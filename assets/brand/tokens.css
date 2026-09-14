@@ -1,0 +1,27 @@
+/* SPDX-FileCopyrightText: Ruben Talstra */
+/* SPDX-License-Identifier: BUSL-1.1 */
+/* FerroFED brand tokens, the "Azure & Iron" palette. Import this file, or
+   copy the values. The family site copies the two hue values verbatim into
+   its own tokens.css, so a change here is a change there. */
+:root {
+  /* Core palette */
+  --ferrofed-azure: #0369A1;        /* primary mark and accents; text on light */
+  --ferrofed-azure-light: #7DD3FC;  /* the same voice on a dark ground; highlights in the mark */
+  --ferrofed-ink: #0F172A;          /* text on light */
+  --ferrofed-mist: #F1F5F9;         /* text on dark */
+  --ferrofed-tile: #0B1020;         /* dark tile background */
+  --ferrofed-surface: #F8FAFC;      /* light surface background */
+
+  /* Roles */
+  --ferrofed-brand: var(--ferrofed-azure);
+  --ferrofed-brand-2: var(--ferrofed-azure-light);
+  --ferrofed-fg: var(--ferrofed-ink);
+  --ferrofed-bg: var(--ferrofed-surface);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ferrofed-brand: var(--ferrofed-azure-light);
+    --ferrofed-fg: var(--ferrofed-mist);
+    --ferrofed-bg: var(--ferrofed-tile);
+  }
+}
