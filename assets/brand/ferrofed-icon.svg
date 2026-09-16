@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Ruben Talstra -->
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 <!-- The FerroFED mark: one query arrives at the gateway and fans out to three sites. The
      gateway takes the full hue; the sites belong to other organisations and
