@@ -21,6 +21,10 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   (content CC-BY-ND 3.0).
 - `docs/specs/aql/`: the openEHR AQL 1.1.0 specification source, its examples
   and the grammar `.g4` files (CC-BY-SA 3.0).
+- `docs/specs/ihe-pixm/`: the ITI-83 artefacts of the IHE PIXm 3.1.0 FHIR
+  package (CC-BY-4.0): the `$ihe-pix` OperationDefinition, the Query
+  Parameters profiles, the capability statements and the IG's examples,
+  pinned by package version and tarball sha256.
 - `website/book/vendor/mermaid/`: the mermaid browser bundle and the
   mdbook-mermaid init script the book loads, fetched by
   `scripts/vendor/mdbook-mermaid-assets.sh` (MIT and MPL 2.0).
