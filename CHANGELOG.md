@@ -22,6 +22,11 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The release lane, `.github/workflows/release.yml`: a signed `v*` tag is
+  checked against `CITATION.cff` and the product row of `docs/VERSIONS.md`,
+  the version's `CHANGELOG.md` section becomes the release notes, and the
+  release is created as a draft and published once the asset set it promises
+  (none before there is code) is verified. `docs/release.md` is the cut (#14).
 - The Business Source License 1.1 with Vernum Projecten B.V. as the Licensor
   and copyright holder (#1), and the contribution-licence terms, the
   pull-request checkbox and the `contribution-licence-guard` check (#3).

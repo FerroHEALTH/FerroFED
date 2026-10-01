@@ -30,8 +30,9 @@ needs a gate.
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
 | `pin-freshness.yml` | Mondays, dispatch | the pins nothing else watches, compared with upstream; one issue when one is behind |
+| `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish; the binary job is gated on a root `Cargo.toml` (`docs/release.md`) |
 
-Dependabot (`.github/dependabot.yml`) is the seventh piece and is described
+Dependabot (`.github/dependabot.yml`) is the eighth piece and is described
 under the pins below.
 
 ## The two tiers of `ci.yml`
@@ -179,12 +180,13 @@ file carries an `SPDX-License-Identifier: BUSL-1.1` header that
 
 ## Lanes that land later
 
-The release lane (`release.yml` with its reusable build and image workflows),
-the crate publishing lane, the documentation site workflow and the fuzz lane
-are not here yet: each needs a workspace, a container recipe, a book or a
-decision the research program has not made. Each lands with its own issue,
-documented here and in `docs/release.md` when it does, under the same pinning
-rules.
+`release.yml` runs before there is code: a pre-code release carries its
+changelog section and no assets. Its reusable build and image workflows (#31),
+the crate publishing lane (#32), the documentation site workflow (#12) and the
+fuzz lane are not here yet: each needs a workspace, a container recipe, a book
+or a decision the research program has not made. Each lands with its own
+issue, documented here and in `docs/release.md` when it does, under the same
+pinning rules.
 
 ## Triggers and concurrency
 
