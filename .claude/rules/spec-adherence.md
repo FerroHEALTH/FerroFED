@@ -158,6 +158,14 @@ so.
   Where it disagrees with the specification text, the specification wins and
   the divergence is worth a note. Never resolve a spec question from its
   observed behaviour alone, and never copy its code.
+  - **Its acceptance proves nothing.** That the reference implementation
+    accepts a form, merges a result a certain way, or claims a conformance
+    point is never evidence that the specification admits it. Where it is
+    laxer than the specification (string comparison of ordered values, a dedup
+    key coarser than the version identity, a conformance claim with no
+    enforcement behind it), FerroFED holds to the specification and to the
+    NEVER LAX rule above, and records the divergence. Strictness here is the
+    family bar FerroEHR sets, not the bar of any other implementation.
 - **FerroEHR and every other CDR are nodes, not oracles.** A response from a
   node is evidence in a comparison, never the reference. A divergence found
   against a node is attributed against ITS-REST before anything is changed,

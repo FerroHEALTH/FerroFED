@@ -77,3 +77,4 @@
   before matching, `cargo clean -p` on a stale rmeta
 - [Forum replies short and plain](forum-replies-short-plain.md): anything the
   owner posts as themself stays short, plain, and linked
+- [Strict over the reference](strict-over-reference.md): the Java reference implementation is evidence, not the bar; FerroFED is as strict as FerroEHR and the specification wins where the reference is laxer; owner 2026-10-01
