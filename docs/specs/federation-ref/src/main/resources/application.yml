@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: openehr-federation-ref
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+federation:
+  federation:
+    id: reference-federation
+    name: openEHR Federation Reference Gateway
+    product: openehr-federation-ref
+    version: 0.1.0
+  timeouts:
+    per-node: 10s
+    overall-budget: 15s
+    connect: 2s
+  completeness:
+    # §11.4: all-or-nothing is the default and is not a setting. This is whether
+    # a client may opt into best-effort per request with
+    # `openEHR-federation-completeness: partial`. Set to false to reject it.
+    offer-best-effort: true
+  identity:
+    mode: static
+    # The issuing namespace assumed for a patient identifier the query does not
+    # qualify itself (§5.2). Set it to the federation's patient identifier
+    # domain; it is what PIXm is asked to resolve from and it keys the
+    # resolution_binding hash.
+    # default-namespace: urn:oid:2.16.840.1.113883.2.4.6.3
+  security:
+    # Outbound only. This gateway does not authenticate its own callers — see the
+    # Javadoc on FederationProperties.Security. Anything that can reach this port
+    # can query the federation, so put it behind whatever your policy requires.
+    default-outbound-profile: passthrough
+    # Encrypts the outbound credentials stored on each source (the SMART signing
+    # key, the OAuth2 client secret). Unset by default: a deployment that uses
+    # only passthrough/static needs no key, and a baked-in default would be a
+    # published key protecting real credentials.
+    #
+    # LOSING THIS MEANS EVERY STORED CREDENTIAL IS UNRECOVERABLE. The gateway
+    # refuses to start if the registry holds credentials it cannot read, rather
+    # than letting every federated query to those sources go out unauthenticated.
+    registry-secret-key: ${FEDERATION_REGISTRY_SECRET_KEY:}

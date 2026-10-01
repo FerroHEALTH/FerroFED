@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+title: "FerroFED"
+abstract: >-
+  A pure-Rust openEHR federation gateway: a transparent ITS-REST
+  intermediary that resolves the patient outside AQL, sends standard AQL to
+  each node scoped to that node's own EHR id, and merges the answers with
+  per-node provenance, after the openEHR Federation Tier with AQL
+  specification.
+type: software
+authors:
+  - given-names: Ruben
+    family-names: Talstra
+license: BUSL-1.1
+repository-code: "https://github.com/rubentalstra/FerroFED"
+url: "https://ferrofed.eu"
+keywords:
+  - openEHR
+  - AQL
+  - federation
+  - ITS-REST
+  - IHE
+  - Rust
+version: 0.0.0

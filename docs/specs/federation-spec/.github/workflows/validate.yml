@@ -1,0 +1,58 @@
+name: Validate
+
+# Runs on every push and every pull request, so a defect is caught *before*
+# merge. Until 0.3.1 the only build ran on push to main (publish.yml), which
+# made the published site the validation step - and is why four broken prose
+# references shipped in v0.3.
+#
+# This workflow does not deploy; deployment stays in publish.yml.
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Antora
+        run: npm ci
+
+      # antora-playbook.yml runs with failure_level: warn, so any Antora
+      # warning - including a broken xref: macro - fails this step.
+      - name: Build site
+        run: npm run build
+
+      # The other half of the reference gate: prose "§n.n" citations, which
+      # Antora never validates, including a §number carried only in an xref's
+      # link text.
+      - name: Check prose section references
+        run: tools/check-refs.sh
+
+      # Every normative requirement must be named by a conformance point or a
+      # test track, or be allowlisted in tools/traceability-exceptions.txt with
+      # a reason.
+      - name: Check requirement traceability
+        run: tools/traceability.sh --assert /tmp/traceability.tsv
+
+      # Antora validates that an xref resolves to a *page*, not that the
+      # fragment resolves to an anchor on it. This checks the rendered site.
+      - name: Check in-page anchors
+        run: tools/check-anchors.sh
+
+      # The published JSON Schemas are only a contract if something enforces
+      # them against the spec's own examples. Without this the schema and the
+      # example beside it can disagree - which is how §9's example came to
+      # serialise `rows` as objects while claiming ITS-REST conformance.
+      - name: Check JSON examples against the published schemas
+        run: tools/check-schemas.sh

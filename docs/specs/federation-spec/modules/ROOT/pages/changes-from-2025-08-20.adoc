@@ -1,0 +1,273 @@
+= Changes from the 2025-08-20 proposal
+
+This note accompanies *_Proposal for Federation Tier with AQL - revised_* and records what changed relative to the original openEHR International Federation Working Group proposal _"Proposal for Federation Tier with AQL"_ (2025-08-20). The revised specification stands on its own and does not narrate this history; this note does.
+
+== Headline (breaking) changes
+
+[cols="1,4,2,3"]
+|===
+| # | Change | Where in the revised spec | Rationale
+
+| C1
+| *Federation is keyed on the per-node local `ehr_id`, not on `EHR_STATUS.subject`.* The gateway resolves `subject → ehr_id` outside AQL and dispatches standard, non-federated AQL per node.
+| xref:reference-flow.adoc[§4], xref:identity-resolution.adoc[§5], xref:requirements.adoc[§6] (N3, N7), xref:aql-facade.adoc[§7]
+| MPI advisory §3 (storing an identifier in `EHR_STATUS.subject` is undesirable); RSO "Record identification".
+
+| C2
+| *The federated example that filtered `WHERE …/ehr_status/subject/external_ref/id/value` at the node level is removed.* `subject` now appears only as _façade input_, rewritten to `ehr_id` before dispatch.
+| xref:aql-facade.adoc[§7] (before→after)
+| Internal consistency: the old example keyed federation on `subject`.
+
+| C3
+| *The gateway is defined as a transparent façade* - a client can query and follow up without knowing it is federated; the API is a conformant openEHR Query API.
+| xref:index.adoc[§1], xref:architecture.adoc[§3.2], xref:requirements.adoc#n1[N1]
+| HL7 Intermediaries White Paper (transparency).
+
+| C4
+| *Storing a directly identifying patient identifier in `EHR_STATUS.subject` is no longer part of the federation model* (storing the BSN there was the RSO interim approach). Identity is resolved in an MPI/demographic layer; no such identifier need be stored in the CDR.
+| xref:identity-resolution.adoc[§5], xref:requirements.adoc#n5[N5]
+| MPI advisory §3; RSO's own "Hide"/external-ref migration note.
+
+| C5
+| *Identity / localization / addressing are bound to IHE profiles* (PIXm, PDQm, XCPD, PMIR, mCSD) as the proposed binding, with the Dutch Generic Functions as a regional alternative in an informative annex.
+| xref:identity-resolution.adoc[§5], xref:localization.adoc[§14], xref:addressing.adoc[§15], xref:annex-a-ihe.adoc[Annex A], xref:annex-b-dutch-gf.adoc[Annex B]
+| Consolidated design decision; MPI advisory §4.
+
+| C6
+| *Follow-up read _and_ write routing is specified*, provenance-honest: rows carry an endpoint identifier and routing uses the `creating_system_id` inside the `OBJECT_VERSION_ID`; openEHR uids are never rewritten.
+| xref:result-set.adoc[§9], xref:follow-up-routing.adoc[§12] (N21–N24)
+| Intermediaries White Paper (routing follow-ups); Exchange-Routing IG (self-routing base URL).
+
+| C7
+| *Four previously-absent areas are added:* authN/authZ handoff (xref:security.adoc[§13]), localization vs record-locator split (xref:localization.adoc[§14]) and addressing (xref:addressing.adoc[§15]), follow-up routing (xref:follow-up-routing.adoc[§12]), and a Connectathon-style test guide (xref:testing.adoc[§16]–xref:conformance.adoc[§17]).
+| §12–§17
+| Gaps flagged in the change brief.
+
+| C8
+| *The federation surface is the whole ITS-REST API*, read and write - not AQL alone - with the unsupported parts named (DEMOGRAPHIC; Definition management is single-node in v1 - stored queries have since gained an optional gateway registry, <<sec-amendments>>), the vendor `/rest/openehr` prefix removed in favour of a deployment-chosen base URL, both EHR addressing forms supported, and `+OPTIONS {base}/+` added so a gateway describes itself and the endpoints behind it.
+| xref:rest-facade.adoc[§7a] (N28–N32), xref:requirements.adoc#n43[N43]
+| Review meeting: transparency has to cover reads and writes, and the prefix is vendor-specific.
+
+| C9
+| *Identifier hygiene is specified beyond `subject`.* In the query the gateway composes, a node is located by the `ehr_id` and nothing else identifying. Predicates and projections over `PARTY_IDENTIFIED`/`DV_IDENTIFIER`, `PARTY_RELATED` and `ENTRY`-level `subject`, plus the path, query string and headers, are all in scope, and a query that cannot be brought into that state is rejected. Write payloads are explicitly out of scope: a commit body is archetyped clinical content and passes through unmodified. The node's obligation is restated as an interface one (be invocable on `ehr_id`, and have some way to exchange a patient identifier for it) with no mandate on what a node stores.
+| xref:identity-resolution.adoc#identifier-hygiene[§5.4], xref:identity-resolution.adoc#node-obligation[§5.5] (N33, N34)
+| Review meeting: the `subject` rewrite alone still leaks; and the spec should not legislate node-internal storage.
+
+| C10
+| *Completeness, timeouts and cross-node result shaping are made normative.* Best-effort is the declared default with a `meta.complete` flag (both since superseded - see <<sec-amendments,the SEC amendments>>); per-node and overall timeout budgets are required and discoverable; `ORDER BY` + `LIMIT` is re-applied at the Tier to give the true global top `n`; `OFFSET` must be rejected or computed correctly; undirected aggregates must be refused with a reason, never answered with per-node rows.
+| xref:partial-results.adoc#best-effort[§11.4]–§11.6 (N37–N39)
+| Review meeting: timeouts and the limit/order/aggregate interaction were left to implementers and are not safely inferable.
+
+| C11
+| *The four identifiers are pinned down.* `node_id`, `endpoint_id`, `system_id` and `creating_system_id` are defined in the reader's guide (xref:terminology.adoc#the-four-identifiers[§ The four identifiers]), with which-one-routes-what made normative in xref:identifiers.adoc[§12a]. The consequences are worked through: dedup must not send a write to a node holding an imported copy, an `ehr_id` claimed by two nodes is a `409` and an integrity incident, never a guess, and node-admission conditions (UUID `ehr_id` s, no reuse, no foreign-`ehr_id` adoption, unique `system_id`) prevent the collision in the first place. Admission is governance, so those conditions live in their own section, xref:membership.adoc[§12b Federation membership], and not inside the routing rules that depend on them.
+| xref:terminology.adoc#the-four-identifiers[§ Terminology], xref:identifiers.adoc[§12a], xref:membership.adoc[§12b], xref:deduplication.adoc#update-routing-hazard[§10.3], xref:follow-up-routing.adoc#ehr-id-routing[§12.5] (N36, N41, N42, N42a)
+| Review meeting: these four were being conflated, and the failure mode is a mis-routed write.
+
+| C12
+| *Endpoint targeting is supported both in and outside the AQL.* The gateway must accept `FROM ENDPOINT` and the `openEHR-federation-endpoint` request header, a header and never a query parameter. A client needs only one. Conflicting node sets in one request are rejected. Provenance travels on write responses as headers, and `meta.endpoints[]` gains `latency_ms`, `product`/`version` and `row_count`. (The key was later nested as `meta.federation.endpoints[]`; see <<sec-amendments,the SEC amendments>>.)
+| xref:endpoint-directive.adoc#header-alternative[§8.4] (N35), xref:result-set.adoc#endpoint-meta[§9.5] (N40, N31)
+| Review meeting: stored and user-authored AQL should not have to be rewritten to retarget it; and writes have no `meta` to carry provenance.
+|===
+
+== Requirement mapping (old numbers → new N-numbers)
+
+The 2025-08-20 proposal had 14 numbered requirements. The revised spec renumbers them as *N1–N27* and adds *N28–N43* (all new, from the review meeting - see C8–C12 above; none maps to an old requirement). The table below maps old→new and marks the change.
+
+[cols="1,2,1,5"]
+|===
+| New | Change | Old | Note
+
+| xref:requirements.adoc#n1[N1] | new | - | Transparent façade: no indication it is federated.
+| xref:requirements.adoc#n2[N2] | new | - | Accept `subject` as façade input; never execute it at a node.
+| xref:requirements.adoc#n3[N3] | new | - | Resolve `subject → {node, ehr_id, consent}` outside AQL.
+| xref:requirements.adoc#n4[N4] | new | - | Undirected queries get their candidate nodes from a localization service (candidates only - not consent).
+| xref:requirements.adoc#n5[N5] | new | - | No directly identifying identifier required in `EHR_STATUS.subject`; a returned subject column is re-injected input.
+| xref:requirements.adoc#n6[N6] | new | - | `not-resolved` / `consent-denied` per node recorded, not fatal.
+| xref:requirements.adoc#n7[N7] | changed | #1 | Dispatch *standard* AQL keyed on `ehr_id`, not `subject` (the core shift).
+| xref:requirements.adoc#n8[N8] | changed (SHOULD→MUST) | #3 | Dispatch only to nodes where the patient is resolved (plus any optional consent pre-filter, xref:requirements.adoc#n27a[N27a]).
+| xref:requirements.adoc#n9[N9] | kept | #13 | `WHERE`/`LIMIT`/`OFFSET` execute within each node.
+| xref:requirements.adoc#n10[N10] | changed | #6 | Accept an undirected query identifying only the patient.
+| xref:requirements.adoc#n11[N11] | changed (merge) | #7 + #8 | Accept a directed query naming Endpoints (SHOULD: Organizations); directive is independent of patient resolution.
+| xref:requirements.adoc#n12[N12] | kept | #2 | Add Endpoint/Organization attributes to rows when selected.
+| xref:requirements.adoc#n13[N13] | changed (SHOULD→MUST) | #14 | `DISTINCT` and `ORDER BY` supported at the Tier.
+| xref:requirements.adoc#n14[N14] | changed | #12 | Block undirected aggregates unless cross-node-correct; directed single-node aggregate allowed.
+| xref:requirements.adoc#n15[N15] | new | - | Default no dedup + provenance; opt-in `object_id` VERSION-identity dedup.
+| xref:requirements.adoc#n16[N16] | kept (extended) | (Unresponsive) | Unresponsive nodes in `meta.endpoints[]` (later nested as `meta.federation.endpoints[]`, <<sec-amendments>>); status set extended with `not-resolved`/`consent-denied`/`excluded`.
+| xref:requirements.adoc#n17[N17] | kept | (result format) | `{q, columns, rows}` + `meta`; no endpoint columns unless selected.
+| xref:requirements.adoc#n18[N18] | kept | (aliasing) | ENDPOINT aliases resolve collisions with EHR columns.
+| xref:requirements.adoc#n19[N19] | changed (merge) | #9 + #11 | FHIR `Endpoint`/`Organization` RECOMMENDED; define a real `connectionType` instead of the informal `'open-ehr-query-API'` string.
+| xref:requirements.adoc#n20[N20] | kept | #10 | Every Endpoint has exactly one managing Organization (1..1).
+| xref:requirements.adoc#n21[N21] | changed | #4 | Registry also maps `system_id`/`creating_system_id` → CDR base URLs (the follow-up routing table).
+| xref:requirements.adoc#n22[N22] | new | - | Follow-up *reads* route to the owning CDR by `creating_system_id`; uids never mutated.
+| xref:requirements.adoc#n23[N23] | new | - | Versioned *writes* route to the single controlling CDR; new objects target one chosen node.
+| xref:requirements.adoc#n24[N24] | new | - | Convey authenticated client identity on every routed follow-up.
+| xref:requirements.adoc#n25[N25] | new | - | Client authenticates to the Tier; the Tier propagates identity onward (OAuth 2.0 client-credentials with an RFC 7523 signed JWT client assertion).
+| xref:requirements.adoc#n26[N26] | new | - | Delegate access decisions needing gateway-invisible information to the source CDR.
+| xref:requirements.adoc#n27[N27] | new | - | Consent enforcement is the node's obligation, performed regardless of upstream filtering.
+| xref:requirements.adoc#n27a[N27a] | new | - | Step-1 consent pre-filtering is OPTIONAL, where a deployment has a consent service.
+| xref:requirements.adoc#n28[N28] | new | - | ITS-REST at a deployment-chosen base URL; no mandated prefix (`/rest/openehr` removed).
+| xref:requirements.adoc#n29[N29] | new | - | Canonical path form and AQL predicate form both supported.
+| xref:requirements.adoc#n30[N30] | new | - | `+OPTIONS {base}/+` describes the surface and lists the endpoints behind the gateway.
+| xref:requirements.adoc#n31[N31] | new | - | Acting-endpoint response headers on routed requests; `Location`/`ETag` untouched.
+| xref:requirements.adoc#n32[N32] | new | - | DEMOGRAPHIC not federated; unsupported areas declared; identifier namespaces distinct.
+| xref:requirements.adoc#n33[N33] | new | - | In the composed query, a node is located by `ehr_id` alone; other identifier carriers stripped or the query rejected. Write bodies pass through untouched.
+| xref:requirements.adoc#n34[N34] | new | - | Node invocable on `ehr_id`; environment supplies the cross-reference; no storage mandate.
+| xref:requirements.adoc#n35[N35] | new | - | Targeting supported both in AQL and via the `openEHR-federation-endpoint` header (not a query parameter); conflicts rejected.
+| xref:requirements.adoc#n36[N36] | new | - | Post-dedup writes route to the originator; never to a holder of a copy.
+| xref:requirements.adoc#n37[N37] | new | - | Best-effort default with `meta.complete`; all-or-nothing opt-in only. Both since reversed - see <<sec-amendments>>.
+| xref:requirements.adoc#n38[N38] | new | - | Per-node and overall timeout budgets, discoverable and reported.
+| xref:requirements.adoc#n39[N39] | new | - | Correct cross-node `ORDER BY`/`LIMIT`; `OFFSET` rejected or correct; aggregates refused with a reason.
+| xref:requirements.adoc#n40[N40] | new | - | `meta.endpoints[]` (now `meta.federation.endpoints[]`, <<sec-amendments>>) carries latency, and should carry product/version and row counts.
+| xref:requirements.adoc#n41[N41] | new | - | Path `ehr_id` routing order; no ask-all probing for writes.
+| xref:requirements.adoc#n42[N42] | new | - | `ehr_id` collisions → `409` + integrity incident (gateway, at request time).
+| xref:requirements.adoc#n42a[N42a] | new | - | Identifier-integrity conditions a node must satisfy to be admitted (federation operator, at admission; xref:membership.adoc[§12b]).
+| xref:requirements.adoc#n43[N43] | new | - | Definitions single-node-routed; optional, explicit, non-atomic template broadcast. Now the template rule and the no-registry fallback - see <<sec-amendments>>.
+| xref:requirements.adoc#n44[N44] | new | - | Optional gateway-held stored-query registry: authoritative, immutably versioned, expanded into a fan-out when invoked by name. Added by <<sec-amendments>>.
+|===
+
+*Dropped / folded:* old #5 (standalone Record Locator Service requirement) is split into localization (N4), addressing (N21/§15) and cross-reference (N3). The old federated `WHERE …/subject` example is replaced by the xref:aql-facade.adoc[§7] before→after rewrite.
+
+[#its-rest-alignment]
+== 0.4.0: alignment with openEHR ITS-REST, and published schemas
+
+Answering the question _"is the federated AQL response not standard openEHR?"_ surfaced a gap no earlier review had noticed: most of the result envelope was already normatively defined by openEHR ITS-REST, and this specification never said so. xref:result-set.adoc[§9] asserted a `{q, columns, rows}` + `meta` envelope as though it were new, and 0.3.1 went further by declaring its own example and table "jointly normative" for the whole structure, which this specification has no authority to do.
+
+Each finding below has the same remedy: cite the standard that already exists, and scope this specification's contract to what it actually adds. The bound release is *ITS-REST Release-1.1.0* (19 July 2026), pinned by name so that the citation fixes one wire format; a `latest` pointer would not.
+
+[cols="1,4,2,3"]
+|===
+| # | Finding | Where in the spec | Disposition
+
+| F1
+| *`meta` extension is conformant.* ITS-REST declares `ResultSetMetadata` with `additionalProperties: true`, so `complete`, `endpoints[]`, `timeout` and `dedup` are legitimate extensions of a standard open object (all four are now nested inside one `federation` member for the reasons in <<sec-amendments>>; the conformance argument is unchanged) - no tension with xref:requirements.adoc#n1[N1]. The specification never said this, so an implementer could not tell.
+| xref:result-set.adoc#its-rest-relationship[§9.1]
+| *Stated.* The reassuring finding, and the one most worth writing down.
+
+| F2
+| *`name` was missing.* ITS-REST has five top-level members; N17 mandated four and never mentioned `name`. Minor - it is optional and meaningful only for stored queries - but xref:rest-facade.adoc[§7a.1] lists `+{base}/v1/definition/query/…+` as an exposed area, so stored queries are in scope, and a gateway built strictly to N17 omitted a standard member.
+| xref:requirements.adoc#n17[N17], xref:result-set.adoc#its-rest-relationship[§9.1]
+| *Adopted by reference.* N17 now cites the ITS-REST member list in place of its own enumeration, so the list cannot drift from ITS-REST again.
+
+| F3
+| *The §9 example contradicted ITS-REST on `rows`.* The example serialised rows as objects keyed by column name, while ITS-REST defines `ResultSetRow` as an ordered array of values. Because 0.3.1 had declared that example normative, this was a wire-format divergence: two vendors following the two documents would have serialised rows differently.
+| xref:result-set.adoc#example[§9.4], xref:requirements.adoc#n17[N17], xref:conformance.adoc#cp-35[CP-35]
+| *Resolved in favour of ITS-REST; the example was wrong and is corrected.* The `columns[]`/row correspondence is now positional, which makes the xref:result-set.adoc#columns-provenance[§9.2] provenance rule more load-bearing, since a client matching `ORDER BY` terms now depends on column order as well as path. Both reference implementations emitted objects and are corrected to match.
+
+| F4
+| *The underscore convention was unstated.* Standard `meta` fields are `_`-prefixed and the federation's additions are not. That is correct - the prefix marks openEHR-defined fields - but the specification never said so, and an implementer had no way to know `_complete` was not intended.
+| xref:result-set.adoc#its-rest-relationship[§9.1], xref:requirements.adoc#n17[N17]
+| *Stated normatively.* The `_` prefix is reserved to openEHR; federation additions are never prefixed.
+
+| F5
+| *`latency_ms` was an unconditional MUST.* N40 and the §9.5 table required it of every endpoint, including those reported `excluded` or `not-localized`, which were never asked and so never timed. Writing the schema exposed it: the rule as written obliged a gateway to invent a measurement.
+| xref:result-set.adoc#endpoint-meta[§9.5], xref:requirements.adoc#n40[N40]
+| *Scoped to dispatch.* Required for `active`, `offline` and `time-out`. It MUST be omitted, not invented, for the statuses settled before any request existed to time, including `not-resolved`, which is in scope and so clears `complete` yet was never dispatched to.
+
+| F6
+| *Two `OPTIONS` keys were required in prose but absent from the example.* §11.4 requires all-or-nothing completeness be opt-in per request via a named header, and §10 gives dedup a selecting header; the 0.3.1 example declared `all_or_nothing: true` without saying how to select it, and omitted `dedup.request_header`. Both reference implementations emit them.
+| xref:rest-facade.adoc#options-root[§7a.2]
+| *Added to the example*, and `opt_in` is now conditionally required by the schema whenever the opt-in mode is offered. (In 0.4.0 that flag was `all_or_nothing`; the SEC amendments reversed the default, so the same conditional now guards `best_effort` - see <<sec-amendments>>.)
+
+| F7
+| *The membership status vocabulary was undefined.* §7a.2 said what the `OPTIONS` endpoint status is not (the §11.1 per-query vocabulary) but never said what it is, implying a closed set that does not exist.
+| xref:rest-facade.adoc#endpoint-membership-status[§7a.2]
+| *Declared open.* It is a free-form string, and `active` is conventional. Fixing a vocabulary is a membership-lifecycle question this release does not specify (xref:future.adoc[§18]). The two schemas model the two statuses as genuinely different types, one a closed seven-value enum and the other an unconstrained string, so the distinction, previously only asserted, is now enforceable.
+|===
+
+*Two JSON Schemas are now published and enforced in CI* (xref:future.adoc[§18] previously promised them):
+
+* xref:attachment$federated-result-set.schema.json[`federated-result-set.schema.json`] - the result envelope. It does not restate `RESULT_SET`; it inlines a constrained subset of the ITS-REST definitions, each commented with its source, and adds the federation's `meta` constraints. The definitions are inlined instead of `$ref`-ed by URL so that validation is self-contained and CI does not depend on a third-party site being reachable.
+* xref:attachment$options-root.schema.json[`options-root.schema.json`] - the `OPTIONS` body, which has no upstream standard and is therefore normative in this specification alone.
+
+`tools/check-schemas.sh` validates every whole-instance `[source,json]` block in the specification against the schema that governs it, and compiles both schemas. It would have caught F3 automatically, and did catch F5 and F6 while being written.
+
+*This release is 0.4.0, not 0.3.2:* correcting `rows` changes the wire contract, so `federation.spec_version` moves from `"0.3"` to `"0.4"`.
+
+[#implementation-validated]
+== 0.9.0: validated by implementation
+
+This release changes no normative requirement, no wire structure and no schema. It changes the specification's standing: every section of the normative body has now been built against real openEHR CDRs by a https://github.com/syntaric/openehr-federation-ref[reference implementation] whose conformance suite mirrors xref:conformance.adoc[§17] one-to-one. The version number moves because a text that has been implemented end to end is a different artifact from one that has only been reviewed.
+
+*Why 0.9.0 and not 0.5.0.* The number measures remaining distance from 1.0 and says nothing about the volume of change in this release. The document is feature-complete for its stated scope and has survived implementation, and 0.5.0 would have understated that. The remaining work before 1.0 is external: working-group review, a second independent implementation, and settling the items xref:future.adoc[§18] defers.
+
+*Implementation findings* are recorded where they apply and are not repeated here. The 0.4.0 findings above (F1-F7) came from building the reference implementation, and the corrections they describe shipped in 0.4.0 as they were found, so this release records no new findings.
+
+*Status moves from "Draft for review" to "Release candidate".* The new status describes stability and does not claim finality: the specification remains open for comment, nothing in it is frozen, and a release candidate can still be withdrawn.
+
+*`federation.spec_version` moves from `"0.4"` to `"0.9"`.* The move is the only client-visible consequence. The field is `major.minor` and tracks minor releases (xref:rest-facade.adoc#options-root[§7a.2]), so it moves even though no structure changed. It reports which release a gateway was built against, and a client pinned to `"0.4"` should learn the document has moved on. Clients matching that value exactly will stop matching. Per §7a.2 they were already forbidden from matching a patch component, and a client needing to accept both should compare the minor version and not the literal string.
+
+[#sec-amendments]
+== The SEC review amendments (0.9.x, no version bump)
+
+A review with SEC raised four points. Three change the wire contract, and one closes a guidance gap. All four landed in the 0.9.x line.
+
+[WARNING]
+.These changes landed without a version bump on purpose, and that is a known hazard
+====
+`federation.spec_version` was not moved, and `antora.yml`, `package.json`, `README.md` and the `"spec_version": "0.9"` literal in xref:rest-facade.adoc#options-root[§7a.2] are unchanged. The decision was to keep the document at 0.9.x while the SEC round is still open and not spend a minor number on an in-progress review.
+
+The consequence is a real hazard, accepted knowingly: two different wire contracts now exist under the marker `"0.9"`. A gateway built against 0.9.0 emits `meta.complete` flat and returns `200` with partial rows by default. A gateway built against this text emits `meta.federation.complete` and fails closed. Both report `"0.9"`, and a client cannot tell them apart from the `OPTIONS` body. The `completeness` object is the only practical discriminator, and only by accident: a body declaring `completeness.default: "all-or-nothing"` and `best_effort` is post-amendment while one declaring `all_or_nothing` is not.
+
+*The bump is owed before any release.* It is recorded as an open item in xref:future.adoc[§18] so it cannot be lost, and `CONTRIBUTING.md` names the four hand-edit sites that must move together when it happens.
+
+A fifth site sits in another repository. The reference implementation (https://github.com/syntaric/openehr-federation-ref[`syntaric/openehr-federation-ref`]) will diverge until it is updated: its `ConformanceOptionsIT` still asserts the pre-amendment `completeness` shape, and its result-envelope tests still assert the flat `meta` keys. That divergence is out of scope for this document, and is flagged here so nobody meets it as a surprise.
+====
+
+[cols="1,4,2,3"]
+|===
+| # | Change | Where in the spec | Rationale
+
+| S1
+| *The federation's `meta` additions are grouped under one `meta.federation` object.* `complete`, `endpoints[]`, `timeout` and `dedup` move from direct members of `meta` into a single nested, unprefixed object. The `_`-prefix prohibition is retained and reinforced: `_` stays reserved to openEHR, so the grouping is `federation`, not `_federation`.
+| xref:result-set.adoc#federation-meta[§9.1], xref:result-set.adoc#example[§9.4], xref:result-set.adoc#endpoint-meta[§9.5], xref:requirements.adoc#n17[N17], xref:conformance.adoc#cp-35[CP-35], `federated-result-set.schema.json`
+| SEC: nothing on the wire said which `meta` keys belonged to the federation. One namespace also removes the collision risk with a future openEHR `meta` member of the same name.
+
+| S2
+| *All-or-nothing becomes the default completion strategy; best-effort becomes opt-in.* A query in which an in-scope node was asked and did not answer now fails - `504` for timeout/unreachability, `424 Failed Dependency` for a node error - where it previously returned `200` with the rows it got. A failing response MUST still carry the diagnostic envelope. Best-effort remains available via `openEHR-federation-completeness: partial`. Two carve-outs are stated explicitly: `not-resolved` and `consent-denied` clear the completeness flag but do not fail the query.
+| xref:partial-results.adoc#all-or-nothing[§11.4], xref:partial-results.adoc#not-resolved-carve-out[§11.3], xref:partial-results.adoc#http-status-mapping[§11.2], xref:requirements.adoc#n37[N37], xref:conformance.adoc#cp-30[CP-30], xref:conformance.adoc#cp-12[CP-12], `options-root.schema.json`
+| SEC: best-effort is the wrong default for clinical data. An incomplete answer that looks complete is a safety hazard, because a clinician who does not know a node was missing may conclude the data does not exist. The mode is retained because a flagged partial answer can beat no answer.
+
+| S3
+| *A gateway MAY hold federated stored queries in an authoritative registry.* The gateway stores the definition, versions it immutably on ITS-REST's own semver path segment, and expands it into an ordinary fan-out when it is invoked by name - which makes a federated query invocable by name at all. Distribution of the definition to nodes is a further option on §12.6's template-upload terms, and an endpoint-targeted definition MUST NOT be distributed. Drift between the registry's copy and a node's is named as a new hazard the facility creates. *Additive:* §12.6/N43's single-node rule is unchanged and is the fallback.
+| xref:follow-up-routing.adoc#stored-query-registry[§12.7], xref:rest-facade.adoc[§7a.1], xref:rest-facade.adoc#options-root[§7a.2], xref:requirements.adoc#n44[N44], xref:conformance.adoc#cp-40[CP-40], xref:result-set.adoc#its-rest-relationship[§9.1], `options-root.schema.json`
+| SEC: stored queries had no federation story. A definition lived at one node, so invoking it by name got one node's answer, and two nodes could hold different definitions under one name with nothing to detect the drift.
+
+| S4
+| *§13.4 states what a deployment MUST settle about authentication* - a checklist of obligations, not mechanisms: which identity crosses the trust boundary and against which authentic source, who authenticates the end user and where that trust stops, how purpose of use is conveyed, what the token is bound to (and whether transport identity is being read as organization identity), and which risks are carried by agreement and which by technique. The *federated trust model* is named as the model behind the checklist. Annex B gains §B.4a, documenting the VWS *Harmonisatie* track (concept v0.9, 13 July 2026) as a distinct national track from the Nuts GF profile of §B.4.
+| xref:security.adoc#authn-deployment-decisions[§13.4], xref:annex-b-dutch-gf.adoc#harmonised-bgz-authn[Annex B §B.4a], xref:requirements.adoc#n25[N25], xref:conformance.adoc#cp-39[CP-39]
+| SEC: §13 did not say what a deployment must decide, nor that it must decide it. The normative body still cannot prescribe a concrete solution, being deployment- and region-specific, so the obligation is to answer the questions, with the Dutch answers kept informative in the annex.
+|===
+
+*What is left out, and why.* No specific authentication profile was hoisted into the normative body, because FAPI 2.0 and RAR are §B.4a's answers to two of §13.4's questions and other programmes may answer them differently. The `_`-prefix rule was not relaxed to carry the grouping: prefixing is openEHR's namespace and S1 does not borrow it.
+
+=== Corrections found while aligning the reference implementation (2026-09-28)
+
+Implementing S2 in `syntaric/openehr-federation-ref` exposed three gaps in the amended text. All three are in the 0.9.x line, under the same no-bump hazard as the SEC amendments above.
+
+[cols="1,4,2,3"]
+|===
+| # | Change | Where in the spec | Rationale
+
+| R1
+| *A `node-error` status is added to the §11.1 vocabulary.* It names the node that was reached and answered with a failure, and is the status behind S2's `424`. `error` and `latency_ms` are required on it, as for `offline` and `time-out`. Where one fan-out has both an unanswered node and an erroring one, `504` takes precedence over `424`. *Wire change:* the schema enum grows from seven values to eight.
+| xref:partial-results.adoc#endpoint-status[§11.1], xref:partial-results.adoc#http-status-mapping[§11.2], xref:partial-results.adoc#all-or-nothing[§11.4], xref:result-set.adoc#endpoint-meta[§9.5], xref:requirements.adoc#n16[N16], xref:requirements.adoc#n37[N37], xref:requirements.adoc#n40[N40], xref:conformance.adoc#cp-11[CP-11], xref:conformance.adoc#cp-30[CP-30], `federated-result-set.schema.json`
+| S2 split the failure into `504` and `424` but left the vocabulary at seven values with no status for "answered with an error", so a gateway had to report the `424` case as `offline` (which it was not) or `active` (which would set `complete: true`), and a client could not tell the two recoveries apart from the envelope, the field the spec calls the normative carrier.
+
+| R2
+| *Reporting out-of-scope members is now a SHOULD.* §11.1 required every in-scope node to appear and defined `excluded` and `not-localized` as out of scope, so nothing actually required them to appear; the §9.4 example showed one and §8 said they "are reported", with no obligation level.
+| xref:partial-results.adoc#endpoint-status[§11.1], xref:endpoint-directive.adoc[§8], xref:requirements.adoc#n16[N16], xref:conformance.adoc#cp-11[CP-11]
+| A gateway that dropped directive-excluded members from the list was conformant by the letter and contradicted the example. §14.1's fail-closed MUST for `not-localized` is unchanged.
+
+| R3
+| *§10 names the dedup members.* `mode`, `suppressed_rows` and `suppressed_endpoints[]` were defined only in the schema; the prose said "record the suppressed endpoints" without saying where.
+| xref:deduplication.adoc[§10.2], xref:deduplication.adoc#suppressed-visible[§10.3]
+| Editorial; no wire change.
+|===
+
+== Other notable edits
+
+* *Result set:* `system_id` added to the selectable ENDPOINT attribute set, so a row can carry the openEHR-native routing key (xref:result-set.adoc[§9]).
+* *Deduplication:* the imported-composition case (same `object_id`, two `creating_system_id`s) is now handled by an opt-in VERSION-identity dedup (xref:deduplication.adoc[§10]).
+* *Partial results:* the endpoint status set is extended and mapped to HTTP status codes aligned with the Exchange-Routing IG; "patient found nowhere" is a `200` with empty rows, not a `404` (xref:partial-results.adoc[§11]).
+* *Diagrams:* the two reference-flow sequence diagrams are authored in PlantUML (`diagrams/*.puml`) and embedded as rendered images.
+* *Spec vs regional realisation:* all Dutch-specific detail (Mitz/OTV, NVI, LRZa, `did:web`/VC/DPoP, Rego/`mitz_consent`, pseudonymised-BSN localization) and the ACP/Vitaly worked example stay in the informative xref:annex-b-dutch-gf.adoc[Annex B]. The normative body names only abstract roles and their proposed IHE binding (xref:scope.adoc[§2.4]).

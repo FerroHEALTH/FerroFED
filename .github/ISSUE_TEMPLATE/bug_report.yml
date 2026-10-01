@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+name: Bug report
+description: Report a defect in FerroFED.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. A maintainer sets the type and priority
+        labels during triage, so you do not need to add them.
+
+        Do not use this form for a security vulnerability. Report those
+        privately through the Security tab. See
+        [SECURITY.md](https://github.com/rubentalstra/FerroFED/blob/main/SECURITY.md).
+
+        Never paste patient data, a real patient identifier, or an extract
+        from a production node into this form. Use synthetic content.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What goes wrong, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact steps, AQL query, request, or command that triggers the bug.
+      placeholder: |
+        1. Start the gateway with ...
+        2. Send POST /query/aql with ...
+        3. See the response
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead. Include the response body or error output.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release tag or commit SHA you run.
+      placeholder: v0.1.0, or a commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >-
+        Your OS and architecture, how you run FerroFED (binary, container, or
+        source), which openEHR CDRs sit behind it as nodes, and which identity
+        or localization service it resolves patients through.
+    validations:
+      required: false
