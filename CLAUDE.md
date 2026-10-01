@@ -123,7 +123,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   trait), `ferrofed-identity` (the role traits, `PatientRef`, the development
   cross-reference, the PIXm resolver over `ihe-iti`, the session-scoped
   resolution bindings, and the adapters over the binding crates) and
-  `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing).
+  `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing, and the
+  outbound identifier-hygiene gate every request to a node passes, #45).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):
   `serve` and `config check`, the TOML and `FERROFED__` environment

@@ -870,6 +870,8 @@ dependencies = [
  "jsonschema",
  "openehr-federation",
  "openehr-its",
+ "openehr-query",
+ "secrecy",
  "serde_json",
  "thiserror",
  "tokio",
@@ -2083,7 +2085,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema",

@@ -29,6 +29,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::hygiene::{Outbound, Part, Withheld};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use openehr_federation::outcome::{ErrorDetail, Outcome};
@@ -108,11 +109,13 @@ impl NodeQuery {
 }
 
 /// The per-call options of one dispatch: the instant the node must have
-/// answered by, and the gateway's request id.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// answered by, the gateway's request id, and the identifiers no request may
+/// carry.
+#[derive(Debug, Clone)]
 pub struct DispatchOptions {
     deadline: Instant,
     request_id: Option<String>,
+    withheld: Arc<Withheld>,
 }
 
 impl DispatchOptions {
@@ -123,7 +126,16 @@ impl DispatchOptions {
         Self {
             deadline,
             request_id: None,
+            withheld: Arc::new(Withheld::none()),
         }
+    }
+
+    /// These options refusing to send a request that carries one of the
+    /// identifiers `withheld` (§5.4.1, N33).
+    #[must_use]
+    pub fn with_withheld(mut self, withheld: Arc<Withheld>) -> Self {
+        self.withheld = withheld;
+        self
     }
 
     /// These options sending `request_id` to the node in
@@ -146,6 +158,41 @@ impl DispatchOptions {
         match self.request_id.as_deref() {
             Some(id) => options.with_header(REQUEST_ID_HEADER, id),
             None => Ok(options),
+        }
+    }
+}
+
+impl<T: Transport> NodeClient<T> {
+    /// The outbound gate: refuses `query` when the request it composes would
+    /// carry a withheld identifier (§5.4.1, N33).
+    fn gate(&self, query: &NodeQuery, options: &DispatchOptions) -> Result<(), DispatchError> {
+        if options.withheld.is_empty() {
+            return Ok(());
+        }
+        let url = format!("{}/query/aql", self.client.base());
+        let paging: Vec<String> = [query.offset, query.fetch]
+            .into_iter()
+            .flatten()
+            .map(|number| number.to_string())
+            .collect();
+        let headers: Vec<(&'static str, &str)> = options
+            .request_id
+            .as_deref()
+            .map(|id| (REQUEST_ID_HEADER, id))
+            .into_iter()
+            .collect();
+        let outbound = Outbound {
+            aql: query.aql(),
+            paging: &paging,
+            url: &url,
+            headers: &headers,
+        };
+        match options.withheld.found_in(&outbound) {
+            Some(part) => Err(DispatchError::Withheld {
+                endpoint: self.endpoint.clone(),
+                part,
+            }),
+            None => Ok(()),
         }
     }
 }
@@ -225,6 +272,17 @@ pub enum DispatchError {
         #[source]
         source: Box<ClientError>,
     },
+    /// The outbound gate found a withheld patient identifier in the request
+    /// the gateway composed, so the request was not sent (§5.4.1, N33).
+    #[error(
+        "the request to endpoint {endpoint} would carry a patient identifier in {part}, so it was not sent"
+    )]
+    Withheld {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// The part of the request that carried it; never the value.
+        part: Part,
+    },
     /// The request could not be composed: a header that is not legal on the
     /// wire, or a body that would not serialize.
     #[error("the request to endpoint {endpoint} could not be composed")]
@@ -299,13 +357,16 @@ impl<T: Transport> NodeClient<T> {
     /// # Errors
     ///
     /// Returns [`DispatchError`] when the request could not leave the gateway:
-    /// no credential, or a request id or body the client runtime refuses.
-    /// Every answer, and every failure to reach the node, is a [`NodeReply`].
+    /// a withheld identifier in the request ([`DispatchError::Withheld`], with
+    /// nothing sent), no credential, or a request id or body the client
+    /// runtime refuses. Every answer, and every failure to reach the node, is a
+    /// [`NodeReply`].
     pub async fn query(
         &self,
         query: &NodeQuery,
         options: &DispatchOptions,
     ) -> Result<NodeReply, DispatchError> {
+        self.gate(query, options)?;
         let call = options
             .call_options()
             .map_err(|source| DispatchError::Compose {

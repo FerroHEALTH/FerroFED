@@ -8,6 +8,7 @@ mod e2e;
 mod facade;
 mod http;
 mod hygiene;
+mod outbound;
 mod readiness;
 mod request_log;
 mod resolution;

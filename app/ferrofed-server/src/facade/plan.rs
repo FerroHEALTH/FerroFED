@@ -16,6 +16,7 @@ use std::time::Instant;
 
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
+use ferrofed_engine::hygiene::Withheld;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -85,7 +86,10 @@ pub async fn patient(
     deadline: Instant,
 ) -> Result<Targets, TargetsError> {
     let membership = membership(snapshot);
-    let mut plan = exclude(Plan::new(), &membership.excluded)?;
+    // NOTE: §5.4.1, the identifier resolution consumes is withheld from every
+    // request the plan sends, the outbound gate's second layer.
+    let withheld = Withheld::new([SecretString::from(query.subject().value())]);
+    let mut plan = exclude(Plan::new().withholding(withheld), &membership.excluded)?;
     let members: Vec<NodeId> = membership.asked.keys().cloned().collect();
     let resolutions = match resolver {
         Some(resolver) => {

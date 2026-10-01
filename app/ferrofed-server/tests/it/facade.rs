@@ -173,7 +173,7 @@ pub(crate) fn settings_with_room() -> ferrofed_server::config::settings::ServerS
 
 /// A development gateway over node A and node B at `a` and `b`, resolving the
 /// patient at the members `rows` name.
-fn dev_gateway(
+pub(crate) fn dev_gateway(
     dir: &Path,
     a: &str,
     b: &str,

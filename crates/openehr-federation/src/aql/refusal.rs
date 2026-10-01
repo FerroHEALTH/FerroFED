@@ -160,6 +160,60 @@ pub enum Refusal {
     NodeSetUndefined,
 }
 
+impl Refusal {
+    /// A stable name for this refusal, for a security event that records why a
+    /// query was refused without quoting any of it (§5.4.3).
+    #[must_use]
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::NotAql { .. } => "not-aql",
+            Self::Parameters(_) => "parameters",
+            Self::Unreducible { .. } => "unreducible",
+            Self::IdentifierNotString { .. } => "identifier-not-string",
+            Self::SecondSubject { .. } => "second-subject",
+            Self::SecondNamespace { .. } => "second-namespace",
+            Self::EmptyIdentifier { .. } => "empty-identifier",
+            Self::NoNamespace => "no-namespace",
+            Self::SubjectProjection { .. } => "subject-projection",
+            Self::SubjectWithoutPredicate { .. } => "subject-without-predicate",
+            Self::SubjectOrdering { .. } => "subject-ordering",
+            Self::IdentifierElsewhere { .. } => "identifier-elsewhere",
+            Self::UnfoldableFunction { .. } => "unfoldable-function",
+            Self::UndirectedAggregate { .. } => "undirected-aggregate",
+            Self::OffsetUnsupported => "offset-unsupported",
+            Self::PagingConflict { .. } => "paging-conflict",
+            Self::NegativePaging { .. } => "negative-paging",
+            Self::NodeSetUndefined => "node-set-undefined",
+        }
+    }
+
+    /// The byte range of the query the refusal points at, when it points at
+    /// one: the position, never the text written there (§5.4.3).
+    #[must_use]
+    pub fn at(&self) -> Option<&Range<usize>> {
+        match self {
+            Self::NotAql { at }
+            | Self::Unreducible { at, .. }
+            | Self::IdentifierNotString { at }
+            | Self::SecondSubject { at }
+            | Self::SecondNamespace { at }
+            | Self::EmptyIdentifier { at }
+            | Self::SubjectProjection { at }
+            | Self::SubjectWithoutPredicate { at }
+            | Self::SubjectOrdering { at }
+            | Self::IdentifierElsewhere { at }
+            | Self::UnfoldableFunction { at }
+            | Self::UndirectedAggregate { at } => at.as_ref(),
+            Self::Parameters(_)
+            | Self::NoNamespace
+            | Self::OffsetUnsupported
+            | Self::PagingConflict { .. }
+            | Self::NegativePaging { .. }
+            | Self::NodeSetUndefined => None,
+        }
+    }
+}
+
 /// Why a patient predicate cannot be consumed exactly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

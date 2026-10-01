@@ -18,11 +18,13 @@
 //! per member that knows them, the engine fans out under the budget, and
 //! [`cells`] builds each façade row with the subject columns re-injected (N5).
 //! A refused query is a `400` whose message locates the fault by byte range
-//! and never quotes it (§5.4.3).
+//! and never quotes it (§5.4.3). Every strip, refusal and outbound-gate stop
+//! is a [`security`] event, by position and never by value.
 
 pub mod cells;
 pub mod intake;
 pub mod plan;
+pub mod security;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -140,7 +142,11 @@ async fn federate(
         offset: request.offset,
         fetch: request.fetch,
     };
-    let analysis = analyse(&request.q, &parameters, paging, federation.context())?;
+    let analysis = analyse(&request.q, &parameters, paging, federation.context())
+        .inspect_err(|refusal| security::refused(refusal, request_id))?;
+    if let Analysis::Patient(query) = &analysis {
+        security::stripped(query, request_id);
+    }
     let deadline = Instant::now()
         .checked_add(federation.budget().overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
@@ -176,7 +182,10 @@ async fn federate(
         (!request_id.is_empty()).then_some(request_id),
     )
     .await
-    .map_err(Failure::FanOut)?;
+    .map_err(|error| {
+        security::fan_out(&error, request_id);
+        Failure::FanOut(error)
+    })?;
     let mut status = answer.status();
     let mut result_set = answer
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
