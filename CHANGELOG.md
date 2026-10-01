@@ -20,6 +20,13 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+## [0.0.2-rc.1] - 2026-10-01
+
+A pre-release that rehearses the release lane at SLSA Build Level 3 (#31):
+attested binaries, the image `ghcr.io/ferrohealth/ferrofed` by digest, and
+their SBOMs. It carries the first federated query (#38) and everything merged
+since v0.0.1.
+
 ### Added
 
 - The release lane at SLSA Build Level 3 (#31): the reusable
@@ -30,30 +37,6 @@ binary follows from v0.0.2.
   `ghcr.io/ferrohealth/ferrofed` by digest, and attests the index and each
   platform manifest. A release is published only when the draft carries all
   eight assets of every target, and a pre-release is never marked latest.
-
-### Changed
-
-- The repository moved to the FerroHEALTH organization,
-  <https://github.com/FerroHEALTH/FerroFED>, with the roadmap board as
-  <https://github.com/orgs/FerroHEALTH/projects/1>; every link, the image name
-  `ghcr.io/ferrohealth/ferrofed` and the crates' `repository` follow it (#123).
-
-### Changed
-
-- The crate layout names every crate that may be published after the
-  specification it implements, one crate per specification with a feature per
-  layer or profile (#106): `openehr-federation` 0.0.1 (the Federation Tier
-  wire types, formerly `ferrofed-wire`, with the `aql` and `merge` features),
-  `ihe-iti` 0.0.1 (features `pixm`, `pdqm`, `mcsd`, `pmir`, `xcpd`) and
-  `nl-generic-functions` 0.0.1 (features `nvi`, `mitz`, `lrza`, `nuts-auth`).
-  The names are held on crates.io by 0.0.0 placeholders. `ferrofed-registry`,
-  `ferrofed-identity` and `ferrofed-engine` move under `app/` and are never
-  published. A new CI job lints every feature of the published crates on its
-  own, and the architecture test also fails when a binding crate depends on
-  FerroFED.
-
-### Added
-
 - The first federated query (#38): `POST {base}/v1/query/aql` answers one
   ITS-REST `RESULT_SET` over every member of the registry, with no federation
   syntax needed (N1, CP-1).
@@ -167,6 +150,21 @@ binary follows from v0.0.2.
 
 ### Changed
 
+- The repository moved to the FerroHEALTH organization,
+  <https://github.com/FerroHEALTH/FerroFED>, with the roadmap board as
+  <https://github.com/orgs/FerroHEALTH/projects/1>; every link, the image name
+  `ghcr.io/ferrohealth/ferrofed` and the crates' `repository` follow it (#123).
+- The crate layout names every crate that may be published after the
+  specification it implements, one crate per specification with a feature per
+  layer or profile (#106): `openehr-federation` 0.0.1 (the Federation Tier
+  wire types, formerly `ferrofed-wire`, with the `aql` and `merge` features),
+  `ihe-iti` 0.0.1 (features `pixm`, `pdqm`, `mcsd`, `pmir`, `xcpd`) and
+  `nl-generic-functions` 0.0.1 (features `nvi`, `mitz`, `lrza`, `nuts-auth`).
+  The names are held on crates.io by 0.0.0 placeholders. `ferrofed-registry`,
+  `ferrofed-identity` and `ferrofed-engine` move under `app/` and are never
+  published. A new CI job lints every feature of the published crates on its
+  own, and the architecture test also fails when a binding crate depends on
+  FerroFED.
 - The `openehr-*` family moves to 0.0.74, the lockstep release with the AST
   visitor, spans, parameter binding and the federation directive in
   `openehr-query`, and the router builder, operation matcher, credentials
@@ -289,6 +287,7 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.2-rc.1...HEAD
+[0.0.2-rc.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.2-rc.1
 [0.0.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1-rc.1...v0.0.1
 [0.0.1-rc.1]: https://github.com/FerroHEALTH/FerroFED/releases/tag/v0.0.1-rc.1
