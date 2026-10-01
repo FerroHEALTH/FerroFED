@@ -22,6 +22,21 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The resolution step through a PIX Manager (#43). A `[pixm]` table selects
+  the PIXm resolver: each `[[pixm.manager]]` names a PIX Manager's FHIR base,
+  its credentials, and the `ehr_id` domain of every member it resolves, and
+  `[pixm.namespaces]` maps a client's issuing namespace to a PIX assigning
+  authority. One ITI-83 call per Manager resolves the patient at its members;
+  only a member that knows the patient is asked its node query, a member that
+  does not is `not-resolved` in `meta.federation`, a patient known nowhere is
+  a `200` with no rows and `complete: false`, and a Manager that cannot answer
+  fails the query `424` with no node asked. The patient identifier and its
+  namespace reach the PIX Manager only. Boot is refused when a member has no
+  Manager, when a member has two, or when `[dev]` and `[pixm]` are both set.
+  The `{node, ehr_id}` set of each resolution is held in memory as the client
+  session's resolution bindings, bounded by `federation.binding_ttl_ms`
+  (default 15 minutes), and nothing derived from a patient identifier is
+  stored or logged.
 - The PIXm ITI-83 client (#42): `ihe-iti` 0.0.3, feature `pixm`, asks a PIX
   Manager's `Patient/$ihe-pix` for the identifiers other domains hold for a
   patient, held to the vendored PIXm 3.1.0 `OperationDefinition` and read into

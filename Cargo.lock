@@ -882,12 +882,19 @@ name = "ferrofed-identity"
 version = "0.0.2"
 dependencies = [
  "async-trait",
+ "base64 0.23.1",
  "ferrofed-registry",
+ "http",
+ "ihe-iti",
+ "reqwest",
  "secrecy",
  "serde",
  "thiserror",
+ "tokio",
  "toml",
  "tracing",
+ "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -929,6 +936,7 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
  "wiremock",
 ]

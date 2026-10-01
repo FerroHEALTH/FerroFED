@@ -32,6 +32,28 @@ pub struct Settings {
     pub credentials: BTreeMap<String, Scheme>,
     /// The static development cross-reference, as written.
     pub dev: Option<DevSection>,
+    /// The PIXm resolver, with every secret read.
+    pub pixm: Option<PixmSettings>,
+}
+
+/// The PIXm resolver, resolved.
+#[derive(Debug)]
+pub struct PixmSettings {
+    /// The PIX Managers.
+    pub managers: Vec<PixManagerSettings>,
+    /// A client's issuing namespace mapped to a PIX assigning authority.
+    pub namespaces: BTreeMap<String, String>,
+}
+
+/// One PIX Manager, resolved.
+#[derive(Debug)]
+pub struct PixManagerSettings {
+    /// The Manager's FHIR base URL.
+    pub url: url::Url,
+    /// Each member it resolves, mapped to that member's `ehr_id` domain.
+    pub members: BTreeMap<String, String>,
+    /// How the gateway authenticates to it.
+    pub credentials: Option<Scheme>,
 }
 
 /// The federated query, resolved.
@@ -41,6 +63,8 @@ pub struct FederationSettings {
     pub budget: Budget,
     /// The issuing namespace an unqualified patient identifier resolves in.
     pub default_namespace: Option<String>,
+    /// How long the resolution bindings of a client session live.
+    pub binding_ttl: Duration,
 }
 
 /// The HTTP surface, resolved.
@@ -94,6 +118,7 @@ impl Settings {
             listen = %self.server.listen,
             profile = ?self.profile,
             registry = self.registry_document.is_some(),
+            pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             credentials = endpoints.join(","),
             "configuration resolved"
         );

@@ -83,6 +83,15 @@ pub enum Error {
         /// The key that carries no value.
         key: String,
     },
+    /// A URL does not parse.
+    #[error("{key} is not a URL")]
+    Url {
+        /// The key that holds it.
+        key: String,
+        /// What the URL parser reported.
+        #[source]
+        source: url::ParseError,
+    },
     /// A socket address does not parse.
     #[error("{key} is not a socket address")]
     Listen {

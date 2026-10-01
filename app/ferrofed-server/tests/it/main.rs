@@ -10,6 +10,7 @@ mod http;
 mod hygiene;
 mod readiness;
 mod request_log;
+mod resolution;
 mod run;
 mod shutdown;
 mod support;

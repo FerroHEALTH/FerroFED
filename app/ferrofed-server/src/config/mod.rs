@@ -20,7 +20,10 @@ use std::time::Duration;
 
 use crate::config::error::{Error, Stage};
 use crate::config::secrets::resolve_credentials;
-use crate::config::settings::{FederationSettings, ServerSettings, Settings, TelemetrySettings};
+use crate::config::settings::{
+    FederationSettings, PixManagerSettings, PixmSettings, ServerSettings, Settings,
+    TelemetrySettings,
+};
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
 pub mod error;
@@ -63,6 +66,9 @@ pub struct Config {
     /// The static development cross-reference (`[[dev.crossref]]`), accepted
     /// only under `profile = "development"`.
     pub dev: Option<DevSection>,
+    /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
+    /// `ehr_id` domain there (#43).
+    pub pixm: Option<Pixm>,
 }
 
 impl Default for Config {
@@ -75,8 +81,37 @@ impl Default for Config {
             federation: Federation::default(),
             credentials: BTreeMap::new(),
             dev: None,
+            pixm: None,
         }
     }
+}
+
+/// The PIXm resolver: the identity binding of N3 over ITI-83 (Annex A.1).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Pixm {
+    /// The PIX Managers, one `[[pixm.manager]]` each; every registry member is
+    /// resolved by exactly one of them.
+    pub manager: Vec<PixManager>,
+    /// A client's issuing namespace mapped to the PIX assigning authority it
+    /// stands for (`"2.999.1" = "urn:oid:2.999.1"`). A namespace that is
+    /// itself an absolute URI needs no entry.
+    pub namespaces: BTreeMap<String, String>,
+}
+
+/// One PIX Manager.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PixManager {
+    /// The Manager's FHIR base URL.
+    pub url: String,
+    /// Each member this Manager resolves, mapped to its `ehr_id` domain: the
+    /// assigning authority whose identifiers are that member's `ehr_id`s
+    /// (Annex A.1).
+    pub members: BTreeMap<String, String>,
+    /// How the gateway authenticates to the Manager, when the transport does
+    /// not.
+    pub credentials: Option<Credentials>,
 }
 
 /// The federation's membership.
@@ -102,6 +137,10 @@ pub struct Federation {
     /// The issuing namespace an unqualified patient identifier resolves in
     /// (decision A5). Without it, a query that names no namespace is a `400`.
     pub default_namespace: Option<String>,
+    /// How long the resolution bindings of a client session live (§12.5.1
+    /// step 2, decision A20): a correctness bound, past which a binding is
+    /// never routed on.
+    pub binding_ttl_ms: u64,
 }
 
 impl Default for Federation {
@@ -110,6 +149,7 @@ impl Default for Federation {
             per_node_timeout_ms: 10_000,
             overall_timeout_ms: 25_000,
             default_namespace: None,
+            binding_ttl_ms: 900_000,
         }
     }
 }
@@ -309,8 +349,8 @@ impl Config {
     /// cannot be read or holds nothing, and the value errors
     /// ([`Error::Listen`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::Missing`], [`Error::Scheme`],
-    /// [`Error::NoScheme`], [`Error::Budget`]), each naming the key that
-    /// carries the fault.
+    /// [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]), each naming the
+    /// key that carries the fault.
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -344,6 +384,7 @@ impl Config {
             credentials.insert(endpoint.clone(), scheme);
         }
         let federation = self.resolve_federation(request_timeout)?;
+        let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
         Ok(Settings {
             profile: self.profile,
             server: ServerSettings {
@@ -360,6 +401,7 @@ impl Config {
             federation,
             credentials,
             dev: self.dev.clone(),
+            pixm,
         })
     }
 
@@ -392,11 +434,39 @@ impl Config {
                 key: String::from("federation.default_namespace"),
             });
         }
+        let binding_ttl = positive_ms("federation.binding_ttl_ms", self.federation.binding_ttl_ms)?;
         Ok(FederationSettings {
             budget,
             default_namespace: self.federation.default_namespace.clone(),
+            binding_ttl,
         })
     }
+}
+
+/// Resolves `[pixm]`: every Manager URL parses and every secret is read.
+fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
+    let mut managers = Vec::with_capacity(pixm.manager.len());
+    for (index, manager) in pixm.manager.iter().enumerate() {
+        let key = format!("pixm.manager[{index}]");
+        let url = url::Url::parse(&manager.url).map_err(|source| Error::Url {
+            key: format!("{key}.url"),
+            source,
+        })?;
+        let credentials = manager
+            .credentials
+            .as_ref()
+            .map(|section| resolve_credentials(&format!("{key}.credentials"), section))
+            .transpose()?;
+        managers.push(PixManagerSettings {
+            url,
+            members: manager.members.clone(),
+            credentials,
+        });
+    }
+    Ok(PixmSettings {
+        managers,
+        namespaces: pixm.namespaces.clone(),
+    })
 }
 
 /// Returns the duration `millis` names, refusing zero under `key`.

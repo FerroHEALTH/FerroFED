@@ -121,7 +121,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-identity` (the role traits, `PatientRef`, the development
-  cross-reference and the adapters over the binding crates) and
+  cross-reference, the PIXm resolver over `ihe-iti`, the session-scoped
+  resolution bindings, and the adapters over the binding crates) and
   `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):

@@ -533,6 +533,21 @@ the table present, warns at startup that it is no identity binding, and reports
 `localization.mode = "development-static"` in `OPTIONS`. Its values are
 synthetic.
 
+**The PIXm resolver** (#43). `[[pixm.manager]]` names each PIX Manager's FHIR
+base, its credentials, and each member it resolves mapped to that member's
+`ehr_id` domain (Annex A.1); `[pixm.namespaces]` maps a client's issuing
+namespace to the PIX assigning authority when the namespace is not itself an
+absolute URI. Boot is refused unless every registry member has exactly one
+Manager, and `[dev]` and `[pixm]` together are refused (decision A14). One
+ITI-83 call per Manager carries a `targetSystem` per asked member. A domain
+with no identifier, or the profile's not-found answer, is `Unknown` (N6). A
+domain with two identifiers, a value that is not an `ehr_id`, a namespace with
+no mapping, a timeout and any other failure are `Unavailable`, which fails the
+query `424` (decision A17). No specification governs the namespace mapping or
+the coverage rule: our own design. Each resolution's `{node, ehr_id}` set is
+recorded as the session's resolution bindings (decision A20) once a client
+session exists (#80); follow-up routing reads them (#62).
+
 ## 7. The security handoff
 
 Research: #22. N25 requires inbound authentication at the Tier, onward

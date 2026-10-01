@@ -30,7 +30,7 @@ cp	actor	requirements	tracks	status	issue	reason
 CP-1	Gateway	N1	1	covered	#38	-
 CP-2	Gateway	N2,N5	1,2	covered	#35,#38	-
 CP-38	Gateway	N33	2,10	covered	#44	-
-CP-3	Gateway	N3	2	planned	#42	-
+CP-3	Gateway	N3	2	covered	#42,#43	-
 CP-4	Gateway	N7	2	covered	#35,#38	-
 CP-5	Gateway	N4,N10	3,4	planned	#46,#85	-
 CP-6	Gateway	N11	3	planned	#70	-
@@ -39,7 +39,7 @@ CP-8	Gateway	N13	5	planned	#52,#55	-
 CP-9	Gateway	N15	5	planned	#56	-
 CP-10	Gateway	N14	5	planned	#54	-
 CP-11	Gateway	N16	4	planned	#49	-
-CP-12	Gateway	N6,N16	4	planned	#43,#50,#58	-
+CP-12	Gateway	N6,N16	4	covered	#43,#50,#58	-
 CP-13	Gateway	N19,N20,N21	6	planned	#36,#67,#74	-
 CP-14	Gateway	N22	6	planned	#64	-
 CP-15	Gateway	N23	6	planned	#65	-
@@ -64,7 +64,7 @@ CP-33	Gateway	N41,N42	6,11	planned	#62,#63,#91	-
 CP-33a	Operator	N42a	11	operator	#79,#91	verified at admission or in the registry, not on a request (section 16.2)
 CP-34	Gateway	N43	9	planned	#75,#76	-
 CP-35	Gateway	N17,N18	1	covered	#33,#38,#72	-
-CP-36	Gateway	N8	2,7	planned	#43,#83	-
+CP-36	Gateway	N8	2,7	covered	#43,#83	-
 CP-37	Gateway	N12	3	planned	#72	-
 CP-39	Operator	N25	7	operator	#84	verified at admission or in the registry, not on a request (section 16.2)
 CP-40	Gateway	N44	9	planned	#77,#78	-

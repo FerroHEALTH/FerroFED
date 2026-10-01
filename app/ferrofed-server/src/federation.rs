@@ -17,21 +17,25 @@ use std::sync::Arc;
 
 use ferrofed_engine::dispatch::{NodeClients, SetupError, SharedCredentials};
 use ferrofed_engine::fanout::Budget;
+use ferrofed_identity::binding::ResolutionBindings;
 use ferrofed_identity::dev::{DevCrossRefError, StaticResolver};
+use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
+use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::Resolver;
 use ferrofed_registry::error::{IdError, LoadError};
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::aql::{Context, Targeting};
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
-use crate::config::settings::{Scheme, Settings};
+use crate::config::settings::{PixmSettings, Scheme, Settings};
 
 /// The federation a server serves the federated query over.
 pub struct Federation {
     snapshot: Arc<RegistrySnapshot>,
     clients: NodeClients<ReqwestTransport>,
     resolver: Option<Arc<dyn Resolver>>,
+    bindings: ResolutionBindings,
     context: Context,
     budget: Budget,
 }
@@ -59,6 +63,31 @@ pub enum FederationError {
     /// The static cross-reference refuses its rows or the profile.
     #[error("the [dev] cross-reference cannot be enabled")]
     DevCrossRef(#[source] DevCrossRefError),
+    /// `[pixm]` is set but no registry document is, so it names members that
+    /// do not exist.
+    #[error("the [pixm] resolver needs registry.document, whose members it names")]
+    PixmWithoutRegistry,
+    /// Both `[dev]` and `[pixm]` are set, and exactly one resolver is active
+    /// (`docs/architecture.md` section 6, decision A14).
+    #[error("set one resolver: [dev] and [pixm] are both configured")]
+    TwoResolvers,
+    /// A `[pixm]` member key is not a node id.
+    #[error("pixm.manager[{manager}].members.{key:?} is not a node id")]
+    PixmMember {
+        /// The Manager's index.
+        manager: usize,
+        /// The key that was given.
+        key: String,
+        /// What the id rules reported.
+        #[source]
+        source: IdError,
+    },
+    /// A `[pixm.namespaces]` key is not a namespace.
+    #[error("pixm.namespaces has an empty namespace")]
+    PixmNamespace(#[source] PatientRefError),
+    /// The PIXm resolver refuses its Managers or members.
+    #[error("the [pixm] resolver cannot be enabled")]
+    Pixm(#[source] PixmConfigError),
     /// A credentials section is keyed by something that is not an endpoint id.
     #[error("credentials.{key:?} is not an endpoint id")]
     CredentialsKey {
@@ -97,6 +126,9 @@ impl Federation {
             if settings.dev.is_some() {
                 return Err(FederationError::DevWithoutRegistry);
             }
+            if settings.pixm.is_some() {
+                return Err(FederationError::PixmWithoutRegistry);
+            }
             return Ok(None);
         };
         let snapshot =
@@ -104,14 +136,16 @@ impl Federation {
                 path: path.clone(),
                 source: Box::new(source),
             })?;
-        let resolver = match &settings.dev {
-            None => None,
-            Some(section) => {
+        let resolver = match (&settings.dev, &settings.pixm) {
+            (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
+            (None, None) => None,
+            (Some(section), None) => {
                 let table = section.table().map_err(FederationError::DevTable)?;
                 StaticResolver::from_config(settings.profile, Some(table), &snapshot)
                     .map_err(FederationError::DevCrossRef)?
                     .map(|resolver| -> Arc<dyn Resolver> { Arc::new(resolver) })
             }
+            (None, Some(pixm)) => Some(pixm_resolver(pixm, &snapshot)?),
         };
         let credentials = onward_credentials(settings)?;
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
@@ -128,6 +162,7 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
+            bindings: ResolutionBindings::new(settings.federation.binding_ttl),
             context,
             budget: settings.federation.budget,
         }))
@@ -146,9 +181,18 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
+            bindings: ResolutionBindings::new(std::time::Duration::from_millis(
+                crate::config::Federation::default().binding_ttl_ms,
+            )),
             context,
             budget,
         }
+    }
+
+    /// The resolution bindings of every client session (§12.5.1 step 2).
+    #[must_use]
+    pub fn bindings(&self) -> &ResolutionBindings {
+        &self.bindings
     }
 
     /// The registry snapshot every query of this process runs over.
@@ -191,6 +235,48 @@ impl std::fmt::Debug for Federation {
             .field("budget", &self.budget)
             .finish_non_exhaustive()
     }
+}
+
+/// The PIXm resolver `[pixm]` describes over the members of `snapshot`.
+fn pixm_resolver(
+    pixm: &PixmSettings,
+    snapshot: &RegistrySnapshot,
+) -> Result<Arc<dyn Resolver>, FederationError> {
+    let mut managers = Vec::with_capacity(pixm.managers.len());
+    for (index, manager) in pixm.managers.iter().enumerate() {
+        let mut members = BTreeMap::new();
+        for (key, domain) in &manager.members {
+            let member =
+                NodeId::new(key.as_str()).map_err(|source| FederationError::PixmMember {
+                    manager: index,
+                    key: key.clone(),
+                    source,
+                })?;
+            members.insert(member, domain.clone());
+        }
+        let auth = match &manager.credentials {
+            None => PixAuth::None,
+            Some(Scheme::Bearer(token)) => PixAuth::Bearer(token.clone()),
+            Some(Scheme::Basic { user, password }) => PixAuth::Basic {
+                user: user.clone(),
+                password: password.clone(),
+            },
+        };
+        managers.push(ManagerConfig {
+            base: manager.url.clone(),
+            auth,
+            members,
+        });
+    }
+    let mut namespaces = BTreeMap::new();
+    for (namespace, system) in &pixm.namespaces {
+        let namespace =
+            IdentifierNamespace::new(namespace.as_str()).map_err(FederationError::PixmNamespace)?;
+        namespaces.insert(namespace, system.clone());
+    }
+    let resolver =
+        PixmResolver::from_config(managers, namespaces, snapshot).map_err(FederationError::Pixm)?;
+    Ok(Arc::new(resolver))
 }
 
 /// The onward credentials of each endpoint that has a `[credentials]`
