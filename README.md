@@ -6,6 +6,7 @@
 [![CI](https://github.com/rubentalstra/FerroFED/actions/workflows/ci.yml/badge.svg)](https://github.com/rubentalstra/FerroFED/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/rubentalstra/FerroFED/actions/workflows/codeql.yml/badge.svg)](https://github.com/rubentalstra/FerroFED/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/rubentalstra/FerroFED/badge)](https://scorecard.dev/viewer/?uri=github.com/rubentalstra/FerroFED)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15130/badge)](https://www.bestpractices.dev/projects/15130)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=rubentalstra_FerroFED&metric=alert_status)](https://sonarcloud.io/summary/overall?id=rubentalstra_FerroFED)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=rubentalstra_FerroFED&metric=coverage)](https://sonarcloud.io/summary/new_code?id=rubentalstra_FerroFED)
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
