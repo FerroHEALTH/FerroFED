@@ -348,6 +348,46 @@ absolute URL on the node, so a client that follows it bypasses the gateway,
 which works against N1 and N28. FerroFED passes it unmodified as N31 requires,
 and the conflict is a draft on #17 to revisit at the re-pin (decision A13).
 
+**Follow-up routing.** A follow-up names its node in one of four ways, and
+each has its own normative order (§12.3 to §12.5, the routing-key table of
+§12a.2). A path `ehr_id` is resolved by the explicit target, the session's
+resolution binding, the `ehr_id` index, and only for a read an ask-all probe,
+never skipping a step that answers (N41); several claimants are a `409` and an
+integrity incident, never a choice (N42). A `VERSION` uid routes on its
+`creating_system_id`, then the row's `endpoint_id`, then ask-all (N22). A
+versioned write goes only to the controlling CDR and a new object only to an
+explicit target, and a write that cannot be routed exactly is a `400` (N23,
+N41). The answer is forwarded once, byte-identical, and no uid is rewritten.
+
+```mermaid
+flowchart TD
+    req["follow-up request"] --> kind{"what does it address?"}
+    kind -->|"path ehr_id, §12.5.1"| s1{"1. openEHR-federation-endpoint header?"}
+    s1 -->|yes| one["route to that node"]
+    s1 -->|no| s2{"2. resolution binding held for this session?"}
+    s2 -->|exactly one node| one
+    s2 -->|none| s3{"3. ehr_id index entry?"}
+    s3 -->|exactly one node| one
+    s3 -->|none or several| rw{"read or write?"}
+    rw -->|write| r400["400, explicit target required (N41)"]
+    rw -->|read| s4["4. ask-all probe GET ehr/{ehr_id}"]
+    s4 -->|one claimant| one
+    s4 -->|none| r404["404"]
+    s4 -->|several claimants| r409["409 listing the claimants, integrity incident (N42)"]
+    kind -->|"VERSION uid, §12.3"| v1{"creating_system_id in the registry?"}
+    v1 -->|yes| one
+    v1 -->|no| v2{"endpoint_id on the row?"}
+    v2 -->|yes| one
+    v2 -->|no| v3["ask-all, reads only"]
+    kind -->|"versioned write, §12.4"| w1{"controlling node: system_id equals creating_system_id?"}
+    w1 -->|exactly one| one
+    w1 -->|otherwise| r400
+    kind -->|"new object, §12.4"| n1{"explicit target: directive, header or path?"}
+    n1 -->|yes| one
+    n1 -->|no| r400
+    one --> pass["forward once, byte-identical; uids never rewritten (N22)"]
+```
+
 **`GET {base}/v1/ehr?subject_id=`.** `ehr_get_by_subject` carries a patient
 identifier in the query string, which N33 forbids the gateway to dispatch, and
 the specification is silent on the operation. FerroFED treats `subject_id` and
