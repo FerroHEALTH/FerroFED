@@ -39,3 +39,7 @@ trigger auto merge okay!! so when the CI is green it will be merged". The
   `gh pr merge * --auto` and `gh pr merge * --auto *` (owner, 2026-10-01,
   after a session merge was refused for want of the rule). The allow covers
   `--auto` only; a plain immediate merge is still the owner's call.
+- The deny list refuses `gh pr merge` with `--admin` (an immediate merge that
+  bypasses the ruleset, which the allow wildcards would otherwise match) and
+  with `-R`/`--repo` (the allow covers this repository only); deny wins over
+  allow. Found by the commit security review on 2026-10-01.
