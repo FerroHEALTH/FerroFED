@@ -32,6 +32,7 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::fanout::{FanOutError, fan_out};
+use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, StatusCode};
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::{Analysis, Paging, analyse};
@@ -58,7 +59,9 @@ pub async fn query_aql(
     let Some(federation) = state.federation() else {
         return crate::body::error(StatusCode::NOT_IMPLEMENTED, "not_implemented", &request_id);
     };
-    match federate(federation, &body, &request_id).await {
+    // TODO(#80): the authenticated client session the resolution bindings belong to.
+    let session: Option<SessionKey> = None;
+    match federate(federation, &body, &request_id, session.as_ref()).await {
         Ok((status, result_set)) => (status, Json(result_set)).into_response(),
         Err(failure) => failure.into_response(),
     }
@@ -118,10 +121,15 @@ impl IntoResponse for Failure {
 }
 
 /// Runs one federated query and returns the status and the `RESULT_SET`.
+///
+/// The `{node, ehr_id}` set a resolution produces is held as `session`'s
+/// resolution bindings (§12.5.1 step 2, decision A20); without a session there
+/// is nothing to scope them to, and none is held.
 async fn federate(
     federation: &Federation,
     body: &[u8],
     request_id: &str,
+    session: Option<&SessionKey>,
 ) -> Result<(StatusCode, ResultSet), Failure> {
     // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
     // body is refused with a fixed message.
@@ -153,6 +161,13 @@ async fn federate(
             None,
         ),
     };
+    if let Some(session) = session {
+        federation.bindings().record(
+            session,
+            Instant::now(),
+            targets.resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
+        );
+    }
     let answer = fan_out(
         federation.clients(),
         federation.snapshot(),

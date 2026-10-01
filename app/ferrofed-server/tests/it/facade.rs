@@ -32,18 +32,18 @@ use crate::support::{call, settings};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The synthetic patient identifier: visibly synthetic, under no real scheme.
-const PATIENT: &str = "SENTINEL-PATIENT-38a1";
+pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38a1";
 
 /// The synthetic issuing namespace, under the example OID arc.
-const NAMESPACE: &str = "urn:oid:2.999.1";
+pub(crate) const NAMESPACE: &str = "urn:oid:2.999.1";
 
 /// The patient's `ehr_id` at node A and at node B.
-const EHR_A: &str = "2222aaaa-2222-4222-8222-222222222222";
-const EHR_B: &str = "1111bbbb-1111-4111-8111-111111111111";
+pub(crate) const EHR_A: &str = "2222aaaa-2222-4222-8222-222222222222";
+pub(crate) const EHR_B: &str = "1111bbbb-1111-4111-8111-111111111111";
 
 /// The façade query of §7.2: the patient identified the openEHR way, the
 /// identifier selected back, and one composition column.
-fn patient_query() -> String {
+pub(crate) fn patient_query() -> String {
     format!(
         "SELECT e/ehr_status/subject/external_ref/id/value AS patient, c/uid/value \
          FROM EHR e CONTAINS COMPOSITION c \
@@ -53,7 +53,7 @@ fn patient_query() -> String {
 }
 
 /// The ITS-REST `AdhocQueryExecute` body carrying `aql`.
-fn body(aql: &str) -> Result<String, serde_json::Error> {
+pub(crate) fn body(aql: &str) -> Result<String, serde_json::Error> {
     #[derive(serde::Serialize)]
     struct Adhoc<'a> {
         q: &'a str,
@@ -62,7 +62,7 @@ fn body(aql: &str) -> Result<String, serde_json::Error> {
 }
 
 /// A node answering `POST /v1/query/aql` with one row holding `uid`.
-async fn node_answering(uid: &str) -> MockServer {
+pub(crate) async fn node_answering(uid: &str) -> MockServer {
     let server = MockServer::start().await;
     let answer = format!(
         r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["{uid}"]]}}"##
@@ -78,7 +78,7 @@ async fn node_answering(uid: &str) -> MockServer {
 }
 
 /// A node answering `POST /v1/query/aql` with `status` and an ITS-REST error.
-async fn node_failing(status: u16) -> MockServer {
+pub(crate) async fn node_failing(status: u16) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
@@ -93,7 +93,7 @@ async fn node_failing(status: u16) -> MockServer {
 
 /// The registry document of node A and node B at `a` and `b`, with
 /// `extra` appended.
-fn registry(a: &str, b: &str, extra: &str) -> String {
+pub(crate) fn registry(a: &str, b: &str, extra: &str) -> String {
     format!(
         r#"
 [[organisation]]
@@ -143,7 +143,12 @@ fn crossref(rows: &[(&str, &str)]) -> String {
 
 /// The gateway configured by the top-level keys `top` and the tables
 /// `tables`, with the registry document `registry` written into `dir`.
-fn gateway(dir: &Path, registry: &str, top: &str, tables: &str) -> Result<Router, Box<dyn Error>> {
+pub(crate) fn gateway(
+    dir: &Path,
+    registry: &str,
+    top: &str,
+    tables: &str,
+) -> Result<Router, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
@@ -159,7 +164,7 @@ fn gateway(dir: &Path, registry: &str, top: &str, tables: &str) -> Result<Router
 }
 
 /// The middleware settings, with a request timeout past the fan-out budget.
-fn settings_with_room() -> ferrofed_server::config::settings::ServerSettings {
+pub(crate) fn settings_with_room() -> ferrofed_server::config::settings::ServerSettings {
     let mut server = settings();
     server.request_timeout = std::time::Duration::from_secs(10);
     server.body_limit = 64 * 1024;
@@ -183,14 +188,14 @@ fn dev_gateway(
 }
 
 /// `POST /v1/query/aql` with `body`.
-fn post(body: String) -> Result<Request<Body>, http::Error> {
+pub(crate) fn post(body: String) -> Result<Request<Body>, http::Error> {
     Request::post("/v1/query/aql")
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(body))
 }
 
 /// The bodies of every request `server` received.
-async fn received(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
+pub(crate) async fn received(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut bodies = Vec::new();
     for request in requests {
@@ -200,7 +205,7 @@ async fn received(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
 }
 
 /// Every byte `server` received, request line and headers included.
-async fn wire(server: &MockServer) -> Result<String, Box<dyn Error>> {
+pub(crate) async fn wire(server: &MockServer) -> Result<String, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut text = String::new();
     for request in requests {
@@ -216,11 +221,11 @@ async fn wire(server: &MockServer) -> Result<String, Box<dyn Error>> {
 
 /// The federated answer, read for the members the tests assert on.
 #[derive(Debug, Deserialize)]
-struct Answer {
+pub(crate) struct Answer {
     q: String,
     columns: Vec<Column>,
-    rows: Vec<Vec<String>>,
-    meta: Meta,
+    pub(crate) rows: Vec<Vec<String>>,
+    pub(crate) meta: Meta,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -230,21 +235,21 @@ struct Column {
 }
 
 #[derive(Debug, Deserialize)]
-struct Meta {
-    federation: FederationMeta,
+pub(crate) struct Meta {
+    pub(crate) federation: FederationMeta,
 }
 
 #[derive(Debug, Deserialize)]
-struct FederationMeta {
-    complete: bool,
-    endpoints: Vec<Endpoint>,
+pub(crate) struct FederationMeta {
+    pub(crate) complete: bool,
+    pub(crate) endpoints: Vec<Endpoint>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Endpoint {
-    id: String,
-    status: String,
-    row_count: Option<u64>,
+pub(crate) struct Endpoint {
+    pub(crate) id: String,
+    pub(crate) status: String,
+    pub(crate) row_count: Option<u64>,
 }
 
 /// The ITS-REST error body.
@@ -257,7 +262,7 @@ struct ItsError {
 }
 
 /// Each endpoint's status, in the envelope's order.
-fn statuses(answer: &Answer) -> Vec<(&str, &str)> {
+pub(crate) fn statuses(answer: &Answer) -> Vec<(&str, &str)> {
     answer
         .meta
         .federation

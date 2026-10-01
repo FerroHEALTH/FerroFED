@@ -18,7 +18,7 @@ use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::{Resolution, Resolver};
-use ferrofed_registry::id::{EndpointId, NodeId};
+use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::{EndpointStatus, RegistrySnapshot};
 use openehr_federation::aql::subject::Subject;
 use openehr_federation::aql::{ColumnSource, PatientQuery, UnscopedQuery};
@@ -38,6 +38,9 @@ pub struct Targets {
     /// Whether the resolver could not answer for some member, which fails the
     /// query under all-or-nothing (decision A17).
     pub resolution_failed: bool,
+    /// The `{node, ehr_id}` set the resolution produced, for the session's
+    /// resolution bindings (§12.5.1 step 2).
+    pub resolved: Vec<(NodeId, EhrId)>,
 }
 
 /// A plan that cannot be built.
@@ -93,6 +96,7 @@ pub async fn patient(
     };
     let mut sources = None;
     let mut resolution_failed = false;
+    let mut bound = Vec::new();
     for (member, endpoint) in membership.asked {
         match resolutions.get(&member) {
             Some(Resolution::Resolved(ehr_id)) => {
@@ -101,6 +105,7 @@ pub async fn patient(
                 plan = plan
                     .dispatch(endpoint, NodeQuery::new(node.aql()))
                     .map_err(TargetsError::Plan)?;
+                bound.push((member.clone(), ehr_id.clone()));
             }
             Some(Resolution::Unknown) => {
                 let error = detail("the patient is not known at this member")?;
@@ -129,6 +134,7 @@ pub async fn patient(
         plan,
         sources,
         resolution_failed,
+        resolved: bound,
     })
 }
 
@@ -152,6 +158,7 @@ pub fn unscoped(
         plan,
         sources: query.node_query().columns().to_vec(),
         resolution_failed: false,
+        resolved: Vec::new(),
     })
 }
 

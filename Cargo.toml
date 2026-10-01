@@ -40,6 +40,7 @@ openehr-sdt = { version = "0.0.74", default-features = false }
 # (.claude/rules/crates-publishing.md); an app/* member is never packaged, so
 # it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.4" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.3" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -77,6 +78,8 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
+# The basic scheme of the PIX Manager credentials (#43), RFC 7617.
+base64 = "0.23.1"
 # The FHIR R4 model of the IHE bindings (docs/architecture.md section 6,
 # decision A16), compiled only in crates/ihe-iti; checked against
 # docs/VERSIONS.md by scripts/checks/versions.sh. Each binding names the

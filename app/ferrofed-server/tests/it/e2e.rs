@@ -58,11 +58,39 @@ fn plan(ehr_id: Uuid, composition: DemoComposition) -> SeedPlan {
     }
 }
 
-/// The gateway over node A and node B, resolving the patient at both.
+/// The gateway over node A and node B, resolving the patient at both through
+/// the development cross-reference.
 fn gateway(
     dir: &std::path::Path,
     a: &ProxiedNode,
     b: &ProxiedNode,
+) -> Result<axum::Router, Box<dyn Error>> {
+    let resolver = format!(
+        r#"profile = "development"
+
+[[dev.crossref]]
+namespace = "{NAMESPACE}"
+value = "{PATIENT}"
+member = "node-a"
+ehr_id = "{EHR_A}"
+
+[[dev.crossref]]
+namespace = "{NAMESPACE}"
+value = "{PATIENT}"
+member = "node-b"
+ehr_id = "{EHR_B}"
+"#
+    );
+    gateway_resolving(dir, a, b, &resolver)
+}
+
+/// The gateway over node A and node B, with the resolver `resolver`
+/// configures.
+fn gateway_resolving(
+    dir: &std::path::Path,
+    a: &ProxiedNode,
+    b: &ProxiedNode,
+    resolver: &str,
 ) -> Result<axum::Router, Box<dyn Error>> {
     let registry = format!(
         r#"
@@ -103,27 +131,7 @@ managing_organisation = "org-b"
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let config = format!(
-        r#"profile = "development"
-
-[registry]
-document = {document}
-
-[federation]
-per_node_timeout_ms = 20000
-overall_timeout_ms = 25000
-
-[[dev.crossref]]
-namespace = "{NAMESPACE}"
-value = "{PATIENT}"
-member = "node-a"
-ehr_id = "{EHR_A}"
-
-[[dev.crossref]]
-namespace = "{NAMESPACE}"
-value = "{PATIENT}"
-member = "node-b"
-ehr_id = "{EHR_B}"
-"#
+        "{resolver}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\n"
     );
     let settings_ = Config::from_sources(Some(&config), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings_)?.ok_or("a registry is configured")?;
@@ -357,5 +365,112 @@ async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_products() 
             node.node.product()
         );
     }
+    Ok(())
+}
+
+/// The `ehr_id` domains of node A and node B at the PIX Manager.
+const DOMAIN_A: &str = "urn:oid:2.999.10";
+const DOMAIN_B: &str = "urn:oid:2.999.20";
+
+/// A PIX Manager that knows the patient at node A's `ehr_id` domain only.
+async fn pix_manager_knowing_node_a() -> wiremock::MockServer {
+    let server = wiremock::MockServer::start().await;
+    let answer = format!(
+        r#"{{"resourceType":"Parameters","parameter":[{{"name":"targetIdentifier","valueIdentifier":{{"system":"{DOMAIN_A}","value":"{EHR_A}"}}}}]}}"#
+    );
+    wiremock::Mock::given(wiremock::matchers::method("GET"))
+        .and(wiremock::matchers::path("/fhir/Patient/$ihe-pix"))
+        .and(wiremock::matchers::query_param(
+            "sourceIdentifier",
+            format!("{NAMESPACE}|{PATIENT}"),
+        ))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .set_body_raw(answer.into_bytes(), "application/fhir+json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    server
+}
+
+// conformance: CP-3 CP-36
+#[tokio::test]
+async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let nodes = containers::two_nodes().await?;
+    seed::seed(
+        &nodes.a.api_root(),
+        &plan(EHR_A, DemoComposition::FirstHospital),
+    )
+    .await?;
+    seed::seed(
+        &nodes.b.api_root(),
+        &plan(EHR_B, DemoComposition::FirstClinic),
+    )
+    .await?;
+    nodes.a.proxy.clear_journal();
+    nodes.b.proxy.clear_journal();
+    let pix = pix_manager_knowing_node_a().await;
+    let resolver = format!(
+        "[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n",
+        pix.uri()
+    );
+    let dir = tempfile::tempdir()?;
+
+    let patient = format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    let app = gateway_resolving(dir.path(), &nodes.a, &nodes.b, &resolver)?;
+    let (status, text) = call(app, query(&patient)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    crate::facade::schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert!(
+        !answer.meta.federation.complete,
+        "a not-resolved member leaves the answer incomplete (§11.1)"
+    );
+    let reported: Vec<(&str, &str, Option<u64>)> = answer
+        .meta
+        .federation
+        .endpoints
+        .iter()
+        .map(|e| (e.id.as_str(), e.status.as_str(), e.row_count))
+        .collect();
+    assert_eq!(
+        vec![
+            ("node-a-pub", "active", Some(1)),
+            ("node-b-pub", "not-resolved", None),
+        ],
+        reported,
+        "{text}"
+    );
+    assert_eq!(1, answer.rows.len(), "the rows of node A alone: {text}");
+
+    let journal = nodes.a.proxy.journal();
+    let sent = journal.first().ok_or("node A was asked")?;
+    assert!(
+        String::from_utf8_lossy(&sent.body).contains(&EHR_A.to_string()),
+        "node A is asked by its own ehr_id (N7)"
+    );
+    assert!(
+        nodes.b.proxy.journal().is_empty(),
+        "node B, where the patient is not known, is never asked (N8)"
+    );
+    for node in [&nodes.a, &nodes.b] {
+        for carried in [PATIENT, NAMESPACE] {
+            assert!(
+                !node.proxy.journal_contains(carried.as_bytes()),
+                "{:?} saw the patient identifier or its namespace (N33)",
+                node.node.product()
+            );
+        }
+    }
+    let asked = pix.received_requests().await.ok_or("recording is on")?;
+    assert_eq!(1, asked.len(), "one ITI-83 call for both members");
     Ok(())
 }
