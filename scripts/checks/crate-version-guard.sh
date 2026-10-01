@@ -64,7 +64,9 @@ if grep -qx 'Cargo.toml' <<<"$changed"; then
   diff_names="$(diff_text Cargo.toml |
     grep -E '^[+-][A-Za-z0-9_-]+[[:space:]]*=' |
     sed -E 's/^[+-]//; s/[[:space:]]*=.*//' | sort -u || true)"
-  dependency_names="$( { head_file Cargo.toml; git show "$base:Cargo.toml"; } | workspace_dependencies)"
+  # The base has no Cargo.toml on the change that adds the workspace, and that
+  # absence must not end the script under `set -e`.
+  dependency_names="$( { head_file Cargo.toml; git show "$base:Cargo.toml" 2> /dev/null || true; } | workspace_dependencies)"
   for name in $diff_names; do
     grep -qx "$name" <<<"$dependency_names" || continue
     touched_dependencies="$touched_dependencies $name"

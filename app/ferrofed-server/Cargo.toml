@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+[package]
+name = "ferrofed-server"
+description = "The FerroFED server: the openEHR federation gateway behind one ITS-REST facade"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+# The application is never published, whatever the workspace switch says.
+publish = false
+
+# A thin main.rs over a testable lib.rs (.claude/rules/testing.md).
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "ferrofed"
+path = "src/main.rs"
+
+[dependencies]
+
+[lints]
+workspace = true

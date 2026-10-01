@@ -21,6 +21,7 @@ disallowed-methods = [
   { path = "core::option::Option::as_mut_slice", reason = "on an Option<Vec<T>> this yields a slice of zero or one vectors, never &mut [T]; match instead" },
 ]
 disallowed-types = [
+  { path = "serde_json::Value", reason = "typed carriers only; a Value lives at one of the four seams of .claude/rules/rust-style.md, behind a scoped #[expect] naming it" },
   { path = "chrono::DateTime", reason = "jiff is the one time library" },
   { path = "chrono::NaiveDate", reason = "jiff is the one time library" },
   { path = "chrono::NaiveDateTime", reason = "jiff is the one time library" },
@@ -29,4 +30,4 @@ disallowed-types = [
 
 # Product, specification, profile and organisation names are words, not code,
 # in documentation.
-doc-valid-idents = ["FerroFED", "FerroHEALTH", "openEHR", "PIXm", "PDQm", "mCSD", "OAuth", ".."]
+doc-valid-idents = ["FerroFED", "FerroHEALTH", "FerroEHR", "FerroPIX", "openEHR", "PIXm", "PDQm", "mCSD", "LRZa", "OAuth", ".."]

@@ -76,23 +76,30 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 
 ## openEHR model crates (crates.io)
 
-The AQL parser and the ITS-REST client and data types come from published
-crates, consumed by version like any other dependency. Nothing depends on them
-until the Cargo workspace lands in v0.0.2. The pin is the latest version on
-crates.io, 0.0.72 on 2026-10-01.
+The openEHR surface comes from the published `openehr-*` crates, consumed by
+version like any other dependency (`docs/architecture.md` §2). FerroEHR
+releases them as one lockstep family, so the five rows below are one group:
+they move together, and `scripts/checks/versions.sh` fails when one member
+moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
+pin is the latest version on crates.io, 0.0.72 on 2026-10-01.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.72 | `docs/architecture.md`, later the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-its` | 0.0.72 | `docs/architecture.md`, later the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-query` | 0.0.72 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-its` | 0.0.72 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-base` | 0.0.72 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-rm` | 0.0.72 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-sdt` | 0.0.72 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 **The planned pin is 0.0.74**, the lockstep release of the whole `openehr-*`
 family that carries the federation gaps FerroEHR #3505 to #3513 (the AST
 visitor, spans, parameter binding, the `FROM ENDPOINT` directive, the parser
 fix, the router builder, the operation matcher with `forward`, the
-credentials provider and per-call options; `docs/architecture.md` §2). Both
-rows move to 0.0.74 in one change when it is on crates.io. The Cargo workspace
-(#28) is blocked on that release, and nothing in v0.0.2 codes against 0.0.72.
+credentials provider and per-call options; `docs/architecture.md` §2). The
+five rows move to 0.0.74 in one change when it is on crates.io. The workspace
+root (#28) declares the family at the published release and nothing depends on
+it yet; the crates that code against the 0.0.74 APIs (#34, #35) are blocked on
+their FerroEHR issues.
 
 ## Language and runtime
 

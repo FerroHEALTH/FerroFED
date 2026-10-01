@@ -18,18 +18,20 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: the design phase
+## Status: the workspace skeleton
 
-There is no code and no Cargo workspace. The design of record is
-`docs/architecture.md`, the output of the first research pass on #16 (the
+The Cargo workspace exists (#28): the root discipline and every crate of the
+`docs/architecture.md` §11 map, each at its placeholder with no behaviour yet.
+The design of record is `docs/architecture.md`, the output of the first
+research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
 owner on 2026-10-01: how the AQL rewrite and the identifier-hygiene gate sit on
 the published `openehr-query`, the identity seams and bindings, the registry
 and its storage, the merge across nodes, the wire types, the crate map, and
-the conformance instrument. Read it before proposing anything structural. The
-Cargo workspace lands with v0.0.2 (#28), blocked on the `openehr-*` 0.0.74
-release; nothing is scaffolded before its issue
-(`.claude/memory/owner-work-style.md`).
+the conformance instrument. Read it before proposing anything structural.
+Each crate gets its behaviour from its own issue, and nothing is built ahead
+of one (`.claude/memory/owner-work-style.md`). The crates that code against
+the `openehr-*` 0.0.74 APIs (#34, #35) wait for that release.
 
 The specification is a release candidate. The vendored pin is v0.9.0 at
 commit `7162d0c`, and the 1.0 release is expected the week of 2026-10-08; the
@@ -95,20 +97,32 @@ Today:
 - `scripts/vendor/`: the fetch scripts for every vendored corpus.
 - `assets/brand/`: the mark and the "Azure & Iron" tokens.
 - `.github/`: issue and pull-request templates, CODEOWNERS, Dependabot, and
-  the workflows. `ci.yml` runs the tier-1 guards with the Rust tier gated
-  until a workspace exists, and its `conclusion` job is the single required
-  check on `main`. `contribution-licence.yml` runs the licence guard.
+  the workflows. `ci.yml` runs the tier-1 guards and the Rust tier, and its
+  `conclusion` job is the single required check on `main`.
+  `contribution-licence.yml` runs the licence guard.
 - `.claude/`: the working discipline. `rules/`, `hooks/`, `skills/`,
   `agents/`, `memory/`.
 - Root markdown: this file, `README.md`, and the community and governance set.
 
-Planned, decided by the research on issue #16: an
-`app/ferrofed-server` binary (the gateway, mounting the `openehr-its`
-`rest-server` traits as its client face), library crates under `crates/` for
-the hand-written federation engine over `openehr-query` and the
-`openehr-its` `rest-client`, a spec-derived crate for the two published
-schemas, and a testkit tool crate. When the workspace lands, each crate
-carries its own `CLAUDE.md` and this section becomes the crate map.
+The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
+
+- `crates/`: the libraries, each at 0.0.0 and publishable only through the
+  workspace `publish` switch. `ferrofed-wire` (the federation wire additions),
+  `ferrofed-aql` (the rewrite on `openehr-query`), `ferrofed-merge` (the
+  cross-node merge, pure), `ferrofed-registry` (members, learned maps,
+  incidents, the definition store trait), `ferrofed-identity` (the role
+  traits), `ferrofed-identity-ihe`, `ferrofed-identity-xcpd` and
+  `ferrofed-identity-nl` (the bindings, each movable to FerroPIX), and
+  `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing).
+- `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
+  library run path; never published.
+- `tools/ferrofed-testkit`: test support, the pin-matrix reader today and the
+  harness later; never published.
+- The root `Cargo.toml` carries the lint set, the release profile, the
+  `openehr-*` family as one pin group and the `publish` switch; `deny.toml`,
+  `clippy.toml`, `rustfmt.toml` and `rust-toolchain.toml` sit beside it.
+  Integration tests follow the `tests/it/` single-binary convention
+  (`.claude/rules/testing.md`).
 
 ## Issue workflow (the loop)
 

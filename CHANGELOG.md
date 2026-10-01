@@ -20,6 +20,22 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+### Added
+
+- The Cargo workspace (#28): the root manifest with the family lint set, the
+  release profile and the `publish = false` switch every library crate
+  inherits; the `openehr-*` family declared as one lockstep pin group at 0.0.72,
+  with the versions guard failing when one member moves alone; `deny.toml`; the
+  `serde_json::Value` ban in `clippy.toml`; and every crate of the architecture's
+  crate map as a documented placeholder, with the `ferrofed` binary over a thin
+  library run path and the testkit's pin-matrix reader asserting each crate's
+  specification constant against `docs/VERSIONS.md`.
+
+### Fixed
+
+- `scripts/checks/crate-version-guard.sh` no longer exits early on the change
+  that adds the root `Cargo.toml`, where the base has none.
+
 ## [0.0.1-rc.1] - 2026-10-01
 
 A pre-release that rehearses the release lane (#14): the repository setup,
