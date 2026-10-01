@@ -20,6 +20,17 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+### Added
+
+- The release lane at SLSA Build Level 3 (#31): the reusable
+  `release-build.yml` builds `ferrofed` per target with `cargo auditable`,
+  writes a CycloneDX and a syft SBOM, and attests the tarball's provenance and
+  both SBOMs; the reusable `release-image.yml` builds the `linux/amd64` and
+  `linux/arm64` image from the attested musl binaries, pushes it to
+  `ghcr.io/ferrohealth/ferrofed` by digest, and attests the index and each
+  platform manifest. A release is published only when the draft carries all
+  eight assets of every target, and a pre-release is never marked latest.
+
 ### Changed
 
 - The repository moved to the FerroHEALTH organization,
