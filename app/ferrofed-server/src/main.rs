@@ -6,5 +6,5 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    ferrofed_server::run(std::env::args().skip(1))
+    ferrofed_server::run(std::env::args())
 }

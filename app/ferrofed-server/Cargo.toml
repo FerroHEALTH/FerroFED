@@ -22,6 +22,28 @@ name = "ferrofed"
 path = "src/main.rs"
 
 [dependencies]
+anyhow.workspace = true
+axum.workspace = true
+clap.workspace = true
+http.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+toml.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+# The shutdown and wire-capture cases drive a real socket, so they need a real
+# HTTP client.
+reqwest.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util"] }
+tower.workspace = true
 
 [lints]
 workspace = true

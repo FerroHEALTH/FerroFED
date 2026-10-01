@@ -16,6 +16,7 @@
 # Operate
 
 - [What FerroFED runs beside](operate/deployment-shape.md)
+- [Configuration](operate/configuration.md)
 
 # Integrate
 

@@ -30,6 +30,20 @@ binary follows from v0.0.2.
   crate map as a documented placeholder, with the `ferrofed` binary over a thin
   library run path and the testkit's pin-matrix reader asserting each crate's
   specification constant against `docs/VERSIONS.md`.
+- The server binary shape (#29): `ferrofed serve` and `ferrofed config check`;
+  configuration from a TOML file and `FERROFED__` environment overrides with
+  unknown keys refused, `_file` siblings for every secret, outbound
+  credentials per endpoint id, and a typed refusal (exit 78) on any bad value,
+  a broken log filter included; `auto`, `json` and `pretty` console formats;
+  `GET /`, `GET /health` and `GET /health/readiness` over an indicator
+  registry; the request id, the panic catch (a `500` that carries neither the
+  panic message nor anything the client sent), the request timeout and the
+  body ceiling; a bounded drain on `SIGTERM`; and `501` for every path of the
+  ITS-REST surface until the façade lands. The request log records the
+  method, the matched route, the status, the latency and the request id, and
+  never a body, the AQL text, a header value, an unmatched path, or a query
+  value other than the digit-only `offset` and `fetch`, so a façade query's
+  patient identifier reaches no log line at any level (§5.4.3).
 
 - The conformance matrix (#41): `conformance/matrix.tsv` with every
   conformance point of section 17, `conformance/tracks.tsv` with the section

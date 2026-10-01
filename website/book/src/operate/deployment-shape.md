@@ -3,9 +3,10 @@
 
 # What FerroFED runs beside
 
-There is nothing to run yet. This page describes what a running gateway will
-need around it, taken from the roles the specification names, so an operator
-can see the shape before the software exists.
+The binary runs its process shape today ([Configuration](configuration.md)),
+and the federation surface follows. This page describes what a running
+gateway will need around it, taken from the roles the specification names, so
+an operator can see the shape before the federation surface exists.
 
 ## The services a gateway consumes
 
