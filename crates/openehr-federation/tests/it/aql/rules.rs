@@ -663,14 +663,3 @@ fn columns_are_the_gateways_rendering_of_the_facade_query_whatever_the_node() {
         "columns[] is a function of the façade query alone"
     );
 }
-
-// ── the ENTRY-level carrier until #44 ───────────────────────────────────────
-
-#[test]
-fn an_entry_level_subject_identifier_is_refused_until_it_is_resolution_input() {
-    let aql = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '4711'";
-    assert!(
-        matches!(refused(aql), Refusal::EntrySubject { .. }),
-        "the reading that cannot leak, §5.4.3"
-    );
-}

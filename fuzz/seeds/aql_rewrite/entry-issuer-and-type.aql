@@ -1,0 +1,1 @@
+SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '4711' AND o/subject/identifiers/issuer = 'urn:oid:2.999.1' AND o/subject/identifiers/type = 'urn:oid:2.999.1'

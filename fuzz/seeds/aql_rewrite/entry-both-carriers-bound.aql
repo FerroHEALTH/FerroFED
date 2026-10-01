@@ -1,0 +1,1 @@
+SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = $pid AND e/ehr_status/subject/external_ref/id/value = $pid

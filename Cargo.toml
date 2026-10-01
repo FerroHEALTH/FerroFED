@@ -39,7 +39,7 @@ openehr-sdt = { version = "0.0.74", default-features = false }
 # the workspace and a version for its packaged manifest, moved with the member
 # (.claude/rules/crates-publishing.md); an app/* member is never packaged, so
 # it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.3" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.4" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }

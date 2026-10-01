@@ -63,19 +63,44 @@ fn reconstruction(identifier: &str) -> impl Strategy<Value = String> + use<> {
     })
 }
 
-/// A façade query naming the patient, with up to three other conditions, an
-/// optional subject column, written or bound.
+/// Where the façade query names the patient: either carrier, which a gateway
+/// must accept on equal terms (§5.4.3, CP-38).
+#[derive(Debug, Clone, Copy)]
+enum Carrier {
+    /// `EHR_STATUS.subject.external_ref`, optionally selected for re-injection.
+    ExternalRef { selected: bool },
+    /// An `ENTRY`-level `subject` `DV_IDENTIFIER`, optionally with its issuer.
+    Entry { issuer: bool },
+}
+
+fn carrier() -> impl Strategy<Value = Carrier> {
+    prop_oneof![
+        prop::bool::ANY.prop_map(|selected| Carrier::ExternalRef { selected }),
+        prop::bool::ANY.prop_map(|issuer| Carrier::Entry { issuer }),
+    ]
+}
+
+/// A façade query naming the patient in either carrier, with up to three
+/// other conditions, written or bound.
 fn facade() -> impl Strategy<Value = (String, String, bool, bool)> {
     identifier().prop_flat_map(|id| {
         let conditions = prop::collection::vec(condition(&id), 0..4);
-        (Just(id), conditions, prop::bool::ANY, prop::bool::ANY).prop_map(|(id, conditions, select_subject, bound)| {
-            let select = if select_subject {
+        (Just(id), conditions, carrier(), prop::bool::ANY).prop_map(|(id, conditions, carrier, bound)| {
+            let select = if matches!(carrier, Carrier::ExternalRef { selected: true }) {
                 "e/ehr_status/subject/external_ref/id/value AS patient, c/uid/value"
             } else {
                 "c/uid/value"
             };
             let subject = if bound { "$patient".to_owned() } else { format!("'{id}'") };
-            let mut where_ = format!("e/ehr_status/subject/external_ref/id/value = {subject}");
+            let mut where_ = match carrier {
+                Carrier::ExternalRef { .. } => {
+                    format!("e/ehr_status/subject/external_ref/id/value = {subject}")
+                }
+                Carrier::Entry { issuer: false } => format!("o/subject/identifiers/id = {subject}"),
+                Carrier::Entry { issuer: true } => format!(
+                    "o/subject/identifiers/id = {subject} AND o/subject/identifiers/issuer = 'urn:oid:2.999.1'"
+                ),
+            };
             let mut rebuilds = false;
             for (condition, rebuilt) in conditions {
                 where_.push_str(" AND ");
@@ -108,6 +133,7 @@ proptest! {
                 let without_scope = node.aql().replace(&format!("'{EHR_ID}'"), "");
                 prop_assert!(!without_scope.contains(&id), "node query {} carries {}", node.aql(), id);
                 prop_assert!(!node.aql().contains("ehr_status/subject"), "node query {} keeps the subject", node.aql());
+                prop_assert!(!node.aql().contains("subject/identifiers"), "node query {} keeps the ENTRY carrier", node.aql());
             }
             Ok(other) => prop_assert!(false, "a patient query analysed as {other:?}"),
         }
@@ -155,7 +181,16 @@ fn no_refusal_names_the_identifier() {
             "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE {subject} = '{sentinel}' AND"
         ),
         format!(
-            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '{sentinel}'"
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '{sentinel}' OR c/name/value = 'x'"
+        ),
+        format!(
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '{sentinel}' AND {subject} = 'other'"
+        ),
+        format!(
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '{sentinel}' AND c/composer/identifiers/id = '{sentinel}'"
+        ),
+        format!(
+            "SELECT o/subject/identifiers/id FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '{sentinel}'"
         ),
     ];
     for aql in &refusing {

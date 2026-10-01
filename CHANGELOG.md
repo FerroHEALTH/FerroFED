@@ -42,6 +42,18 @@ binary follows from v0.0.2.
   identifier-hygiene property of §5.4.1 (N33) on every query it accepts,
   string-function reconstructions included. `fuzz.yml` runs the targets
   weekly, on dispatch and on pull requests touching the code they read.
+- Both patient-identifier carriers resolve (#44; §5.4.3, N33, CP-38): an
+  `ENTRY`-level `subject` predicate, `…/subject/identifiers/id`, is resolution
+  input on equal terms with `EHR_STATUS.subject.external_ref`, with the
+  `DV_IDENTIFIER` `issuer` or `type` as its issuing namespace. It is consumed
+  and stripped exactly as `external_ref` is, so the same patient query through
+  either carrier sends the same node query and returns the same rows. The same
+  value in both carriers is consumed once; a second, different value, and
+  qualifiers that name two namespaces, are refused with a `400`, as are the
+  `assigner`, a predicate on the identifier list, an `ENTRY`-level
+  `external_ref`, and the carrier selected, ordered on or inside a function.
+  `openehr-federation` is 0.0.4, and the interim `Refusal::EntrySubject` is
+  gone.
 
 ## [0.0.2-rc.1] - 2026-10-01
 

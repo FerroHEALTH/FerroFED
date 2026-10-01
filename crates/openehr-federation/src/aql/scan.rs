@@ -19,9 +19,7 @@ use openehr_query::visit::{
 
 use super::fold;
 use super::refusal::{Refusal, Unreducible};
-use super::subject::{
-    SubjectPath, ehr_id_path, entry_subject_path, identifier_bearing, subject_path,
-};
+use super::subject::{SubjectPath, ehr_id_path, identifier_bearing, patient_path, subject_path};
 
 /// A literal the query compares a subject path with, and where.
 #[derive(Debug, Clone)]
@@ -174,7 +172,7 @@ impl Scan {
             rhs,
         } = expr
         {
-            if let Some(kind) = subject_path(path, &ehr) {
+            if let Some(kind) = patient_path(path, &ehr) {
                 self.subject_predicate(kind, *op, rhs, top, leaf, at);
                 return;
             }
@@ -186,7 +184,7 @@ impl Scan {
             rhs: Terminal::Path(path),
             ..
         } = expr
-            && subject_path(path, &ehr).is_some()
+            && patient_path(path, &ehr).is_some()
         {
             self.unreducible(Unreducible::NotALiteral, at);
             return;
@@ -194,7 +192,7 @@ impl Scan {
         if let IdentifiedExpr::Exists(path)
         | IdentifiedExpr::Like { path, .. }
         | IdentifiedExpr::Matches { path, .. } = expr
-            && subject_path(path, &ehr).is_some()
+            && patient_path(path, &ehr).is_some()
         {
             let reason = if top {
                 Unreducible::NotEquality
@@ -309,9 +307,7 @@ impl<'ast> Visit<'ast> for Scan {
     fn visit_identified_path(&mut self, node: &'ast IdentifiedPath) {
         let ehr = self.findings.ehr.clone();
         let at = node.span.bytes().or_else(|| self.at.clone());
-        if entry_subject_path(node, &ehr) {
-            self.refuse(Refusal::EntrySubject { at });
-        } else if subject_path(node, &ehr).is_some() {
+        if patient_path(node, &ehr).is_some() {
             match self.context {
                 Context::Select => self.refuse(Refusal::SubjectProjection { at }),
                 Context::OrderBy => self.refuse(Refusal::SubjectOrdering { at }),

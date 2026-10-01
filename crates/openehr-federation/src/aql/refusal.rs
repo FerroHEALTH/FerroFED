@@ -45,9 +45,10 @@ pub enum Refusal {
         at: Option<Range<usize>>,
     },
     /// The patient identifier, or its namespace, is compared with something
-    /// other than a string literal: `OBJECT_ID.value` and `PARTY_REF.namespace`
-    /// are `String`, and an AQL parameter is typed as the literal it stands
-    /// for (decision A6; AQL §Parameters).
+    /// other than a string literal: `OBJECT_ID.value`, `PARTY_REF.namespace`
+    /// and the `id`, `issuer` and `type` of a `DV_IDENTIFIER` are `String`, and
+    /// an AQL parameter is typed as the literal it stands for (decision A6;
+    /// AQL §Parameters).
     #[error("the patient identifier and its namespace are strings, and this operand is not one{}", At(.at))]
     IdentifierNotString {
         /// Where the comparison was written.
@@ -81,7 +82,8 @@ pub enum Refusal {
     /// A subject path is selected in a form the gateway cannot re-inject:
     /// only `…/external_ref/id/value` and `…/external_ref/namespace` are the
     /// resolution input, and a returned subject column must be that input
-    /// (N5, §7.1).
+    /// (N5, §7.1). An `ENTRY`-level subject column is never re-injected,
+    /// because the row may be about a relative (`PARTY_RELATED`, §5.4.2).
     #[error("a selected subject column must be the re-injected resolution input, and this path is not one (N5){}", At(.at))]
     SubjectProjection {
         /// Where the column was written.
@@ -118,16 +120,6 @@ pub enum Refusal {
     )]
     UnfoldableFunction {
         /// Where the comparison was written.
-        at: Option<Range<usize>>,
-    },
-    /// The query reaches an `ENTRY`-level subject identifier, which this
-    /// release does not yet consume as resolution input (§5.4.3, N33).
-    ///
-    /// Refusing it is the reading that cannot leak until that carrier lands
-    /// as resolution input.
-    #[error("the ENTRY-level subject carrier is not yet accepted as resolution input (§5.4.3){}", At(.at))]
-    EntrySubject {
-        /// Where the path was written.
         at: Option<Range<usize>>,
     },
     /// An aggregate the gateway cannot compute correctly across a fan-out
@@ -178,9 +170,9 @@ pub enum Unreducible {
     NotEquality,
     /// Its operand is not a literal (a path or a function call).
     NotALiteral,
-    /// It is a subject path the gateway does not consume: another attribute
-    /// of `EHR_STATUS.subject`, a predicate on the path, or a root that is not
-    /// an `EHR` variable.
+    /// It is a path into a patient carrier the gateway does not consume:
+    /// another attribute of `EHR_STATUS.subject` or of an `ENTRY`-level
+    /// `subject`, a predicate on the carrier, or a root that cannot carry it.
     OtherSubjectPath,
     /// The `FROM` clause binds more than one `EHR`.
     SeveralEhrs,
@@ -195,7 +187,7 @@ impl fmt::Display for Unreducible {
             Self::NotEquality => "its operator is not =",
             Self::NotALiteral => "its operand is not a literal",
             Self::OtherSubjectPath => {
-                "the path is not ehr_status/subject/external_ref/id/value or its namespace on the EHR variable"
+                "the path is not one the gateway resolves on: ehr_status/subject/external_ref/id/value or its namespace on the EHR variable, or an ENTRY-level subject/identifiers/id, issuer or type"
             }
             Self::SeveralEhrs => "the FROM clause binds more than one EHR",
             Self::InsideAnExpression => "it sits inside a function call or an aggregate",
