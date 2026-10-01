@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# .github/dependabot.yml: automated dependency updates.
+#
+# Three ecosystems. `github-actions` is live today and bumps the digest-pinned
+# actions the workflows in this directory use. `cargo` and `docker` are
+# declared ahead of the Cargo workspace and the container recipe, so they
+# start proposing bumps the moment a manifest or a Dockerfile lands, with no
+# edit here.
+#
+# COOLDOWN is the delay between a release being published and this bot
+# proposing it, so a compromised or yanked release has a window to be caught
+# before it reaches a pull request (the OWASP CI/CD Security Cheat Sheet's
+# third-party-code control). Every entry sits at 7 days or more, the floor
+# zizmor's `dependabot-cooldown` audit enforces, and the audit runs over this
+# file in CI.
+#
+# SECURITY updates are exempt by design: Dependabot applies no cooldown to
+# advisory-driven bumps, so an advisory still arrives immediately. That is what
+# makes a cooldown safe rather than a delay on getting fixes.
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    labels:
+      - "dependencies"
+    schedule:
+      interval: "weekly"
+    # `semver-major-days` is not accepted for this ecosystem, so `default-days`
+    # covers every bump. A week costs nothing here: the schedule is weekly
+    # anyway and a security bump ignores the cooldown.
+    cooldown:
+      default-days: 7
+    groups:
+      # ONE weekly PR for every minor and patch action bump (one codeql-action
+      # release alone opens three PRs, one per sub-action). MAJORS stay
+      # individual: a breaking action major is a real review, and burying one
+      # in a batch is how it gets rubber-stamped.
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    labels:
+      - "dependencies"
+    schedule:
+      interval: "weekly"
+    # Longer for a major than for an action: a compromised crate executes in
+    # the build and ships in the binary, which is the higher-consequence case.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    open-pull-requests-limit: 10
+    groups:
+      # ONE weekly PR for every minor and patch bump; lockstep families (serde,
+      # axum and tower) bump together inside it by construction. MAJORS stay
+      # individual: a semver major in shipped code is a real review.
+      cargo-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      # The openehr-* crates are one lockstep line on 0.0.x, where every bump
+      # counts as a major and would otherwise open one PR per crate, none of
+      # which builds alone. One PR moves the family.
+      openehr:
+        patterns: ["openehr-*"]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "docker"
+    # The container recipe lands under docker/ with the workspace; the root is
+    # listed too, so a Dockerfile at either place is watched.
+    directories:
+      - "/"
+      - "/docker"
+    labels:
+      - "dependencies"
+    schedule:
+      interval: "weekly"
+    # The base image is pinned by index digest, so a bump is a change of
+    # digest. `semver-major-days` is not accepted for this ecosystem either.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "build"

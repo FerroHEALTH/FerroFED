@@ -1,0 +1,27 @@
+= 12a. Which identifier routes what
+
+The four identifiers (`node_id`, `endpoint_id`, `system_id`, `creating_system_id`) are defined in xref:terminology.adoc#the-four-identifiers[§ The four identifiers]. This section is the normative part: which one governs which request. Getting it wrong produces the worst class of bug in this architecture, a follow-up write delivered to the wrong CDR, and that bug succeeds silently.
+
+== 12a.1 Routing rules (normative)
+
+* [[route-read]]A *follow-up read* of a specific `VERSION` MUST be routed on `creating_system_id` first, then `endpoint_id`, then ask-all (xref:follow-up-routing.adoc[§12.3], xref:requirements.adoc#n22[N22]). Reading the originating copy is the intended behaviour, because that copy is the authoritative one.
+* [[route-write]]A *versioned write* MUST be routed to the CDR that controls the target object. Control is established by `system_id == creating_system_id` of the target version - i.e. the CDR where the version was created, not merely a CDR that holds a copy of it (xref:follow-up-routing.adoc[§12.4], xref:requirements.adoc#n23[N23], and the imported-copy hazard in xref:deduplication.adoc#update-routing-hazard[§10.3]).
+* [[route-ehr]]An *EHR-scoped* request (`+{base}/v1/ehr/{ehr_id}/…+`) MUST be routed on the `ehr_id` → node binding established during resolution (xref:identity-resolution.adoc[§5.2]) or carried explicitly by the client (xref:follow-up-routing.adoc[§12.5]) - not on `creating_system_id`, which describes versions, not EHRs.
+* [[route-fanout]]A *fan-out query* is dispatched per `endpoint_id` (xref:endpoint-directive.adoc[§8]), and every contributing endpoint MUST be reported in `meta.federation.endpoints[]` under that same identifier (xref:result-set.adoc#endpoint-meta[§9.5]).
+* [[route-provenance]]A result row that will be used for follow-up SHOULD carry both `endpoint_id` (where the row came from) and the uid (which carries `creating_system_id`). They answer different questions: `endpoint_id` says _who told me_, `creating_system_id` says _who owns it_. When they disagree, the row is a copy - see xref:deduplication.adoc#update-routing-hazard[§10.3].
+* [[id-namespaces]]`node_id`, `endpoint_id` and `system_id` MUST be distinct namespaces. A gateway MUST NOT accept a `system_id` where an `endpoint_id` is expected (or vice-versa) merely because the strings happen to coincide, and the registry MUST be able to answer each lookup unambiguously. _(xref:requirements.adoc#n32[N32].)_
+
+== 12a.2 Summary table for implementers
+
+[cols="2,1,1,1,1"]
+|===
+| Question | `node_id` | `endpoint_id` | `system_id` | `creating_system_id`
+
+| Where do I send this fan-out query? | - | *✔* | - | -
+| Which node contributed this row? | ✔ (via endpoint) | *✔* | ✔ | -
+| Where do I read this VERSION from? | - | fallback | via registry | *✔*
+| Where do I commit a new version of this object? | - | - | *✔* (must equal) | *✔* (must equal)
+| Where do I send `+{base}/v1/ehr/{ehr_id}/…+`? | - | *✔* (from the `ehr_id` binding) | - | -
+| Who is accountable / audited? | *✔* | - | - | -
+| Who is admitted to the federation? | *✔* | - | - | -
+|===

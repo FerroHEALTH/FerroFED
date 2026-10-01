@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# Git stores text with LF and checks it out with LF on every platform.
+* text=auto eol=lf
+
+# Vendored trees and generated files are exempt from language statistics and
+# collapse in diffs; extend the list when one lands
+# (.claude/rules/vendored-inputs.md, .claude/rules/codegen.md).
+docs/specs/** linguist-vendored -text

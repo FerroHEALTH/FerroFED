@@ -1,0 +1,2 @@
+# Known file-length breaches: "<lines> <path> #<issue>". A listed file passes
+# while it does not grow past its recorded count; the split removes the entry.

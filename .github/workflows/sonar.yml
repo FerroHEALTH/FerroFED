@@ -1,0 +1,113 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# SonarQube Cloud analysis: the machine opinion beside CodeQL. Findings are
+# ADVISORY. They never outrank the specifications, the project rules, or the
+# local gates, and they gate no merge (.claude/rules/ai-code-review.md). The
+# quality gate is the built-in "Sonar way" default.
+#
+# The multi-language sweep over shell, YAML, JSON and the other config surfaces
+# the Rust gates never see runs on every scan, including today, on a repository
+# with no code. The Rust steps (the pinned toolchain, the instrumented coverage
+# run, the projectVersion derivation) are guarded on a root Cargo.toml, so they
+# skip until the workspace lands and then activate by themselves. hashFiles()
+# is the correct primitive HERE, unlike in ci.yml: the checkout above it has
+# already populated the workspace when the step-level `if:` is evaluated.
+#
+# Scan SCOPE lives in sonar-project.properties; do not restate it here.
+# SONAR_HOST_URL is not needed for SonarQube Cloud (SonarSource/
+# sonarqube-scan-action README, v8.2.1).
+name: SonarQube Cloud
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  scan:
+    name: analyze
+    # Pull-request analysis authenticates with SONAR_TOKEN, which a fork pull
+    # request cannot read, and neither can a DEPENDABOT one: a dependabot-actor
+    # run reads Dependabot secrets rather than Actions secrets, so the scan
+    # would die on "Not authorized". A dependency bump has nothing to decorate
+    # anyway, and the post-merge push to main analyzes the merged result.
+    if: github.event_name == 'push' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read # PR decoration reads the pull-request metadata
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: Sonar assigns issues and new-code status by blame.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install the Rust toolchain
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+        uses: ./.github/actions/setup-rust
+        with:
+          # llvm-tools-preview carries the profdata reader cargo-llvm-cov needs.
+          components: llvm-tools-preview
+          cache-shared-key: sonar
+          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install cargo-llvm-cov and cargo-nextest
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+        uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2.87.14
+        with:
+          tool: cargo-llvm-cov,cargo-nextest
+
+      # The lcov file sonar.rust.lcov.reportPaths names. One package at a time,
+      # so the instrumented build stays inside the hosted runner's memory as
+      # the workspace grows. --no-report accumulates the profiles, the report
+      # step merges them into the single file Sonar imports. --no-tests=pass
+      # keeps a member with no tests from failing the run, the same flag the
+      # ci.yml test lane uses.
+      - name: Instrumented tests to lcov, one package at a time
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+        env:
+          CARGO_BUILD_JOBS: "2"
+        run: |
+          set -euo pipefail
+          cargo llvm-cov clean --workspace
+          cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[].name' \
+            | sort \
+            | while read -r package; do
+                echo "::group::${package}"
+                cargo llvm-cov nextest --locked --no-report --no-tests=pass -p "${package}"
+                echo "::endgroup::"
+              done
+          cargo llvm-cov report --lcov --output-path lcov.info
+          lines="$(grep -c '^DA:' lcov.info || true)"
+          echo "lcov.info carries ${lines} line records"
+          if [ "${lines}" = "0" ]; then
+            echo "the coverage report is empty" >&2
+            exit 1
+          fi
+
+      # sonar.projectVersion anchors the "Previous version" New Code window: the
+      # workspace version bumps at every release cut, so "new code" means "since
+      # the last release". Read from the root Cargo.toml at scan time, never a
+      # second hand-maintained copy, and appended to the properties file, so no
+      # context value reaches a shell or the action arguments.
+      - name: Derive sonar.projectVersion from the workspace version
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+        run: |
+          set -euo pipefail
+          v="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2 || true)"
+          if [ -z "$v" ]; then
+            echo "Cargo.toml has no [workspace.package] version" >&2
+            exit 1
+          fi
+          echo "sonar.projectVersion=$v" >> sonar-project.properties
+
+      - uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -13,9 +13,12 @@ Closes #NNN
 
 ## Checklist
 
+- [ ] Spec-facing decisions cite the governing specification (the Federation Tier with AQL by section, N# requirement or CP# conformance point, openEHR ITS-REST, AQL, or the IHE profile), not memory and not another implementation.
 - [ ] Shell and workflow files are clean: `shellcheck --severity=style`, `actionlint`, `zizmor --min-severity=low .github/`.
-- [ ] Rust gates pass, once a workspace exists: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo nextest run --workspace --locked`, `cargo deny check`.
+- [ ] Rust gates pass, once a workspace exists: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo nextest run --workspace --locked`, `cargo test --doc --locked`, `cargo doc` with `RUSTDOCFLAGS=-D warnings`, and `cargo deny check`.
+- [ ] `CHANGELOG.md` has an `[Unreleased]` entry, if the change is user-visible.
 - [ ] Docs are updated, if behaviour changed.
+- [ ] No patient data or real patient identifier in a fixture, test, or example.
 - [ ] Every commit is signed.
 - [ ] No AI or assistant attribution anywhere in the commits or this PR.
 
