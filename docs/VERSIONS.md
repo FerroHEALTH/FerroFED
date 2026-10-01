@@ -134,13 +134,13 @@ database image instead (EHRbase on 16.2, §13).
 ## Product and citation version
 
 The product version is the workspace `version` in the root `Cargo.toml`, which
-every member inherits. The milestone line is 0.0.x, starting at v0.0.1. The
-`v0.0.1-rc.1` pre-release rehearses the release lane (#14); the v0.0.1 release
-cut moves this row and every file that repeats it in one pull request.
+every member inherits. The milestone line is 0.0.x, starting at v0.0.1. v0.0.1 is
+the first release (the `v0.0.1-rc.1` pre-release rehearsed the lane, #14);
+each cut moves this row and every file that repeats it in one pull request.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Product version | 0.0.1-rc.1 | `CITATION.cff` `version`, later the root `Cargo.toml` `[workspace.package]` `version` |
+| Product version | 0.0.1 | `CITATION.cff` `version`, later the root `Cargo.toml` `[workspace.package]` `version` |
 
 `CITATION.cff` tracks this row exactly, and the guard compares the two whenever
 `CITATION.cff` exists. Once the root `Cargo.toml` lands, the guard also compares
