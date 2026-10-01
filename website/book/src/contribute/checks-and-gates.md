@@ -33,6 +33,7 @@ The first tier runs on every change, because it needs no Rust:
 | file-length | no hand-written Rust file over 1000 lines |
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |
 | favicon-sync | the book's favicons match the brand mark |
+| conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point |
 
 The second tier is the Rust lane: formatting, clippy, tests, rustdoc,
 `cargo deny`, the MSRV build and dependency review. It turns itself on when a
@@ -45,6 +46,7 @@ bash scripts/checks/versions.sh
 bash scripts/checks/comment-style.sh --all
 bash scripts/checks/file-length.sh
 bash scripts/checks/favicon-sync.sh
+bash scripts/checks/conformance-matrix.sh
 find scripts .claude/hooks -name '*.sh' -exec shellcheck --severity=style {} +
 actionlint
 zizmor --min-severity=low .github/

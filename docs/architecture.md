@@ -711,8 +711,16 @@ invalidating. A stored query whose subject is a literal is refused; the
 subject is always a `$parameter`. SQLite is not a candidate: `rusqlite` links C
 `libsqlite3`, and the family is pure Rust.
 
-**Nothing on the clinical path waits on storage** (#40). The types that
-execute a federated query hold no store handle, and a test pins it.
+**Nothing on the clinical path waits on storage** (#40). A store call on
+the request path adds a latency and a failure mode to every node of every
+query, and a failure there is easy to swallow. The types that execute a
+federated query hold no store handle, and the crate graph pins it: no
+`crates/*` member may reach a storage implementation (`redb`, `sqlx`, a
+PostgreSQL or SQLite driver, and the like) or the application crate through
+its normal or build dependencies, with every feature on, and
+`crates/ferrofed-engine/tests/it/architecture.rs` fails when one does. The
+storage implementations live in `app/ferrofed-server`. No specification
+governs this: our own design.
 `DefinitionStore` is reached only from the definition routes and the
 name-expansion step, which reads the cache. The reference implementation states
 the same invariant and breaks it: its identity pipeline reads and writes the
@@ -1095,7 +1103,11 @@ CP-20	Operator	N19	6	operator	#74	verified at admission or in the registry (§16
 The `actor`, `requirements` and `tracks` columns are derived by
 `scripts/conformance/matrix.sh --derive` from the vendored `conformance.adoc`,
 and the check fails when a fresh derivation differs, so a re-pin shows new or
-changed points as a reviewable diff. `status`, `issue` and `reason` are the
+changed points as a reviewable diff. Two companion tables are derived the same
+way: `conformance/tracks.tsv` (the §16.3 tracks, with the points that name
+each and its own status, issue and reason) and `conformance/requirements.tsv`
+(every requirement with the points and tracks that reach it, and its
+reachability). `status`, `issue` and `reason` are the
 only hand-held columns, with this vocabulary:
 
 - `covered`: at least one marked test exists and CI runs it;
@@ -1131,10 +1143,14 @@ and fails when:
 The sixth check recomputes the specification's closure independently, because
 the vendored `tools/traceability.sh` never computes track reachability: its awk
 pattern expects `| <n>` where `testing.adoc` writes `| [[track-1]]1`, so the
-`tracks` column of `traceability.tsv` is `-` for every row (held on #17). The
-CI test run already fails on a failing marked test, so the check stays static.
-A `conformance` job renders a badge (`gateway CP n/35`, the FerroBRIDGE
-pattern) and the matrix into the docs site.
+`tracks` column of `traceability.tsv` is `-` for every row (held on #17). Its
+points column is still compared, so the derivation and the specification's own
+tool must agree on which points reach each requirement. The CI test run
+already fails on a failing marked test, so the check stays static.
+`scripts/conformance/matrix.sh --render-write` renders the matrix into the
+book's Evaluate part, and the check fails when the committed page is stale. A
+`conformance` job that renders a badge (`gateway CP n/35`, the FerroBRIDGE
+pattern) joins it with the first covered point.
 
 **Deferral authority** (decision A37). Only the owner defers a Gateway point,
 by a decision recorded on the issue the row names; a session may propose one

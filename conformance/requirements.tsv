@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Every requirement of the Federation Tier with AQL specification, with the
+# points and tracks that reach it (docs/architecture.md section 12, #41).
+# Entirely derived by `scripts/conformance/matrix.sh --derive`; never edit it.
+# reachability: direct (a point names it), track-only (only a track does),
+# orphan (neither; allowed only when tools/traceability-exceptions.txt lists
+# it with a reason).
+requirement	cps	tracks	reachability
+N1	CP-1	1	direct
+N2	CP-2	1	direct
+N3	CP-3	2,8	direct
+N4	CP-5	-	direct
+N5	CP-2,CP-7	2,10	direct
+N6	CP-12	4	direct
+N7	CP-4	2	direct
+N8	CP-36	-	direct
+N9	CP-32	-	direct
+N10	CP-5	3	direct
+N11	CP-6	3	direct
+N12	CP-37	-	direct
+N13	CP-8	5	direct
+N14	CP-10,CP-32	-	direct
+N15	CP-9	5	direct
+N16	CP-11,CP-12	4	direct
+N17	CP-35	1	direct
+N18	CP-35	1	direct
+N19	CP-13,CP-20	-	direct
+N20	CP-13	-	direct
+N21	CP-13	6	direct
+N22	CP-14	6	direct
+N23	CP-15	6	direct
+N24	CP-16	7	direct
+N25	CP-17,CP-39	7	direct
+N26	CP-18	7	direct
+N27	CP-19	7	direct
+N27a	CP-19	7	direct
+N28	CP-21	9	direct
+N29	CP-22	-	direct
+N30	CP-23	-	direct
+N31	CP-24	-	direct
+N32	CP-25	-	direct
+N33	CP-38,CP-26	2,10	direct
+N34	CP-27	10	direct
+N35	CP-28	-	direct
+N36	CP-29	-	direct
+N37	CP-30	-	direct
+N38	CP-31	-	direct
+N39	CP-32	-	direct
+N40	CP-31	-	direct
+N41	CP-33	11	direct
+N42	CP-33	11	direct
+N42a	CP-33a	11	direct
+N43	CP-34	9	direct
+N44	CP-40	9	direct

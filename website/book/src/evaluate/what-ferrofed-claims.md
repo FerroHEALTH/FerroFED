@@ -52,3 +52,7 @@ not until a test scores it. The specification is a release candidate; when 1.0
 is published, the vendored text is re-pinned and every citation on the tracker
 is checked against it
 ([#17](https://github.com/rubentalstra/FerroFED/issues/17)).
+
+The [conformance matrix](conformance.md) records where each point stands:
+every point, its requirements and tracks as the specification states them,
+and the issue that scores it.
