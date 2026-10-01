@@ -23,6 +23,22 @@ repository is where the design and the build happen; the tracker is the
 record of both. The site is <https://ferrofed.eu/>, with the documentation
 under [`/docs/`](https://ferrofed.eu/docs/).
 
+## Quickstart
+
+The gateway beside two member CDRs, FerroEHR and EHRbase, from the binaries of
+the latest release:
+
+```sh
+scripts/release/stage-dist.sh 0.0.1
+docker compose up --build --wait
+curl http://127.0.0.1:8080/health
+```
+
+The gateway answers its health family today, and the federated query over the
+two nodes lands with v0.0.2. The image, the ports and the development
+credentials are described in
+[the container page](https://ferrofed.eu/docs/operate/container.html).
+
 ## Licence
 
 FerroFED is source-available under the Business Source License 1.1. The

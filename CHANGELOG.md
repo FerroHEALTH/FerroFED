@@ -39,6 +39,13 @@ binary follows from v0.0.2.
   identifier to each member's `ehr_id` that a configuration can enable only
   under `profile = "development"`. It is FerroFED's own testing device, not an
   identity binding.
+- The container image: `docker/Dockerfile` puts the `ferrofed` musl binary on
+  distroless static, digest-pinned, as the numeric non-root user `65532`, with
+  no shell and a read-only root; `scripts/release/stage-dist.sh` stages the
+  binaries of a published release after checking their checksums. `compose.yaml`
+  starts the gateway beside two member CDRs, FerroEHR 4.3.1 and EHRbase 2.36.0,
+  every image pinned by digest in `docs/VERSIONS.md` and held there by the
+  versions guard (#30).
 
 ### Changed
 

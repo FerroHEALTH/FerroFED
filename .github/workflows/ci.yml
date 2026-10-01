@@ -145,9 +145,8 @@ jobs:
           } | { grep -zc . >/dev/null && xargs -0 -r shellcheck --severity=style; } \
             || echo "no shell files to check"
 
-  # hadolint over every tracked Dockerfile, under the committed .hadolint.yaml
-  # (failure-threshold: warning). No Dockerfile exists yet, so the step reports
-  # that and passes; it gains teeth the moment a container recipe lands.
+  # hadolint over every tracked Dockerfile (docker/Dockerfile today), under the
+  # committed .hadolint.yaml (failure-threshold: warning).
   dockerfile-lint:
     name: hadolint
     runs-on: ubuntu-latest

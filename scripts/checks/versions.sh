@@ -28,12 +28,17 @@
 #                          tag its docs/VERSIONS.md corpus row pins, and the
 #                          federation specification's provenance declares the
 #                          version the specification row pins.
-#   8. licence             LICENSE is the Business Source License 1.1 and no
+#   8. container images    the FROM of docker/Dockerfile against the base-image
+#                          row, every digest-pinned compose.yaml image against
+#                          a row naming the same reference, and the
+#                          compose.yaml gateway tag default against the product
+#                          version.
+#   9. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
 #                          own.
 #
-# A container recipe, a quickstart compose file and a database image get a
-# check of their own in the change that adds their first pin row.
+# FerroFED's own database image gets a check of its own in the change that adds
+# its first pin row.
 #
 # Usage:
 #   scripts/checks/versions.sh
@@ -426,6 +431,64 @@ if [ -f "$spec_prov" ]; then
   else
     note "OK: the vendored federation specification declares $found"
   fi
+fi
+
+echo "== container images (docker/Dockerfile, compose.yaml <-> $matrix)"
+if [ -f docker/Dockerfile ]; then
+  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | head -n1)"
+  want_base="$(pin_of "Container base image" "$matrix")"
+  if [ -z "$base" ]; then
+    bad "docker/Dockerfile has no FROM"
+  elif [ -z "$want_base" ]; then
+    bad "$matrix has no 'Container base image' row"
+  elif [ "$base" != "$want_base" ]; then
+    bad "base image: docker/Dockerfile builds on $base, $matrix pins $want_base"
+  else
+    note "OK: docker/Dockerfile builds on the pinned base"
+  fi
+  # The digest belongs to the FROM alone; the base.name label names the tag it
+  # was resolved from, and the two must name the same image.
+  label_base="$(sed -nE 's|.*org\.opencontainers\.image\.base\.name="([^"]+)".*|\1|p' docker/Dockerfile | head -n1)"
+  if [ -n "$base" ] && [ "${base%@*}" != "$label_base" ]; then
+    bad "docker/Dockerfile labels its base as '$label_base' but builds on ${base%@*}"
+  fi
+else
+  note "no docker/Dockerfile yet, skipped"
+fi
+if [ -f compose.yaml ]; then
+  # Every digest-pinned image is one of the matrix's pin cells, verbatim.
+  pinned="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+@sha256:[0-9a-f]{64})[[:space:]]*$|\1|p' compose.yaml | sort -u)"
+  agreed=0
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    if grep -qF "\`$ref\`" "$matrix"; then
+      agreed=$((agreed + 1))
+    else
+      bad "compose.yaml runs $ref, which no $matrix row pins"
+    fi
+  done <<< "$pinned"
+  [ "$agreed" -gt 0 ] && note "OK: all $agreed digest-pinned compose.yaml images are rows of $matrix"
+  # An image that is neither digest-pinned nor the gateway's own is a drift
+  # the line above cannot see.
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    case "$ref" in
+    *@sha256:* | ghcr.io/rubentalstra/ferrofed:*) ;;
+    *) bad "compose.yaml runs $ref, which is not pinned by digest" ;;
+    esac
+  done < <(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p' compose.yaml)
+  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/rubentalstra/ferrofed:\$\{[A-Za-z_][A-Za-z0-9_]*:-([^}]+)\}[[:space:]]*$|\1|p' compose.yaml | sort -u)"
+  if [ -z "$tags" ]; then
+    bad "compose.yaml has no ghcr.io/rubentalstra/ferrofed image tag default"
+  elif [ "$(printf '%s\n' "$tags" | wc -l | tr -d '[:space:]')" -gt 1 ]; then
+    bad "compose.yaml names more than one ferrofed tag default: $(printf '%s' "$tags" | tr '\n' ' ')"
+  elif [ "$tags" != "$want_product" ]; then
+    bad "quickstart tag: compose.yaml runs $tags, $matrix pins the product version $want_product"
+  else
+    note "OK: the compose.yaml gateway tag is the product version $tags"
+  fi
+else
+  note "no compose.yaml yet, skipped"
 fi
 
 echo "== licence (LICENSE <-> SPDX headers, manifests, badges, labels)"

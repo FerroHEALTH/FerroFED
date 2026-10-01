@@ -1,0 +1,59 @@
+# syntax=docker/dockerfile:1
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The FerroFED image: one static binary on distroless static, per platform.
+# Nothing is compiled here. The release lane builds the musl binaries and
+# stages them under dist/<os>_<arch>/ferrofed before this file is built for
+# linux/amd64 and linux/arm64 (docs/release.md); locally,
+# scripts/release/stage-dist.sh stages the binaries of a published release.
+# .dockerignore holds the build context to that one directory.
+#
+# Build from a staged dist/ tree, at the repository root:
+#   docker buildx build -f docker/Dockerfile --platform linux/arm64 .
+
+# distroless static: ca-certificates, tzdata, an /etc/passwd carrying the
+# nonroot user (uid 65532), a /tmp, no shell and no package manager. Pinned by
+# the digest of its image index, which is what Docker resolves for a
+# multi-platform build; docs/VERSIONS.md carries the pin and
+# scripts/checks/versions.sh holds the two equal.
+# https://github.com/GoogleContainerTools/distroless
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
+
+# The platform of the manifest being built, set by buildx per platform.
+# https://docs.docker.com/reference/dockerfile/#automatic-platform-args-in-the-global-scope
+ARG TARGETOS
+ARG TARGETARCH
+
+# Root-owned, executable, and not writable by the runtime user.
+COPY --chmod=0555 dist/${TARGETOS}_${TARGETARCH}/ferrofed /usr/local/bin/ferrofed
+
+# The binary's own default is loopback, which no container can publish, so the
+# image default is every interface on the documented port. The configuration
+# key is `[server] listen`; every override is FERROFED__<SECTION>__<KEY>.
+ENV FERROFED__SERVER__LISTEN=0.0.0.0:8080
+EXPOSE 8080/tcp
+
+# Numeric on purpose: the kubelet cannot resolve a user name against an image
+# it does not read, so `runAsNonRoot: true` refuses a named USER.
+USER 65532:65532
+
+# No HEALTHCHECK: the base has no shell and no HTTP client, and the binary has
+# no probe subcommand, so the probe is external, a GET /health (and
+# /health/readiness) from the orchestrator or the compose file.
+
+# Exec form: the binary is PID 1 and receives SIGTERM itself, which it drains
+# on.
+ENTRYPOINT ["/usr/local/bin/ferrofed"]
+CMD ["serve"]
+
+# Build-independent labels only. The release lane sets the version, revision
+# and created labels at build time.
+LABEL org.opencontainers.image.title="FerroFED" \
+      org.opencontainers.image.description="An openEHR federation gateway: one AQL query in, standard AQL to every node, one answer out" \
+      org.opencontainers.image.url="https://ferrofed.eu" \
+      org.opencontainers.image.documentation="https://ferrofed.eu/docs/operate/container.html" \
+      org.opencontainers.image.source="https://github.com/rubentalstra/FerroFED" \
+      org.opencontainers.image.vendor="FerroFED" \
+      org.opencontainers.image.licenses="BUSL-1.1" \
+      org.opencontainers.image.base.name="gcr.io/distroless/static-debian13:nonroot"
