@@ -13,9 +13,11 @@ merges what comes back with each node's provenance.
 An application crate under `app/`: FerroFED's own glue, never published. The
 `dispatch` module holds node dispatch (#34): one `openehr-its` client per
 registry endpoint and the mapping from a node's answer to its §11.1 endpoint
-status. The fan-out over those clients lands with
-[FerroFED issue #37](https://github.com/FerroHEALTH/FerroFED/issues/37), and
-the design is recorded in the repository's architecture document.
+status. The `fanout` module (#37) sends one request per in-scope node under
+one deadline, builds `meta.federation` from every outcome and applies the
+all-or-nothing decision: `504` for an unanswered node, `424` for a node error,
+`200` otherwise. The design is recorded in the repository's architecture
+document.
 
 ## Licence
 

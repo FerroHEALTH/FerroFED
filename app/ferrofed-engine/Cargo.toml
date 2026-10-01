@@ -21,13 +21,16 @@ openehr-federation.workspace = true
 # The node client: every request to a node is built by its runtime, never in
 # this crate (docs/architecture.md section 5, #34).
 openehr-its = { workspace = true, features = ["rest-client"] }
+http.workspace = true
 thiserror.workspace = true
+# One task per in-scope node under one deadline (docs/architecture.md section 9).
+tokio = { workspace = true, features = ["rt", "time"] }
 url.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
 ferrofed-testkit.workspace = true
-http.workspace = true
+jsonschema.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "net", "time"] }
 wiremock.workspace = true
