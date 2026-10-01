@@ -92,8 +92,16 @@ fn a_file_states_every_section_and_the_resolver_reads_it() -> Result<(), Box<dyn
 fn a_resolved_secret_never_reaches_debug_output() -> Result<(), Box<dyn StdError>> {
     let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
     let rendered = format!("{settings:?}");
-    assert!(!rendered.contains("synthetic-token"), "{rendered}");
-    assert!(!rendered.contains("synthetic-password"), "{rendered}");
+    // NOTE: a failure message never echoes the rendering, which would put the
+    // leaked secret into the test log it is meant to keep it out of.
+    assert!(
+        !rendered.contains("synthetic-token"),
+        "Debug output carries the bearer token"
+    );
+    assert!(
+        !rendered.contains("synthetic-password"),
+        "Debug output carries the basic password"
+    );
     Ok(())
 }
 
@@ -133,8 +141,7 @@ fn an_environment_override_adds_a_credentials_section_with_no_file() -> Result<(
     .resolve()?;
     assert!(
         matches!(settings.credentials.get("node_a"), Some(Scheme::Bearer(_))),
-        "{:?}",
-        settings.credentials
+        "node_a should resolve to a bearer scheme"
     );
     Ok(())
 }
