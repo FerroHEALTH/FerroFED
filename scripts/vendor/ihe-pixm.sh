@@ -7,8 +7,10 @@
 # crates/ihe-iti (feature `pixm`, #42) reads into docs/specs/ihe-pixm/
 # (.claude/rules/vendored-inputs.md): the `$ihe-pix` OperationDefinition, the
 # Query Parameters In and Out profiles, the Consumer and Manager capability
-# statements, the package manifest and ImplementationGuide, and the IG's own
-# ITI-83 request, response and error examples, which the client's tests decode.
+# statements, the ImplementationGuide, and the IG's own ITI-83 request,
+# response and error examples, which the client's tests decode. The package
+# manifest is read for its name, version and licence and left out of the tree
+# (the dependency-manifest rule of scripts/vendor/lib/corpus.sh).
 #
 # The "IHE PIXm FHIR package" row of docs/VERSIONS.md pins the package by
 # version and by the sha256 of the registry tarball, so a republished package
@@ -43,7 +45,6 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 # upstream paths inside the package. The audit (BALP), feed (ITI-104) and Patient
 # profiles serve other actors and transactions and are not taken.
 paths=(
-  package/package.json
   package/ImplementationGuide-ihe.iti.pixm.json
   package/OperationDefinition-IHE.PIXm.pix.json
   package/StructureDefinition-IHE.PIXm.Query.Parameters.In.json
@@ -79,6 +80,9 @@ rm -rf "$dest"
 mkdir -p "$dest"
 corpus_take "$tmp" "$dest" "${paths[@]}"
 
+# shellcheck disable=SC2016 # the backticks are Markdown, not a command substitution
+dropped="$(printf '| `%s` | `%s` |' package/package.json "$(corpus_sha256 "$tmp/package/package.json")")"
+
 rows=""
 while IFS= read -r file; do
   path="${file#"$dest"/}"
@@ -106,7 +110,8 @@ docs/VERSIONS.md and re-run the script.
 - Pin: package \`$name\` version \`$version\`, tarball sha256 \`$want\`
 - Fetched: $fetched
 - Upstream licence: Creative Commons Attribution 4.0 International
-  (\`$licence\`, the package manifest's \`license\`;
+  (\`$licence\`, the \`license\` of the package manifest, listed under What is
+  left out;
   <https://creativecommons.org/licenses/by/4.0/>). The package ships no licence
   file of its own. Attribution: IHE International, IT Infrastructure Technical
   Committee, *Patient Identifier Cross-referencing for Mobile (PIXm)* $version.
@@ -131,6 +136,19 @@ profiles, the Schematron renderings, the OpenAPI renderings and the registry's
 
 | File | sha256 |
 |---|---|$rows
+
+## What is left out
+
+The package manifest, \`package.json\`. The script reads its name, version
+and licence from the tarball and checks them against the pin. A vendored copy
+would make this repository's dependency graph claim an npm package that
+depends on \`hl7.fhir.r4.core\`, a FHIR registry package whose name the GitHub
+advisory database flags as a malicious npm package; nothing here installs
+either.
+
+| File | sha256 |
+|---|---|
+$dropped
 PROV
 
 say "$files files, tree digest $digest"

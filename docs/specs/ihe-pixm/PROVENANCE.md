@@ -12,15 +12,16 @@ docs/VERSIONS.md and re-run the script.
 - Pin: package `ihe.iti.pixm` version `3.1.0`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`
 - Fetched: 2026-10-01
 - Upstream licence: Creative Commons Attribution 4.0 International
-  (`CC-BY-4.0`, the package manifest's `license`;
+  (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
+  left out;
   <https://creativecommons.org/licenses/by/4.0/>). The package ships no licence
   file of its own. Attribution: IHE International, IT Infrastructure Technical
   Committee, *Patient Identifier Cross-referencing for Mobile (PIXm)* 3.1.0.
 - FHIR version: 4.0.1
 - Layout: the upstream paths inside the package, unchanged
-- Files: 12 of the package's 59, listed below
+- Files: 11 of the package's 59, listed below
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `6e27c0d7ebdcf7159587b3f19c8131983f34021ff61c573645157cdacd23fb59`
+  `PROVENANCE.md` excluded): `a432e138cf7845288b5259b75294b1300d386933c7b5bf6489d66181a9053d13`
 - Read by: #42 (the ITI-83 client of `crates/ihe-iti`, whose tests decode the
   examples and hold the request and response to the OperationDefinition)
 
@@ -48,4 +49,16 @@ profiles, the Schematron renderings, the OpenAPI renderings and the registry's
 | `package/example/Parameters-pixm-request-mohralice-red-to-blue.json` | `83499a196da8538c9f2d16c71d0598565c2a5c7f1c7277c88f78509394330fb3` |
 | `package/example/Parameters-pixm-response-mohralice-red-all.json` | `1847411fe0bd952528840c278b117b485636469ed4c69b3be0ded0d991ae615c` |
 | `package/example/Parameters-pixm-response-mohralice-red-to-blue.json` | `97f664e1c4eca6a9d25168b0d6ffe249167d3496d3f6ea483a650c211b6b5533` |
+
+## What is left out
+
+The package manifest, `package.json`. The script reads its name, version
+and licence from the tarball and checks them against the pin. A vendored copy
+would make this repository's dependency graph claim an npm package that
+depends on `hl7.fhir.r4.core`, a FHIR registry package whose name the GitHub
+advisory database flags as a malicious npm package; nothing here installs
+either.
+
+| File | sha256 |
+|---|---|
 | `package/package.json` | `2f1692aabdbb2d5a60650e7d529a341dac8de1668049bd581683394225d9113b` |
