@@ -25,16 +25,16 @@ publish = false
 [workspace.dependencies]
 # The openEHR surface (docs/architecture.md section 2): one lockstep family at
 # the latest published release, moved together by the dependency sweep and
-# checked against docs/VERSIONS.md by scripts/checks/versions.sh. The planned
-# pin is 0.0.74, the release carrying FerroEHR #3505 to #3513.
-openehr-base = "0.0.72"
-openehr-rm = "0.0.72"
-openehr-query = "0.0.72"
-openehr-its = { version = "0.0.72", default-features = false }
-openehr-sdt = { version = "0.0.72", default-features = false }
+# checked against docs/VERSIONS.md by scripts/checks/versions.sh. The pin is
+# 0.0.74, the release carrying FerroEHR #3505 to #3514.
+openehr-base = "0.0.74"
+openehr-rm = "0.0.74"
+openehr-query = "0.0.74"
+openehr-its = { version = "0.0.74", default-features = false }
+openehr-sdt = { version = "0.0.74", default-features = false }
 # Internal library crates: a path for the workspace and a version for a
 # packaged manifest, moved with the member (.claude/rules/crates-publishing.md).
-ferrofed-registry = { path = "crates/ferrofed-registry", version = "0.0.1" }
+ferrofed-registry = { path = "crates/ferrofed-registry", version = "0.0.2" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }

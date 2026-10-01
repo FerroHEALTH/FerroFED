@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-identity"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "ferrofed-registry",
@@ -290,7 +290,7 @@ version = "0.0.0"
 
 [[package]]
 name = "ferrofed-registry"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "openehr-base",
  "serde",
@@ -722,9 +722,9 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "openehr-base"
-version = "0.0.72"
+version = "0.0.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75c7fc2fe1f570cdc8458475e552fe27c1ed7335855a629cc51846b5b56c0e1a"
+checksum = "e082cf526cae130fcdb0d79d7b49b930ad440f8a3f420391524f1770094a07af"
 dependencies = [
  "serde",
  "serde_json",

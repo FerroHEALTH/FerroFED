@@ -40,6 +40,13 @@ binary follows from v0.0.2.
   under `profile = "development"`. It is FerroFED's own testing device, not an
   identity binding.
 
+### Changed
+
+- The `openehr-*` family moves to 0.0.74, the lockstep release with the AST
+  visitor, spans, parameter binding and the federation directive in
+  `openehr-query`, and the router builder, operation matcher, credentials
+  provider and per-call options in `openehr-its` (FerroEHR #3505 to #3514).
+
 ## [0.0.1] - 2026-10-01
 
 The first release: the repository setup, the documentation site on

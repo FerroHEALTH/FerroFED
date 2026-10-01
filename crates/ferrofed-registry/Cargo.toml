@@ -3,7 +3,7 @@
 [package]
 name = "ferrofed-registry"
 description = "The federation registry: members, endpoints and system ids from a reviewed document, the learned maps, integrity incidents and the stored-query definition store"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
