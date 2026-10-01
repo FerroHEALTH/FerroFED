@@ -21,9 +21,16 @@ publish.workspace = true
 include = ["src/**", "README.md", "LICENSE"]
 
 [dependencies]
+openehr-its = { workspace = true, features = ["rest"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 ferrofed-testkit.workspace = true
+jsonschema.workspace = true
+proptest.workspace = true
 
 [lints]
 workspace = true

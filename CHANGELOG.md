@@ -96,6 +96,17 @@ federated query follows from v0.0.2.
   never a body, the AQL text, a header value, an unmatched path, or a query
   value other than the digit-only `offset` and `fetch`, so a façade query's
   patient identifier reaches no log line at any level (§5.4.3).
+- The federation wire types in `ferrofed-wire` (#33): `meta.federation` with
+  `complete` derived from the endpoint statuses (§11.4), the per-endpoint
+  record whose shape carries the N40 `error` and `latency_ms` obligations of
+  each §11.1 status, the `OPTIONS {base}/` self-description with its two
+  schema conditionals (§7a.2), the federation header names, and the one seam
+  into the ITS-REST `ResultSetMetadata`, which refuses the flat and
+  `_`-prefixed members §9.1 forbids (CP-35). Unknown members of every open
+  object round-trip. The tests validate every emitted body against the
+  vendored schemas, the specification's §9.4 and §7a.2 examples included,
+  fail on drift between the schemas and the types, and pin the rules no
+  schema states.
 
 - The conformance matrix (#41): `conformance/matrix.tsv` with every
   conformance point of section 17, `conformance/tracks.tsv` with the section
