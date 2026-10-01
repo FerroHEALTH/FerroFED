@@ -24,6 +24,6 @@ runs:
   steps:
     # install-action downloads each tool's upstream release binary and verifies
     # its checksum, so no cargo build runs in the docs lane.
-    - uses: taiki-e/install-action@0758d235715de2f3551eacc980d9ae8fce9342c3 # v2.87.3
+    - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
       with:
         tool: mdbook@${{ inputs.mdbook-version }},mdbook-toc@${{ inputs.mdbook-toc-version }},mdbook-mermaid@${{ inputs.mdbook-mermaid-version }}
