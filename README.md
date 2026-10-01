@@ -34,9 +34,25 @@ docker compose up --build --wait
 curl http://127.0.0.1:8080/health
 ```
 
-The gateway answers its health family today, and the federated query over the
-two nodes lands with v0.0.2. The image, the ports and the development
-credentials are described in
+From v0.0.2 the gateway federates the two nodes. Create one EHR on each, then
+send one ordinary ITS-REST query to the gateway:
+
+```sh
+curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
+  http://127.0.0.1:8081/ferroehr/rest/openehr/v1/ehr
+curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
+  http://127.0.0.1:8091/ehrbase/rest/openehr/v1/ehr
+
+curl http://127.0.0.1:8080/v1/query/aql \
+  -H 'Content-Type: application/json' \
+  -d '{"q":"SELECT e/ehr_id/value FROM EHR e"}'
+```
+
+The answer is one ITS-REST `RESULT_SET` with the EHR of each node in `rows`,
+and `meta.federation` reports both endpoints `active`. The quickstart
+configuration (`docker/quickstart/`) names the two nodes and binds no identity
+service, so a query that names a patient fails closed with `424`. The image,
+the ports and the development credentials are described in
 [the container page](https://ferrofed.eu/docs/operate/container.html).
 
 ## Licence

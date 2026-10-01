@@ -38,6 +38,8 @@ openehr-sdt = { version = "0.0.74", default-features = false }
 # it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.3" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
+ferrofed-identity = { path = "app/ferrofed-identity" }
+ferrofed-engine = { path = "app/ferrofed-engine" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }

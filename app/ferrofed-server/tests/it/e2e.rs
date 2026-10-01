@@ -1,0 +1,271 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The first federated query end to end, behind the `FERROFED_E2E` gate: one
+//! `RESULT_SET` over FerroEHR and EHRbase, each behind its capturing proxy,
+//! and no node request carrying the patient identifier (§7, §9, §11; N1, N5,
+//! N7, N16, N17, N33).
+//!
+//! The gateway resolves the patient through the development cross-reference,
+//! which the gateway alone holds: the nodes are seeded with no subject at all,
+//! so a row can only reach the answer through the `ehr_id` the gateway sent.
+#![allow(
+    clippy::panic_in_result_fn,
+    reason = "test assertions in tests that return their setup errors"
+)]
+
+use std::collections::BTreeMap;
+use std::error::Error;
+use std::sync::Arc;
+use std::time::Duration;
+
+use axum::body::Body;
+use ferrofed_server::config::Config;
+use ferrofed_server::federation::Federation;
+use ferrofed_server::state::AppState;
+use ferrofed_testkit::containers::{self, ProxiedNode};
+use ferrofed_testkit::seed::{self, CompositionSeed, DemoComposition, EhrSeed, SeedPlan};
+use http::{Request, StatusCode, header};
+use serde::Deserialize;
+use uuid::Uuid;
+
+use crate::support::{call, settings};
+
+type TestResult = Result<(), Box<dyn Error>>;
+
+/// The synthetic patient the gateway's cross-reference knows.
+const PATIENT: &str = "SENTINEL-PATIENT-e2e-38";
+
+/// The synthetic issuing namespace, under the example OID arc.
+const NAMESPACE: &str = "urn:oid:2.999.1";
+
+/// The patient's `ehr_id` on node A (FerroEHR) and on node B (EHRbase).
+const EHR_A: Uuid = Uuid::from_u128(0x3333_3333_3333_4333_8333_3333_3333_3333);
+const EHR_B: Uuid = Uuid::from_u128(0x4444_4444_4444_4444_8444_4444_4444_4444);
+
+/// A seed of one EHR with no subject and one composition in it.
+fn plan(ehr_id: Uuid, composition: DemoComposition) -> SeedPlan {
+    SeedPlan {
+        ehrs: vec![EhrSeed {
+            ehr_id,
+            subject: None,
+        }],
+        template: true,
+        compositions: vec![CompositionSeed {
+            ehr_id,
+            composition,
+        }],
+    }
+}
+
+/// The gateway over node A and node B, resolving the patient at both.
+fn gateway(
+    dir: &std::path::Path,
+    a: &ProxiedNode,
+    b: &ProxiedNode,
+) -> Result<axum::Router, Box<dyn Error>> {
+    let registry = format!(
+        r#"
+[[organisation]]
+id = "org-a"
+
+[[organisation]]
+id = "org-b"
+
+[[node]]
+id = "node-a"
+organisation = "org-a"
+system_id = "cdr-a.example.org"
+
+[[node]]
+id = "node-b"
+organisation = "org-b"
+system_id = "cdr-b.example.org"
+
+[[endpoint]]
+id = "node-a-pub"
+node = "node-a"
+url = "{}"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-a"
+
+[[endpoint]]
+id = "node-b-pub"
+node = "node-b"
+url = "{}"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-b"
+"#,
+        a.api_root(),
+        b.api_root()
+    );
+    let document = dir.join("registry.toml");
+    std::fs::write(&document, registry)?;
+    let document = toml::Value::String(document.display().to_string());
+    let config = format!(
+        r#"profile = "development"
+
+[registry]
+document = {document}
+
+[federation]
+per_node_timeout_ms = 20000
+overall_timeout_ms = 25000
+
+[[dev.crossref]]
+namespace = "{NAMESPACE}"
+value = "{PATIENT}"
+member = "node-a"
+ehr_id = "{EHR_A}"
+
+[[dev.crossref]]
+namespace = "{NAMESPACE}"
+value = "{PATIENT}"
+member = "node-b"
+ehr_id = "{EHR_B}"
+"#
+    );
+    let settings_ = Config::from_sources(Some(&config), &BTreeMap::new())?.resolve()?;
+    let federation = Federation::load(&settings_)?.ok_or("a registry is configured")?;
+    let mut server = settings();
+    server.request_timeout = Duration::from_secs(30);
+    server.body_limit = 64 * 1024;
+    Ok(ferrofed_server::router(
+        Arc::new(AppState::with_federation(federation)),
+        &server,
+    ))
+}
+
+/// `POST /v1/query/aql` with `aql`.
+fn query(aql: &str) -> Result<Request<Body>, Box<dyn Error>> {
+    #[derive(serde::Serialize)]
+    struct Adhoc<'a> {
+        q: &'a str,
+    }
+    Ok(Request::post("/v1/query/aql")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_string(&Adhoc { q: aql })?))?)
+}
+
+/// The members of the answer the test reads.
+#[derive(Debug, Deserialize)]
+struct Answer {
+    rows: Vec<Vec<String>>,
+    meta: Meta,
+}
+
+#[derive(Debug, Deserialize)]
+struct Meta {
+    federation: FederationMeta,
+}
+
+#[derive(Debug, Deserialize)]
+struct FederationMeta {
+    complete: bool,
+    endpoints: Vec<Endpoint>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Endpoint {
+    id: String,
+    status: String,
+    row_count: Option<u64>,
+}
+
+// conformance: CP-1 CP-2 CP-4 CP-35
+#[tokio::test]
+async fn one_result_set_over_two_cdr_products_and_no_identifier_on_the_wire() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let nodes = containers::two_nodes().await?;
+    seed::seed(
+        &nodes.a.api_root(),
+        &plan(EHR_A, DemoComposition::FirstHospital),
+    )
+    .await?;
+    seed::seed(
+        &nodes.b.api_root(),
+        &plan(EHR_B, DemoComposition::FirstClinic),
+    )
+    .await?;
+    nodes.a.proxy.clear_journal();
+    nodes.b.proxy.clear_journal();
+    let dir = tempfile::tempdir()?;
+
+    let patient = format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    let (status, text) = call(gateway(dir.path(), &nodes.a, &nodes.b)?, query(&patient)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    crate::facade::schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert!(answer.meta.federation.complete, "both products answered");
+    let reported: Vec<(&str, &str, Option<u64>)> = answer
+        .meta
+        .federation
+        .endpoints
+        .iter()
+        .map(|e| (e.id.as_str(), e.status.as_str(), e.row_count))
+        .collect();
+    assert_eq!(
+        vec![
+            ("node-a-pub", "active", Some(1)),
+            ("node-b-pub", "active", Some(1)),
+        ],
+        reported,
+        "one composition from each product (N16)"
+    );
+    assert_eq!(2, answer.rows.len(), "rows from both nodes: {text}");
+
+    for (node, own, other) in [(&nodes.a, EHR_A, EHR_B), (&nodes.b, EHR_B, EHR_A)] {
+        let journal = node.proxy.journal();
+        let api = node.node.product().api_path();
+        let steps: Vec<(&str, &str)> = journal
+            .iter()
+            .map(|capture| (capture.method.as_str(), capture.path.as_str()))
+            .collect();
+        assert_eq!(
+            vec![("POST", format!("{api}/v1/query/aql").as_str())],
+            steps,
+            "{:?} received one ITS-REST query and nothing else",
+            node.node.product()
+        );
+        let sent = journal.first().ok_or("one capture")?;
+        let body = String::from_utf8_lossy(&sent.body);
+        assert!(
+            body.contains(&own.to_string()),
+            "the node query is keyed on the node's own ehr_id (N7): {body}"
+        );
+        assert!(
+            !body.contains(&other.to_string()),
+            "a node never learns another node's ehr_id: {body}"
+        );
+        assert!(
+            !node.proxy.journal_contains(PATIENT.as_bytes()),
+            "{:?} saw the patient identifier in some carrier (N33)",
+            node.node.product()
+        );
+    }
+
+    // The README quickstart query: no patient, every member asked (N4).
+    let (status, text) = call(
+        gateway(dir.path(), &nodes.a, &nodes.b)?,
+        query("SELECT e/ehr_id/value FROM EHR e")?,
+    )
+    .await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    crate::facade::schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    let mut ehr_ids: Vec<String> = answer.rows.into_iter().flatten().collect();
+    ehr_ids.sort();
+    let mut expected = vec![EHR_A.to_string(), EHR_B.to_string()];
+    expected.sort();
+    assert_eq!(
+        expected, ehr_ids,
+        "the quickstart query returns the EHR of each member"
+    );
+    Ok(())
+}

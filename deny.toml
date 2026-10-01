@@ -62,6 +62,8 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ferrofed-engine" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-server" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
+  # The AQL front end the federated query parses and prints with (#38).
+  { allow = ["BUSL-1.1"], crate = "openehr-query" },
   # The openEHR terminology data openehr-term redistributes (through
   # openehr-its's json layer) is CC-BY-SA-3.0; the crate's code is Apache-2.0.
   # The share-alike terms cover that data, which FerroFED redistributes

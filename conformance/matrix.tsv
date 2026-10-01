@@ -27,14 +27,14 @@
 # #[tokio::test] attribute, naming CP ids and tracks only:
 #   // conformance: CP-26 CP-38 track-10
 cp	actor	requirements	tracks	status	issue	reason
-CP-1	Gateway	N1	1	planned	#38	-
-CP-2	Gateway	N2,N5	1,2	planned	#35,#38	-
+CP-1	Gateway	N1	1	covered	#38	-
+CP-2	Gateway	N2,N5	1,2	covered	#35,#38	-
 CP-38	Gateway	N33	2,10	planned	#44	-
 CP-3	Gateway	N3	2	planned	#42	-
-CP-4	Gateway	N7	2	planned	#35,#38	-
+CP-4	Gateway	N7	2	covered	#35,#38	-
 CP-5	Gateway	N4,N10	3,4	planned	#46,#85	-
 CP-6	Gateway	N11	3	planned	#70	-
-CP-7	Gateway	N5	2	planned	#35,#38	-
+CP-7	Gateway	N5	2	covered	#35,#38	-
 CP-8	Gateway	N13	5	planned	#52,#55	-
 CP-9	Gateway	N15	5	planned	#56	-
 CP-10	Gateway	N14	5	planned	#54	-
@@ -63,7 +63,7 @@ CP-32	Gateway	N39,N14,N9	5	planned	#52,#53,#54	-
 CP-33	Gateway	N41,N42	6,11	planned	#62,#63,#91	-
 CP-33a	Operator	N42a	11	operator	#79,#91	verified at admission or in the registry, not on a request (section 16.2)
 CP-34	Gateway	N43	9	planned	#75,#76	-
-CP-35	Gateway	N17,N18	1	planned	#33,#38,#72	-
+CP-35	Gateway	N17,N18	1	covered	#33,#38,#72	-
 CP-36	Gateway	N8	2,7	planned	#43,#83	-
 CP-37	Gateway	N12	3	planned	#72	-
 CP-39	Operator	N25	7	operator	#84	verified at admission or in the registry, not on a request (section 16.2)

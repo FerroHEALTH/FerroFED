@@ -54,6 +54,30 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The first federated query (#38): `POST {base}/v1/query/aql` answers one
+  ITS-REST `RESULT_SET` over every member of the registry, with no federation
+  syntax needed (N1, CP-1).
+  - The gateway types the `query_parameters`, analyses the query with
+    `openehr-federation`'s `aql` rewrite, resolves the patient at every member
+    through the configured cross-reference, and sends each member that knows
+    the patient standard AQL keyed on its own `ehr_id` (N2, N7, CP-2, CP-4).
+  - It fans out under the budget and re-injects the selected subject column
+    as the resolution input (N5, CP-7). `meta.federation` names every endpoint
+    (N16): a member that does not know the patient is `not-resolved`, a
+    suspended endpoint and a second endpoint of one member are `excluded`.
+  - A refused query is a `400` ITS-REST error that locates the fault and
+    quotes nothing (§5.4.3). Without a cross-reference a patient query fails
+    closed with `424` (decision A17), and without a registry the route stays
+    `501`.
+  - The configuration gains `profile`, `[registry] document`, `[federation]`
+    (`per_node_timeout_ms`, `overall_timeout_ms` below the request timeout,
+    `default_namespace`) and the `[[dev.crossref]]` rows of the development
+    profile. `config check` loads the registry too.
+  - The compose quickstart mounts `docker/quickstart/registry.toml` and
+    `ferrofed.toml`, and the README shows one federated query returning the
+    EHR of both nodes. The end-to-end test runs it against FerroEHR and
+    EHRbase behind their capturing proxies, and no node request carries the
+    patient identifier in any carrier (N33).
 - The fan-out engine, first increment (#37): `ferrofed-engine`'s `fanout`
   module sends one request per in-scope node at once, each under a per-node
   deadline cut to the overall budget, with no retry and no hedging (§11.5,

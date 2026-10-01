@@ -9,14 +9,23 @@
 //! read at boot, and a bad value refuses to boot rather than falling back. No
 //! specification governs the configuration: our own design.
 
-use secrecy::SecretString;
+use ferrofed_engine::fanout::Budget;
+use ferrofed_identity::dev::{DevTable, Profile};
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::config::error::Error;
+use crate::config::secrets::resolve_credentials;
+use crate::config::settings::{FederationSettings, ServerSettings, Settings, TelemetrySettings};
 use crate::telemetry::{DEFAULT_FILTER, Format};
+
+pub mod error;
+mod secrets;
+pub mod settings;
 
 /// The prefix of every environment override.
 ///
@@ -31,19 +40,113 @@ pub const CONFIG_PATH_ENV: &str = "FERROFED_CONFIG";
 pub const MAX_ENDPOINT_ID_LENGTH: usize = 128;
 
 /// The whole configuration tree, as a file and the environment state it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    /// The deployment profile: `production`, or `development`, the only
+    /// profile that admits the static cross-reference of `[dev]`.
+    pub profile: Profile,
     /// The HTTP surface.
     pub server: Server,
     /// The console.
     pub telemetry: Telemetry,
+    /// The federation's membership.
+    pub registry: Registry,
+    /// The federated query: the budgets and the default issuing namespace.
+    pub federation: Federation,
     /// The outbound credentials, one section per endpoint id
     /// (`[credentials."<endpoint id>"]`).
     ///
-    /// The registry (#36) names the endpoints; the node dispatch (#34) hands
-    /// each one its credentials. Both are read and checked at boot today.
+    /// The registry names the endpoints, and the node dispatch hands each one
+    /// its credentials.
     pub credentials: BTreeMap<String, Credentials>,
+    /// The static development cross-reference (`[[dev.crossref]]`), accepted
+    /// only under `profile = "development"`.
+    pub dev: Option<DevSection>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            profile: Profile::Production,
+            server: Server::default(),
+            telemetry: Telemetry::default(),
+            registry: Registry::default(),
+            federation: Federation::default(),
+            credentials: BTreeMap::new(),
+            dev: None,
+        }
+    }
+}
+
+/// The federation's membership.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Registry {
+    /// The reviewed registry document naming the organisations, nodes and
+    /// endpoints (`docs/architecture.md` section 8). Without it the gateway
+    /// federates nothing, and the ITS-REST surface stays unserved.
+    pub document: Option<PathBuf>,
+}
+
+/// The federated query.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Federation {
+    /// How long one node's request may take (§11.5, N38).
+    pub per_node_timeout_ms: u64,
+    /// How long the whole fan-out may take (§11.5, N38). It must be shorter
+    /// than `server.request_timeout_ms`, so the gateway answers with its
+    /// envelope before the request timeout cuts the connection.
+    pub overall_timeout_ms: u64,
+    /// The issuing namespace an unqualified patient identifier resolves in
+    /// (decision A5). Without it, a query that names no namespace is a `400`.
+    pub default_namespace: Option<String>,
+}
+
+impl Default for Federation {
+    fn default() -> Self {
+        Self {
+            per_node_timeout_ms: 10_000,
+            overall_timeout_ms: 25_000,
+            default_namespace: None,
+        }
+    }
+}
+
+/// The `[dev]` table, held as written until the registry it refers to is
+/// loaded.
+///
+/// Its rows carry patient identifier values, so `Debug` shows how many rows
+/// there are and none of them.
+#[derive(Clone, PartialEq, Deserialize)]
+#[serde(transparent)]
+pub struct DevSection(toml::Table);
+
+impl DevSection {
+    /// Reads the table as the static cross-reference's configuration.
+    ///
+    /// # Errors
+    /// Returns [`Error::DevTable`] when the table does not have the shape of
+    /// `[[dev.crossref]]` rows. The error names the shape, never a value.
+    pub fn table(&self) -> Result<DevTable, Error> {
+        toml::Value::Table(self.0.clone())
+            .try_into::<DevTable>()
+            .map_err(|_shape| Error::DevTable)
+    }
+}
+
+impl fmt::Debug for DevSection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let rows = self
+            .0
+            .get("crossref")
+            .and_then(toml::Value::as_array)
+            .map_or(0, Vec::len);
+        f.debug_struct("DevSection")
+            .field("crossref_rows", &rows)
+            .finish()
+    }
 }
 
 /// The HTTP surface.
@@ -107,122 +210,6 @@ pub struct Credentials {
     pub password: Option<String>,
     /// A file holding the password, read at boot.
     pub password_file: Option<PathBuf>,
-}
-
-/// A configuration the server refuses to start on.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum Error {
-    /// The configuration file could not be read.
-    #[error("the configuration file {} could not be read", path.display())]
-    Read {
-        /// The path that was tried.
-        path: PathBuf,
-        /// What the file system reported.
-        #[source]
-        source: std::io::Error,
-    },
-    /// The configuration does not parse, names an unknown key, or holds a
-    /// value of the wrong type.
-    #[error("the configuration is not valid")]
-    Parse {
-        /// What the TOML reader reported, with the offending key.
-        #[source]
-        source: toml::de::Error,
-    },
-    /// The merged configuration could not be written back for re-reading.
-    #[error("the configuration could not be assembled")]
-    Assemble {
-        /// What the TOML writer reported.
-        #[source]
-        source: toml::ser::Error,
-    },
-    /// An environment override names no key under the prefix.
-    #[error("{name} names no configuration key; use {ENV_PREFIX}<SECTION>__<KEY>")]
-    EnvName {
-        /// The variable that was read.
-        name: String,
-    },
-    /// An environment override addresses a key under a value that is not a
-    /// section.
-    #[error("{name} addresses a key under a value that is not a section")]
-    EnvShape {
-        /// The variable that was read.
-        name: String,
-    },
-    /// A value and its `_file` sibling are both set.
-    #[error("{key} is set together with {key}_file; set one of them")]
-    Conflict {
-        /// The inline key.
-        key: String,
-    },
-    /// A `_file` sibling could not be read.
-    #[error("{key} names {}, which could not be read", path.display())]
-    Secret {
-        /// The `_file` key.
-        key: String,
-        /// The path it named.
-        path: PathBuf,
-        /// What the file system reported.
-        #[source]
-        source: std::io::Error,
-    },
-    /// A secret read from a `_file` sibling is empty.
-    #[error("{key} names {}, which holds no secret", path.display())]
-    EmptySecret {
-        /// The `_file` key.
-        key: String,
-        /// The path it named.
-        path: PathBuf,
-    },
-    /// A key a section needs is not set.
-    #[error("{key} is not set, and its section needs it")]
-    Missing {
-        /// The key that carries no value.
-        key: String,
-    },
-    /// A socket address does not parse.
-    #[error("{key} is not a socket address")]
-    Listen {
-        /// The key that holds it.
-        key: String,
-        /// What the address parser reported.
-        #[source]
-        source: std::net::AddrParseError,
-    },
-    /// A duration or a size that must be positive is zero.
-    #[error("{key} is zero; it must be positive")]
-    Zero {
-        /// The key that holds it.
-        key: String,
-    },
-    /// The log filter does not parse.
-    #[error("telemetry.filter is not a valid tracing filter")]
-    Filter {
-        /// What the filter parser reported.
-        #[source]
-        source: tracing_subscriber::filter::ParseError,
-    },
-    /// A credentials section is keyed by something that is not an endpoint id.
-    #[error(
-        "credentials.{key:?} is not an endpoint id: one to {MAX_ENDPOINT_ID_LENGTH} printable ASCII characters with no space"
-    )]
-    EndpointId {
-        /// The key that was given.
-        key: String,
-    },
-    /// A credentials section names both a bearer token and a user.
-    #[error("{section} names both a bearer token and a user; set one scheme")]
-    Scheme {
-        /// The credentials section.
-        section: String,
-    },
-    /// A credentials section names no scheme at all.
-    #[error("{section} names no credentials; remove the section or set one scheme")]
-    NoScheme {
-        /// The credentials section.
-        section: String,
-    },
 }
 
 impl Config {
@@ -292,7 +279,8 @@ impl Config {
     /// cannot be read or holds nothing, and the value errors
     /// ([`Error::Listen`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::Missing`], [`Error::Scheme`],
-    /// [`Error::NoScheme`]), each naming the key that carries the fault.
+    /// [`Error::NoScheme`], [`Error::Budget`]), each naming the key that
+    /// carries the fault.
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -325,7 +313,9 @@ impl Config {
             let scheme = resolve_credentials(&format!("credentials.{endpoint}"), section)?;
             credentials.insert(endpoint.clone(), scheme);
         }
+        let federation = self.resolve_federation(request_timeout)?;
         Ok(Settings {
+            profile: self.profile,
             server: ServerSettings {
                 listen,
                 request_timeout,
@@ -336,74 +326,46 @@ impl Config {
                 format: self.telemetry.format,
                 filter: self.telemetry.filter.clone(),
             },
+            registry_document: self.registry.document.clone(),
+            federation,
             credentials,
+            dev: self.dev.clone(),
         })
     }
-}
 
-/// The settings the run path holds, with every secret already read.
-#[derive(Debug)]
-pub struct Settings {
-    /// The HTTP surface.
-    pub server: ServerSettings,
-    /// The console.
-    pub telemetry: TelemetrySettings,
-    /// The outbound credentials, by endpoint id.
-    pub credentials: BTreeMap<String, Scheme>,
-}
-
-/// The HTTP surface, resolved.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServerSettings {
-    /// The socket address to bind.
-    pub listen: SocketAddr,
-    /// How long one request may take before the server answers `408`.
-    pub request_timeout: Duration,
-    /// How long the drain may take after the stop signal.
-    pub shutdown_timeout: Duration,
-    /// The largest request body the server reads before answering `413`.
-    pub body_limit: usize,
-}
-
-/// The console, resolved.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TelemetrySettings {
-    /// The rendering.
-    pub format: Format,
-    /// The `tracing` filter directive, already known to parse.
-    pub filter: String,
-}
-
-/// The authentication scheme a credentials section resolves to.
-///
-/// `Debug` redacts every secret, because [`SecretString`] does.
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum Scheme {
-    /// An RFC 6750 bearer token.
-    Bearer(SecretString),
-    /// RFC 7617 basic authentication.
-    Basic {
-        /// The user name, which is not a secret.
-        user: String,
-        /// The password.
-        password: SecretString,
-    },
-}
-
-impl Settings {
-    /// Logs what this process is configured to reach, never a value.
-    ///
-    /// The line names the endpoints that carry credentials and never the
-    /// credentials, so a start-up log states what the process can reach
-    /// without stating any of it.
-    pub fn log_summary(&self) {
-        let endpoints: Vec<&str> = self.credentials.keys().map(String::as_str).collect();
-        tracing::info!(
-            listen = %self.server.listen,
-            credentials = endpoints.join(","),
-            "configuration resolved"
-        );
+    /// Resolves `[federation]`: both budgets positive (§11.5), and the overall
+    /// one ending before `request_timeout` when a registry is configured.
+    fn resolve_federation(&self, request_timeout: Duration) -> Result<FederationSettings, Error> {
+        let per_node = positive_ms(
+            "federation.per_node_timeout_ms",
+            self.federation.per_node_timeout_ms,
+        )?;
+        let overall = positive_ms(
+            "federation.overall_timeout_ms",
+            self.federation.overall_timeout_ms,
+        )?;
+        // NOTE: §11.4, the budget only bounds a fan-out, so it is held to the
+        // request timeout only when the gateway federates.
+        if self.registry.document.is_some() && overall >= request_timeout {
+            return Err(Error::Budget {
+                overall_ms: self.federation.overall_timeout_ms,
+                request_ms: self.server.request_timeout_ms,
+            });
+        }
+        let budget = Budget::new(per_node, overall).map_err(|_zero| Error::Zero {
+            key: String::from("federation"),
+        })?;
+        if let Some(namespace) = &self.federation.default_namespace
+            && namespace.is_empty()
+        {
+            return Err(Error::Missing {
+                key: String::from("federation.default_namespace"),
+            });
+        }
+        Ok(FederationSettings {
+            budget,
+            default_namespace: self.federation.default_namespace.clone(),
+        })
     }
 }
 
@@ -471,69 +433,6 @@ fn env_value(raw: &str) -> toml::Value {
         .ok()
         .and_then(|table| table.get("value").cloned());
     parsed.unwrap_or_else(|| toml::Value::String(raw.to_owned()))
-}
-
-/// Returns the scheme `credentials` describes.
-fn resolve_credentials(section: &str, credentials: &Credentials) -> Result<Scheme, Error> {
-    let token = secret(
-        &format!("{section}.bearer_token"),
-        credentials.bearer_token.as_deref(),
-        credentials.bearer_token_file.as_deref(),
-    )?;
-    let password = secret(
-        &format!("{section}.password"),
-        credentials.password.as_deref(),
-        credentials.password_file.as_deref(),
-    )?;
-    match (token, credentials.user.as_deref(), password) {
-        (Some(_), Some(_), _) | (Some(_), None, Some(_)) => Err(Error::Scheme {
-            section: section.to_owned(),
-        }),
-        (Some(token), None, None) => Ok(Scheme::Bearer(token)),
-        (None, Some(user), Some(password)) => Ok(Scheme::Basic {
-            user: user.to_owned(),
-            password,
-        }),
-        (None, Some(_), None) => Err(Error::Missing {
-            key: format!("{section}.password"),
-        }),
-        (None, None, Some(_)) => Err(Error::Missing {
-            key: format!("{section}.user"),
-        }),
-        (None, None, None) => Err(Error::NoScheme {
-            section: section.to_owned(),
-        }),
-    }
-}
-
-/// Returns the secret `key` names, inline or from its `_file` sibling.
-fn secret(
-    key: &str,
-    inline: Option<&str>,
-    file: Option<&Path>,
-) -> Result<Option<SecretString>, Error> {
-    match (inline, file) {
-        (Some(_), Some(_)) => Err(Error::Conflict {
-            key: key.to_owned(),
-        }),
-        (Some(value), None) => Ok(Some(SecretString::from(value))),
-        (None, Some(path)) => {
-            let text = std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: format!("{key}_file"),
-                path: path.to_path_buf(),
-                source,
-            })?;
-            let value = text.trim();
-            if value.is_empty() {
-                return Err(Error::EmptySecret {
-                    key: format!("{key}_file"),
-                    path: path.to_path_buf(),
-                });
-            }
-            Ok(Some(SecretString::from(value)))
-        }
-        (None, None) => Ok(None),
-    }
 }
 
 #[cfg(test)]
