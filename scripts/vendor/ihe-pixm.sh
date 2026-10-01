@@ -4,11 +4,14 @@
 # scripts/vendor/ihe-pixm.sh
 #
 # Vendors the IHE PIXm 3.1.0 FHIR package artefacts the ITI-83 client of
-# crates/ihe-iti (feature `pixm`, #42) reads into docs/specs/ihe-pixm/
+# crates/ihe-iti (feature `pixm`, #42) and the harness PIX Manager of
+# tools/ferrofed-testkit (#47) read into docs/specs/ihe-pixm/
 # (.claude/rules/vendored-inputs.md): the `$ihe-pix` OperationDefinition, the
-# Query Parameters In and Out profiles, the Consumer and Manager capability
-# statements, the ImplementationGuide, and the IG's own ITI-83 request,
-# response and error examples, which the client's tests decode. The package
+# Query Parameters In and Out profiles, the Consumer, Manager and Source
+# capability statements, the ImplementationGuide, the IG's own ITI-83 request,
+# response and error examples, which the client's tests decode, and the ITI-104
+# Patient Identity Feed's Patient profiles and example Patients, which the
+# harness Manager's feed is held to. The package
 # manifest is read for its name, version and licence and left out of the tree
 # (the dependency-manifest rule of scripts/vendor/lib/corpus.sh).
 #
@@ -41,9 +44,9 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 [ -n "$version" ] || die "the pin names no package version"
 [ -n "$want" ] || die "the pin names no package sha256"
 
-# The artefacts of the ITI-83 Get Corresponding Identifiers transaction, at their
-# upstream paths inside the package. The audit (BALP), feed (ITI-104) and Patient
-# profiles serve other actors and transactions and are not taken.
+# The artefacts of the ITI-83 Get Corresponding Identifiers and ITI-104 Patient
+# Identity Feed FHIR transactions, at their upstream paths inside the package.
+# The audit (BALP) profiles and examples serve no reader here and are not taken.
 paths=(
   package/ImplementationGuide-ihe.iti.pixm.json
   package/OperationDefinition-IHE.PIXm.pix.json
@@ -51,11 +54,22 @@ paths=(
   package/StructureDefinition-IHE.PIXm.Query.Parameters.Out.json
   package/CapabilityStatement-IHE.PIXm.Consumer.json
   package/CapabilityStatement-IHE.PIXm.Manager.json
+  package/CapabilityStatement-IHE.PIXm.Source.json
+  package/StructureDefinition-IHE.PIXm.Patient.json
+  package/StructureDefinition-IHE.PIXm.Patient.BirthDateRequired.json
   package/example/Parameters-pixm-request-mohralice-red-all.json
   package/example/Parameters-pixm-request-mohralice-red-to-blue.json
   package/example/Parameters-pixm-response-mohralice-red-all.json
   package/example/Parameters-pixm-response-mohralice-red-to-blue.json
   package/example/OperationOutcome-pixm-response-error-not-found.json
+  package/example/Patient-Patient-MaidenAlice-Red.json
+  package/example/Patient-Patient-MohrAlice-Blue.json
+  package/example/Patient-Patient-MohrAlice-Green.json
+  package/example/Patient-Patient-MohrAlice-Red.json
+  package/example/Patient-Patient-MohrAlice.json
+  package/example/Patient-Patient-MohrAlissa-Red.json
+  package/example/Patient-Patient-MohrMaidenResolvedByMohrMalice-Red.json
+  package/example/Patient-ex-patient.json
 )
 
 tmp="$(mktemp -d)"
@@ -121,7 +135,10 @@ docs/VERSIONS.md and re-run the script.
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
 - Read by: #42 (the ITI-83 client of \`crates/ihe-iti\`, whose tests decode the
-  examples and hold the request and response to the OperationDefinition)
+  examples and hold the request and response to the OperationDefinition) and
+  #47 (the harness PIX Manager of \`tools/ferrofed-testkit\`, whose ITI-104 feed
+  accepts the example Patients and holds every fed Patient to the Patient
+  profile, and whose ITI-83 answers are held to the OperationDefinition)
 
 ## What is here
 
@@ -129,10 +146,11 @@ The artefacts of ITI-83, Get Corresponding Identifiers: the \`\$ihe-pix\`
 OperationDefinition with its in and out parameters, the Query Parameters In
 and Out profiles, the Consumer and Manager capability statements, and the
 IG's examples of an ITI-83 request, a response and the not-found error. The
-package's other files serve actors and transactions the client does not play:
-the BALP audit profiles, the ITI-104 Patient Identity Feed and its Patient
-profiles, the Schematron renderings, the OpenAPI renderings and the registry's
-\`.index.db\`, a SQLite file. They are not taken.
+artefacts of ITI-104, Patient Identity Feed FHIR: the Source capability
+statement, the Patient profile and its birth-date variant, and the IG's
+example Patients. The package's other files serve no reader here: the BALP
+audit profiles and examples, the Schematron renderings, the OpenAPI renderings
+and the registry's \`.index.db\`, a SQLite file. They are not taken.
 
 | File | sha256 |
 |---|---|$rows

@@ -22,6 +22,20 @@ binary follows from v0.0.2.
 
 ### Added
 
+- A PIX Manager in the test harness, seeded by ITI-104 (#47). The testkit's
+  `pix::PixManager` is a test device, not a PIXm implementation: an in-process
+  loopback server that takes the PIXm 3.1.0 Patient Identity Feed FHIR
+  (ITI-104, a conditional `PUT Patient?identifier=` held to the
+  `IHE.PIXm.Patient` minimums, plus the Remove Patient Option's conditional
+  `DELETE`) and answers ITI-83 `$ihe-pix` from what was fed, with each case of
+  ITI TF-2 §3.83.4.2.2. The seed builder feeds it a synthetic patient in the
+  `urn:oid:2.999` arc with one `ehr_id` per node domain (`seed::feed`), and a
+  capturing proxy in front of it journals and faults its traffic. The server's
+  e2e suite now resolves through it, at one member and at both, while the
+  failure classes stay on stubbed Managers. The IG's ITI-104 artefacts (the
+  Source `CapabilityStatement`, the `Patient` profiles and the example
+  Patients) are added to the vendored PIXm corpus.
+
 - The resolution step through a PIX Manager (#43). A `[pixm]` table selects
   the PIXm resolver: each `[[pixm.manager]]` names a PIX Manager's FHIR base,
   its credentials, and the `ehr_id` domain of every member it resolves, and
@@ -69,6 +83,12 @@ binary follows from v0.0.2.
   `external_ref`, and the carrier selected, ordered on or inside a function.
   `openehr-federation` is 0.0.4, and the interim `Refusal::EntrySubject` is
   gone.
+
+### Fixed
+
+- `ihe-iti` 0.0.4 names PMIR's transactions as ITI-93 and ITI-94 in its
+  description, feature list and README. ITI-104, which it attributed to PMIR,
+  is the PIXm Patient Identity Feed FHIR (#47).
 
 ## [0.0.2-rc.1] - 2026-10-01
 

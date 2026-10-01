@@ -946,16 +946,20 @@ name = "ferrofed-testkit"
 version = "0.0.2-rc.1"
 dependencies = [
  "bytes",
+ "fhir-types",
  "http",
  "http-body-util",
  "hyper",
  "hyper-util",
+ "ihe-iti",
  "reqwest",
+ "secrecy",
  "serde",
  "serde_json",
  "testcontainers",
  "thiserror",
  "tokio",
+ "url",
  "uuid",
  "wiremock",
 ]
@@ -1553,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "fhir-types",
  "http",

@@ -24,7 +24,11 @@ use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::containers::{self, ProxiedNode};
-use ferrofed_testkit::seed::{self, CompositionSeed, DemoComposition, EhrSeed, SeedPlan};
+use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::seed::{
+    self, CompositionSeed, CrossReferenceSeed, DemoComposition, EhrDomain, EhrSeed, PatientId,
+    SeedPlan,
+};
 use http::{Request, StatusCode, header};
 use serde::Deserialize;
 use uuid::Uuid;
@@ -368,38 +372,20 @@ async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_products() 
     Ok(())
 }
 
-/// The `ehr_id` domains of node A and node B at the PIX Manager.
-const DOMAIN_A: &str = "urn:oid:2.999.10";
-const DOMAIN_B: &str = "urn:oid:2.999.20";
+/// The `ehr_id` domains of node A and node B at the harness PIX Manager.
+const DOMAIN_A: EhrDomain = EhrDomain::new(1);
+const DOMAIN_B: EhrDomain = EhrDomain::new(2);
 
-/// A PIX Manager that knows the patient at node A's `ehr_id` domain only.
-async fn pix_manager_knowing_node_a() -> wiremock::MockServer {
-    let server = wiremock::MockServer::start().await;
-    let answer = format!(
-        r#"{{"resourceType":"Parameters","parameter":[{{"name":"targetIdentifier","valueIdentifier":{{"system":"{DOMAIN_A}","value":"{EHR_A}"}}}}]}}"#
-    );
-    wiremock::Mock::given(wiremock::matchers::method("GET"))
-        .and(wiremock::matchers::path("/fhir/Patient/$ihe-pix"))
-        .and(wiremock::matchers::query_param(
-            "sourceIdentifier",
-            format!("{NAMESPACE}|{PATIENT}"),
-        ))
-        .respond_with(
-            wiremock::ResponseTemplate::new(200)
-                .set_body_raw(answer.into_bytes(), "application/fhir+json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-    server
+/// The patient the harness PIX Manager is fed with, in the example arc.
+fn pix_patient() -> PatientId {
+    PatientId::new(1, 38)
 }
 
-// conformance: CP-3 CP-36
-#[tokio::test]
-async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> TestResult {
-    if !containers::e2e_enabled() {
-        return Ok(());
-    }
+/// The two nodes, seeded, and the harness PIX Manager fed over ITI-104 with
+/// the patient at `ehrs`, plus an unrelated patient so both domains are known.
+async fn nodes_and_pix(
+    ehrs: Vec<(EhrDomain, Uuid)>,
+) -> Result<(containers::TwoNodes, PixManager), Box<dyn Error>> {
     let nodes = containers::two_nodes().await?;
     seed::seed(
         &nodes.a.api_root(),
@@ -413,18 +399,81 @@ async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> T
     .await?;
     nodes.a.proxy.clear_journal();
     nodes.b.proxy.clear_journal();
-    let pix = pix_manager_knowing_node_a().await;
-    let resolver = format!(
-        "[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n",
-        pix.uri()
-    );
+    let pix = PixManager::start().await?;
+    let fed = [
+        CrossReferenceSeed {
+            patient: pix_patient(),
+            ehrs,
+        },
+        CrossReferenceSeed {
+            patient: PatientId::new(1, 39),
+            ehrs: vec![
+                (
+                    DOMAIN_A,
+                    Uuid::from_u128(0x5555_5555_5555_4555_8555_5555_5555_5555),
+                ),
+                (
+                    DOMAIN_B,
+                    Uuid::from_u128(0x6666_6666_6666_4666_8666_6666_6666_6666),
+                ),
+            ],
+        },
+    ];
+    for cross_reference in &fed {
+        let status = seed::feed(&pix.base_url(), cross_reference).await?;
+        assert_eq!(StatusCode::CREATED, status, "ITI-104 creates the Patient");
+    }
+    Ok((nodes, pix))
+}
+
+/// The resolver configuration over the harness PIX Manager.
+fn pixm_resolver(pix: &PixManager) -> String {
+    format!(
+        "[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
+        pix.base_url(),
+        DOMAIN_A.system(),
+        DOMAIN_B.system()
+    )
+}
+
+/// The patient query for the PIX-fed patient, through `external_ref`.
+fn pix_patient_query() -> String {
+    let patient = pix_patient();
+    format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{}'",
+        patient.value(),
+        patient.namespace()
+    )
+}
+
+/// Asserts that neither node saw the PIX-fed patient's identifier or its
+/// namespace in any carrier (N33).
+fn assert_no_patient_identifier_on_the_wire(nodes: &containers::TwoNodes) {
+    let patient = pix_patient();
+    for node in [&nodes.a, &nodes.b] {
+        for carried in [patient.value(), patient.namespace()] {
+            assert!(
+                !node.proxy.journal_contains(carried.as_bytes()),
+                "{:?} saw the patient identifier or its namespace (N33)",
+                node.node.product()
+            );
+        }
+    }
+}
+
+// conformance: CP-3 CP-36
+#[tokio::test]
+async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let (nodes, pix) = Box::pin(nodes_and_pix(vec![(DOMAIN_A, EHR_A)])).await?;
+    let resolver = pixm_resolver(&pix);
     let dir = tempfile::tempdir()?;
 
-    let patient = format!(
-        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
-         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
-         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
-    );
+    let patient = pix_patient_query();
     let app = gateway_resolving(dir.path(), &nodes.a, &nodes.b, &resolver)?;
     let (status, text) = call(app, query(&patient)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -461,16 +510,56 @@ async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> T
         nodes.b.proxy.journal().is_empty(),
         "node B, where the patient is not known, is never asked (N8)"
     );
-    for node in [&nodes.a, &nodes.b] {
-        for carried in [PATIENT, NAMESPACE] {
-            assert!(
-                !node.proxy.journal_contains(carried.as_bytes()),
-                "{:?} saw the patient identifier or its namespace (N33)",
-                node.node.product()
-            );
-        }
+    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_eq!(1, pix.queries(), "one ITI-83 call for both members");
+    Ok(())
+}
+
+// conformance: CP-3
+#[tokio::test]
+async fn a_patient_fed_at_both_members_resolves_through_pix_at_both() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
     }
-    let asked = pix.received_requests().await.ok_or("recording is on")?;
-    assert_eq!(1, asked.len(), "one ITI-83 call for both members");
+    let (nodes, pix) = Box::pin(nodes_and_pix(vec![(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)])).await?;
+    let resolver = pixm_resolver(&pix);
+    let dir = tempfile::tempdir()?;
+
+    let app = gateway_resolving(dir.path(), &nodes.a, &nodes.b, &resolver)?;
+    let (status, text) = call(app, query(&pix_patient_query())?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    crate::facade::schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert!(
+        answer.meta.federation.complete,
+        "both members resolved: {text}"
+    );
+    let reported: Vec<(&str, &str, Option<u64>)> = answer
+        .meta
+        .federation
+        .endpoints
+        .iter()
+        .map(|e| (e.id.as_str(), e.status.as_str(), e.row_count))
+        .collect();
+    assert_eq!(
+        vec![
+            ("node-a-pub", "active", Some(1)),
+            ("node-b-pub", "active", Some(1)),
+        ],
+        reported,
+        "{text}"
+    );
+    for (node, own, other) in [(&nodes.a, EHR_A, EHR_B), (&nodes.b, EHR_B, EHR_A)] {
+        let journal = node.proxy.journal();
+        let sent = journal.first().ok_or("each node was asked")?;
+        let body = String::from_utf8_lossy(&sent.body);
+        assert!(
+            body.contains(&own.to_string()) && !body.contains(&other.to_string()),
+            "{:?} is asked by its own ehr_id alone (N7)",
+            node.node.product()
+        );
+    }
+    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_eq!(1, pix.queries(), "one ITI-83 call for both members");
     Ok(())
 }

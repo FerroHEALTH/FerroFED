@@ -1087,7 +1087,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | Crate | Responsibility | Depends on | Must not depend on |
 |---|---|---|---|
 | `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
-| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-104), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
+| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth` | the clients each function needs | anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
@@ -1260,7 +1260,8 @@ the box, IPF is a Java library rather than a server image, and FerroPIX, the
 family's planned MPI, has no code yet. The testkit implements exactly the two
 transactions the tracks need (ITI-83 `GET [base]/Patient/$ihe-pix` and ITI-104
 conditional `PUT Patient?identifier=`) in Rust on `fhir-types` R4, held to the
-PIXm IG's request and response shapes by tests, with fault knobs. A
+PIXm IG's request and response shapes by tests, with its faults injected by the
+capturing proxy in front of it (`tools/ferrofed-testkit`, `pix`). A
 differential run against FerroPIX replaces it as evidence once FerroPIX exists.
 
 **Capture and faults.** Toxiproxy works at TCP and cannot record a request
