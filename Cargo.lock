@@ -274,7 +274,7 @@ version = "0.0.0"
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.1-rc.1"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.1-rc.1"
+version = "0.0.1"
 
 [[package]]
 name = "ferrofed-wire"

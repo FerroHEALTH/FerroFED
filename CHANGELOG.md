@@ -20,6 +20,14 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-10-01
+
+The first release: the repository setup, the documentation site on
+<https://ferrofed.eu/>, the architecture of record, the Cargo workspace and the
+server binary's shape (configuration, telemetry, health, readiness and
+shutdown). The `ferrofed` binary serves health and readiness only; the
+federated query follows from v0.0.2.
+
 ### Added
 
 - The Cargo workspace (#28): the root manifest with the family lint set, the
@@ -118,5 +126,6 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/rubentalstra/FerroFED/compare/v0.0.1-rc.1...HEAD
+[Unreleased]: https://github.com/rubentalstra/FerroFED/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/rubentalstra/FerroFED/compare/v0.0.1-rc.1...v0.0.1
 [0.0.1-rc.1]: https://github.com/rubentalstra/FerroFED/releases/tag/v0.0.1-rc.1
