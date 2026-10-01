@@ -3,7 +3,7 @@
 [package]
 name = "ferrofed-identity"
 description = "The identity roles of the Federation Tier as traits (resolver, localizer, directory, consent pre-filter, onward authentication) and the patient reference carrier, with no FHIR and no transport"
-version = "0.0.1"
+version = "0.0.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

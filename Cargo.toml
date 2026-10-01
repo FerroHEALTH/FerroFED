@@ -34,7 +34,7 @@ openehr-its = { version = "0.0.74", default-features = false }
 openehr-sdt = { version = "0.0.74", default-features = false }
 # Internal library crates: a path for the workspace and a version for a
 # packaged manifest, moved with the member (.claude/rules/crates-publishing.md).
-ferrofed-registry = { path = "crates/ferrofed-registry", version = "0.0.1" }
+ferrofed-registry = { path = "crates/ferrofed-registry", version = "0.0.2" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }
