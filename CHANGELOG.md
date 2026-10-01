@@ -55,6 +55,25 @@ binary follows from v0.0.2.
   N40). A credential the provider cannot produce, or a request the client
   runtime refuses to compose, is a typed dispatch error, never an endpoint
   status. The engine names no HTTP engine directly, and a test holds it.
+- The AQL rewrite, first increment (#35): the `aql` feature of
+  `openehr-federation` 0.0.3 parses a façade query with `openehr-query`, binds
+  its `query_parameters` before analysis, and consumes the
+  `EHR_STATUS.subject.external_ref` patient predicate with its namespace into a
+  redacted `Subject` (§5.2). Each node receives the query scoped to its own
+  `ehr_id` (§7.1, N7, N29); a selected subject or namespace column is
+  re-injected after the merge (N5); and `columns[]` is rendered from the façade
+  query alone (N17). The rewrite refuses with a typed `400`, never quoting the
+  identifier: a predicate outside the top-level `AND` chain or under another
+  operator (§7.1), an integer identifier (decision A6), two different patients
+  (A7), an unqualified identifier with no default namespace (A5), a query with
+  no patient where a localizer decides the node set (A8), paging members that
+  disagree with the query (A10), cross-node `OFFSET` (§11.6.2), an undirected
+  aggregate (N14), and the identifier anywhere else in the query (§5.4.1),
+  including rebuilt by `CONCAT`, `CONCAT_WS` or `SUBSTRING` over split
+  literals, which the rewrite folds before the value test; a string function
+  over a literal that cannot be folded is refused on an identifier-bearing path
+  (decision A4). The reference implementation's 17 golden cases run as a
+  corpus, each adjudicated. CI's test lane runs every feature.
 - The static registry (#36): `ferrofed-registry` 0.0.1 loads the federation's
   membership from a reviewed TOML bootstrap document (`[[organisation]]`,
   `[[node]]` with its `system_id` and `[[node.identifier]]`, `[[endpoint]]`)
