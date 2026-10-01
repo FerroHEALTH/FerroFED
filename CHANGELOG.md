@@ -43,6 +43,20 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The fan-out engine, first increment (#37): `ferrofed-engine`'s `fanout`
+  module sends one request per in-scope node at once, each under a per-node
+  deadline cut to the overall budget, with no retry and no hedging (§11.5,
+  N38). A node still outstanding when the overall budget runs out is abandoned
+  and reported `time-out`, without touching any other request, and its late
+  answer contributes nothing. `meta.federation` is built from every outcome
+  before the decision, so a failing answer carries it, with the effective
+  `timeout` budget and `complete: false`. Under the all-or-nothing default an
+  `offline` or `time-out` node fails the query `504`, a `node-error` fails it
+  `424`, `504` taking precedence; `not-resolved` and `consent-denied` fail
+  nothing, so a patient found nowhere is a `200` with empty rows (§11.3, §11.4,
+  N6, N37). Every endpoint record carries its node, `system_id`, managing
+  organisation, base URL and `latency_ms` (§9.5, N40), and the rows of the
+  `active` nodes are concatenated in endpoint id order until the merge (#52).
 - Node dispatch (#34): `ferrofed-engine`'s `dispatch` module builds one
   `openehr-its` client per registry endpoint, rooted at the endpoint's base URL
   as the registry holds it plus the ITS-REST `v1` segment (N28), and sends each
