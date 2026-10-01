@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# cargo-deny configuration. Run: cargo deny check
+# Docs: https://embarkstudios.github.io/cargo-deny/
+#
+# This is the ONLY advisory gate. cargo deny check advisories reads the same
+# RustSec database cargo audit does and adds yanked, licenses, bans and
+# sources, so there is no separate cargo-audit job.
+
+[advisories]
+version = 2
+# Fail on any RustSec advisory. Add exceptions explicitly, dated, and each
+# naming the event that deletes it.
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# cargo-deny leaves dev-dependencies out of the licence check by default, on
+# the ground that they reach no downstream crate and no binary. They are
+# compiled here and in CI, so the check covers them
+# (https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html).
+include-dev = true
+# Permissive licences a BUSL-1.1 project can depend on (and that its Apache 2.0
+# Change License admits). Copyleft is not allowed by default; a weak-copyleft
+# dependency gets a crate-scoped exceptions entry with its reason.
+#
+# The workspace has no third-party dependency yet. A licence joins the list the
+# day a dependency needs it, with the reason it is acceptable here, and leaves
+# when the last crate carrying it does, so cargo deny reports no unencountered
+# licence.
+allow = []
+confidence-threshold = 0.9
+# The project's own crates are BUSL-1.1 (LICENSE). The openEHR model crates
+# join this list as each is first depended on: openehr-sdt and openehr-query
+# are BUSL-1.1, openehr-its is Apache-2.0, and openehr-term, under openehr-rm,
+# is Apache-2.0 with the CC-BY-SA-3.0 terminology data it redistributes.
+exceptions = [
+  { allow = ["BUSL-1.1"], crate = "ferrofed-wire" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-aql" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-merge" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-registry" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-identity" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-identity-ihe" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-identity-xcpd" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-identity-nl" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-engine" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-server" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Internal path-only deps carry an implicit "*" version, which never reaches a
+# registry. External wildcards stay denied.
+allow-wildcard-paths = true
+deny = []
+# Each entry names a duplicate inherent to the pinned set, with its reason; the
+# list starts empty and grows only from `cargo deny check bans` output.
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

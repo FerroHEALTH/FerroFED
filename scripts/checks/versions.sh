@@ -160,12 +160,36 @@ else
 fi
 
 echo "== model crate pins (docs/architecture.md <-> $matrix <-> Cargo.toml)"
-for crate in openehr-query openehr-its; do
+# The openehr-* family is released in lockstep, so its rows are one group: a
+# member that moves alone is drift even when its own file pair agrees.
+family_pin=""
+for crate in openehr-query openehr-its openehr-base openehr-rm openehr-sdt; do
   want="$(pin_of "$crate" "$matrix")"
   if [ -z "$want" ]; then
     bad "$matrix has no $crate row"
     continue
   fi
+  if [ -z "$family_pin" ]; then
+    family_pin="$want"
+  elif [ "$want" != "$family_pin" ]; then
+    bad "$crate: $matrix pins $want, the rest of the openehr-* family $family_pin; the family moves together"
+  fi
+  case "$crate" in
+  openehr-query | openehr-its) ;;
+  *)
+    if [ -f Cargo.toml ]; then
+      req="$(manifest_req "$crate")"
+      if [ -z "$req" ]; then
+        note "root Cargo.toml has no $crate requirement yet, skipped"
+      elif [ "$req" != "$want" ]; then
+        bad "$crate: root Cargo.toml requires $req, $matrix pins $want"
+      else
+        note "OK: $crate $want (root Cargo.toml agrees)"
+      fi
+    fi
+    continue
+    ;;
+  esac
   if [ -f docs/architecture.md ]; then
     arch="$(pin_of "$crate" docs/architecture.md)"
     if [ -z "$arch" ]; then

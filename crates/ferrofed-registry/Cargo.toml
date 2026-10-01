@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+[package]
+name = "ferrofed-registry"
+description = "The federation registry: members, endpoints and system ids from a reviewed document, the learned maps, integrity incidents and the stored-query definition store"
+# 0.0.0 is the placeholder of a member with no crate line yet (docs/VERSIONS.md).
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+documentation = "https://docs.rs/ferrofed-registry"
+readme = "README.md"
+keywords = ["openehr", "federation", "aql", "healthcare"]
+categories = ["science"]
+# The workspace switch decides whether this crate is publishable
+# (docs/architecture.md section 11); include is the packaged content.
+publish.workspace = true
+include = ["src/**", "README.md", "LICENSE"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[lints]
+workspace = true
