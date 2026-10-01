@@ -5,8 +5,10 @@
 
 Test support for the FerroFED suites, never shipped: the pin-matrix reader,
 the container harness for the two member CDR products behind the
-`FERROFED_E2E` gate, the capturing and fault proxy in front of each node, and
-the synthetic seed builder that writes over ITS-REST alone.
+`FERROFED_E2E` gate, the capturing and fault proxy in front of each node,
+the synthetic seed builder that writes over ITS-REST alone, and the PIX
+Manager test device the seed builder feeds over ITI-104 (a test device, not a
+PIXm implementation).
 
 A tool crate under `tools/`: never published.
 

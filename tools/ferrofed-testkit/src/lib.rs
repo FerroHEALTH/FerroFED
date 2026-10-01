@@ -12,14 +12,18 @@
 //!   pinned by digest;
 //! - [`proxy`]: the capturing and fault proxy in front of each node, whose
 //!   journal the tests read;
-//! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone
-//!   and names patients only inside the `urn:oid:2.999` example arc.
+//! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
+//!   what an ITI-104 feed delivered (#47);
+//! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
+//!   feeds the PIX Manager over ITI-104, and names patients only inside the
+//!   `urn:oid:2.999` example arc.
 //!
-//! The identity fakes (the PIXm Manager, the localizer, the consent
-//! pre-filter) arrive with the issues that first need them.
+//! The other identity fakes (the localizer, the consent pre-filter) arrive
+//! with the issues that first need them.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod containers;
+pub mod pix;
 pub mod proxy;
 pub mod seed;
 
