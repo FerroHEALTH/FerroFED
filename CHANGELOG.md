@@ -20,6 +20,11 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+## [0.0.1-rc.1] - 2026-10-01
+
+A pre-release that rehearses the release lane (#14): the repository setup,
+the documentation site and the architecture of record, with no binaries.
+
 ### Added
 
 - The architecture of record, `docs/architecture.md`, from the first research
@@ -72,4 +77,5 @@ binary follows from v0.0.2.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/rubentalstra/FerroFED/commits/main
+[Unreleased]: https://github.com/rubentalstra/FerroFED/compare/v0.0.1-rc.1...HEAD
+[0.0.1-rc.1]: https://github.com/rubentalstra/FerroFED/releases/tag/v0.0.1-rc.1
