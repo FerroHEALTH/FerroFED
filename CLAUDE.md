@@ -115,7 +115,13 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `ferrofed-identity-nl` (the bindings, each movable to FerroPIX), and
   `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
-  library run path; never published.
+  library run path; never published. It carries the server shape (#29):
+  `serve` and `config check`, the TOML and `FERROFED__` environment
+  configuration with `_file` secrets and per-endpoint outbound credentials,
+  the console, the request log that carries no body, query text, header value
+  or unmatched path, the health family over an indicator registry, the
+  `tower-http` stack and the bounded drain. Every path under `/v1/` answers
+  `501` until the façade (#38).
 - `tools/ferrofed-testkit`: test support, the pin-matrix reader today and the
   harness later; never published.
 - The root `Cargo.toml` carries the lint set, the release profile, the

@@ -1,0 +1,14 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! Integration tests through the library run path the binary shares.
+
+mod config;
+mod http;
+mod hygiene;
+mod readiness;
+mod request_log;
+mod run;
+mod shutdown;
+mod support;
+mod telemetry;

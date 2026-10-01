@@ -30,7 +30,16 @@ include-dev = true
 # day a dependency needs it, with the reason it is acceptable here, and leaves
 # when the last crate carrying it does, so cargo deny reports no unencountered
 # licence.
-allow = []
+allow = [
+  # The server's HTTP, configuration and console stack (#29): the permissive
+  # pair almost every crate in it carries, alone or as a choice.
+  "MIT",
+  "Apache-2.0",
+  # The Unicode data tables under the URL and identifier crates.
+  "Unicode-3.0",
+  # One crate in the stack pairs MIT with BSD-3-Clause.
+  "BSD-3-Clause",
+]
 confidence-threshold = 0.9
 # The project's own crates are BUSL-1.1 (LICENSE). The openEHR model crates
 # join this list as each is first depended on: openehr-sdt and openehr-query
@@ -59,7 +68,12 @@ allow-wildcard-paths = true
 deny = []
 # Each entry names a duplicate inherent to the pinned set, with its reason; the
 # list starts empty and grows only from `cargo deny check bans` output.
-skip = []
+skip = [
+  # syn 3 sits under clap_derive and serde_derive, syn 2 under
+  # tracing-attributes; both are proc-macro build dependencies, so neither
+  # reaches the binary. Deleted when tracing-attributes moves to syn 3.
+  { crate = "syn@2", reason = "tracing-attributes still builds on syn 2" },
+]
 skip-tree = []
 
 [sources]
