@@ -36,6 +36,7 @@ openehr-sdt = { version = "0.0.74", default-features = false }
 # the workspace and a version for its packaged manifest, moved with the member
 # (.claude/rules/crates-publishing.md); an app/* member is never packaged, so
 # it takes the path alone.
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.2" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.

@@ -43,6 +43,18 @@ binary follows from v0.0.2.
 
 ### Added
 
+- Node dispatch (#34): `ferrofed-engine`'s `dispatch` module builds one
+  `openehr-its` client per registry endpoint, rooted at the endpoint's base URL
+  as the registry holds it plus the ITS-REST `v1` segment (N28), and sends each
+  node query as the generated `POST {base}/v1/query/aql`, once, with the
+  per-node deadline and the gateway's request id. The answer maps to exactly
+  one §11.1 status: a result set to `active`, a refused connection or broken
+  stream to `offline` with its reason, a passed deadline to `time-out`, and a
+  documented error, an undocumented status or a body that is not a result set
+  to `node-error` carrying the node's own status and message (§11.2, N16,
+  N40). A credential the provider cannot produce, or a request the client
+  runtime refuses to compose, is a typed dispatch error, never an endpoint
+  status. The engine names no HTTP engine directly, and a test holds it.
 - The static registry (#36): `ferrofed-registry` 0.0.1 loads the federation's
   membership from a reviewed TOML bootstrap document (`[[organisation]]`,
   `[[node]]` with its `system_id` and `[[node.identifier]]`, `[[endpoint]]`)

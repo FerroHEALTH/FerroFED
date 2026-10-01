@@ -11,9 +11,11 @@ the query, sends standard AQL to each node scoped to its own EHR id, and
 merges what comes back with each node's provenance.
 
 An application crate under `app/`: FerroFED's own glue, never published. The
-crate holds its place in the workspace, and the implementation lands with
-[FerroFED issue #37](https://github.com/FerroHEALTH/FerroFED/issues/37),
-and the design is recorded in the repository's architecture document.
+`dispatch` module holds node dispatch (#34): one `openehr-its` client per
+registry endpoint and the mapping from a node's answer to its §11.1 endpoint
+status. The fan-out over those clients lands with
+[FerroFED issue #37](https://github.com/FerroHEALTH/FerroFED/issues/37), and
+the design is recorded in the repository's architecture document.
 
 ## Licence
 
