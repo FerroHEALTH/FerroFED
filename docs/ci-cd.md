@@ -218,7 +218,7 @@ These are repository settings only the owner can change. The state on
 | The `SONAR_TOKEN` Actions secret, the SonarQube Cloud project `rubentalstra_FerroFED`, and Automatic Analysis off | done |
 | The roadmap board ("FerroFED Roadmap") and the label bootstrap (`scripts/gh/labels.sh`) | done |
 | Pages publishes from GitHub Actions and serves `ferrofed.eu` with HTTPS enforced; the domain is a Pages setting and a verified account domain, never a `CNAME` file in the tree | pending: lands with the documentation site |
-| Registration at bestpractices.dev | pending |
+| Registration at bestpractices.dev | done: project [15130](https://www.bestpractices.dev/projects/15130), badge in the README |
 | A `crates-io` environment with a required reviewer and Trusted Publishing entries, and a `github-pages` environment | pending: each lands with its lane |
 | Artifact attestations for the release lane's provenance and SBOM bundles | pending: lands with the release lane |
 
