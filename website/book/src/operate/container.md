@@ -68,9 +68,13 @@ reachable from the network even when the firewall says otherwise. Set
 `FERROFED_BIND_HOST` to the one address you mean, or put a reverse proxy in
 front.
 
-Today the gateway serves its process shape: `/`, the health family, and `501`
-under `/v1/`. The registry document that names the two nodes and the federated
-query over them land with the v0.0.2 milestone, and the nodes above are the
-ones that query reaches.
+The gateway federates the two nodes from the release that carries the
+federated query (v0.0.2). `docker/quickstart/registry.toml` names the nodes and
+`docker/quickstart/ferrofed.toml` configures the gateway with each node's
+quickstart credentials; Compose mounts both read-only. `POST /v1/query/aql`
+answers one ITS-REST `RESULT_SET` over both nodes, with `meta.federation`
+reporting each endpoint, and every other path under `/v1/` answers `501`. The
+quickstart binds no identity service, so a query that names a patient fails
+closed with `424`; the README's quickstart sends one that names none.
 
 `docker compose down -v` stops the stack and removes its volumes.

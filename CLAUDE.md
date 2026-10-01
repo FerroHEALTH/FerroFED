@@ -129,8 +129,11 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   configuration with `_file` secrets and per-endpoint outbound credentials,
   the console, the request log that carries no body, query text, header value
   or unmatched path, the health family over an indicator registry, the
-  `tower-http` stack and the bounded drain. Every path under `/v1/` answers
-  `501` until the façade (#38).
+  `tower-http` stack and the bounded drain. The façade (#38) serves
+  `POST /v1/query/aql` over the registry document, the development
+  cross-reference and the engine, with its two `serde_json::Value` seams
+  (`facade::intake`, `facade::cells`); every other path under `/v1/` answers
+  `501`.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
   reader, and the harness of `docs/architecture.md` §13 (#39): the two node
   products pinned by digest behind the `FERROFED_E2E` gate (`containers`), the

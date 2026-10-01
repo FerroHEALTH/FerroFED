@@ -4,6 +4,8 @@
 //! Integration tests through the library run path the binary shares.
 
 mod config;
+mod e2e;
+mod facade;
 mod http;
 mod hygiene;
 mod readiness;

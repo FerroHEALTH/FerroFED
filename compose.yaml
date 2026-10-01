@@ -18,10 +18,13 @@
 # The tag default is the product version, and scripts/checks/versions.sh keeps
 # it equal to the workspace version.
 #
-# WHAT RUNS TODAY. The gateway serves its process shape: `/`, `/health` and
-# `/health/readiness`, and `501` under `/v1/`. The registry document that names
-# the two nodes (#36) and the federated query over them (#38) land in v0.0.2;
-# the nodes below are already the ones that query will reach.
+# WHAT RUNS. The gateway federates the two nodes below: docker/quickstart/
+# registry.toml names them and docker/quickstart/ferrofed.toml configures the
+# gateway, both mounted read-only. `POST /v1/query/aql` answers one federated
+# RESULT_SET over both (#38), from the release that carries it; every other
+# path under `/v1/` answers `501`. No identity binding is configured, so a
+# query that names a patient fails closed with 424; the README shows a query
+# that names none.
 #
 # THE NODES. Each runs its product's documented image, database included, so
 # EHRbase keeps its PostgreSQL 16.2 image: the PostgreSQL 18 rule governs
@@ -69,6 +72,12 @@ services:
       # `auto` renders pretty output on a terminal and JSON otherwise.
       FERROFED__TELEMETRY__FORMAT: ${FERROFED_LOG_FORMAT:-auto}
       FERROFED__TELEMETRY__FILTER: ${FERROFED_LOG_FILTER:-info}
+      FERROFED_CONFIG: /etc/ferrofed/ferrofed.toml
+    # The quickstart's configuration and registry document, read-only, so the
+    # root filesystem stays read-only as well.
+    volumes:
+      - ./docker/quickstart/ferrofed.toml:/etc/ferrofed/ferrofed.toml:ro
+      - ./docker/quickstart/registry.toml:/etc/ferrofed/registry.toml:ro
     # The gateway writes nothing: no cache, no scratch file, and every secret is
     # read once at boot. So the root filesystem is read-only with no tmpfs
     # beside it.

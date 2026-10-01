@@ -5,18 +5,21 @@
 //! integration tests share.
 //!
 //! [`cli`] parses the command line, [`config`] reads the file and the
-//! environment into one [`config::Settings`], [`telemetry`] installs the
+//! environment into one [`config::settings::Settings`], [`telemetry`] installs the
 //! subscriber, [`router`] builds the HTTP surface over [`state::AppState`],
 //! and [`serve`] runs it on a bound listener until the process is asked to
 //! stop. `main.rs` only hands in the arguments and returns the exit code.
 //!
-//! The ITS-REST façade is not served yet: every path under `/v1/` answers
-//! `501` until the façade lands (#38, `docs/architecture.md` section 5).
+//! The ITS-REST façade serves the federated query, `POST /v1/query/aql`
+//! ([`facade`], `docs/architecture.md` section 5); every other path under
+//! `/v1/` answers `501` until its issue lands.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod body;
 pub mod cli;
 pub mod config;
+pub mod facade;
+pub mod federation;
 pub mod health;
 pub mod panic;
 pub mod request_id;
@@ -32,7 +35,7 @@ use std::time::Duration;
 
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use clap::Parser;
 use http::{HeaderMap, StatusCode, Uri};
@@ -43,7 +46,9 @@ use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::timeout::TimeoutLayer;
 
 use crate::cli::{Cli, Command, ConfigCommand};
-use crate::config::{Config, ServerSettings, Settings};
+use crate::config::Config;
+use crate::config::settings::{ServerSettings, Settings};
+use crate::federation::Federation;
 use crate::state::AppState;
 
 /// The exit code of a command line the binary refuses.
@@ -89,7 +94,13 @@ where
     match cli.command {
         Command::Config {
             command: ConfigCommand::Check,
-        } => config_checked(),
+        } => match Federation::load(&settings) {
+            Ok(_) => config_checked(),
+            Err(error) => {
+                eprintln!("ferrofed: cannot start: {}", chain(&error));
+                ExitCode::from(EXIT_CONFIG)
+            }
+        },
         Command::Serve => {
             let stdout_is_terminal = std::io::stdout().is_terminal();
             if let Err(error) = telemetry::init(
@@ -100,7 +111,14 @@ where
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 return ExitCode::from(EXIT_CONFIG);
             }
-            match serve_command(settings) {
+            let state = match AppState::build(&settings) {
+                Ok(state) => Arc::new(state),
+                Err(error) => {
+                    tracing::error!(error = chain(&error), "cannot start");
+                    return ExitCode::from(EXIT_CONFIG);
+                }
+            };
+            match serve_command(&settings, state) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     tracing::error!(error = format!("{error:#}"), "cannot serve");
@@ -121,15 +139,14 @@ fn config_checked() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Builds the runtime and serves until the process is asked to stop.
-fn serve_command(settings: Settings) -> anyhow::Result<()> {
+/// Builds the runtime and serves `state` until the process is asked to stop.
+fn serve_command(settings: &Settings, state: Arc<AppState>) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
     runtime.block_on(async move {
         use anyhow::Context;
 
-        let state = Arc::new(AppState::build(&settings));
         tracing::info!(
             version = body::VERSION,
             indicators = state.health().names().join(","),
@@ -191,14 +208,20 @@ fn chain(error: &dyn std::error::Error) -> String {
 /// `GET /` answers a small JSON document naming the product and its version,
 /// `GET /health` answers `200` while the process is up, and
 /// `GET /health/readiness` answers `200` when every registered indicator is up
-/// and `503` with each indicator's state otherwise. Every other path under
-/// [`ITS_REST_PREFIX`] answers `501`, because the façade is not built yet
-/// (#38), and every path outside it answers `404`.
+/// and `503` with each indicator's state otherwise. `POST /v1/query/aql` answers
+/// the federated query when a registry is configured ([`facade::query_aql`]).
+/// Every other path under [`ITS_REST_PREFIX`] answers `501`, because its
+/// part of the façade is not built yet, and every path outside it answers
+/// `404`.
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let routes = Router::new()
         .route("/", get(root))
         .route("/health", get(liveness))
         .route("/health/readiness", get(readiness))
+        .route(
+            facade::QUERY_AQL,
+            post(facade::query_aql).fallback(unrouted),
+        )
         .fallback(unrouted)
         .with_state(state);
     with_middleware(routes, server)
@@ -247,8 +270,8 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 /// Every path no route serves.
 ///
 /// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface the
-/// gateway will serve, so it answers `501`: the façade is not built yet (#38),
-/// and a `404` would claim the resource does not exist. Every other path
+/// gateway will serve, so it answers `501`: that part of the façade is not built
+/// yet, and a `404` would claim the resource does not exist. Every other path
 /// answers `404`. Neither answer echoes the path.
 async fn unrouted(uri: Uri, headers: HeaderMap) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();

@@ -4,7 +4,9 @@
 //! The configuration contract: the file, the environment over it, the `_file`
 //! secrets, and every refusal.
 
-use ferrofed_server::config::{Config, Error, Scheme};
+use ferrofed_server::config::Config;
+use ferrofed_server::config::error::Error;
+use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::telemetry::Format;
 use secrecy::ExposeSecret;
 use std::collections::BTreeMap;

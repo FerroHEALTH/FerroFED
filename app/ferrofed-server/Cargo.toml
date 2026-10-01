@@ -25,6 +25,14 @@ path = "src/main.rs"
 anyhow.workspace = true
 axum.workspace = true
 clap.workspace = true
+# The federated query (#38): the registry, the resolver seam, the rewrite, and
+# the dispatch and fan-out, wired behind POST {base}/v1/query/aql.
+ferrofed-engine.workspace = true
+ferrofed-identity.workspace = true
+ferrofed-registry.workspace = true
+openehr-federation = { workspace = true, features = ["aql"] }
+openehr-its = { workspace = true, features = ["rest", "rest-client"] }
+openehr-query.workspace = true
 http.workspace = true
 secrecy.workspace = true
 serde.workspace = true
@@ -38,6 +46,9 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+ferrofed-testkit.workspace = true
+jsonschema.workspace = true
+wiremock.workspace = true
 # The shutdown and wire-capture cases drive a real socket, so they need a real
 # HTTP client.
 reqwest.workspace = true

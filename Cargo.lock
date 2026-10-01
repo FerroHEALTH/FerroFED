@@ -908,7 +908,15 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
+ "ferrofed-engine",
+ "ferrofed-identity",
+ "ferrofed-registry",
+ "ferrofed-testkit",
  "http",
+ "jsonschema",
+ "openehr-federation",
+ "openehr-its",
+ "openehr-query",
  "reqwest",
  "secrecy",
  "serde",
@@ -922,6 +930,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "wiremock",
 ]
 
 [[package]]

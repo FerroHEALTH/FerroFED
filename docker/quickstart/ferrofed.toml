@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The gateway configuration of the compose.yaml quickstart. It federates the
+# two nodes of registry.toml and sends each the quickstart Basic-auth user of
+# its product: development credentials, NOT for anything real.
+#
+# No identity binding is configured, so a query that names a patient fails
+# closed with 424 (decision A17); a query that names no patient is asked of
+# both members (N4).
+
+[registry]
+document = "/etc/ferrofed/registry.toml"
+
+[federation]
+per_node_timeout_ms = 10000
+overall_timeout_ms = 25000
+
+[credentials."node-a-query"]
+user = "ferroehr"
+password = "ferroehr"
+
+[credentials."node-b-query"]
+user = "ferroehr"
+password = "ferroehr"

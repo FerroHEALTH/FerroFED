@@ -6,7 +6,7 @@
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_server::config::ServerSettings;
+use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::state::AppState;
 use http::{Request, Response, StatusCode};
 use serde::Deserialize;
