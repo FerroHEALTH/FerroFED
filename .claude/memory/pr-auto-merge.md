@@ -35,3 +35,7 @@ trigger auto merge okay!! so when the CI is green it will be merged". The
   `git fetch origin && git checkout -b <type>/<slug> origin/HEAD`. Stage named
   paths (`git add <files>`), never `git add -A` from the root.
 - Never push a follow-up commit to an armed PR ([[auto-merge-follow-ups]]).
+- Arming is pre-approved: `.claude/settings.json` allows
+  `gh pr merge * --auto` and `gh pr merge * --auto *` (owner, 2026-10-01,
+  after a session merge was refused for want of the rule). The allow covers
+  `--auto` only; a plain immediate merge is still the owner's call.
