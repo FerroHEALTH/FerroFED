@@ -331,9 +331,11 @@ jobs:
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
           tool: cargo-nextest
-      - run: cargo nextest run --workspace --locked --no-tests=pass
+      # Every feature: a library feature no workspace member enables yet (the
+      # aql rewrite of openehr-federation) still runs its tests.
+      - run: cargo nextest run --workspace --locked --all-features --no-tests=pass
       # nextest does not run doctests, so they get their own compile.
-      - run: cargo test --doc --workspace --locked
+      - run: cargo test --doc --workspace --locked --all-features
 
   # The container-backed suite (#39, docs/architecture.md section 13). Every
   # such test checks FERROFED_E2E first and returns early without it, so the

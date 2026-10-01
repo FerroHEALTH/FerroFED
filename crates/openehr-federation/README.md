@@ -12,8 +12,25 @@ specification, with a feature per layer.
 | `aql` | the §7 rewrite of a client query into one `ehr_id`-scoped query per node, with identifier hygiene (§5.4), on the `openehr-query` syntax tree |
 | `merge` | the §9 to §11 merge of node answers: `ORDER BY` with `LIMIT`, `DISTINCT`, version-identity dedup, decomposable aggregates |
 
-The `aql` and `merge` modules hold their place and land with their FerroFED
-issues. The rest of this page describes the wire types.
+The `merge` module holds its place and lands with its FerroFED issue.
+
+## The `aql` feature
+
+`aql::analyse` takes the client's AQL, binds the ITS-REST `query_parameters`
+into the `openehr-query` syntax tree, and finds the patient on the
+`EHR_STATUS.subject.external_ref` carrier (§7). A patient query then prints one
+node query per resolved `ehr_id`, with the patient predicate replaced by
+`<ehr>/ehr_id/value = '<ehr_id>'` and a selected subject column left to
+re-injection (N5). Every transformation is on the syntax tree, printed with
+`printer::to_aql`.
+
+The identifier never reaches a node query (§5.4.1, N33). A query that cannot
+be reduced to one `ehr_id` scope per node, or in which the identifier appears
+anywhere else, is refused with a typed `400` that locates the offending text by
+byte range and never quotes it. The `ENTRY`-level subject carrier is refused
+until it is accepted as resolution input.
+
+## The wire types
 
 A federation gateway answers an AQL query with an ordinary openEHR ITS-REST
 `RESULT_SET` and adds one member to its open `meta`: `meta.federation`, the
