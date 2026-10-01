@@ -81,25 +81,21 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.72 on 2026-10-01.
+pin is the latest version on crates.io, 0.0.74 since 2026-10-01.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.72 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-its` | 0.0.72 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-base` | 0.0.72 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-rm` | 0.0.72 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-sdt` | 0.0.72 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-query` | 0.0.74 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-its` | 0.0.74 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-base` | 0.0.74 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-rm` | 0.0.74 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-sdt` | 0.0.74 | the root `Cargo.toml` `[workspace.dependencies]` |
 
-**The planned pin is 0.0.74**, the lockstep release of the whole `openehr-*`
-family that carries the federation gaps FerroEHR #3505 to #3513 (the AST
-visitor, spans, parameter binding, the `FROM ENDPOINT` directive, the parser
-fix, the router builder, the operation matcher with `forward`, the
-credentials provider and per-call options; `docs/architecture.md` §2). The
-five rows move to 0.0.74 in one change when it is on crates.io. The workspace
-root (#28) declares the family at the published release and nothing depends on
-it yet; the crates that code against the 0.0.74 APIs (#34, #35) are blocked on
-their FerroEHR issues.
+**0.0.74 is the lockstep release of the whole `openehr-*` family that carries
+the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
+spans, parameter binding, the `FROM ENDPOINT` directive, the parser fix, the
+router builder, the operation matcher with `forward`, the credentials provider
+and per-call options; `docs/architecture.md` §2), published on 2026-10-01.
 
 ## Language and runtime
 

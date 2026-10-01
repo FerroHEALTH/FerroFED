@@ -15,7 +15,7 @@ audit there found model knowledge restated by hand and one live drift.
 On 2026-10-01 the owner ruled the same for FerroFED from the start, in two
 messages: the ITS-REST surface and AQL come from the published crates and
 are never re-implemented, and then that the whole `openehr-*` family is the
-model, nothing redone. FerroEHR publishes the family (0.0.72 the latest on crates.io on 2026-10-01; 0.0.73 in its working tree):
+model, nothing redone. FerroEHR publishes the family (0.0.74 on 2026-10-01, the lockstep release that closed FerroEHR #3505 to #3514, the gaps FerroFED raised):
 
 - `openehr-its`: the client face is the generated axum server traits
   (`rest-server` feature), dispatch to each node is the generated client
