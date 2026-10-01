@@ -10,9 +10,14 @@ gateway: a transparent ITS-REST intermediary that resolves the patient outside
 the query, sends standard AQL to each node scoped to its own EHR id, and
 merges what comes back with each node's provenance.
 
-Version 0.0.0 holds the crate in the workspace. The implementation lands with
-[FerroFED issue #36](https://github.com/rubentalstra/FerroFED/issues/36),
-and the design is recorded in the repository's architecture document.
+It loads the federation's membership from a reviewed TOML bootstrap document
+(organisations, nodes with their openEHR `system_id`, endpoints with their base
+URL, connection type and one managing organisation) into an immutable
+`RegistrySnapshot`, refusing any document with a dangling reference, a
+duplicate id or `system_id`, or an endpoint without exactly one managing
+organisation. `node_id`, `endpoint_id` and `system_id` are three types with no
+conversion between them. The design is recorded in the repository's
+architecture document.
 
 ## Licence
 

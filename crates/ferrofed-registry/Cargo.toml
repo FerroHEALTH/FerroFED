@@ -3,8 +3,7 @@
 [package]
 name = "ferrofed-registry"
 description = "The federation registry: members, endpoints and system ids from a reviewed document, the learned maps, integrity incidents and the stored-query definition store"
-# 0.0.0 is the placeholder of a member with no crate line yet (docs/VERSIONS.md).
-version = "0.0.0"
+version = "0.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -21,6 +20,11 @@ publish.workspace = true
 include = ["src/**", "README.md", "LICENSE"]
 
 [dependencies]
+openehr-base.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 

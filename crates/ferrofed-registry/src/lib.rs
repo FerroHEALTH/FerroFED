@@ -5,8 +5,50 @@
 //! document, the learned maps, integrity incidents and the stored-query
 //! definition store.
 //!
-//! Version 0.0.0 holds the crate in the workspace; the implementation lands
-//! with FerroFED issue #36, following `docs/architecture.md` section 11.
+//! The registry is the operator's record of membership (§12b.1) and the
+//! follow-up routing table (N21). Organisations, nodes with their openEHR
+//! `system_id`, and endpoints with their base URLs come from a reviewed
+//! bootstrap document, validated at load into an immutable
+//! [`RegistrySnapshot`](snapshot::RegistrySnapshot) (docs/architecture.md
+//! section 8). `node_id`, `endpoint_id` and `system_id` are three types with
+//! no conversion between them (N32, §12a.1, see [`id`]).
+//!
+//! ```
+//! use ferrofed_registry::id::{EndpointId, NodeId, SystemId};
+//! use ferrofed_registry::snapshot::RegistrySnapshot;
+//!
+//! let registry = RegistrySnapshot::from_toml_str(
+//!     r#"
+//!     [[organisation]]
+//!     id = "org-a"
+//!
+//!     [[node]]
+//!     id = "node-a"
+//!     organisation = "org-a"
+//!     system_id = "cdr-a.example.org"
+//!
+//!     [[endpoint]]
+//!     id = "node-a-pub"
+//!     node = "node-a"
+//!     url = "https://cdr-a.example.org/openehr"
+//!     connection_type = "openehr-rest-query"
+//!     managing_organisation = "org-a"
+//!     "#,
+//! )?;
+//!
+//! let system_id: SystemId = "cdr-a.example.org".parse()?;
+//! let node = registry.node_for_system_id(&system_id).map(|node| node.id());
+//! assert_eq!(node, Some(&"node-a".parse::<NodeId>()?));
+//! let endpoint: EndpointId = "node-a-pub".parse()?;
+//! assert!(registry.endpoint(&endpoint).is_some());
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! The learned maps (observed `creating_system_id`, the `ehr_id` index), the
+//! integrity incidents and the definition store land with their own issues.
 #![doc(test(attr(deny(warnings))))]
 
-// TODO(#36): the implementation this crate holds the place for.
+mod document;
+pub mod error;
+pub mod id;
+pub mod snapshot;

@@ -32,6 +32,9 @@ openehr-rm = "0.0.72"
 openehr-query = "0.0.72"
 openehr-its = { version = "0.0.72", default-features = false }
 openehr-sdt = { version = "0.0.72", default-features = false }
+# Internal library crates: a path for the workspace and a version for a
+# packaged manifest, moved with the member (.claude/rules/crates-publishing.md).
+ferrofed-registry = { path = "crates/ferrofed-registry", version = "0.0.1" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }
@@ -60,6 +63,10 @@ uuid = { version = "1.26.1", default-features = false, features = ["v4", "std"] 
 # Test-only: a real HTTP client for the cases that drive a real socket.
 reqwest = { version = "0.13.5", default-features = false }
 tempfile = "3.27.0"
+# The identity seams (#36): an object-safe async Resolver trait.
+async-trait = "0.1.92"
+# Endpoint base URLs in the registry (#36).
+url = "2.5.8"
 
 # The reliability bar (.claude/rules/reliability.md). Groups sit at priority -1
 # so every named lint below overrides its group.

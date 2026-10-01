@@ -1,0 +1,220 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The static development cross-reference: a fixed table from a synthetic
+//! patient identifier to each member's `ehr_id`.
+//!
+//! It is FerroFED's own testing device and binds nothing: it is not an
+//! identity binding of N3, and a PIXm resolver replaces it (#42). It is
+//! accepted only in a configuration explicitly marked for development
+//! (docs/architecture.md section 6):
+//!
+//! ```toml
+//! profile = "development"
+//!
+//! [[dev.crossref]]
+//! namespace = "2.999.1"
+//! value = "12345"
+//! member = "node-a"
+//! ehr_id = "6f2a51a4-1b8e-4f8b-9a4c-1f6c2b1d7e30"
+//! ```
+
+use std::collections::BTreeMap;
+use std::fmt;
+use std::time::Instant;
+
+use async_trait::async_trait;
+use ferrofed_registry::id::{EhrId, NodeId};
+use ferrofed_registry::snapshot::RegistrySnapshot;
+use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
+use thiserror::Error;
+
+use crate::patient::{IdentifierNamespace, PatientRef};
+use crate::resolver::{Resolution, Resolver};
+
+/// The deployment profile a server configuration declares.
+///
+/// Only [`Profile::Development`] admits development-only devices such as the
+/// static cross-reference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Profile {
+    /// A deployment that serves real requests.
+    Production,
+    /// A deployment explicitly marked for development and testing.
+    Development,
+}
+
+/// One row of the development cross-reference, as the configuration writes
+/// it.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EntryDoc {
+    namespace: IdentifierNamespace,
+    value: String,
+    member: NodeId,
+    ehr_id: EhrId,
+}
+
+/// The `[dev]` table of a server configuration.
+///
+/// Its `Debug` output counts the rows and shows none of them, because each
+/// row carries a patient identifier value.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DevTable {
+    crossref: Vec<EntryDoc>,
+}
+
+impl fmt::Debug for DevTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DevTable")
+            .field("crossref_rows", &self.crossref.len())
+            .finish()
+    }
+}
+
+/// A development cross-reference that cannot be enabled.
+///
+/// The errors name the member or the namespace, never the identifier value.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
+pub enum DevCrossRefError {
+    /// The configuration carries the table but is not marked for development.
+    #[error("the static cross-reference is accepted only under profile = \"development\"")]
+    NotDevelopment,
+    /// A row's identifier value is empty.
+    #[error("a cross-reference row in namespace {0} has an empty value")]
+    EmptyValue(IdentifierNamespace),
+    /// A row names a member the registry does not hold.
+    #[error("a cross-reference row names member {0}, which is not in the registry")]
+    UnknownMember(NodeId),
+    /// Two rows map the same identifier at the same member.
+    #[error(
+        "two cross-reference rows map one identifier in namespace {namespace} at member {member}"
+    )]
+    DuplicateRow {
+        /// The identifier's namespace.
+        namespace: IdentifierNamespace,
+        /// The member both rows name.
+        member: NodeId,
+    },
+}
+
+struct Row {
+    namespace: IdentifierNamespace,
+    value: SecretString,
+    member: NodeId,
+    ehr_id: EhrId,
+}
+
+/// The [`Resolver`] over the static development cross-reference.
+///
+/// It answers [`Resolution::Resolved`] for a row of the table and
+/// [`Resolution::Unknown`] for every other member asked; it never answers
+/// [`Resolution::Unavailable`].
+pub struct StaticResolver {
+    rows: Vec<Row>,
+}
+
+/// The warning logged when the static cross-reference is enabled.
+pub const STATIC_CROSS_REFERENCE_WARNING: &str =
+    "static cross-reference: development only, not an identity binding";
+
+impl StaticResolver {
+    /// Builds the static resolver a configuration asks for, if any.
+    ///
+    /// Returns `None` when the configuration has no `[dev]` table. The table is
+    /// refused outside [`Profile::Development`], so a server in any other
+    /// profile cannot start with it. Every row must name a registry member,
+    /// and no two rows may map one identifier at one member. Enabling it
+    /// logs [`STATIC_CROSS_REFERENCE_WARNING`] at `WARN`, with the row count
+    /// and none of the rows.
+    ///
+    /// # Errors
+    ///
+    /// [`DevCrossRefError::NotDevelopment`] for a table outside the
+    /// development profile, and the other variants for a row that breaks a
+    /// rule above.
+    pub fn from_config(
+        profile: Profile,
+        table: Option<DevTable>,
+        registry: &RegistrySnapshot,
+    ) -> Result<Option<Self>, DevCrossRefError> {
+        let Some(table) = table else {
+            return Ok(None);
+        };
+        if profile != Profile::Development {
+            return Err(DevCrossRefError::NotDevelopment);
+        }
+        let mut rows: Vec<Row> = Vec::with_capacity(table.crossref.len());
+        for entry in table.crossref {
+            if entry.value.is_empty() {
+                return Err(DevCrossRefError::EmptyValue(entry.namespace));
+            }
+            if registry.node(&entry.member).is_none() {
+                return Err(DevCrossRefError::UnknownMember(entry.member));
+            }
+            let duplicate = rows.iter().any(|row| {
+                row.namespace == entry.namespace
+                    && row.member == entry.member
+                    && row.value.expose_secret() == entry.value
+            });
+            if duplicate {
+                return Err(DevCrossRefError::DuplicateRow {
+                    namespace: entry.namespace,
+                    member: entry.member,
+                });
+            }
+            rows.push(Row {
+                namespace: entry.namespace,
+                value: entry.value.into(),
+                member: entry.member,
+                ehr_id: entry.ehr_id,
+            });
+        }
+        tracing::warn!(rows = rows.len(), "{STATIC_CROSS_REFERENCE_WARNING}");
+        Ok(Some(Self { rows }))
+    }
+
+    fn lookup(&self, patient: &PatientRef, member: &NodeId) -> Option<&EhrId> {
+        self.rows
+            .iter()
+            .find(|row| {
+                row.member == *member
+                    && row.namespace == *patient.namespace()
+                    && row.value.expose_secret() == patient.value()
+            })
+            .map(|row| &row.ehr_id)
+    }
+}
+
+impl fmt::Debug for StaticResolver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StaticResolver")
+            .field("rows", &self.rows.len())
+            .finish()
+    }
+}
+
+#[async_trait]
+impl Resolver for StaticResolver {
+    async fn resolve(
+        &self,
+        patient: &PatientRef,
+        members: &[NodeId],
+        _deadline: Instant,
+    ) -> BTreeMap<NodeId, Resolution> {
+        members
+            .iter()
+            .map(|member| {
+                let resolution = match self.lookup(patient, member) {
+                    Some(ehr_id) => Resolution::Resolved(ehr_id.clone()),
+                    None => Resolution::Unknown,
+                };
+                (member.clone(), resolution)
+            })
+            .collect()
+    }
+}
