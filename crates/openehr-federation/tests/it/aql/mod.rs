@@ -7,6 +7,7 @@
 //! §5.4.1 and N33.
 #![cfg(feature = "aql")]
 
+mod folding;
 mod golden;
 mod hygiene;
 mod rules;

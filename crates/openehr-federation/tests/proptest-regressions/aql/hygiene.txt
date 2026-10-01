@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 4c177eac0e6e6ff34150ff4d8bff6c0a68969fbe591e1f4c6e396fd1d4c42ac2 # shrinks to (aql, id, bound) = ("SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE e/ehr_status/subject/external_ref/id/value = '10000' AND c/composer/identifiers/id = '10000'", "10000", false)
+cc 648a2d55b9a7f340af611cbd86ec847580a185b5d3458b14c28a7273420e487a # shrinks to (aql, id, bound, rebuilds) = ("SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE e/ehr_status/subject/external_ref/id/value = '10000' AND c/name/value = CONCAT('1', '0000')", "10000", false, true)

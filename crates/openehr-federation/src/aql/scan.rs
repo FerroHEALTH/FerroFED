@@ -17,8 +17,11 @@ use openehr_query::visit::{
     walk_identified_path, walk_order_by_expr, walk_select_expr,
 };
 
+use super::fold;
 use super::refusal::{Refusal, Unreducible};
-use super::subject::{SubjectPath, ehr_id_path, entry_subject_path, subject_path};
+use super::subject::{
+    SubjectPath, ehr_id_path, entry_subject_path, identifier_bearing, subject_path,
+};
 
 /// A literal the query compares a subject path with, and where.
 #[derive(Debug, Clone)]
@@ -322,31 +325,68 @@ impl<'ast> Visit<'ast> for Scan {
     }
 }
 
+/// How the identifier would reach a node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LeakKind {
+    /// A text of the query contains it, or a string function over literals
+    /// folds to a text that does (§5.4.1; decision A4).
+    Value,
+    /// A string function over a literal that the gateway cannot fold is
+    /// compared with an identifier-bearing path, so the node could compute
+    /// the identifier (decision A4).
+    Unfoldable,
+}
+
+/// Where and how the identifier would reach a node.
+#[derive(Debug, Clone)]
+pub(super) struct Leak {
+    /// How.
+    pub(super) kind: LeakKind,
+    /// Where.
+    pub(super) at: Option<Range<usize>>,
+}
+
 /// Every written text of `query` that could carry the identifier to a node:
-/// the literals, the codes, names and patterns, and the identifiers of the
-/// query itself (§5.4.1 "in any position").
-pub(super) fn reaches(query: &SelectQuery, value: &str) -> Option<Hit> {
+/// the literals, the codes, names and patterns, the identifiers of the query
+/// itself, and the folded value of every string function over literals
+/// (§5.4.1 "in any position"; decision A4).
+pub(super) fn reaches(query: &SelectQuery, value: &str) -> Option<Leak> {
     let mut search = Search {
         value,
-        hit: None,
+        leak: None,
         at: None,
     };
     search.visit_select_query(query);
-    search.hit
+    search.leak
 }
 
 struct Search<'v> {
     value: &'v str,
-    hit: Option<Hit>,
+    leak: Option<Leak>,
     at: Option<Range<usize>>,
 }
 
 impl Search<'_> {
     fn check(&mut self, text: &str) {
-        if self.hit.is_none() && text.contains(self.value) {
-            self.hit = Some(Hit {
+        if text.contains(self.value) {
+            self.found(LeakKind::Value);
+        }
+    }
+
+    fn found(&mut self, kind: LeakKind) {
+        if self.leak.is_none() {
+            self.leak = Some(Leak {
+                kind,
                 at: self.at.clone(),
             });
+        }
+    }
+
+    /// Refuses a string function over a literal that does not fold when it is
+    /// compared with a path that carries an identifier.
+    fn unfoldable(&mut self, path: &IdentifiedPath, call: &FunctionCall) {
+        if identifier_bearing(path) && fold::over_a_literal(call) && fold::fold(call).is_none() {
+            self.found(LeakKind::Unfoldable);
         }
     }
 }
@@ -485,7 +525,31 @@ impl<'ast> Visit<'ast> for Search<'_> {
         if let FunctionCall::Named { name, .. } = node {
             self.check(name);
         }
+        if let Some(folded) = fold::fold(node) {
+            self.check(&folded);
+        }
         walk_function_call(self, node);
+    }
+
+    fn visit_identified_expr(&mut self, node: &'ast IdentifiedExpr) {
+        match node {
+            IdentifiedExpr::Compare {
+                lhs: CompareOperand::Path(path),
+                rhs: Terminal::Function(call),
+                ..
+            }
+            | IdentifiedExpr::Compare {
+                lhs: CompareOperand::Function(call),
+                rhs: Terminal::Path(path),
+                ..
+            } => self.unfoldable(path, call),
+            IdentifiedExpr::Compare { .. }
+            | IdentifiedExpr::Exists(_)
+            | IdentifiedExpr::Like { .. }
+            | IdentifiedExpr::Matches { .. }
+            | IdentifiedExpr::Resolved(_) => {}
+        }
+        walk_identified_expr(self, node);
     }
 
     fn visit_terminology_function(&mut self, node: &'ast openehr_query::ast::TerminologyFunction) {

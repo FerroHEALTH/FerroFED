@@ -108,6 +108,18 @@ pub enum Refusal {
         /// Where the value was found.
         at: Option<Range<usize>>,
     },
+    /// A string function over a literal is compared with an
+    /// identifier-bearing path and cannot be folded at the gateway, so the
+    /// node could compute the identifier from it (§5.4.1, §5.4.2; decision
+    /// A4).
+    #[error(
+        "a string function over a literal is compared with an identifier path and cannot be folded at the gateway, so the identifier could be rebuilt at the node (§5.4.1){}",
+        At(.at)
+    )]
+    UnfoldableFunction {
+        /// Where the comparison was written.
+        at: Option<Range<usize>>,
+    },
     /// The query reaches an `ENTRY`-level subject identifier, which this
     /// release does not yet consume as resolution input (§5.4.3, N33).
     ///

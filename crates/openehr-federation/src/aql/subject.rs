@@ -131,6 +131,18 @@ pub(super) fn entry_subject_path(path: &IdentifiedPath, ehr: &[String]) -> bool 
     })
 }
 
+/// Whether `path` reaches an identifier the RM keeps as a value or a
+/// reference: a `PARTY_IDENTIFIED.identifiers` list (`DV_IDENTIFIER`) or a
+/// `PARTY_REF` (`external_ref`), on any subject, composer, performer, facility
+/// or committer (§5.4.2).
+pub(super) fn identifier_bearing(path: &IdentifiedPath) -> bool {
+    path.path.as_ref().is_some_and(|p| {
+        p.parts
+            .iter()
+            .any(|part| matches!(part.name.as_str(), "identifiers" | "external_ref"))
+    })
+}
+
 /// Whether `path` is `<ehr>/ehr_id/value`, the canonical `ehr_id` scope of
 /// N29.
 pub(super) fn ehr_id_path(path: &IdentifiedPath, ehr: &[String]) -> bool {

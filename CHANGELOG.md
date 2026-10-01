@@ -68,9 +68,12 @@ binary follows from v0.0.2.
   (A7), an unqualified identifier with no default namespace (A5), a query with
   no patient where a localizer decides the node set (A8), paging members that
   disagree with the query (A10), cross-node `OFFSET` (§11.6.2), an undirected
-  aggregate (N14), and the identifier anywhere else in the query (§5.4.1). The
-  reference implementation's 17 golden cases run as a corpus, each adjudicated.
-  CI's test lane runs every feature.
+  aggregate (N14), and the identifier anywhere else in the query (§5.4.1),
+  including rebuilt by `CONCAT`, `CONCAT_WS` or `SUBSTRING` over split
+  literals, which the rewrite folds before the value test; a string function
+  over a literal that cannot be folded is refused on an identifier-bearing path
+  (decision A4). The reference implementation's 17 golden cases run as a
+  corpus, each adjudicated. CI's test lane runs every feature.
 - The static registry (#36): `ferrofed-registry` 0.0.1 loads the federation's
   membership from a reviewed TOML bootstrap document (`[[organisation]]`,
   `[[node]]` with its `system_id` and `[[node.identifier]]`, `[[endpoint]]`)

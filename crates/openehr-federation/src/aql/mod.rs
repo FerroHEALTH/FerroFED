@@ -17,7 +17,8 @@
 //! predicate that carries it is replaced by `<ehr>/ehr_id/value = '<ehr_id>'`,
 //! a selected subject column is re-injected after the merge instead of being
 //! asked of the node (N5), and a query in which the value appears anywhere
-//! else is refused. The AQL release the module rewrites is [`crate::AQL`].
+//! else is refused, including as the folded value of `CONCAT`, `CONCAT_WS` or
+//! `SUBSTRING` over literals (decision A4). The AQL release the module rewrites is [`crate::AQL`].
 //!
 //! # Examples
 //!
@@ -42,6 +43,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+mod fold;
 mod rewrite;
 mod scan;
 
@@ -420,8 +422,11 @@ fn patient(
     let mut dispatched = query.clone();
     rewrite::strip_where(&mut dispatched, consumed, None);
     rewrite::strip_columns(&mut dispatched, &inputs);
-    if let Some(hit) = scan::reaches(&dispatched, subject.value()) {
-        return Err(Refusal::IdentifierElsewhere { at: hit.at });
+    if let Some(leak) = scan::reaches(&dispatched, subject.value()) {
+        return Err(match leak.kind {
+            scan::LeakKind::Value => Refusal::IdentifierElsewhere { at: leak.at },
+            scan::LeakKind::Unfoldable => Refusal::UnfoldableFunction { at: leak.at },
+        });
     }
     let mut template = query;
     let ehr = rewrite::ehr_variable(&mut template, &findings.ehr);
