@@ -3,11 +3,10 @@
 
 # .github/dependabot.yml: automated dependency updates.
 #
-# Three ecosystems. `github-actions` is live today and bumps the digest-pinned
-# actions the workflows in this directory use. `cargo` and `docker` are
-# declared ahead of the Cargo workspace and the container recipe, so they
-# start proposing bumps the moment a manifest or a Dockerfile lands, with no
-# edit here.
+# Four ecosystems. `github-actions` bumps the digest-pinned actions the
+# workflows in this directory use, `cargo` the workspace dependencies, `docker`
+# the base image of docker/Dockerfile, and `docker-compose` the digest-pinned
+# member-node images of the root compose.yaml.
 #
 # COOLDOWN is the delay between a release being published and this bot
 # proposing it, so a compromised or yanked release has a window to be caught
@@ -83,6 +82,21 @@ updates:
       interval: "weekly"
     # The base image is pinned by index digest, so a bump is a change of
     # digest. `semver-major-days` is not accepted for this ecosystem either.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "build"
+
+  - package-ecosystem: "docker-compose"
+    # The quickstart's member-node images (FerroEHR and EHRbase with their
+    # databases), each pinned by tag and index digest. A bump must move the
+    # matching docs/VERSIONS.md row in the same pull request, or the versions
+    # guard fails it.
+    directory: "/"
+    labels:
+      - "dependencies"
+    schedule:
+      interval: "weekly"
     cooldown:
       default-days: 7
     commit-message:

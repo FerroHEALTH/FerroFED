@@ -1,0 +1,217 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The FerroFED quickstart: the gateway beside two member CDRs of different
+# products, FerroEHR and EHRbase (docs/architecture.md section 13, decision
+# A41).
+#
+#   docker compose up --wait
+#   curl http://127.0.0.1:8080/health
+#
+# THE GATEWAY IMAGE. ghcr.io/rubentalstra/ferrofed is published by the image
+# lane (#31). Until that lands, the service builds the same recipe from the
+# binaries of a published release, staged first:
+#
+#   scripts/release/stage-dist.sh 0.0.1
+#   docker compose up --build --wait
+#
+# The tag default is the product version, and scripts/checks/versions.sh keeps
+# it equal to the workspace version.
+#
+# WHAT RUNS TODAY. The gateway serves its process shape: `/`, `/health` and
+# `/health/readiness`, and `501` under `/v1/`. The registry document that names
+# the two nodes (#36) and the federated query over them (#38) land in v0.0.2;
+# the nodes below are already the ones that query will reach.
+#
+# THE NODES. Each runs its product's documented image, database included, so
+# EHRbase keeps its PostgreSQL 16.2 image: the PostgreSQL 18 rule governs
+# FerroFED's own database only (decision A40). Both nodes use their products'
+# quickstart Basic-auth users, which are development credentials and NOT for
+# anything real:
+#
+#   FerroEHR  http://127.0.0.1:8081/ferroehr/rest/openehr/v1   ferroehr / ferroehr
+#   EHRbase   http://127.0.0.1:8091/ehrbase/rest/openehr/v1    ferroehr / ferroehr
+#
+# PORTS. Every published port binds the loopback interface by default. A
+# published port is DNAT'd ahead of the host firewall's own chains, so a port on
+# 0.0.0.0 is reachable from the network even when the firewall says otherwise
+# (https://docs.docker.com/engine/network/packet-filtering-firewalls/). To serve
+# another machine, name the interface (FERROFED_BIND_HOST=10.0.0.7) or put a
+# reverse proxy in front.
+#
+# IMAGES. Every image is pinned by tag and by the digest of its image index,
+# and each pin is a row of docs/VERSIONS.md that scripts/checks/versions.sh
+# holds equal to this file.
+
+# Without this the project is named after the directory the file sits in, and
+# the container, network and volume names move when the directory does.
+name: ferrofed
+
+services:
+  ferrofed:
+    image: ghcr.io/rubentalstra/ferrofed:${FERROFED_VERSION:-0.0.1}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: ferrofed
+    restart: unless-stopped
+    depends_on:
+      ferroehr:
+        condition: service_healthy
+      ehrbase:
+        condition: service_started
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_PORT:-8080}:8080"
+    environment:
+      # The image sets the same value; it is repeated here so the address the
+      # container binds is visible in `docker compose config`.
+      FERROFED__SERVER__LISTEN: 0.0.0.0:8080
+      # `auto` renders pretty output on a terminal and JSON otherwise.
+      FERROFED__TELEMETRY__FORMAT: ${FERROFED_LOG_FORMAT:-auto}
+      FERROFED__TELEMETRY__FILTER: ${FERROFED_LOG_FILTER:-info}
+    # The gateway writes nothing: no cache, no scratch file, and every secret is
+    # read once at boot. So the root filesystem is read-only with no tmpfs
+    # beside it.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 16384
+
+  # Node A, FerroEHR, on its own PostgreSQL image.
+  ferroehr-postgres:
+    image: ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9
+    restart: unless-stopped
+    environment:
+      # Development defaults of FerroEHR's own quickstart; the image's init
+      # script creates the role and the database from the PG_INIT_ keys.
+      POSTGRES_PASSWORD: ${FERROEHR_POSTGRES_PASSWORD:-postgres}
+      PG_INIT_USER: ferroehr
+      PG_INIT_PASSWORD: ferroehr
+      PG_INIT_DB: ferroehr
+    volumes:
+      - ferroehr-pgdata:/var/lib/postgresql
+    # The entrypoint starts as root to chown the data directory and then drops
+    # to `postgres`, so it keeps exactly the capabilities that needs.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+      - /var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ferroehr -d ferroehr"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  ferroehr:
+    image: ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6
+    restart: unless-stopped
+    depends_on:
+      ferroehr-postgres:
+        condition: service_healthy
+    environment:
+      FERROEHR__DB__URL: postgres://ferroehr:ferroehr@ferroehr-postgres:5432/ferroehr
+      FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+    configs:
+      - source: ferroehr-config
+        target: /etc/ferroehr/ferroehr.toml
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_PORT:-8081}:8080"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # NOT read_only: Compose refuses an inline config in a read-only service,
+    # and the inline config below keeps this file free of host bind mounts.
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ferroehr", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Node B, EHRbase, on its companion PostgreSQL 16.2 image.
+  ehrbase-db:
+    image: ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${EHRBASE_POSTGRES_PASSWORD:-postgres}
+      # The image's own contract: its baked createdb.sql reads these keys and
+      # creates the database `ehrbase`.
+      EHRBASE_USER_ADMIN: ehrbase
+      EHRBASE_PASSWORD_ADMIN: ehrbase
+      EHRBASE_USER: ehrbase_restricted
+      EHRBASE_PASSWORD: ehrbase_restricted
+    volumes:
+      - ehrbase-pgdata:/var/lib/postgresql/data
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  ehrbase:
+    image: ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a
+    restart: unless-stopped
+    depends_on:
+      ehrbase-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://ehrbase-db:5432/ehrbase
+      DB_USER_ADMIN: ehrbase
+      DB_PASS_ADMIN: ehrbase
+      DB_USER: ehrbase_restricted
+      DB_PASS: ehrbase_restricted
+      SECURITY_AUTHTYPE: BASIC
+      SECURITY_AUTHUSER: ferroehr
+      SECURITY_AUTHPASSWORD: ferroehr
+      # EHRbase's in-memory user store requires a distinct admin user name.
+      SECURITY_AUTHADMINUSER: ferroehr-admin
+      SECURITY_AUTHADMINPASSWORD: ferroehr
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${EHRBASE_PORT:-8091}:8080"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # No container healthcheck: the official image ships no wget or curl, so an
+    # in-container probe could never pass. Probe it from the host instead.
+
+configs:
+  # FerroEHR's quickstart configuration, inline so this file needs no bind
+  # mount (`$` is escaped as `$$` against Compose interpolation). The Basic-auth
+  # user is ferroehr / ferroehr (the hash is Argon2id of "ferroehr"):
+  # development credentials only.
+  ferroehr-config:
+    content: |
+      [server]
+      bind = "0.0.0.0:8080"
+
+      [auth]
+      enabled = true
+
+      [[auth.basic.users]]
+      username = "ferroehr"
+      password_hash = "$$argon2id$$v=19$$m=19456,t=2,p=1$$ZmVycm9laHJEZXZTYWx0$$be5nPwWjfUl1qvSrvkvqvdMOuCgM0VFcN/VN4MFLjT8"
+      roles = ["ADMIN", "USER"]
+
+      [authz.rbac]
+      enabled = false
+
+volumes:
+  ferroehr-pgdata:
+  ehrbase-pgdata:

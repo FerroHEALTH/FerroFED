@@ -127,6 +127,27 @@ database image instead (EHRbase on 16.2, §13).
 |---|---|---|
 | PostgreSQL | 18 | nothing yet; the image row is added with its first consumer |
 
+## Container images
+
+The gateway image builds on distroless static, and the quickstart runs two
+member CDRs of different products beside it (`docs/architecture.md` §13,
+decision A41). Every image is pinned by tag and by the digest of its image
+index, resolved on 2026-10-01. Each member node runs its product's documented
+image, database included, so EHRbase keeps its PostgreSQL 16.2 image (decision
+A40). `scripts/checks/versions.sh` holds every row equal to the file that
+repeats it.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM` |
+| FerroEHR node image | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6` | `compose.yaml` |
+| FerroEHR node database image | `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` | `compose.yaml` |
+| EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | `compose.yaml` |
+| EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | `compose.yaml` |
+
+The quickstart's gateway image, `ghcr.io/rubentalstra/ferrofed`, carries the
+product version below as its tag default, and the guard holds the two equal.
+
 ## Product and citation version
 
 The product version is the workspace `version` in the root `Cargo.toml`, which
@@ -136,7 +157,7 @@ each cut moves this row and every file that repeats it in one pull request.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Product version | 0.0.1 | `CITATION.cff` `version`, later the root `Cargo.toml` `[workspace.package]` `version` |
+| Product version | 0.0.1 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
 
 `CITATION.cff` tracks this row exactly, and the guard compares the two whenever
 `CITATION.cff` exists. Once the root `Cargo.toml` lands, the guard also compares
