@@ -9,7 +9,9 @@
 //! `crates/*` library and no other `app/*` crate (the engine included) may
 //! reach one, or the server, through its normal or build dependencies. The
 //! IHE and Dutch binding crates depend on nothing in FerroFED (#106), so a
-//! patient index or another gateway can use them as they are.
+//! patient index or another gateway can use them as they are. The engine names
+//! no HTTP engine directly, so every request to a node is built by
+//! `openehr-its`'s client runtime (#34).
 //!
 //! The checks read the graph with `cargo tree`, so they hold from the
 //! placeholder modules on and turn red the day a dependency edge would break
@@ -47,6 +49,21 @@ const STORAGE: &[&str] = &[
     "tokio-postgres",
 ];
 
+/// HTTP engines and clients, by crates.io name. Every request to a node is
+/// built by `openehr-its`'s client runtime (#34), so the engine names none of
+/// them directly; the runtime's own engine reaches it transitively.
+const HTTP_ENGINES: &[&str] = &[
+    "attohttpc",
+    "curl",
+    "h2",
+    "hyper",
+    "hyper-util",
+    "isahc",
+    "reqwest",
+    "surf",
+    "ureq",
+];
+
 /// The application holds the storage implementations, so no other member may
 /// depend on it either.
 const APPLICATION: &str = "ferrofed-server";
@@ -67,6 +84,34 @@ fn closure(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
         .arg(&manifest)
         .args(["--package", package])
         .args(["--edges", "normal,build"])
+        .args(["--prefix", "none", "--format", "{p}"])
+        .args(["--all-features", "--locked"])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "cargo tree failed for {package}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(String::from_utf8(output.stdout)?
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .map(str::to_owned)
+        .collect())
+}
+
+/// The package names `package` depends on directly through its normal and
+/// build dependencies, with every feature on.
+fn direct(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
+    let manifest = Path::new(ROOT).join("Cargo.toml");
+    let output = Command::new(env!("CARGO"))
+        .arg("tree")
+        .arg("--manifest-path")
+        .arg(&manifest)
+        .args(["--package", package])
+        .args(["--edges", "normal,build"])
+        .args(["--depth", "1"])
         .args(["--prefix", "none", "--format", "{p}"])
         .args(["--all-features", "--locked"])
         .output()?;
@@ -162,6 +207,29 @@ fn the_binding_crates_depend_on_nothing_in_ferrofed() -> Result<(), Box<dyn Erro
     assert!(
         breaches.is_empty(),
         "a binding crate depends on FerroFED (#106): {breaches:?}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_engine_builds_no_http_request_of_its_own() -> Result<(), Box<dyn Error>> {
+    let named = direct("ferrofed-engine")?;
+    assert!(
+        named.contains("openehr-its"),
+        "the engine lost its node client runtime: {named:?}"
+    );
+    let engines: Vec<&str> = HTTP_ENGINES
+        .iter()
+        .copied()
+        .filter(|engine| named.contains(*engine))
+        .collect();
+    assert!(
+        engines.is_empty(),
+        "the engine depends on an HTTP engine directly, so it could build a request outside openehr-its (#34): {engines:?}"
     );
     Ok(())
 }

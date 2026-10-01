@@ -70,6 +70,10 @@ exceptions = [
   # A build-time archive writer in a toolchain-facing tree; the LLVM
   # exception only widens Apache-2.0.
   { allow = ["Apache-2.0 WITH LLVM-exception"], crate = "ar_archive_writer" },
+  # The Mozilla CA root data the node client's TLS verifier ships
+  # (openehr-its rest-client through rustls-platform-verifier, #34); a data
+  # licence over certificates, allowed for that crate alone.
+  { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
 ]
 
 [bans]
