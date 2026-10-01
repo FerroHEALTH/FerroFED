@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 5 of 35 covered, 30 planned, 0 deferred.
+**Gateway points:** 6 of 35 covered, 29 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -22,7 +22,7 @@ and a gateway is never marked down for them (section 17).
 |---|---|---|---|---|---|---|
 | [CP-1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-1) | Gateway | N1 | 1 | covered | [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | - |
 | [CP-2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-2) | Gateway | N2, N5 | 1, 2 | covered | [#35](https://github.com/FerroHEALTH/FerroFED/issues/35), [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | - |
-| [CP-38](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-38) | Gateway | N33 | 2, 10 | planned | [#44](https://github.com/FerroHEALTH/FerroFED/issues/44) | - |
+| [CP-38](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-38) | Gateway | N33 | 2, 10 | covered | [#44](https://github.com/FerroHEALTH/FerroFED/issues/44) | - |
 | [CP-3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-3) | Gateway | N3 | 2 | planned | [#42](https://github.com/FerroHEALTH/FerroFED/issues/42) | - |
 | [CP-4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-4) | Gateway | N7 | 2 | covered | [#35](https://github.com/FerroHEALTH/FerroFED/issues/35), [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | - |
 | [CP-5](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-5) | Gateway | N4, N10 | 3, 4 | planned | [#46](https://github.com/FerroHEALTH/FerroFED/issues/46), [#85](https://github.com/FerroHEALTH/FerroFED/issues/85) | - |

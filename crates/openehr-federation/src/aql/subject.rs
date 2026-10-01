@@ -3,10 +3,15 @@
 
 //! The patient a façade query identifies, and the paths that carry it.
 //!
-//! The `EHR_STATUS.subject.external_ref` carrier is the subject predicate of
-//! §7: `<ehr>/ehr_status/subject/external_ref/id/value = <patientId>`, with
-//! the issuing namespace in `<ehr>/ehr_status/subject/external_ref/namespace`
-//! (§5.2, §5.4.3).
+//! A gateway accepts the patient identifier in either carrier and resolves on
+//! whichever the client used (§5.4.3, N33, CP-38):
+//!
+//! - `EHR_STATUS.subject.external_ref`, the subject predicate of §7:
+//!   `<ehr>/ehr_status/subject/external_ref/id/value = <patientId>`, with the
+//!   issuing namespace in `<ehr>/ehr_status/subject/external_ref/namespace`;
+//! - an `ENTRY`-level `subject` (`PARTY_IDENTIFIED` / `DV_IDENTIFIER`):
+//!   `…/subject/identifiers/id = <patientId>`, with the issuing namespace in
+//!   `…/subject/identifiers/issuer` or `…/subject/identifiers/type`.
 
 use std::fmt;
 
@@ -28,7 +33,8 @@ pub struct Subject {
 /// Where the issuing namespace of a [`Subject`] came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NamespaceOrigin {
-    /// The query predicated on `…/external_ref/namespace` itself.
+    /// The query named the namespace itself: `…/external_ref/namespace`, or
+    /// the `issuer` or `type` of an `ENTRY`-level `DV_IDENTIFIER` (§5.4.3).
     Query,
     /// The query named none, and the deployment declares a default issuing
     /// namespace (decision A5; FerroFED's own reading of §5.2, which requires
@@ -77,20 +83,30 @@ impl fmt::Debug for Subject {
     }
 }
 
-/// What a path over `EHR_STATUS.subject` is, for the rewrite.
+/// What a path over a patient carrier is, for the rewrite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SubjectPath {
-    /// `<ehr>/ehr_status/subject/external_ref/id/value`: the identifier.
+    /// The identifier: `<ehr>/ehr_status/subject/external_ref/id/value`, or
+    /// `…/subject/identifiers/id` of an `ENTRY`.
     Id,
-    /// `<ehr>/ehr_status/subject/external_ref/namespace`: its namespace.
+    /// Its issuing namespace: `<ehr>/ehr_status/subject/external_ref/namespace`,
+    /// or `…/subject/identifiers/issuer` or `…/subject/identifiers/type` of an
+    /// `ENTRY` (§5.4.3).
     Namespace,
-    /// Any other path under `ehr_status/subject`, or one of the two above
-    /// written with a predicate or on a variable that is not an `EHR`.
+    /// Any other path into a patient carrier, or one of the above written with
+    /// a predicate on the carrier or on a variable that cannot carry it.
     Other,
 }
 
 const ID: [&str; 5] = ["ehr_status", "subject", "external_ref", "id", "value"];
 const NAMESPACE: [&str; 4] = ["ehr_status", "subject", "external_ref", "namespace"];
+
+/// Classifies `path` when it reaches into either patient carrier, or `None`.
+///
+/// `ehr` lists the variables the `FROM` clause binds to the `EHR` class.
+pub(super) fn patient_path(path: &IdentifiedPath, ehr: &[String]) -> Option<SubjectPath> {
+    subject_path(path, ehr).or_else(|| entry_path(path, ehr))
+}
 
 /// Classifies `path` when it reaches into `EHR_STATUS.subject`, or `None`.
 ///
@@ -114,21 +130,44 @@ pub(super) fn subject_path(path: &IdentifiedPath, ehr: &[String]) -> Option<Subj
     })
 }
 
-/// Whether `path` reaches the identifiers of a `subject` that is not the
-/// `EHR_STATUS` one: an `ENTRY`-level `subject` (`PARTY_IDENTIFIED` or
-/// `PARTY_RELATED`, §5.4.2).
-pub(super) fn entry_subject_path(path: &IdentifiedPath, ehr: &[String]) -> bool {
+/// Classifies `path` when it reaches into an `ENTRY`-level `subject`, or
+/// `None`.
+///
+/// The carrier is `…/subject/identifiers/<attribute>` on any root that is not
+/// an `EHR` variable: `ENTRY.subject` is a `PARTY_PROXY`, and
+/// `PARTY_IDENTIFIED` holds the `DV_IDENTIFIER` list (§5.4.2). `id` is the
+/// identifier and `issuer` or `type` its namespace (§5.4.3). The navigation
+/// before `subject` may carry predicates; the carrier itself may not, so
+/// `…/subject/identifiers[…]/id`, `assigner`, and `…/subject/external_ref` are
+/// [`SubjectPath::Other`], refused rather than guessed at.
+fn entry_path(path: &IdentifiedPath, ehr: &[String]) -> Option<SubjectPath> {
     if ehr.contains(&path.root) {
-        return false;
+        return None;
     }
     let parts = path.path.as_ref().map_or(&[][..], |p| p.parts.as_slice());
-    parts.windows(2).any(|pair| match pair {
+    let start = parts.windows(2).position(|pair| match pair {
         [subject, next] => {
             subject.name == "subject"
                 && matches!(next.name.as_str(), "identifiers" | "external_ref")
         }
         _ => false,
-    })
+    })?;
+    let carrier = parts.get(start..).unwrap_or_default();
+    if carrier.iter().any(|part| part.predicate.is_some()) {
+        return Some(SubjectPath::Other);
+    }
+    Some(
+        match carrier
+            .iter()
+            .map(|part| part.name.as_str())
+            .collect::<Vec<_>>()
+            .as_slice()
+        {
+            ["subject", "identifiers", "id"] => SubjectPath::Id,
+            ["subject", "identifiers", "issuer" | "type"] => SubjectPath::Namespace,
+            _ => SubjectPath::Other,
+        },
+    )
 }
 
 /// Whether `path` reaches an identifier the RM keeps as a value or a

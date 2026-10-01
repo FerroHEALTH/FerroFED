@@ -36,6 +36,17 @@ fn verdict(case: &str) -> Verdict {
         | "11-no-subject-passthrough.case"
         | "12-comment-hiding-identifier-stripped.case"
         | "15-external-ref-namespace-consumed.case" => Verdict::Rewrites,
+        // §5.4.3, N33, CP-38: the ENTRY-level carrier is resolution input,
+        // consumed and stripped as external_ref is; 13 resolves in the declared
+        // default namespace, 14 in its issuer.
+        "13-entry-subject-carrier-rewrite.case" | "14-entry-subject-issuer-consumed.case" => {
+            Verdict::Rewrites
+        }
+        // §7.1, decision A7: a second value in a patient carrier, which may name
+        // a relative that no path tells apart; the reading that cannot leak.
+        "17-entry-subject-second-value-rejected.case" => {
+            Verdict::Refuses(|r| matches!(r, Refusal::SecondSubject { .. }))
+        }
         // §11.6.2 option 1, declared; the exact k + n page is #53.
         "05-offset-rejected.case" => Verdict::Refuses(|r| *r == Refusal::OffsetUnsupported),
         // N14, §11.6.3: the corpus runs undirected.
@@ -71,12 +82,6 @@ fn verdict(case: &str) -> Verdict {
         // TODO(#70): the FROM ENDPOINT directive, parsed with the openehr-query federation feature.
         "02-directive-strip-projections.case" => {
             Verdict::Refuses(|r| matches!(r, Refusal::NotAql { .. }))
-        }
-        // TODO(#44): the ENTRY-level subject as resolution input; refused until then, which cannot leak.
-        "13-entry-subject-carrier-rewrite.case"
-        | "14-entry-subject-issuer-consumed.case"
-        | "17-entry-subject-second-value-rejected.case" => {
-            Verdict::Refuses(|r| matches!(r, Refusal::EntrySubject { .. }))
         }
         other => panic!("golden case {other} has no adjudication; add one before it runs"),
     }

@@ -269,3 +269,93 @@ async fn one_result_set_over_two_cdr_products_and_no_identifier_on_the_wire() ->
     );
     Ok(())
 }
+
+/// The rows of `aql` through the gateway, sorted, after asserting a complete
+/// `200` whose envelope validates.
+async fn sorted_rows(router: axum::Router, aql: &str) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
+    let (status, text) = call(router, query(aql)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    crate::facade::schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert!(answer.meta.federation.complete, "both products answered");
+    let mut rows = answer.rows;
+    rows.sort();
+    Ok(rows)
+}
+
+// conformance: CP-38
+#[tokio::test]
+async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_products() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let nodes = containers::two_nodes().await?;
+    seed::seed(
+        &nodes.a.api_root(),
+        &plan(EHR_A, DemoComposition::FirstHospital),
+    )
+    .await?;
+    seed::seed(
+        &nodes.b.api_root(),
+        &plan(EHR_B, DemoComposition::FirstClinic),
+    )
+    .await?;
+    nodes.a.proxy.clear_journal();
+    nodes.b.proxy.clear_journal();
+    let dir = tempfile::tempdir()?;
+
+    // §5.4.3, CP-38: the same patient query once per carrier.
+    let from = "FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o";
+    let via_external_ref = format!(
+        "SELECT c/uid/value {from} \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    let via_entry = format!(
+        "SELECT c/uid/value {from} \
+         WHERE o/subject/identifiers/id = '{PATIENT}' \
+         AND o/subject/identifiers/issuer = '{NAMESPACE}'"
+    );
+    let external_ref_rows =
+        sorted_rows(gateway(dir.path(), &nodes.a, &nodes.b)?, &via_external_ref).await?;
+    let entry_rows = sorted_rows(gateway(dir.path(), &nodes.a, &nodes.b)?, &via_entry).await?;
+    assert!(
+        !entry_rows.is_empty(),
+        "the demo compositions hold observations, so the comparison is not vacuous"
+    );
+    assert_eq!(
+        external_ref_rows, entry_rows,
+        "both carriers return the same rows (CP-38)"
+    );
+
+    for node in [&nodes.a, &nodes.b] {
+        let journal = node.proxy.journal();
+        let bodies: Vec<String> = journal
+            .iter()
+            .map(|capture| String::from_utf8_lossy(&capture.body).into_owned())
+            .collect();
+        assert_eq!(
+            2,
+            bodies.len(),
+            "{:?} received one query per carrier",
+            node.node.product()
+        );
+        assert_eq!(
+            bodies.first(),
+            bodies.get(1),
+            "{:?} received the same node query from both carriers (§7.1)",
+            node.node.product()
+        );
+        assert!(
+            !node.proxy.journal_contains(PATIENT.as_bytes()),
+            "{:?} saw the patient identifier in some carrier (N33)",
+            node.node.product()
+        );
+        assert!(
+            !node.proxy.journal_contains(b"subject/identifiers"),
+            "{:?} received the ENTRY carrier (N33)",
+            node.node.product()
+        );
+    }
+    Ok(())
+}

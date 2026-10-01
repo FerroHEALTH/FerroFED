@@ -29,7 +29,7 @@
 cp	actor	requirements	tracks	status	issue	reason
 CP-1	Gateway	N1	1	covered	#38	-
 CP-2	Gateway	N2,N5	1,2	covered	#35,#38	-
-CP-38	Gateway	N33	2,10	planned	#44	-
+CP-38	Gateway	N33	2,10	covered	#44	-
 CP-3	Gateway	N3	2	planned	#42	-
 CP-4	Gateway	N7	2	covered	#35,#38	-
 CP-5	Gateway	N4,N10	3,4	planned	#46,#85	-

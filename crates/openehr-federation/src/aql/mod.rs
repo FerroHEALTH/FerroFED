@@ -6,8 +6,10 @@
 //!
 //! [`analyse`] parses the client's query with `openehr-query`, binds the
 //! ITS-REST `query_parameters` into the tree before anything reads it, finds
-//! the patient on the `EHR_STATUS.subject.external_ref` carrier, and refuses
-//! with a [`refusal::Refusal`] whatever cannot be consumed exactly. A
+//! the patient on either carrier, `EHR_STATUS.subject.external_ref` or an
+//! `ENTRY`-level `subject` `DV_IDENTIFIER` (§5.4.3, CP-38), and refuses with a
+//! [`refusal::Refusal`] whatever cannot be consumed exactly. Both carriers
+//! rewrite to the same node query. A
 //! [`PatientQuery`] then prints the node query for each resolved `ehr_id` with
 //! `printer::to_aql`. Every step is a transformation of the AQL syntax tree:
 //! there is no AQL text splicing, and a value reaches a node query only
