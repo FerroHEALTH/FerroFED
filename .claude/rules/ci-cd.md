@@ -22,9 +22,8 @@ Ten workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 runs now (zizmor,
   actionlint, shellcheck, hadolint, the comment-style guard, the versions
-  guard, the favicon guard); tier 2 is the Rust set, gated behind a `detect`
-  job that looks for a
-  root `Cargo.toml`. The `conclusion` job is the single required status check
+  guard, the favicon guard, the conformance-matrix guard); tier 2 is the Rust
+  set, gated behind a `detect` job that looks for a root `Cargo.toml`. The `conclusion` job is the single required status check
   on `main`. The design is `docs/ci-cd.md`.
 - `.github/workflows/scorecard.yml`: OpenSSF Scorecard, an independent score of
   the repository's security posture, published to the OpenSSF API and to code

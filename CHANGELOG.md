@@ -31,6 +31,17 @@ binary follows from v0.0.2.
   library run path and the testkit's pin-matrix reader asserting each crate's
   specification constant against `docs/VERSIONS.md`.
 
+- The conformance matrix (#41): `conformance/matrix.tsv` with every
+  conformance point of section 17, `conformance/tracks.tsv` with the section
+  16.3 tracks (track 8 deferred as provisional) and
+  `conformance/requirements.tsv` with the reachability of all 46 requirements,
+  derived from the vendored specification by `scripts/conformance/matrix.sh`;
+  the `// conformance:` test marker; the tier-1 `conformance-matrix` guard; and
+  the matrix rendered into the book's Evaluate part.
+- The clinical-path storage rule (#40): an engine test reads the crate graph
+  and fails when a library crate reaches a storage implementation or the
+  application crate.
+
 ### Fixed
 
 - `scripts/checks/crate-version-guard.sh` no longer exits early on the change

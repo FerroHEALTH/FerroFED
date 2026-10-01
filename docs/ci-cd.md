@@ -52,6 +52,7 @@ under the pins below.
 | `file-length` | `scripts/checks/file-length.sh`, the 1000-line cap on hand-written Rust with its ratchet allow-list |
 | `versions` | `scripts/checks/versions.sh`, the pin matrix against every file that repeats a pin, the vendored provenance stamps and the SPDX licence claims |
 | `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
+| `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, the conformance matrix against the vendored specification, the test markers against the matrix, and the rendered book page against the matrix (`docs/architecture.md` section 12) |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
 reference implementation ships its own shell scripts, Dockerfile and

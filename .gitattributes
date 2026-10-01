@@ -9,3 +9,7 @@
 # (.claude/rules/vendored-inputs.md, .claude/rules/codegen.md).
 docs/specs/** linguist-vendored -text
 website/book/vendor/** linguist-vendored -text
+# Rendered and derived by scripts/conformance/matrix.sh (docs/architecture.md
+# section 12); the conformance-matrix guard fails when either is stale.
+website/book/src/evaluate/conformance.md linguist-generated
+conformance/requirements.tsv linguist-generated
