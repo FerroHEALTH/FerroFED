@@ -4,11 +4,24 @@
 //! Test support for the FerroFED suites, consumed as a path-only
 //! dev-dependency so `cargo package` strips it.
 //!
-//! Today it reads the pin matrix, so a crate's version constant can be asserted
-//! against the single source of truth. The end-to-end harness, the capturing
-//! and fault proxy, the identity fakes and the synthetic seed builder arrive
-//! with #39 (`docs/architecture.md` section 13).
+//! It reads the pin matrix, so a crate's version constant can be asserted
+//! against the single source of truth, and it holds the harness of
+//! `docs/architecture.md` section 13:
+//!
+//! - [`containers`]: the two CDR products behind the `FERROFED_E2E` gate,
+//!   pinned by digest;
+//! - [`proxy`]: the capturing and fault proxy in front of each node, whose
+//!   journal the tests read;
+//! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone
+//!   and names patients only inside the `urn:oid:2.999` example arc.
+//!
+//! The identity fakes (the PIXm Manager, the localizer, the consent
+//! pre-filter) arrive with the issues that first need them.
 #![doc(test(attr(deny(warnings))))]
+
+pub mod containers;
+pub mod proxy;
+pub mod seed;
 
 use std::fmt;
 use std::path::PathBuf;

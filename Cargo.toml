@@ -67,6 +67,15 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
+# The test harness (#39, docs/architecture.md section 13): the container
+# runner behind the FERROFED_E2E gate, the in-process stub nodes, and the
+# HTTP server half the capturing and fault proxy is built on.
+testcontainers = "0.28.0"
+wiremock = "0.6.5"
+hyper = { version = "1.11.1", default-features = false }
+hyper-util = { version = "0.1.21", default-features = false }
+http-body-util = "0.1.5"
+bytes = "1.12.1"
 
 # The reliability bar (.claude/rules/reliability.md). Groups sit at priority -1
 # so every named lint below overrides its group.

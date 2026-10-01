@@ -335,6 +335,31 @@ jobs:
       # nextest does not run doctests, so they get their own compile.
       - run: cargo test --doc --workspace --locked
 
+  # The container-backed suite (#39, docs/architecture.md section 13). Every
+  # such test checks FERROFED_E2E first and returns early without it, so the
+  # test job above stays offline; this job sets the gate and runs the crates
+  # that carry container tests against the digest-pinned images the
+  # testkit's PinnedImage constants name and docs/VERSIONS.md repeats.
+  e2e:
+    name: e2e (containers)
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      FERROFED_E2E: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-nextest
+      - run: cargo nextest run --locked -p ferrofed-testkit --no-tests=pass
+
   doc:
     name: rustdoc
     needs: detect
@@ -463,6 +488,7 @@ jobs:
       - fmt
       - clippy
       - test
+      - e2e
       - doc
       - cargo-deny
       - msrv

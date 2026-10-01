@@ -119,7 +119,7 @@ docs/VERSIONS.md and re-run the script.
   cases under \`$golden/\`
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #18 (the golden cases adjudicated against the specification), #35 (the golden cases as a corpus test) and #94 (the differential run)
+- Read by: #18 (the golden cases adjudicated against the specification), #35 (the golden cases as a corpus test), #39 (the demo template and compositions as the e2e seed) and #94 (the differential run)
 
 ## Evidence, never an oracle
 

@@ -122,8 +122,12 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   or unmatched path, the health family over an indicator registry, the
   `tower-http` stack and the bounded drain. Every path under `/v1/` answers
   `501` until the façade (#38).
-- `tools/ferrofed-testkit`: test support, the pin-matrix reader today and the
-  harness later; never published.
+- `tools/ferrofed-testkit`: test support; never published. The pin-matrix
+  reader, and the harness of `docs/architecture.md` §13 (#39): the two node
+  products pinned by digest behind the `FERROFED_E2E` gate (`containers`), the
+  capturing and fault proxy in front of each node (`proxy`), and the synthetic
+  seed builder that writes over ITS-REST alone inside the `urn:oid:2.999`
+  example arc (`seed`) (`.claude/memory/e2e-gate.md`).
 - The root `Cargo.toml` carries the lint set, the release profile, the
   `openehr-*` family as one pin group and the `publish` switch; `deny.toml`,
   `clippy.toml`, `rustfmt.toml` and `rust-toolchain.toml` sit beside it.
