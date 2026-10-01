@@ -20,6 +20,26 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+### Added
+
+- The static registry (#36): `ferrofed-registry` 0.0.1 loads the federation's
+  membership from a reviewed TOML bootstrap document (`[[organisation]]`,
+  `[[node]]` with its `system_id` and `[[node.identifier]]`, `[[endpoint]]`)
+  with `deny_unknown_fields` throughout into an immutable `RegistrySnapshot`.
+  A document with a dangling reference, a duplicate id, a `system_id` shared by
+  two nodes (compared without ASCII case), an endpoint without exactly one
+  managing organisation, a connection type other than `openehr-rest-query`, an
+  unusable base URL or a node without an endpoint refuses to load (N19, N20,
+  N21, §12b.2). `NodeId`, `EndpointId` and `SystemId` are distinct types with
+  no conversion between them (N32, §12a.1).
+- The resolver seam and the development cross-reference (#36):
+  `ferrofed-identity` 0.0.1 carries `PatientRef`, the patient identifier
+  redacted in every rendering and never serialized (§5.4, N33), the `Resolver`
+  trait (N3, §5.2), and `StaticResolver`, a fixed table from a synthetic
+  identifier to each member's `ehr_id` that a configuration can enable only
+  under `profile = "development"`. It is FerroFED's own testing device, not an
+  identity binding.
+
 ## [0.0.1] - 2026-10-01
 
 The first release: the repository setup, the documentation site on

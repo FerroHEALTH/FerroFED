@@ -3,8 +3,7 @@
 [package]
 name = "ferrofed-identity"
 description = "The identity roles of the Federation Tier as traits (resolver, localizer, directory, consent pre-filter, onward authentication) and the patient reference carrier, with no FHIR and no transport"
-# 0.0.0 is the placeholder of a member with no crate line yet (docs/VERSIONS.md).
-version = "0.0.0"
+version = "0.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -21,8 +20,15 @@ publish.workspace = true
 include = ["src/**", "README.md", "LICENSE"]
 
 [dependencies]
+async-trait.workspace = true
+ferrofed-registry.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+toml.workspace = true
 
 [lints]
 workspace = true

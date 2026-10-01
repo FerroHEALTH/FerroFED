@@ -68,6 +68,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "async-trait"
+version = "0.1.92"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -250,7 +261,16 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-identity"
-version = "0.0.0"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "ferrofed-registry",
+ "secrecy",
+ "serde",
+ "thiserror",
+ "toml",
+ "tracing",
+]
 
 [[package]]
 name = "ferrofed-identity-ihe"
@@ -270,7 +290,14 @@ version = "0.0.0"
 
 [[package]]
 name = "ferrofed-registry"
-version = "0.0.0"
+version = "0.0.1"
+dependencies = [
+ "openehr-base",
+ "serde",
+ "thiserror",
+ "toml",
+ "url",
+]
 
 [[package]]
 name = "ferrofed-server"
@@ -694,6 +721,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "openehr-base"
+version = "0.0.72"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75c7fc2fe1f570cdc8458475e552fe27c1ed7335855a629cc51846b5b56c0e1a"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -854,6 +893,7 @@ version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "serde",
@@ -1278,6 +1318,7 @@ checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
 dependencies = [
  "getrandom",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

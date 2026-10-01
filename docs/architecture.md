@@ -1068,7 +1068,7 @@ errors instead of a test (decision A34).
 | `crates/ferrofed-aql` | the rewrite of section 4; no I/O | `openehr-query`, `openehr-base`, `ferrofed-wire` | registry, identity, engine, any HTTP |
 | `crates/ferrofed-merge` | the merge of section 9: order, `DISTINCT`, dedup, aggregates, `complete`; pure | `openehr-rm`, `openehr-base`, `openehr-its` (`rest`), `ferrofed-wire` | registry, identity, I/O |
 | `crates/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base`, `ferrofed-wire` | aql, merge, identity, engine |
-| `crates/ferrofed-identity` | the role traits of section 6 and `PatientRef`; no FHIR | `ferrofed-wire`, `openehr-base` | registry storage, engine, `fhir-types` |
+| `crates/ferrofed-identity` | the role traits of section 6, `PatientRef` and the development cross-reference; no FHIR | `ferrofed-registry` (the ids and the snapshot the seams name), `ferrofed-wire` | registry storage, engine, `fhir-types` |
 | `crates/ferrofed-identity-ihe` | the PIXm ITI-83 resolver and localizer, the mCSD directory sync, the PMIR hooks | `ferrofed-identity`, `fhir-types` (`r4`, `resources`), `reqwest` | the core's internals |
 | `crates/ferrofed-identity-xcpd` | the XCPD ITI-55 initiating-gateway localizer, with #85; the only crate with SOAP 1.2, HL7 v3 and SAML XUA dependencies | `ferrofed-identity` and its own protocol stack | the core's internals |
 | `crates/ferrofed-identity-nl` | the Annex B adapters (NVI, Mitz, LRZa), with #87 | `ferrofed-identity` | the core's internals |
@@ -1099,6 +1099,7 @@ flowchart TD
     aql --> wire["ferrofed-wire"]
     merge --> wire
     registry --> wire
+    identity --> registry
     identity --> wire
     engine --> its["openehr-its rest-client"]
     aql --> query["openehr-query"]

@@ -26,10 +26,9 @@ include-dev = true
 # Change License admits). Copyleft is not allowed by default; a weak-copyleft
 # dependency gets a crate-scoped exceptions entry with its reason.
 #
-# The workspace has no third-party dependency yet. A licence joins the list the
-# day a dependency needs it, with the reason it is acceptable here, and leaves
-# when the last crate carrying it does, so cargo deny reports no unencountered
-# licence.
+# A licence joins the list the day a dependency needs it, with the reason it is
+# acceptable here, and leaves when the last crate carrying it does, so cargo
+# deny reports no unencountered licence.
 allow = [
   # The server's HTTP, configuration and console stack (#29): the permissive
   # pair almost every crate in it carries, alone or as a choice.
