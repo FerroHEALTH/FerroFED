@@ -52,7 +52,7 @@ latest on 2026-10-01.
 
 | Binding | Package | Latest on 2026-10-01 |
 |---|---|---|
-| PIXm (ITI-83, ITI-104) | `ihe.iti.pixm` | 3.1.0 |
+| PIXm (ITI-83, ITI-104) | `ihe.iti.pixm` | 3.1.0, vendored by #42 (the corpus table below) |
 | PDQm (ITI-78, ITI-119) | `ihe.iti.pdqm` | 3.2.0 |
 | PMIR (ITI-93, ITI-94) | `ihe.iti.pmir` | 1.6.0 |
 | mCSD | `ihe.iti.mcsd` | 4.0.0 |
@@ -61,7 +61,8 @@ latest on 2026-10-01.
 
 ## Corpora and machine-readable inputs
 
-A corpus is pinned by commit or immutable tag, never by a moving tag or a
+A corpus is pinned by commit or immutable tag, or, for a FHIR package, by its
+version and the sha256 of the registry tarball; never by a moving tag or a
 `latest` URL, and vendored by a committed `scripts/vendor/*.sh` with a
 `PROVENANCE.md` (`.claude/rules/vendored-inputs.md`). Each script below reads
 its pin from this table, and `scripts/checks/versions.sh` reads each vendored
@@ -73,6 +74,7 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` commit `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` | `scripts/vendor/federation-ref.sh`, `docs/specs/federation-ref/PROVENANCE.md` |
 | openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
 | openEHR AQL specification source | `openEHR/specifications-QUERY` tag `Release-1.1.0`, the AQL and AQL examples documents and the grammar | `scripts/vendor/aql.sh`, `docs/specs/aql/PROVENANCE.md` |
+| IHE PIXm FHIR package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`, the ITI-83 artefacts | `scripts/vendor/ihe-pixm.sh`, `docs/specs/ihe-pixm/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 
@@ -96,6 +98,23 @@ the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
 spans, parameter binding, the `FROM ENDPOINT` directive, the parser fix, the
 router builder, the operation matcher with `forward`, the credentials provider
 and per-call options; `docs/architecture.md` §2), published on 2026-10-01.
+
+## FHIR model crate (crates.io)
+
+The FHIR model of the IHE bindings comes from the published `fhir-types`
+crate (`docs/architecture.md` §6, decision A16), compiled only in
+`crates/ihe-iti` with its `pixm` feature, so the gateway core never builds
+it. `scripts/checks/versions.sh` fails when this row and the root
+`Cargo.toml` `[workspace.dependencies]` disagree.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| `fhir-types` | 0.1.107 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+
+The features are `r4` and `terminology`: that root set holds every type
+ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
+`Bundle`). `resources`, every R4 resource, joins with the mCSD directory
+(#86), the first binding that reads `Organization` and `Endpoint`.
 
 ## Language and runtime
 

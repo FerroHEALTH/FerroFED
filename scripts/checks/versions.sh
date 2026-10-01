@@ -428,12 +428,39 @@ else
   note "no $harness yet, skipped"
 fi
 
+echo "== FHIR model crate (docs/architecture.md <-> $matrix <-> Cargo.toml)"
+want="$(pin_of fhir-types "$matrix")"
+if [ -z "$want" ]; then
+  bad "$matrix has no fhir-types row"
+else
+  if [ -f docs/architecture.md ]; then
+    arch="$(pin_of fhir-types docs/architecture.md)"
+    if [ -z "$arch" ]; then
+      bad "docs/architecture.md has no fhir-types row"
+    elif [ "$arch" != "$want" ]; then
+      bad "fhir-types: docs/architecture.md says $arch, $matrix pins $want"
+    fi
+  fi
+  if [ -f Cargo.toml ]; then
+    req="$(manifest_req fhir-types)"
+    if [ -z "$req" ]; then
+      note "root Cargo.toml has no fhir-types requirement yet, skipped"
+    elif [ "$req" != "$want" ]; then
+      bad "fhir-types: root Cargo.toml requires $req, $matrix pins $want"
+    else
+      note "OK: fhir-types $want (docs/architecture.md and the root Cargo.toml agree)"
+    fi
+  fi
+fi
+
 echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"
-# The reference a pin cell names: its first 40-hex token, else the token after
-# the word `tag`.
+# The reference a pin cell names: its first 40-hex token (a commit), else its
+# first 64-hex token (the sha256 of a FHIR package tarball), else the token
+# after the word `tag`.
 pinned_ref_of() {
   awk '{
     for (i = 1; i <= NF; i++) if ($i ~ /^[0-9a-f]{40}$/) { print $i; exit }
+    for (i = 1; i <= NF; i++) { t = $i; gsub(/[,.;:]+$/, "", t); if (t ~ /^[0-9a-f]{64}$/) { print t; exit } }
     for (i = 1; i < NF; i++) if ($i == "tag") { t = $(i + 1); gsub(/[,.;:]+$/, "", t); print t; exit }
   }' <<< "$1"
 }
@@ -441,7 +468,8 @@ pinned_ref_of() {
 corpora="docs/specs/federation-spec|Federation Tier with AQL specification
 docs/specs/federation-ref|Federation Tier reference implementation
 docs/specs/its-rest|openEHR ITS-REST OpenAPI
-docs/specs/aql|openEHR AQL specification source"
+docs/specs/aql|openEHR AQL specification source
+docs/specs/ihe-pixm|IHE PIXm FHIR package"
 
 agreed=0
 expected=0

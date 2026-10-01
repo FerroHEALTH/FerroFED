@@ -74,7 +74,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `openehr-base`, `openehr-rm`, `openehr-sdt` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison, and the SMART on openEHR scope grammar |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
-| `fhir-types` | 0.1.106 (`r4`, `resources`; Apache-2.0) | the FHIR R4 model for PIXm `Parameters` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
+| `fhir-types` | 0.1.107 (`r4` with `terminology`, `resources` from the mCSD binding #86; Apache-2.0) | the FHIR R4 model for PIXm `Parameters` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
 | `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for inbound validation and outbound assertions |
 | `jsonschema` | 0.58.3 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
@@ -498,9 +498,12 @@ FerroFED-owned CodeSystem, carried through the `ihe-endpointspecifictype`
 extension with `connectionType` left conformant. That meets N19 and CP-20 and
 is FerroFED's own; the missing registered code is a draft on #17.
 
-**The FHIR model** (decision A16) comes from `fhir-types` (`r4`, `resources`),
-compiled only in the IHE adapter crate (section 11), so the core never compiles
-it. A hand-written struct for a FHIR resource is refused by the codegen rule.
+**The FHIR model** (decision A16) comes from `fhir-types` (`r4`), compiled
+only in `crates/ihe-iti` (section 11), so the core never compiles it. Its
+`terminology` root set carries every type ITI-83 reads (`Parameters`,
+`OperationOutcome`, `Identifier`, `Reference`, `Bundle`); `resources` joins
+with the mCSD directory (#86), the first binding that reads `Organization` and
+`Endpoint`. A hand-written struct for a FHIR resource is refused by the codegen rule.
 
 **The patient identifier inside the gateway.** It is a `PatientRef`: the
 issuing namespace and a `SecretString` value, with redacted `Debug` and
@@ -1378,7 +1381,7 @@ R4 is #23, #25 and #27).
 | A13 | `Location` on a routed answer [R1 D6] | unmodified until 1.0; the conflict with N1 and N28 held on #17 | N31 and §7a.3 say unmodified | decided (owner, 2026-10-01) |
 | A14 | The Step-1 seams [R2 D1] | one trait per role, one active implementation, outcomes not errors, per-seam budgets | §14, §5.2 and §14.3 keep the questions apart; N4's fail-closed rule presumes one localizer | decided (owner, 2026-10-01) |
 | A15 | XCPD ITI-55 [R2 D2, changed by the owner] | built in FerroFED with the localization seam in v0.0.8 (#85), as the `xcpd` feature of `ihe-iti`, with the SOAP 1.2, HL7 v3 and SAML XUA dependencies confined to it | build what FerroFED needs inside FerroFED first and never block on an unbuilt sibling; the crate can move to FerroPIX later. The report had recommended leaving it unscheduled | decided (owner, 2026-10-01) |
-| A16 | The FHIR model [R2 D3] | `fhir-types` r4 with `resources`, compiled only in `ihe-iti` | the codegen rule refuses hand-written resource structs; the core never compiles FHIR | decided (owner, 2026-10-01) |
+| A16 | The FHIR model [R2 D3] | `fhir-types` r4, compiled only in `ihe-iti`: the `terminology` root set for PIXm (#42), `resources` from mCSD (#86) | the codegen rule refuses hand-written resource structs; the core never compiles FHIR | decided (owner, 2026-10-01) |
 | A17 | A resolver that cannot answer [R2 D4] | `not-resolved` with the error, `complete` cleared, `424` under all-or-nothing; only a `404` keeps N6's do-not-fail rule; best-effort may degrade it only when requested | a PIX outage must never look like an empty record; §11.1 does not separate the cases (held on #17) | decided (owner, 2026-10-01) |
 | A18 | Vendoring the bindings [R2 D9] | PIXm 3.1.0, mCSD 4.0.0, PMIR 1.6.0 (CC-BY-4.0) and Nuts GF 0.3.0 (EUPL-1.2), each with the issue that first reads it; not the ITI TF volumes or IUA until their terms are read | `.claude/rules/vendored-inputs.md`; the licences were read from each `package.json` | decided (owner, 2026-10-01) |
 | A19 | Pseudonyms [R2 D10] | accept a pseudonym or a direct identifier; never pseudonymise in the core; a regional adapter may | §5.3, §B.7; a pseudonym is personal data under the same hygiene | decided (owner, 2026-10-01) |

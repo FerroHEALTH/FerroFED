@@ -77,6 +77,11 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
+# The FHIR R4 model of the IHE bindings (docs/architecture.md section 6,
+# decision A16), compiled only in crates/ihe-iti; checked against
+# docs/VERSIONS.md by scripts/checks/versions.sh. Each binding names the
+# root set it reads: `terminology` for PIXm (#42).
+fhir-types = { version = "0.1.107", default-features = false }
 # The test harness (#39, docs/architecture.md section 13): the container
 # runner behind the FERROFED_E2E gate, the in-process stub nodes, and the
 # HTTP server half the capturing and fault proxy is built on.

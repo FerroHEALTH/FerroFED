@@ -22,6 +22,17 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The PIXm ITI-83 client (#42): `ihe-iti` 0.0.3, feature `pixm`, asks a PIX
+  Manager's `Patient/$ihe-pix` for the identifiers other domains hold for a
+  patient, held to the vendored PIXm 3.1.0 `OperationDefinition` and read into
+  a cross-reference, the profile's not-found answer, or a typed error (an
+  unknown source or target domain, a rejection with its issue types, a
+  timeout, a transport failure, a malformed answer). A `404` without a
+  `not-found` issue never reads as "patient unknown". Identifier values are
+  redacted in `Debug` and carried by no error. The IHE PIXm 3.1.0 package
+  artefacts of ITI-83 are vendored under `docs/specs/ihe-pixm/` by
+  `scripts/vendor/ihe-pixm.sh`, pinned by version and tarball sha256, and the
+  FHIR R4 model comes from `fhir-types` 0.1.107.
 - The fuzz lane (#134): four `cargo fuzz` targets over the untrusted inputs
   (the AQL rewrite over arbitrary text and parameters, the ITS-REST
   `AdhocQueryExecute` body through the façade's intake, a federated
