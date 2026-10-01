@@ -4,7 +4,7 @@
 # Pinned versions
 
 Every version the repository depends on is pinned once, in
-[`docs/VERSIONS.md`](https://github.com/rubentalstra/FerroFED/blob/main/docs/VERSIONS.md),
+[`docs/VERSIONS.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/VERSIONS.md),
 and `scripts/checks/versions.sh` fails a change that lets a repeated pin drift
 from it. This page summarises the pins that shape the design.
 
@@ -25,6 +25,6 @@ program.
 
 The specification, its reference implementation, the ITS-REST OpenAPI
 documents and the AQL source are vendored verbatim under
-[`docs/specs/`](https://github.com/rubentalstra/FerroFED/tree/main/docs/specs),
+[`docs/specs/`](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs),
 each fetched by a committed script and stamped with a `PROVENANCE.md` that
 records the source, the pin, the licence and a tree digest.

@@ -22,8 +22,8 @@ site-url = "/docs/"
 # scripts/checks/favicon-sync.sh (assets/brand/README.md).
 default-theme = "rust"
 preferred-dark-theme = "coal"
-git-repository-url = "https://github.com/rubentalstra/FerroFED"
-edit-url-template = "https://github.com/rubentalstra/FerroFED/edit/main/website/book/src/{path}"
+git-repository-url = "https://github.com/FerroHEALTH/FerroFED"
+edit-url-template = "https://github.com/FerroHEALTH/FerroFED/edit/main/website/book/src/{path}"
 additional-js = ["vendor/mermaid/mermaid.min.js", "vendor/mermaid/mermaid-init.js"]
 
 [output.html.search]

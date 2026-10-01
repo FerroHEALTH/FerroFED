@@ -145,7 +145,7 @@ repeats it.
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | `compose.yaml`, the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | `compose.yaml`, the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 
-The quickstart's gateway image, `ghcr.io/rubentalstra/ferrofed`, carries the
+The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
 product version below as its tag default, and the guard holds the two equal.
 
 The end-to-end lane starts the same four node images through the testkit

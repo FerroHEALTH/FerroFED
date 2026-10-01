@@ -5,7 +5,7 @@
 
 This page is a plain account of the specification FerroFED implements. It
 cites the sections of the vendored text at
-[`docs/specs/federation-spec/`](https://github.com/rubentalstra/FerroFED/tree/main/docs/specs/federation-spec)
+[`docs/specs/federation-spec/`](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs/federation-spec)
 and adds nothing of FerroFED's own; the next page does that.
 
 ## Three tiers

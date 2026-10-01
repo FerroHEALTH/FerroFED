@@ -15,7 +15,7 @@
 # else. Policy: .claude/rules/project-board.md.
 #
 # The board is not created by this script. It exists as the GitHub Project (v2)
-# "FerroFED Roadmap" (number 8) under the `rubentalstra` account, with a
+# "FerroFED Roadmap" (number 1) under the `FerroHEALTH` organization, with a
 # single-select "Status" field carrying Todo / In Progress / Done and a Date
 # field named "Target date" for the roadmap view. The clone needs the
 # `project` token scope (`gh auth refresh -s project`). The project is found by

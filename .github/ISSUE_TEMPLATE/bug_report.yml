@@ -12,7 +12,7 @@ body:
 
         Do not use this form for a security vulnerability. Report those
         privately through the Security tab. See
-        [SECURITY.md](https://github.com/rubentalstra/FerroFED/blob/main/SECURITY.md).
+        [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md).
 
         Never paste patient data, a real patient identifier, or an extract
         from a production node into this form. Use synthetic content.

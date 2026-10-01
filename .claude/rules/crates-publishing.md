@@ -97,7 +97,7 @@ reaches the registry.
    from the merged `main`, then
    `scripts/release/publish-crates.sh verify`.
 2. On crates.io, each crate's Settings, Trusted Publishing: two GitHub entries,
-   repository owner `rubentalstra`, repository `FerroFED`, workflow
+   repository owner `FerroHEALTH`, repository `FerroFED`, workflow
    `release.yml` and workflow `publish-crates.yml`, environment `crates-io`.
 3. The `crates-io` GitHub environment carries the owner as required reviewer.
 

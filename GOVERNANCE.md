@@ -33,7 +33,7 @@ drift out of sync with the tree
 
 | Kind of decision                   | Where it lives                                                                                     |
 |------------------------------------|----------------------------------------------------------------------------------------------------|
-| What to work on next               | a [GitHub issue](https://github.com/rubentalstra/FerroFED/issues); the open list is the worklist |
+| What to work on next               | a [GitHub issue](https://github.com/FerroHEALTH/FerroFED/issues); the open list is the worklist |
 | Direction and status, publicly     | the roadmap project board, a view over the tracker (`.claude/rules/project-board.md`)              |
 | Why a change looks the way it does | the pull request description that landed it, and the issue's closing comment                        |
 | What a release contains            | [`CHANGELOG.md`](CHANGELOG.md) and the `vX.Y.Z` milestone                                          |

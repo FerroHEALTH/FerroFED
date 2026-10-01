@@ -194,7 +194,7 @@ two cannot both be on for one project. Its scope, including the exclusion of
 ## Why the GitHub licence field reads NOASSERTION
 
 GitHub detects a repository licence with licensee, whose licence set does not
-contain BUSL-1.1, so `gh api repos/rubentalstra/FerroFED --jq .license`
+contain BUSL-1.1, so `gh api repos/FerroHEALTH/FerroFED --jq .license`
 returns `NOASSERTION` and will keep returning it. No layout of `LICENSE` can
 change that, and changing a term to satisfy a detector would be a change to
 the licence. The terms are in `LICENSE` and `NOTICE`, and every first-party

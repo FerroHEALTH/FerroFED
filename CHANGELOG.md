@@ -22,6 +22,13 @@ binary follows from v0.0.2.
 
 ### Changed
 
+- The repository moved to the FerroHEALTH organization,
+  <https://github.com/FerroHEALTH/FerroFED>, with the roadmap board as
+  <https://github.com/orgs/FerroHEALTH/projects/1>; every link, the image name
+  `ghcr.io/ferrohealth/ferrofed` and the crates' `repository` follow it (#123).
+
+### Changed
+
 - The crate layout names every crate that may be published after the
   specification it implements, one crate per specification with a feature per
   layer or profile (#106): `openehr-federation` 0.0.1 (the Federation Tier
@@ -195,6 +202,6 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/rubentalstra/FerroFED/compare/v0.0.1...HEAD
-[0.0.1]: https://github.com/rubentalstra/FerroFED/compare/v0.0.1-rc.1...v0.0.1
-[0.0.1-rc.1]: https://github.com/rubentalstra/FerroFED/releases/tag/v0.0.1-rc.1
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1-rc.1...v0.0.1
+[0.0.1-rc.1]: https://github.com/FerroHEALTH/FerroFED/releases/tag/v0.0.1-rc.1

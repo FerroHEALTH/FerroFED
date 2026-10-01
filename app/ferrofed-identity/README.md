@@ -15,7 +15,7 @@ It holds `PatientRef`, the patient identifier as the gateway carries it
 turns a patient into each member's local `ehr_id`, and the static development
 cross-reference, a testing device accepted only under the development profile.
 The remaining seams and the resolution step land with
-[FerroFED issue #43](https://github.com/rubentalstra/FerroFED/issues/43); the
+[FerroFED issue #43](https://github.com/FerroHEALTH/FerroFED/issues/43); the
 design is recorded in the repository's architecture document. The adapters
 that plug the published `ihe-iti` and `nl-generic-functions` clients into these
 seams live here too.

@@ -168,7 +168,7 @@ render_page() {
       out = ""
       for (i = 1; i <= n; i++) {
         num = substr(parts[i], 2)
-        out = out (out == "" ? "" : ", ") "[" parts[i] "](https://github.com/rubentalstra/FerroFED/issues/" num ")"
+        out = out (out == "" ? "" : ", ") "[" parts[i] "](https://github.com/FerroHEALTH/FerroFED/issues/" num ")"
       }
       return out
     }

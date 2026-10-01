@@ -1338,7 +1338,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "indexmap"
@@ -1625,7 +1625,7 @@ dependencies = [
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.0.1"
+version = "0.0.2"
 
 [[package]]
 name = "nu-ansi-term"
@@ -1777,7 +1777,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema",
