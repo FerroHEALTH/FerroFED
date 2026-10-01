@@ -35,12 +35,14 @@ plan ── github-release (draft) ── build-binaries ── finalize-release
   `ci.yml` tier 2 uses. There is no Cargo workspace yet, so it reports
   `skipped` and a release with no binaries is a clean pass. It activates by
   itself when the workspace lands (v0.0.2). The attested build, the container
-  image and the SBOMs replace this job with a reusable workflow under #31; the
-  crates.io leg, if the research decides to publish, is #32. Neither changes
-  the trigger.
+  image and the SBOMs replace this job with a reusable workflow under #31,
+  without changing the trigger.
 - **finalize-release** checks that the draft carries every asset this version
   promises, then publishes. Publishing last means a half-assembled release is
   never visible.
+
+The library crates are not part of this lane. `publish-crates.yml` runs on the
+same `v*` tag and is described below (§ The crates.io lane).
 
 Concurrency is `cancel-in-progress: false`. A second tag push queues behind the
 first, because a release cancelled part-way through publishing is worse than a
@@ -99,6 +101,45 @@ next real cut. A tag with a suffix (`v0.0.1-rc.1`) publishes as a pre-release.
 4. The rehearsal tag and its pre-release stay. Tags cannot be deleted under the
    ruleset, and the record of a rehearsal is worth keeping. The next real cut
    moves the version files on to `0.0.1`.
+
+## The crates.io lane
+
+The library crates under `crates/` (`openehr-federation`, `ihe-iti`,
+`nl-generic-functions`) publish behind one switch: the root `Cargo.toml` sets
+`[workspace.package] publish = false`, every `crates/*` member inherits it, and
+`app/*` and `tools/*` carry a hard `publish = false` of their own
+(`docs/architecture.md` section 11, decision A35).
+
+`publish-crates.yml` runs on every `v*` tag:
+
+1. **select and package** checks that the tag names the workspace version,
+   reads the publishable set from `cargo metadata`, writes it to the job
+   summary, and packages every library crate with `cargo package`. While the
+   switch is `false` the set is empty, the summary says nothing is published,
+   and the run is a successful no-op.
+2. **publish** runs only when the set is not empty, in the `crates-io`
+   environment: it exchanges the workflow's OIDC identity for a short-lived
+   crates.io token (Trusted Publishing), uploads each crate in dependency order
+   at its manifest version, and reads the registry back. "Already exists"
+   counts as done, so a run that failed part-way is finished by running it
+   again (a dispatch with `publish` set, from `main` or the tag).
+
+The `publish-dry-run` job of `ci.yml` packages the same crates on every pull
+request, and the crate-version guard refuses packaged content that changes
+without a version bump, because a published version is immutable
+(`.claude/rules/crates-publishing.md`).
+
+**Turning publishing on** is two owner steps and one line:
+
+1. Create the `crates-io` GitHub environment, with the owner as required
+   reviewer and a deployment policy for `main` and `v*` tags.
+2. On crates.io, give each crate one Trusted Publisher entry: repository
+   owner `FerroHEALTH`, repository `FerroFED`, workflow `publish-crates.yml`,
+   environment `crates-io`. The three names already exist (the 0.0.0
+   placeholders of 2026-10-01), so no first upload with a personal token is
+   needed.
+3. Set `publish = true` in the root `[workspace.package]` in a pull request.
+   The next `v*` tag publishes every library crate at its manifest version.
 
 ## After the tag
 

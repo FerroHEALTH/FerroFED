@@ -446,6 +446,28 @@ jobs:
           --package openehr-federation --package ihe-iti --package nl-generic-functions
           -- -D warnings
 
+  # The library crates stay publishable while the workspace `publish` switch is
+  # off (docs/architecture.md section 11, decision A35): `cargo package` builds
+  # and verifies every crates/* tarball an upload would send, and once the
+  # switch is on the script adds `cargo publish --dry-run` over the
+  # publishable set. No cache, as in the publishing lane it rehearses.
+  publish-dry-run:
+    name: publish dry run (cargo package)
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      - run: bash scripts/release/publish-crates.sh package
+
   # A published crates.io version is immutable, so packaged content that
   # changes without a version bump is a defect nothing can repair after the
   # upload (.claude/rules/crates-publishing.md). The script exits 0 while no
@@ -520,6 +542,7 @@ jobs:
       - cargo-deny
       - msrv
       - features
+      - publish-dry-run
       - crate-version-guard
       - dependency-review
     if: always()

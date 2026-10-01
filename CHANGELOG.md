@@ -57,6 +57,13 @@ binary follows from v0.0.2.
   N6, N37). Every endpoint record carries its node, `system_id`, managing
   organisation, base URL and `latency_ms` (§9.5, N40), and the rows of the
   `active` nodes are concatenated in endpoint id order until the merge (#52).
+- The crates.io lane behind the workspace `publish` switch (#32):
+  `publish-crates.yml` runs on every `v*` tag, reads the publishable set from
+  `cargo metadata`, packages it and publishes it in dependency order through
+  crates.io Trusted Publishing, and is a successful no-op while the root
+  `[workspace.package] publish` is `false`. The `publish-dry-run` job packages
+  every library crate on every pull request, and
+  `scripts/release/publish-crates.sh` is the shared implementation.
 - Node dispatch (#34): `ferrofed-engine`'s `dispatch` module builds one
   `openehr-its` client per registry endpoint, rooted at the endpoint's base URL
   as the registry holds it plus the ITS-REST `v1` segment (N28), and sends each
