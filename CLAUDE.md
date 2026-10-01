@@ -20,16 +20,16 @@ rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
 ## Status: the design phase
 
-There is no code and no Cargo workspace. The design is the output of the
-research program on issue #16, which produces `docs/architecture.md`
-in v0.0.1: how the AQL rewrite and the identifier-hygiene gate sit on the
-published `openehr-query` AQL model, which identity binding comes first (IHE
-PIXm for the cross-reference, mCSD for addressing, the Dutch Generic Functions
-of Annex B as the regional alternative), where the registry lives, how the
-result merge, `DISTINCT`, `ORDER BY` and `LIMIT` are made correct across nodes,
-and what the acceptance instrument is. Read that issue before proposing
-anything structural. Nothing is scaffolded before its issues are filed and the
-research that fixes it has closed (`.claude/memory/owner-work-style.md`).
+There is no code and no Cargo workspace. The design of record is
+`docs/architecture.md`, the output of the first research pass on #16 (the
+evidence is on #18 to #27), with every decision in its register decided by the
+owner on 2026-10-01: how the AQL rewrite and the identifier-hygiene gate sit on
+the published `openehr-query`, the identity seams and bindings, the registry
+and its storage, the merge across nodes, the wire types, the crate map, and
+the conformance instrument. Read it before proposing anything structural. The
+Cargo workspace lands with v0.0.2 (#28), blocked on the `openehr-*` 0.0.74
+release; nothing is scaffolded before its issue
+(`.claude/memory/owner-work-style.md`).
 
 The specification is a release candidate. The vendored pin is v0.9.0 at
 commit `7162d0c`, and the 1.0 release is expected the week of 2026-10-08; the
@@ -39,13 +39,14 @@ the pinned text until that issue lands.
 
 ## The two layers
 
-- **Generated where a machine-readable source exists.** The specification
-  publishes two JSON Schemas, `federated-result-set.schema.json` (the result
-  envelope with `meta.federation`) and `options-root.schema.json` (the
-  `OPTIONS {base}/` self-description). Whether these are generated into Rust
-  types or validated against hand-written ones is research on issue
-  #16 (`.claude/rules/codegen.md`). Either way a file marked
-  `// @generated` is off-limits: change the generator and regenerate.
+- **FerroFED generates nothing of its own** (owner decision 2026-10-01,
+  `docs/architecture.md` §10). The specification's two JSON Schemas,
+  `federated-result-set.schema.json` (the result envelope with
+  `meta.federation`) and `options-root.schema.json` (the `OPTIONS {base}/`
+  self-description), get hand-written types in `ferrofed-wire`, held to the
+  vendored schemas by validation, drift and semantic tests
+  (`.claude/rules/codegen.md`). A file marked `// @generated` anywhere is
+  off-limits: change the generator and regenerate.
 - **Taken from the published `openehr-*` crates, never re-implemented**
   (owner rulings 2026-10-01). FerroEHR publishes them, and the whole family
   is the model:
@@ -71,9 +72,13 @@ the pinned text until that issue lands.
   of our own design, with the Federation Tier specification, openEHR AQL and
   ITS-REST, and the bound IHE profiles as the authority.
 
-Spec and generated crates are split from the app crates, as in every Ferro
-product; whether the library crates are published to crates.io is open
-(`.claude/memory/crate-split.md`).
+Spec crates are split from the app crates, as in every Ferro product. Nothing
+is published to crates.io for now, and publishing is a one-line switch:
+`publish = false` inherited from `[workspace.package]`, with the lane, the dry
+run and the version guard built from v0.0.2 (`.claude/memory/crate-split.md`,
+`.claude/rules/crates-publishing.md`). Identity bindings are built here first,
+each as a crate that can move to FerroPIX later
+(`.claude/memory/build-in-fed-first.md`).
 
 ## Repo map
 
@@ -246,13 +251,13 @@ apply always. Read the relevant one before working in that area.
   the Rust engineering discipline.
 - `.claude/rules/spec-adherence.md`: the Federation Tier specification,
   openEHR AQL and ITS-REST, and the bound IHE profiles as the oracles.
-- `.claude/rules/codegen.md`: the generated-versus-hand-written rule, pending
-  the research that fixes the boundary.
+- `.claude/rules/codegen.md`: no generator of our own; the hand-written wire
+  types held to the schemas, and the rules if a generator is ever justified.
 - `.claude/rules/vendored-inputs.md`: every external corpus is fetched by a
   committed `scripts/vendor/*.sh`, vendored verbatim, provenance-stamped.
 - `.claude/rules/ci-cd.md`, `ai-code-review.md`, `crates-publishing.md`: the
   workflow-security discipline, the advisory-analyzer policy (SonarQube Cloud,
-  CodeQL), and the crates.io rules for when a publish is decided.
+  CodeQL), and the crates.io rules behind the `publish` switch.
 - `.claude/rules/issue-workflow.md`, `issue-relationships.md`,
   `project-board.md`: the tracker work style.
 - Skills: `/spec-lookup`, `/next-task`, `/phase-done`, `/phase-status`.

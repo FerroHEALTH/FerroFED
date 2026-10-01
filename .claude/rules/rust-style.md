@@ -178,6 +178,34 @@ standing bar for hand-written code.
   item; `#[allow(lint, reason = "…")]` only for configuration-conditional fire
   (full policy: `reliability.md`).
 
+## Typed carriers: `serde_json::Value` only at the four seams
+
+The family rule FerroEHR set, adopted by owner decision on 2026-10-01
+(`docs/architecture.md` §2, decision A2): `serde_json::Value` is a
+`disallowed-types` entry in `clippy.toml` from the first workspace commit
+(#28), and everything else consumes the typed `openehr-*` and `ferrofed-wire`
+types. The ITS-REST contract puts `Value` in three places the gateway touches,
+so the approved seams are fixed by the wire. Each is ONE module carrying a
+scoped `#[expect(clippy::disallowed_types, reason = "…")]` that names it:
+
+1. **Query intake:** `query_parameters` to `openehr_query::ast::Primitive`,
+   once, at the façade boundary, before `bind`. A string becomes `String`, an
+   integral number `Integer`, any other number `Real`, a boolean `Boolean`;
+   `null`, an array or an object is a `400` naming the parameter, never the
+   value.
+2. **Result cells:** one cell codec decodes each node's `ResultSetRow` into
+   typed values (an RM object through canonical JSON, a primitive as itself)
+   and re-encodes the merged row. No other module sees a `Value` cell.
+3. **The envelope:** the typed `FederationMeta` is serialized once into
+   `ResultSetMetadata.additional_properties["federation"]`.
+4. **Tests:** schema validation through `jsonschema`, under `#[cfg(test)]` and
+   in the testkit.
+
+A fifth seam is an owner decision recorded in `docs/architecture.md`, never a
+new `#[expect]`. Single-node passthrough bodies (raw bytes through
+`Client::forward`), node error bodies, the `OPTIONS` bodies and the registry
+are never seams.
+
 ## Documentation (`missing_docs` is enforced workspace-wide)
 
 - Every public item carries a doc comment (rustc `missing_docs`; a generated

@@ -12,9 +12,9 @@
 - [Spec pin 0.9.0 RC](spec-pin-0-9-0-rc.md): specification at `7162d0c`,
   reference implementation at `92aff3c`, both vendored; 1.0 expected the week
   of 2026-10-08 with a dedicated re-pin issue; owner 2026-10-01
-- [Crate split](crate-split.md): spec-derived and generated crates split from
-  the app crates as in every product; the crates.io publish decision is open;
-  owner 2026-10-01
+- [Crate split](crate-split.md): spec-derived crates split from the app crates
+  as in every product; nothing published for now, publishing is a one-line
+  `publish` switch with the whole lane built; owner 2026-10-01
 - [Family naming allowed](family-naming-allowed.md): public documents may name
   FerroHEALTH and the siblings, unlike FerroBRIDGE; owner 2026-10-01
 - [One setup PR](one-setup-pr.md): the opening setup lands as one large pull
@@ -69,8 +69,9 @@
   lines, split at 750; empty allow-list here
 - [Dependency sweep to latest](deps-latest-sweep.md): compare pins with
   crates.io and FerroEHR's crate list every session
-- [PostgreSQL 18](postgresql-18.md): the latest release if research puts the
-  registry in PostgreSQL
+- [PostgreSQL 18](postgresql-18.md): the latest release for FerroFED's own
+  optional stored-query backend; a member node runs its product's image
+  (EHRbase on 16.2)
 - [Mermaid diagrams](mermaid-diagrams.md): render every fence with
   mermaid-cli before a PR
 - [Perl edit pitfalls](perl-edit-pitfalls.md): heredoc literals, re-read
@@ -78,3 +79,4 @@
 - [Forum replies short and plain](forum-replies-short-plain.md): anything the
   owner posts as themself stays short, plain, and linked
 - [Strict over the reference](strict-over-reference.md): the Java reference implementation is evidence, not the bar; FerroFED is as strict as FerroEHR and the specification wins where the reference is laxer; owner 2026-10-01
+- [Build in FED first](build-in-fed-first.md): every capability FerroFED needs is built here behind its trait seam, as a crate that can move to FerroPIX later; never block on an unbuilt sibling; owner 2026-10-01

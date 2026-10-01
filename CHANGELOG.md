@@ -13,8 +13,8 @@ Maintenance rule: every pull request that changes user-visible behaviour adds
 an entry under **[Unreleased]** in the same PR. Cutting a release renames
 [Unreleased] to the version and date, and adds a fresh link reference.
 
-The architecture is the output of the research program on the v0.0.1
-milestone, which produces `docs/architecture.md`. Releases on the 0.0.x line
+The architecture is `docs/architecture.md`, the output of the research
+program on the v0.0.1 milestone. Releases on the 0.0.x line
 start with the repository, its gates and its documentation; the gateway
 binary follows from v0.0.2.
 
@@ -22,6 +22,17 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The architecture of record, `docs/architecture.md`, from the first research
+  pass (#16, evidence on #18 to #27): the published `openehr-*` crates as the
+  openEHR surface at the planned 0.0.74 pin, the request pipeline, the AQL
+  rewrite and identifier hygiene on `openehr-query`'s AST, the façade split
+  over the ITS-REST route tables, the identity seams with each binding (PIXm,
+  mCSD, PMIR, XCPD, the Dutch Generic Functions) in its own crate, the
+  security handoff, the registry and its storage, the fan-out, completeness
+  and cross-node merge with the `LIMIT` agreement check, the hand-written wire
+  types, the crate map with the `publish` switch, the conformance instrument,
+  the test topology, the milestone map, and the decision register, every
+  entry decided by the owner on 2026-10-01.
 - The documentation site on ferrofed.eu: a landing page at `/` and an mdBook
   under `/docs/` organised by reader intent (Evaluate, Operate, Integrate,
   Contribute), built on every pull request and deployed from `main` by

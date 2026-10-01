@@ -36,17 +36,19 @@ declares `spec-version: '0.9.0'`.
 The federation specification binds ITS-REST by name, Release-1.1.0, so the
 ITS-REST row follows it rather than the latest ITS-REST development line.
 
-## Bindings (not pinned yet)
+## Bindings (decided, vendored with their first consumer)
 
 The specification names the IHE ITI profiles as its proposed binding (Annex
 A) without naming their versions, and the Dutch Generic Functions IG as a
-regional alternative (Annex B), which it names at `fhir.nl.gf#0.3.0`. Which
-binding the gateway implements first, and at which version, is a v0.0.1
-research question, so neither is pinned or vendored yet. A row is added here,
-and the published package vendored under `docs/specs/`, in the change that
-first implements a binding. The versions below are what the FHIR package
-registry listed as latest on 2026-10-01, a starting point for that research
-and no decision.
+regional alternative (Annex B), which it names at `fhir.nl.gf#0.3.0`. The
+bindings and their versions are decided (`docs/architecture.md` §6, decision
+A18): PIXm 3.1.0, mCSD 4.0.0 and PMIR 1.6.0 (CC-BY-4.0) and `fhir.nl.gf`
+0.3.0 (EUPL-1.2), each vendored under `docs/specs/` and moved into the corpus
+table below by the issue that first reads it (#42, #74 and #86, #48, #87).
+XCPD has no FHIR package; its adapter (#85) binds the ITI Technical Framework
+revision below, which is not vendored until its terms are read. PDQm is not
+used by the gateway. The versions are what the FHIR package registry listed as
+latest on 2026-10-01.
 
 | Binding | Package | Latest on 2026-10-01 |
 |---|---|---|
@@ -54,7 +56,7 @@ and no decision.
 | PDQm (ITI-78, ITI-119) | `ihe.iti.pdqm` | 3.2.0 |
 | PMIR (ITI-93, ITI-94) | `ihe.iti.pmir` | 1.6.0 |
 | mCSD | `ihe.iti.mcsd` | 4.0.0 |
-| XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | not read |
+| XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | Vol 2 Rev 20.1 (2024-12-12, Final Text) |
 | Netherlands Generic Functions | `fhir.nl.gf` | 0.3.0, as Annex B names it |
 
 ## Corpora and machine-readable inputs
@@ -76,13 +78,21 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 
 The AQL parser and the ITS-REST client and data types come from published
 crates, consumed by version like any other dependency. Nothing depends on them
-until the Cargo workspace lands in v0.0.2; the rows record the line the
-research starts from. The pin is the latest version on crates.io.
+until the Cargo workspace lands in v0.0.2. The pin is the latest version on
+crates.io, 0.0.72 on 2026-10-01.
 
 | Item | Pin | Repeated in |
 |---|---|---|
 | `openehr-query` | 0.0.72 | `docs/architecture.md`, later the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-its` | 0.0.72 | `docs/architecture.md`, later the root `Cargo.toml` `[workspace.dependencies]` |
+
+**The planned pin is 0.0.74**, the lockstep release of the whole `openehr-*`
+family that carries the federation gaps FerroEHR #3505 to #3513 (the AST
+visitor, spans, parameter binding, the `FROM ENDPOINT` directive, the parser
+fix, the router builder, the operation matcher with `forward`, the
+credentials provider and per-call options; `docs/architecture.md` §2). Both
+rows move to 0.0.74 in one change when it is on crates.io. The Cargo workspace
+(#28) is blocked on that release, and nothing in v0.0.2 codes against 0.0.72.
 
 ## Language and runtime
 
@@ -102,11 +112,13 @@ toolchain.
 
 ## Databases
 
-No database is a dependency yet. Whether the registry (nodes, endpoints, the
-`ehr_id` index, the optional stored-query registry) needs one is a v0.0.1
-research question. Every PostgreSQL the project tests against or documents is
-the latest release line, so a database row, when one is added, pins the latest
-`postgres:18.x` image by tag and by the digest of its image index.
+A single gateway needs no database (`docs/architecture.md` §8). PostgreSQL is
+used only as the optional backend of the stored-query store when several
+gateway replicas run. Every PostgreSQL FerroFED itself tests against or
+documents is the latest release line, so the image row, added with its first
+consumer, pins the latest `postgres:18.x` image by tag and by the digest of its
+image index. A member node in the test harness runs its product's documented
+database image instead (EHRbase on 16.2, §13).
 
 | Item | Pin | Repeated in |
 |---|---|---|

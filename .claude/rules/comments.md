@@ -80,6 +80,11 @@ A comment describes the code as it IS.
   design". If it describes something not yet done, it is a TODO.
 - `// SAFETY:`, reserved for `unsafe` (forbidden anyway;
   `unnecessary_safety_comment` denies misuse).
+- `// conformance: CP-26 CP-38 track-10`, the conformance marker: one line
+  directly above a `#[test]` or `#[tokio::test]` attribute, naming only the §17
+  CP ids and §16 tracks the test scores. It is a structural tag read by
+  `scripts/checks/conformance-matrix.sh` against `conformance/matrix.tsv`
+  (`docs/architecture.md` §12, owner decision 2026-10-01), never prose.
 - No other marker form exists: `FIXME`, `HACK`, `XXX`, `WIP`, and any bespoke
   vocabulary fail the guard.
 
