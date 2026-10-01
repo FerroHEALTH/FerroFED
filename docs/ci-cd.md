@@ -29,9 +29,10 @@ needs a gate.
 | `codeql.yml` | push and pull request touching workflows, actions or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
+| `docs.yml` | push to `main`, pull request, dispatch | builds the site (the landing page at `/`, the book under `/docs/`) on every event and deploys it to GitHub Pages from `main` only |
 | `pin-freshness.yml` | Mondays, dispatch | the pins nothing else watches, compared with upstream; one issue when one is behind |
 
-Dependabot (`.github/dependabot.yml`) is the seventh piece and is described
+Dependabot (`.github/dependabot.yml`) is the eighth piece and is described
 under the pins below.
 
 ## The two tiers of `ci.yml`
@@ -49,6 +50,7 @@ under the pins below.
 | `comment-style` | `scripts/checks/comment-style.sh --all` |
 | `file-length` | `scripts/checks/file-length.sh`, the 1000-line cap on hand-written Rust with its ratchet allow-list |
 | `versions` | `scripts/checks/versions.sh`, the pin matrix against every file that repeats a pin, the vendored provenance stamps and the SPDX licence claims |
+| `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
 reference implementation ships its own shell scripts, Dockerfile and
@@ -180,9 +182,9 @@ file carries an `SPDX-License-Identifier: BUSL-1.1` header that
 ## Lanes that land later
 
 The release lane (`release.yml` with its reusable build and image workflows),
-the crate publishing lane, the documentation site workflow and the fuzz lane
-are not here yet: each needs a workspace, a container recipe, a book or a
-decision the research program has not made. Each lands with its own issue,
+the crate publishing lane and the fuzz lane are not here yet: each needs a
+workspace, a container recipe or a decision the research program has not
+made. Each lands with its own issue,
 documented here and in `docs/release.md` when it does, under the same pinning
 rules.
 

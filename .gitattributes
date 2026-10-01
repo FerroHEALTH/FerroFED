@@ -8,3 +8,4 @@
 # collapse in diffs; extend the list when one lands
 # (.claude/rules/vendored-inputs.md, .claude/rules/codegen.md).
 docs/specs/** linguist-vendored -text
+website/book/vendor/** linguist-vendored -text

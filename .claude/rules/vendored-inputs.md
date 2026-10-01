@@ -21,6 +21,9 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   (content CC-BY-ND 3.0).
 - `docs/specs/aql/`: the openEHR AQL 1.1.0 specification source, its examples
   and the grammar `.g4` files (CC-BY-SA 3.0).
+- `website/book/vendor/mermaid/`: the mermaid browser bundle and the
+  mdbook-mermaid init script the book loads, fetched by
+  `scripts/vendor/mdbook-mermaid-assets.sh` (MIT and MPL 2.0).
 
 A new corpus (an IHE profile's published artefacts, the Dutch
 Generic Functions IG) gets its own directory, script, pin and `PROVENANCE.md`

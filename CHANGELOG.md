@@ -22,6 +22,11 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The documentation site on ferrofed.eu: a landing page at `/` and an mdBook
+  under `/docs/` organised by reader intent (Evaluate, Operate, Integrate,
+  Contribute), built on every pull request and deployed from `main` by
+  `docs.yml`, with the pinned docs toolchain, the vendored mermaid assets, the
+  favicon set and its `favicon-sync` guard, and the README badge block (#12).
 - The Business Source License 1.1 with Vernum Projecten B.V. as the Licensor
   and copyright holder (#1), and the contribution-licence terms, the
   pull-request checkbox and the `contribution-licence-guard` check (#3).
