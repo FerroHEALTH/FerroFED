@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+[book]
+title = "FerroFED"
+authors = ["FerroFED contributors"]
+description = "Documentation for FerroFED, a pure-Rust openEHR federation gateway after the Federation Tier with AQL specification."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+# The book is served under /docs/ of the Pages site; the landing page holds the
+# root. site-url makes the book's absolute asset, search, and 404 links resolve
+# under that prefix.
+site-url = "/docs/"
+# The tab icon is a theme override: mdBook copies theme/favicon.svg and
+# theme/favicon.png into the build output and links them from every page. Both
+# are copies of assets/brand/favicon.svg and favicon-32.png, kept in step by
+# scripts/checks/favicon-sync.sh (assets/brand/README.md).
+default-theme = "rust"
+preferred-dark-theme = "coal"
+git-repository-url = "https://github.com/rubentalstra/FerroFED"
+edit-url-template = "https://github.com/rubentalstra/FerroFED/edit/main/website/book/src/{path}"
+additional-js = ["vendor/mermaid/mermaid.min.js", "vendor/mermaid/mermaid-init.js"]
+
+[output.html.search]
+enable = true
+
+# Mermaid diagrams render from ```mermaid fences. The browser assets above are
+# vendored by scripts/vendor/mdbook-mermaid-assets.sh.
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+# A table of contents where a chapter carries a `<!-- toc -->` marker.
+[preprocessor.toc]
+command = "mdbook-toc"
+renderer = ["html"]

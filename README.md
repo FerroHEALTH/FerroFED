@@ -1,8 +1,16 @@
 <!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
-# <img src="assets/brand/ferrofed-icon.svg" alt="" width="40" height="40" align="top"> FerroFED
+# <img src="https://raw.githubusercontent.com/rubentalstra/FerroFED/main/assets/brand/ferrofed-icon.svg" alt="" width="40" height="40" align="top"> FerroFED
 
+<!-- badges:begin -->
+[![CI](https://github.com/rubentalstra/FerroFED/actions/workflows/ci.yml/badge.svg)](https://github.com/rubentalstra/FerroFED/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/rubentalstra/FerroFED/actions/workflows/codeql.yml/badge.svg)](https://github.com/rubentalstra/FerroFED/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/rubentalstra/FerroFED/badge)](https://scorecard.dev/viewer/?uri=github.com/rubentalstra/FerroFED)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=rubentalstra_FerroFED&metric=alert_status)](https://sonarcloud.io/summary/overall?id=rubentalstra_FerroFED)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=rubentalstra_FerroFED&metric=coverage)](https://sonarcloud.io/summary/new_code?id=rubentalstra_FerroFED)
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/rubentalstra/FerroFED?sort=semver)](https://github.com/rubentalstra/FerroFED/releases/latest)
+<!-- badges:end -->
 
 An openEHR federation gateway, in pure Rust: where else the record is.
 
@@ -11,7 +19,8 @@ A record held by another organisation is out of reach today. FerroFED is a trans
 FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family. The family
 page shows where it sits among the eight and what calls what, and this
 repository is where the design and the build happen; the tracker is the
-record of both. Its site will be <https://ferrofed.eu/>.
+record of both. The site is <https://ferrofed.eu/>, with the documentation
+under [`/docs/`](https://ferrofed.eu/docs/).
 
 ## Licence
 

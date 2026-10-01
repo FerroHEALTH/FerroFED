@@ -22,6 +22,11 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The documentation site on ferrofed.eu: a landing page at `/` and an mdBook
+  under `/docs/` organised by reader intent (Evaluate, Operate, Integrate,
+  Contribute), built on every pull request and deployed from `main` by
+  `docs.yml`, with the pinned docs toolchain, the vendored mermaid assets, the
+  favicon set and its `favicon-sync` guard, and the README badge block (#12).
 - The release lane, `.github/workflows/release.yml`: a signed `v*` tag is
   checked against `CITATION.cff` and the product row of `docs/VERSIONS.md`,
   the version's `CHANGELOG.md` section becomes the release notes, and the

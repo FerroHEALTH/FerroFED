@@ -30,6 +30,7 @@ shellcheck --severity=style <tracked shell files>
 scripts/checks/comment-style.sh --all
 scripts/checks/file-length.sh
 scripts/checks/versions.sh
+scripts/checks/favicon-sync.sh
 ```
 
 These are the tier-1 guards `ci.yml` runs, with the same flags, so a local

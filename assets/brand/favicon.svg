@@ -1,0 +1,15 @@
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+<!-- The FerroFED mark: one query arrives at the gateway and fans out to three sites. The
+     gateway takes the full hue; the sites belong to other organisations and
+     take the light value. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" role="img" aria-label="FerroFED icon">
+  <title>FerroFED</title>
+  <path d="M3 32 H16" stroke="#0369A1" stroke-width="4.6" stroke-linecap="round"/>
+  <path d="M11 26.5 L16.5 32 L11 37.5" fill="none" stroke="#0369A1" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M27 32 L48 14 M27 32 L50 32 M27 32 L48 50" stroke="#0369A1" stroke-width="4.2" stroke-linecap="round"/>
+  <circle cx="27" cy="32" r="8" fill="#0369A1"/>
+  <rect x="45" y="7" width="14" height="14" rx="3.5" fill="#7DD3FC"/>
+  <rect x="47" y="25" width="14" height="14" rx="3.5" fill="#7DD3FC"/>
+  <rect x="45" y="43" width="14" height="14" rx="3.5" fill="#7DD3FC"/>
+</svg>

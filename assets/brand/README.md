@@ -36,6 +36,23 @@ values from `tokens.css` here verbatim.
 |---|---|
 | `ferrofed-icon.svg` | primary icon, full colour, transparent background, 64-unit viewBox at a 512 intrinsic size |
 | `tokens.css` | the palette as CSS custom properties |
+| `favicon.svg` | the browser-tab icon, byte-identical to `ferrofed-icon.svg` |
+| `favicon-32.png` | the 32-pixel raster of `favicon.svg` |
+| `favicon.ico` | the 16 and 32 pixel rasters in one file, for browsers that ask for `/favicon.ico` |
 
-The lockups, the favicon set and the social card follow when the product has a
-site to carry them.
+The lockups and the social card follow when the site needs them.
+
+## Regenerating the favicon set
+
+The book theme carries copies of `favicon.svg` and `favicon-32.png` under
+`website/book/theme/`, and `scripts/checks/favicon-sync.sh` fails when a copy
+drifts from its source. After changing the mark, run from the repository root:
+
+```sh
+cp assets/brand/ferrofed-icon.svg assets/brand/favicon.svg
+rsvg-convert -w 32 -h 32 assets/brand/favicon.svg -o assets/brand/favicon-32.png
+rsvg-convert -w 16 -h 16 assets/brand/favicon.svg -o /tmp/favicon-16.png
+magick /tmp/favicon-16.png assets/brand/favicon-32.png assets/brand/favicon.ico
+cp assets/brand/favicon.svg website/book/theme/favicon.svg
+cp assets/brand/favicon-32.png website/book/theme/favicon.png
+```

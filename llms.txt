@@ -10,6 +10,7 @@
 - [README](README.md): what FerroFED is, and the licence.
 - [Working discipline](CLAUDE.md): the engineering rules for changing the code, the status, and the repo map.
 - [Vendored specifications](docs/specs/): the Federation Tier specification and its reference implementation, each with its provenance.
+- [Documentation](https://ferrofed.eu/docs/): the book, by reader intent: Evaluate, Operate, Integrate, Contribute.
 
 ## The specification
 

@@ -1,0 +1,52 @@
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# The client contract
+
+A client of a federation gateway is an ordinary openEHR client. This page sets
+out what the specification promises that client; FerroFED has no endpoint to
+call yet.
+
+## What a client sends
+
+A conformant openEHR AQL request to `POST {base}/v1/query/aql`, where `{base}`
+is the deployment's ITS-REST base URL; no prefix is mandated (§4.1, N28). The
+patient is identified the openEHR way:
+
+```sql
+SELECT c/uid/value AS composition_id, c/context/start_time/value AS start_time
+FROM EHR e CONTAINS COMPOSITION c
+WHERE e/ehr_status/subject/external_ref/id/value = '12345'
+  AND c/archetype_node_id = 'openEHR-EHR-COMPOSITION.encounter.v1'
+```
+
+No federation-specific syntax is needed for a basic patient query (§3.2, N1).
+An optional AQL extension, `FROM ENDPOINT …` and `ORGANISATION …`, pins a
+query to named systems for a client that wants it (§8).
+
+## What a client gets back
+
+An openEHR `RESULT_SET` exactly as ITS-REST 1.1.0 defines it, rows as ordered
+arrays matched to `columns` (§9.1). A client that parses the AQL response of a
+single CDR parses a federated one. Everything the federation adds lives in one
+member of the open `meta` object, `meta.federation`:
+
+- `complete`, whether the answer covers every node in scope (§11.4);
+- `endpoints[]`, one entry per node with its status and provenance (§9.5,
+  §11.1);
+- `timeout`, the budget that applied (§11.5);
+- `dedup`, the de-duplication policy that applied (§10).
+
+## Follow-ups
+
+A composition id in a result row is an `OBJECT_VERSION_ID`, which already
+carries the `creating_system_id` of the CDR that created it. A follow-up read
+or write sent to the gateway is routed to that CDR (§7.2, §12). A new object
+is always created on one node the client names; creation across nodes is
+refused (§2.3, N23).
+
+## Self-description
+
+`OPTIONS {base}/` returns the gateway's self-description, including what it
+refuses rather than approximates, validated against the specification's
+`options-root.schema.json` (§7a.2).
