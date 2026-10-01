@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+[package]
+name = "ferrofed-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "BUSL-1.1"
+
+# The crate is OUTSIDE the workspace (the root manifest excludes it):
+# cargo-fuzz builds with sanitizer flags that need a nightly toolchain, and the
+# product stays on the pinned stable one (#134). It keeps its own lockfile.
+[package.metadata]
+cargo-fuzz = true
+
+# Its own workspace root, so cargo never walks up into an enclosing one.
+[workspace]
+
+[dependencies]
+ferrofed-server = { path = "../app/ferrofed-server" }
+libfuzzer-sys = "0.4.13"
+openehr-base = "0.0.74"
+openehr-federation = { path = "../crates/openehr-federation", features = ["aql"] }
+openehr-its = { version = "0.0.74", default-features = false, features = ["rest"] }
+openehr-query = "0.0.74"
+serde_json = "1"
+
+[[bin]]
+name = "aql_rewrite"
+path = "fuzz_targets/aql_rewrite.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "adhoc_query"
+path = "fuzz_targets/adhoc_query.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "result_set_meta"
+path = "fuzz_targets/result_set_meta.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "options_root"
+path = "fuzz_targets/options_root.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1

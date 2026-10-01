@@ -1,0 +1,39 @@
+{
+  "federation": {
+    "id": "rso-zl",
+    "spec_version": "0.9",
+    "aql": { "fan_out": true },
+    "dedup": {
+      "default": "none",
+      "modes": ["none", "version-identity"],
+      "request_header": "openEHR-federation-dedup"
+    },
+    "timeout": { "per_node_ms": 5000, "overall_ms": 15000, "policy": "all-or-nothing" },
+    "completeness": {
+      "default": "all-or-nothing",
+      "best_effort": true,
+      "opt_in": { "header": "openEHR-federation-completeness", "value": "partial" }
+    },
+    "paging": { "offset_strategy": "reject" },
+    "aggregates": { "decomposable": ["COUNT", "SUM", "MIN", "MAX"] },
+    "definition": {
+      "fan_out_template_upload": false,
+      "stored_query_registry": true,
+      "stored_query_fan_out": false
+    },
+    "localization": { "on_failure": "closed" },
+    "auth": { "jwks_uri": "https://gw.rso.nl/.well-known/jwks.json" },
+    "its_rest": {
+      "query": "federated",
+      "ehr": "routed",
+      "definition": "routed-single-node; stored queries at the gateway registry",
+      "demographic": "unsupported"
+    }
+  },
+  "endpoints": [
+    { "id": "node_1", "node_id": "node_1", "system_id": "cdr1.rso.nl", "organisation": "Org A",
+      "status": "active", "product": "VendorX CDR", "version": "3.4.1", "latency_ms_p50": 120 },
+    { "id": "node_2", "node_id": "node_2", "system_id": "cdr2.rso.nl", "organisation": "Org B",
+      "status": "active", "product": "VendorY", "version": "2026.1", "latency_ms_p50": 310 }
+  ]
+}

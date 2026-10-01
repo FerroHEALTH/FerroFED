@@ -1,0 +1,1 @@
+SELECT COUNT(c/uid/value) AS n FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345'

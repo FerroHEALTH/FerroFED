@@ -1,0 +1,1 @@
+SELECT c/uid/value AS composition_id FROM EHR e CONTAINS COMPOSITION c WHERE c/archetype_node_id = 'openEHR-EHR-COMPOSITION.encounter.v1'

@@ -35,8 +35,9 @@ needs a gate.
 | `release-build.yml` | called by `release.yml`, once per target | the SLSA Build Level 3 binary lane: `cargo auditable` build, CycloneDX and syft SBOMs, provenance and SBOM attestations, every asset attached to the draft (`docs/release.md` § The build legs) |
 | `release-image.yml` | called by `release.yml` | the container from the attested musl binaries, pushed to `ghcr.io/ferrohealth/ferrofed` by digest with provenance and SBOM attestations as OCI referrers, verified as a consumer would |
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
+| `fuzz.yml` | Wednesdays, dispatch, and pull requests touching `crates/openehr-federation`, `app/ferrofed-server`, `fuzz/` or `scripts/fuzz/` | the four `cargo fuzz` targets over the untrusted inputs, time-boxed and advisory, after a check that the generated seeds are current (§The fuzz lane) |
 
-Dependabot (`.github/dependabot.yml`) is the twelfth piece and is described
+Dependabot (`.github/dependabot.yml`) is the thirteenth piece and is described
 under the pins below.
 
 ## The two tiers of `ci.yml`
@@ -166,6 +167,8 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | the zizmor, actionlint, shellcheck and hadolint versions in `ci.yml` | `pin-freshness.yml`, weekly |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows; a bump is a deliberate change to both |
+| the release and fuzz tool versions (`cargo-auditable`, `cargo-cyclonedx`, `syft`, `cargo-fuzz`) | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` tool rows |
+| the fuzz seeds generated from the vendored corpora (`fuzz/seeds/*/gen-*`) | `scripts/fuzz/seeds.sh --check`, the first job of `fuzz.yml` |
 | every pin repeated in a second file | `scripts/checks/versions.sh` against `docs/VERSIONS.md` |
 
 Every Dependabot ecosystem carries a 7-day cooldown. CI is where the
@@ -204,11 +207,37 @@ the licence. The terms are in `LICENSE` and `NOTICE`, and every first-party
 file carries an `SPDX-License-Identifier: BUSL-1.1` header that
 `scripts/checks/versions.sh` enforces.
 
-## Lanes that land later
+## The fuzz lane
 
-The fuzz lane is not here yet: it needs a decision the research program has
-not made. It lands with its own issue, documented here when it does, under the
-same pinning rules.
+`.github/workflows/fuzz.yml` runs the four `cargo fuzz` targets of the `fuzz/`
+crate over the inputs a caller controls before anything else reads them (#134):
+
+- **`aql_rewrite`:** the rewrite over AQL text and parameters;
+- **`adhoc_query`:** the ITS-REST `AdhocQueryExecute` body through the
+  façade's intake;
+- **`result_set_meta`:** a federated `RESULT_SET` and its `meta.federation`;
+- **`options_root`:** the `OPTIONS {base}/` body.
+
+It runs every Wednesday and on dispatch for five minutes per target, and for
+one minute per target on a pull request that touches the code a target reads.
+It is a time-boxed search, so it is never a `conclusion` input.
+
+A panic, an abort or a hang is a defect: the run fails, uploads the
+reproducing input as an artifact for 90 days, and the finding becomes a `bug`
+issue with the input attached. An `Err` or a refusal is never a finding.
+`aql_rewrite` also asserts the identifier-hygiene property of §5.4.1 (N33) on
+every query the rewrite accepts, so a node query that still carries the
+patient identifier, in a literal or rebuilt by a string function, fails the
+run like a crash (`fuzz/README.md`).
+
+A first job runs `scripts/fuzz/seeds.sh --check`: the seeds are generated from
+the vendored golden cases and the specification's JSON examples, and a
+re-vendored corpus that leaves them stale fails it. The lane is the one job on
+a nightly toolchain, through the `toolchain` input of the `setup-rust`
+composite, because cargo-fuzz needs sanitizer flags stable does not carry. The
+`fuzz/` crate is its own workspace, excluded from the root one, so the product
+stays on the pinned stable toolchain. Its `cargo-fuzz` pin is a
+`docs/VERSIONS.md` row the versions guard checks.
 
 ## Triggers and concurrency
 

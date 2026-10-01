@@ -83,13 +83,23 @@ runs them.
 ## Fuzz findings
 
 The `fuzz/` crate feeds arbitrary bytes to the parsers a caller reaches first
-(`docs/ci-cd.md` §The fuzz lane). A finding is a panic, an abort or a hang in
-library code: that is a violation of `reliability.md` (no panicking path on
-caller-controlled input) and becomes a `bug` issue with the reproducing input
-committed as a regression seed under `fuzz/seeds/<target>/` and a unit test
-asserting the typed `Err`. A parser returning `Err` on garbage is the correct
-answer and is never a finding; never "fix" one by making the parser accept
-more.
+(`docs/ci-cd.md` §The fuzz lane): the AQL rewrite, the ITS-REST query body,
+and the federated `RESULT_SET` and `OPTIONS` bodies. A finding is a panic, an
+abort or a hang in library code: that is a violation of `reliability.md` (no
+panicking path on caller-controlled input) and becomes a `bug` issue with the
+reproducing input committed as a regression seed under `fuzz/seeds/<target>/`
+and a unit test asserting the typed `Err`. A parser returning `Err` on garbage
+is the correct answer and is never a finding; never "fix" one by making the
+parser accept more.
+
+The `aql_rewrite` target asserts a property as well as the absence of a
+panic: a node query of an accepted query never carries the patient identifier
+(`identifier-hygiene.md`, §5.4.1, N33), in a literal or rebuilt by a string
+function. A violation is the most serious finding the lane can report: fix it
+before anything else, and add the input to the rewrite's negative corpus.
+
+Seeds named `gen-*` are written by `scripts/fuzz/seeds.sh` from the vendored
+corpora and are never hand-edited; a regression seed carries any other name.
 
 ## Where tests live
 

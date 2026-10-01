@@ -1,0 +1,27 @@
+{
+  "q": "SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition_id FROM ENDPOINT p [\"node_1\",\"node_2\"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345'",
+  "columns": [
+    { "name": "endpoint_id",    "path": "p/id" },
+    { "name": "system_id",      "path": "p/system_id" },
+    { "name": "composition_id", "path": "c/uid/value" }
+  ],
+  "rows": [
+    ["node_1", "cdr1.rso.nl", "8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1"],
+    ["node_2", "cdr2.rso.nl", "6ba7b810-9dad-11d1-80b4-00c04fd430c8::cdr2.rso.nl::1"]
+  ],
+  "meta": {
+    "federation": {
+      "complete": true,
+      "endpoints": [
+        { "id": "node_1", "node_id": "node_1", "system_id": "cdr1.rso.nl", "organisation": "Org A",
+          "url": "https://ehr.hospital-a.example/openehr/v1", "status": "active",
+          "latency_ms": 118, "product": "VendorX CDR", "version": "3.4.1", "row_count": 1 },
+        { "id": "node_2", "node_id": "node_2", "system_id": "cdr2.rso.nl", "organisation": "Org B",
+          "url": "https://ehr.clinic-b.example/openehr/v1", "status": "active",
+          "latency_ms": 306, "product": "VendorY", "version": "2026.1", "row_count": 1 },
+        { "id": "node_3", "node_id": "node_3", "organisation": "Org C",
+          "status": "excluded" }
+      ]
+    }
+  }
+}

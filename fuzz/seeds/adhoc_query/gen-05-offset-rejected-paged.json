@@ -1,0 +1,1 @@
+{"q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345' ORDER BY c/uid/value LIMIT 10 OFFSET 5","offset":0,"fetch":10,"query_parameters":{"pid":"sentinel-4711"}}

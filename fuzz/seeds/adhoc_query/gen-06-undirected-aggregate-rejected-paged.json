@@ -1,0 +1,1 @@
+{"q":"SELECT COUNT(c/uid/value) AS n FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345'","offset":0,"fetch":10,"query_parameters":{"pid":"sentinel-4711"}}

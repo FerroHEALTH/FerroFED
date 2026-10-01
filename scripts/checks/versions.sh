@@ -330,8 +330,8 @@ else
   note "no $ci yet, skipped"
 fi
 
-release_workflows=(.github/workflows/release-build.yml .github/workflows/release-image.yml)
-# Every version of TOOL the release workflows install, deduplicated, so a tool
+release_workflows=(.github/workflows/release-build.yml .github/workflows/release-image.yml .github/workflows/fuzz.yml)
+# Every version of TOOL the release and fuzz workflows install, deduplicated, so a tool
 # named in both files has to carry the same pin in both.
 release_tool_pins() {
   local wf
@@ -341,7 +341,7 @@ release_tool_pins() {
   done | sort -u
 }
 if [ -f "${release_workflows[0]}" ] || [ -f "${release_workflows[1]}" ]; then
-  for tool in cargo-auditable cargo-cyclonedx syft; do
+  for tool in cargo-auditable cargo-cyclonedx syft cargo-fuzz; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(release_tool_pins "$tool")"
     if [ -z "$want" ]; then

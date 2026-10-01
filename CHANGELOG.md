@@ -20,6 +20,18 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+### Added
+
+- The fuzz lane (#134): four `cargo fuzz` targets over the untrusted inputs
+  (the AQL rewrite over arbitrary text and parameters, the ITS-REST
+  `AdhocQueryExecute` body through the façade's intake, a federated
+  `RESULT_SET` with its `meta.federation`, and the `OPTIONS {base}/` body),
+  with seeds generated from the vendored golden cases and the specification's
+  JSON examples by `scripts/fuzz/seeds.sh`. The rewrite target asserts the
+  identifier-hygiene property of §5.4.1 (N33) on every query it accepts,
+  string-function reconstructions included. `fuzz.yml` runs the targets
+  weekly, on dispatch and on pull requests touching the code they read.
+
 ## [0.0.2-rc.1] - 2026-10-01
 
 A pre-release that rehearses the release lane at SLSA Build Level 3 (#31):
