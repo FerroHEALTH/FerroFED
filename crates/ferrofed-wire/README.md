@@ -3,16 +3,31 @@
 
 # ferrofed-wire
 
-The federation wire additions of the Federation Tier with AQL specification: `meta.federation`, the endpoint status vocabulary and the federation headers, as typed carriers held to the published schemas.
+The wire additions of the openEHR Federation Tier with AQL specification, as
+typed Rust carriers held to its two published JSON Schemas.
 
-Part of [FerroFED](https://ferrofed.eu), a pure-Rust openEHR federation
-gateway: a transparent ITS-REST intermediary that resolves the patient outside
-the query, sends standard AQL to each node scoped to its own EHR id, and
-merges what comes back with each node's provenance.
+A federation gateway answers an AQL query with an ordinary openEHR ITS-REST
+`RESULT_SET` and adds one member to its open `meta`: `meta.federation`, the
+per-endpoint record of what happened to each node. This crate models:
 
-Version 0.0.0 holds the crate in the workspace. The implementation lands with
-[FerroFED issue #33](https://github.com/rubentalstra/FerroFED/issues/33),
-and the design is recorded in the repository's architecture document.
+- `meta.federation` with `complete`, `endpoints[]`, `timeout` and `dedup`
+  (§9.1, §9.5, §11.4), where `complete` is derived from the statuses rather
+  than set by hand;
+- the per-query endpoint status vocabulary of §11.1, including `node-error`,
+  with the `error` and `latency_ms` obligations of N40 made part of each
+  status's shape;
+- the `OPTIONS {base}/` self-description (§7a.2, N30) and its two schema
+  conditionals;
+- the federation HTTP header names (§7a.3, §8.4, §10, §11.4);
+- the one seam into the `openehr-its` `ResultSetMetadata`, which refuses the
+  flat and `_`-prefixed forms §9.1 forbids (CP-35).
+
+Every object in the schemas is open, so each type keeps the members it does
+not model and writes them back. The tests validate every emitted body against
+the vendored schemas, fail on drift when a re-pinned schema adds a member, and
+pin the rules no schema can state.
+
+The specification release this crate implements is in `FEDERATION_SPEC`.
 
 ## Licence
 

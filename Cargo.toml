@@ -45,7 +45,9 @@ thiserror = "2.0.21"
 clap = { version = "4.6.7", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
 # Typed carriers only: serde_json::Value is a disallowed type (clippy.toml).
-serde_json = "1.0.151"
+# raw_value lets an open wire object keep the members it does not model as
+# raw JSON text (ferrofed-wire).
+serde_json = { version = "1.0.151", features = ["raw_value"] }
 # The configuration file format, parsed into the server's Config tree.
 toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "display", "serde"] }
 secrecy = "0.10.3"
@@ -76,6 +78,10 @@ hyper = { version = "1.11.1", default-features = false }
 hyper-util = { version = "0.1.21", default-features = false }
 http-body-util = "0.1.5"
 bytes = "1.12.1"
+# Test-only for the wire types (#33): schema validation of every emitted body
+# (draft 2020-12, the remote resolvers off) and property tests.
+jsonschema = { version = "0.58.3", default-features = false }
+proptest = "1.11.0"
 
 # The reliability bar (.claude/rules/reliability.md). Groups sit at priority -1
 # so every named lint below overrides its group.

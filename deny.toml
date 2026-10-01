@@ -42,6 +42,11 @@ allow = [
   # client testcontainers drives. ISC is the permissive MIT-equivalent the
   # OSI lists.
   "ISC",
+  # The wire types' schema validation (#33): borrow-or-share under jsonschema
+  # (MIT-0, MIT with the attribution clause removed) and foldhash under its
+  # hash maps (Zlib). Both are OSI-listed permissive licences.
+  "MIT-0",
+  "Zlib",
 ]
 confidence-threshold = 0.9
 # The project's own crates are BUSL-1.1 (LICENSE). The openEHR model crates
@@ -60,6 +65,14 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ferrofed-engine" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-server" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
+  # The openEHR terminology data openehr-term redistributes (through
+  # openehr-its's json layer) is CC-BY-SA-3.0; the crate's code is Apache-2.0.
+  # The share-alike terms cover that data, which FerroFED redistributes
+  # unmodified inside the dependency and never alters.
+  { allow = ["Apache-2.0", "CC-BY-SA-3.0"], crate = "openehr-term" },
+  # A build-time archive writer in a toolchain-facing tree; the LLVM
+  # exception only widens Apache-2.0.
+  { allow = ["Apache-2.0 WITH LLVM-exception"], crate = "ar_archive_writer" },
 ]
 
 [bans]
