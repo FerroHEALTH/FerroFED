@@ -9,9 +9,12 @@ paths: ["crates/**", "scripts/release/**", ".github/workflows/publish-crates.yml
 
 **Nothing is published to crates.io for now, and publishing is a one-line
 switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
-A35). The split is fixed: the specification crates (`ferrofed-wire`) and the
-gateway's library crates live under `crates/`, the server binary under `app/`,
-and the tools under `tools/`.
+A35). The split is fixed (#106, decision A34): the libraries a third party
+could use live under `crates/` and carry the name of the specification they
+implement, never `ferrofed-*` (`openehr-federation`, `ihe-iti`,
+`nl-generic-functions`; `.claude/memory/published-crate-naming.md`), one crate
+per specification with a feature per layer or profile; FerroFED's own glue and
+the server binary live under `app/`, and the tools under `tools/`.
 
 ## The switch
 
@@ -44,8 +47,9 @@ an owner decision recorded per crate when the switch flips, never assumed.
   (the server, the tools, the release tag `vX.Y.Z`).
 - **The crate line** is the `version` in each `crates/*/Cargo.toml`. It never
   adopts the product version or a specification version; it is the crates' own
-  SemVer line. A member holds its name at the 0.0.0 placeholder until its
-  first publish, and joins the line then.
+  SemVer line. A name is held on crates.io by a 0.0.0 placeholder published
+  before the crate has content (the three published on 2026-10-01), and the
+  crate's line in the workspace starts at 0.0.1, above the placeholder.
 
 ## The bump rule
 

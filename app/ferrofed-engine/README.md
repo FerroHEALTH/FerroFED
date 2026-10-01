@@ -1,0 +1,22 @@
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# ferrofed-engine
+
+The federation engine: dispatch and fan-out to each node over ITS-REST, the per-node and overall budgets, the completeness decision and follow-up routing on the creating system id.
+
+Part of [FerroFED](https://ferrofed.eu), a pure-Rust openEHR federation
+gateway: a transparent ITS-REST intermediary that resolves the patient outside
+the query, sends standard AQL to each node scoped to its own EHR id, and
+merges what comes back with each node's provenance.
+
+An application crate under `app/`: FerroFED's own glue, never published. The
+crate holds its place in the workspace, and the implementation lands with
+[FerroFED issue #37](https://github.com/rubentalstra/FerroFED/issues/37),
+and the design is recorded in the repository's architecture document.
+
+## Licence
+
+Business Source License 1.1 (`LICENSE`): free for every non-production use and
+for non-commercial production use; a commercial licence for other production
+use; Apache License 2.0 four years after each version.

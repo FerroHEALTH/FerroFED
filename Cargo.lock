@@ -718,13 +718,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
-name = "ferrofed-aql"
-version = "0.0.0"
-dependencies = [
- "ferrofed-testkit",
-]
-
-[[package]]
 name = "ferrofed-engine"
 version = "0.0.0"
 dependencies = [
@@ -743,22 +736,6 @@ dependencies = [
  "toml",
  "tracing",
 ]
-
-[[package]]
-name = "ferrofed-identity-ihe"
-version = "0.0.0"
-
-[[package]]
-name = "ferrofed-identity-nl"
-version = "0.0.0"
-
-[[package]]
-name = "ferrofed-identity-xcpd"
-version = "0.0.0"
-
-[[package]]
-name = "ferrofed-merge"
-version = "0.0.0"
 
 [[package]]
 name = "ferrofed-registry"
@@ -811,20 +788,6 @@ dependencies = [
  "tokio",
  "uuid",
  "wiremock",
-]
-
-[[package]]
-name = "ferrofed-wire"
-version = "0.0.0"
-dependencies = [
- "ferrofed-testkit",
- "jsonschema",
- "openehr-its",
- "proptest",
- "serde",
- "serde_json",
- "thiserror",
- "url",
 ]
 
 [[package]]
@@ -1374,6 +1337,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ihe-iti"
+version = "0.0.1"
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1657,6 +1624,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "nl-generic-functions"
+version = "0.0.1"
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1805,6 +1776,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "openehr-federation"
+version = "0.0.1"
+dependencies = [
+ "ferrofed-testkit",
+ "jsonschema",
+ "openehr-its",
+ "openehr-query",
+ "openehr-rm",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "url",
+]
+
+[[package]]
 name = "openehr-its"
 version = "0.0.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1837,6 +1824,17 @@ dependencies = [
  "openehr-base",
  "serde",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "openehr-query"
+version = "0.0.74"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03d466b659a96b5ba5fa5a5d896044535e852e578def92288d98b6ee73d36702"
+dependencies = [
+ "chumsky",
+ "logos",
  "thiserror",
 ]
 

@@ -13,11 +13,12 @@ sibling model, the owner answered: "not sure yet but we will definitely split
 spec codegenerated crates and the app crates like what we do for all our
 products".
 
-**Decided:** the layout separates the specification-derived crates (the
-hand-written `ferrofed-wire` types behind the two published JSON Schemas; no
-FerroFED generator, decision A33) from the engine crates and from `app/*`;
-the crate map is `docs/architecture.md` §11.
-`app/*` and `tools/*` are never published.
+**Decided:** the layout separates the specification crates under `crates/`
+(`openehr-federation` with the hand-written wire types behind the two
+published JSON Schemas, no FerroFED generator by decision A33; `ihe-iti`;
+`nl-generic-functions`) from FerroFED's own glue under `app/`; the crate map
+is `docs/architecture.md` §11, and the naming is [[published-crate-naming]]
+(#106). `app/*` and `tools/*` are never published.
 
 **Publishing, decided on 2026-10-01.** The owner: "first we will not push to
 crates.io but please setup all the CI and everything so when we want to do it

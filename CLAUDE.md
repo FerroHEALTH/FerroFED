@@ -18,10 +18,12 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: the workspace skeleton
+## Status: building v0.0.2
 
-The Cargo workspace exists (#28): the root discipline and every crate of the
-`docs/architecture.md` §11 map, each at its placeholder with no behaviour yet.
+The Cargo workspace exists (#28) with the crate map of `docs/architecture.md`
+§11 (#106). The server shape, the wire types, the registry with the
+development cross-reference, the container and the test harness have landed;
+the rest of each crate holds its place until its issue.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
@@ -45,7 +47,7 @@ the pinned text until that issue lands.
   `docs/architecture.md` §10). The specification's two JSON Schemas,
   `federated-result-set.schema.json` (the result envelope with
   `meta.federation`) and `options-root.schema.json` (the `OPTIONS {base}/`
-  self-description), get hand-written types in `ferrofed-wire`, held to the
+  self-description), get hand-written types in `openehr-federation`, held to the
   vendored schemas by validation, drift and semantic tests
   (`.claude/rules/codegen.md`). A file marked `// @generated` anywhere is
   off-limits: change the generator and regenerate.
@@ -106,13 +108,20 @@ Today:
 
 The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 
-- `crates/`: the libraries, each at 0.0.0 and publishable only through the
-  workspace `publish` switch. `ferrofed-wire` (the federation wire additions),
-  `ferrofed-aql` (the rewrite on `openehr-query`), `ferrofed-merge` (the
-  cross-node merge, pure), `ferrofed-registry` (members, learned maps,
-  incidents, the definition store trait), `ferrofed-identity` (the role
-  traits), `ferrofed-identity-ihe`, `ferrofed-identity-xcpd` and
-  `ferrofed-identity-nl` (the bindings, each movable to FerroPIX), and
+- `crates/`: the libraries a third party could use, each named for the
+  specification it implements, never `ferrofed-*`
+  (`.claude/memory/published-crate-naming.md`), with one feature per layer or
+  profile, publishable only through the workspace `publish` switch (#106):
+  `openehr-federation` (the Federation Tier: the wire additions always on, the
+  rewrite on `openehr-query` behind `aql`, the cross-node merge behind
+  `merge`), `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`,
+  `xcpd`) and `nl-generic-functions` (the Annex B functions: `nvi`, `mitz`,
+  `lrza`, `nuts-auth`). The binding crates depend on nothing in FerroFED, so
+  FerroPIX can use them as they are.
+- `app/`: FerroFED's own glue, each a hard `publish = false`:
+  `ferrofed-registry` (members, learned maps, incidents, the definition store
+  trait), `ferrofed-identity` (the role traits, `PatientRef`, the development
+  cross-reference and the adapters over the binding crates) and
   `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):

@@ -113,7 +113,10 @@ flags verbatim: `cargo fmt --all --check`; `cargo clippy --workspace
 --locked` plus `cargo test --doc --locked`; `cargo doc` with
 `RUSTDOCFLAGS=-D warnings`; `cargo deny check` (advisories, licences, bans,
 sources, which subsumes cargo-audit); MSRV via `cargo hack check
---rust-version`; the codegen drift gate once a generator exists (`codegen.md`); `cargo publish --workspace --dry-run --locked`; the
+--rust-version`; every feature of each published crate alone via `cargo hack
+clippy --locked --each-feature --all-targets --package openehr-federation
+--package ihe-iti --package nl-generic-functions -- -D warnings`, per package
+and never the workspace all-features union; the codegen drift gate once a generator exists (`codegen.md`); `cargo publish --workspace --dry-run --locked`; the
 crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 `dependency-review-action` on pull requests; the `e2e (containers)` job,
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the

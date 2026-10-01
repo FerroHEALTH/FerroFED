@@ -20,6 +20,20 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+### Changed
+
+- The crate layout names every crate that may be published after the
+  specification it implements, one crate per specification with a feature per
+  layer or profile (#106): `openehr-federation` 0.0.1 (the Federation Tier
+  wire types, formerly `ferrofed-wire`, with the `aql` and `merge` features),
+  `ihe-iti` 0.0.1 (features `pixm`, `pdqm`, `mcsd`, `pmir`, `xcpd`) and
+  `nl-generic-functions` 0.0.1 (features `nvi`, `mitz`, `lrza`, `nuts-auth`).
+  The names are held on crates.io by 0.0.0 placeholders. `ferrofed-registry`,
+  `ferrofed-identity` and `ferrofed-engine` move under `app/` and are never
+  published. A new CI job lints every feature of the published crates on its
+  own, and the architecture test also fails when a binding crate depends on
+  FerroFED.
+
 ### Added
 
 - The static registry (#36): `ferrofed-registry` 0.0.1 loads the federation's

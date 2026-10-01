@@ -183,7 +183,7 @@ standing bar for hand-written code.
 The family rule FerroEHR set, adopted by owner decision on 2026-10-01
 (`docs/architecture.md` §2, decision A2): `serde_json::Value` is a
 `disallowed-types` entry in `clippy.toml` from the first workspace commit
-(#28), and everything else consumes the typed `openehr-*` and `ferrofed-wire`
+(#28), and everything else consumes the typed `openehr-*` and `openehr-federation`
 types. The ITS-REST contract puts `Value` in three places the gateway touches,
 so the approved seams are fixed by the wire. Each is ONE module carrying a
 scoped `#[expect(clippy::disallowed_types, reason = "…")]` that names it:

@@ -32,9 +32,11 @@ openehr-rm = "0.0.74"
 openehr-query = "0.0.74"
 openehr-its = { version = "0.0.74", default-features = false }
 openehr-sdt = { version = "0.0.74", default-features = false }
-# Internal library crates: a path for the workspace and a version for a
-# packaged manifest, moved with the member (.claude/rules/crates-publishing.md).
-ferrofed-registry = { path = "crates/ferrofed-registry", version = "0.0.2" }
+# Internal crates. A crates/* member another member depends on takes a path for
+# the workspace and a version for its packaged manifest, moved with the member
+# (.claude/rules/crates-publishing.md); an app/* member is never packaged, so
+# it takes the path alone.
+ferrofed-registry = { path = "app/ferrofed-registry" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }
@@ -46,7 +48,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
 # Typed carriers only: serde_json::Value is a disallowed type (clippy.toml).
 # raw_value lets an open wire object keep the members it does not model as
-# raw JSON text (ferrofed-wire).
+# raw JSON text (openehr-federation).
 serde_json = { version = "1.0.151", features = ["raw_value"] }
 # The configuration file format, parsed into the server's Config tree.
 toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "display", "serde"] }
