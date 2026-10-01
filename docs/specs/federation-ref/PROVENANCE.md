@@ -20,7 +20,7 @@ docs/VERSIONS.md and re-run the script.
   cases under `src/test/resources/aql-golden/`
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `12bbe44dea3e3fb85b9a997f474c146e8c2235d23491f16aee948352c643853e`
-- Read by: #18 (the golden cases adjudicated against the specification), #35 (the golden cases as a corpus test) and #94 (the differential run)
+- Read by: #18 (the golden cases adjudicated against the specification), #35 (the golden cases as a corpus test), #39 (the demo template and compositions as the e2e seed) and #94 (the differential run)
 
 ## Evidence, never an oracle
 

@@ -46,6 +46,16 @@ binary follows from v0.0.2.
   starts the gateway beside two member CDRs, FerroEHR 4.3.1 and EHRbase 2.36.0,
   every image pinned by digest in `docs/VERSIONS.md` and held there by the
   versions guard (#30).
+- The test harness in `tools/ferrofed-testkit` (#39): FerroEHR 4.3.1 and
+  EHRbase 2.36.0 as two nodes on their own documented databases, pinned by
+  digest and started only behind the `FERROFED_E2E` gate; a capturing and
+  fault proxy in front of each node, whose journal records every request
+  (method, path, query, headers, body) and which refuses, delays or answers
+  with a chosen status per node; and a synthetic seed builder that writes
+  EHRs, the template and compositions over ITS-REST alone, with patient
+  identifiers only inside the `urn:oid:2.999` example arc. CI runs the
+  container suite in its own `e2e (containers)` job, and the versions guard
+  holds the image pins to `docs/VERSIONS.md`.
 
 ### Changed
 

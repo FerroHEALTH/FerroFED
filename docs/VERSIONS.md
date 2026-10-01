@@ -140,13 +140,19 @@ repeats it.
 | Item | Pin | Repeated in |
 |---|---|---|
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM` |
-| FerroEHR node image | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6` | `compose.yaml` |
-| FerroEHR node database image | `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` | `compose.yaml` |
-| EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | `compose.yaml` |
-| EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | `compose.yaml` |
+| FerroEHR node image | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| FerroEHR node database image | `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | `compose.yaml`, the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | `compose.yaml`, the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 
 The quickstart's gateway image, `ghcr.io/rubentalstra/ferrofed`, carries the
 product version below as its tag default, and the guard holds the two equal.
+
+The end-to-end lane starts the same four node images through the testkit
+harness, behind the `FERROFED_E2E` gate (`docs/ci-cd.md`): each is a
+`PinnedImage` constant in `tools/ferrofed-testkit/src/containers.rs`, and the
+guard holds every constant equal to its row here, so the quickstart and the
+test suite always run the same nodes.
 
 ## Product and citation version
 

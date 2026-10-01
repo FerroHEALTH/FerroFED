@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "ferrofed-testkit"
-description = "Test support for the FerroFED suites: the pin-matrix reader now, the harness, proxies and fakes later; never shipped"
+description = "Test support for the FerroFED suites: the pin-matrix reader, the container harness, the capturing and fault proxy, and the synthetic seed builder; never shipped"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,23 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+bytes.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+# The proxy's forwarding client and the seed builder's ITS-REST client.
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+testcontainers.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync"] }
+wiremock.workspace = true
 
 [lints]
 workspace = true

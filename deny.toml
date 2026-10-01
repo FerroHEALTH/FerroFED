@@ -38,6 +38,10 @@ allow = [
   "Unicode-3.0",
   # One crate in the stack pairs MIT with BSD-3-Clause.
   "BSD-3-Clause",
+  # The test harness (#39): rustls, rustls-webpki and ring under the Docker
+  # client testcontainers drives. ISC is the permissive MIT-equivalent the
+  # OSI lists.
+  "ISC",
 ]
 confidence-threshold = 0.9
 # The project's own crates are BUSL-1.1 (LICENSE). The openEHR model crates

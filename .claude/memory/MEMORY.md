@@ -80,3 +80,4 @@
   owner posts as themself stays short, plain, and linked
 - [Strict over the reference](strict-over-reference.md): the Java reference implementation is evidence, not the bar; FerroFED is as strict as FerroEHR and the specification wins where the reference is laxer; owner 2026-10-01
 - [Build in FED first](build-in-fed-first.md): every capability FerroFED needs is built here behind its trait seam, as a crate that can move to FerroPIX later; never block on an unbuilt sibling; owner 2026-10-01
+- [End-to-end gate](e2e-gate.md): container tests run only with FERROFED_E2E=1 through the testkit harness (FerroEHR and EHRbase behind capturing and fault proxies, images pinned by digest); EHRbase refuses a `.` in a namespace, so its EHRs are seeded without a subject; 2026-10-01

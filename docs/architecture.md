@@ -1278,7 +1278,13 @@ scheme validates. `ehr_id`s are fixed UUIDs per scenario. Compositions are built
 from the RM types in `openehr-rm` on the vendored `International Patient
 Summary.opt`, and every seed goes over ITS-REST alone (`PUT /ehr/{ehr_id}`,
 `POST /definition/template/adl1.4`, `POST /ehr/{ehr_id}/composition`), never
-into a node's database, so the harness is product-neutral.
+into a node's database, so the harness is product-neutral. EHRbase 2.36.0
+refuses a `PARTY_REF.namespace` that contains a `.`, which BASE
+`object_ref.adoc` §Attributes allows (`[a-zA-Z][a-zA-Z0-9_.:/&?=+-]*`) and
+FerroEHR accepts; the arc is not bent to suit the node, so an EHR seeded on
+EHRbase carries no subject. Nothing is lost, because FerroFED resolves a
+patient through the cross-reference and never through a node's
+`EHR_STATUS.subject` (section 6).
 
 **The differential run** (#94). The reference implementation's image refused an
 anonymous pull on 2026-10-01, so the run builds from the vendored tree's

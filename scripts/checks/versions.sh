@@ -24,16 +24,18 @@
 #                          the release workflows install.
 #   6. docs toolchain      the mdBook, mdbook-toc and mdbook-mermaid defaults of
 #                          .github/actions/docs-toolchain/action.yml.
-#   7. vendored corpora    every docs/specs/*/PROVENANCE.md names the commit or
+#   7. testkit images      the PinnedImage constants of the testkit container
+#                          harness against the docs/VERSIONS.md image rows.
+#   8. vendored corpora    every docs/specs/*/PROVENANCE.md names the commit or
 #                          tag its docs/VERSIONS.md corpus row pins, and the
 #                          federation specification's provenance declares the
 #                          version the specification row pins.
-#   8. container images    the FROM of docker/Dockerfile against the base-image
+#   9. container images    the FROM of docker/Dockerfile against the base-image
 #                          row, every digest-pinned compose.yaml image against
 #                          a row naming the same reference, and the
 #                          compose.yaml gateway tag default against the product
 #                          version.
-#   9. licence             LICENSE is the Business Source License 1.1 and no
+#  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
 #                          own.
 #
@@ -379,6 +381,51 @@ if [ -f "$action" ]; then
   [ "$agreed" -eq 3 ] && note "OK: the three docs-toolchain pins agree"
 else
   note "no $action yet, skipped"
+fi
+
+echo "== testkit images (tools/ferrofed-testkit <-> $matrix)"
+harness=tools/ferrofed-testkit/src/containers.rs
+if [ -f "$harness" ]; then
+  # The repository, tag and digest of the PinnedImage literal named CONST,
+  # composed into the one reference the matrix row carries.
+  image_pin_of() {
+    awk -v name="$1" '
+      $0 ~ "^pub const " name ": PinnedImage = PinnedImage \\{" { inside = 1; next }
+      inside {
+        if ($0 ~ /^\};/) { exit }
+        if (match($0, /repository: "[^"]+"/)) { repo = substr($0, RSTART + 13, RLENGTH - 14) }
+        if (match($0, /tag: "[^"]+"/)) { tag = substr($0, RSTART + 6, RLENGTH - 7) }
+        if (match($0, /digest: "[^"]+"/)) { digest = substr($0, RSTART + 9, RLENGTH - 10) }
+      }
+      END { if (repo != "" && tag != "" && digest != "") print repo ":" tag "@" digest }
+    ' "$2"
+  }
+
+  agreed=0
+  expected=0
+  for image in \
+    "FerroEHR node image|FERROEHR" \
+    "FerroEHR node database image|FERROEHR_POSTGRES" \
+    "EHRbase node image|EHRBASE" \
+    "EHRbase node database image|EHRBASE_POSTGRES"; do
+    item="${image%%|*}"
+    constant="${image##*|}"
+    expected=$((expected + 1))
+    want="$(pin_of "$item" "$matrix")"
+    found="$(image_pin_of "$constant" "$harness")"
+    if [ -z "$want" ]; then
+      bad "$matrix has no '$item' row"
+    elif [ -z "$found" ]; then
+      bad "$harness has no $constant PinnedImage with a repository, tag and digest"
+    elif [ "$found" != "$want" ]; then
+      bad "$item: $harness pins $found, $matrix pins $want"
+    else
+      agreed=$((agreed + 1))
+    fi
+  done
+  [ "$agreed" -eq "$expected" ] && note "OK: all $expected container image pins agree"
+else
+  note "no $harness yet, skipped"
 fi
 
 echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"

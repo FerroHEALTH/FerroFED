@@ -76,6 +76,16 @@ pull requests. Each lane mirrors the local command in `.claude/rules/ci-cd.md`.
 The workspace pull request therefore changes nothing in CI; the lanes activate
 by themselves.
 
+`e2e (containers)` is the Rust lane that needs Docker. A container-backed test
+checks the `FERROFED_E2E` gate first and returns early without it, so the
+`test` job stays offline and fast; this job sets `FERROFED_E2E=1` and runs the
+crates that carry container tests (`tools/ferrofed-testkit` today) against the
+digest-pinned images of `docs/VERSIONS.md` §Container images: FerroEHR and
+EHRbase as the two nodes, each behind the testkit's capturing and fault proxy
+(`docs/architecture.md` §13). It feeds `conclusion` like every other lane.
+Locally: `FERROFED_E2E=1 cargo nextest run -p ferrofed-testkit` with Docker
+running.
+
 `crate-version-guard` runs on pull requests only and fails a change that
 alters a `crates/*` member's packaged content without moving its version,
 because a published version is immutable (`.claude/rules/crates-publishing.md`).
@@ -143,6 +153,7 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | a digest-pinned `FROM` in a first-party Dockerfile | Dependabot, `docker` ecosystem at `/` and `/docker` (inert until the container lands) |
 | the zizmor, actionlint, shellcheck and hadolint versions in `ci.yml` | `pin-freshness.yml`, weekly |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
+| the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows; a bump is a deliberate change to both |
 | every pin repeated in a second file | `scripts/checks/versions.sh` against `docs/VERSIONS.md` |
 
 Every Dependabot ecosystem carries a 7-day cooldown. CI is where the
