@@ -22,7 +22,12 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # The root covers .github/workflows/; the composite actions under
+    # .github/actions/ pin actions of their own and are listed explicitly, so a
+    # bump never lands in a workflow while the composite keeps the old pin.
+    directories:
+      - "/"
+      - "/.github/actions/*"
     labels:
       - "dependencies"
     schedule:
