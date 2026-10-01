@@ -201,21 +201,21 @@ fn a_secret_set_inline_and_through_its_file_refuses_to_boot() -> Result<(), Box<
 )]
 fn an_unknown_key_refuses_to_boot_and_the_message_names_it() -> Result<(), Box<dyn StdError>> {
     for (text, key) in [
-        ("[server]\nlisten_port = 8080\n", "listen_port"),
+        ("[server]\nlisten_port = 8080\n", "server.listen_port"),
         (
             "[telemetry]\nlogged_query_parameters = [\"q\"]\n",
-            "logged_query_parameters",
+            "telemetry.logged_query_parameters",
         ),
-        ("[credentials.\"a\"]\ntoken = \"synthetic\"\n", "token"),
+        (
+            "[credentials.\"a\"]\ntoken = \"synthetic\"\n",
+            "credentials.\"a\".token",
+        ),
         ("[unknown]\nkey = 1\n", "unknown"),
     ] {
         let error = refusal(text)?;
         assert!(matches!(error, Error::Parse { .. }), "{error:?}");
-        let source = std::error::Error::source(&error).map(ToString::to_string);
-        assert!(
-            source.as_deref().is_some_and(|text| text.contains(key)),
-            "the refusal names {key}: {source:?}"
-        );
+        let message = error.to_string();
+        assert!(message.contains(key), "the refusal names {key}: {message}");
     }
     Ok(())
 }
@@ -319,5 +319,129 @@ fn a_refusal_never_quotes_a_secret() -> Result<(), Box<dyn StdError>> {
         cause = source.source();
     }
     assert!(!rendered.contains("synthetic-secret"), "{rendered}");
+    Ok(())
+}
+
+/// Everything an error shows: its `Display`, its `Debug` and the `Display`
+/// of every error in its source chain.
+fn everything(error: &Error) -> String {
+    let mut rendered = format!("{error}\n{error:?}");
+    let mut cause = std::error::Error::source(error);
+    while let Some(source) = cause {
+        rendered.push('\n');
+        rendered.push_str(&source.to_string());
+        cause = source.source();
+    }
+    rendered
+}
+
+/// A malformed `[dev]` row whose identifier is a sentinel, one row per
+/// way a row can be broken.
+const BROKEN_DEV_ROWS: [&str; 3] = [
+    // An unterminated string.
+    "profile = \"development\"\n[[dev.crossref]]\nnamespace = \"urn:oid:2.999.1\"\nvalue = \"SENTINEL-7319\nmember = \"node-a\"\n",
+    // A value with no key.
+    "profile = \"development\"\n[[dev.crossref]]\nnamespace = \"urn:oid:2.999.1\"\n\"SENTINEL-7319\"\n",
+    // A key set twice.
+    "profile = \"development\"\n[[dev.crossref]]\nvalue = \"SENTINEL-7319\"\nvalue = \"SENTINEL-7319\"\n",
+];
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_malformed_dev_row_never_echoes_its_identifier() -> Result<(), Box<dyn StdError>> {
+    for text in BROKEN_DEV_ROWS {
+        let error = refusal(text)?;
+        assert!(matches!(error, Error::Parse { .. }), "not a parse refusal");
+        // NOTE: the messages never print the rendering, which would put the
+        // identifier into the test log the test keeps it out of.
+        let rendered = everything(&error);
+        assert!(
+            !rendered.contains("SENTINEL-7319"),
+            "a parse refusal echoes the [dev] identifier"
+        );
+        assert!(
+            error.to_string().contains("at dev"),
+            "the refusal locates the fault in the [dev] table"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_secret_of_the_wrong_type_is_never_echoed() -> Result<(), Box<dyn StdError>> {
+    let error = refusal("[credentials.\"a\"]\nbearer_token = 73194426\n")?;
+    assert!(matches!(error, Error::Parse { .. }), "not a parse refusal");
+    assert!(
+        !everything(&error).contains("73194426"),
+        "the refusal echoes the inline secret"
+    );
+    assert!(
+        error.to_string().contains("credentials.\"a\".bearer_token"),
+        "the refusal names the key"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_malformed_line_outside_dev_names_its_key_and_position() -> Result<(), Box<dyn StdError>> {
+    let error = refusal("[server]\nlisten = \"127.0.0.1:8080\nshutdown_timeout_ms = 10\n")?;
+    let message = error.to_string();
+    assert!(
+        message.contains("at server.listen") && message.contains("line 2"),
+        "the refusal names server.listen on line 2: {message}"
+    );
+    assert!(
+        !message.contains("127.0.0.1:8080"),
+        "the refusal quotes the source line"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn an_environment_fault_names_its_key_and_no_line() -> Result<(), Box<dyn StdError>> {
+    let Err(error) = Config::from_sources(None, &env("FERROFED__SERVER__LISTEN_PORT", "8080"))
+    else {
+        return Err("the override was accepted".into());
+    };
+    let message = error.to_string();
+    assert!(
+        message.contains("after the environment overrides")
+            && message.contains("at server.listen_port")
+            && !message.contains("line "),
+        "the refusal names the key and no position: {message}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_parse_fault_names_the_file_it_is_in() -> Result<(), Box<dyn StdError>> {
+    let file = secret_file("[server]\nlisten_port = 8080\n")?;
+    let Err(error) = Config::load(Some(file.path())) else {
+        return Err("the configuration was accepted".into());
+    };
+    let message = error.to_string();
+    assert!(
+        message.contains(&file.path().display().to_string()),
+        "the refusal names the file: {message}"
+    );
     Ok(())
 }

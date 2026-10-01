@@ -170,6 +170,15 @@ since v0.0.1.
   `openehr-query`, and the router builder, operation matcher, credentials
   provider and per-call options in `openehr-its` (FerroEHR #3505 to #3514).
 
+### Security
+
+- A configuration that does not parse no longer quotes its source line
+  (#133). The TOML reader's error printed the offending line, so a malformed
+  `[dev]` row could put its patient identifier, and a mistyped inline secret
+  its value, into the `config check` output and the boot failure. The refusal
+  now names the file, the line and column, the key path (`dev` alone for any
+  line of the `[dev]` table) and the kind of fault, and none of the text.
+
 ## [0.0.1] - 2026-10-01
 
 The first release: the repository setup, the documentation site on
