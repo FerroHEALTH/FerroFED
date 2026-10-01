@@ -17,6 +17,7 @@ use ferrofed_engine::fanout::{Budget, FanOutError, Plan, fan_out};
 use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_its::rest::client::ReqwestTransport;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};
@@ -144,6 +145,52 @@ async fn a_clean_request_is_sent_with_identifiers_withheld() -> TestResult {
         )
         .await?;
     assert_eq!(1, requests_at(&server).await?, "the clean query was sent");
+    Ok(())
+}
+
+/// The scope `ehr_id` of [`CLEAN`], which holds `4199` by chance.
+const SCOPE: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
+
+fn short_options() -> Result<DispatchOptions, Box<dyn Error>> {
+    let deadline = Instant::now()
+        .checked_add(Duration::from_secs(5))
+        .ok_or("the deadline is past the platform clock")?;
+    Ok(DispatchOptions::new(deadline)
+        .with_withheld(Arc::new(Withheld::new([SecretString::from("4199")]))))
+}
+
+// conformance: CP-26
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+async fn a_short_identifier_inside_the_scope_ehr_id_is_sent() -> TestResult {
+    let server = node().await;
+    let snapshot = registry(&server.uri())?;
+    let scoped = NodeQuery::new(CLEAN).with_scope(&HierObjectId::new(SCOPE)?);
+    client(&snapshot)?.query(&scoped, &short_options()?).await?;
+    assert_eq!(1, requests_at(&server).await?, "the correct query was sent");
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+async fn the_same_short_identifier_elsewhere_is_never_sent() -> TestResult {
+    let server = node().await;
+    let snapshot = registry(&server.uri())?;
+    let scoped = NodeQuery::new(format!("{CLEAN} AND c/name/value = '4199'"))
+        .with_scope(&HierObjectId::new(SCOPE)?);
+    let refused = client(&snapshot)?.query(&scoped, &short_options()?).await;
+    let Err(DispatchError::Withheld { part, .. }) = refused else {
+        return Err(format!("the gate let a leaking query through: {refused:?}").into());
+    };
+    assert_eq!(Part::Aql, part);
+    assert_eq!(0, requests_at(&server).await?, "nothing reached the node");
     Ok(())
 }
 

@@ -107,7 +107,10 @@ pub async fn patient(
                 let node = query.for_node(ehr_id.hier_object_id());
                 sources.get_or_insert_with(|| node.columns().to_vec());
                 plan = plan
-                    .dispatch(endpoint, NodeQuery::new(node.aql()))
+                    .dispatch(
+                        endpoint,
+                        NodeQuery::new(node.aql()).with_scope(ehr_id.hier_object_id()),
+                    )
                     .map_err(TargetsError::Plan)?;
                 bound.push((member.clone(), ehr_id.clone()));
             }

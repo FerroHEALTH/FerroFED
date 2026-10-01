@@ -14,7 +14,8 @@ use axum::body::Body;
 use http::{Request, StatusCode, header};
 
 use crate::facade::{
-    EHR_A, EHR_B, NAMESPACE, PATIENT, body, dev_gateway, node_answering, post, received, wire,
+    EHR_A, EHR_B, NAMESPACE, PATIENT, body, dev_gateway, gateway, node_answering, post, received,
+    registry, wire,
 };
 use crate::request_log::logged;
 use crate::support::call;
@@ -192,6 +193,53 @@ async fn the_identifier_on_another_path_is_a_400_that_asks_nobody() -> TestResul
     for server in [&a, &b] {
         assert!(received(server).await?.is_empty(), "no node is asked");
     }
+    Ok(())
+}
+
+/// A short identifier that occurs, by chance, inside [`EHR_A`].
+const INSIDE_EHR_A: &str = "2222";
+
+// conformance: CP-26
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+async fn a_short_identifier_inside_the_nodes_ehr_id_is_answered() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_answering("uid-at-b").await;
+    let dir = tempfile::tempdir()?;
+    let crossref = format!(
+        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{INSIDE_EHR_A}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+    );
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "profile = \"development\"",
+        &crossref,
+    )?;
+    let aql = format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{INSIDE_EHR_A}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    let (status, text) = call(app, post(body(&aql)?)?).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "the gate reads past the scope: {text}"
+    );
+    let bodies = received(&a).await?;
+    assert_eq!(1, bodies.len(), "node A is asked once");
+    let sent = bodies.first().ok_or("one request")?;
+    assert!(
+        sent.contains(&format!("e/ehr_id/value='{EHR_A}'")),
+        "the node query is keyed on the node's own ehr_id: {sent}"
+    );
+    assert!(
+        !sent.contains("ehr_status/subject"),
+        "no patient carrier reaches the node: {sent}"
+    );
     Ok(())
 }
 

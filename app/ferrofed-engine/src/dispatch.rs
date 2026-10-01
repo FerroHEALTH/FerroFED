@@ -32,6 +32,7 @@ use std::time::Instant;
 use crate::hygiene::{Outbound, Part, Withheld};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
+use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{
@@ -64,6 +65,7 @@ pub struct NodeQuery {
     aql: String,
     offset: Option<u32>,
     fetch: Option<u32>,
+    scope: Option<String>,
 }
 
 impl NodeQuery {
@@ -74,7 +76,16 @@ impl NodeQuery {
             aql: aql.into(),
             offset: None,
             fetch: None,
+            scope: None,
         }
+    }
+
+    /// This query as scoped by the rewrite to the node's own `ehr_id`, which
+    /// the outbound gate reads past (§7.1).
+    #[must_use]
+    pub fn with_scope(mut self, ehr_id: &HierObjectId) -> Self {
+        self.scope = Some(ehr_id.value().to_owned());
+        self
     }
 
     /// This query starting at row `offset` of the node's answer.
@@ -183,6 +194,7 @@ impl<T: Transport> NodeClient<T> {
             .collect();
         let outbound = Outbound {
             aql: query.aql(),
+            scope: query.scope.as_deref(),
             paging: &paging,
             url: &url,
             headers: &headers,

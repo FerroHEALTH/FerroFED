@@ -53,12 +53,27 @@ impl Withheld {
 
     /// The first part of `request` that carries a withheld identifier, in any
     /// form a node could read it in, or `None` for a clean request.
+    ///
+    /// The scope literal the rewrite wrote (`'<ehr_id>'`) is masked out of
+    /// the AQL text before it is read, so a short identifier that happens to
+    /// occur inside the node's own `ehr_id` is no false refusal. An
+    /// identifier that contains the whole `ehr_id` is never masked: the
+    /// cross-reference maps a patient to an `ehr_id` the node minted, so the
+    /// two are equal only through a defect, and the gate then fails closed.
     #[must_use]
     pub fn found_in(&self, request: &Outbound<'_>) -> Option<Part> {
         self.0.iter().find_map(|value| {
             let value = value.expose_secret();
             let escaped = escape_string(value);
-            if request.aql.contains(value) || request.aql.contains(&escaped) {
+            let in_aql = |fragment: &str| fragment.contains(value) || fragment.contains(&escaped);
+            let aql_carries = match request.scope.filter(|scope| !value.contains(*scope)) {
+                Some(scope) => {
+                    let token = format!("'{}'", escape_string(scope));
+                    request.aql.split(token.as_str()).any(in_aql)
+                }
+                None => in_aql(request.aql),
+            };
+            if aql_carries {
                 Some(Part::Aql)
             } else if request.paging.iter().any(|number| number.contains(value)) {
                 Some(Part::Paging)
@@ -89,6 +104,8 @@ impl fmt::Debug for Withheld {
 pub struct Outbound<'a> {
     /// The AQL text of the body.
     pub aql: &'a str,
+    /// The node's own `ehr_id` the rewrite scoped the AQL to, if any.
+    pub scope: Option<&'a str>,
     /// The body's paging members, as the text they are sent as.
     pub paging: &'a [String],
     /// The URL the request is sent to.
@@ -170,6 +187,7 @@ mod tests {
     ) -> Outbound<'a> {
         Outbound {
             aql,
+            scope: None,
             paging: &[],
             url,
             headers,
@@ -222,6 +240,52 @@ mod tests {
             None,
             Withheld::none().found_in(&request(aql, "https://cdr.example.org/", &[]))
         );
+    }
+
+    const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
+
+    fn scoped(aql: &str) -> Outbound<'_> {
+        Outbound {
+            scope: Some(EHR_ID),
+            ..request(aql, "https://cdr.example.org/v1/query/aql", &[])
+        }
+    }
+
+    fn short() -> Withheld {
+        Withheld::new([SecretString::from("4199")])
+    }
+
+    #[test]
+    fn a_short_identifier_inside_the_scope_ehr_id_passes() {
+        let aql =
+            format!("SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{EHR_ID}'");
+        assert_eq!(None, short().found_in(&scoped(&aql)));
+    }
+
+    #[test]
+    fn the_same_short_identifier_elsewhere_is_found() {
+        let aql = format!(
+            "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{EHR_ID}' AND c/name/value = '4199'"
+        );
+        assert_eq!(Some(Part::Aql), short().found_in(&scoped(&aql)));
+    }
+
+    #[test]
+    fn without_a_scope_the_ehr_id_is_read_like_any_text() {
+        let aql =
+            format!("SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{EHR_ID}'");
+        assert_eq!(
+            Some(Part::Aql),
+            short().found_in(&request(&aql, "https://cdr.example.org/", &[]))
+        );
+    }
+
+    #[test]
+    fn an_identifier_equal_to_the_scope_ehr_id_fails_closed() {
+        let aql =
+            format!("SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{EHR_ID}'");
+        let equal = Withheld::new([SecretString::from(EHR_ID)]);
+        assert_eq!(Some(Part::Aql), equal.found_in(&scoped(&aql)));
     }
 
     #[test]

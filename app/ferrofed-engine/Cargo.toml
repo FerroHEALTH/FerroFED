@@ -17,6 +17,8 @@ publish = false
 
 [dependencies]
 ferrofed-registry.workspace = true
+# The typed `ehr_id` a node query is scoped to (#45).
+openehr-base.workspace = true
 openehr-federation.workspace = true
 # The node client: every request to a node is built by its runtime, never in
 # this crate (docs/architecture.md section 5, #34).

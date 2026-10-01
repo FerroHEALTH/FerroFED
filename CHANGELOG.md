@@ -42,7 +42,9 @@ binary follows from v0.0.2.
   headers the gateway adds, against the identifiers resolution consumed, and
   refuses to send a request that still carries one: nothing reaches the node,
   the query fails closed, and the refusal names the part of the request and
-  never the value. Every patient predicate the rewrite strips, every refused
+  never the value. The gate reads past the `ehr_id` literal the rewrite
+  scoped the query to, so a short identifier that occurs inside the node's
+  own `ehr_id` is answered. Every patient predicate the rewrite strips, every refused
   query and every gate stop is a security event under `ferrofed::security`,
   located by byte range and carrying no identifier. A clinician or facility
   predicate (composer, care facility, performer, committer) is dispatched
