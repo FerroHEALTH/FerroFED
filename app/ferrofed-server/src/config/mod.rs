@@ -18,7 +18,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::config::error::Error;
+use crate::config::error::{Error, Stage};
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::{FederationSettings, ServerSettings, Settings, TelemetrySettings};
 use crate::telemetry::{DEFAULT_FILTER, Format};
@@ -225,10 +225,10 @@ impl Config {
         let named = path
             .map(Path::to_path_buf)
             .or_else(|| std::env::var_os(CONFIG_PATH_ENV).map(PathBuf::from));
-        let text = match named {
+        let text = match &named {
             None => None,
             Some(path) => {
-                let text = std::fs::read_to_string(&path).map_err(|source| Error::Read {
+                let text = std::fs::read_to_string(path).map_err(|source| Error::Read {
                     path: path.clone(),
                     source,
                 })?;
@@ -238,7 +238,11 @@ impl Config {
         let environment: BTreeMap<String, String> = std::env::vars()
             .filter(|(name, _)| name.starts_with(ENV_PREFIX))
             .collect();
-        Self::from_sources(text.as_deref(), &environment)
+        let loaded = Self::from_sources(text.as_deref(), &environment);
+        match &named {
+            Some(path) => loaded.map_err(|error| error.in_file(path)),
+            None => loaded,
+        }
     }
 
     /// Reads `text` as TOML and applies `environment` over it.
@@ -257,7 +261,9 @@ impl Config {
     ) -> Result<Self, Error> {
         let mut table = match text {
             None => toml::Table::new(),
-            Some(text) => toml::from_str(text).map_err(|source| Error::Parse { source })?,
+            Some(text) => {
+                toml::from_str(text).map_err(|error| Error::parse(&error, text, Stage::File))?
+            }
         };
         for (name, raw) in environment {
             apply_override(&mut table, name, raw)?;
@@ -265,7 +271,31 @@ impl Config {
         // The merged tree is written back and re-read so every refusal carries
         // the key and its position, which a `Table` alone cannot report.
         let merged = toml::to_string(&table).map_err(|source| Error::Assemble { source })?;
-        toml::from_str(&merged).map_err(|source| Error::Parse { source })
+        toml::from_str(&merged).map_err(|error| {
+            let fault = Error::parse(&error, &merged, Stage::Merged);
+            text.and_then(|text| Self::in_the_file(text, &fault))
+                .unwrap_or(fault)
+        })
+    }
+
+    /// Reads the file alone again when the merged tree is refused, so a fault
+    /// the file itself carries is reported at its line and column.
+    ///
+    /// The file's own refusal is taken only when it names the same key: a
+    /// fault an override introduced has no line in the file.
+    fn in_the_file(text: &str, merged: &Error) -> Option<Error> {
+        let file = toml::from_str::<Self>(text)
+            .err()
+            .map(|error| Error::parse(&error, text, Stage::File))?;
+        let same_key = match (merged, &file) {
+            (Error::Parse { fault: merged }, Error::Parse { fault: file }) => {
+                let unquoted =
+                    |key: &Option<String>| key.as_deref().map(|key| key.replace('"', ""));
+                unquoted(&merged.key) == unquoted(&file.key)
+            }
+            _ => false,
+        };
+        same_key.then_some(file)
     }
 
     /// Resolves this tree into the settings the run path holds.
