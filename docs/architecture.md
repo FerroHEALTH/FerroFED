@@ -1,0 +1,1344 @@
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# Architecture
+
+FerroFED is an openEHR federation gateway: a transparent ITS-REST intermediary
+that takes an ordinary AQL query, resolves the patient outside the query,
+sends standard AQL scoped to each node's own `ehr_id`, and merges what comes
+back with each node's provenance. It follows the openEHR Federation Working
+Group's Federation Tier with AQL specification and holds no clinical data of
+its own.
+
+This document is the design of record. It is the output of the first research
+pass of 2026-10-01 (program #16), whose full reports are the evidence comments
+on #18 to #27. Every decision below names its ground: a section, requirement
+(N) or conformance point (CP) of the specification, a section of ITS-REST or
+AQL, an IHE profile, an RFC, or published research. Where the specification is
+silent, the decision is labelled FerroFED's own. Where it contradicts itself or
+another specification, the contradiction is named and held as an
+upstream-report draft on #17, to be re-checked against the 1.0 release.
+
+Three owner rulings of 2026-10-01 shape every section:
+
+- **The published `openehr-*` crates are the openEHR surface.** FerroFED
+  re-implements nothing they provide. A gap in one of them is an issue on
+  FerroEHR's tracker, and the FerroFED issue that needs it is blocked by it
+  (section 2).
+- **The reference implementation is evidence, not the bar.** FerroFED is held
+  to FerroEHR's strictness: it accepts exactly what the specification admits
+  and asserts every refusal with a negative test. That the Java reference
+  implementation accepts a form, merges a result a certain way, or claims a
+  conformance point proves nothing. Every place where it is laxer than the
+  specification is named below and recorded on #17.
+- **Build what FerroFED needs inside FerroFED first.** No capability waits on
+  a sibling that is not built yet. FerroPIX, the family's planned MPI over
+  PIXm and PDQm, exists only as a repository today, so every identity binding
+  the gateway needs lands here, each as a self-contained crate behind its
+  trait seam, shaped so it can move to FerroPIX later without changing the
+  gateway core (sections 6 and 11).
+
+The decision register in section 15 lists every choice this pass put to the
+owner. The owner decided all of them on 2026-10-01, and the text describes the
+decided design.
+
+## 1. The problem and the specification pin
+
+A record held by another organisation is out of reach of a client that speaks
+to one CDR. The Federation Tier with AQL lets a client run one AQL query across
+several CDRs as if they were one repository (§1). The Tier is a transparent
+intermediary: a client sends a conformant AQL query and follow-up requests
+without knowing it is federated, across the whole ITS-REST surface, read and
+write (§1, N1). Federation keys on each node's local `ehr_id`. The patient is
+resolved to a set of `{node, ehr_id}` pairs outside AQL, through an identity
+cross-reference service (§5), and each node then receives standard,
+non-federated AQL scoped to its `ehr_id` (§4, §7). The patient identifier used
+for resolution is consumed at the gateway and never reaches a node, in any
+carrier (§5.4, N33).
+
+The specification is a release candidate circulated for comment. Its 1.0
+release is expected the week of 2026-10-08, and #17 re-pins to it: re-vendor,
+diff, re-cite every issue, and re-check the held upstream-report drafts.
+
+**Pinned versions.** The pins live in `docs/VERSIONS.md`; this table records
+the ground for each, and `scripts/checks/versions.sh` holds the two in step.
+
+| Component | Pin | Ground |
+|---|---|---|
+| Federation Tier with AQL | 0.9.0 (`syntaric/openehr-federation-spec` at `7162d0c760d23105d62a743bf0ad1073c45fdb85`, 2026-09-28, CC0 1.0) | the specification FerroFED implements. The pinned commit is past the `0.9.0` tag and carries the SEC review amendments (the `meta.federation` nesting, the all-or-nothing default, the `node-error` status) while `antora.yml` still declares `0.9.0`, which is held as a draft on #17 |
+| Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
+| openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
+| openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
+| `openehr-query` | 0.0.72 on crates.io; the planned pin is 0.0.74 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 adds the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513) |
+| `openehr-its` | 0.0.72 on crates.io; the planned pin is 0.0.74 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 adds the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512) |
+| `openehr-base`, `openehr-rm`, `openehr-sdt` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison, and the SMART on openEHR scope grammar |
+| IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
+| Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
+| `fhir-types` | 0.1.106 (`r4`, `resources`; Apache-2.0) | the FHIR R4 model for PIXm `Parameters` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
+| `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for inbound validation and outbound assertions |
+| `jsonschema` | 0.58.3 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
+| PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
+
+The `openehr-*` rows stay at the published 0.0.72 until 0.0.74 is on
+crates.io. #28 (the Cargo workspace) is blocked on that release, and nothing in
+v0.0.2 codes against 0.0.72.
+
+## 2. The openEHR surface: the published crates
+
+FerroFED takes every openEHR concern from the published crates, as one family
+on one lockstep version. The table fixes what each crate carries for the
+gateway.
+
+| Crate (feature) | What FerroFED takes from it |
+|---|---|
+| `openehr-query` (`federation`) | AQL 1.1.0: `parse_str`, the typed AST, `printer::to_aql` with the fixed point `parse(to_aql(ast)) == ast`, `visit::Visit` and `visit::VisitMut`, `ast::Span` on every `IdentifiedPath` and `WHERE` leaf, `bind::bind` for `query_parameters`, and `federation::parse_federated` / `to_federated_aql` for the `FROM ENDPOINT` directive |
+| `openehr-its` (`rest-server`) | the generated `server::router` per group, used where the typed contract fits (section 5) |
+| `openehr-its` (`rest-client`) | one `rest::client::Client` per endpoint, `routes::lookup` (the operation matcher), `Client::forward` (one unclassified send with the bytes as received), `CredentialsProvider` and `CallOptions { deadline, headers }` |
+| `openehr-its` (`rest`, `json`) | the `AdhocQueryExecute`, `ResultSet`, `ResultSetMetadata` and `ResultSetColumn` DTOs, with `ResultSetMetadata.additional_properties` as the extension point `meta.federation` occupies (N17), and canonical JSON of the RM |
+| `openehr-base` | `ObjectVersionId` (`object_id()`, `creating_system_id()`, `version_tree_id()`), `HierObjectId` for `ehr_id`, the lexical rule for `system_id`, and `PartialOrd` on the ISO 8601 types |
+| `openehr-rm` | `DV_ORDERED`'s `less_than` and `is_strictly_comparable_to`, for cross-node ordering of data values |
+| `openehr-sdt` (`smart_scopes`) | `SmartScope::parse` and `parse_all` for the SMART on openEHR scope grammar (section 7) |
+
+The research found eight gaps between these crates and what an intermediary
+needs, filed as FerroEHR #3505 to #3512, and the work found a ninth (#3513, a
+parser defect for `[$p and at0001]` and `[<archetype id> or …]`). All nine are
+built on FerroEHR's side and ship in the lockstep 0.0.74, which is FerroFED's
+pin for the workspace (section 1). Two residuals are FerroEHR's to note:
+`Client::forward` defaults `Accept` when the client sent none, which a
+byte-transparent intermediary would rather opt out of (one sentence on #3510),
+and the ITS-REST OpenAPI documents leak `operationId: definition_query_store.yaml`
+into generated method names.
+
+**Typed carriers.** FerroEHR bans `serde_json::Value` outside approved seams
+(clippy `disallowed-types`). FerroFED adopts the rule unchanged from #28
+(decision A2). The ITS-REST contract itself puts `Value` in three places the
+gateway touches, so the seams are fixed by the wire. Each is one module with a
+scoped `#[expect]` naming it:
+
+1. **Query intake.** `query_parameters` become `ast::Primitive` once, at the
+   façade boundary, before `bind`. A JSON string becomes `String`, an integral
+   number `Integer`, any other number `Real`, a boolean `Boolean`. A `null`, an
+   array or an object is a `400` naming the parameter, never its value. The GET
+   forms carry strings only, typed by the position they bind to.
+2. **Result cells.** `ResultSetRow` from each node is decoded once by a cell
+   codec: an RM object through canonical JSON into its RM type, a primitive as
+   itself. The merged row is re-encoded on the way out, and no other module
+   sees a `Value` cell.
+3. **The envelope.** A typed `FederationMeta` is serialized once into
+   `ResultSetMetadata.additional_properties["federation"]`, and the `424`/`504`
+   failure envelope is built from the same type.
+4. **Tests.** Schema validation hands `jsonschema` a `Value`, under
+   `#[cfg(test)]` and in the testkit.
+
+Single-node passthrough bodies, node error bodies, the `OPTIONS` bodies and the
+registry are never seams.
+
+## 3. The request pipeline
+
+A federated query goes through five stages. The first resolves where the
+patient is and under which local id; the rest are pure transformations over
+typed values, except the fan-out.
+
+```mermaid
+flowchart LR
+    C["Client: AQL over ITS-REST"] --> P["Parse, reconcile targeting,<br/>bind parameters"]
+    P --> A["Analyse: both carriers,<br/>hygiene, strategies"]
+    A --> R["Resolve: Directory, Localizer,<br/>ConsentPrefilter, Resolver"]
+    R --> W["Rewrite one AST per node<br/>and print with to_aql"]
+    W --> F["Fan out under one deadline"]
+    F --> N1["Node A"]
+    F --> N2["Node B"]
+    N1 --> M["Merge: dedup, DISTINCT,<br/>ORDER BY, LIMIT, re-inject"]
+    N2 --> M
+    M --> E["Annotate meta.federation<br/>and decide the status"]
+    E --> C
+```
+
+1. **Resolve** (§4 Step 1, §5, §14, §15). The analysis yields a `PatientRef`
+   (identifier plus issuing namespace). The registry snapshot, the localizer,
+   the optional consent pre-filter and the cross-reference resolver turn it
+   into the set of `{node, ehr_id}` pairs to dispatch to, and a status for
+   every member that is not dispatched (section 6).
+2. **Rewrite** (§7.1). One node AST per resolved node, scoped to that node's
+   `ehr_id`, with every directly identifying identifier consumed or the query
+   refused (section 4).
+3. **Fan out** (§11.5, N38). One request per in-scope endpoint, concurrent,
+   under a deadline fixed at entry (section 9).
+4. **Merge** (§9 to §11.6). Positional decoding against the gateway's own
+   `SELECT`, opt-in dedup, `DISTINCT`, the cross-node order, `LIMIT` and
+   `OFFSET`, and the re-injected columns (section 9).
+5. **Annotate** (§9.5, §11.4, N16, N17). `meta.federation` lists every registry
+   member with its status, and the completeness decision picks `200`, `424` or
+   `504`, carrying the envelope in every case (section 9).
+
+A follow-up read or write to one record takes the single-node path of section
+5 instead: no rewrite, no merge, byte-identical passthrough to the node that
+holds it.
+
+## 4. The AQL rewrite and identifier hygiene
+
+Research: #18. Every step is a call on `openehr-query` or a pure function over
+its public AST. FerroFED has no AQL parser, no printer and no text splicing.
+
+**The pipeline.**
+
+1. **Parse** with `federation::parse_federated`. It lifts a `FROM ENDPOINT` /
+   `ORGANISATION` directive out at the token level, so the same words inside a
+   string literal stay a string, and parses the remainder as strict AQL 1.1.0
+   with spans kept (§8.1). The directive grammar is an extension no openEHR
+   release defines, and it lives behind the crate's opt-in feature (decision
+   A1).
+2. **Reconcile targeting.** The directive and the
+   `openEHR-federation-endpoint` / `openEHR-federation-organisation` headers
+   must name the same set, or the request is `400`. An unknown identifier is
+   `400` (§8.4.1, N35).
+3. **Bind** the request's `query_parameters` with `bind::bind` before any
+   analysis, so `… = $patient` is analysed as the literal it stands for. AQL
+   substitutes a parameter "following the same rules as each type when the
+   value is specified as a literal" (`master03-syntax.adoc` §Parameters), and
+   §5.4.1 tests a value wherever it sits, so the order is forced. Faults name
+   the parameter and its position, never the value.
+4. **Analyse** on `visit::Visit`. The visitor is exhaustive, with no wildcard
+   arm, so a new AST variant fails to compile in the traversal. A hand-written
+   walk missed four literal positions in the research's experiment (a
+   `MATCHES` list, a containment predicate, a function argument, a `SELECT`
+   constant):
+   - locate the patient in either carrier: `external_ref/id/value` with its
+     `namespace`, or an `ENTRY`-level `subject/identifiers` with its
+     `issuer`/`type` (§5.4.3, N33, CP-38);
+   - take the namespace from the query, else from a declared default issuing
+     namespace, else refuse `400` (§5.2; decision A5);
+   - refuse a non-String operand on an identifier path, written or bound
+     (decision A6);
+   - enforce the reduction constraint: one patient value, in the top-level
+     `AND` chain, under `=` (§7.1). The same value repeated is consumed once;
+     two different values are `400` (decision A7);
+   - refuse a directive-variable path outside the §9.3 attribute set (decision
+     A9), and a query whose node set the specification does not define
+     (decision A8);
+   - fold `CONCAT`, `CONCAT_WS` and `SUBSTRING` over literal arguments, and
+     refuse a string function over a literal that cannot be folded on an
+     identifier-bearing path (decision A4);
+   - run the value test over every client literal the visitor reaches: equal
+     to the patient value, or containing it, on any path, is a `400` (§5.4.1).
+     A clinician predicate with a different value is legitimate (§5.4.3 note,
+     golden case 08);
+   - refuse what the declared strategies refuse: `OFFSET` or the ITS-REST
+     `offset` member past the window, and undirected aggregates (N14, N39).
+
+   A refusal is `400` carrying the span of the offending path or leaf and never
+   the value (§5.4.3 last bullet).
+5. **Rewrite per node** with `visit::VisitMut`, one AST per node with a
+   resolved `ehr_id`: replace the patient predicate with
+   `<ehr>/ehr_id/value = '<ehr_id>'`, the canonical form of N29; remove the
+   consumed namespace leaves, the subject projections and the directive's
+   projections; wrap `FROM` in `EHR e CONTAINS …` when the query had no `EHR`
+   containment (decision A3); add the hidden `ORDER BY` columns and the uid
+   tie-break of section 9. The resolved `ehr_id` is validated as an RM
+   `HIER_OBJECT_ID` through `openehr-base`, never by a UUID pattern, because
+   N42a admits "UUID-v4 or equivalent".
+6. **Print** each node AST with `printer::to_aql`. A value reaches the text
+   only through the printer's escaping, and comments never survive a parse
+   (golden case 12). FerroFED builds one AST per node; it never renders a
+   template once and substitutes a string into it, as the reference
+   implementation does.
+7. **Gate** the composed request line and headers: no path segment, query
+   parameter or header value equals a consumed identifier (N33). The node-side
+   wire capture of track 10 (#90) is the backstop.
+
+`columns[]` is rendered once, from the façade AST, with
+`IdentifiedPath::column_path_text` and the select alias (or `#i`), never from a
+node's answer (§9.2, N17, CP-35). Rows are positional, so the merge maps each
+node column to its façade index and inserts the re-injected subject constant
+(N5) and any selected ENDPOINT attribute (N12, N18) at theirs.
+
+**ITS-REST paging members.** `AdhocQueryExecute` and the stored-query bodies
+carry `offset` and `fetch` beside the AQL, and the GET forms carry them as
+parameters. §11.6 and N39 speak only of AQL `OFFSET` and `LIMIT`. FerroFED
+treats `offset` exactly as AQL `OFFSET` under the declared strategy and `fetch`
+as `LIMIT`, and refuses a request that sets the clause and the member to
+different values (decision A10; draft on #17).
+
+**A query with no patient carrier.** N4 derives an undirected node set from
+localization, and localization is keyed on the patient. FerroFED answers such a
+query only where its node set is defined: directed by the directive or the
+header (§8), or ask-all in a deployment with no localizer (N4's last sentence).
+Where a localizer is configured and nothing names the nodes, it is `400`
+(decision A8).
+
+**Only the subject selected.** The specification is silent. FerroFED dispatches
+`SELECT e/ehr_id/value` per node, so each row stands for an EHR that exists,
+and answers each row with the re-injected input (N5). FerroFED's own.
+
+**The golden cases.** The reference implementation's 17 cases run as a corpus
+test compared by AST equality, because parenthesisation and spacing are the
+printer's. On published 0.0.72, 16 of the 17 already pass as a rewrite written
+against the public AST alone; the 17th is the directive, which 0.0.74's
+feature parses. Each case is adjudicated against the specification text: none
+is disagreed with, and four are adopted on a different mechanism or scope (02
+the crate feature and the strict attribute set; 05 a declared strategy that
+also covers the ITS-REST member; 11 the node-set rule; 13 the `EHR` wrapping).
+Beside them sits FerroFED's own strict corpus, each case an asserted test:
+
+- an unqualified identifier with no declared default namespace (`400`);
+- an integer literal on the String-typed identifier path (`400`);
+- the subject under `!=`, `<`, `>`, `MATCHES`, `EXISTS` and `NOT` (`400`);
+- the same subject value twice (consumed once);
+- the subject path in `ORDER BY` (§5.4.2 names it a leak path);
+- a parameter bound to the patient value in a non-subject position;
+- `CONCAT('12','345')` rebuilding the identifier at the node;
+- directive and header with different sets (`400`) and identical sets;
+- two `ENTRY` qualifiers that do not reduce to one namespace (`400`);
+- a namespace predicate with no id predicate (ordinary query material);
+- `COMPOSITION c[$t and …]` binding and analysing (#3513);
+- a query with no `EHR` containment (wrapped, not refused).
+
+**Where the reference implementation is laxer than the specification.** Each is
+recorded on #17 and refused here:
+
+- an unqualified identifier resolves in a default namespace that falls back to
+  the literal `"facade"` when unconfigured (§5.2 requires the namespace);
+- an integer operand is coerced to the identifier's digits, although
+  `OBJECT_ID.value` and `DV_IDENTIFIER.id` are `String`;
+- `p/organization` is accepted through the directive, which neither §8.3 nor
+  §9.3 names;
+- the ITS-REST `offset` and `fetch` members are dropped without a word, and
+  `GET /v1/query/aql` answers `501`;
+- `GET /v1/ehr?subject_id=` forwards the patient identifier to a node;
+- its final hygiene gate is a substring search over all composed text, which
+  misses `CONCAT('12','345')` and false-positives on short values.
+
+It is also stricter than the specification in two places, which refuse
+queries the specification admits: a query with no `EHR` containment, and a
+`SELECT` of only the subject. FerroFED answers both.
+
+**Two specification gaps held on #17.** Stripping an `ENTRY`-subject predicate,
+as §5.4.3 requires, widens "compositions with an OBSERVATION about this
+subject" to "any composition with an OBSERVATION in this EHR", which also
+matches entries whose subject is a `PARTY_RELATED` (family history). And a
+second value in an `ENTRY` carrier may name a relative, which the gateway
+cannot tell from the patient by path; FerroFED refuses it, the reading that
+cannot leak.
+
+## 5. The façade and node dispatch
+
+Research: #26. The façade serves the 96 operations of the generated route
+tables, split by what each area needs (decision A11):
+
+| Area | Operations | How |
+|---|---|---|
+| `query` | 6 (ad hoc and stored, GET and POST) | FerroFED handlers over the generated DTOs, matched by `routes::lookup`; fan-out under sections 3 and 9. They answer `424`/`504` with `meta.federation` (N37), which `ApiError` and the typed answers cannot express, and which belong in no ITS-REST crate |
+| `ehr` | 33 | single-node and byte-identical: `routes::lookup` names the operation from the method and path without reading the body, the routing of §12 picks the node, and `Client::forward` sends it once, unclassified and unretried |
+| `definition/template` | 9 | single-node to an explicitly chosen node, as `ehr` (§12.6, N43) |
+| `definition/query` | 4 | the generated router over the gateway-held registry when N44 is on; single-node raw otherwise |
+| `admin` | 2 | single-node raw, explicit target only |
+| `demographic` | 41 | the generated router with every method at its `501` default (§7a.1, N32) |
+| `system` | `OPTIONS {base}/v1/` | ITS-REST's own body through the typed System trait (N1) |
+| federation | `OPTIONS {base}/` | FerroFED's handler: the §7a.2 body, validated against `options-root.schema.json` (N30). The two `OPTIONS` documents live at different URLs, so a client of a single CDR still gets the shape it expects |
+
+The typed traits decode request bodies into RM types, which N22, N31 and §7a.3
+rule out for a single-node route, so those routes go through the matcher and
+`forward` instead.
+
+**Single-node answers.** Status, body, `Location` and `ETag` pass through
+unmodified (N22, N31). One tower layer adds `openEHR-federation-endpoint` and
+`openEHR-federation-system-id` to every routed answer, and hop-by-hop fields are
+stripped in both directions (RFC 9110 §7.6.1). A CDR's `Location` is usually an
+absolute URL on the node, so a client that follows it bypasses the gateway,
+which works against N1 and N28. FerroFED passes it unmodified as N31 requires,
+and the conflict is a draft on #17 to revisit at the re-pin (decision A13).
+
+**`GET {base}/v1/ehr?subject_id=`.** `ehr_get_by_subject` carries a patient
+identifier in the query string, which N33 forbids the gateway to dispatch, and
+the specification is silent on the operation. FerroFED treats `subject_id` and
+`subject_namespace` as resolution input (§5.2), dispatches
+`GET {base}/v1/ehr/{ehr_id}` to the one node that resolved, answers `404` when
+none did, and `409` naming the claimants when several did, the N42 shape
+(decision A12; FerroFED's own; draft on #17).
+
+**Per-node clients.** Each endpoint has one `rest::client::Client` built from
+the registry snapshot: its base URL, a `CredentialsProvider` for the onward
+grant (section 7) and a retry policy. Every call carries `CallOptions` with the
+deadline derived from the §11.5 budget and the conveyed client identity (N24).
+The deadline bounds the whole call: no attempt or backoff runs past it, and
+each attempt's engine timeout is the time left. The overall budget is the
+fan-out's own timeout over the join (section 9).
+
+## 6. Identity, localization and addressing
+
+Research: #19. FerroFED keeps the three Step-1 questions apart, as §14 and
+§5.2 do: localization says where a patient's data might be, the optional
+consent pre-filter says which nodes may not be asked, and resolution says under
+which local `ehr_id` each remaining node knows the patient. A localization hit
+is candidacy, never clearance (N27, §14.3), and a Tier "MUST work in either [a
+consent-aware or a plain locator] without change" (§14.3).
+
+**The seams** (decision A14). One trait per role, exactly one active
+implementation per role, chosen in configuration. One adapter type may
+implement several traits (a regional service that answers both where and
+whether); the core never assumes it does.
+
+| Trait | Returns | Role |
+|---|---|---|
+| `Directory` | `Arc<RegistrySnapshot>` | the addressing registry (N21, §15), refreshed off the clinical path; a query never awaits a directory call |
+| `Localizer` | `NotConfigured`, `Candidates(set)`, `NoRecords`, `Unavailable(error)` | where (N4, §14) |
+| `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `Unavailable(error)` | which candidates may not be asked (N27a); absence from `Denied` asserts nothing |
+| `Resolver` | per member: `Resolved(EhrId)`, `Unknown`, `Unavailable(error)` | under which local id (N3, §5.2) |
+| `OnwardAuth` | per endpoint: a `CredentialsProvider`, the conveyance header, an optional transport layer | how the gateway authenticates to each node (section 7) |
+
+No seam returns an error to the core. A backend that did not answer is an
+`Unavailable` outcome carrying its reason. Each seam runs inside its own
+budget, declared in `OPTIONS` beside the N38 timeouts, and every seam budget is
+a strict part of the overall budget. A configuration whose seam budgets sum
+above the overall budget is refused at startup. The order is `Directory`, then
+`Localizer`, then `ConsentPrefilter`, then `Resolver`; only `Resolved` members
+are dispatched (N8).
+
+**When a seam fails.**
+
+- **The localizer.** A configured localizer that does not answer leaves an
+  empty candidate set, every member `not-localized` with the error, and no
+  ask-all unless the deployment declared `on_failure: "ask-all"` (N4, §14.1,
+  CP-5). XCPD discovery is a broadcast that tells every responding community
+  the patient was asked about, which is why §14.1 forbids widening silently.
+  With no localizer configured, every registry member is a candidate (§4.3,
+  #46).
+- **The resolver** (decision A17). A resolver that cannot answer is not a
+  patient who is unknown. An ITI-83 `404`, or a `200` with no identifier in a
+  domain, is `not-resolved` and, per N6, does not fail the query. An outage, a
+  timeout, an ITI-83 `403` (target domain unknown, a configuration fault) or a
+  malformed answer is reported `not-resolved` with the error
+  `cross-reference unavailable: …`, clears `complete`, and under the
+  all-or-nothing default fails the query `424`, as an unreachable in-scope node
+  would. §11.1 has no status that separates the two cases, so this is
+  FerroFED's own, and the gap is a draft on #17. The reference implementation
+  folds every PIX failure into `not-resolved`, so a PIX outage there looks like
+  an empty record.
+
+**The bindings.**
+
+| Role | Binding | Issue | Version |
+|---|---|---|---|
+| Resolver | the static development cross-reference | #36 | none: FerroFED's own, not a binding of N3 |
+| Resolver | PIXm ITI-83 `$ihe-pix` against any conformant PIX Manager (a FerroPIX instance once it exists), one call per PIX Manager with `targetSystem` repeated per member domain (`targetSystem` is `0..*` in the OperationDefinition) | #42, #43 | PIXm 3.1.0 |
+| Harness | a PIX Manager answering ITI-83 and seeded by ITI-104 | #47 | PIXm 3.1.0 |
+| Lifecycle | PMIR ITI-94 notifications evict the bindings of a merged or split identity (track 8, provisional) | #48 | PMIR 1.6.0 |
+| Localizer | none (ask-all); a registry-scoped PIXm localizer, the members whose domain returned an identifier (§14.2's "demographic-registration" kind) | #46, #85 | PIXm 3.1.0 |
+| Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, in its own crate | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
+| Directory | the static registry document; then mCSD ITI-91 `_history`/`_since` synchronised into the snapshot, plus ITI-90 reads | #36, #74, #86 | mCSD 4.0.0 |
+| ConsentPrefilter | none; then the Annex B Mitz adapter | #83, #87 | `fhir.nl.gf` 0.3.0 |
+
+**Built here, movable later.** Each binding lives in a crate of its own behind
+its seam: the PIXm resolver and localizer, the mCSD directory and the PMIR
+hooks in `ferrofed-identity-ihe`, the XCPD adapter in `ferrofed-identity-xcpd`,
+and the Annex B adapters in `ferrofed-identity-nl`. The development
+cross-reference, which binds nothing, sits beside the traits in
+`ferrofed-identity`. The gateway core depends only
+on the traits of `ferrofed-identity`, and a binding crate depends only on
+those traits and its own protocol stack. When FerroPIX exists, a binding can
+move there, or the gateway can point its PIXm resolver at a FerroPIX instance,
+with no change to the core. FerroFED never blocks on FerroPIX.
+
+**XCPD** (decision A15). ITI-55 lands with the localization seam in v0.0.8
+(#85) as `ferrofed-identity-xcpd`, so the SOAP 1.2, HL7 v3 and SAML XUA
+dependencies stay confined to that crate and reach no deployment that does not
+enable it. Its discovery is a broadcast to every responding community, so it
+runs under the same fail-closed rules as every localizer (N4, §14.1), and its
+answers are candidacy, never clearance (§14.3). Of its three request modes,
+the gateway uses only the shared identifier, because its input is an
+identifier and never demographics.
+
+ITI-83 is GET only, and its query string carries the source identifier, so the
+outbound span never records the request URL (#45). PDQm is a demographic
+search a client application makes; FerroFED's input is AQL, which carries an
+identifier and never demographics (§5.4.3), so the gateway does not use it.
+
+**The openEHR connection type.** mCSD 4.0.0 defines endpoint types for the IHE
+transactions and none for openEHR. FerroFED defines `openehr-rest-query` in a
+FerroFED-owned CodeSystem, carried through the `ihe-endpointspecifictype`
+extension with `connectionType` left conformant. That meets N19 and CP-20 and
+is FerroFED's own; the missing registered code is a draft on #17.
+
+**The FHIR model** (decision A16) comes from `fhir-types` (`r4`, `resources`),
+compiled only in the IHE adapter crate (section 11), so the core never compiles
+it. A hand-written struct for a FHIR resource is refused by the codegen rule.
+
+**The patient identifier inside the gateway.** It is a `PatientRef`: the
+issuing namespace and a `SecretString` value, with redacted `Debug` and
+`Display`, never `Serialize`, never logged, traced or measured. A pseudonym is
+treated exactly like a direct identifier (§5.3, §B.7). A stable pseudonym is
+still personal data and a persistent linkage key (GDPR Art. 4(5) and Recital
+26; EDPB Guidelines 01/2025), and quasi-identifiers and encoded identifiers
+re-identify (Sweeney 2000; Rocher et al. 2019; Christen et al. 2019). FerroFED
+supports a client presenting either a pseudonym or a direct identifier, and
+never pseudonymises in the core; a regional adapter may (decision A19).
+
+**Caching resolution** (decision A20). The resolution bindings of §12.5.1 step
+2 belong to the client session: they are held in memory, keyed by the
+authenticated session, and expire with it under a TTL declared as a correctness
+bound. A consent denial drops any cached `ehr_id`, and "no signal" is never
+cached as consent. FerroFED keeps no cross-session resolution cache and writes
+nothing derived from a patient identifier to disk (section 8). An unkeyed hash
+of a national identifier space reverses by enumeration (the BSN space is about
+10^9 values with an eleven-check), and a keyed hash is pseudonymised personal
+data, so the cost of a re-probe after a restart is the price of holding none.
+
+**The development cross-reference** (#36). A TOML table
+(`[[dev.crossref]]` with `namespace`, `value`, `member` and `ehr_id`) read by a
+`StaticResolver` and an optional `StaticLocalizer`. It is accepted only under
+`profile = "development"`; a server in any other profile refuses to start with
+the table present, warns at startup that it is no identity binding, and reports
+`localization.mode = "development-static"` in `OPTIONS`. Its values are
+synthetic.
+
+## 7. The security handoff
+
+Research: #22. N25 requires inbound authentication at the Tier, onward
+authentication, and propagation of the client identity; N24 requires that
+identity on every routed follow-up; N26 and N27 keep the release decision at
+the node.
+
+**Callers** (#80). A caller presents a bearer access token, validated as a JWT
+(RFC 9068) against configured issuers and their JWKS, or by RFC 7662
+introspection. Validation fails closed:
+
+- a missing, expired, not-yet-valid or wrongly audienced token is `401`; `aud`
+  names this gateway;
+- an issuer not on the trust list is `401`;
+- the algorithm is on an allow-list (ES256, ES384, PS256, RS256); `none` and
+  HMAC algorithms are refused (RFC 8725 §3.1, §3.2);
+- an introspection endpoint that does not answer is `503`, never a pass;
+- a token with no scope covering the operation is `403`.
+
+Scopes are read with `openehr_sdt::smart_scopes::SmartScope::parse_all`, never
+a FerroFED parser. A query needs an `aql-…` search scope in the `patient/`,
+`user/` or `system/` compartment, and a routed follow-up needs the matching
+`composition-` or `template-` permission. A scope `SmartScope::parse` maps to
+`Other` grants nothing. A wildcard `system/aql-*` grant is honoured only for
+backend clients the deployment lists, because it "would grant access to all
+registered and ad-hoc AQL queries system-wide" (ITS-REST `master08-scopes`).
+Sender-constrained tokens (RFC 8705, RFC 9449) can be required per deployment
+and are off by default. Mutual TLS protects the transport and is never an
+organisation's identity (§13.4; the VWS memo, §B.4a.2).
+
+**Nodes** (#81). FerroFED authenticates to each node as itself, with OAuth 2.0
+client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
+
+- **keys:** ES384, loaded from a `_file` secret; the JWKS is served at
+  `{base}/.well-known/jwks.json` and declared as `federation.auth.jwks_uri`
+  (N30), or an external `jwks_uri` is configured;
+- **rotation:** the JWKS publishes the current and the previous `kid` for one
+  overlap window of at least the assertion lifetime plus the nodes' JWKS cache
+  time;
+- **assertions:** `exp` of 300 s or less, a unique `jti`, `aud` the node's
+  token endpoint;
+- **tokens:** cached per endpoint until `exp` minus 30 s and handed to the
+  node's `rest-client` through its `CredentialsProvider`; a `401` drops the
+  token;
+- **token exchange:** where a node's authorization server supports RFC 8693,
+  the endpoint is configured for it. The `subject_token` is the caller's
+  verified token, the `actor_token` the gateway's assertion, and `resource` the
+  node (RFC 8707), so the issued token is audience-restricted and carries the
+  caller as the delegating subject in `act`. It is preferred where available
+  and is the FerroSMART target;
+- **DPoP:** for a deployment that requires it, a `Transport` decorator adds the
+  proof per request, because the proof binds `htm` and `htu`, which only the
+  transport sees. It needs no change to `openehr-its`.
+
+**Scope attenuation.** The gateway never requests onward more than the caller
+holds. Under token exchange the requested scope is the caller's scope
+intersected with the operation. Under client credentials the node's grant to
+the gateway is `system/`, so the caller's narrower scope is enforced at the
+gateway and also conveyed, so the node can apply it (N26).
+
+**The caller's token is never forwarded to a node.** Its audience is the
+gateway, and one token would unlock every member that accepts its issuer (RFC
+9700 §2.3). There is no passthrough profile. An onward token that cannot be
+obtained fails that node as `node-error`, with the token endpoint's error; the
+gateway never dispatches unauthenticated.
+
+**What a node is told about the caller** (decision A21). Every dispatched and
+routed request carries `openEHR-federation-client`, a JWS signed with the
+gateway key from the same JWKS. Its claims: `iss` (the gateway), `aud` (the
+node's `endpoint_id`), `exp` of 60 s or less, `jti`, `sub` and `iss_upstream`
+(the verified caller), the caller organisation, `purpose_of_use` (the IHE IUA
+claim name, HL7 v3 PurposeOfUse coding) and `scope` (the caller's scopes as
+granted). It never carries `person_id` or any patient identifier (N33). §13.1
+leaves end-user conveyance unspecified, naming RFC 8693 and an OIDC `id_token`
+as candidates without mandating either, so the header and its claim set are
+FerroFED's own. Production federations do the same: the US XCPD networks
+convey a signed assertion with the end user, the organisation and a purpose of
+use on every cross-gateway request (Sequoia NHIN Authorization Framework v3.0;
+eHealth Exchange Authorization Framework v4; TEFCA QTF v2).
+
+**Purpose of use** (decision A24). Required by default: a request whose token
+carries no purpose of use (an IUA `purpose_of_use` claim, or RAR
+`authorization_details`, RFC 9396) is a `403` at the gateway. §13.4 says a
+deployment "MUST NOT rely on a node inferring it from the query", and
+forwarding a request without one leaves exactly that inference to the node. A
+deployment relaxes it only by declaring `purpose_of_use.required = false`,
+recorded in its §13.4 page.
+
+**`OPTIONS {base}/`** (decision A23) answers `401` without authentication, and
+the JWKS is public. §7a.2 says the endpoint list "MUST be subject to the
+gateway's normal authentication" and that a deployment "MAY restrict the detail
+returned to unauthenticated callers"; FerroFED takes the stricter sentence, and
+the ambiguity is held on #17 (T158). Public keys are public material (RFC 7517),
+and a node is configured with the gateway's `jwks_uri` at admission anyway.
+
+**The §13.4 decisions** (#84, CP-39). FerroFED documents its own answers and
+ships an operator template for what only a deployment can answer:
+
+1. **The identity verified across the trust boundary.** Gateway to node: the
+   gateway's organisation identity, the `client_id` its assertion asserts,
+   verified by the node's authorization server against its own client
+   registry. Caller to gateway: the issuer and subject of a validated token and
+   the organisation it names. The authentic organisation register (URA in the
+   Netherlands) is the deployment's to name.
+2. **Who authenticates the end user.** The requesting organisation does.
+   FerroFED verifies the token that organisation's authorization server issued
+   and never re-authenticates the user; the node relies on the conveyance JWT.
+3. **Purpose of use.** It travels in the caller's token, is relayed to every
+   node, and is required by default.
+4. **What the token is bound to.** Bearer by default at both hops; DPoP or
+   mTLS-bound tokens can be required per deployment and per endpoint.
+5. **What the technique does not cover.** Addressed in FerroFED: patient
+   identifiers never reach a node, the caller's token is never forwarded,
+   tokens are audience-restricted where the node's authorization server allows
+   it, keys rotate, consent is never inferred from localization. Addressed by
+   agreement: admission (§12b), the trust list of caller issuers, the
+   organisation register, audit and supervision (§2.2), logging and liability.
+
+**Where the reference implementation is laxer.** Recorded on #17 and refused
+here:
+
+- the gateway authenticates no caller, yet claims CP-17;
+- it parses the inbound JWT's `sub` "without verifying (already verified
+  inbound)" and signs that value into an `act` claim of its own client
+  assertion: a confused deputy, the gateway lending its key to an unchecked
+  statement about the end user;
+- `act` sits in a client assertion, where RFC 7523 defines none and RFC 8693
+  does not place it, so a node never demonstrably sees it (N24);
+- its shipped outbound profile is `passthrough`, which replays the caller's
+  token to every node (RFC 9700 §2.3);
+- every PIX failure becomes `not-resolved` (section 6);
+- its assertions are RS384 only.
+
+## 8. The registry and storage
+
+Research: #20. The gateway holds no clinical data. Its state has four origins,
+and each lives where its origin puts it (decision A25; the specification is
+silent on storage, so this section is FerroFED's own).
+
+| State | Origin | Where it lives |
+|---|---|---|
+| Organisations, nodes, endpoints, node identifiers, configured `system_id` | the operator, at admission (§12b.1) | a reviewed bootstrap document, loaded into an immutable snapshot |
+| Observed `creating_system_id` to node (N21) | learned from result rows | an in-memory map, written by a task off the request path |
+| The `ehr_id` to node index (§12.5.1 step 3) | learned from resolution and probes | a bounded in-memory LRU |
+| Resolution bindings (§12.5.1 step 2) | per client session | in memory, keyed by the session (decision A20) |
+| Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log, a counter, an optional webhook |
+| Stored-query definitions (N44) | a client `PUT` | the one durable store, behind `DefinitionStore` |
+| Outbound credentials | the operator | `_file` secrets per endpoint |
+
+**Membership is configuration.** The bootstrap document is TOML
+(`[[organisation]]`, `[[node]]`, `[[endpoint]]`, `[[node.identifier]]`) with
+`deny_unknown_fields` throughout, or a FHIR R4 `Bundle` of `Organization` and
+`Endpoint` resources, the form N19 recommends, with a registered connection
+type on every `Endpoint` and exactly one managing organisation (N20). It is
+validated strictly and published as an immutable snapshot through `arc-swap`.
+A query takes the snapshot once at entry and uses it to the end, so a reload
+never changes membership under a running query. Admission is a reviewed act,
+so there is no registry write API; the document's own change process (review,
+deploy, reload on `SIGHUP` or a file watch) is its audit trail. An admin
+surface would need its own authorization design and has its own issue when it
+is planned.
+
+**The three namespaces** (N32, §12a.1) are three newtypes, `NodeId`,
+`EndpointId` and `SystemId` (the last through `openehr-base`'s lexical rule),
+in three maps, with no conversion between them.
+
+**Learned state.** The observed `creating_system_id` map only adds candidates,
+so a stale entry is harmless. An index insert that finds the same `ehr_id` at
+another node raises the §12b.2 alarm. On a miss after a restart, or on another
+gateway instance, routing falls through to the explicit target, which is
+RECOMMENDED anyway, or to the ask-all probe for reads (N41). A miss costs a
+probe, never a wrong route.
+
+**No patient-derived data at rest** (decision A26). Nothing derived from a
+patient identifier is written to disk: not the identifier, not a keyed hash of
+it, not a result row. The reference implementation stores resolution bindings
+as HMAC-SHA256 values in PostgreSQL, which is pseudonymised personal data held
+for a performance gain the session-scoped design does not need.
+
+**Incidents are events.** An `ehr_id` claimed by two nodes fails the request
+with `409` listing the claimants (N42) and emits an integrity incident: a
+structured `tracing` event at `ERROR` with a stable kind (`EhrIdCollision`,
+`IndexInsertCollision`), a counter
+(`ferrofed_integrity_incidents_total{kind}`) and an optional webhook. It carries
+the `ehr_id` and the claiming endpoints, never a patient identifier. The
+operator's log pipeline is the durable record, where each participant's audit
+already lives (§2.2). The request waits on none of it.
+
+**Stored queries** (§12.7, N44, #77) are the one state that needs a store.
+A client registers a federated stored query with
+`PUT {base}/v1/definition/query/{name}/{version}`, and N44 makes each version
+immutable: a second `PUT` of a held name and version MUST be refused. That
+version must outlive the process, because a client that registered it invokes
+it by name after any restart, and a refusal that held before a restart must
+still hold after it. Configuration cannot carry a client write, and memory
+does not survive a restart, so the definitions need a durable store. They are
+written once and never changed, so
+`DefinitionStore::insert_if_absent((name, version), aql)` is the whole write
+interface:
+
+- **`redb`** (the default, one gateway instance): the insert runs in one write
+  transaction, so a second `PUT` of a held pair fails atomically, which is the
+  immutability rule with no race. `redb` is the family's embedded store
+  (FerroBRIDGE's identity store, FerroTERM's concept store);
+- **PostgreSQL 18** (an optional feature, where several gateway replicas
+  run): the same interface, with a `UNIQUE (name, version)` constraint as the
+  race guard. A `redb` file is opened by one process at a time, so each replica
+  would hold its own copy: a version registered on one replica would be unknown
+  to the next, and two replicas could each accept a different first `PUT` of
+  the same name and version, which breaks the immutability rule. One shared
+  database makes a registered version visible to every replica and makes the
+  refusal hold across them;
+- **read-only**: definitions loaded from files and `PUT` answered `405`, so
+  several instances share definitions with no shared database.
+
+Reads go through an in-memory cache of immutable versions, which never needs
+invalidating. A stored query whose subject is a literal is refused; the
+subject is always a `$parameter`. SQLite is not a candidate: `rusqlite` links C
+`libsqlite3`, and the family is pure Rust.
+
+**Nothing on the clinical path waits on storage** (#40). The types that
+execute a federated query hold no store handle, and a test pins it.
+`DefinitionStore` is reached only from the definition routes and the
+name-expansion step, which reads the cache. The reference implementation states
+the same invariant and breaks it: its identity pipeline reads and writes the
+binding table on the request thread.
+
+**Membership change.** An added or re-addressed node applies to queries that
+start after the reload. A removed node finishes the queries already running
+and is never asked again, and bindings and index entries naming it are dropped
+at the swap. A suspended endpoint (a `status` other than `active` in the
+document) is reported `excluded` with an operator-policy reason (§11.1) and is
+not contacted. §12b.3 leaves revocation open, so these rules are FerroFED's
+own, held on #17 as the behaviour to put to the working group.
+
+## 9. Fan-out, completeness, timeouts and the merge
+
+Research: #21.
+
+**Dispatch.** One `tokio` task per in-scope endpoint under a `JoinSet`. A single
+deadline is fixed at entry: the configured overall budget, or the client's
+`Prefer: wait` when that is shorter, never longer (§11.5). Each request carries
+a per-node timeout cut down to the time left. When the deadline fires, the
+remaining tasks are aborted; dropping one request touches no other (no
+cascade), each abandoned node is `time-out` with the elapsed time (§9.5), and a
+late answer has nowhere to go. There is no hedging: hedged requests need
+replicas of the same data (Dean and Barroso, "The Tail at Scale", CACM 56(2),
+2013), and federation nodes hold different data. There is no retry inside the
+client's budget.
+
+**Classification.** A reached node that answered an HTTP error is
+`node-error`, never `offline`. A refused connection, a DNS failure or a TLS
+failure is `offline`; a connect or read timeout is `time-out` (§11.1, N16). A
+node's own consent refusal has no specified signal in ITS-REST 1.1.0, so it is
+`node-error` until 1.0 says otherwise (held on #17, T151).
+
+**The decision** is a pure function from the outcomes to a status, built after
+the envelope, so a failure carries it (§11.4, CP-30):
+
+```mermaid
+stateDiagram-v2
+    [*] --> Collect
+    Collect --> Envelope: all tasks settled or the deadline fired
+    Envelope --> Decide: meta.federation built from every outcome
+    Decide --> Ok200: no in-scope failure
+    Decide --> Fail504: all-or-nothing, an offline or time-out node
+    Decide --> Fail424: all-or-nothing, node-error or resolver unavailable only
+    Decide --> Partial200: partial requested, rows from active nodes only
+    Ok200 --> [*]
+    Fail504 --> [*]
+    Fail424 --> [*]
+    Partial200 --> [*]
+```
+
+- The default is all-or-nothing (N37). An `offline` or `time-out` node fails
+  the query `504`; a `node-error` node fails it `424`; `504` wins when both
+  occur.
+- `not-resolved` (patient unknown) and `consent-denied` are answers and never
+  fail the query (§11.3, N6). A resolver that could not answer is an in-scope
+  failure (section 6, decision A17).
+- `complete` is true only when every in-scope node is `active`.
+- A client that sends `openEHR-federation-completeness: partial` gets the rows
+  that arrived and a `200` that says what is missing. `all` is accepted when
+  requested explicitly.
+
+**The merge**, in order (FerroFED's own sequence where the specification gives
+none):
+
+1. decode each `active` node's rows positionally against the façade's own
+   `SELECT`, never against node-reported column names;
+2. version-identity dedup, if requested (below);
+3. `DISTINCT` over the positional value tuple under the Tier equality (N13),
+   after dedup, because dedup decides which copy's provenance survives;
+4. `ORDER BY` under the Tier comparator and the tie-break;
+5. `OFFSET` and `LIMIT`;
+6. re-inject the subject and ENDPOINT projections (N5, §9.3);
+7. render `columns[]` from the façade AQL (N17, CP-35).
+
+The k-way merge is the optimised form of step 4: each node's stream is sorted
+once its agreement check passes, so a binary heap over the node heads yields
+the global order in `O(N log m)` for `N` rows over `m` nodes and stops after
+`offset + limit` rows.
+
+**The Tier comparator.** AQL leaves the order of nulls, the collation of
+strings and the order of data values undefined (`master03-syntax.adoc` §ORDER
+BY), so two conformant CDRs can sort the same values differently. The gateway
+owns one total order, completing the crates' partial orders. For two values of
+one `ORDER BY` column, the first rule that applies decides:
+
+1. **nulls** are last under `ASC` and first under `DESC`, the convention
+   PostgreSQL uses (FerroFED's own);
+2. **class rank** orders a cross-class pair: boolean, then number, then
+   temporal, then string, then data value object, then other JSON;
+3. **within a class**: numbers exactly, as decimals parsed from the JSON text,
+   never through `f64`; temporals by `openehr-base`'s `PartialOrd` over instants
+   (an offset is honoured); strings by Unicode code point, which is
+   reproducible where a locale collation is not (FerroFED's own); data values
+   by `openehr-rm`'s `less_than` where `is_strictly_comparable_to` holds;
+4. **fallback**: the canonical JSON of the value by code point, deterministic
+   and documented.
+
+The row order is the `ORDER BY` keys in turn, then `endpoint_id`, then the
+row's uid as a full `ObjectVersionId`, then the positional row under rule 4, so
+a repeated query returns the same bytes (§11.6.1 MUST). An `ORDER BY` path that
+is not in the `SELECT` is added to the dispatched `SELECT` as a hidden column
+and stripped after the merge (decision A28); the reference implementation
+refuses such a query. The reference implementation compares every
+non-numeric value by its string form, so `2026-01-01T10:00:00+02:00` sorts
+after `2026-01-01T09:00:00Z` although it is earlier, and a `DV_QUANTITY` orders
+by its `toString()`.
+
+**Making the `LIMIT` pushdown provably correct** (decision A27). §11.6.1
+justifies dispatching `LIMIT n` per node by saying that "under a total order the
+global top `n` is necessarily contained in the union of the per-node top `n`".
+That is true only if every node orders by the order the Tier uses, which AQL
+does not fix for nulls, collation, data values or ties at the cut. A node that
+sorts differently returns a top `n` that looks right and is not, the failure
+§11.6.3 calls the worst because a client cannot detect it. Distributed engines
+avoid the problem by owning the comparator end to end: Presto pushes TopN to a
+connector only where it can prove the ordering semantics match (Sethi et al.,
+ICDE 2019), and the threshold algorithm's correctness rests on each source's
+sorted access agreeing with the aggregation (Fagin, Lotem and Naor, JCSS 66(4),
+2003). The gateway cannot fetch unbounded within its budget, but it can verify
+what it receives:
+
+1. where the `FROM` binds a versioned object whose uid path is known
+   (`c/uid/value` for `COMPOSITION c`), append `ORDER BY <uid path> ASC` after
+   the client's keys in the dispatched AQL, so within one node the node's order
+   matches the Tier's on every key it can see;
+2. dispatch `LIMIT n + 1`;
+3. check each node: a node that returned more than `n` rows was cut, and if its
+   rows are not non-decreasing under the Tier comparator, or rows `n` and
+   `n + 1` tie on every pushed-down key, its top `n` is not provably the
+   Tier's. That node becomes `node-error` with the error
+   `result order disagrees with the federation order` or
+   `ambiguous cut at LIMIT`, the specification's own meaning of `node-error`
+   ("a response the gateway could not use"). A node that returned `n` rows or
+   fewer was not cut, and the Tier sorts everything it got.
+
+With these steps every row of the true global top `n` is in the union of the
+per-node answers, or the node that would have broken it is reported. The cost
+is one comparison per row received, one extra row per node, and a refusal
+exactly where a vendor's order makes a correct answer impossible. The
+precondition the specification's argument omits is held on #17. The
+deprecated `TOP n` is treated as `LIMIT n`.
+
+**`OFFSET`** (decision A29, #53). Bounded `k + n`: dispatch `LIMIT k + n + 1`,
+run the agreement check, merge, and slice `[k, k + n)`. The window is capped by
+`max_offset_window`, 1000 rows per node by default, and a request past it is
+`400` naming the bound. `OPTIONS` declares `paging.offset_strategy: "bounded"`
+and `paging.max_window`. The spelling is FerroFED's own: §11.6.2 admits three
+strategies, but the schema description and `future.adoc` name only reject and
+cursor (held on #17). The ITS-REST `offset` member follows the same strategy
+(section 4).
+
+**Aggregates** (decision A30, #54). With no `DISTINCT`, no `COUNT(DISTINCT …)`,
+no dedup mode and no non-aggregate column beside them:
+
+- `COUNT(*)` and `COUNT(path)`: the sum of the node counts;
+- `SUM` over numeric values: the sum of the non-null node sums, or `NULL`;
+- `MIN` and `MAX` over numeric and temporal values, under the Tier comparator;
+  not over strings (the collation problem with no row stream to check) and not
+  over data value objects;
+- `AVG` over numeric values, rewritten in the dispatched AST to `SUM(x),
+  COUNT(x)` and recombined exactly in decimal arithmetic.
+
+These are the distributive and algebraic cases of Gray et al. ("Data Cube",
+DMKD 1(1), 1997); a holistic aggregate (`MEDIAN`, `COUNT DISTINCT`) does not
+decompose. Mixing aggregates with plain columns would need `GROUP BY`, which
+AQL 1.1.0 does not have, so §11.6.3's `GROUP BY` rule has no object (held on
+#17, T153). Anything else is `400` naming both alternatives (§11.6.3). An
+undirected aggregate is `400` (N14); a directed single-node aggregate passes
+through.
+
+**Dedup** (decision A32, #56). `none` by default (N15), `version-identity` on
+request, with the header `openEHR-federation-dedup: version-identity`
+(FerroFED's spelling, since the specification leaves the name to the gateway
+through `request_header`). The key is the full `ObjectVersionId` from the
+row's uid column, parsed by `openehr-base`. §10.2 says the import signature is
+the same `object_id` under two different `creating_system_id`s, while §10.3's
+own scenario has both copies hold `8849…::cdr-a::1`, because an import retains
+the original uid; the second matches the RM's copy semantics. So the duplicate
+is the whole version id seen at two endpoints, and the keeper is the copy from
+the endpoint whose `system_id` equals the uid's `creating_system_id`, else the
+lowest `endpoint_id`. Two versions of one object both survive, which §10.2
+requires for version-history queries. Rows with no uid pass through, and every
+suppression is recorded in `meta.federation.dedup` (§10.3). The reference
+implementation groups by `object_id` alone and so collapses a version history.
+The contradiction between §10.2 and §10.3 is held on #17.
+
+**Not built.** The materialised cursor (§11.6.4, #60) and asynchronous queries
+(§11.7, #59) both need gateway-held state with an expiry and, with more than
+one instance, request affinity, which cuts against keeping state off the
+clinical path (decision A31). `Prefer: respond-async` is ignored, which RFC 7240
+allows, and the request is answered synchronously. Both issues stay at P3.
+
+**What `OPTIONS {base}/` declares.**
+
+| Facility | Decision | Issue | Declaration |
+|---|---|---|---|
+| best-effort `partial` | offered, opt-in per request | #50 | `completeness.best_effort: true`, `opt_in` with the header and value |
+| timeouts | per node and overall; `Prefer: wait` shortens | #37, #51 | `timeout {per_node_ms, overall_ms, policy: "abandon-and-mark"}` |
+| `ORDER BY` with `LIMIT` | total-order pushdown and the agreement check | #52 | the agreement rule is documented on the site |
+| `OFFSET` | bounded `k + n`, capped | #53 | `paging {offset_strategy: "bounded", max_window}` |
+| cursor | not built | #60 | `offset_strategy` is never `"cursor"` |
+| aggregates | `COUNT`, `SUM`, `MIN`, `MAX`, `AVG` | #54 | `aggregates.decomposable` |
+| `DISTINCT` | at the Tier, after dedup | #55 | none |
+| dedup | `none` by default, `version-identity` on request | #56 | `dedup {default, modes, request_header}` |
+| async | not built | #59 | absent |
+| stored-query registry | offered, `redb` by default | #77 | `definition.stored_query_registry: true` |
+
+**Invariants**, each a `proptest` property over generated node result sets:
+
+1. merge with pushdown (`LIMIT n + 1` per node) equals sort-everything then
+   `LIMIT n`, for nodes sorted by the Tier comparator;
+2. for nodes sorted by a different order, the merge equals that oracle or
+   reports `node-error` for a node that was cut, and never returns a different
+   top `n`;
+3. any permutation of node arrival and of rows within equal keys yields
+   byte-identical output;
+4. every registry member appears in `endpoints[]` exactly once, no failed node
+   contributes a row, and `complete` is true exactly when every in-scope
+   outcome is `active`;
+5. the decision table holds for every outcome vector, and the failing body
+   still validates against `federated-result-set.schema.json`;
+6. dedup leaves at most one row per full `ObjectVersionId`, keeps the
+   originating copy when present, leaves rows with no uid untouched, keeps two
+   versions of one object, and records exactly the suppressed count;
+7. `DISTINCT` is idempotent and leaves no two rows equal under the Tier
+   equality;
+8. recombined `COUNT`, `SUM`, `MIN`, `MAX` and `AVG` equal the aggregate over
+   the union in decimal arithmetic, ignoring nulls as AQL does;
+9. bounded `OFFSET` equals the oracle's slice within the cap and is `400` past
+   it;
+10. the effective budget never exceeds the configured overall budget, a node's
+    `latency_ms` never exceeds it plus a scheduling epsilon, and abandoning one
+    node never changes another node's outcome (checked with `wiremock`
+    delays);
+11. the Tier comparator is a total order: reflexive equality, antisymmetry,
+    transitivity, and consistency with the Tier equality.
+
+## 10. The wire types
+
+Research: #23 (decision A33). FerroFED generates nothing. Every
+machine-readable input it consumes is generated upstream: the ITS-REST 1.1.0
+contract in `openehr-its`, the RM and BASE in `openehr-rm` and `openehr-base`,
+and the FHIR R4 model in `fhir-types`; the AQL front end is `openehr-query`. A
+need one of those crates does not meet is an issue on that crate's tracker,
+never a local copy, and only a corpus too large to model by hand would justify
+a generator here.
+
+The specification's two schemas define what FerroFED adds: one
+`meta.federation` object inside the ITS-REST `ResultSetMetadata` extension
+point, the per-query endpoint outcome with its closed set of eight statuses,
+and the `OPTIONS {base}/` body. Together that is about 45 named members, one
+closed enum, one single-value enum and four conditionals. Those types are
+hand-written in `ferrofed-wire`: `FederationMeta`, `EndpointOutcome`,
+`EndpointStatus` (eight variants, kebab-case), `TimeoutBudget`, `DedupRecord`,
+`OptionsRoot`, `MemberEndpoint`, `MembershipStatus` (a string newtype, because
+the schema makes it open on purpose), the header names and the status-code
+table. `$defs/itsRest`, the schema's restatement of ITS-REST, is never
+re-modelled: `openehr-its` carries it.
+
+A generator was weighed and refused. Every federation object is
+`additionalProperties: true` by design ("closing it would forbid the very
+extensions §11.6.4 and §14.1 ask for"), and typify 0.8.0 drops such members on
+deserialize; four of the rules are `if`/`then` conditionals it does not support
+(typify #480 and #927, open); its draft 2020-12 support is a stated plan
+(#579). Open objects keep their unknown members in a
+`#[serde(flatten)] extra` map, so a client round-trips members it does not
+know. The conditionals are invariants of construction: a constructor per
+status makes `error` and `latency_ms` present exactly when the schema requires
+them, and the `OPTIONS` builder enforces `opt_in` with `best_effort` and the
+stored-query pair.
+
+Three test layers keep the schemas load-bearing, after FerroBRIDGE's mapping
+AST (its architecture §4.2):
+
+1. **Schema validation.** Every envelope and `OPTIONS` body FerroFED emits, in
+   unit and end-to-end tests, validates against the vendored schemas with
+   `jsonschema` (draft 2020-12). Property tests generate outcomes over every
+   status. The specification's own whole-envelope examples in
+   `result-set.adoc` and `rest-facade.adoc` are extracted and validated, as its
+   `tools/check-schemas.sh` does with ajv.
+2. **Drift.** A test walks each schema's `properties`, `required` and `enum`
+   outside `$defs/itsRest` and fails when a member, a required member or an
+   enum value has no Rust counterpart. A member that 1.0 adds fails it at the
+   re-pin (#17) until it is modelled.
+3. **Semantics no schema states.** `columns[]` is the gateway's own rendering
+   (CP-35); `latency_ms` is the gateway's measurement, never the node's;
+   `complete` is true only when every in-scope node is `active`.
+
+## 11. Crate layout and publishing
+
+Research: #24. The family split holds: specification-derived libraries in
+`crates/`, the application in `app/`, development tools in `tools/`. Cargo
+dependency edges enforce the boundaries mechanically, because a crate cannot
+use what it does not list. That reproduces the content of the reference
+implementation's five ArchUnit rules (`aqlPipelineIsPure`,
+`registryStaysALeaf`, `definitionStaysALeaf`,
+`identitySpiDependsOnNothingInternal`, `fanOutReachesNoPersistence`) as compile
+errors instead of a test (decision A34).
+
+| Crate | Responsibility | Depends on | Must not depend on |
+|---|---|---|---|
+| `crates/ferrofed-wire` | the federation wire additions of section 10 | `serde`, `serde_json`, `openehr-its` (`rest`) | anything else in FerroFED |
+| `crates/ferrofed-aql` | the rewrite of section 4; no I/O | `openehr-query`, `openehr-base`, `ferrofed-wire` | registry, identity, engine, any HTTP |
+| `crates/ferrofed-merge` | the merge of section 9: order, `DISTINCT`, dedup, aggregates, `complete`; pure | `openehr-rm`, `openehr-base`, `openehr-its` (`rest`), `ferrofed-wire` | registry, identity, I/O |
+| `crates/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base`, `ferrofed-wire` | aql, merge, identity, engine |
+| `crates/ferrofed-identity` | the role traits of section 6 and `PatientRef`; no FHIR | `ferrofed-wire`, `openehr-base` | registry storage, engine, `fhir-types` |
+| `crates/ferrofed-identity-ihe` | the PIXm ITI-83 resolver and localizer, the mCSD directory sync, the PMIR hooks | `ferrofed-identity`, `fhir-types` (`r4`, `resources`), `reqwest` | the core's internals |
+| `crates/ferrofed-identity-xcpd` | the XCPD ITI-55 initiating-gateway localizer, with #85; the only crate with SOAP 1.2, HL7 v3 and SAML XUA dependencies | `ferrofed-identity` and its own protocol stack | the core's internals |
+| `crates/ferrofed-identity-nl` | the Annex B adapters (NVI, Mitz, LRZa), with #87 | `ferrofed-identity` | the core's internals |
+| `crates/ferrofed-engine` | dispatch and fan-out on `rest-client`, the budgets, the completeness decision, follow-up routing on `creating_system_id`; reads the registry through the snapshot only | the crates above except the adapters, `openehr-its` (`rest-client`) | any storage implementation (#40) |
+| `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, authentication (`openehr-sdt` scopes, `jsonwebtoken`), telemetry, health, the storage implementations, wiring | everything | is never depended on |
+| `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
+
+Each identity binding crate depends only on the traits in
+`ferrofed-identity` and its own protocol stack, so it can move to FerroPIX
+later, or be replaced by a client of a FerroPIX instance, without a change to
+the engine or the server (section 6). The server enables the binding crates a
+deployment configures, and a deployment that enables none of them compiles
+none of their dependencies.
+
+```mermaid
+flowchart TD
+    server["app/ferrofed-server"] --> engine["ferrofed-engine"]
+    server --> ihe["ferrofed-identity-ihe"]
+    server --> nl["ferrofed-identity-nl"]
+    server --> xcpd["ferrofed-identity-xcpd"]
+    engine --> aql["ferrofed-aql"]
+    engine --> merge["ferrofed-merge"]
+    engine --> registry["ferrofed-registry"]
+    engine --> identity["ferrofed-identity"]
+    ihe --> identity
+    nl --> identity
+    xcpd --> identity
+    aql --> wire["ferrofed-wire"]
+    merge --> wire
+    registry --> wire
+    identity --> wire
+    engine --> its["openehr-its rest-client"]
+    aql --> query["openehr-query"]
+    merge --> rm["openehr-rm"]
+    ihe --> fhir["fhir-types r4"]
+```
+
+**Publishing** (decision A35). Nothing is published to crates.io for now, and
+the whole publishing lane is built so that publishing is a one-line switch:
+
+- the root `Cargo.toml` sets `[workspace.package] publish = false`, and every
+  `crates/*` member inherits it with `publish.workspace = true`; flipping that
+  one value to `true` makes the library crates publishable. `app/*` and
+  `tools/*` keep a hard `publish = false` of their own;
+- from v0.0.2, `publish-crates.yml` (#32) runs on every release tag and
+  publishes exactly the members whose cargo metadata says publishable, which
+  today is a successful no-op;
+- CI runs the package and `publish --dry-run` job on every pull request, so the
+  crates stay publishable while nothing is published;
+- the crate-version guard and its bump hook are live from the first crate, so
+  a member's packaged content never changes without its version.
+
+Flipping the switch needs two owner steps: the `crates-io` environment, and a
+Trusted Publisher per crate on crates.io. Every `pub` surface is designed as
+API from the start. `ferrofed-wire` would be the first candidate, because any
+client of any federation gateway reads `meta.federation`.
+
+## 12. The conformance instrument
+
+Research: #25. Conformance is measured from the first test (#41).
+
+**The matrix.** `conformance/matrix.tsv` holds one row per §17 point, in
+specification order, 41 rows (CP-1 to CP-40 and CP-33a):
+
+```text
+cp	actor	requirements	tracks	status	issue	reason
+CP-1	Gateway	N1	1	planned	#38	-
+CP-18	Node	N26	7	node-profile	#93	scored against the member CDRs, not the gateway (§16.2)
+CP-20	Operator	N19	6	operator	#74	verified at admission or in the registry (§16.2)
+```
+
+The `actor`, `requirements` and `tracks` columns are derived by
+`scripts/conformance/matrix.sh --derive` from the vendored `conformance.adoc`,
+and the check fails when a fresh derivation differs, so a re-pin shows new or
+changed points as a reviewable diff. `status`, `issue` and `reason` are the
+only hand-held columns, with this vocabulary:
+
+- `covered`: at least one marked test exists and CI runs it;
+- `planned`: no test yet, the issue names the work; allowed until #89 requires
+  none;
+- `deferred`: a Gateway point FerroFED does not score yet, with a reason and an
+  issue;
+- `node-profile`: a Node point (CP-18, CP-19, CP-27), scored against the
+  member CDRs in the end-to-end harness (#93; decision A38);
+- `operator`: an Operator point (CP-20, CP-33a, CP-39), verified by the
+  admission check (#79) or the registry.
+
+§17 says "a gateway is not marked down for a point whose actor is not the
+gateway", so Node and Operator rows never count against the gateway's score.
+
+**The marker** is one line immediately above `#[test]` or `#[tokio::test]`,
+naming CP ids and tracks only: `// conformance: CP-26 CP-38 track-10`. It is a
+structural tag like a lint marker, so `.claude/rules/comments.md` gains it on
+its allowed list (decision A36). A test may score several points.
+
+**The check**, `scripts/checks/conformance-matrix.sh`, runs in tier 1, offline,
+and fails when:
+
+1. the derived columns differ from a fresh derivation;
+2. a marker names a CP or a track that is not in the matrix;
+3. a `covered` row has no marker;
+4. a `deferred`, `node-profile` or `operator` row carries a marker on a gateway
+   test, or lacks its issue and reason;
+5. a marker does not sit directly above a test attribute;
+6. a requirement in the vendored `requirements.adoc` is reached by no CP and no
+   track and is not in `traceability-exceptions.txt`.
+
+The sixth check recomputes the specification's closure independently, because
+the vendored `tools/traceability.sh` never computes track reachability: its awk
+pattern expects `| <n>` where `testing.adoc` writes `| [[track-1]]1`, so the
+`tracks` column of `traceability.tsv` is `-` for every row (held on #17). The
+CI test run already fails on a failing marked test, so the check stays static.
+A `conformance` job renders a badge (`gateway CP n/35`, the FerroBRIDGE
+pattern) and the matrix into the docs site.
+
+**Deferral authority** (decision A37). Only the owner defers a Gateway point,
+by a decision recorded on the issue the row names; a session may propose one
+and never applies it. The reason cites the specification's own optionality
+(MAY, provisional, §18) or an open blocking issue. Track 8 is deferred from the
+start, on §16.3's "provisional" and §18.
+
+The reference implementation discovers coverage from JUnit tags, which is the
+right shape, but transcribes the CP-to-N map by hand, which drifts; FerroFED
+derives it.
+
+## 13. The test topology
+
+Research: #27.
+
+**Offline**, on every `cargo nextest run`: `wiremock` 0.6.5 nodes, the
+in-testkit PIXm Manager, localizer, consent pre-filter and capturing proxy in
+process, no Docker. The AQL golden cases and FerroFED's strict corpus, the
+merge properties, schema validation and every fault status against stub nodes.
+
+**End to end**, only with `FERROFED_E2E=1`, through `ferrofed-testkit` on
+`testcontainers` 0.28, exactly the FerroBRIDGE gate: every container test checks
+the variable first and returns early, and CI runs an `e2e (containers)` job.
+
+| Role | Image, pinned by tag and image-index digest (2026-10-01) |
+|---|---|
+| node A, FerroEHR | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6`, with `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` |
+| node B, EHRbase | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a`, with `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` |
+| node C, for three-node cases | a second FerroEHR on the same pins (decision A41) |
+| the stored-query HA backend, when tested | `postgres:18.6`, pinned by digest in the change that adds it |
+| PIX Manager | the in-testkit PIXm fake, no image (decision A39) |
+| capture and fault proxy | in-testkit, one per node, no image |
+| localizer, consent pre-filter | in-testkit stubs |
+| gateway under test | in process on the library run path; the release image in one smoke test |
+
+Two products, because the differences between them are exactly what the
+federation must absorb: EHRbase 2.35 did not implement `OPTIONS` on its API
+root, and the §9.2 alias example is product behaviour. EHRbase ships its
+database as `ehrbase-v2-postgres:16.2`; the family rule is PostgreSQL 18, and
+FerroFED applies it to its own database while a member node runs its product's
+documented image (decision A40). A new image is a `PinnedImage` constant plus a
+`docs/VERSIONS.md` row the versions guard checks, and pin freshness watches the
+tags.
+
+**The PIX Manager.** No lightweight container answers `$ihe-pix` and accepts
+ITI-104 seeding on its own: HAPI FHIR does not implement the operation out of
+the box, IPF is a Java library rather than a server image, and FerroPIX, the
+family's planned MPI, has no code yet. The testkit implements exactly the two
+transactions the tracks need (ITI-83 `GET [base]/Patient/$ihe-pix` and ITI-104
+conditional `PUT Patient?identifier=`) in Rust on `fhir-types` R4, held to the
+PIXm IG's request and response shapes by tests, with fault knobs. A
+differential run against FerroPIX replaces it as evidence once FerroPIX exists.
+
+**Capture and faults.** Toxiproxy works at TCP and cannot record a request
+line or inject an HTTP status; mitmproxy brings a Python runtime into the
+harness. The testkit's capturing reverse proxy, one in front of each node,
+journals method, path, query, headers and body, and injects faults. Track 10 is
+judged on that journal, on the node's side of the wire, because "a gateway that
+sanitises its logs but not its dispatches passes the wrong test" (§16.3).
+
+| Status | How the harness produces it |
+|---|---|
+| `active` | unmodified |
+| `offline` | the proxy refuses the connection, or the node container is stopped |
+| `time-out` | the proxy delays past the per-node budget, and past the overall budget for N38 |
+| `node-error` | the proxy overrides with `500`, or forwards a node's own `4xx` |
+| `not-resolved` | the PIXm fake holds no cross-reference for that node's domain; and the fake failing, for the resolver-unavailable rule |
+| `consent-denied` | the consent stub denies at Step 1 |
+| `excluded` | the registry or the directive excludes the node |
+| `not-localized` | the localizer stub omits the node; an unreachable localizer fails closed (CP-5) |
+
+**The adversarial tracks.** Track 10 runs the four carriers from the golden
+cases and passes on zero occurrences in any node journal or a `400`; its
+converse asserts a forwarded write body is byte-identical. Track 11 creates the
+same `ehr_id` on two nodes with `PUT /ehr/{same-uuid}` and expects a `409` and
+an incident, never a served row or an applied write. Track 6 creates a
+composition on node A and imports it to node B with its `creating_system_id`
+kept, which exercises routing and dedup. A slow body and a reset after headers
+exercise partial reads.
+
+**Synthetic data.** Every value is invented for the test. Patient identifiers
+live in the example arc `urn:oid:2.999.1.<n>` that ITU-T X.660 and ISO 9834
+reserve for examples, with non-numeric values (`ffd-test-0001`) no national
+scheme validates. `ehr_id`s are fixed UUIDs per scenario. Compositions are built
+from the RM types in `openehr-rm` on the vendored `International Patient
+Summary.opt`, and every seed goes over ITS-REST alone (`PUT /ehr/{ehr_id}`,
+`POST /definition/template/adl1.4`, `POST /ehr/{ehr_id}/composition`), never
+into a node's database, so the harness is product-neutral.
+
+**The differential run** (#94). The reference implementation's image refused an
+anonymous pull on 2026-10-01, so the run builds from the vendored tree's
+`Dockerfile` outside CI, or waits for a public image (decision A42). Its answers
+are evidence in a comparison; where they and the specification disagree, the
+specification wins.
+
+## 14. The milestone map
+
+Each milestone is a release; the issues are the plan, and the decisions above
+change what some of them carry.
+
+- **v0.0.1, setup and the architecture of record.** The setup issues (#5 to
+  #15) and this research program (#16 to #27). It closes when the owner has
+  decided the register, the re-pin to 1.0 has landed (#17), and the release
+  lane has been rehearsed (#14).
+- **v0.0.2, the workspace and the first federated query** (#28 to #41).
+  - #28 the workspace, blocked on the `openehr-*` 0.0.74 release, with the
+    `serde_json::Value` ban (A2);
+  - #29 the server, #30 the container, #31 the release lane at SLSA Build
+    Level 3; #32 the publishing lane, a successful no-op until the switch of
+    A35 flips;
+  - #33 the wire types (A33);
+  - #34 node dispatch on `rest-client` with `CallOptions` and
+    `CredentialsProvider`;
+  - #35 the AQL pipeline on the `external_ref` carrier (A3 to A10 in the first
+    increment);
+  - #36 the static registry and the development cross-reference;
+  - #37 the fan-out with the all-or-nothing decision;
+  - #38 `POST {base}/v1/query/aql` end to end over two nodes;
+  - #39 the testkit and the harness (A39 to A41);
+  - #40 the storage rule; #41 the conformance matrix (A36 to A38).
+- **v0.0.3, identity resolution** (#42 to #48). The PIXm client batched per PIX
+  Manager and usable against any PIX Manager (#42, A16, A18), the resolution step with the resolver-unavailable
+  rule (#43, A17), both carriers (#44), the hygiene guard with string-function
+  folding (#45, A4), ask-all (#46), the PIX Manager fake (#47, A39), and the
+  PMIR hooks (#48, track 8 deferred).
+- **v0.0.4, the federated answer** (#49 to #60). The endpoint report (#49),
+  completeness (#50), timeouts (#51), `ORDER BY` with `LIMIT` and the agreement
+  check (#52, A27, A28), bounded `OFFSET` (#53, A29), decomposable aggregates
+  (#54, A30), `DISTINCT` (#55), dedup on the full version id (#56, A32), the
+  status mapping (#57), CP-12 (#58, held draft T154). #59 and #60 are not built
+  (A31) and stay at P3.
+- **v0.0.5, the ITS-REST surface and follow-up routing** (#61 to #69). The
+  single-node proxy with `Location` unmodified and `subject_id` resolved (#61,
+  A12, A13), `ehr_id` routing (#62), collisions as events (#63), follow-up reads
+  (#64), writes (#65), the dedup write hazard (#66), observed
+  `creating_system_id` (#67), `DEMOGRAPHIC` at `501` through the generated
+  router (#68), base-URL neutrality (#69).
+- **v0.0.6, targeting and self-description** (#70 to #74). The directive on the
+  crate feature with the strict attribute set (#70, A1, A9), the headers (#71),
+  ENDPOINT attributes (#72), `OPTIONS {base}/` authenticated (#73, A23), the
+  registry on the FHIR model with `openehr-rest-query` (#74).
+- **v0.0.7, definitions and membership** (#75 to #79). Definition routing
+  (#75), template fan-out (#76), the stored-query registry on
+  `DefinitionStore` (#77, A25), definition fan-out (#78), admission with the
+  revocation rules of section 8 (#79).
+- **v0.0.8, security and the bindings** (#80 to #88). Caller authentication
+  (#80), onward authentication with token exchange where offered (#81), the
+  conveyance JWT and the purpose-of-use rule (#82, A21, A24), consent at the
+  node (#83), the §13.4 page (#84), the localization seam with the
+  registry-scoped PIXm localizer and the XCPD adapter crate (#85, A15), mCSD (#86), the
+  Annex B adapters in `ferrofed-identity-nl` (#87), the GF authentication tracks
+  (#88).
+- **v0.0.9, conformance** (#89 to #95). The matrix closed (#89), track 10
+  (#90), track 11 (#91), tracks 1 to 9 (#92), the node profile (#93, A38), the
+  differential run (#94, A42), the conformance statement (#95).
+
+## 15. The decision register
+
+Every choice this pass put to the owner, all decided by the owner on
+2026-10-01. The bracket names the report and its
+own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
+R4 is #23, #25 and #27).
+
+| # | Decision | Recommendation | Ground | Status |
+|---|---|---|---|---|
+| A1 | The `FROM ENDPOINT` directive [R1 D1] | `openehr-query`'s `federation` feature, not a documented split point | every token-level decision stays in the crate that owns the lexer; no FerroFED parser | decided (owner, 2026-10-01) |
+| A2 | Typed carriers [R1 D13] | adopt FerroEHR's `serde_json::Value` ban with the four seams of section 2 | a family rule; the seams are fixed by the ITS-REST wire | decided (owner, 2026-10-01) |
+| A3 | A patient query with no `EHR` containment [R1 D4] | wrap `FROM` in `EHR e CONTAINS …`, never refuse | AQL admits it, §5.4.3 makes the `ENTRY` carrier mandatory input, N7 requires the scope; refusing it refuses a query the specification admits | decided (owner, 2026-10-01) |
+| A4 | Identifier reconstruction [R1 D7] | fold string functions over literals and add a containment test to the value test | §5.4.1 "in any position"; `CONCAT('12','345')` passes both an exact test and a substring scan | decided (owner, 2026-10-01) |
+| A5 | An identifier with no namespace [R1 D8] | resolve only in a declared default issuing namespace; `400` when none is configured | §5.2 requires the namespace; the reference implementation's silent `"facade"` fallback is a divergence | decided (owner, 2026-10-01) |
+| A6 | An integer on the String identifier path [R1 D9] | `400`, never coerced, written or bound | `OBJECT_ID.value` and `DV_IDENTIFIER.id` are `String`; AQL types a bound parameter as its literal | decided (owner, 2026-10-01) |
+| A7 | The same subject value twice [R1 D11] | consumed once; two different values are `400` | the first reduces to one scope, the second does not (§7.1) | decided (owner, 2026-10-01) |
+| A8 | A query with no patient carrier [R1 D12] | answered only where the node set is defined: directed, or ask-all with no localizer; `400` otherwise | N4 keys localization on the patient | decided (owner, 2026-10-01) |
+| A9 | The ENDPOINT attribute names [R1 D10] | the §9.3 set, plus `p/id` until 1.0 settles §8.3 against §9.3; every other path `400` | the §8.3 example is the only place a client learns the syntax; `p/organization` is named by neither | decided (owner, 2026-10-01) |
+| A10 | ITS-REST `offset` and `fetch` [R1 D3] | follow the declared `OFFSET` and `LIMIT` strategies; both set and different is `400` | they are the same paging §11.6 governs; dropping them silently is the reference implementation's divergence | decided (owner, 2026-10-01) |
+| A11 | The `query` group [R1 D2] | FerroFED handlers over the generated DTOs | N37's `424`/`504` with `meta.federation` cannot pass through `ApiError` and belong in no ITS-REST crate | decided (owner, 2026-10-01) |
+| A12 | `GET /ehr?subject_id=` [R1 D5] | resolution input; route by id; `404` or `409` | N33 forbids dispatching the identifier; the specification is silent | decided (owner, 2026-10-01) |
+| A13 | `Location` on a routed answer [R1 D6] | unmodified until 1.0; the conflict with N1 and N28 held on #17 | N31 and §7a.3 say unmodified | decided (owner, 2026-10-01) |
+| A14 | The Step-1 seams [R2 D1] | one trait per role, one active implementation, outcomes not errors, per-seam budgets | §14, §5.2 and §14.3 keep the questions apart; N4's fail-closed rule presumes one localizer | decided (owner, 2026-10-01) |
+| A15 | XCPD ITI-55 [R2 D2, changed by the owner] | built in FerroFED with the localization seam in v0.0.8 (#85), as `ferrofed-identity-xcpd`, with the SOAP 1.2, HL7 v3 and SAML XUA dependencies confined to it | build what FerroFED needs inside FerroFED first and never block on an unbuilt sibling; the crate can move to FerroPIX later. The report had recommended leaving it unscheduled | decided (owner, 2026-10-01) |
+| A16 | The FHIR model [R2 D3] | `fhir-types` r4 with `resources`, compiled only in `ferrofed-identity-ihe` | the codegen rule refuses hand-written resource structs; the core never compiles FHIR | decided (owner, 2026-10-01) |
+| A17 | A resolver that cannot answer [R2 D4] | `not-resolved` with the error, `complete` cleared, `424` under all-or-nothing; only a `404` keeps N6's do-not-fail rule; best-effort may degrade it only when requested | a PIX outage must never look like an empty record; §11.1 does not separate the cases (held on #17) | decided (owner, 2026-10-01) |
+| A18 | Vendoring the bindings [R2 D9] | PIXm 3.1.0, mCSD 4.0.0, PMIR 1.6.0 (CC-BY-4.0) and Nuts GF 0.3.0 (EUPL-1.2), each with the issue that first reads it; not the ITI TF volumes or IUA until their terms are read | `.claude/rules/vendored-inputs.md`; the licences were read from each `package.json` | decided (owner, 2026-10-01) |
+| A19 | Pseudonyms [R2 D10] | accept a pseudonym or a direct identifier; never pseudonymise in the core; a regional adapter may | §5.3, §B.7; a pseudonym is personal data under the same hygiene | decided (owner, 2026-10-01) |
+| A20 | The resolution cache [reconciles R2 §5 with R3 D2] | session-scoped, in memory, TTL-bounded; no cross-session cache keyed by a hash of the identifier | §12.5.1 step 2 scopes the binding to the session; a keyed hash is pseudonymised personal data | decided (owner, 2026-10-01) |
+| A21 | Identity conveyance [R2 D5] | RFC 7523 client credentials by default, the gateway-signed `openEHR-federation-client` JWT on every request, RFC 8693 per endpoint where offered | §13.1 leaves end-user conveyance open; production federations convey a signed assertion per request; the caller's token is never forwarded (RFC 9700 §2.3) | decided (owner, 2026-10-01) |
+| A22 | FerroEHR #3511 and #3512 [R2 D6] | confirmed; DPoP as a `Transport` decorator, no new issue | both are built on FerroEHR's side and ship in 0.0.74 | decided (owner, 2026-10-01; built on FerroEHR's side) |
+| A23 | `OPTIONS {base}/` [R2 D7] | authenticated, `401` otherwise; the JWKS public | the stricter of §7a.2's two sentences; T158 holds the ambiguity | decided (owner, 2026-10-01) |
+| A24 | Purpose of use [R2 D8] | required by default, `403` without it; relaxed only by a declared setting | §13.4: a node must not be left to infer it | decided (owner, 2026-10-01) |
+| A25 | Storage [R3 D1] | membership as a reviewed document with no write API; learned state in memory; incidents as events; stored queries behind `DefinitionStore`, with the `PUT` registration API, on `redb` for one gateway, PostgreSQL 18 when several replicas run, or read-only | stored versions are immutable and must survive a restart (N44); replicas must see one version and one refusal; the clinical path holds no store handle; admission is an operator act (§12b.1) | decided (owner, 2026-10-01) |
+| A26 | Patient-derived data at rest [R3 D2] | none | GDPR Art. 4(5), Recital 26; the cost is a re-probe after a restart | decided (owner, 2026-10-01) |
+| A27 | The N39 agreement check [R3 D3] | uid tie-break pushed down, `LIMIT n + 1`, and a cut node out of order reported `node-error` | §11.6.1's containment argument assumes an order AQL does not define; a wrong top `n` is undetectable for a client | decided (owner, 2026-10-01) |
+| A28 | An `ORDER BY` path not in `SELECT` [R3 D4] | a hidden column, stripped after the merge | the client's query stays answerable; hygiene re-checks the dispatched AQL | decided (owner, 2026-10-01) |
+| A29 | `OFFSET` [R3 D5] | bounded `k + n`, 1000 rows per node by default, `400` past it | §11.6.2 admits it when declared | decided (owner, 2026-10-01) |
+| A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01) |
+| A31 | Cursor and async [R3 D7] | not built; #59 and #60 stay at P3 | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
+| A32 | The dedup key [R3 D8] | the full `ObjectVersionId` | §10.3's scenario and the RM's copy semantics; §10.2 contradicts §10.3 (held on #17); grouping by `object_id` collapses a version history | decided (owner, 2026-10-01) |
+| A33 | The wire types [R4 D1] | hand-written in `ferrofed-wire`, held to the schemas by three test layers; no FerroFED generator | typify drops open members and supports no `if`/`then` | decided (owner, 2026-10-01) |
+| A34 | The crate map [R4 §6, with A16] | section 11, with the identity traits split from the IHE adapters | Cargo edges enforce the boundaries; the core never compiles FHIR | decided (owner, 2026-10-01) |
+| A35 | Publishing the library crates [#24] | nothing published for now; `publish = false` inherited from `[workspace.package]` as the one-line switch, with the lane, the dry run and the version guard built from v0.0.2 | publishing becomes a switch the owner flips, never a project; the crates stay publishable | decided (owner, 2026-10-01) |
+| A36 | The conformance marker [R4 D2] | `// conformance: CP-n … track-n` above the test, a derived `matrix.tsv`, one line in `comments.md` | the specification stays the source of the derived columns; a re-pin shows as a diff | decided (owner, 2026-10-01) |
+| A37 | Deferral authority [R4 D3] | only the owner defers a Gateway point; track 8 deferred from the start | §16.3 "provisional", §18 | decided (owner, 2026-10-01) |
+| A38 | Node points [R4 D4] | CP-18, CP-19 and CP-27 scored against the member CDRs as the node profile | §16.2; the reference implementation defers them | decided (owner, 2026-10-01) |
+| A39 | The PIX Manager [R4 D5] | an in-testkit PIXm fake now; the PIXm client also runs against FerroPIX once it exists, as a differential | no lightweight image answers `$ihe-pix` and accepts ITI-104 | decided (owner, 2026-10-01) |
+| A40 | EHRbase's PostgreSQL 16.2 [R4 D6] | the PostgreSQL 18 rule governs FerroFED's own database; a member node runs its product's documented image, recorded in the memory | the node's database is part of the product under test | decided (owner, 2026-10-01) |
+| A41 | The number of nodes [R4 D7] | two products, a second FerroEHR for three-node cases | no third open CDR image was evaluated | decided (owner, 2026-10-01) |
+| A42 | The reference implementation's image [R4 D8] | build from the vendored `Dockerfile` outside CI, or wait for a public image | its image refused an anonymous pull on 2026-10-01 | decided (owner, 2026-10-01) |

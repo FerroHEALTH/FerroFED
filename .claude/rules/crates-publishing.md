@@ -7,21 +7,36 @@ paths: ["crates/**", "scripts/release/**", ".github/workflows/publish-crates.yml
 
 # Published crates discipline (crates.io)
 
-**Whether the `crates/*` members are published on crates.io is open.** The
-owner's decision (2026-10-01) fixes the split and leaves the publish call to
-the research program that produces `docs/architecture.md`: the specification
-crates (the types the federation schemas define, generated or not,
-`codegen.md`) and the gateway's library crates live under `crates/`, the
-server binary under `app/`, and the tools under `tools/`. `app/*` and
-`tools/*` are never published. Until the decision is recorded on the
-research issue and in `docs/architecture.md`, design every `pub` surface of a
-`crates/*` member as if it will be published, and publish nothing.
+**Nothing is published to crates.io for now, and publishing is a one-line
+switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
+A35). The split is fixed: the specification crates (`ferrofed-wire`) and the
+gateway's library crates live under `crates/`, the server binary under `app/`,
+and the tools under `tools/`.
 
-When the decision is to publish, the rest of this file applies as written:
-published versions are immutable, so version hygiene is a hard rule,
-machine-enforced by the `crate-version-guard` CI job. The licence of each
-published crate (BUSL-1.1, or Apache-2.0 for a generated crate other projects
-should be free to use) is an owner decision recorded per crate, never assumed.
+## The switch
+
+- The root `Cargo.toml` sets `[workspace.package] publish = false`, and every
+  `crates/*` member inherits it with `publish.workspace = true`. Changing that
+  one value to `true` makes the library crates publishable. It is flipped only
+  by the owner.
+- `app/*` and `tools/*` carry a hard `publish = false` of their own, never the
+  inherited one, so the switch can never reach them.
+- From v0.0.2 the whole lane exists and runs while the switch is off:
+  `publish-crates.yml` (#32) runs on every release tag and publishes exactly
+  the members whose cargo metadata says publishable, which today is a
+  successful no-op; the `publish-dry-run` job runs on every pull request, so
+  the crates stay publishable; and the crate-version guard and its bump hook
+  are live from the first crate.
+- Flipping the switch takes the two owner steps below: the `crates-io`
+  environment, and a Trusted Publisher per crate on crates.io.
+
+Design every `pub` surface of a `crates/*` member as API from the start, so
+flipping the switch needs no rework. Because a member's version is guarded
+from the first crate, version hygiene is a hard rule now, not at the first
+publish: published versions are immutable, and the `crate-version-guard` CI
+job enforces the bump rule below. The licence of each published crate
+(BUSL-1.1, or Apache-2.0 for a crate other projects should be free to use) is
+an owner decision recorded per crate when the switch flips, never assumed.
 
 ## Two version lines
 

@@ -1,18 +1,23 @@
 <!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-# Code generation: the intended discipline, pending the research
+# Code generation: none of our own, and the rules if that changes
 
-**No generated layer exists yet, and the boundary is open on the research
-issue.** The candidate is small. The federation specification publishes two
-machine-readable contracts, `federated-result-set.schema.json` (the §9 result
-envelope, an ITS-REST `RESULT_SET` with a constrained, inlined subset of the
-ITS-REST definitions) and `options-root.schema.json` (the §7a.2 `OPTIONS
-{base}/` body, entirely federation-defined), vendored under
-`docs/specs/federation-spec/modules/ROOT/attachments/`. Whether their Rust
-types are emitted from the schemas, hand-written and validated against them,
-or taken from a published crate is what the research settles and
-`docs/architecture.md` records.
+**FerroFED generates nothing of its own** (owner decision 2026-10-01,
+`docs/architecture.md` §10, decision A33). The federation specification
+publishes two machine-readable contracts, `federated-result-set.schema.json`
+(the §9 result envelope, an ITS-REST `RESULT_SET` with a constrained, inlined
+subset of the ITS-REST definitions) and `options-root.schema.json` (the §7a.2
+`OPTIONS {base}/` body, entirely federation-defined), vendored under
+`docs/specs/federation-spec/modules/ROOT/attachments/`. Their Rust types are
+hand-written in `ferrofed-wire`: every federation object is
+`additionalProperties: true` and four rules are `if`/`then` conditionals,
+which the available generator drops. Open objects keep unknown members in a
+flattened map, the conditionals are invariants of construction, and three test
+layers hold the types to the schemas (validation, drift, semantics). A
+machine-readable input FerroFED needs that no family crate generates is a
+request to that crate first; only a corpus too large to model by hand would
+justify a generator here, and the rules below then apply.
 
 The openEHR side is not generated here, and never re-implemented (owner
 ruling 2026-10-01). It is generated upstream and consumed from crates.io:
