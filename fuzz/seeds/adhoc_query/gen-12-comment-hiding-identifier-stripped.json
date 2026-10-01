@@ -1,0 +1,1 @@
+{"q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c -- patient 12345 WHERE e/ehr_status/subject/external_ref/id/value = '12345'"}

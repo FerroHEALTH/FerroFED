@@ -1,0 +1,1 @@
+{"q":"SELECT e/ehr_status/subject/external_ref/id/value AS patient_id, c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '999' ORDER BY c/context/start_time/value DESC LIMIT 10"}

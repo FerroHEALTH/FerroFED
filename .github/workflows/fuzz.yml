@@ -1,0 +1,107 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The fuzz targets, run for a bounded time (#134).
+#
+# The gateway parses untrusted input on every request: the client's AQL and
+# its query_parameters, the ITS-REST AdhocQueryExecute body, and a node's or a
+# gateway's federated RESULT_SET and OPTIONS body. Each target is fed arbitrary
+# bytes from its seed corpus. A panic, an abort or a hang is a defect and the
+# run uploads the input that reproduces it; an Err is the parser doing its job.
+# The aql_rewrite target also asserts the identifier-hygiene property of
+# section 5.4.1 (N33) on every query the rewrite accepts (fuzz/README.md).
+#
+# It runs weekly and on dispatch for five minutes per target, and for one
+# minute per target on a pull request that touches the code a target reads.
+# It is a time-boxed search, never a conclusion input (docs/ci-cd.md). It is
+# also the one place a nightly toolchain appears: cargo-fuzz builds with
+# sanitizer flags that need it (https://rust-fuzz.github.io/book/cargo-fuzz.html).
+# Nothing built here ships.
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "41 4 * * 3"
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/openehr-federation/**"
+      - "app/ferrofed-server/**"
+      - "fuzz/**"
+      - "scripts/fuzz/**"
+      - ".github/workflows/fuzz.yml"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: How long to run each target.
+        type: string
+        default: "300"
+
+permissions: {}
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  seeds:
+    name: fuzz seeds are current
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The generated seeds match the vendored corpora
+        run: bash scripts/fuzz/seeds.sh --check
+
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    needs: seeds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aql_rewrite
+          - adhoc_query
+          - result_set_meta
+          - options_root
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+          cache-shared-key: fuzz
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-fuzz@0.13.2
+      - name: Run the target over its seeds
+        env:
+          TARGET: ${{ matrix.target }}
+          SECONDS_PER_TARGET: ${{ inputs.seconds || (github.event_name == 'pull_request' && '60') || '300' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "fuzz/corpus/${TARGET}"
+          cp "fuzz/seeds/${TARGET}"/* "fuzz/corpus/${TARGET}/"
+          # The prebuilt cargo-fuzz binary is a musl build and defaults to the
+          # triple it was compiled for; AddressSanitizer refuses a statically
+          # linked libc, so the runner's gnu triple is named explicitly.
+          cargo fuzz run --target x86_64-unknown-linux-gnu \
+            "${TARGET}" "fuzz/corpus/${TARGET}" \
+            -- -max_total_time="${SECONDS_PER_TARGET}" -rss_limit_mb=4096
+      - name: Upload what reproduces a crash
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 90
+          if-no-files-found: ignore

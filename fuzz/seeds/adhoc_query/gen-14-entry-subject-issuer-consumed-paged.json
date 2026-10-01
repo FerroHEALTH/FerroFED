@@ -1,0 +1,1 @@
+{"q":"SELECT c/uid/value AS composition_id FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '12345' AND o/subject/identifiers/issuer = 'urn:oid:2.16.840.1.113883.2.4.6.3' AND c/archetype_node_id = 'openEHR-EHR-COMPOSITION.encounter.v1'","offset":0,"fetch":10,"query_parameters":{"pid":"sentinel-4711"}}
