@@ -4,18 +4,22 @@
 # The release lane. One workflow owns the `v*` tag, and every ordering in it is
 # a `needs` edge:
 #
-#   plan ── github-release (draft) ── build-binaries ── finalize-release (publish)
+#   plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish)
 #
-# The release is created as a DRAFT, the binaries are attached to it, and only
+# build-binaries and build-image are calls to the reusable workflows
+# release-build.yml and release-image.yml, the SLSA Build Level 3 lanes.
+#
+# The release is created as a DRAFT, the binaries, SBOMs and attestation
+# bundles are attached to it, the image is pushed to GHCR, and only
 # once the expected asset set is complete is it PUBLISHED. Publishing last
 # means a half-assembled release is never visible.
 #
 # Two tiers, the same split ci.yml uses. `plan`, `github-release` and
 # `finalize-release` run on a repository with no code, because a pre-code
 # release is legitimate here: it carries the changelog section and nothing
-# else. `build-binaries` is gated behind the same root-Cargo.toml detection,
-# so it reports `skipped` today and activates by itself when the workspace
-# lands, with no edit to this file.
+# else. `build-binaries` and `build-image` are gated behind the same
+# root-Cargo.toml detection, so the lane still cuts a pre-code release, and the
+# workspace (#28) has had them running since v0.0.1.
 #
 # The workflow is dormant until a `v*` tag is pushed. It does not run on a push
 # to main, on a pull request, or in a merge group.
@@ -288,16 +292,16 @@ jobs:
               ;;
           esac
 
-  # ---- build-binaries: gated on the workspace, skipped today ----------------
+  # ---- build-binaries: the SLSA Build L3 lane, once per target --------------
 
-  # TODO(#31): this job becomes a call to a reusable workflow
-  # (`on: workflow_call`) that also emits SLSA build provenance, a CycloneDX
-  # SBOM, and the Sigstore bundles for both. The isolation is the point: SLSA
-  # Build Level 3 requires the signing material to sit out of reach of
-  # user-defined build steps, and a job's steps all share one runner VM
-  # (https://slsa.dev/spec/v1.0/levels). Everything below then moves into that
-  # workflow unchanged, and this job keeps its name, its gate and its place in
-  # the graph.
+  # A call and nothing else. The isolation is what makes the provenance
+  # unforgeable: SLSA Build Level 3 requires the signing material to sit out of
+  # reach of user-defined build steps, and a job's steps all share one runner VM
+  # (https://slsa.dev/spec/v1.2/build-requirements), so the build and its
+  # attestations run in release-build.yml, a reusable workflow on its own VM. A
+  # job that carries `uses:` cannot also carry `steps:`. The workspace gate
+  # stays, so a repository without a root Cargo.toml still cuts a pre-code
+  # release.
   build-binaries:
     name: binaries (${{ matrix.target }})
     needs: [plan, github-release]
@@ -305,75 +309,51 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.targets) }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # Declared on both sides: a called workflow receives the caller's token
+    # permissions, and GitHub's Build L3 guide asks for the same set in both
+    # places.
     permissions:
-      contents: write # attach the archives to the draft release
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.sha }}
-      # No cache in a publishing lane: a cache an untrusted run could poison
-      # must never feed a release, so this builds from the checkout and
-      # nothing else.
-      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-        with:
-          target: ${{ matrix.target }}
-          cache: false
-      - name: Build the release binaries
-        env:
-          TARGET: ${{ matrix.target }}
-        run: cargo build --release --locked --workspace --bins --target "$TARGET"
-      - name: Package the binaries with their checksum
-        env:
-          TAG: ${{ needs.plan.outputs.tag }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          # The binary names come from the workspace itself, so this step needs
-          # no edit when a binary is added or renamed.
-          bins=()
-          while IFS= read -r name; do
-            if [ -n "$name" ]; then
-              bins+=("$name")
-            fi
-          done < <(cargo metadata --format-version 1 --no-deps --locked \
-            | jq -r '.packages[].targets[] | select(.kind | index("bin")) | .name' | sort -u)
-          if [ "${#bins[@]}" -eq 0 ]; then
-            echo "::error::the workspace declares no bin target, so this release can attach no binary." >&2
-            exit 1
-          fi
-          printf 'packaging: %s\n' "${bins[@]}"
-          mkdir -p dist
-          archive="ferrofed-${TAG}-${TARGET}.tar.gz"
-          tar -czf "dist/${archive}" -C "target/${TARGET}/release" "${bins[@]}"
-          (cd dist && sha256sum "${archive}" > "${archive}.sha256sum")
-          cat "dist/${archive}.sha256sum"
-      - name: Attach the archive to the draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.plan.outputs.tag }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          archive="ferrofed-${TAG}-${TARGET}.tar.gz"
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
-            "dist/${archive}" "dist/${archive}.sha256sum"
+      contents: write # attach the per-target assets to the draft release
+      id-token: write # Sigstore, for the provenance and SBOM attestations
+      attestations: write # store them against this repository
+    uses: ./.github/workflows/release-build.yml
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
+      target: ${{ matrix.target }}
+      runner: ${{ matrix.runner }}
+
+  # ---- build-image: the container from the attested musl binaries -----------
+
+  # A call and nothing else, for the same Build L3 reason.
+  build-image:
+    name: image (linux/amd64, linux/arm64)
+    needs: [plan, build-binaries]
+    if: needs.plan.outputs.cargo == 'true'
+    permissions:
+      contents: read # the attestations API, to verify the inputs
+      packages: write # push the image and its attestations to GHCR
+      id-token: write # Sigstore, for the provenance and SBOM attestations
+      attestations: write # store them against this repository
+    uses: ./.github/workflows/release-image.yml
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
+      version: ${{ needs.plan.outputs.version }}
 
   # ---- finalize-release: verify the asset set, then PUBLISH -----------------
 
   finalize-release:
     name: github release (publish)
-    needs: [plan, github-release, build-binaries]
-    # build-binaries is skipped while there is no workspace, and a skipped
+    needs: [plan, github-release, build-binaries, build-image]
+    # The build legs are skipped when there is no workspace, and a skipped
     # `needs` job skips its dependents by default, so the results are read
-    # explicitly. A skip is a pass here; a failure is not.
+    # explicitly. A skip is a pass only when both legs skipped together; a
+    # failure is never one.
     if: >-
       always()
       && needs.plan.result == 'success'
       && needs.github-release.result == 'success'
-      && (needs.build-binaries.result == 'success' || needs.build-binaries.result == 'skipped')
+      && ((needs.build-binaries.result == 'success' && needs.build-image.result == 'success')
+          || (needs.build-binaries.result == 'skipped' && needs.build-image.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -399,12 +379,19 @@ jobs:
             exit 0
           fi
           missing=""
-          # grep -Fxq: fixed string, whole line, so ".tar.gz" is not satisfied
-          # by ".tar.gz.sha256sum".
-          # TODO(#31): extend this suffix list with the provenance, SBOM and
-          # Sigstore bundle names once the attested build lane emits them.
+          # Every suffix release-build.yml uploads, per target. `grep -Fxq` is
+          # a fixed string matched whole-line, so ".tar.gz" is not satisfied by
+          # ".tar.gz.sha256sum". A draft missing any of them stays a draft.
           while IFS= read -r target; do
-            for suffix in ".tar.gz" ".tar.gz.sha256sum"; do
+            for suffix in \
+              ".tar.gz" \
+              ".tar.gz.sha256sum" \
+              ".tar.gz.sigstore.json" \
+              ".tar.gz.sbom.sigstore.json" \
+              ".tar.gz.build-sbom.sigstore.json" \
+              ".tar.gz.intoto.jsonl" \
+              ".cdx.json" \
+              ".spdx.json"; do
               printf '%s\n' "$assets" | grep -Fxq "ferrofed-${TAG}-${target}${suffix}" \
                 || missing="$missing ferrofed-${TAG}-${target}${suffix}"
             done
@@ -415,8 +402,17 @@ jobs:
           fi
           echo "every expected asset is attached."
 
+      # `--latest` marks this release as the repository's latest, which a
+      # pre-release must never be.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
-        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          IS_PRERELEASE: ${{ needs.plan.outputs.is-prerelease }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          else
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi

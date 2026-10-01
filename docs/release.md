@@ -19,7 +19,7 @@ to `main`, on a pull request, or in a merge group. `workflow_dispatch` re-runs
 it for a tag that already exists and has to be dispatched at that tag.
 
 ```text
-plan ── github-release (draft) ── build-binaries ── finalize-release (publish)
+plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish)
 ```
 
 - **plan** validates the tag shape, refuses a dispatch that is not at the tag
@@ -31,15 +31,73 @@ plan ── github-release (draft) ── build-binaries ── finalize-release
 - **github-release** creates the release as a draft carrying those notes. A
   draft is mutable and invisible to anyone browsing releases, which is the
   window the asset uploads need.
-- **build-binaries** is gated on a root `Cargo.toml`, the same detection
-  `ci.yml` tier 2 uses. There is no Cargo workspace yet, so it reports
-  `skipped` and a release with no binaries is a clean pass. It activates by
-  itself when the workspace lands (v0.0.2). The attested build, the container
-  image and the SBOMs replace this job with a reusable workflow under #31,
-  without changing the trigger.
+- **build-binaries** calls `release-build.yml` once per target (two Linux
+  architectures, glibc and musl). It is gated on a root `Cargo.toml`, the same
+  detection `ci.yml` tier 2 uses, so a repository without a workspace still
+  cuts a pre-code release. See § The build legs.
+- **build-image** calls `release-image.yml`, which builds the container from
+  the attested musl binaries and pushes it to `ghcr.io/ferrohealth/ferrofed`.
 - **finalize-release** checks that the draft carries every asset this version
-  promises, then publishes. Publishing last means a half-assembled release is
-  never visible.
+  promises, eight per target, and publishes only then. A draft missing any of
+  them fails the check and stays a draft, so a half-assembled release is never
+  visible. A pre-release is published with `--latest=false`, so it never
+  becomes the repository's latest release.
+
+## The build legs
+
+Both legs are reusable workflows (`on: workflow_call`). SLSA Build Level 3
+requires that the signing material authenticating the provenance is out of
+reach of the user-defined build steps, and every step of one job shares a
+runner VM, so the build and its attestations run in a called workflow on its
+own VM, whose steps the caller cannot add to. The Sigstore certificate then
+names the called workflow as the signer, which a consumer can demand with
+`--signer-workflow`.
+
+**`release-build.yml`, per target:**
+
+- builds `ferrofed` with `cargo auditable`, which embeds the dependency list in
+  the binary's `.dep-v0` section, from a cold checkout with no cache;
+- packages a flat `ferrofed-<tag>-<target>.tar.gz` (the binary, `LICENSE`,
+  `NOTICE`, `README.md`) and its `.sha256sum`;
+- writes two SBOMs: CycloneDX 1.5 from the source graph (`.cdx.json`) and SPDX
+  from the shipped binary with syft (`.spdx.json`), failing when the binary
+  carries no `pkg:cargo` purl;
+- attests the tarball's SLSA provenance and both SBOMs with GitHub artifact
+  attestations, and attaches the three Sigstore bundles
+  (`.sigstore.json`, `.sbom.sigstore.json`, `.build-sbom.sigstore.json`) and the
+  in-toto envelope (`.intoto.jsonl`) to the draft.
+
+**`release-image.yml`, once:**
+
+- takes the two musl tarballs from this run's artifacts and verifies each
+  against `release-build.yml`'s signer before extracting it;
+- builds the `linux/amd64` and `linux/arm64` index from `docker/Dockerfile` with
+  no cache and no QEMU, and pushes it by digest, tagged `<version>` and, for a
+  release that is not a pre-release, `<major>.<minor>` and `latest`;
+- attests SLSA provenance for the index and each platform manifest and an SPDX
+  SBOM per platform, all pushed to the registry as OCI referrers, then
+  verifies the published image the way a consumer would.
+
+Verify a release:
+
+```sh
+gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
+  --repo FerroHEALTH/FerroFED \
+  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-build.yml
+gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
+  --repo FerroHEALTH/FerroFED \
+  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
+```
+
+The tools are pinned in `docs/VERSIONS.md` (`cargo-auditable`,
+`cargo-cyclonedx`, `syft`) and `scripts/checks/versions.sh` holds the workflows
+to those rows.
+
+**The package's visibility is an owner setting.** GHCR creates
+`ghcr.io/ferrohealth/ferrofed` on the first push, private by default. After the
+first release pushes it, the owner sets it public under the FerroHEALTH
+organization's package settings and links it to the repository, so `docker
+pull` works without a login.
 
 The library crates are not part of this lane. `publish-crates.yml` runs on the
 same `v*` tag and is described below (§ The crates.io lane).
@@ -144,7 +202,8 @@ without a version bump, because a published version is immutable
 ## After the tag
 
 1. **Read the published release.** Its notes are the changelog section, and its
-   asset list is what `finalize-release` verified.
+   asset list is what `finalize-release` verified. Run the two `gh attestation
+   verify` commands of § The build legs against one tarball and the image.
 2. **Post the board status update** with what shipped and what the next
    milestone targets (`.claude/rules/project-board.md`).
 
@@ -171,6 +230,10 @@ tag, and fails with that message instead.
 
 ## Sources
 
+- SLSA v1.2 build requirements: <https://slsa.dev/spec/v1.2/build-requirements>
+- Artifact attestations and reusable workflows for SLSA Build Level 3:
+  <https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-and-reusable-workflows-to-achieve-slsa-v1-build-level-3>
+- cargo-auditable: <https://github.com/rust-secure-code/cargo-auditable>
 - Available rules for rulesets:
   <https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets>
 - Immutable releases:
