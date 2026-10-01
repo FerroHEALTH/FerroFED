@@ -10,7 +10,7 @@ publishes two machine-readable contracts, `federated-result-set.schema.json`
 subset of the ITS-REST definitions) and `options-root.schema.json` (the §7a.2
 `OPTIONS {base}/` body, entirely federation-defined), vendored under
 `docs/specs/federation-spec/modules/ROOT/attachments/`. Their Rust types are
-hand-written in `ferrofed-wire`: every federation object is
+hand-written in `openehr-federation`: every federation object is
 `additionalProperties: true` and four rules are `if`/`then` conditionals,
 which the available generator drops. Open objects keep unknown members in a
 flattened map, the conditionals are invariants of construction, and three test

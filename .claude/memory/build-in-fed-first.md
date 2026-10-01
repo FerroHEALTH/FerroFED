@@ -25,11 +25,13 @@ cannot ship, and the identity bindings are on the gateway's critical path.
   PIXm client usable against any PIX Manager, a FerroPIX instance later (#42),
   and the XCPD ITI-55 adapter, scheduled with the localization seam in v0.0.8
   (#85).
-- Each binding is its own crate (`ferrofed-identity-ihe`,
-  `ferrofed-identity-xcpd`, `ferrofed-identity-nl`), depending only on the
-  traits in `ferrofed-identity` and its own protocol stack, so it can move to
-  FerroPIX later with no change to the gateway core (§11). The XCPD crate is
-  the only one with SOAP, HL7 v3 and SAML dependencies.
+- The protocols live in the published, spec-named crates `ihe-iti` (a
+  feature per profile) and `nl-generic-functions` (a feature per function),
+  which depend on nothing in FerroFED; the adapters onto the seams sit in
+  `app/ferrofed-identity` (#106, [[published-crate-naming]]). FerroPIX can use
+  `ihe-iti` directly, and a binding can move there with no change to the
+  gateway core (§11). The `xcpd` feature is the only one with SOAP, HL7 v3 and
+  SAML dependencies.
 - The same holds for any sibling that does not exist yet: build the piece here
   behind a seam, shaped to move, and record the move as a later issue. This
   does not override [[openehr-crates-are-the-model]]: a gap in a crate that is

@@ -467,21 +467,21 @@ are dispatched (N8).
 | Directory | the static registry document; then mCSD ITI-91 `_history`/`_since` synchronised into the snapshot, plus ITI-90 reads | #36, #74, #86 | mCSD 4.0.0 |
 | ConsentPrefilter | none; then the Annex B Mitz adapter | #83, #87 | `fhir.nl.gf` 0.3.0 |
 
-**Built here, movable later.** Each binding lives in a crate of its own behind
-its seam: the PIXm resolver and localizer, the mCSD directory and the PMIR
-hooks in `ferrofed-identity-ihe`, the XCPD adapter in `ferrofed-identity-xcpd`,
-and the Annex B adapters in `ferrofed-identity-nl`. The development
-cross-reference, which binds nothing, sits beside the traits in
-`ferrofed-identity`. The gateway core depends only
-on the traits of `ferrofed-identity`, and a binding crate depends only on
-those traits and its own protocol stack. When FerroPIX exists, a binding can
-move there, or the gateway can point its PIXm resolver at a FerroPIX instance,
-with no change to the core. FerroFED never blocks on FerroPIX.
+**Built here, movable later.** The protocols live in two published crates
+that know nothing of FerroFED: `ihe-iti`, with a feature per profile (`pixm`,
+`pdqm`, `mcsd`, `pmir`, `xcpd`), and `nl-generic-functions`, with a feature per
+Annex B function (`nvi`, `mitz`, `lrza`, `nuts-auth`). The adapters that turn
+those clients into the seams, and the development cross-reference, which binds
+nothing, sit beside the traits in `app/ferrofed-identity` (section 11, #106).
+The gateway core depends only on the traits. When FerroPIX exists, it can use
+`ihe-iti` directly, a binding can move there, or the gateway can point its
+PIXm resolver at a FerroPIX instance, with no change to the core. FerroFED
+never blocks on FerroPIX.
 
 **XCPD** (decision A15). ITI-55 lands with the localization seam in v0.0.8
-(#85) as `ferrofed-identity-xcpd`, so the SOAP 1.2, HL7 v3 and SAML XUA
-dependencies stay confined to that crate and reach no deployment that does not
-enable it. Its discovery is a broadcast to every responding community, so it
+(#85) as the `xcpd` feature of `ihe-iti`, so the SOAP 1.2, HL7 v3 and SAML XUA
+dependencies stay confined to that feature and reach no deployment that does
+not enable it. Its discovery is a broadcast to every responding community, so it
 runs under the same fail-closed rules as every localizer (N4, §14.1), and its
 answers are candidacy, never clearance (§14.3). Of its three request modes,
 the gateway uses only the shared identifier, because its input is an
@@ -754,10 +754,11 @@ subject is always a `$parameter`. SQLite is not a candidate: `rusqlite` links C
 the request path adds a latency and a failure mode to every node of every
 query, and a failure there is easy to swallow. The types that execute a
 federated query hold no store handle, and the crate graph pins it: no
-`crates/*` member may reach a storage implementation (`redb`, `sqlx`, a
-PostgreSQL or SQLite driver, and the like) or the application crate through
-its normal or build dependencies, with every feature on, and
-`crates/ferrofed-engine/tests/it/architecture.rs` fails when one does. The
+`crates/*` member and no `app/*` crate but the server may reach a storage
+implementation (`redb`, `sqlx`, a PostgreSQL or SQLite driver, and the like)
+or the server crate through its normal or build dependencies, with every
+feature on, and `app/ferrofed-engine/tests/it/architecture.rs` fails when one
+does. The
 storage implementations live in `app/ferrofed-server`. No specification
 governs this: our own design.
 `DefinitionStore` is reached only from the definition routes and the
@@ -1014,7 +1015,7 @@ The specification's two schemas define what FerroFED adds: one
 point, the per-query endpoint outcome with its closed set of eight statuses,
 and the `OPTIONS {base}/` body. Together that is about 45 named members, one
 closed enum, one single-value enum and four conditionals. Those types are
-hand-written in `ferrofed-wire`: `FederationMeta`, `EndpointOutcome`,
+hand-written in `openehr-federation`: `FederationMeta`, `EndpointOutcome`,
 `EndpointStatus` (eight variants, kebab-case), `TimeoutBudget`, `DedupRecord`,
 `OptionsRoot`, `MemberEndpoint`, `MembershipStatus` (a string newtype, because
 the schema makes it open on purpose), the header names and the status-code
@@ -1052,58 +1053,56 @@ AST (its architecture §4.2):
 
 ## 11. Crate layout and publishing
 
-Research: #24. The family split holds: specification-derived libraries in
-`crates/`, the application in `app/`, development tools in `tools/`. Cargo
-dependency edges enforce the boundaries mechanically, because a crate cannot
-use what it does not list. That reproduces the content of the reference
-implementation's five ArchUnit rules (`aqlPipelineIsPure`,
-`registryStaysALeaf`, `definitionStaysALeaf`,
-`identitySpiDependsOnNothingInternal`, `fanOutReachesNoPersistence`) as compile
-errors instead of a test (decision A34).
+Research: #24; layout #106. The family split holds: the libraries a third
+party could use live in `crates/` and are named for the specification they
+implement, FerroFED's own glue lives in `app/`, and development tools in
+`tools/` (decision A34). A crate that may be published never carries the
+product name. There is one crate per specification, with a feature per layer
+or profile, so a caller compiles only the part it uses. Cargo dependency edges
+enforce the boundaries between crates mechanically, because a crate cannot use
+what it does not list, and a test reads the crate graph for the rules an edge
+alone cannot state. Together they cover the reference implementation's five
+ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
+`definitionStaysALeaf`, `identitySpiDependsOnNothingInternal`,
+`fanOutReachesNoPersistence`).
 
 | Crate | Responsibility | Depends on | Must not depend on |
 |---|---|---|---|
-| `crates/ferrofed-wire` | the federation wire additions of section 10 | `serde`, `serde_json`, `openehr-its` (`rest`) | anything else in FerroFED |
-| `crates/ferrofed-aql` | the rewrite of section 4; no I/O | `openehr-query`, `openehr-base`, `ferrofed-wire` | registry, identity, engine, any HTTP |
-| `crates/ferrofed-merge` | the merge of section 9: order, `DISTINCT`, dedup, aggregates, `complete`; pure | `openehr-rm`, `openehr-base`, `openehr-its` (`rest`), `ferrofed-wire` | registry, identity, I/O |
-| `crates/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base`, `ferrofed-wire` | aql, merge, identity, engine |
-| `crates/ferrofed-identity` | the role traits of section 6, `PatientRef` and the development cross-reference; no FHIR | `ferrofed-registry` (the ids and the snapshot the seams name), `ferrofed-wire` | registry storage, engine, `fhir-types` |
-| `crates/ferrofed-identity-ihe` | the PIXm ITI-83 resolver and localizer, the mCSD directory sync, the PMIR hooks | `ferrofed-identity`, `fhir-types` (`r4`, `resources`), `reqwest` | the core's internals |
-| `crates/ferrofed-identity-xcpd` | the XCPD ITI-55 initiating-gateway localizer, with #85; the only crate with SOAP 1.2, HL7 v3 and SAML XUA dependencies | `ferrofed-identity` and its own protocol stack | the core's internals |
-| `crates/ferrofed-identity-nl` | the Annex B adapters (NVI, Mitz, LRZa), with #87 | `ferrofed-identity` | the core's internals |
-| `crates/ferrofed-engine` | dispatch and fan-out on `rest-client`, the budgets, the completeness decision, follow-up routing on `creating_system_id`; reads the registry through the snapshot only | the crates above except the adapters, `openehr-its` (`rest-client`) | any storage implementation (#40) |
+| `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
+| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-104), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
+| `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth` | the clients each function needs | anything in FerroFED |
+| `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
+| `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
+| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, the budgets, the completeness decision, follow-up routing on `creating_system_id`; reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`) | any storage implementation (#40), the server |
 | `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, authentication (`openehr-sdt` scopes, `jsonwebtoken`), telemetry, health, the storage implementations, wiring | everything | is never depended on |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
 
-Each identity binding crate depends only on the traits in
-`ferrofed-identity` and its own protocol stack, so it can move to FerroPIX
-later, or be replaced by a client of a FerroPIX instance, without a change to
-the engine or the server (section 6). The server enables the binding crates a
-deployment configures, and a deployment that enables none of them compiles
-none of their dependencies.
+`ihe-iti` and `nl-generic-functions` know nothing of FerroFED. The adapters in
+`ferrofed-identity` turn their clients into the seams, so a binding can move
+to FerroPIX later, or be served by a FerroPIX instance, without a change to
+the engine or the server (section 6). The server enables the features a
+deployment configures, and a deployment that enables none of a binding
+compiles none of its dependencies. The architecture test in
+`app/ferrofed-engine/tests/it/architecture.rs` fails when a crate other than
+the server reaches a storage implementation (#40), or when a binding crate
+gains a FerroFED dependency, and CI lints every feature of the published crates
+on its own (`cargo hack --each-feature`).
 
 ```mermaid
 flowchart TD
-    server["app/ferrofed-server"] --> engine["ferrofed-engine"]
-    server --> ihe["ferrofed-identity-ihe"]
-    server --> nl["ferrofed-identity-nl"]
-    server --> xcpd["ferrofed-identity-xcpd"]
-    engine --> aql["ferrofed-aql"]
-    engine --> merge["ferrofed-merge"]
-    engine --> registry["ferrofed-registry"]
-    engine --> identity["ferrofed-identity"]
-    ihe --> identity
-    nl --> identity
-    xcpd --> identity
-    aql --> wire["ferrofed-wire"]
-    merge --> wire
-    registry --> wire
+    server["app/ferrofed-server"] --> engine["app/ferrofed-engine"]
+    server --> identity["app/ferrofed-identity"]
+    engine --> federation["openehr-federation (aql, merge)"]
+    engine --> registry["app/ferrofed-registry"]
+    engine --> identity
     identity --> registry
-    identity --> wire
+    identity --> iti["ihe-iti (pixm, pdqm, mcsd, pmir, xcpd)"]
+    identity --> nlgf["nl-generic-functions (nvi, mitz, lrza, nuts-auth)"]
     engine --> its["openehr-its rest-client"]
-    aql --> query["openehr-query"]
-    merge --> rm["openehr-rm"]
-    ihe --> fhir["fhir-types r4"]
+    federation --> query["openehr-query"]
+    federation --> rm["openehr-rm"]
+    registry --> base["openehr-base"]
+    iti --> fhir["fhir-types r4"]
 ```
 
 **Publishing** (decision A35). Nothing is published to crates.io for now, and
@@ -1123,8 +1122,10 @@ the whole publishing lane is built so that publishing is a one-line switch:
 
 Flipping the switch needs two owner steps: the `crates-io` environment, and a
 Trusted Publisher per crate on crates.io. Every `pub` surface is designed as
-API from the start. `ferrofed-wire` would be the first candidate, because any
-client of any federation gateway reads `meta.federation`.
+API from the start. The three names are held on crates.io by 0.0.0
+placeholders published on 2026-10-01, and each crate's line starts at 0.0.1.
+`openehr-federation` would be the first to publish, because any client of any
+federation gateway reads `meta.federation`.
 
 ## 12. The conformance instrument
 
@@ -1347,7 +1348,7 @@ change what some of them carry.
   conveyance JWT and the purpose-of-use rule (#82, A21, A24), consent at the
   node (#83), the §13.4 page (#84), the localization seam with the
   registry-scoped PIXm localizer and the XCPD adapter crate (#85, A15), mCSD (#86), the
-  Annex B adapters in `ferrofed-identity-nl` (#87), the GF authentication tracks
+  Annex B functions in `nl-generic-functions` (#87), the GF authentication tracks
   (#88).
 - **v0.0.9, conformance** (#89 to #95). The matrix closed (#89), track 10
   (#90), track 11 (#91), tracks 1 to 9 (#92), the node profile (#93, A38), the
@@ -1376,8 +1377,8 @@ R4 is #23, #25 and #27).
 | A12 | `GET /ehr?subject_id=` [R1 D5] | resolution input; route by id; `404` or `409` | N33 forbids dispatching the identifier; the specification is silent | decided (owner, 2026-10-01) |
 | A13 | `Location` on a routed answer [R1 D6] | unmodified until 1.0; the conflict with N1 and N28 held on #17 | N31 and §7a.3 say unmodified | decided (owner, 2026-10-01) |
 | A14 | The Step-1 seams [R2 D1] | one trait per role, one active implementation, outcomes not errors, per-seam budgets | §14, §5.2 and §14.3 keep the questions apart; N4's fail-closed rule presumes one localizer | decided (owner, 2026-10-01) |
-| A15 | XCPD ITI-55 [R2 D2, changed by the owner] | built in FerroFED with the localization seam in v0.0.8 (#85), as `ferrofed-identity-xcpd`, with the SOAP 1.2, HL7 v3 and SAML XUA dependencies confined to it | build what FerroFED needs inside FerroFED first and never block on an unbuilt sibling; the crate can move to FerroPIX later. The report had recommended leaving it unscheduled | decided (owner, 2026-10-01) |
-| A16 | The FHIR model [R2 D3] | `fhir-types` r4 with `resources`, compiled only in `ferrofed-identity-ihe` | the codegen rule refuses hand-written resource structs; the core never compiles FHIR | decided (owner, 2026-10-01) |
+| A15 | XCPD ITI-55 [R2 D2, changed by the owner] | built in FerroFED with the localization seam in v0.0.8 (#85), as the `xcpd` feature of `ihe-iti`, with the SOAP 1.2, HL7 v3 and SAML XUA dependencies confined to it | build what FerroFED needs inside FerroFED first and never block on an unbuilt sibling; the crate can move to FerroPIX later. The report had recommended leaving it unscheduled | decided (owner, 2026-10-01) |
+| A16 | The FHIR model [R2 D3] | `fhir-types` r4 with `resources`, compiled only in `ihe-iti` | the codegen rule refuses hand-written resource structs; the core never compiles FHIR | decided (owner, 2026-10-01) |
 | A17 | A resolver that cannot answer [R2 D4] | `not-resolved` with the error, `complete` cleared, `424` under all-or-nothing; only a `404` keeps N6's do-not-fail rule; best-effort may degrade it only when requested | a PIX outage must never look like an empty record; §11.1 does not separate the cases (held on #17) | decided (owner, 2026-10-01) |
 | A18 | Vendoring the bindings [R2 D9] | PIXm 3.1.0, mCSD 4.0.0, PMIR 1.6.0 (CC-BY-4.0) and Nuts GF 0.3.0 (EUPL-1.2), each with the issue that first reads it; not the ITI TF volumes or IUA until their terms are read | `.claude/rules/vendored-inputs.md`; the licences were read from each `package.json` | decided (owner, 2026-10-01) |
 | A19 | Pseudonyms [R2 D10] | accept a pseudonym or a direct identifier; never pseudonymise in the core; a regional adapter may | §5.3, §B.7; a pseudonym is personal data under the same hygiene | decided (owner, 2026-10-01) |
@@ -1394,8 +1395,8 @@ R4 is #23, #25 and #27).
 | A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01) |
 | A31 | Cursor and async [R3 D7] | not built; #59 and #60 stay at P3 | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
 | A32 | The dedup key [R3 D8] | the full `ObjectVersionId` | §10.3's scenario and the RM's copy semantics; §10.2 contradicts §10.3 (held on #17); grouping by `object_id` collapses a version history | decided (owner, 2026-10-01) |
-| A33 | The wire types [R4 D1] | hand-written in `ferrofed-wire`, held to the schemas by three test layers; no FerroFED generator | typify drops open members and supports no `if`/`then` | decided (owner, 2026-10-01) |
-| A34 | The crate map [R4 §6, with A16] | section 11, with the identity traits split from the IHE adapters | Cargo edges enforce the boundaries; the core never compiles FHIR | decided (owner, 2026-10-01) |
+| A33 | The wire types [R4 D1] | hand-written in `openehr-federation`, held to the schemas by three test layers; no FerroFED generator | typify drops open members and supports no `if`/`then` | decided (owner, 2026-10-01) |
+| A34 | The crate map [R4 §6, with A16; renamed by #106] | section 11: the published crates named for their specification (`openehr-federation`, `ihe-iti`, `nl-generic-functions`), one crate per specification with a feature per layer or profile, FerroFED's own glue under `app/` | a published crate carries the name of the specification it implements, never the product name; Cargo edges and the architecture test enforce the boundaries; the core never compiles FHIR | decided (owner, 2026-10-01) |
 | A35 | Publishing the library crates [#24] | nothing published for now; `publish = false` inherited from `[workspace.package]` as the one-line switch, with the lane, the dry run and the version guard built from v0.0.2 | publishing becomes a switch the owner flips, never a project; the crates stay publishable | decided (owner, 2026-10-01) |
 | A36 | The conformance marker [R4 D2] | `// conformance: CP-n … track-n` above the test, a derived `matrix.tsv`, one line in `comments.md` | the specification stays the source of the derived columns; a re-pin shows as a diff | decided (owner, 2026-10-01) |
 | A37 | Deferral authority [R4 D3] | only the owner defers a Gateway point; track 8 deferred from the start | §16.3 "provisional", §18 | decided (owner, 2026-10-01) |

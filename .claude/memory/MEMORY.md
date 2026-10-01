@@ -15,6 +15,10 @@
 - [Crate split](crate-split.md): spec-derived crates split from the app crates
   as in every product; nothing published for now, publishing is a one-line
   `publish` switch with the whole lane built; owner 2026-10-01
+- [Published crate naming](published-crate-naming.md): a publishable crate
+  carries its specification's name, never ferrofed-*; one crate per
+  specification with a feature per layer or profile; FED glue under app/;
+  names claimed with 0.0.0 placeholders; owner 2026-10-01
 - [Family naming allowed](family-naming-allowed.md): public documents may name
   FerroHEALTH and the siblings, unlike FerroBRIDGE; owner 2026-10-01
 - [One setup PR](one-setup-pr.md): the opening setup lands as one large pull

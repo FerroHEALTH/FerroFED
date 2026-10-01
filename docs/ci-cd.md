@@ -86,13 +86,22 @@ EHRbase as the two nodes, each behind the testkit's capturing and fault proxy
 Locally: `FERROFED_E2E=1 cargo nextest run -p ferrofed-testkit` with Docker
 running.
 
+`features (cargo-hack)` lints every feature of the three published crates on
+its own: `cargo hack clippy --each-feature --all-targets` over
+`openehr-federation`, `ihe-iti` and `nl-generic-functions`, at `-D warnings`.
+Each of those crates is one specification with a feature per layer or profile
+(`docs/architecture.md` §11), so a feature that only builds beside another one
+is a defect a caller would hit; the workspace `clippy` job sees the
+all-features union only. The job runs per package, never over the workspace.
+
 `crate-version-guard` runs on pull requests only and fails a change that
 alters a `crates/*` member's packaged content without moving its version,
 because a published version is immutable (`.claude/rules/crates-publishing.md`).
 It exits cleanly while no `crates/*` member exists, and the `no-crate-bump`
 label is its escape for a diff that provably does not change packaged bytes.
-Whether the crates are published at all is decided by the research program;
-the guard costs nothing until then and is in place the day it matters.
+Nothing is published yet, behind the workspace `publish` switch
+(`.claude/rules/crates-publishing.md`); the guard keeps each crate's line
+honest until the switch flips.
 
 `hashFiles()` cannot do the detection. It is evaluated before checkout, when
 the workspace is empty, so an `if: hashFiles('Cargo.toml') != ''` gate on a job

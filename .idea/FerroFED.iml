@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="EMPTY_MODULE" version="4">
   <component name="NewModuleRootManager">
-    <content url="file://$MODULE_DIR$" />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/crates/openehr-federation/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/openehr-federation/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ihe-iti/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/nl-generic-functions/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-engine/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-engine/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-identity/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-identity/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-registry/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-registry/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-server/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/tools/ferrofed-testkit/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tools/ferrofed-testkit/tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>

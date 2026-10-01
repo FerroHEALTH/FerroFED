@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+[package]
+name = "ferrofed-identity"
+description = "The identity roles of the Federation Tier as traits (resolver, localizer, directory, consent pre-filter, onward authentication), the patient reference carrier, and the adapters that plug the ihe-iti and nl-generic-functions clients into them"
+version = "0.0.2"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+# FerroFED's own glue lives under app/ and is never published
+# (docs/architecture.md section 11, decision A34).
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+ferrofed-registry.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+toml.workspace = true
+
+[lints]
+workspace = true

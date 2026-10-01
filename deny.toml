@@ -54,14 +54,11 @@ confidence-threshold = 0.9
 # are BUSL-1.1, openehr-its is Apache-2.0, and openehr-term, under openehr-rm,
 # is Apache-2.0 with the CC-BY-SA-3.0 terminology data it redistributes.
 exceptions = [
-  { allow = ["BUSL-1.1"], crate = "ferrofed-wire" },
-  { allow = ["BUSL-1.1"], crate = "ferrofed-aql" },
-  { allow = ["BUSL-1.1"], crate = "ferrofed-merge" },
+  { allow = ["BUSL-1.1"], crate = "openehr-federation" },
+  { allow = ["BUSL-1.1"], crate = "ihe-iti" },
+  { allow = ["BUSL-1.1"], crate = "nl-generic-functions" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-registry" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-identity" },
-  { allow = ["BUSL-1.1"], crate = "ferrofed-identity-ihe" },
-  { allow = ["BUSL-1.1"], crate = "ferrofed-identity-xcpd" },
-  { allow = ["BUSL-1.1"], crate = "ferrofed-identity-nl" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-engine" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-server" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
