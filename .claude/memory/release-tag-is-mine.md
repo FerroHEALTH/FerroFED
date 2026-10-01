@@ -25,7 +25,7 @@ step of a milestone; a hand-back is unfinished work.
 2. Its merge, then `git tag -s vX.Y.Z -m vX.Y.Z` and `git push origin vX.Y.Z`
    from the session, then reading the release run and fixing what fails.
 3. A new milestone for stragglers if needed, and the emptied milestone closed
-   by hand (`gh api -X PATCH repos/rubentalstra/FerroFED/milestones/<n> -f
+   by hand (`gh api -X PATCH repos/FerroHEALTH/FerroFED/milestones/<n> -f
    state=closed`).
 
 A change to the release lane is rehearsed with a `-rc.N` tag first, also

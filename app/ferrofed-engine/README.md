@@ -12,7 +12,7 @@ merges what comes back with each node's provenance.
 
 An application crate under `app/`: FerroFED's own glue, never published. The
 crate holds its place in the workspace, and the implementation lands with
-[FerroFED issue #37](https://github.com/rubentalstra/FerroFED/issues/37),
+[FerroFED issue #37](https://github.com/FerroHEALTH/FerroFED/issues/37),
 and the design is recorded in the repository's architecture document.
 
 ## Licence

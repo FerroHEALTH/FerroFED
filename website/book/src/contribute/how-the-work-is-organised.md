@@ -24,7 +24,7 @@ milestone has no open issue left. The planned line:
 | v0.0.8 | security and the bindings (§13 to §15, Annex A, Annex B) |
 | v0.0.9 | conformance: every conformance point scored (§16, §17) |
 
-The [project board](https://github.com/users/rubentalstra/projects/8) shows
+The [project board](https://github.com/orgs/FerroHEALTH/projects/1) shows
 the same issues by status.
 
 ## Labels
@@ -40,4 +40,4 @@ is cited evidence, not code.
 A pull request answers one issue and says so with `Closes #<n>`. Every commit
 is signed, every first-party file carries the SPDX header, and the pull
 request body accepts the contribution licence terms through its checkbox
-([CONTRIBUTING.md](https://github.com/rubentalstra/FerroFED/blob/main/CONTRIBUTING.md)).
+([CONTRIBUTING.md](https://github.com/FerroHEALTH/FerroFED/blob/main/CONTRIBUTING.md)).

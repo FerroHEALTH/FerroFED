@@ -22,7 +22,7 @@ specification, a release candidate at v0.9.0 with a 1.0 release expected.
 FerroFED is in its design phase. The repository, its gates and its vendored
 specifications exist; the design does not yet. It is the output of a research
 program on the tracker
-([#16](https://github.com/rubentalstra/FerroFED/issues/16)), which writes the
+([#16](https://github.com/FerroHEALTH/FerroFED/issues/16)), which writes the
 architecture of record before any code is scaffolded. There is no Cargo
 workspace, no release and no binary to run. Nothing in this book describes
 software you can download today, and every page says which parts are settled
@@ -42,5 +42,5 @@ The four parts follow what you came to do.
 
 The tracker is the scope. Open issues are the worklist, milestones are
 releases, and the
-[roadmap](https://github.com/rubentalstra/FerroFED/milestones) is the public
+[roadmap](https://github.com/FerroHEALTH/FerroFED/milestones) is the public
 view of both.

@@ -5,7 +5,7 @@
 
 Every check is a committed script or a pinned tool you can run yourself. The
 design of the workflows is in
-[`docs/ci-cd.md`](https://github.com/rubentalstra/FerroFED/blob/main/docs/ci-cd.md);
+[`docs/ci-cd.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/ci-cd.md);
 this page is the short version.
 
 ## Two required checks

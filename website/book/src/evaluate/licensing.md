@@ -5,9 +5,9 @@
 
 FerroFED is source-available under the Business Source License 1.1. The
 authoritative text is
-[`LICENSE`](https://github.com/rubentalstra/FerroFED/blob/main/LICENSE), with
+[`LICENSE`](https://github.com/FerroHEALTH/FerroFED/blob/main/LICENSE), with
 the notice in
-[`NOTICE`](https://github.com/rubentalstra/FerroFED/blob/main/NOTICE). This
+[`NOTICE`](https://github.com/FerroHEALTH/FerroFED/blob/main/NOTICE). This
 page summarises it; where the two differ, the licence text wins.
 
 ## What you may do without asking
@@ -32,7 +32,7 @@ every case. So does selling, sublicensing or distributing it for a fee, on its
 own or inside another product.
 
 A commercial licence starts with a conversation with the maintainer named in
-[`MAINTAINERS.md`](https://github.com/rubentalstra/FerroFED/blob/main/MAINTAINERS.md).
+[`MAINTAINERS.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/MAINTAINERS.md).
 The Licensor is Vernum Projecten B.V.
 
 ## The change date

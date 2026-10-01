@@ -8,7 +8,7 @@
 #   docker compose up --wait
 #   curl http://127.0.0.1:8080/health
 #
-# THE GATEWAY IMAGE. ghcr.io/rubentalstra/ferrofed is published by the image
+# THE GATEWAY IMAGE. ghcr.io/ferrohealth/ferrofed is published by the image
 # lane (#31). Until that lands, the service builds the same recipe from the
 # binaries of a published release, staged first:
 #
@@ -49,7 +49,7 @@ name: ferrofed
 
 services:
   ferrofed:
-    image: ghcr.io/rubentalstra/ferrofed:${FERROFED_VERSION:-0.0.1}
+    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.1}
     build:
       context: .
       dockerfile: docker/Dockerfile

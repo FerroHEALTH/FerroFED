@@ -13,7 +13,7 @@
 # Usage:
 #   scripts/release/stage-dist.sh <version>      # for example 0.0.1
 #   docker buildx build -f docker/Dockerfile --platform linux/arm64 \
-#     -t ghcr.io/rubentalstra/ferrofed:0.0.1 --load .
+#     -t ghcr.io/ferrohealth/ferrofed:0.0.1 --load .
 #
 # Needs the GitHub CLI (`gh`) and `sha256sum` or `shasum`. No specification
 # governs this file; it is FerroFED's own design.
@@ -52,7 +52,7 @@ aarch64-unknown-linux-musl|linux_arm64"
 
 while IFS='|' read -r target platform; do
   asset="ferrofed-v${version}-${target}.tar.gz"
-  gh release download "v${version}" --repo rubentalstra/FerroFED \
+  gh release download "v${version}" --repo FerroHEALTH/FerroFED \
     --pattern "$asset" --pattern "$asset.sha256sum" --dir "$work" --clobber ||
     die "release v${version} has no $asset"
 

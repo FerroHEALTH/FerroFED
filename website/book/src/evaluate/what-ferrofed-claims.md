@@ -29,7 +29,7 @@ two apart.
 ## Open, on the research program
 
 The research program
-([#16](https://github.com/rubentalstra/FerroFED/issues/16)) answers these with
+([#16](https://github.com/FerroHEALTH/FerroFED/issues/16)) answers these with
 cited evidence before the workspace exists:
 
 - how the AQL rewrite sits on `openehr-query`'s typed AST, checked against the
@@ -51,7 +51,7 @@ FerroFED does not claim conformance to any conformance point today, and will
 not until a test scores it. The specification is a release candidate; when 1.0
 is published, the vendored text is re-pinned and every citation on the tracker
 is checked against it
-([#17](https://github.com/rubentalstra/FerroFED/issues/17)).
+([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
 
 The [conformance matrix](conformance.md) records where each point stands:
 every point, its requirements and tracks as the specification states them,

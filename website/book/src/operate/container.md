@@ -29,13 +29,13 @@ binary has no probe subcommand, so probe it from outside: `GET /health`
 answers `200` while the process is up, and `GET /health/readiness` answers
 `200` when every registered indicator is up.
 
-The image lane publishes it as `ghcr.io/rubentalstra/ferrofed`. To build it
+The image lane publishes it as `ghcr.io/ferrohealth/ferrofed`. To build it
 yourself from the binaries of a published release:
 
 ```sh
 scripts/release/stage-dist.sh 0.0.1
 docker buildx build -f docker/Dockerfile --platform linux/arm64 \
-  -t ghcr.io/rubentalstra/ferrofed:0.0.1 --load .
+  -t ghcr.io/ferrohealth/ferrofed:0.0.1 --load .
 ```
 
 The stage script checks every tarball against the `.sha256sum` published

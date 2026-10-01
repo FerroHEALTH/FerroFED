@@ -14,7 +14,7 @@ authors:
   - given-names: Ruben
     family-names: Talstra
 license: BUSL-1.1
-repository-code: "https://github.com/rubentalstra/FerroFED"
+repository-code: "https://github.com/FerroHEALTH/FerroFED"
 url: "https://ferrofed.eu"
 keywords:
   - openEHR

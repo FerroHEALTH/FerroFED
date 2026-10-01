@@ -11,13 +11,13 @@ the difference between an answer and a thread nobody is paged for.
 FerroFED is in its **design phase**: there is no code and no release, so there
 is little to configure and nothing to operate. [`CLAUDE.md`](CLAUDE.md) carries
 the status and the working discipline, and the research program in the
-[v0.0.1 milestone](https://github.com/rubentalstra/FerroFED/milestones) is
+[v0.0.1 milestone](https://github.com/FerroHEALTH/FerroFED/milestones) is
 where the design decisions appear with their citations. The governing text is
 the [Federation Tier with AQL specification](https://syntaric.github.io/openehr-federation-spec/).
 The documentation site at <https://ferrofed.eu/> is planned.
 
 If those do not answer it, **open a GitHub issue** through the
-[issue chooser](https://github.com/rubentalstra/FerroFED/issues/new/choose):
+[issue chooser](https://github.com/FerroHEALTH/FerroFED/issues/new/choose):
 whether an approach fits, what a requirement means in this implementation, or
 why a design is the way it is.
 
@@ -27,7 +27,7 @@ paid tier. Answers come when the maintainer is at a keyboard
 
 ## I found a defect
 
-**[Open an issue](https://github.com/rubentalstra/FerroFED/issues/new/choose)**
+**[Open an issue](https://github.com/FerroHEALTH/FerroFED/issues/new/choose)**
 when something is wrong, missing, or contradicts one of the specifications
 this project answers to: the Federation Tier with AQL specification, openEHR
 AQL and ITS-REST, or a bound IHE profile.
@@ -55,7 +55,7 @@ it differently" is not by itself a defect; a citation is.
 
 **Do not open a public issue.** Follow [SECURITY.md](SECURITY.md): report
 privately through
-[GitHub private vulnerability reporting](https://github.com/rubentalstra/FerroFED/security/advisories/new).
+[GitHub private vulnerability reporting](https://github.com/FerroHEALTH/FerroFED/security/advisories/new).
 A gateway that leaks a patient identifier to a node, or that answers a query
 it should have refused, is a vulnerability.
 

@@ -1,16 +1,16 @@
 <!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
-# <img src="https://raw.githubusercontent.com/rubentalstra/FerroFED/main/assets/brand/ferrofed-icon.svg" alt="" width="40" height="40" align="top"> FerroFED
+# <img src="https://raw.githubusercontent.com/FerroHEALTH/FerroFED/main/assets/brand/ferrofed-icon.svg" alt="" width="40" height="40" align="top"> FerroFED
 
 <!-- badges:begin -->
-[![CI](https://github.com/rubentalstra/FerroFED/actions/workflows/ci.yml/badge.svg)](https://github.com/rubentalstra/FerroFED/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/rubentalstra/FerroFED/actions/workflows/codeql.yml/badge.svg)](https://github.com/rubentalstra/FerroFED/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/rubentalstra/FerroFED/badge)](https://scorecard.dev/viewer/?uri=github.com/rubentalstra/FerroFED)
+[![CI](https://github.com/FerroHEALTH/FerroFED/actions/workflows/ci.yml/badge.svg)](https://github.com/FerroHEALTH/FerroFED/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/FerroHEALTH/FerroFED/actions/workflows/codeql.yml/badge.svg)](https://github.com/FerroHEALTH/FerroFED/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/FerroHEALTH/FerroFED/badge)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroFED)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15130/badge)](https://www.bestpractices.dev/projects/15130)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=rubentalstra_FerroFED&metric=alert_status)](https://sonarcloud.io/summary/overall?id=rubentalstra_FerroFED)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=rubentalstra_FerroFED&metric=coverage)](https://sonarcloud.io/summary/new_code?id=rubentalstra_FerroFED)
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/rubentalstra/FerroFED?sort=semver)](https://github.com/rubentalstra/FerroFED/releases/latest)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/FerroHEALTH/FerroFED?sort=semver)](https://github.com/FerroHEALTH/FerroFED/releases/latest)
 <!-- badges:end -->
 
 An openEHR federation gateway, in pure Rust: where else the record is.

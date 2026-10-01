@@ -520,13 +520,13 @@ if [ -f compose.yaml ]; then
   while IFS= read -r ref; do
     [ -n "$ref" ] || continue
     case "$ref" in
-    *@sha256:* | ghcr.io/rubentalstra/ferrofed:*) ;;
+    *@sha256:* | ghcr.io/ferrohealth/ferrofed:*) ;;
     *) bad "compose.yaml runs $ref, which is not pinned by digest" ;;
     esac
   done < <(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p' compose.yaml)
-  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/rubentalstra/ferrofed:\$\{[A-Za-z_][A-Za-z0-9_]*:-([^}]+)\}[[:space:]]*$|\1|p' compose.yaml | sort -u)"
+  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{[A-Za-z_][A-Za-z0-9_]*:-([^}]+)\}[[:space:]]*$|\1|p' compose.yaml | sort -u)"
   if [ -z "$tags" ]; then
-    bad "compose.yaml has no ghcr.io/rubentalstra/ferrofed image tag default"
+    bad "compose.yaml has no ghcr.io/ferrohealth/ferrofed image tag default"
   elif [ "$(printf '%s\n' "$tags" | wc -l | tr -d '[:space:]')" -gt 1 ]; then
     bad "compose.yaml names more than one ferrofed tag default: $(printf '%s' "$tags" | tr '\n' ' ')"
   elif [ "$tags" != "$want_product" ]; then
