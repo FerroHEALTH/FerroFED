@@ -24,12 +24,13 @@ the server binary live under `app/`, and the tools under `tools/`.
   by the owner.
 - `app/*` and `tools/*` carry a hard `publish = false` of their own, never the
   inherited one, so the switch can never reach them.
-- From v0.0.2 the whole lane exists and runs while the switch is off:
-  `publish-crates.yml` (#32) runs on every release tag and publishes exactly
-  the members whose cargo metadata says publishable, which today is a
-  successful no-op; the `publish-dry-run` job runs on every pull request, so
-  the crates stay publishable; and the crate-version guard and its bump hook
-  are live from the first crate.
+- From v0.0.2 the whole lane exists and runs while the switch is off (#32):
+  `publish-crates.yml` runs on every `v*` release tag and publishes exactly
+  the members whose `cargo metadata` says publishable, which today is a
+  successful no-op that says so in its job summary; the `publish-dry-run` job
+  of `ci.yml` packages every library crate on every pull request, so the
+  crates stay publishable; and the crate-version guard and its bump hook are
+  live from the first crate.
 - Flipping the switch takes the two owner steps below: the `crates-io`
   environment, and a Trusted Publisher per crate on crates.io.
 
@@ -74,32 +75,48 @@ an owner decision recorded per crate when the switch flips, never assumed.
 
 ## The publish lane is per crate, resumable, and verified
 
-`scripts/release/publish-crates.sh` (`publish` / `verify` / `version`) uploads
-the members one at a time in dependency order, counts "already exists" as done,
-and reads the registry back before reporting success. Two lanes call it: the
-`crates` leg of `release.yml` on a `v*` tag (the primary path, paused by the
-`crates-io` environment's required reviewer) and `publish-crates.yml` on a
-manual dispatch (a dry run by default; `publish = true` is the recovery path).
-Both authenticate with crates.io Trusted Publishing (OIDC through
-`rust-lang/crates-io-auth-action`); no long-lived crates.io token exists in the
-repository. Neither lane restores a build cache (`ci-cd.md`), and once a
-generator exists its `codegen-drift` gate runs ahead of both, so a published
-generated crate never disagrees with its generator.
+`scripts/release/publish-crates.sh` is the one implementation:
 
-`cargo publish --workspace --dry-run --locked` runs on every pull request as
-the `publish-dry-run` job, so a packaging failure is found before a release
+- `select` reads the publishable set from `cargo metadata` (a member whose
+  `publish` is unset or names crates-io) in dependency order, never from a
+  hand-kept list. While the switch is off the set is empty.
+- `package` runs `cargo package` over every `crates/*` member, which builds
+  and verifies the exact tarball an upload would send and works while the
+  switch is off, then `cargo publish --dry-run` over the publishable set once
+  there is one.
+- `publish` uploads the publishable members one at a time in dependency order
+  and counts "already exists" as done, so a partial run is finished by
+  running it again; `verify` reads the registry back before success is
+  reported. Both are successful no-ops while the switch is off.
+
+`publish-crates.yml` is the lane. On a `v*` tag it checks that the tag names
+the workspace version, selects and packages, and only then runs the `publish`
+job, in the `crates-io` environment; on a manual dispatch it is a dry run
+unless `publish` is set, and it publishes only from `main` or a release tag.
+It authenticates with crates.io Trusted Publishing (OIDC through
+`rust-lang/crates-io-auth-action`), so no long-lived crates.io token exists in
+the repository, and it restores no build cache (`ci-cd.md`). Once a generator
+exists, its `codegen-drift` gate runs ahead of it, so a published generated
+crate never disagrees with its generator.
+
+The `publish-dry-run` job of `ci.yml` runs `publish-crates.sh package` on every
+pull request, so a crate that cannot be packaged is found before a release
 reaches the registry.
 
-## Owner steps (once per crate, and once for the environment)
+## Owner steps when the switch is flipped
 
-1. The first-ever version of a crate cannot use Trusted Publishing: the owner
-   runs `cargo login` locally and `scripts/release/publish-crates.sh publish`
-   from the merged `main`, then
-   `scripts/release/publish-crates.sh verify`.
-2. On crates.io, each crate's Settings, Trusted Publishing: two GitHub entries,
+The three names already exist on crates.io (the 0.0.0 placeholders of
+2026-10-01), so every later version can go through Trusted Publishing; no
+crate needs a first upload with a personal token. Two steps, done once:
+
+1. The `crates-io` GitHub environment, with the owner as required reviewer and
+   a deployment policy that admits `main` and `v*` tags.
+2. On crates.io, each crate's Settings, Trusted Publishing: one GitHub entry,
    repository owner `FerroHEALTH`, repository `FerroFED`, workflow
-   `release.yml` and workflow `publish-crates.yml`, environment `crates-io`.
-3. The `crates-io` GitHub environment carries the owner as required reviewer.
+   `publish-crates.yml`, environment `crates-io`.
+
+Then the owner sets `publish = true` in the root `[workspace.package]`, and the
+next `v*` tag publishes every library crate at its manifest version.
 
 ## Before publishing: the C-STABLE adjudication
 

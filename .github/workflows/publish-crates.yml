@@ -1,0 +1,130 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# publish-crates.yml: the crates.io lane behind the workspace `publish` switch
+# (docs/architecture.md section 11, decision A35; .claude/rules/crates-publishing.md).
+#
+# It runs on every `v*` release tag beside release.yml, and on a manual
+# dispatch as a dry run or, with `publish`, the recovery path. The publishable
+# set is read from `cargo metadata`: while the root `[workspace.package]
+# publish = false`, no member is publishable, the `publish` job is skipped, and
+# the run is a successful no-op that says so in its summary. Flipping the
+# switch to true is the whole change that turns publishing on.
+#
+# Authentication is crates.io Trusted Publishing (OIDC): the
+# rust-lang/crates-io-auth-action step exchanges this workflow's identity for a
+# short-lived token, so no long-lived crates.io token exists in the
+# repository. Each crate's Trusted Publisher entry names this file, the
+# FerroHEALTH/FerroFED repository and the `crates-io` environment.
+name: Publish crates
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Really publish to crates.io (false = dry run)"
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+jobs:
+  select:
+    name: select and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      publishable: ${{ steps.select.outputs.publishable }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # No cache in a publishing lane: the packaging below verifies the same
+      # bytes a real publish uploads (.claude/rules/ci-cd.md).
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      # A tag that disagrees with the declared product version publishes
+      # nothing; release.yml refuses the same tag in its plan job.
+      - name: The tag names the workspace version
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version = "\(.*\)"$/\1/p;}' Cargo.toml | head -n1)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::tag $TAG does not name the workspace version $version, so nothing is published."
+            exit 1
+          fi
+          echo "tag $TAG names the workspace version $version"
+      - id: select
+        name: Read the publishable set from cargo metadata
+        run: |
+          set -euo pipefail
+          crates="$(bash scripts/release/publish-crates.sh select)"
+          if [ -n "$crates" ]; then
+            echo "publishable=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Publishable crates, in dependency order"
+              echo
+              while IFS= read -r crate; do
+                echo "- \`$crate\` $(bash scripts/release/publish-crates.sh version "$crate")"
+              done <<< "$crates"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "publishable=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Nothing to publish"
+              echo
+              echo "The workspace \`publish\` switch in the root \`Cargo.toml\` is \`false\`, so no member is publishable and this run is a successful no-op (\`docs/architecture.md\` section 11, decision A35)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Package every library crate (no upload)
+        run: bash scripts/release/publish-crates.sh package
+
+  publish:
+    name: publish
+    needs: select
+    # A tag publishes; a dispatch publishes only when asked to, and only from
+    # main or a release tag.
+    if: >-
+      needs.select.outputs.publishable == 'true' && (github.event_name == 'push' ||
+      (inputs.publish && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # The protected environment is part of each crate's Trusted Publisher entry
+    # on crates.io and carries the owner as required reviewer.
+    environment: crates-io
+    # Two runs uploading the same immutable versions never interleave. Queue,
+    # never cancel.
+    concurrency:
+      group: publish-crates
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # OIDC token exchange (rust-lang/crates-io-auth-action)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      - id: auth
+        name: Exchange the OIDC identity for a temporary crates.io token
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: Publish the crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: bash scripts/release/publish-crates.sh publish
+      # The registry is the ground truth, so the read-back runs even when the
+      # upload step went red.
+      - name: Verify every crate resolves at its manifest version
+        if: always()
+        run: bash scripts/release/publish-crates.sh verify

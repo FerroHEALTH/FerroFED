@@ -44,9 +44,9 @@ Ten workflows:
   is pushed. It validates the tag, checks it against every file that declares
   the product version, takes the release notes from the matching
   `CHANGELOG.md` section, creates the release as a draft, calls the two lanes
-  below, and publishes only after the expected asset set is complete. Its
-  `crates` leg uploads the library crates to crates.io after the release is
-  public. The checklist a cut follows is `docs/release.md`.
+  below, and publishes only after the expected asset set is complete. The
+  library crates go to crates.io through `publish-crates.yml` on the same tag,
+  never through this lane. The checklist a cut follows is `docs/release.md`.
 - `.github/workflows/release-build.yml`: the reusable per-target binary lane
   `cargo auditable` build with no cache, the tarball and its checksum,
   a CycloneDX source SBOM and a syft build SBOM, three attestations, and the
@@ -63,11 +63,12 @@ Ten workflows:
   documentation toolchain. It opens one issue when a pin is behind its newest
   upstream release and fails only when a release could not be read
   (`docs/ci-cd.md`).
-- `.github/workflows/publish-crates.yml`: the between-releases crates.io lane,
-  a manual dispatch that is a dry run unless `publish` is set. It shares
-  `scripts/release/publish-crates.sh` with the release lane; the rules are
-  `crates-publishing.md`. This is the one workflow that needs the Cargo
-  workspace to do anything.
+- `.github/workflows/publish-crates.yml`: the crates.io lane behind the
+  workspace `publish` switch. It runs on every `v*` tag (and on a manual
+  dispatch, a dry run unless `publish` is set), reads the publishable set from
+  `cargo metadata`, and is a successful no-op while the switch is off. It
+  shares `scripts/release/publish-crates.sh` with the `publish-dry-run` job of
+  `ci.yml`; the rules are `crates-publishing.md`.
 
 `.github/release.yml` is a different file from the workflow: it configures
 GitHub's auto-generated release notes, which the lane never uses, because a
@@ -116,7 +117,7 @@ sources, which subsumes cargo-audit); MSRV via `cargo hack check
 --rust-version`; every feature of each published crate alone via `cargo hack
 clippy --locked --each-feature --all-targets --package openehr-federation
 --package ihe-iti --package nl-generic-functions -- -D warnings`, per package
-and never the workspace all-features union; the codegen drift gate once a generator exists (`codegen.md`); `cargo publish --workspace --dry-run --locked`; the
+and never the workspace all-features union; the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
 crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 `dependency-review-action` on pull requests; the `e2e (containers)` job,
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the
@@ -145,10 +146,10 @@ lockfile drift rather than on registry drift. Commit `Cargo.lock`.
 - **A version pin has a single source of truth**, and a committed check fails
   on cross-file drift.
 - **The library crates publish to crates.io through Trusted Publishing** (OIDC,
-  no long-lived token), in dependency order, from a dispatch lane and from the
-  release lane, with a dry run on every pull request and the codegen drift gates
-  ahead of it, so a published generated crate never disagrees with its
-  generator.
+  no long-lived token), in dependency order, from `publish-crates.yml` on a
+  release tag, behind the workspace `publish` switch, with the packaging dry run
+  on every pull request and the codegen drift gates ahead of it, so a published
+  generated crate never disagrees with its generator.
 
 ## Never
 
