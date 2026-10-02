@@ -20,7 +20,7 @@ inputs:
     description: >-
       Restore and save the Rust build cache, on by default. A publishing lane
       passes "false": a cache an untrusted run could poison must never feed a
-      release (.claude/rules/ci-cd.md).
+      release.
     required: false
     default: "true"
   cache-shared-key:

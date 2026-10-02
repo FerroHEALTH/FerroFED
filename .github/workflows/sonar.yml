@@ -3,8 +3,8 @@
 
 # SonarQube Cloud analysis: the machine opinion beside CodeQL. Findings are
 # ADVISORY. They never outrank the specifications, the project rules, or the
-# local gates, and they gate no merge (.claude/rules/ai-code-review.md). The
-# quality gate is the built-in "Sonar way" default.
+# local gates, and they gate no merge (no specification governs this: our own
+# design). The quality gate is the built-in "Sonar way" default.
 #
 # The multi-language sweep over shell, YAML, JSON and the other config surfaces
 # the Rust gates never see runs on every scan, including today, on a repository

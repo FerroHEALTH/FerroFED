@@ -3,15 +3,14 @@
 
 # Provenance: the openEHR AQL specification source
 
-Vendored verbatim by `scripts/vendor/aql.sh`
-(.claude/rules/vendored-inputs.md). Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+Vendored verbatim by `scripts/vendor/aql.sh`. Never edit a file here:
+change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <https://github.com/openEHR/specifications-QUERY>
 - Pin: tag `Release-1.1.0`, which resolves to commit `b03c48000d17eeae1e4f8868bfba3dfb59df8b3f`; the
   `manifest.json` of that commit dates release `1.1.0` `2021-05-14`
   and declares the AQL document `STABLE`
-- Fetched: 2026-10-01
+- Fetched: 2026-10-02
 - Upstream licence: Creative Commons Attribution-ShareAlike 3.0 Unported, the
   repository's `LICENSE` file, vendored beside this file
 - Layout: the upstream paths, unchanged

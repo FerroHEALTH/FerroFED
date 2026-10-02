@@ -42,14 +42,17 @@
 #                          (`0xA1`), `HbA1c`, Annex section numbers such as
 #                          `A.1` and an AQL alias quoted in backticks pass.
 #
-# Checks 9 and 10 also read the full-line `#` comments of every shell script
-# under scripts/ and of every Cargo.toml (HASH files). Heredoc bodies are
-# skipped there, since they are document text a script writes. One difference
-# is deliberate: a hash comment may NAME the architecture document as a file a
+# Checks 9 and 10 also read the HASH files: the full-line `#` comments of
+# every shell script under scripts/, every Cargo.toml, clippy.toml, the YAML
+# under .github (workflows, composite actions and the repository
+# configuration) and the TOML under docker/. In the YAML they also read the
+# text of every `echo` or `printf` in a `run:` block, shell escapes removed,
+# and in the TOML every `reason = "…"` string. Heredoc bodies are skipped,
+# since they are document text a script writes. One difference is
+# deliberate: a HASH file may NAME the architecture document as a file a
 # script reads (the versions guard compares its pin table), so only the
 # citation form fails there, the document followed by `section` or `§`, or
-# opening a parenthetical. Workflow files are left out: their comments are
-# not in this guard's scope yet.
+# opening a parenthetical.
 #
 # Citation rule: no specification governs this: our own design. A comment
 # cites the specification it rests on (section, N, CP) or official external
@@ -254,32 +257,74 @@ check_rs() {
   ' "$1"
 }
 
-# Prints the check 9 and 10 violations of one HASH file (a shell script or a
-# Cargo.toml), one `:LINE: message` per line. `is_sh` turns heredoc skipping
-# on: a TOML file has no heredocs.
+# Prints the check 9 and 10 violations of one HASH file, one `:LINE: message`
+# per line. The kind comes from the extension: `sh` (heredoc bodies skipped),
+# `yml` (workflow and action YAML: heredocs inside a `run:` block skipped, and
+# the text of every `echo` or `printf` in a `run:` block read, with its shell
+# escapes removed) or `toml` (every `reason = "…"` string read as well).
 check_hash() {
-  local is_sh=0
-  [[ "$1" == *.sh ]] && is_sh=1
-  awk -v is_sh="$is_sh" -v sq="'" "$CITE_AWK"'
+  local kind="toml"
+  case "$1" in
+  *.sh) kind="sh" ;;
+  *.yml | *.yaml) kind="yml" ;;
+  esac
+  awk -v kind="$kind" -v sq="'" "$CITE_AWK"'
     BEGIN {
       hd_re = "<<-?[[:space:]]*[" sq "\"]?[A-Za-z_][A-Za-z0-9_]*[" sq "\"]?"
+      reason_re = "reason[[:space:]]*=[[:space:]]*\"([^\"\\\\]|\\\\.)*\""
+      echo_re = "(^|[;&|({[:space:]])(echo|printf)[[:space:]]"
       heredoc = ""
+      run_ind = -1
     }
     NR == 1 && /^#!/ { next }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      ind = length($0) - length(line)
+    }
+    # A block scalar holds the lines indented deeper than its key (the YAML
+    # 1.2.2 specification, block scalars), so the first line that is not ends it.
+    kind == "yml" && run_ind >= 0 && line != "" && ind <= run_ind {
+      run_ind = -1
+      heredoc = ""
+    }
     heredoc != "" {
       t = $0
       if (heredoc_tabs) sub(/^\t+/, "", t)
+      if (kind == "yml") sub(/^[[:space:]]+/, "", t)
       if (t == heredoc) heredoc = ""
       next
     }
     {
-      line = $0
-      sub(/^[[:space:]]+/, "", line)
       if (line ~ /^#/) {
         cite_check(line, "comment", 0, 0)
         next
       }
-      if (is_sh && match($0, hd_re)) {
+      in_run = (kind == "sh")
+      if (kind == "yml") {
+        if (line ~ /^(-[[:space:]]+)?run:[[:space:]]*[|>]/) {
+          run_ind = ind
+          next
+        }
+        in_run = (run_ind >= 0)
+        if (match(line, /^(-[[:space:]]+)?run:[[:space:]]*/)) {
+          in_run = 1
+          line = substr(line, RLENGTH + 1)
+        }
+        if (in_run && match(line, echo_re)) {
+          t = substr(line, RSTART)
+          gsub(/\\/, "", t)
+          cite_check(t, "echoed text", 0, 0)
+        }
+      }
+      if (kind == "toml") {
+        t = $0
+        while (match(t, reason_re)) {
+          cite_check(substr(t, RSTART, RLENGTH), "lint reason", 0, 0)
+          t = substr(t, RSTART + RLENGTH)
+        }
+      }
+      if (in_run && match($0, hd_re)) {
         tok = substr($0, RSTART, RLENGTH)
         heredoc_tabs = (tok ~ /^<<-/)
         sub(/^<<-?[[:space:]]*/, "", tok)
@@ -309,15 +354,23 @@ check_file() {
   return 1
 }
 
-# The HASH files of the tree: shell scripts under scripts/ and every
-# Cargo.toml outside the vendored corpora.
+# The HASH files of the tree, outside the vendored corpora: shell scripts
+# under scripts/, every Cargo.toml, clippy.toml, the YAML under .github
+# (workflows, composite actions and the repository configuration) and the TOML
+# under docker/. A `case` pattern's `*` also matches `/`.
 is_hash_file() {
   case "$1" in
   docs/specs/*) return 1 ;;
-  scripts/*.sh | Cargo.toml | */Cargo.toml) return 0 ;;
+  scripts/*.sh | Cargo.toml | */Cargo.toml | clippy.toml) return 0 ;;
+  .github/*.yml | .github/*.yaml | docker/*.toml) return 0 ;;
   *) return 1 ;;
   esac
 }
+
+# The pathspecs that list the files the guard reads. A pathspec `*` also
+# matches `/`, and is_hash_file narrows the set.
+pathspecs=('*.rs' 'scripts/*.sh' 'Cargo.toml' '*/Cargo.toml' 'clippy.toml'
+  '.github/*.yml' '.github/*.yaml' 'docker/*.toml')
 
 # Proves checks 9 and 10: every refused form fails with its message, and
 # every near miss passes. Fixtures are written to a temporary tree.
@@ -390,11 +443,45 @@ self_test() {
   expect h.sh accepted "" '# The byte 0xA1 opens the frame; Annex A §A.1.'
   expect i.sh accepted "" '#!/usr/bin/env bash' '# A plain comment.'
 
+  local steps=('jobs:' '  x:' '    runs-on: ubuntu-latest' '    steps:')
+  expect a.yml refused "$internal" '  # through env:, never spliced into run: (.claude/rules/ci-cd.md).'
+  expect b.yml refused "$internal" '  # The guard (docs/architecture.md section 12): the matrix.'
+  expect c.yml refused "$marker" '# Nothing is published (decision A35).'
+  # shellcheck disable=SC2016 # a literal workflow fixture: the backticks are Markdown the echo prints
+  expect d.yml refused "$internal" "${steps[@]}" '      - run: |' \
+    '          echo "a no-op (\`docs/architecture.md\` section 11)."'
+  expect e.yml refused "$marker" "${steps[@]}" '      - run: |' '          set -euo pipefail' \
+    '          { echo "### Nothing"; echo "a no-op (decision A35)."; } >> out.md'
+  expect f.yml refused "$internal" "${steps[@]}" '      - run: echo "rules: .claude/rules/ci-cd.md"'
+  expect g.yml refused "$marker" "${steps[@]}" '      - name: Print' '        run: >-' \
+    "          printf '%s\\n' 'the resolver fails closed (A17)'"
+  expect action.yaml refused "$internal" 'runs:' '  using: composite' '  steps:' \
+    '    # A publishing lane restores no cache (.claude/rules/ci-cd.md).'
+
+  expect h.yml accepted "" "${steps[@]}" '      - run: |' '          echo "the pin table of docs/architecture.md"'
+  expect i.yml accepted "" "${steps[@]}" '      - name: Print' '        run: |' '          echo "ok"' \
+    '      - name: echo the summary (A35) is a step name, not a run line'
+  expect j.yml accepted "" "${steps[@]}" '      - run: |' "          cat > out.md <<EOF" \
+    '          # Provenance (.claude/rules/vendored-inputs.md)' '          EOF' '          echo "done"'
+  expect k.yml accepted "" "${steps[@]}" '      - run: echo "the byte 0xA1; Annex A §A.1; HbA1c"'
+  expect l.yml accepted "" '# Pinned in docs/VERSIONS.md (the GitHub Actions security hardening guide).'
+
+  expect clippy.toml refused "$internal" '# Clippy configuration (.claude/rules/reliability.md).'
+  expect clippy.toml refused "$internal" 'disallowed-types = [' \
+    '  { path = "serde_json::Value", reason = "a Value lives at one of the four seams of rust-style.md" },' ']'
+  expect clippy.toml refused "$marker" '  { path = "x::Y", reason = "decision A2: typed carriers only" },'
+  expect clippy.toml accepted "" '# Clippy configuration (the Clippy book, Configuration).' \
+    '  { path = "serde_json::Value", reason = "typed carriers only; HbA1c and 0xA1 are words" },'
+  expect registry.toml refused "$internal" '# reached at its API root (docs/architecture.md section 8).'
+  expect ferrofed.toml refused "$marker" '# a patient query fails closed with 424 (decision A17).'
+  expect ferrofed.toml accepted "" '# a patient query fails closed with 424 (§11.4, N37).' \
+    'document = "/etc/ferrofed/registry.toml"'
+
   if [[ "$fails" -ne 0 ]]; then
     echo "comment-style self-test: $fails case(s) failed." >&2
     return 1
   fi
-  echo "ok: comment-style self-test (internal citations and decision markers refused in .rs, .sh and Cargo.toml; near misses accepted)"
+  echo "ok: comment-style self-test (internal citations and decision markers refused in .rs, .sh, Cargo.toml, clippy.toml, workflow and action YAML and the docker TOML; near misses accepted)"
 }
 
 mode="${1:---all}"
@@ -414,7 +501,7 @@ case "$mode" in
     *.rs) files+=("$f") ;;
     *) is_hash_file "$f" && files+=("$f") ;;
     esac
-  done < <(git ls-files '*.rs' 'scripts/*.sh' 'Cargo.toml' '*/Cargo.toml')
+  done < <(git ls-files -- "${pathspecs[@]}")
   ;;
 --diff)
   base="${2:?usage: --diff <base> [head]}"
@@ -425,12 +512,15 @@ case "$mode" in
     *.rs) files+=("$f") ;;
     *) is_hash_file "$f" && files+=("$f") ;;
     esac
-  done < <(git diff --name-only "$base" "$head" -- '*.rs' 'scripts/*.sh' 'Cargo.toml' '*/Cargo.toml')
+  done < <(git diff --name-only "$base" "$head" -- "${pathspecs[@]}")
   ;;
 --files)
   shift
   for f in "$@"; do
     [[ -f "$f" ]] || continue
+    # The hook passes an absolute path, and the patterns of is_hash_file are
+    # relative to the repository root this script runs from.
+    f="${f#"$PWD"/}"
     case "$f" in
     *.rs) files+=("$f") ;;
     *) is_hash_file "$f" && files+=("$f") ;;

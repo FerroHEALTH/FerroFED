@@ -103,9 +103,9 @@ cat > "$dest/PROVENANCE.md" << PROV
 # Provenance: the Federation Tier reference implementation
 
 The whole repository tree, vendored verbatim by
-\`scripts/vendor/federation-ref.sh\` (.claude/rules/vendored-inputs.md), less
-the dependency manifest listed below. Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+\`scripts/vendor/federation-ref.sh\`, less the dependency manifest listed
+below. Never edit a file here: change the pin in docs/VERSIONS.md and re-run
+the script.
 
 - Source: <https://github.com/$repo>
 - Pin: commit \`$commit\`

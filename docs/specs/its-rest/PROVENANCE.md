@@ -3,13 +3,12 @@
 
 # Provenance: the openEHR ITS-REST OpenAPI documents
 
-Vendored verbatim by `scripts/vendor/its-rest.sh`
-(.claude/rules/vendored-inputs.md). Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+Vendored verbatim by `scripts/vendor/its-rest.sh`. Never edit a file here:
+change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <https://github.com/openEHR/specifications-ITS-REST>
 - Pin: tag `Release-1.1.0`, which resolves to commit `24058992d5fa96e8dfbd855d9c133f328387fc09`
-- Fetched: 2026-10-01
+- Fetched: 2026-10-02
 - Upstream licence: the specification content declares `Creative Commons Attribution-NoDerivs 3.0 Unported` in each
   document's `info.license`. The repository's own `LICENSE` file is the
   Apache License 2.0 and is vendored beside this file, so both statements are

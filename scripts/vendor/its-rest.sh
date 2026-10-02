@@ -93,9 +93,8 @@ cat > "$dest/PROVENANCE.md" << PROV
 
 # Provenance: the openEHR ITS-REST OpenAPI documents
 
-Vendored verbatim by \`scripts/vendor/its-rest.sh\`
-(.claude/rules/vendored-inputs.md). Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+Vendored verbatim by \`scripts/vendor/its-rest.sh\`. Never edit a file here:
+change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <https://github.com/$repo>
 - Pin: tag \`$tag\`, which resolves to commit \`$commit\`

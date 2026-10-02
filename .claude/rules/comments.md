@@ -84,7 +84,8 @@ A comment describes the code as it IS.
   directly above a `#[test]` or `#[tokio::test]` attribute, naming only the §17
   CP ids and §16 tracks the test scores. It is a structural tag read by
   `scripts/checks/conformance-matrix.sh` against `conformance/matrix.tsv`
-  (`docs/architecture.md` §12, owner decision 2026-10-01), never prose.
+  (the §17 conformance points and the §16.3 tracks; no specification governs
+  the marker form: our own design), never prose.
 - No other marker form exists: `FIXME`, `HACK`, `XXX`, `WIP`, and any bespoke
   vocabulary fail the guard.
 
@@ -94,9 +95,17 @@ A comment describes the code as it IS.
   marker vocabulary, NOTE at most 3 lines (at most 8 in doc comments), `//`
   runs at most 8 lines, punctuation-only comment lines (sweep residue),
   backtick-quoted markers used AS markers on doc lines, and empty
-  `# Errors`/`# Panics` doc sections. Runs per-edit (the `rust_fmt_clippy.sh`
-  PostToolUse hook); a CI job running `--all` over the whole tree is added when
-  the Rust CI lanes are stood up.
+  `# Errors`/`# Panics` doc sections. Check 9 refuses a citation of an internal
+  file (`docs/architecture.md`, a path into `.claude/`, `CLAUDE.md`, or the
+  name of a rule or memory file) and check 10 a decision-register marker
+  (`decision A17`, a bare `A30`), in Rust comments, doc comments and lint
+  `reason` strings, in the full-line comments of `scripts/**/*.sh`, every
+  `Cargo.toml`, `clippy.toml`, the YAML under `.github/` and the TOML under
+  `docker/`, in the `echo` and `printf` text of a workflow `run:` block, and
+  in the `reason` strings of those TOML files; `--self-test` proves each refused
+  form and its near misses. Runs per-edit on every one of those file kinds
+  (the `rust_fmt_clippy.sh` PostToolUse hook) and in the CI `comment-style`
+  job, which runs `--self-test` and `--all`.
 - `clippy::too_long_first_doc_paragraph` (CI `-D warnings`): the RFC 1574
   summary line. Configured in `[workspace.lints]` when the workspace exists.
 - Companion doc lints (`doc_markdown`, `missing_errors_doc`,

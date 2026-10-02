@@ -106,8 +106,8 @@ jobs:
   # helpers, and the hooks. `--severity=style` is the lowest floor, so every
   # finding gates. A finding is fixed, or it carries a per-line
   # `# shellcheck disable=SCnnnn` directive with its reason. There is no
-  # .shellcheckrc, deliberately: nothing may turn a code off tree-wide
-  # (.claude/rules/ci-cd.md).
+  # .shellcheckrc, deliberately: nothing may turn a code off tree-wide (no
+  # specification governs this: our own design).
   shellcheck:
     name: shellcheck
     runs-on: ubuntu-latest
@@ -130,8 +130,7 @@ jobs:
           # Every tracked *.sh, plus every tracked extensionless file whose
           # first line is a shell shebang, which covers the git hooks. A
           # NUL-delimited pipe, so a path with a space survives. Vendored
-          # trees are bytes a publisher owns and are never linted in place
-          # (.claude/rules/vendored-inputs.md).
+          # trees are bytes a publisher owns and are never linted in place.
           {
             git ls-files -z -- '*.sh' ':(glob,exclude)docs/specs/**' ':(glob,exclude)**/vendor/**'
             git ls-files -z -- ':(glob,exclude)docs/specs/**' ':(glob,exclude)**/vendor/**' \
@@ -179,9 +178,10 @@ jobs:
             hadolint --config .hadolint.yaml "${files[@]}"
 
   # The comment-style guard (RFC 505 and RFC 1574) over the whole tree: every
-  # hand-written .rs file, plus the citation checks over the shell scripts and
-  # every Cargo.toml. Its self-test proves the citation checks refuse what they
-  # must and pass their near misses.
+  # hand-written .rs file, plus the citation checks over the shell scripts,
+  # every Cargo.toml, clippy.toml, the YAML under .github and the TOML under
+  # docker/. Its self-test proves the citation checks refuse what they must and
+  # pass their near misses.
   comment-style:
     name: comment-style
     runs-on: ubuntu-latest
@@ -198,8 +198,8 @@ jobs:
           bash scripts/checks/comment-style.sh --all
 
   # The file-length guard: a hand-written Rust file stays under 1000 lines and
-  # a listed breach may not grow (.claude/rules/rust-style.md). It passes on a
-  # tree with no .rs file.
+  # a listed breach may not grow (no specification governs this: our own
+  # design). It passes on a tree with no .rs file.
   file-length:
     name: file-length
     runs-on: ubuntu-latest
@@ -241,8 +241,9 @@ jobs:
           persist-credentials: false
       - run: bash scripts/checks/favicon-sync.sh
 
-  # The conformance-matrix guard (docs/architecture.md section 12): the
-  # matrix's derived columns against the vendored specification, every
+  # The conformance-matrix guard (the §17 conformance points and the §16.3
+  # tracks): the matrix's derived columns against the vendored specification,
+  # every
   # `// conformance:` marker against the matrix, and the rendered book page
   # against the matrix. Static and offline; a failing marked test fails in the
   # Rust tier's test job.
@@ -262,7 +263,7 @@ jobs:
   # against the live tracker: the fallback of fields.sh needs a token that
   # cannot read the organisation's issue types, and the migration and the
   # label run write to every issue. Each drives itself against a stub gh on
-  # PATH instead (.claude/rules/issue-workflow.md).
+  # PATH instead.
   tracker-helpers:
     name: tracker-helpers
     runs-on: ubuntu-latest
@@ -382,8 +383,8 @@ jobs:
       # nextest does not run doctests, so they get their own compile.
       - run: cargo test --doc --workspace --locked --all-features
 
-  # The container-backed suite (#39, docs/architecture.md section 13). Every
-  # such test checks FERROFED_E2E first and returns early without it, so the
+  # The container-backed suite (#39; no specification governs it: our own
+  # design). Every such test checks FERROFED_E2E first and returns early without it, so the
   # test job above stays offline; this job sets the gate and runs the crates
   # that carry container tests against the digest-pinned images the
   # testkit's PinnedImage constants name and docs/VERSIONS.md repeats.
@@ -472,8 +473,9 @@ jobs:
       - run: cargo hack check --rust-version --workspace --locked --all-targets
 
   # Each published crate is one specification with a feature per layer or
-  # profile (docs/architecture.md section 11), so every feature must build and
-  # lint on its own as well as together. Per package, never the workspace
+  # profile (the Cargo reference, Features; no specification governs the
+  # layout: our own design), so every feature must build and lint on its own
+  # as well as together. Per package, never the workspace
   # all-features union.
   features:
     name: features (cargo-hack)
@@ -497,7 +499,8 @@ jobs:
           -- -D warnings
 
   # The library crates stay publishable while the workspace `publish` switch is
-  # off (docs/architecture.md section 11, decision A35): `cargo package` builds
+  # off (the Cargo reference, the `publish` field; no specification governs the
+  # policy: our own design): `cargo package` builds
   # and verifies every crates/* tarball an upload would send, and once the
   # switch is on the script adds `cargo publish --dry-run` over the
   # publishable set. No cache, as in the publishing lane it rehearses.
@@ -520,7 +523,8 @@ jobs:
 
   # A published crates.io version is immutable, so packaged content that
   # changes without a version bump is a defect nothing can repair after the
-  # upload (.claude/rules/crates-publishing.md). The script exits 0 while no
+  # upload (the Cargo reference, Publishing on crates.io: a publish is
+  # generally permanent). The script exits 0 while no
   # crates/* member exists. `no-crate-bump` is the escape for a diff that
   # provably does not alter packaged bytes.
   crate-version-guard:
@@ -570,7 +574,8 @@ jobs:
   # every other job and runs on always(), so it reports even when every gated
   # Rust lane is skipped. It fails when a needed job failed or was cancelled
   # and passes when every result is success or skipped. The results arrive
-  # through env:, never spliced into run: (.claude/rules/ci-cd.md).
+  # through env:, never spliced into run: (the GitHub Actions security
+  # hardening guide, script injection).
   conclusion:
     name: conclusion
     needs:
