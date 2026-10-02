@@ -30,19 +30,19 @@ publish = false
 # The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
 # one lockstep family at the latest published release, moved together by the
 # dependency sweep and checked against docs/VERSIONS.md by
-# scripts/checks/versions.sh. The pin is 0.0.77, which classifies AQL
-# function calls (FerroEHR #3529) and builds every ITS-REST client without
-# redirects (FerroEHR #3531).
-openehr-base = "0.0.77"
-openehr-rm = "0.0.77"
-openehr-query = { version = "0.0.77", features = ["federation"] }
-openehr-its = { version = "0.0.77", default-features = false }
-openehr-sdt = { version = "0.0.77", default-features = false }
+# scripts/checks/versions.sh. The pin is 0.0.78, which makes the
+# Authorization value of a credential public (FerroEHR #3535), so
+# configuration load checks exactly what the node client sends.
+openehr-base = "0.0.78"
+openehr-rm = "0.0.78"
+openehr-query = { version = "0.0.78", features = ["federation"] }
+openehr-its = { version = "0.0.78", default-features = false }
+openehr-sdt = { version = "0.0.78", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.25" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.26" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.7" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
@@ -85,8 +85,6 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
-# The basic scheme of the PIX Manager credentials (#43), RFC 7617.
-base64 = "0.23.1"
 # The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
 # ImplementationGuide), compiled only in crates/ihe-iti and, for its PIX Manager
 # test device, in tools/ferrofed-testkit; checked against docs/VERSIONS.md by

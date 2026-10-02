@@ -19,6 +19,7 @@ use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
+use openehr_its::rest::client::InvalidCredentials;
 use secrecy::SecretString;
 use url::Url;
 use wiremock::matchers::{header, method, path, query_param};
@@ -393,4 +394,48 @@ fn every_member_must_have_exactly_one_domain() {
         Err(PixmConfigError::Domain { .. })
     ));
     assert!(matches!(built(Vec::new()), Err(PixmConfigError::NoManager)));
+}
+
+#[test]
+fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
+    let refused = |auth| {
+        let config = ManagerConfig {
+            base: Url::parse("http://127.0.0.1:9/fhir/").expect("a base"),
+            auth,
+            members: members(&[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)]),
+        };
+        PixmResolver::from_config(vec![config], namespaces(), &registry())
+            .expect_err("the credential is refused")
+    };
+    let bearer = refused(PixAuth::Bearer(SecretString::from("Qz7left Qz7right")));
+    assert!(
+        matches!(
+            &bearer,
+            PixmConfigError::Credentials(InvalidCredentials::NotB64Token)
+        ),
+        "a bearer token is the b64token of RFC 6750 §2.1: {bearer:?}"
+    );
+    let basic = refused(PixAuth::Basic {
+        user: "gate:way".to_owned(),
+        password: SecretString::from("Qz7left"),
+    });
+    assert!(
+        matches!(
+            &basic,
+            PixmConfigError::Credentials(InvalidCredentials::ColonInUserId)
+        ),
+        "a basic user-id carries no colon (RFC 7617 §2): {basic:?}"
+    );
+    for error in [&bearer, &basic] {
+        let mut rendered = format!("{error}\n{error:?}");
+        let mut cause = std::error::Error::source(error);
+        while let Some(source) = cause {
+            rendered.push_str(&source.to_string());
+            cause = source.source();
+        }
+        assert!(
+            !rendered.contains("Qz7"),
+            "the refusal quotes no secret: {rendered}"
+        );
+    }
 }
