@@ -516,6 +516,7 @@ version = "0.0.0"
 dependencies = [
  "ferrofed-registry",
  "http",
+ "openehr-base",
  "openehr-federation",
  "openehr-its",
  "openehr-query",
