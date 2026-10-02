@@ -98,6 +98,7 @@ EFFORT_JUDGED="${GH_MIGRATE_EFFORT:-
 147 high
 154 medium
 155 medium
+157 low
 }"
 
 # The work kind of each Task whose labels name none and whose title carries
