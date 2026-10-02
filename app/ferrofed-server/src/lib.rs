@@ -18,6 +18,7 @@
 pub mod body;
 pub mod cli;
 pub mod config;
+pub mod error;
 pub mod facade;
 pub mod federation;
 pub mod health;
@@ -270,15 +271,15 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 /// Every path no route serves.
 ///
 /// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface the
-/// gateway will serve, so it answers `501`: that part of the façade is not built
-/// yet, and a `404` would claim the resource does not exist. Every other path
-/// answers `404`. Neither answer echoes the path.
+/// gateway will serve, so it answers `501` (§7a.1, N32): that part of the
+/// façade is not built yet, and a `404` would claim the resource does not
+/// exist. Every other path answers `404`. Neither answer echoes the path.
 async fn unrouted(uri: Uri, headers: HeaderMap) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();
     if uri.path().starts_with(ITS_REST_PREFIX) {
-        body::error(StatusCode::NOT_IMPLEMENTED, "not_implemented", request_id)
+        error::fixed(error::Code::NotImplemented, request_id)
     } else {
-        body::error(StatusCode::NOT_FOUND, "not_found", request_id)
+        error::fixed(error::Code::NotFound, request_id)
     }
 }
 

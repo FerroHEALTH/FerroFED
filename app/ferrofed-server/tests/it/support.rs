@@ -127,12 +127,18 @@ pub(crate) async fn call(
     Ok((status, String::from_utf8(bytes.to_vec())?))
 }
 
-/// The body this server answers a refusal with.
+/// The body this server answers a refusal with: the ITS-REST `Error` with the
+/// stable code and the request id, and nothing else.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ErrorBody {
+    /// The ITS-REST message.
+    pub(crate) message: String,
+    /// The ITS-REST validation errors.
+    #[serde(rename = "validationErrors")]
+    pub(crate) validation_errors: Vec<String>,
     /// The stable error code.
-    pub(crate) error: String,
+    pub(crate) code: String,
     /// The request id.
     pub(crate) request_id: String,
 }

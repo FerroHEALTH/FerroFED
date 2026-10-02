@@ -20,8 +20,10 @@
 //! strategy, and [`cells`] builds each façade row with the subject columns
 //! re-injected (N5).
 //! A refused query is a `400` whose message locates the fault by byte range
-//! and never quotes it (§5.4.3). Every strip, refusal and outbound-gate stop
-//! is a [`security`] event, by position and never by value.
+//! and never quotes it (§5.4.3), and whose body names the refusal's stable
+//! code ([`crate::error`]). A failing fan-out echoes no `q`. Every strip,
+//! refusal and outbound-gate stop is a [`security`] event, by position and
+//! never by value.
 
 pub mod cells;
 pub mod completeness;
@@ -42,9 +44,9 @@ use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::{Analysis, Paging, analyse};
-use openehr_its::rest::generated::common::Error as ItsError;
 use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
 
+use crate::error::{self, Code};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
@@ -64,13 +66,13 @@ pub async fn query_aql(
     let started = Instant::now();
     let request_id = request_id::of(&headers).unwrap_or_default().to_owned();
     let Some(federation) = state.federation() else {
-        return crate::body::error(StatusCode::NOT_IMPLEMENTED, "not_implemented", &request_id);
+        return error::fixed(Code::NotImplemented, &request_id);
     };
     // TODO(#80): the authenticated client session the resolution bindings belong to.
     let session: Option<SessionKey> = None;
     let completion = match completeness::of(&headers, federation.best_effort()) {
         Ok(completion) => completion,
-        Err(error) => return Failure::Completeness(error).into_response(),
+        Err(error) => return Failure::Completeness(error).respond(&request_id),
     };
     let configured = federation.budget();
     let wait = prefer::wait(&headers);
@@ -91,7 +93,7 @@ pub async fn query_aql(
             }
             response
         }
-        Err(failure) => failure.into_response(),
+        Err(failure) => failure.respond(&request_id),
     }
 }
 
@@ -129,7 +131,6 @@ enum Failure {
     Plan(#[source] plan::TargetsError),
     /// Node selection left no registry member in scope, so the request
     /// resolves to no destination (§11.2, §11.3).
-    // TODO(#57): answer with the `no-destination` error code.
     #[error(
         "no registry member is in scope for this request, so it cannot be resolved to any destination (§11.2, §11.3)"
     )]
@@ -145,32 +146,41 @@ enum Failure {
     Envelope(#[source] openehr_federation::error::WireError),
 }
 
-impl IntoResponse for Failure {
-    fn into_response(self) -> Response {
-        let status = match &self {
-            Self::Body
-            | Self::Completeness(_)
-            | Self::Parameter(_)
-            | Self::Refused(_)
-            | Self::Plan(plan::TargetsError::Patient(_)) => StatusCode::BAD_REQUEST,
-            Self::NoDestination => StatusCode::NOT_FOUND,
-            Self::Cells(_) => StatusCode::BAD_GATEWAY,
-            Self::Plan(_) | Self::FanOut(_) | Self::Envelope(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
+impl Failure {
+    /// The code of this failure, which names its status (§11.2).
+    fn code(&self) -> Code {
+        match self {
+            Self::Body => Code::BodyInvalid,
+            Self::Completeness(completeness::CompletenessError::NotOffered) => {
+                Code::PartialUnsupported
             }
-        };
-        if status.is_server_error() {
-            tracing::error!(error = %crate::chain(&self), "the federated query failed");
+            Self::Completeness(
+                completeness::CompletenessError::Repeated | completeness::CompletenessError::Value,
+            ) => Code::CompletenessInvalid,
+            Self::Parameter(_) => Code::ParameterInvalid,
+            Self::Refused(refusal) => Code::Refused(refusal.into()),
+            Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
+            Self::NoDestination => Code::NoDestination,
+            // NOTE: §11.1, a node row the gateway cannot use is a node-error
+            // at dispatch, so one reaching the cells is the gateway's fault.
+            Self::Plan(_) | Self::FanOut(_) | Self::Cells(_) | Self::Envelope(_) => Code::Internal,
         }
-        let message = self.to_string();
-        (
-            status,
-            Json(ItsError {
-                message,
-                validation_errors: Vec::new(),
-            }),
-        )
-            .into_response()
+    }
+
+    /// The error answer of this failure, naming `request_id`.
+    ///
+    /// The message is the failure's display text, which locates a fault and
+    /// never quotes the query, a parameter value or a header value (§5.4.3).
+    fn respond(self, request_id: &str) -> Response {
+        let code = self.code();
+        if code.status().is_server_error() {
+            tracing::error!(
+                code = code.as_str(),
+                error = %crate::chain(&self),
+                "the federated query failed"
+            );
+        }
+        error::response(code, self.to_string(), request_id)
     }
 }
 
@@ -275,9 +285,6 @@ async fn federate(
         Failure::FanOut(error)
     })?;
     let mut status = answer.status();
-    let mut result_set = answer
-        .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
-        .map_err(Failure::Envelope)?;
     // NOTE: no specification governs this (§11.3 covers only an answered lookup):
     // our own design, a cross-reference that could not answer fails the query
     // 424 under all-or-nothing; under best-effort it stays reported.
@@ -287,6 +294,12 @@ async fn federate(
     {
         status = StatusCode::FAILED_DEPENDENCY;
     }
+    // NOTE: §11.4 calls the failing answer an error body, and §5.4.3 keeps
+    // the query text out of one, so only a 200 echoes q (N17).
+    let echoed = (status == StatusCode::OK).then(|| request.q.clone());
+    let mut result_set = answer
+        .into_result_set(echoed, Some(analysis.columns().to_vec()))
+        .map_err(Failure::Envelope)?;
     let rows = if status == StatusCode::OK {
         cells::reinject(
             std::mem::take(&mut result_set.rows),
@@ -299,4 +312,61 @@ async fn federate(
     };
     result_set.rows = rows;
     Ok((status, result_set))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Failure, cells, completeness, plan};
+    use crate::error::Code;
+    use ferrofed_engine::fanout::FanOutError;
+    use ferrofed_identity::patient::PatientRefError;
+    use http::StatusCode;
+    use openehr_federation::aql::refusal::Refusal;
+
+    #[test]
+    fn each_failure_answers_its_code_and_status() {
+        let table = [
+            (Failure::Body, "body-invalid", StatusCode::BAD_REQUEST),
+            (
+                Failure::Completeness(completeness::CompletenessError::Value),
+                "completeness-invalid",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Completeness(completeness::CompletenessError::Repeated),
+                "completeness-invalid",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Completeness(completeness::CompletenessError::NotOffered),
+                "partial-unsupported",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Refused(Refusal::OffsetUnsupported),
+                "offset-unsupported",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Plan(plan::TargetsError::Patient(PatientRefError::EmptyNamespace)),
+                "patient-invalid",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::FanOut(FanOutError::Clock),
+                "internal",
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
+            (
+                Failure::Cells(cells::CellError::NoSubject),
+                "internal",
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
+        ];
+        for (failure, code, status) in table {
+            let answered: Code = failure.code();
+            assert_eq!(code, answered.as_str(), "{failure:?}");
+            assert_eq!(status, answered.status(), "{failure:?}");
+        }
+    }
 }

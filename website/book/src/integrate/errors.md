@@ -1,0 +1,130 @@
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# Errors and status codes
+
+When FerroFED fails a request, the HTTP status follows the table of §11.2 of
+the Federation Tier specification, and the body names a stable code your
+client can branch on. This page lists every code.
+
+The codes are API. A code is only ever added: it is never renamed, never
+removed and never moved to another status, so a client written against this
+page keeps working across releases. A test holds this page to the gateway's
+own table, so a code the gateway answers is always listed here.
+
+## The error body
+
+A failure the gateway reports on its own behalf answers with the openEHR
+ITS-REST `Error` body and two more members:
+
+- `message`: a sentence for a person. Its wording can change between
+  releases, so do not parse it.
+- `validationErrors`: the ITS-REST list, which is empty.
+- `code`: the stable code, from the tables below.
+- `request_id`: the request id, the value of the `X-Request-Id` response
+  header, so you and the operator name the same request.
+
+```json
+{
+  "message": "offset-based paging is not supported across a fan-out (§11.6.2, N39)",
+  "validationErrors": [],
+  "code": "offset-unsupported",
+  "request_id": "6f1c0b9e-3d1a-4c55-9a43-0d8f1f2b7c11"
+}
+```
+
+No error body quotes your request: not the AQL text, not the value of a
+query parameter, not a header value and not the path. A message about part of
+the query points at it by byte range (`bytes 52..77`), and a message about a
+query parameter names the parameter and never its value (§5.4.3).
+
+## A failed fan-out
+
+Under the default all-or-nothing strategy, a query fails when a node it asked
+did not answer or answered with an error (§11.4, N37). That answer is not an
+error body. It is the federated `RESULT_SET` with no rows and no `q`, and its
+`meta.federation` carries `complete: false` and every node with its status
+(§11.1):
+
+| Status | When | The cause, in `meta.federation.endpoints[]` |
+|---|---|---|
+| 504 | a node did not answer in time, or could not be reached | `time-out` or `offline`, with the node's `error` |
+| 424 | a node answered with an error, or with a result the gateway cannot use | `node-error`, with the node's own failure in `error` |
+| 424 | the cross-reference service could not answer for a member | `not-resolved`, with the service's failure in `error` |
+
+When both a 504 and a 424 cause occur, the answer is `504` (§11.4). With
+`openEHR-federation-completeness: partial` on a gateway that offers it, the
+same causes answer `200` with the rows of the nodes that did answer, and the
+failed nodes reported the same way.
+
+Two statuses are answers and never fail a query: `not-resolved` (the patient
+is not known at that node) and `consent-denied`. A query where no node knows
+the patient answers `200` with no rows (§11.3).
+
+## A node's own answer
+
+On a route the gateway forwards to one node, the node's status and body pass
+through as the node sent them: a node's `404` is the node's `404`, and a
+node's `500` is the node's `500` (§11.2). Those answers carry no FerroFED
+code, because the body is the node's. The single-node routes are planned
+build order; until they land, every ITS-REST path other than the federated
+query answers `501` with the code `not-implemented`.
+
+Inside a fan-out, a node's `404` or `500` is not passed through. The node is
+reported `node-error`, and the query fails with `424`, or, under `partial`,
+the node is reported and the query succeeds.
+
+## Gateway codes
+
+| Code | Status | When |
+|---|---|---|
+| `body-invalid` | 400 | The request body is not the ITS-REST request the route takes, for example an `AdhocQueryExecute` without a string `q`. |
+| `completeness-invalid` | 400 | The `openEHR-federation-completeness` header is repeated, or carries neither `all` nor `partial` (§11.4). |
+| `partial-unsupported` | 400 | The request asks for `partial`, and this gateway does not offer best-effort (§11.4, N37). |
+| `parameter-invalid` | 400 | A query parameter is `null`, an array, an object, or an integer outside 64 bits. |
+| `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). |
+| `no-destination` | 404 | The request can be routed to no destination at all (§11.2, §11.3). |
+| `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node; the gateway never chooses between them (§12.5.2, N42). |
+| `controlling-system-unreachable` | 409 | A versioned write's controlling system is not reachable, and the gateway never writes to a copy (§10.3, N36). |
+| `internal` | 500 | The gateway failed on its own side. The operator's log carries the cause under the request id. |
+| `not-found` | 404 | The path is outside every surface the gateway serves. |
+| `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32). |
+
+The `404` for a path with no destination and the two `409` codes belong to
+follow-up routing (§12), which is planned build order; the codes are fixed
+now, so a client can handle them before they occur.
+
+## Query refusals
+
+The gateway refuses a query it cannot answer correctly before it sends
+anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
+
+| Code | Status | When |
+|---|---|---|
+| `not-aql` | 400 | The query is not AQL 1.1.0. |
+| `parameters` | 400 | The query parameters cannot be bound: one is used without a value, supplied but unused, supplied twice, or of a form its position cannot hold. |
+| `unreducible` | 400 | The patient predicate cannot be reduced to one `ehr_id` scope per node: it sits under `OR` or `NOT`, is not an `=`, compares with a non-literal, or uses another subject path (§7.1, §5.4.3). |
+| `identifier-not-string` | 400 | The patient identifier or its namespace is compared with something other than a string. |
+| `second-subject` | 400 | The query names two different patient identifiers (§7.1). |
+| `second-namespace` | 400 | The query names two different issuing namespaces for the patient (§5.2, §7.1). |
+| `empty-identifier` | 400 | The patient identifier is empty (§5.2). |
+| `no-namespace` | 400 | The patient identifier carries no namespace, and the deployment configures no default (§5.2). |
+| `subject-projection` | 400 | A selected subject column is not one the gateway can fill in from the resolution input (N5, §7.1). |
+| `subject-without-predicate` | 400 | The subject column is selected, and the query names no patient (N5). |
+| `subject-ordering` | 400 | A subject path appears in `ORDER BY`, which would carry it to a node (§5.4.2). |
+| `identifier-elsewhere` | 400 | The patient identifier appears in another position of the query, where it would reach a node (§5.4.1, N33). |
+| `unfoldable-function` | 400 | A string function over a literal is compared with an identifier path and cannot be folded at the gateway (§5.4.1). |
+| `undirected-aggregate` | 400 | An aggregate cannot be computed correctly across nodes; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). |
+| `offset-unsupported` | 400 | Offset-based paging is not supported across a fan-out (§11.6.2, N39). |
+| `paging-conflict` | 400 | The ITS-REST `offset` or `fetch` member and the query's `OFFSET` or `LIMIT` disagree, or `TOP` and `LIMIT` name different counts. |
+| `negative-paging` | 400 | An ITS-REST paging member, or a row count of the query, is negative. |
+| `top-backward` | 400 | `TOP … BACKWARD` is not supported across a fan-out; write `ORDER BY … DESC LIMIT n`. |
+| `order-not-selected` | 400 | Under `DISTINCT`, an `ORDER BY` path is not also selected (N13). |
+| `node-set-undefined` | 400 | The query names no patient and no endpoints, so no node set is defined (N4, §8). |
+
+## Other answers
+
+Two answers come from the HTTP layer around the gateway and carry no error
+body or code: `408`, with an empty body, when a request runs past the
+server's request timeout, and `413`, with a short plain-text body, when the
+request body is over the configured size limit.

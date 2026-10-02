@@ -137,7 +137,9 @@ pub async fn patient(
                 plan = plan
                     .dispatch(
                         endpoint,
-                        NodeQuery::new(node.aql()).with_scope(ehr_id.hier_object_id()),
+                        NodeQuery::new(node.aql())
+                            .with_scope(ehr_id.hier_object_id())
+                            .with_width(super::cells::width(node.columns())),
                     )
                     .map_err(TargetsError::Plan)?;
                 bound.push((member.clone(), ehr_id.clone()));
@@ -188,9 +190,13 @@ pub fn unscoped(
 ) -> Result<Targets, TargetsError> {
     let membership = membership(snapshot, selection);
     let mut plan = exclude(Plan::new(), &membership.excluded)?;
+    let node = query.node_query();
     for endpoint in membership.asked.into_values() {
         plan = plan
-            .dispatch(endpoint, NodeQuery::new(query.node_query().aql()))
+            .dispatch(
+                endpoint,
+                NodeQuery::new(node.aql()).with_width(super::cells::width(node.columns())),
+            )
             .map_err(TargetsError::Plan)?;
     }
     Ok(Targets {

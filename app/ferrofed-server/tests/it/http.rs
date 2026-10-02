@@ -75,7 +75,7 @@ async fn the_unbuilt_its_rest_surface_answers_five_hundred_and_one_and_echoes_no
         let (status, body) = call(app(), request).await?;
         assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "{path}");
         let document: ErrorBody = serde_json::from_str(&body)?;
-        assert_eq!("not_implemented", document.error, "{path}");
+        assert_eq!("not-implemented", document.code, "{path}");
         assert!(!document.request_id.is_empty(), "a request id is named");
         assert!(!body.contains("SELECT"), "the body echoes no query: {body}");
         assert!(
@@ -96,7 +96,7 @@ async fn a_path_outside_every_surface_answers_four_hundred_and_four()
     let (status, body) = call(app(), Request::get("/nowhere").body(Body::empty())?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status);
     let document: ErrorBody = serde_json::from_str(&body)?;
-    assert_eq!("not_found", document.error);
+    assert_eq!("not-found", document.code);
     Ok(())
 }
 
@@ -193,7 +193,7 @@ async fn a_panicking_handler_yields_a_five_hundred_with_the_request_id_and_no_me
     );
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
     let document: ErrorBody = serde_json::from_slice(&bytes)?;
-    assert_eq!("internal", document.error);
+    assert_eq!("internal", document.code);
     assert_eq!("corr-panic", document.request_id);
     assert!(
         !String::from_utf8_lossy(&bytes).contains("SYNTHETIC-PANIC-VALUE"),

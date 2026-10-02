@@ -12,7 +12,6 @@
 //! (§5.4.3). No specification governs the body shape: our own design.
 
 use axum::response::Response;
-use http::StatusCode;
 use std::any::Any;
 
 /// The marker a caught panic leaves on its response.
@@ -28,7 +27,7 @@ struct Panicked;
 #[must_use]
 pub fn caught(payload: Box<dyn Any + Send + 'static>) -> Response {
     drop(payload);
-    let mut response = crate::body::error(StatusCode::INTERNAL_SERVER_ERROR, "internal", "");
+    let mut response = crate::error::fixed(crate::error::Code::Internal, "");
     response.extensions_mut().insert(Panicked);
     response
 }
@@ -50,7 +49,7 @@ pub async fn render(response: Response) -> Response {
         request_id = request_id.as_str(),
         "the request handler panicked"
     );
-    let mut rendered = crate::body::error(response.status(), "internal", &request_id);
+    let mut rendered = crate::error::fixed(crate::error::Code::Internal, &request_id);
     // The request id header the propagate layer set is on the old response;
     // carry every header over so the client sees the value the body names.
     let content_type = rendered.headers().get(http::header::CONTENT_TYPE).cloned();

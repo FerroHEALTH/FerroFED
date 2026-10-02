@@ -201,8 +201,39 @@ pub enum Refusal {
 }
 
 impl Refusal {
-    /// A stable name for this refusal, for a security event that records why a
-    /// query was refused without quoting any of it (§5.4.3).
+    /// Every name [`Refusal::kind`] returns, one per variant, in declaration
+    /// order.
+    ///
+    /// The names are API: a gateway answers them as the stable code of its
+    /// error body, so a name is only ever added, never renamed or removed.
+    pub const KINDS: &'static [&'static str] = &[
+        "not-aql",
+        "parameters",
+        "unreducible",
+        "identifier-not-string",
+        "second-subject",
+        "second-namespace",
+        "empty-identifier",
+        "no-namespace",
+        "subject-projection",
+        "subject-without-predicate",
+        "subject-ordering",
+        "identifier-elsewhere",
+        "unfoldable-function",
+        "undirected-aggregate",
+        "offset-unsupported",
+        "paging-conflict",
+        "negative-paging",
+        "top-backward",
+        "order-not-selected",
+        "node-set-undefined",
+    ];
+
+    /// A stable name for this refusal: the code a gateway's error body
+    /// carries, and the name a security event records the refusal by, so
+    /// neither quotes any of the query (§5.4.3).
+    ///
+    /// Every name is in [`Refusal::KINDS`].
     #[must_use]
     pub fn kind(&self) -> &'static str {
         match self {
@@ -340,6 +371,100 @@ impl fmt::Display for At<'_> {
         match self.0 {
             Some(bytes) => write!(f, " (bytes {}..{})", bytes.start, bytes.end),
             None => Ok(()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Refusal, Unreducible};
+    use openehr_query::bind::BindError;
+
+    /// One refusal of every variant, in declaration order.
+    ///
+    /// The `match` in [`ordinal`] has no wildcard, so a new variant fails to
+    /// compile there until it is listed, and the test below then holds
+    /// [`Refusal::KINDS`] to it.
+    fn every() -> Vec<Refusal> {
+        vec![
+            Refusal::NotAql { at: None },
+            Refusal::Parameters(BindError { faults: Vec::new() }),
+            Refusal::Unreducible {
+                reason: Unreducible::NotEquality,
+                at: None,
+            },
+            Refusal::IdentifierNotString { at: None },
+            Refusal::SecondSubject { at: None },
+            Refusal::SecondNamespace { at: None },
+            Refusal::EmptyIdentifier { at: None },
+            Refusal::NoNamespace,
+            Refusal::SubjectProjection { at: None },
+            Refusal::SubjectWithoutPredicate { at: None },
+            Refusal::SubjectOrdering { at: None },
+            Refusal::IdentifierElsewhere { at: None },
+            Refusal::UnfoldableFunction { at: None },
+            Refusal::UndirectedAggregate { at: None },
+            Refusal::OffsetUnsupported,
+            Refusal::PagingConflict {
+                member: "fetch",
+                clause: "LIMIT",
+            },
+            Refusal::NegativePaging { member: "offset" },
+            Refusal::TopBackward,
+            Refusal::OrderNotSelected { at: None },
+            Refusal::NodeSetUndefined,
+        ]
+    }
+
+    /// The declaration position of `refusal`'s variant.
+    fn ordinal(refusal: &Refusal) -> usize {
+        match refusal {
+            Refusal::NotAql { .. } => 0,
+            Refusal::Parameters(_) => 1,
+            Refusal::Unreducible { .. } => 2,
+            Refusal::IdentifierNotString { .. } => 3,
+            Refusal::SecondSubject { .. } => 4,
+            Refusal::SecondNamespace { .. } => 5,
+            Refusal::EmptyIdentifier { .. } => 6,
+            Refusal::NoNamespace => 7,
+            Refusal::SubjectProjection { .. } => 8,
+            Refusal::SubjectWithoutPredicate { .. } => 9,
+            Refusal::SubjectOrdering { .. } => 10,
+            Refusal::IdentifierElsewhere { .. } => 11,
+            Refusal::UnfoldableFunction { .. } => 12,
+            Refusal::UndirectedAggregate { .. } => 13,
+            Refusal::OffsetUnsupported => 14,
+            Refusal::PagingConflict { .. } => 15,
+            Refusal::NegativePaging { .. } => 16,
+            Refusal::TopBackward => 17,
+            Refusal::OrderNotSelected { .. } => 18,
+            Refusal::NodeSetUndefined => 19,
+        }
+    }
+
+    #[test]
+    fn kinds_names_every_variant_once_in_declaration_order() {
+        let every = every();
+        let ordinals: Vec<usize> = every.iter().map(ordinal).collect();
+        assert_eq!(
+            (0..Refusal::KINDS.len()).collect::<Vec<_>>(),
+            ordinals,
+            "every() lists each variant once, in order"
+        );
+        let kinds: Vec<&str> = every.iter().map(Refusal::kind).collect();
+        assert_eq!(Refusal::KINDS, kinds.as_slice());
+    }
+
+    #[test]
+    fn every_kind_is_lower_kebab_case() {
+        for kind in Refusal::KINDS {
+            assert!(
+                !kind.is_empty()
+                    && !kind.starts_with('-')
+                    && !kind.ends_with('-')
+                    && kind.chars().all(|c| c.is_ascii_lowercase() || c == '-'),
+                "{kind}"
+            );
         }
     }
 }

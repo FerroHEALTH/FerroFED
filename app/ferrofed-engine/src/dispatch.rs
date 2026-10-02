@@ -17,7 +17,7 @@
 //! | answered `200` with a result set | `active` |
 //! | was not reachable: a refused connection or a broken stream | `offline` |
 //! | did not answer before the deadline | `time-out` |
-//! | answered with a failure: a documented error, an undocumented status, a body that is not a result set | `node-error` |
+//! | answered with a failure: a documented error, an undocumented status, a body that is not a result set, rows shorter than the query selects | `node-error` |
 //!
 //! A `node-error` carries the node's own status and message (§11.2), never
 //! folded into `offline`; a refused connection still carries its reason. A
@@ -67,6 +67,7 @@ pub struct NodeQuery {
     offset: Option<u32>,
     fetch: Option<u32>,
     scope: Option<String>,
+    width: usize,
 }
 
 impl NodeQuery {
@@ -78,7 +79,18 @@ impl NodeQuery {
             offset: None,
             fetch: None,
             scope: None,
+            width: 0,
         }
+    }
+
+    /// This query reading `width` cells of every row the node answers.
+    ///
+    /// A node row with fewer cells is an answer the gateway cannot use, so
+    /// the endpoint is `node-error` (§11.1).
+    #[must_use]
+    pub fn with_width(mut self, width: usize) -> Self {
+        self.width = width;
+        self
     }
 
     /// This query as scoped by the rewrite to the node's own `ehr_id`, which
@@ -397,9 +409,40 @@ impl<T: Transport> NodeClient<T> {
             .await;
         let latency_ms = elapsed_ms(started);
         match answer {
-            Ok(outcome) => Ok(answered(outcome, latency_ms)),
+            Ok(outcome) => Ok(narrow(answered(outcome, latency_ms), query.width)),
             Err(error) => failed(&self.endpoint, error, latency_ms),
         }
+    }
+}
+
+/// `reply`, or a `node-error` when one of its rows has fewer than `width`
+/// cells (§11.1).
+fn narrow(reply: NodeReply, width: usize) -> NodeReply {
+    let NodeReply::Answered {
+        result_set,
+        latency_ms,
+    } = reply
+    else {
+        return reply;
+    };
+    match result_set
+        .rows
+        .iter()
+        .map(Vec::len)
+        .find(|found| *found < width)
+    {
+        Some(found) => NodeReply::Failed {
+            outcome: Outcome::NodeError {
+                latency_ms,
+                error: text(format!(
+                    "the node answered a row with {found} cells where the dispatched query selects {width}"
+                )),
+            },
+        },
+        None => NodeReply::Answered {
+            result_set,
+            latency_ms,
+        },
     }
 }
 

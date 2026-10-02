@@ -22,6 +22,7 @@
 # Integrate
 
 - [The client contract](integrate/client-contract.md)
+- [Errors and status codes](integrate/errors.md)
 
 # Contribute
 

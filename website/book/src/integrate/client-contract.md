@@ -38,6 +38,9 @@ member of the open `meta` object, `meta.federation`:
 - `timeout`, the budget that applied (§11.5);
 - `dedup`, the de-duplication policy that applied (§10).
 
+A request that fails answers the status §11.2 names and a stable code; the
+[errors and status codes](errors.md) page lists every one.
+
 ## Follow-ups
 
 A composition id in a result row is an `OBJECT_VERSION_ID`, which already

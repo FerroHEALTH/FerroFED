@@ -1,0 +1,332 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The error vocabulary: every condition the gateway answers with an error
+//! body, its HTTP status (§11.2) and the stable code the body names.
+//!
+//! An error body is the ITS-REST `Error`, `message` and `validationErrors`,
+//! with two members added: `code`, one of the codes of [`Code`], and
+//! `request_id`, so a client and an operator name the same request. Two
+//! failures answer with another body. A fan-out that fails under
+//! all-or-nothing (`504`, `424`) answers the `RESULT_SET` of §11.4, whose
+//! `meta.federation.endpoints[]` statuses say which node failed and why
+//! (N17, N37). A node's own answer on a single-node route passes through as
+//! the node sent it (§11.2).
+//!
+//! The codes are API: a code is only ever added, never renamed, removed or
+//! moved to another status. No body quotes a parameter value, the query text,
+//! a path or a header value (§5.4.3). No specification defines the `code`
+//! member or its values: our own design.
+
+use axum::Json;
+use axum::response::{IntoResponse, Response};
+use http::StatusCode;
+use openehr_federation::aql::refusal::Refusal;
+use openehr_its::rest::generated::common::Error as ItsError;
+use serde::Serialize;
+
+/// The stable code of a failure the gateway answers with an error body.
+///
+/// [`Code::status`] is the one table from a code to its HTTP status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Code {
+    /// The request body is not the ITS-REST request the route takes.
+    BodyInvalid,
+    /// The `openEHR-federation-completeness` header is repeated, or carries
+    /// neither `all` nor `partial` (§11.4).
+    CompletenessInvalid,
+    /// The request asks for best-effort, which this gateway does not offer
+    /// (§11.4, N37).
+    PartialUnsupported,
+    /// A query parameter is not an AQL literal. The body names the parameter
+    /// and never its value.
+    ParameterInvalid,
+    /// The query's patient identifier or namespace cannot form a patient
+    /// reference (§5.2).
+    PatientInvalid,
+    /// The query is refused before anything is dispatched (§5.4.1, §7.1,
+    /// §11.6): the code is the refusal's kind.
+    Refused(RefusalCode),
+    /// The request can be routed to no destination at all (§11.2, §11.3).
+    NoDestination,
+    /// The `ehr_id` is claimed by more than one node (§12.5.2, N42).
+    EhrIdCollision,
+    /// No reachable node is the controlling system of a versioned write
+    /// (§10.3, N36).
+    ControllingSystemUnreachable,
+    /// The gateway failed on its own side (§11.2).
+    Internal,
+    /// The path is outside every surface the gateway serves.
+    NotFound,
+    /// The path is an ITS-REST area the gateway does not expose (§7a.1, N32).
+    NotImplemented,
+}
+
+/// The code of a refused query: the refusal's stable kind
+/// ([`Refusal::kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RefusalCode(&'static str);
+
+impl From<&Refusal> for RefusalCode {
+    fn from(refusal: &Refusal) -> Self {
+        Self(refusal.kind())
+    }
+}
+
+impl Code {
+    /// Every code that is not a refusal, in declaration order.
+    pub const GATEWAY: [Self; 11] = [
+        Self::BodyInvalid,
+        Self::CompletenessInvalid,
+        Self::PartialUnsupported,
+        Self::ParameterInvalid,
+        Self::PatientInvalid,
+        Self::NoDestination,
+        Self::EhrIdCollision,
+        Self::ControllingSystemUnreachable,
+        Self::Internal,
+        Self::NotFound,
+        Self::NotImplemented,
+    ];
+
+    /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
+    pub fn every() -> impl Iterator<Item = Self> {
+        Self::GATEWAY.into_iter().chain(
+            Refusal::KINDS
+                .iter()
+                .map(|kind| Self::Refused(RefusalCode(kind))),
+        )
+    }
+
+    /// The code as the error body's `code` member carries it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::BodyInvalid => "body-invalid",
+            Self::CompletenessInvalid => "completeness-invalid",
+            Self::PartialUnsupported => "partial-unsupported",
+            Self::ParameterInvalid => "parameter-invalid",
+            Self::PatientInvalid => "patient-invalid",
+            Self::Refused(RefusalCode(kind)) => kind,
+            Self::NoDestination => "no-destination",
+            Self::EhrIdCollision => "ehr-id-collision",
+            Self::ControllingSystemUnreachable => "controlling-system-unreachable",
+            Self::Internal => "internal",
+            Self::NotFound => "not-found",
+            Self::NotImplemented => "not-implemented",
+        }
+    }
+
+    /// The HTTP status this code answers with (§11.2).
+    #[must_use]
+    pub fn status(self) -> StatusCode {
+        match self {
+            Self::BodyInvalid
+            | Self::CompletenessInvalid
+            | Self::PartialUnsupported
+            | Self::ParameterInvalid
+            | Self::PatientInvalid
+            | Self::Refused(_) => StatusCode::BAD_REQUEST,
+            Self::NoDestination | Self::NotFound => StatusCode::NOT_FOUND,
+            Self::EhrIdCollision | Self::ControllingSystemUnreachable => StatusCode::CONFLICT,
+            Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
+        }
+    }
+
+    /// The fixed `message` of a failure that has no more to say than its
+    /// code.
+    #[must_use]
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::BodyInvalid => "the request body is not the ITS-REST request this route takes",
+            Self::CompletenessInvalid => {
+                "the openEHR-federation-completeness header takes \"all\" or \"partial\", once"
+            }
+            Self::PartialUnsupported => "best-effort completion is not offered (§11.4)",
+            Self::ParameterInvalid => "a query parameter is not an AQL literal",
+            Self::PatientInvalid => "the patient reference cannot be formed (§5.2)",
+            Self::Refused(_) => "the query is refused",
+            Self::NoDestination => "the request can be routed to no destination (§11.2)",
+            Self::EhrIdCollision => "the ehr_id is claimed by more than one node (N42)",
+            Self::ControllingSystemUnreachable => {
+                "no reachable node is the controlling system of this version (N36)"
+            }
+            Self::Internal => "the gateway failed on its own side",
+            Self::NotFound => "no resource is served at this path",
+            Self::NotImplemented => "this part of the ITS-REST API is not served by the gateway",
+        }
+    }
+}
+
+/// The body of every error the gateway answers on its own behalf.
+///
+/// It is the ITS-REST `Error` with the stable [`Code`] and the request id
+/// added. It never carries the request's path, query, headers or body, any of
+/// which may carry a patient identifier (§5.4.3).
+#[derive(Debug, Clone, Serialize)]
+pub struct ErrorBody {
+    /// The ITS-REST `message` and `validationErrors`.
+    #[serde(flatten)]
+    error: ItsError,
+    /// The stable, machine-readable code.
+    code: &'static str,
+    /// The request id, so a client and an operator name the same request.
+    request_id: String,
+}
+
+impl ErrorBody {
+    /// The body of `code` with `message` and `request_id`.
+    #[must_use]
+    pub fn new(code: Code, message: impl Into<String>, request_id: &str) -> Self {
+        Self {
+            error: ItsError {
+                message: message.into(),
+                validation_errors: Vec::new(),
+            },
+            code: code.as_str(),
+            request_id: request_id.to_owned(),
+        }
+    }
+
+    /// The stable code the body names.
+    #[must_use]
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+
+    /// The ITS-REST `message`.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.error.message
+    }
+}
+
+/// Answers `code` with its status and an [`ErrorBody`] carrying `message` and
+/// `request_id`.
+#[must_use]
+pub fn response(code: Code, message: impl Into<String>, request_id: &str) -> Response {
+    (
+        code.status(),
+        Json(ErrorBody::new(code, message, request_id)),
+    )
+        .into_response()
+}
+
+/// Answers `code` with its status and its fixed [`Code::message`].
+#[must_use]
+pub fn fixed(code: Code, request_id: &str) -> Response {
+    response(code, code.message(), request_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::{Code, ErrorBody, RefusalCode};
+    use http::StatusCode;
+    use openehr_federation::aql::refusal::Refusal;
+
+    /// The declaration position of `code`'s variant; no wildcard, so a new
+    /// variant fails to compile here until [`Code::GATEWAY`] lists it.
+    fn ordinal(code: Code) -> Option<usize> {
+        match code {
+            Code::BodyInvalid => Some(0),
+            Code::CompletenessInvalid => Some(1),
+            Code::PartialUnsupported => Some(2),
+            Code::ParameterInvalid => Some(3),
+            Code::PatientInvalid => Some(4),
+            Code::Refused(_) => None,
+            Code::NoDestination => Some(5),
+            Code::EhrIdCollision => Some(6),
+            Code::ControllingSystemUnreachable => Some(7),
+            Code::Internal => Some(8),
+            Code::NotFound => Some(9),
+            Code::NotImplemented => Some(10),
+        }
+    }
+
+    #[test]
+    fn gateway_lists_every_code_that_is_not_a_refusal_once() {
+        let ordinals: Vec<Option<usize>> = Code::GATEWAY.into_iter().map(ordinal).collect();
+        assert_eq!(
+            (0..Code::GATEWAY.len()).map(Some).collect::<Vec<_>>(),
+            ordinals
+        );
+    }
+
+    #[test]
+    fn every_code_is_distinct_and_lower_kebab_case() {
+        let codes: Vec<&str> = Code::every().map(Code::as_str).collect();
+        let distinct: BTreeSet<&str> = codes.iter().copied().collect();
+        assert_eq!(codes.len(), distinct.len(), "{codes:?}");
+        assert_eq!(Code::GATEWAY.len() + Refusal::KINDS.len(), codes.len());
+        for code in codes {
+            assert!(
+                !code.is_empty()
+                    && !code.starts_with('-')
+                    && !code.ends_with('-')
+                    && code.chars().all(|c| c.is_ascii_lowercase() || c == '-'),
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_code_is_a_client_or_a_server_error() {
+        for code in Code::every() {
+            let status = code.status();
+            assert!(
+                status.is_client_error() || status.is_server_error(),
+                "{code:?}"
+            );
+        }
+    }
+
+    // NOTE: §11.2, the status of each condition the gateway itself reports.
+    #[test]
+    fn each_code_answers_its_section_11_2_status() {
+        let table = [
+            (Code::BodyInvalid, StatusCode::BAD_REQUEST),
+            (Code::CompletenessInvalid, StatusCode::BAD_REQUEST),
+            (Code::PartialUnsupported, StatusCode::BAD_REQUEST),
+            (Code::ParameterInvalid, StatusCode::BAD_REQUEST),
+            (Code::PatientInvalid, StatusCode::BAD_REQUEST),
+            (Code::NoDestination, StatusCode::NOT_FOUND),
+            (Code::EhrIdCollision, StatusCode::CONFLICT),
+            (Code::ControllingSystemUnreachable, StatusCode::CONFLICT),
+            (Code::Internal, StatusCode::INTERNAL_SERVER_ERROR),
+            (Code::NotFound, StatusCode::NOT_FOUND),
+            (Code::NotImplemented, StatusCode::NOT_IMPLEMENTED),
+        ];
+        assert_eq!(Code::GATEWAY.len(), table.len());
+        for (code, status) in table {
+            assert_eq!(status, code.status(), "{code:?}");
+        }
+        for kind in Refusal::KINDS {
+            assert_eq!(
+                StatusCode::BAD_REQUEST,
+                Code::Refused(RefusalCode(kind)).status(),
+                "a refused query is a 400 (§11.2, §7.1): {kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_refusal_code_is_the_refusals_kind() {
+        let refusal = Refusal::OffsetUnsupported;
+        assert_eq!(
+            "offset-unsupported",
+            Code::Refused(RefusalCode::from(&refusal)).as_str()
+        );
+    }
+
+    #[test]
+    fn the_body_is_the_its_rest_error_with_the_code_and_the_request_id() {
+        let body = ErrorBody::new(Code::EhrIdCollision, "two claimants", "corr-1");
+        assert_eq!(
+            r#"{"message":"two claimants","validationErrors":[],"code":"ehr-id-collision","request_id":"corr-1"}"#,
+            serde_json::to_string(&body).unwrap()
+        );
+    }
+}

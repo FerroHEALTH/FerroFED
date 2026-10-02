@@ -84,8 +84,29 @@ binary follows from v0.0.2.
   its near misses, and CI runs it before the full-tree pass. Every comment that
   cited one of these now cites the specification section it rests on, or says
   that no specification governs it.
+- The error vocabulary (#57; §11.2, N32, N36, N37, N42, CP-12, CP-30): every
+  failure the gateway reports on its own behalf answers the ITS-REST `Error`
+  body with a stable `code` and the `request_id`, and its status follows one
+  table. A refused query is a `400` named by its refusal (`not-aql`,
+  `unreducible`, `offset-unsupported`, and the rest), an unknown path a `404`
+  `not-found`, an unexposed ITS-REST area a `501` `not-implemented`, and the
+  gateway's own fault a `500` `internal`; `no-destination` (`404`),
+  `ehr-id-collision` and `controlling-system-unreachable` (`409`) are fixed
+  for follow-up routing. The codes are API and are only ever added. The
+  book's "Errors and status codes" page lists them all, and a test holds the
+  page to the gateway's table.
 
 ### Changed
+
+- Error bodies (#57): the gateway's own refusals (`404`, `501`, a caught
+  panic's `500`) answer the ITS-REST `Error` shape with `code` and
+  `request_id`, where they named the code in an `error` member, and the codes
+  are kebab-case (`not-found`, `not-implemented`). No error body quotes the
+  query, a parameter value or a header value (§5.4.3); a `424` or `504` under
+  all-or-nothing stays the §11.4 result set and echoes the client's own `q`
+  (N17). A node row shorter than the dispatched
+  query selects is now that node's `node-error` (`424`, or reported under
+  `partial`), where the whole query answered `502` (§11.1, §11.2).
 
 - The quickstart and the end-to-end harness run two FerroEHR nodes (#155,
   decision A44). EHRbase left both, because it refuses a `.` in
