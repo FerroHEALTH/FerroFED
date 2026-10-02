@@ -176,6 +176,16 @@ pub enum LoadError {
     /// A node identifier with an empty `system` or `value`.
     #[error("node {0} carries an identifier with an empty system or value")]
     EmptyNodeIdentifier(NodeId),
+    /// A node's `product` or `version` is present and empty: an empty value
+    /// describes nothing, and §9.5 reports these only as the gateway knows
+    /// them.
+    #[error("node {node} declares an empty {member}")]
+    EmptyNodeDescription {
+        /// The node.
+        node: NodeId,
+        /// `product` or `version`.
+        member: &'static str,
+    },
     /// A node or an endpoint names an organisation the document does not
     /// declare.
     #[error("{referrer} names organisation {organisation}, which is not declared")]

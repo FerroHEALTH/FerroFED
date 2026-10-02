@@ -33,6 +33,8 @@ pub(crate) struct NodeDoc {
     pub(crate) id: NodeId,
     pub(crate) organisation: OrganisationId,
     pub(crate) system_id: SystemId,
+    pub(crate) product: Option<String>,
+    pub(crate) version: Option<String>,
     #[serde(default, rename = "identifier")]
     pub(crate) identifiers: Vec<NodeIdentifierDoc>,
 }

@@ -6,6 +6,7 @@
 mod ask_all;
 mod config;
 mod e2e;
+mod endpoint_report;
 mod facade;
 mod http;
 mod hygiene;
