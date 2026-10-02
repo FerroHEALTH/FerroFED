@@ -52,7 +52,7 @@ per-endpoint report, the best-effort completeness opt-in, the client's
 `Prefer: wait` budget, `ORDER BY` with `LIMIT` merged across nodes, `OFFSET`
 paging (§9.5, §11.2 to §11.6), and the §11.2 status mapping with the stable
 error codes of [Errors and status codes](../integrate/errors.md), on the
-`openehr-*` 0.0.76 crates.
+`openehr-*` crates at the pin [Pinned versions](versions.md) records.
 
 ## Planned
 

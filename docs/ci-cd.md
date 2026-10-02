@@ -32,7 +32,7 @@ has run on every change since the workspace landed.
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
 | `docs.yml` | push to `main`, pull request, dispatch | builds the site (the landing page at `/`, the book under `/docs/`) on every event and deploys it to GitHub Pages from `main` only |
 | `pin-freshness.yml` | Mondays, dispatch | the pins nothing else watches, compared with upstream; one issue when one is behind |
-| `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish; the binary job is gated on a root `Cargo.toml` (`docs/release.md`) |
+| `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish, with a tag whose tree has no root `Cargo.toml` refused at `plan` (`docs/release.md`) |
 | `release-build.yml` | called by `release.yml`, once per target | the SLSA Build Level 3 binary lane: `cargo auditable` build, CycloneDX and syft SBOMs, provenance and SBOM attestations, every asset attached to the draft (`docs/release.md` § The build legs) |
 | `release-image.yml` | called by `release.yml` | the container from the attested musl binaries, pushed to `ghcr.io/ferrohealth/ferrofed` by digest with provenance and SBOM attestations as OCI referrers, verified as a consumer would |
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
@@ -58,7 +58,7 @@ under the pins below.
 | `versions` | `scripts/checks/versions.sh --self-test`, then `scripts/checks/versions.sh`: the pin matrix against every file that repeats a pin and each specification row against the crate constant it names, the landing page's release string against the newest `CHANGELOG.md` release, the book's pin table against the rows it names, the vendored provenance stamps and the SPDX licence claims |
 | `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
 | `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, the conformance matrix against the vendored specification, the test markers against the matrix, the rendered book page against the matrix, and the README conformance badges under `conformance/badges/` against the matrix and the AQL golden pass list (`docs/architecture.md` section 12) |
-| `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh` and `migrate-fields.sh`, each driven against a stub `gh` on `PATH` |
+| `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh`, `migrate-fields.sh` and `rel.sh`, each driven against a stub `gh` on `PATH` |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
 reference implementation ships its own shell scripts, Dockerfile and

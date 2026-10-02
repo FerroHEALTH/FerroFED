@@ -16,8 +16,8 @@
 #
 # Every tag since v0.0.1 carries the workspace (#28), so `plan` fails a tag
 # whose tree has no root Cargo.toml, because the tag cannot then be checked
-# against the workspace version. `build-binaries` and `build-image` keep the
-# root-Cargo.toml detection ci.yml tier 2 uses.
+# against the workspace version. Every job past `plan` therefore builds and
+# ships the binaries and the image.
 #
 # The workflow is dormant until a `v*` tag is pushed. It does not run on a push
 # to main, on a pull request, or in a merge group.
@@ -57,8 +57,7 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
       is-prerelease: ${{ steps.tag.outputs.is_prerelease }}
-      cargo: ${{ steps.workspace.outputs.cargo }}
-      targets: ${{ steps.workspace.outputs.targets }}
+      targets: ${{ steps.targets.outputs.targets }}
     steps:
       - id: tag
         name: Resolve and validate the release tag
@@ -201,25 +200,14 @@ jobs:
           echo "release notes ($(wc -l < release-notes.md) lines):"
           cat release-notes.md
 
-      - id: workspace
-        name: Detect the Cargo workspace and name the binary targets
-        # The same detection ci.yml tier 2 uses, for the same reason:
-        # hashFiles() is evaluated before checkout, when the workspace is
-        # empty, so a real detection step is the correct primitive.
-        #
+      - id: targets
+        name: Name the binary targets
         # The target set is emitted once, here, and read both by the
         # build-binaries matrix and by the finalize asset check, so the two
         # cannot drift apart. Linux only, because the deliverable is a server.
         # No specification governs this: FerroFED's own design.
         run: |
           set -euo pipefail
-          if [ -f Cargo.toml ]; then
-            echo "cargo=true" >> "$GITHUB_OUTPUT"
-            echo "Cargo.toml present: the binary lane will run."
-          else
-            echo "cargo=false" >> "$GITHUB_OUTPUT"
-            echo "No Cargo.toml: the binary lane is skipped and this release promises no binaries."
-          fi
           targets='{"include":[
             {"runner":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
             {"runner":"ubuntu-latest","target":"x86_64-unknown-linux-musl"},
@@ -301,7 +289,6 @@ jobs:
   build-binaries:
     name: binaries (${{ matrix.target }})
     needs: [plan, github-release]
-    if: needs.plan.outputs.cargo == 'true'
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.targets) }}
@@ -324,7 +311,6 @@ jobs:
   build-image:
     name: image (linux/amd64, linux/arm64)
     needs: [plan, build-binaries]
-    if: needs.plan.outputs.cargo == 'true'
     permissions:
       contents: read # the attestations API, to verify the inputs
       packages: write # push the image and its attestations to GHCR
@@ -339,17 +325,9 @@ jobs:
 
   finalize-release:
     name: github release (publish)
+    # Every `needs` job has to succeed, the default, so a failed or skipped
+    # leg leaves the release a draft.
     needs: [plan, github-release, build-binaries, build-image]
-    # The build legs are skipped when there is no workspace, and a skipped
-    # `needs` job skips its dependents by default, so the results are read
-    # explicitly. A skip is a pass only when both legs skipped together; a
-    # failure is never one.
-    if: >-
-      always()
-      && needs.plan.result == 'success'
-      && needs.github-release.result == 'success'
-      && ((needs.build-binaries.result == 'success' && needs.build-image.result == 'success')
-          || (needs.build-binaries.result == 'skipped' && needs.build-image.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -359,21 +337,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
-          HAVE_BINARIES: ${{ needs.plan.outputs.cargo }}
           TARGETS: ${{ needs.plan.outputs.targets }}
         run: |
           set -euo pipefail
           assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           echo "attached assets:"
           printf '%s\n' "$assets"
-          if [ "$HAVE_BINARIES" != "true" ]; then
-            if [ -n "$assets" ]; then
-              echo "::error::the draft carries assets that a release with no workspace does not promise." >&2
-              exit 1
-            fi
-            echo "this version promises no binaries, and the draft carries none."
-            exit 0
-          fi
           missing=""
           # Every suffix release-build.yml uploads, per target. `grep -Fxq` is
           # a fixed string matched whole-line, so ".tar.gz" is not satisfied by
