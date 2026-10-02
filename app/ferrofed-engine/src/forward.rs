@@ -8,9 +8,11 @@
 //! it once and classifies nothing. The method, the path and the body bytes are
 //! the client's, unchanged: a commit body is clinical content the gateway has
 //! no right to alter (§5.4 scope note, N33). Of the client's headers and query
-//! string, only what the outbound gate admits travels
-//! ([`hygiene::forwarded_headers`], [`hygiene::forwarded_query`]); the
-//! endpoint's onward credentials set `Authorization`.
+//! string, only what the ITS-REST operation the method and path address
+//! declares travels, as the outbound gate admits it
+//! ([`hygiene::forwarded_headers`], [`hygiene::forwarded_query`]). The
+//! endpoint's onward credentials set `Authorization`, and the request's
+//! minted [`OutboundId`](crate::outbound_id::OutboundId) sets `X-Request-Id`.
 //!
 //! The answer keeps its status, its body bytes, `Location` and `ETag`; only
 //! the hop-by-hop fields are removed (RFC 9110 §7.6.1). A node's `404` or
@@ -21,12 +23,13 @@
 
 use std::fmt;
 
-use crate::dispatch::{DispatchOptions, NodeClient, REQUEST_ID_HEADER};
+use crate::dispatch::{DispatchOptions, NodeClient};
 use crate::hygiene::{self, Outbound, Part, UnlistedParameter};
 use ferrofed_registry::id::EndpointId;
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
 use http::{HeaderMap, HeaderName, Method, StatusCode};
 use openehr_its::rest::client::{ClientError, ErrorBody, Request, Transport, TransportError};
+use openehr_its::rest::routes::{self, Lookup, ParamLocation, RouteMatch};
 
 /// The hop-by-hop fields RFC 9110 §7.6.1 names besides `Connection` itself,
 /// which an intermediary never forwards.
@@ -172,23 +175,28 @@ pub enum ForwardError {
         /// The node's body, as received.
         body: ErrorBody,
     },
+    /// The method and path address no ITS-REST operation, so nothing names
+    /// what the request may carry and nothing was sent.
+    #[error("the request addresses no ITS-REST operation, so it was not sent")]
+    Unrouted,
 }
 
 impl<T: Transport> NodeClient<T> {
     /// Forwards `request` to the node once and returns its answer.
     ///
-    /// The deadline and the request id of `options` apply, and the outbound
-    /// gate reads the URL and every header that is sent against the
-    /// identifiers `options` withholds.
+    /// The ITS-REST operation the method and path address decides which of
+    /// the client's headers and query parameters travel. The deadline and the
+    /// request id of `options` apply, and the outbound gate reads the URL and
+    /// every forwarded header against the identifiers `options` withholds.
     ///
     /// # Errors
     ///
-    /// Returns [`ForwardError::QueryParameter`] and [`ForwardError::Withheld`]
-    /// with nothing sent, [`ForwardError::Credentials`] and
-    /// [`ForwardError::Compose`] when the request could not leave,
-    /// [`ForwardError::TimeOut`] and [`ForwardError::Unreachable`] when the
-    /// node gave no answer, and [`ForwardError::Refused`] when it answered
-    /// `401`.
+    /// Returns [`ForwardError::Unrouted`], [`ForwardError::QueryParameter`]
+    /// and [`ForwardError::Withheld`] with nothing sent,
+    /// [`ForwardError::Credentials`] and [`ForwardError::Compose`] when the
+    /// request could not leave, [`ForwardError::TimeOut`] and
+    /// [`ForwardError::Unreachable`] when the node gave no answer, and
+    /// [`ForwardError::Refused`] when it answered `401`.
     pub async fn forward(
         &self,
         request: ClientRequest,
@@ -201,13 +209,16 @@ impl<T: Transport> NodeClient<T> {
             headers,
             body,
         } = request;
+        let Lookup::Matched(operation) = routes::lookup(&method, &path) else {
+            return Err(ForwardError::Unrouted);
+        };
         let mut outgoing = Request::new(method, path);
         if let Some(query) = query.as_deref() {
-            outgoing.raw_query(hygiene::forwarded_query(query)?);
+            outgoing.raw_query(hygiene::forwarded_query(&operation, query)?);
         }
         outgoing
             .headers_mut()
-            .extend(hygiene::forwarded_headers(&headers));
+            .extend(hygiene::forwarded_headers(&operation, &headers));
         let call = options
             .call_options()
             .map_err(|source| ForwardError::Compose {
@@ -218,7 +229,7 @@ impl<T: Transport> NodeClient<T> {
         if !body.is_empty() {
             outgoing.raw_body(body, None);
         }
-        self.gate_forward(&outgoing, options)?;
+        self.gate_forward(&operation, &outgoing, options)?;
         match self.client().forward(outgoing).await {
             Ok(answer) if answer.status() == StatusCode::UNAUTHORIZED => {
                 Err(ForwardError::Refused {
@@ -242,9 +253,14 @@ impl<T: Transport> NodeClient<T> {
     }
 
     /// The outbound gate over a forwarded request: its URL and every header
-    /// the gateway sends (§5.4.1, N33).
+    /// `operation` declares that the request carries (§5.4.1, N33).
+    ///
+    /// Those are all the headers [`hygiene::forwarded_headers`] admits. The
+    /// minted `X-Request-Id` is the one other header set before sending, and
+    /// is exempt as in every node request ([`crate::hygiene`]).
     fn gate_forward(
         &self,
+        operation: &RouteMatch,
         request: &Request,
         options: &DispatchOptions,
     ) -> Result<(), ForwardError> {
@@ -252,22 +268,24 @@ impl<T: Transport> NodeClient<T> {
         if withheld.is_empty() {
             return Ok(());
         }
-        let mut url = format!(
+        let base = self.base();
+        let mut url = base.clone();
+        url.set_path(&format!(
             "{}{}",
-            self.base().as_str().trim_end_matches('/'),
+            base.path().trim_end_matches('/'),
             request.path()
-        );
-        if !request.query_string().is_empty() {
-            url.push('?');
-            url.push_str(request.query_string());
-        }
+        ));
+        let query = request.query_string();
+        url.set_query((!query.is_empty()).then_some(query));
         let mut sent: Vec<(&'static str, String)> = Vec::new();
-        for name in hygiene::FORWARDED_HEADERS
-            .into_iter()
-            .chain([REQUEST_ID_HEADER])
-        {
-            for value in request.headers().get_all(name) {
-                sent.push((name, String::from_utf8_lossy(value.as_bytes()).into_owned()));
+        let declared = operation
+            .params
+            .iter()
+            .filter(|param| param.location == ParamLocation::Header);
+        for param in declared {
+            for value in request.headers().get_all(param.name) {
+                let value = String::from_utf8_lossy(value.as_bytes()).into_owned();
+                sent.push((param.name, value));
             }
         }
         let headers: Vec<(&'static str, &str)> = sent

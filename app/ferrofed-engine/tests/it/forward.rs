@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! Single-node forwarding against a mock node (§7a.3, N22, N31, N33): the
-//! body arrives byte for byte, only the named client headers travel, the
-//! outbound gate reads the URL and the headers of a forwarded request, and the
-//! answer comes back as the node sent it. Asserted on what the mock node
-//! received.
+//! body arrives byte for byte, only the client headers and query parameters
+//! the ITS-REST operation declares travel, the outbound gate reads the URL and
+//! the headers of a forwarded request, and the answer comes back as the node
+//! sent it. Asserted on what the mock node received.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -18,6 +18,7 @@ use std::time::{Duration, Instant};
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
 use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::{Part, Withheld};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::ReqwestTransport;
@@ -44,13 +45,20 @@ fn client(url: &str) -> Result<NodeClient<ReqwestTransport>, Box<dyn Error>> {
     )?)
 }
 
-fn options(withheld: Withheld) -> Result<DispatchOptions, Box<dyn Error>> {
+fn options_under(
+    withheld: Withheld,
+    outbound: OutboundId,
+) -> Result<DispatchOptions, Box<dyn Error>> {
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(5))
         .ok_or("the deadline is past the platform clock")?;
     Ok(DispatchOptions::new(deadline)
-        .with_request_id("req-forward-1")
+        .with_request_id(outbound)
         .with_withheld(Arc::new(withheld)))
+}
+
+fn options(withheld: Withheld) -> Result<DispatchOptions, Box<dyn Error>> {
+    options_under(withheld, OutboundId::mint())
 }
 
 fn patient() -> Withheld {
@@ -83,7 +91,7 @@ async fn received(server: &MockServer) -> Result<Vec<wiremock::Request>, Box<dyn
 
 // conformance: CP-24
 #[tokio::test]
-async fn the_body_arrives_byte_for_byte_and_only_the_named_headers_travel() -> TestResult {
+async fn the_body_arrives_byte_for_byte_and_only_the_declared_headers_travel() -> TestResult {
     let at = format!("/ehr/{EHR}/composition");
     let server = node(
         "POST",
@@ -94,14 +102,16 @@ async fn the_body_arrives_byte_for_byte_and_only_the_named_headers_travel() -> T
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse()?);
     headers.insert("authorization", "Bearer client-token".parse()?);
+    headers.insert("x-request-id", "req-client-1".parse()?);
     headers.insert("x-patient", PATIENT.parse()?);
     let body = format!(
         "{{\"_type\":\"COMPOSITION\",  \"identifiers\":[{{\"_type\":\"DV_IDENTIFIER\",\"id\":\"{PATIENT}\"}}]}}"
     );
+    let outbound = OutboundId::mint();
     let forwarded = client(&server.uri())?
         .forward(
             request(Method::POST, &at, headers, body.as_bytes()),
-            &options(Withheld::none())?,
+            &options_under(Withheld::none(), outbound)?,
         )
         .await?;
     assert_eq!(StatusCode::CREATED, forwarded.status());
@@ -115,14 +125,104 @@ async fn the_body_arrives_byte_for_byte_and_only_the_named_headers_travel() -> T
     let requests = received(&server).await?;
     let sent = requests.first().ok_or("one request")?;
     assert_eq!(body.as_bytes(), sent.body.as_slice(), "byte for byte (N33)");
+    let request_ids: Vec<&[u8]> = sent
+        .headers
+        .get_all("x-request-id")
+        .iter()
+        .map(http::HeaderValue::as_bytes)
+        .collect();
     assert_eq!(
-        Some("req-forward-1"),
+        vec![outbound.to_string().as_bytes()],
+        request_ids,
+        "the node receives the minted id alone, never the client's (N33)"
+    );
+    assert_eq!(
+        Some(b"application/json".as_slice()),
         sent.headers
-            .get("x-request-id")
-            .and_then(|v| v.to_str().ok())
+            .get("content-type")
+            .map(http::HeaderValue::as_bytes)
     );
     assert!(sent.headers.get("authorization").is_none());
     assert!(sent.headers.get("x-patient").is_none());
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_header_the_operation_declares_travels_and_one_it_does_not_is_stripped() -> TestResult {
+    let uid = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
+    let at = format!("/ehr/{EHR}/composition/{uid}");
+    let server = MockServer::start().await;
+    for verb in ["PUT", "GET"] {
+        Mock::given(method(verb))
+            .and(path(format!("/v1{at}")))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+    }
+    let client = client(&server.uri())?;
+    let mut headers = HeaderMap::new();
+    headers.insert("if-match", format!("\"{uid}\"").parse()?);
+    headers.insert("x-patient", PATIENT.parse()?);
+    for verb in [Method::PUT, Method::GET] {
+        let sent = request(verb, &at, headers.clone(), b"");
+        client.forward(sent, &options(Withheld::none())?).await?;
+    }
+    let requests = received(&server).await?;
+    let [update, read] = requests.as_slice() else {
+        return Err(format!("two requests, got {}", requests.len()).into());
+    };
+    assert_eq!(
+        Some(format!("\"{uid}\"").as_bytes()),
+        update
+            .headers
+            .get("if-match")
+            .map(http::HeaderValue::as_bytes),
+        "PUT composition declares If-Match (ITS-REST, EHR API)"
+    );
+    assert!(
+        read.headers.get("if-match").is_none(),
+        "GET composition declares no If-Match, so it is stripped"
+    );
+    for sent in [update, read] {
+        assert!(sent.headers.get("x-patient").is_none());
+    }
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_query_parameter_the_operation_does_not_declare_is_refused_unsent() -> TestResult {
+    let server = MockServer::start().await;
+    let at = format!("/ehr/{EHR}/composition");
+    let mut commit = request(Method::POST, &at, HeaderMap::new(), b"{}");
+    commit.query = Some("version_at_time=2026-01-01T00:00:00Z".to_owned());
+    let refused = client(&server.uri())?
+        .forward(commit, &options(Withheld::none())?)
+        .await;
+    assert!(
+        matches!(
+            &refused,
+            Err(ForwardError::QueryParameter(unlisted)) if unlisted.position == 1
+        ),
+        "{refused:?}"
+    );
+    assert!(received(&server).await?.is_empty(), "nothing is sent");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_request_that_names_no_operation_is_never_sent() -> TestResult {
+    let server = MockServer::start().await;
+    let unrouted = request(Method::PATCH, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
+    let refused = client(&server.uri())?
+        .forward(unrouted, &options(Withheld::none())?)
+        .await;
+    assert!(
+        matches!(&refused, Err(ForwardError::Unrouted)),
+        "{refused:?}"
+    );
+    assert!(received(&server).await?.is_empty(), "nothing is sent");
     Ok(())
 }
 
@@ -153,7 +253,12 @@ async fn a_withheld_identifier_in_the_path_or_a_forwarded_header_is_never_sent()
         "openehr-audit-details",
         format!("committer.id={PATIENT}").parse()?,
     );
-    let in_header = request(Method::GET, &format!("/ehr/{EHR}"), headers, b"");
+    let in_header = request(
+        Method::POST,
+        &format!("/ehr/{EHR}/composition"),
+        headers,
+        b"",
+    );
     let refused = client.forward(in_header, &options(patient())?).await;
     assert!(
         matches!(

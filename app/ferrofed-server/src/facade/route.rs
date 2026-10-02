@@ -24,6 +24,7 @@ use axum::body::{Body, Bytes};
 use axum::response::Response;
 use ferrofed_engine::dispatch::{DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
@@ -56,7 +57,12 @@ pub struct Arrived<'a> {
     /// The body bytes the client sent.
     pub body: Bytes,
     /// The request id, empty when the client sent none.
+    ///
+    /// It names the request in the answer only, and never reaches the node.
     pub request_id: &'a str,
+    /// The gateway's id for the request, the `X-Request-Id` the node receives
+    /// (§5.4.1, N33).
+    pub outbound: OutboundId,
 }
 
 /// Answers a request under the ITS-REST prefix that no other route serves.
@@ -117,10 +123,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>) -> Response {
         tracing::error!("the routed request's deadline cannot be represented");
         return error::fixed(Code::Internal, request_id);
     };
-    let mut options = DispatchOptions::new(deadline);
-    if !request_id.is_empty() {
-        options = options.with_request_id(request_id);
-    }
+    let options = DispatchOptions::new(deadline).with_request_id(arrived.outbound);
     let request = ClientRequest {
         method: arrived.method.clone(),
         path: arrived.path.to_owned(),

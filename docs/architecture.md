@@ -347,13 +347,16 @@ unmodified (N22, N31). The routed handler adds `openEHR-federation-endpoint`
 and `openEHR-federation-system-id` to every routed answer, the gateway's own
 `504` and `424` for a node that gave no answer included, and hop-by-hop fields
 are stripped from the answer (RFC 9110 §7.6.1). The request side is an
-allow-list: the ITS-REST request headers of the EHR API and nothing else, so
-neither a hop-by-hop field, the client's `Authorization` nor any other client
-header reaches a node, and a query string travels only when every parameter
-in it is one ITS-REST defines under `/ehr/{ehr_id}`; any other is a `400`
-before dispatch (§5.4.1, N33). The node clients follow no redirect, so a
-node's `3xx` is passed on as the node's answer and no request is re-sent to a
-host the registry does not name. Built in #61 for the EHR area, with the
+allow-list read from `openehr-its`'s per-operation parameter table
+(`routes::lookup`, FerroEHR #3530): the request headers the matched operation
+declares and nothing else, so neither a hop-by-hop field, the client's
+`Authorization` or `X-Request-Id` nor any other client header reaches a node,
+and a query string travels only when the operation declares every parameter
+in it; any other is a `400` before dispatch (§5.4.1, N33). `subject_id` and
+`subject_namespace` are refused wherever declared. The `openehr-its`
+transport follows no redirect (FerroEHR #3531), so a node's `3xx` is passed
+on as the node's answer and no request is re-sent to a host the registry does
+not name. Built in #61 for the EHR area, with the
 explicit target as the only routing step so far (#62). A CDR's `Location` is usually an
 absolute URL on the node, so a client that follows it bypasses the gateway,
 which works against N1 and N28. FerroFED passes it unmodified as N31 requires,

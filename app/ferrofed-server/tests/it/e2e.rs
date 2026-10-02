@@ -599,7 +599,7 @@ fn field<'a>(headers: &'a http::HeaderMap, name: &str) -> Option<&'a str> {
 
 /// Whether `capture` carries `needle` outside its body: in the path, the
 /// query or a header.
-fn outside_the_body(capture: &ferrofed_testkit::proxy::Capture, needle: &[u8]) -> bool {
+fn outside_the_body(capture: &Capture, needle: &[u8]) -> bool {
     let found = |haystack: &[u8]| haystack.windows(needle.len()).any(|w| w == needle);
     found(capture.path.as_bytes())
         || capture

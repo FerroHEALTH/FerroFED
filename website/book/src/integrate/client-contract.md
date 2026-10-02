@@ -125,15 +125,18 @@ A routed request reaches the node as you sent it:
   included, because a commit body is clinical content the gateway has no
   right to alter (§5.4, N33);
 - the method and the path, under the node's own base URL;
-- the ITS-REST request headers (`Accept`, `Content-Type`, `If-Match`,
-  `Prefer` and the `openehr-*` commit headers), and no other header. Your
+- the request headers the ITS-REST operation you address declares (of
+  `Accept`, `Content-Type`, `If-Match`, `Prefer` and the `openehr-*` commit
+  headers, the ones that operation lists), and no other header. `If-Match`
+  reaches the node on a `PUT`, for example, and never on a `GET`. Your
   `Authorization` never reaches a node: the gateway authenticates to each node
-  with that node's own credentials (§13);
-- the query string, when every parameter in it is one ITS-REST defines for
-  the EHR resources (`version_at_time`, `path`, `tag_key`, `tag_value`,
-  `tag_target_path`). Any other parameter is a `400`
-  (`query-parameter-refused`) and nothing is sent, because the gateway cannot
-  tell an identifying value from any other (§5.4.1, N33).
+  with that node's own credentials (§13). Neither does your `X-Request-Id`:
+  the node receives the gateway's own id for the request;
+- the query string, when the operation declares every parameter in it (such
+  as `version_at_time` on a read, or `path` on a directory read). Any other
+  parameter is a `400` (`query-parameter-refused`) and nothing is sent,
+  because the gateway cannot tell an identifying value from any other
+  (§5.4.1, N33).
 
 The answer is the node's: its status, its body, and its `Location` and `ETag`
 unmodified, since openEHR uids are never rewritten (N22, N31). Every routed

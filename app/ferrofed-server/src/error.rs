@@ -82,8 +82,8 @@ pub enum Code {
     /// single node names more than one endpoint (§7a.1, §12.4).
     EndpointSeveral,
     /// The query string of a request routed to a single node carries a
-    /// parameter ITS-REST does not define there (§5.4.1, N33). The body names
-    /// the parameter by position, never by name or value.
+    /// parameter the ITS-REST operation does not declare (§5.4.1, N33). The
+    /// body names the parameter by position, never by name or value.
     QueryParameterRefused,
     /// The node a request was routed to did not answer in time (§11.2).
     NodeTimeout,
@@ -229,7 +229,7 @@ impl Code {
                 "a request routed to one node names exactly one endpoint in the openEHR-federation-endpoint header (§7a.1)"
             }
             Self::QueryParameterRefused => {
-                "a query parameter ITS-REST does not define for this resource is refused, never forwarded (§5.4.1, N33)"
+                "a query parameter the ITS-REST operation does not declare is refused, never forwarded (§5.4.1, N33)"
             }
             Self::NodeTimeout => "the node did not answer in time (§11.2)",
             Self::NodeUnreachable => "the node could not be reached (§11.2)",

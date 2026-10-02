@@ -269,6 +269,7 @@ define, is refused like any other unknown key.
 | `GET /health` | `200` while the process is up |
 | `GET /health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
 | `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
+| `/v1/ehr/{ehr_id}` and below | routed to the one node `openEHR-federation-endpoint` names, and answered as that node answered; `501` when no registry is configured |
 | any other path under `/v1/` | `501` |
 | any other path | `404` |
 
@@ -287,11 +288,24 @@ The outbound gate searches every other part of a node request for the
 identifiers resolution consumed, and skips the minted id: it holds no client
 input, and a short hexadecimal identifier can occur inside a random UUID.
 
-Every other header the gateway sends to a node is fixed by the gateway:
-`Accept` and `Content-Type` (`application/json`), `Authorization` (the
-endpoint's configured onward credential, when it has one), and the `Host`,
-`Content-Length` and `Accept-Encoding` the HTTP client writes. None is copied
-from the client request.
+Every other header the gateway sends to a node for a federated query is fixed
+by the gateway: `Accept` and `Content-Type` (`application/json`),
+`Authorization` (the endpoint's configured onward credential, when it has
+one), and the `Host`, `Content-Length` and `Accept-Encoding` the HTTP client
+writes. None is copied from the client request.
+
+A request routed to one node (`{base}/v1/ehr/{ehr_id}` and below) carries the
+same `Authorization`, `X-Request-Id`, `Host`, `Content-Length` and
+`Accept-Encoding`, and the client's own value of each request header the
+matched ITS-REST operation declares, byte for byte: of `Accept`,
+`Content-Type`, `If-Match`, `Prefer`, `openehr-version`,
+`openehr-audit-details`, `openehr-template-id`, `openehr-item-tag` and
+`openehr-version-item-tag`, only those that operation lists. The list comes
+from the `openehr-its` parameter table, never from the gateway's own copy.
+`Accept` is `application/json` when the client sent none. Every other client
+header is stripped, the client's `Authorization` and `x-request-id` and the
+federation's own headers included, and the outbound gate reads every
+forwarded value.
 
 ## What the log records
 

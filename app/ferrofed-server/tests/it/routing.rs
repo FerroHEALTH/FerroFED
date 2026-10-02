@@ -220,16 +220,20 @@ async fn a_committed_composition_lands_byte_identical_and_location_and_etag_pass
 #[tokio::test]
 async fn every_routed_answer_names_the_acting_endpoint_and_its_system_id() -> TestResult {
     let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
-    for (verb, answer) in [
+    // NOTE: ITS-REST 1.1.0 EHR API: only `PUT` of a composition declares
+    // `If-Match`, so it travels there and is stripped from `GET` and `DELETE`.
+    for (verb, answer, declares_if_match) in [
         (
             Method::GET,
             ResponseTemplate::new(200).set_body_raw(b"{}".to_vec(), "application/json"),
+            false,
         ),
         (
             Method::PUT,
             ResponseTemplate::new(200).insert_header("ETag", "\"v::cdr-a.example.org::2\""),
+            true,
         ),
-        (Method::DELETE, ResponseTemplate::new(204)),
+        (Method::DELETE, ResponseTemplate::new(204), false),
     ] {
         let a = node(verb.as_str(), resource.clone(), answer).await;
         let b = silent().await;
@@ -245,13 +249,14 @@ async fn every_routed_answer_names_the_acting_endpoint_and_its_system_id() -> Te
         assert!(status.is_success(), "{verb}: {status}");
         names_node_a(&headers, verb.as_str());
         let received = only_request(&a).await?;
+        let expected = format!("\"{VERSION_A}\"");
         assert_eq!(
-            Some(format!("\"{VERSION_A}\"").as_str()),
+            declares_if_match.then_some(expected.as_bytes()),
             received
                 .headers
                 .get(header::IF_MATCH)
-                .and_then(|v| v.to_str().ok()),
-            "{verb}: If-Match reaches the node as sent"
+                .map(http::HeaderValue::as_bytes),
+            "{verb}: If-Match reaches the node as sent exactly where the operation declares it"
         );
     }
     Ok(())
@@ -332,9 +337,15 @@ async fn an_identifier_in_a_client_header_never_reaches_the_node_nor_does_its_au
     fields.insert("x-patient", PATIENT.parse()?);
     fields.insert(header::COOKIE, format!("patient={PATIENT}").parse()?);
     fields.insert(header::FORWARDED, format!("for={PATIENT}").parse()?);
-    let (status, _, _) =
+    fields.insert("x-request-id", format!("req-{PATIENT}").parse()?);
+    let (status, answer, _) =
         parts(send(gateway_over(dir.path(), &a.uri(), &b.uri(), "")?, request).await?).await?;
     assert_eq!(StatusCode::OK, status);
+    assert_eq!(
+        Some(format!("req-{PATIENT}").as_bytes()),
+        answer.get("x-request-id").map(http::HeaderValue::as_bytes),
+        "the client's id names the request in the answer only"
+    );
     let received = only_request(&a).await?;
     let all = wire(&a).await?;
     assert!(
@@ -346,9 +357,19 @@ async fn an_identifier_in_a_client_header_never_reaches_the_node_nor_does_its_au
         "the client's credential never reaches a node: {all}"
     );
     assert!(
-        !all.to_ascii_lowercase().contains("openehr-federation"),
+        !all.contains_ignoring_ascii_case("openehr-federation"),
         "the federation's own headers stay at the gateway: {all}"
     );
+    let ids: Vec<&[u8]> = received
+        .headers
+        .get_all("x-request-id")
+        .iter()
+        .map(http::HeaderValue::as_bytes)
+        .collect();
+    let [id] = ids.as_slice() else {
+        return Err(format!("one x-request-id at the node, got {}", ids.len()).into());
+    };
+    uuid::Uuid::try_parse_ascii(id)?;
     assert_eq!(
         Some(format!("Bearer {ONWARD_TOKEN}").as_str()),
         received
@@ -369,6 +390,7 @@ async fn an_identifier_in_a_query_parameter_is_refused_before_anything_is_sent()
         format!("version_at_time=2026-01-01T00:00:00Z&subject_id={PATIENT}"),
         PATIENT.to_owned(),
         "endpoint=node-b-pub".to_owned(),
+        "path=/folders/0".to_owned(),
     ] {
         let a = node("GET", resource.clone(), ResponseTemplate::new(200)).await;
         let b = silent().await;

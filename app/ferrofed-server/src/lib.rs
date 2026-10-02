@@ -39,8 +39,9 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use clap::Parser;
+use ferrofed_engine::outbound_id::OutboundId;
 use http::{HeaderMap, Method, StatusCode, Uri};
 use tokio::net::TcpListener;
 use tower_http::catch_panic::CatchPanicLayer;
@@ -283,14 +284,19 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 /// ([`facade::route`]; §7a.1), and every other path answers `501` (§7a.1,
 /// N32), because a `404` would claim the resource does not exist. Every other
 /// path answers `404`. No answer of the gateway's own echoes the path.
+///
+/// A routed request reaches its node under the request's [`OutboundId`],
+/// never the client's `x-request-id` (§5.4.1, N33).
 async fn unrouted(
     State(state): State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();
+    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
     let Some(path) = uri
         .path()
         .strip_prefix(ITS_REST_PREFIX.trim_end_matches('/'))
@@ -305,6 +311,7 @@ async fn unrouted(
         headers: &headers,
         body,
         request_id,
+        outbound,
     };
     facade::route::serve(state.federation(), arrived).await
 }

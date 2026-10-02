@@ -23,73 +23,60 @@
 //! inside it by chance, which would refuse a valid request.
 //!
 //! A single-node route forwards a client request, so the gate also decides
-//! which parts of it travel at all: the client headers named in
-//! [`FORWARDED_HEADERS`] and nothing else ([`forwarded_headers`]), and a query
-//! string only when every parameter in it is one of
-//! [`FORWARDED_QUERY_PARAMETERS`] ([`forwarded_query`]). The gateway cannot
-//! tell an identifying value from any other by looking at it, so an unnamed
-//! header is stripped and an unnamed query parameter is refused (§5.4.1, N33).
+//! which parts of it travel at all, from the parameters the matched ITS-REST
+//! operation declares (`openehr-its`'s `routes::lookup`): the client headers
+//! the operation declares and nothing else ([`forwarded_headers`]), and a
+//! query string only when the operation declares every parameter in it
+//! ([`forwarded_query`]). The gateway cannot tell an identifying value from
+//! any other by looking at it, so an undeclared header is stripped and an
+//! undeclared query parameter is refused (§5.4.1, N33).
 
 use std::fmt;
 
-use http::{HeaderMap, HeaderName};
+use http::HeaderMap;
+use openehr_its::rest::routes::RouteMatch;
 use openehr_query::printer::escape_string;
 use secrecy::{ExposeSecret, SecretString};
 use url::Url;
 
-/// The client request headers a single-node route forwards to the node: the
-/// request headers ITS-REST 1.1.0 defines for the EHR API.
+/// The client headers a single-node route never forwards, whatever the
+/// operation declares.
 ///
-/// `Accept`, `Content-Type`, `If-Match` and `Prefer` are the operations'
-/// declared parameters; `openehr-version`, `openehr-audit-details`,
-/// `openehr-template-id`, `openehr-item-tag` and `openehr-version-item-tag`
-/// are the commit headers the ITS-REST overview defines (Requests and
-/// responses). `Authorization` is never among them: the gateway authenticates
-/// onward with the endpoint's own credentials (§13). The federation's own
-/// request headers are consumed at the gateway and never forwarded.
-pub const FORWARDED_HEADERS: [&str; 9] = [
-    "accept",
-    "content-type",
-    "if-match",
-    "prefer",
-    "openehr-version",
-    "openehr-audit-details",
-    "openehr-template-id",
-    "openehr-item-tag",
-    "openehr-version-item-tag",
-];
+/// `Authorization` is the client's credential at the gateway, and the gateway
+/// authenticates onward with the endpoint's own credentials (§13).
+/// `X-Request-Id` is the client's free text, and a node receives the
+/// gateway's minted [`OutboundId`](crate::outbound_id::OutboundId) instead.
+// NOTE: §5.4.1, N33: no ITS-REST operation declares either header, and a
+// client value in either could name a patient, so both stay withheld.
+pub const WITHHELD_HEADERS: [&str; 2] = ["authorization", "x-request-id"];
 
-/// The query parameters a single-node route forwards: those ITS-REST 1.1.0
-/// defines for the operations under `/ehr/{ehr_id}`.
+/// The query parameters a single-node route never forwards, whatever the
+/// operation declares: the patient identifier and its namespace (§5.4.2).
+// NOTE: §5.4.1, N33: only `GET /ehr` declares them, which resolution answers
+// at the gateway, so no forwarded request carries them.
+pub const WITHHELD_QUERY_PARAMETERS: [&str; 2] = ["subject_id", "subject_namespace"];
+
+/// The client headers of `client` a single-node route forwards for
+/// `operation`: every field line of each header the operation declares,
+/// values byte for byte, less [`WITHHELD_HEADERS`].
 ///
-/// `version_at_time` (`EHR_STATUS`, `COMPOSITION`, `DIRECTORY` and their
-/// versioned forms), `path` (`DIRECTORY`), and `tag_key`, `tag_value` and
-/// `tag_target_path` (the EHR's item tags). `subject_id` and
-/// `subject_namespace` carry the patient identifier and are never among them.
-pub const FORWARDED_QUERY_PARAMETERS: [&str; 5] = [
-    "version_at_time",
-    "path",
-    "tag_key",
-    "tag_value",
-    "tag_target_path",
-];
-
-/// The client headers of `client` a single-node route forwards: every field
-/// line of each name in [`FORWARDED_HEADERS`], values byte for byte.
+/// A field name is compared without regard to case (RFC 9110 §5.1). The
+/// federation's own request headers, which no ITS-REST operation declares,
+/// are consumed at the gateway and never forwarded.
 #[must_use]
-pub fn forwarded_headers(client: &HeaderMap) -> HeaderMap {
+pub fn forwarded_headers(operation: &RouteMatch, client: &HeaderMap) -> HeaderMap {
     let mut forwarded = HeaderMap::new();
-    for name in FORWARDED_HEADERS {
-        let name = HeaderName::from_static(name);
-        for value in client.get_all(&name) {
+    for (name, value) in client {
+        let withheld = WITHHELD_HEADERS.contains(&name.as_str());
+        if !withheld && operation.header_param(name.as_str()).is_some() {
             forwarded.append(name.clone(), value.clone());
         }
     }
     forwarded
 }
 
-/// `query` when every parameter in it is one of
-/// [`FORWARDED_QUERY_PARAMETERS`], to be forwarded as received.
+/// `query` when `operation` declares every parameter in it and none is one of
+/// [`WITHHELD_QUERY_PARAMETERS`], to be forwarded as received.
 ///
 /// A parameter's name is compared percent-decoded, and an empty pair
 /// (`a=1&&b=2`) carries nothing and is ignored.
@@ -99,14 +86,18 @@ pub fn forwarded_headers(client: &HeaderMap) -> HeaderMap {
 /// Returns [`UnlistedParameter`] naming the first other parameter by its
 /// position, never by its name or value, either of which may be the
 /// identifier.
-pub fn forwarded_query(query: &str) -> Result<&str, UnlistedParameter> {
+pub fn forwarded_query<'q>(
+    operation: &RouteMatch,
+    query: &'q str,
+) -> Result<&'q str, UnlistedParameter> {
     let unlisted = query
         .split('&')
         .filter(|pair| !pair.is_empty())
         .position(|pair| {
             let name = pair.split('=').next().unwrap_or(pair);
             let name = percent_decoded(name);
-            !FORWARDED_QUERY_PARAMETERS.contains(&name.as_str())
+            WITHHELD_QUERY_PARAMETERS.contains(&name.as_str())
+                || operation.query_key(&name).is_none()
         });
     match unlisted {
         Some(index) => Err(UnlistedParameter {
@@ -120,7 +111,7 @@ pub fn forwarded_query(query: &str) -> Result<&str, UnlistedParameter> {
 /// refused before anything is sent (§5.4.1, N33).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "query parameter {position} is not one ITS-REST defines under /ehr/{{ehr_id}}, so the request was not sent"
+    "query parameter {position} is not one the ITS-REST operation declares, so the request was not sent"
 )]
 pub struct UnlistedParameter {
     /// The parameter's position in the query string, counted from 1.
@@ -301,6 +292,7 @@ mod tests {
     use std::sync::LazyLock;
 
     use super::{Outbound, Part, Withheld, percent_decoded};
+    use openehr_its::rest::routes::{Lookup, RouteMatch, lookup};
     use secrecy::SecretString;
     use url::Url;
 
@@ -476,16 +468,29 @@ mod tests {
         assert!(shown.contains('1'), "{shown}");
     }
 
+    /// The operation `method` and `path` address, from `openehr-its`'s table.
+    fn operation(method: &http::Method, path: &str) -> RouteMatch {
+        match lookup(method, path) {
+            Lookup::Matched(matched) => matched,
+            other => panic!("{method} {path} names no operation: {other:?}"),
+        }
+    }
+
+    fn composition_update() -> RouteMatch {
+        operation(&http::Method::PUT, "/ehr/7d44/composition/u::s::1")
+    }
+
     #[test]
-    fn only_the_named_client_headers_are_forwarded_byte_for_byte() {
+    fn only_the_declared_client_headers_are_forwarded_byte_for_byte() {
         let mut client = http::HeaderMap::new();
         client.insert("authorization", "Bearer client-token".parse().unwrap());
+        client.insert("x-request-id", "req-O'Sentinel-4711".parse().unwrap());
         client.insert("x-patient", SENTINEL.parse().unwrap());
         client.insert("if-match", "\"uid::cdr-a.example.org::1\"".parse().unwrap());
         client.append("openehr-audit-details", "change_type=249".parse().unwrap());
         client.append("openehr-audit-details", "committer=c-1".parse().unwrap());
         client.insert("openehr-federation-endpoint", "node-a-pub".parse().unwrap());
-        let forwarded = super::forwarded_headers(&client);
+        let forwarded = super::forwarded_headers(&composition_update(), &client);
         assert_eq!(3, forwarded.len(), "{forwarded:?}");
         assert_eq!(
             Some("\"uid::cdr-a.example.org::1\""),
@@ -493,24 +498,59 @@ mod tests {
         );
         assert_eq!(2, forwarded.get_all("openehr-audit-details").iter().count());
         assert!(forwarded.get("authorization").is_none());
+        assert!(forwarded.get("x-request-id").is_none());
         assert!(forwarded.get("x-patient").is_none());
         assert!(forwarded.get("openehr-federation-endpoint").is_none());
     }
 
     #[test]
-    fn a_query_of_named_parameters_is_forwarded_as_received() {
-        let query = "version_at_time=2026-01-01T00:00:00Z&path=a%2Fb&&tag_key=k";
-        assert_eq!(Ok(query), super::forwarded_query(query));
-        assert_eq!(Ok(""), super::forwarded_query(""));
+    fn a_header_one_operation_declares_is_stripped_from_one_that_does_not() {
+        let mut client = http::HeaderMap::new();
+        client.insert("if-match", "\"uid::cdr-a.example.org::1\"".parse().unwrap());
+        client.insert("accept", "application/json".parse().unwrap());
+        let update = super::forwarded_headers(&composition_update(), &client);
+        assert!(update.get("if-match").is_some(), "{update:?}");
+        let read = operation(&http::Method::GET, "/ehr/7d44/composition/u::s::1");
+        let read = super::forwarded_headers(&read, &client);
+        assert!(read.get("if-match").is_none(), "{read:?}");
         assert_eq!(
-            Ok("version%5Fat%5Ftime=x"),
-            super::forwarded_query("version%5Fat%5Ftime=x")
+            Some("application/json"),
+            read.get("accept").and_then(|v| v.to_str().ok())
         );
     }
 
     #[test]
-    fn an_unnamed_query_parameter_is_refused_by_position_never_by_name() {
-        let refused = super::forwarded_query("path=a&patient=O%27Sentinel-4711");
+    fn a_query_of_declared_parameters_is_forwarded_as_received() {
+        let directory = operation(&http::Method::GET, "/ehr/7d44/directory");
+        let query = "version_at_time=2026-01-01T00:00:00Z&path=a%2Fb&";
+        assert_eq!(Ok(query), super::forwarded_query(&directory, query));
+        assert_eq!(Ok(""), super::forwarded_query(&directory, ""));
+        assert_eq!(
+            Ok("version%5Fat%5Ftime=x"),
+            super::forwarded_query(&directory, "version%5Fat%5Ftime=x")
+        );
+        let tags = operation(&http::Method::GET, "/ehr/7d44/tags");
+        let query = "tag_key=k&&tag_value=v&tag_target_path=p";
+        assert_eq!(Ok(query), super::forwarded_query(&tags, query));
+    }
+
+    #[test]
+    fn a_parameter_another_operation_declares_is_refused() {
+        let composition = operation(&http::Method::GET, "/ehr/7d44/composition/u::s::1");
+        assert_eq!(
+            Ok("version_at_time=x"),
+            super::forwarded_query(&composition, "version_at_time=x")
+        );
+        assert_eq!(
+            Err(super::UnlistedParameter { position: 2 }),
+            super::forwarded_query(&composition, "version_at_time=x&path=a")
+        );
+    }
+
+    #[test]
+    fn an_undeclared_query_parameter_is_refused_by_position_never_by_name() {
+        let directory = operation(&http::Method::GET, "/ehr/7d44/directory");
+        let refused = super::forwarded_query(&directory, "path=a&patient=O%27Sentinel-4711");
         assert_eq!(Err(super::UnlistedParameter { position: 2 }), refused);
         let shown = refused.map_err(|e| e.to_string()).unwrap_err();
         assert!(
@@ -519,11 +559,25 @@ mod tests {
         );
         assert_eq!(
             Err(super::UnlistedParameter { position: 1 }),
-            super::forwarded_query("subject_id=4711&subject_namespace=x")
+            super::forwarded_query(&directory, "subject_id=4711&subject_namespace=x")
         );
         assert_eq!(
             Err(super::UnlistedParameter { position: 1 }),
-            super::forwarded_query("O%27Sentinel-4711")
+            super::forwarded_query(&directory, "O%27Sentinel-4711")
+        );
+    }
+
+    #[test]
+    fn the_subject_parameters_are_refused_even_where_declared() {
+        let by_subject = operation(&http::Method::GET, "/ehr");
+        assert!(by_subject.query_param("subject_id").is_some());
+        assert_eq!(
+            Err(super::UnlistedParameter { position: 1 }),
+            super::forwarded_query(&by_subject, "subject_id=4711&subject_namespace=x")
+        );
+        assert_eq!(
+            Err(super::UnlistedParameter { position: 1 }),
+            super::forwarded_query(&by_subject, "subject%5Fnamespace=x")
         );
     }
 

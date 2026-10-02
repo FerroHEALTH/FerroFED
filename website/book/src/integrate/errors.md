@@ -111,7 +111,7 @@ the node is reported and the query succeeds.
 | `organisation-unknown` | 400 | The `ORGANISATION` directive names an identifier that is not an organisation of the registry (§8.1, §8.4.1, N20). The message points at the identifier by its place in the list and never quotes it. |
 | `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and nothing else routes it; the gateway never finds a write's destination by trial (§12.5.1, N41). |
 | `endpoint-several` | 400 | A request routed to one node names more than one endpoint in `openEHR-federation-endpoint` (§7a.1, §12.4). |
-| `query-parameter-refused` | 400 | A request routed to one node carries a query parameter ITS-REST does not define for the EHR resources. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
+| `query-parameter-refused` | 400 | A request routed to one node carries a query parameter the ITS-REST operation it addresses does not declare, or `subject_id` or `subject_namespace`. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
 | `node-timeout` | 504 | The node a request was routed to did not answer in time (§11.2). |
 | `node-unreachable` | 504 | The node a request was routed to could not be reached (§11.2). |
 | `node-refused` | 424 | The node a request was routed to refused the gateway's onward credentials (§11.2). |

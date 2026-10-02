@@ -34,8 +34,6 @@ ferrofed-registry.workspace = true
 openehr-federation = { workspace = true, features = ["aql"] }
 openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true
-# The HTTP engine under the node clients, built to follow no redirect (#61).
-reqwest.workspace = true
 http.workspace = true
 secrecy.workspace = true
 serde.workspace = true
