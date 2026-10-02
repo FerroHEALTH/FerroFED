@@ -70,6 +70,26 @@ selection the gateway offers until a localizer binding lands; a localizer that
 does not answer then fails closed, which is a different rule. The selection is
 named in the startup log line.
 
+## Resolution bindings
+
+A query that resolves a patient leaves a binding behind for the client
+session: which member holds which `ehr_id`, so a follow-up on a path `ehr_id`
+reaches the right node. A binding holds no patient identifier, lives in memory
+only, and expires after a lifetime you set:
+
+```toml
+[federation]
+binding_ttl_ms = 900000   # 15 minutes, the default; 0 is refused
+```
+
+The lifetime is a correctness bound. An identity merge or split at the
+identity source can make a binding stale, and a binding never outlives its
+lifetime, so set it no longer than you would accept a follow-up being routed
+on a superseded identity. The gateway also has a hook that drops the affected
+bindings the moment a PMIR subscription reports a merge or split. No
+subscription is built yet, so the lifetime is the bound in practice; the
+specification marks this lifecycle track provisional.
+
 Every secret has a `_file` sibling, read once at boot and trimmed, so a secret
 can come from a mounted file and never sit in the configuration or the
 environment. The credentials are read and checked at boot; the node dispatch

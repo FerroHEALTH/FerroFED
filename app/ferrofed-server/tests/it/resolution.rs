@@ -425,6 +425,21 @@ fn a_pix_manager_url_that_does_not_parse_refuses_to_boot_naming_its_key() -> Tes
 }
 
 #[test]
+fn a_configured_binding_lifetime_is_the_one_resolved() -> TestResult {
+    let text = "[federation]\nbinding_ttl_ms = 1500\n";
+    let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
+    if settings.federation.binding_ttl == std::time::Duration::from_millis(1_500) {
+        Ok(())
+    } else {
+        Err(format!(
+            "the configured lifetime, not the default: {:?}",
+            settings.federation.binding_ttl
+        )
+        .into())
+    }
+}
+
+#[test]
 fn a_zero_binding_lifetime_refuses_to_boot() -> TestResult {
     let text = "[federation]\nbinding_ttl_ms = 0\n";
     match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {

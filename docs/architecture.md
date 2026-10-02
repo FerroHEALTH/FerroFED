@@ -461,7 +461,7 @@ are dispatched (N8).
 | Resolver | the static development cross-reference | #36 | none: FerroFED's own, not a binding of N3 |
 | Resolver | PIXm ITI-83 `$ihe-pix` against any conformant PIX Manager (a FerroPIX instance once it exists), one call per PIX Manager with `targetSystem` repeated per member domain (`targetSystem` is `0..*` in the OperationDefinition) | #42, #43 | PIXm 3.1.0 |
 | Harness | a PIX Manager answering ITI-83 and seeded by ITI-104 | #47 | PIXm 3.1.0 |
-| Lifecycle | PMIR ITI-94 notifications evict the bindings of a merged or split identity (track 8, provisional) | #48 | PMIR 1.6.0 |
+| Lifecycle | the PMIR hook: a merge or split (an ITI-93 notification to an ITI-94 subscription) drops every resolution binding it could have made stale, and the TTL bounds the rest; track 8 is provisional and not claimed | #48 (the hook); the subscription is unscheduled | PMIR 1.6.0, vendored with the subscription that first reads it |
 | Localizer | none (ask-all); a registry-scoped PIXm localizer, the members whose domain returned an identifier (§14.2's "demographic-registration" kind) | #46, #85 | PIXm 3.1.0 |
 | Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, in its own crate | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
 | Directory | the static registry document; then mCSD ITI-91 `_history`/`_since` synchronised into the snapshot, plus ITI-90 reads | #36, #74, #86 | mCSD 4.0.0 |
@@ -524,6 +524,20 @@ nothing derived from a patient identifier to disk (section 8). An unkeyed hash
 of a national identifier space reverses by enumeration (the BSN space is about
 10^9 values with an eleven-check), and a keyed hash is pseudonymised personal
 data, so the cost of a re-probe after a restart is the price of holding none.
+
+**Identity lifecycle** (#48, track 8). An identity merge or split at the
+source can make a binding name the wrong patient's `ehr_id`. Track 8 asks that
+the change propagate so a later query resolves the surviving identity, and it
+is provisional: §16.3 marks it so and §18 lets full propagation be deferred.
+What FerroFED owes is that no binding outlives a change it could have learned
+of. Two parts give that: every binding expires at the configured TTL
+(`federation.binding_ttl_ms`), and `ResolutionBindings::identity_changed` is
+the hook a PMIR subscription calls on a merge or split. The hook drops the
+bindings that name the touched `ehr_id`s in every session, or every binding
+when the change cannot be scoped. A dropped binding costs one re-resolution,
+never a misrouted follow-up. The ITI-94 subscription that would call it is not
+built, so track 8 stays deferred in `conformance/tracks.tsv`, and FerroFED
+claims no propagation.
 
 **The development cross-reference** (#36). A TOML table
 (`[[dev.crossref]]` with `namespace`, `value`, `member` and `ehr_id`) read by a
