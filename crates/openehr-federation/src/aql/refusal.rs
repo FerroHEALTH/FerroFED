@@ -226,6 +226,8 @@ impl Refusal {
         "paging-conflict",
         "negative-paging",
         "top-backward",
+        "top-with-limit",
+        "top-with-fetch",
         "order-not-selected",
         "node-set-undefined",
     ];
@@ -415,6 +417,8 @@ mod tests {
             },
             Refusal::NegativePaging { member: "offset" },
             Refusal::TopBackward,
+            Refusal::TopWithLimit,
+            Refusal::TopWithFetch,
             Refusal::OrderNotSelected { at: None },
             Refusal::NodeSetUndefined,
         ]
@@ -442,8 +446,10 @@ mod tests {
             Refusal::PagingConflict { .. } => 16,
             Refusal::NegativePaging { .. } => 17,
             Refusal::TopBackward => 18,
-            Refusal::OrderNotSelected { .. } => 19,
-            Refusal::NodeSetUndefined => 20,
+            Refusal::TopWithLimit => 19,
+            Refusal::TopWithFetch => 20,
+            Refusal::OrderNotSelected { .. } => 21,
+            Refusal::NodeSetUndefined => 22,
         }
     }
 

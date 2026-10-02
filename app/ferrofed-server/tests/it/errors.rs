@@ -38,7 +38,7 @@ use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, crossref, node_answering, node_failing,
     patient_query, received, registry, schema, settings_with_room, statuses,
 };
-use crate::support::{ErrorBody, call};
+use crate::support::{self, ErrorBody, call};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -122,8 +122,8 @@ fn quotes_nothing(text: &str) {
 }
 
 /// The error body of `text`, with `status` checked against its code's.
-fn error_body(status: StatusCode, text: &str) -> Result<ErrorBody, Box<dyn Error>> {
-    let error: ErrorBody = serde_json::from_str(text)?;
+fn checked(status: StatusCode, text: &str) -> Result<ErrorBody, Box<dyn Error>> {
+    let error = support::error_body(text)?;
     let code = Code::every()
         .find(|code| code.as_str() == error.code)
         .ok_or_else(|| format!("{} is in the vocabulary", error.code))?;
@@ -247,7 +247,7 @@ async fn an_invalid_request_is_a_400_with_its_code_and_quotes_nothing() -> TestR
         let app = gateway(dir.path(), &a.uri(), &b.uri(), 2000, true)?;
         let (status, text) = call(app, post(request.clone(), completeness)?).await?;
         assert_eq!(StatusCode::BAD_REQUEST, status, "{request}: {text}");
-        let error = error_body(status, &text)?;
+        let error = checked(status, &text)?;
         assert_eq!(expected, error.code, "{request}: {text}");
         quotes_nothing(&text);
     }
@@ -270,7 +270,7 @@ async fn partial_where_best_effort_is_not_offered_is_a_400_partial_unsupported()
     assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
     assert_eq!(
         "partial-unsupported",
-        error_body(status, &text)?.code,
+        checked(status, &text)?.code,
         "§11.4, N37"
     );
     quotes_nothing(&text);
@@ -407,7 +407,7 @@ async fn an_unexposed_its_rest_area_is_a_501_not_implemented() -> TestResult {
         let app = gateway(dir.path(), &a.uri(), &b.uri(), 2000, true)?;
         let (status, text) = call(app, Request::get(&path).body(Body::empty())?).await?;
         assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "§7a.1, N32: {path}");
-        assert_eq!("not-implemented", error_body(status, &text)?.code);
+        assert_eq!("not-implemented", checked(status, &text)?.code);
         quotes_nothing(&text);
     }
     Ok(())
@@ -422,7 +422,7 @@ async fn a_path_outside_every_surface_is_a_404_not_found() -> TestResult {
     let path = format!("/patients/{PATIENT}");
     let (status, text) = call(app, Request::get(&path).body(Body::empty())?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status);
-    assert_eq!("not-found", error_body(status, &text)?.code);
+    assert_eq!("not-found", checked(status, &text)?.code);
     quotes_nothing(&text);
     Ok(())
 }

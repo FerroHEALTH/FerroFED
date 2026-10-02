@@ -86,16 +86,16 @@ the node is reported and the query succeeds.
 | `partial-unsupported` | 400 | The request asks for `partial`, and this gateway does not offer best-effort (§11.4, N37). |
 | `parameter-invalid` | 400 | A query parameter is `null`, an array, an object, or an integer outside 64 bits. |
 | `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). |
-| `no-destination` | 404 | The request can be routed to no destination at all (§11.2, §11.3). |
+| `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope (§11.2, §11.3). |
 | `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node; the gateway never chooses between them (§12.5.2, N42). |
 | `controlling-system-unreachable` | 409 | A versioned write's controlling system is not reachable, and the gateway never writes to a copy (§10.3, N36). |
 | `internal` | 500 | The gateway failed on its own side. The operator's log carries the cause under the request id. |
 | `not-found` | 404 | The path is outside every surface the gateway serves. |
 | `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32). |
 
-The `404` for a path with no destination and the two `409` codes belong to
-follow-up routing (§12), which is planned build order; the codes are fixed
-now, so a client can handle them before they occur.
+The two `409` codes belong to follow-up routing (§12), which is planned build
+order; the codes are fixed now, so a client can handle them before they
+occur.
 
 ## Query refusals
 
@@ -120,9 +120,11 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `undirected-aggregate` | 400 | An aggregate cannot be computed correctly across nodes; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). |
 | `offset-unsupported` | 400 | Offset-based paging is not supported across a fan-out (§11.6.2, N39). |
 | `offset-page` | 400 | The gateway computes an `OFFSET` page from `k + n` rows per node, and this page cannot be computed that way: `k + n` is past the configured bound, or the query has no `LIMIT` or no `ORDER BY` (§11.6.2, N39). |
-| `paging-conflict` | 400 | The ITS-REST `offset` or `fetch` member and the query's `OFFSET` or `LIMIT` disagree, or `TOP` and `LIMIT` name different counts. |
+| `paging-conflict` | 400 | The ITS-REST `offset` or `fetch` member and the query's `OFFSET` or `LIMIT` disagree. |
 | `negative-paging` | 400 | An ITS-REST paging member, or a row count of the query, is negative. |
 | `top-backward` | 400 | `TOP … BACKWARD` is not supported across a fan-out; write `ORDER BY … DESC LIMIT n`. |
+| `top-with-limit` | 400 | The query uses the deprecated `TOP` together with a `LIMIT` clause, which AQL forbids; write `ORDER BY … LIMIT n`. |
+| `top-with-fetch` | 400 | The query uses `TOP` and the request carries the ITS-REST `fetch` member, which cannot be combined with it; write `ORDER BY … LIMIT n`, or send `fetch` alone. |
 | `order-not-selected` | 400 | Under `DISTINCT`, an `ORDER BY` path is not also selected (N13). |
 | `node-set-undefined` | 400 | The query names no patient and no endpoints, so no node set is defined (N4, §8). |
 

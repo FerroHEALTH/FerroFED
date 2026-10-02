@@ -7,8 +7,10 @@
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::settings::ServerSettings;
+use ferrofed_server::error::{CODE_MEMBER, REQUEST_ID_MEMBER};
 use ferrofed_server::state::AppState;
 use http::{Request, Response, StatusCode};
+use openehr_its::rest::generated::common::Error;
 use serde::Deserialize;
 use std::error::Error as StdError;
 use std::io::{self, Write};
@@ -127,18 +129,40 @@ pub(crate) async fn call(
     Ok((status, String::from_utf8(bytes.to_vec())?))
 }
 
-/// The body this server answers a refusal with: the ITS-REST `Error` with the
-/// stable code and the request id, and nothing else.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+/// What the tests read of an error body.
+#[derive(Debug)]
 pub(crate) struct ErrorBody {
     /// The ITS-REST message.
     pub(crate) message: String,
     /// The ITS-REST validation errors.
-    #[serde(rename = "validationErrors")]
     pub(crate) validation_errors: Vec<String>,
     /// The stable error code.
     pub(crate) code: String,
     /// The request id.
     pub(crate) request_id: String,
+}
+
+/// Reads `text` as the generated ITS-REST `Error`, which must carry the
+/// stable code and the request id as its only extra members.
+pub(crate) fn error_body(text: &str) -> Result<ErrorBody, Box<dyn StdError>> {
+    let error: Error = serde_json::from_str(text)?;
+    let member = |name: &str| -> Result<String, Box<dyn StdError>> {
+        Ok(error
+            .additional_properties
+            .get(name)
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| format!("the error body carries a string {name}: {text}"))?
+            .to_owned())
+    };
+    let code = member(CODE_MEMBER)?;
+    let request_id = member(REQUEST_ID_MEMBER)?;
+    if error.additional_properties.len() != 2 {
+        return Err(format!("the error body carries only code and request_id: {text}").into());
+    }
+    Ok(ErrorBody {
+        message: error.message,
+        validation_errors: error.validation_errors,
+        code,
+        request_id,
+    })
 }

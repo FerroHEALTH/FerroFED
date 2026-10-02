@@ -35,7 +35,8 @@ and its storage, the merge across nodes, the wire types, the crate map, and
 the conformance instrument. Read it before proposing anything structural.
 Each crate gets its behaviour from its own issue, and nothing is built ahead
 of one (`.claude/memory/owner-work-style.md`). The `openehr-*` family is pinned
-at 0.0.74, the release that carries the federation gaps FerroFED raised.
+at 0.0.76, which carries the federation gaps FerroFED raised and the open
+ITS-REST `Error` the error vocabulary writes its `code` into.
 
 The specification is a release candidate. The vendored pin is v0.9.0 at
 commit `7162d0c`, and the 1.0 release is expected the week of 2026-10-08; the

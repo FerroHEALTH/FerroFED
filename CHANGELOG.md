@@ -90,11 +90,12 @@ binary follows from v0.0.2.
   table. A refused query is a `400` named by its refusal (`not-aql`,
   `unreducible`, `offset-unsupported`, and the rest), an unknown path a `404`
   `not-found`, an unexposed ITS-REST area a `501` `not-implemented`, and the
-  gateway's own fault a `500` `internal`; `no-destination` (`404`),
-  `ehr-id-collision` and `controlling-system-unreachable` (`409`) are fixed
-  for follow-up routing. The codes are API and are only ever added. The
-  book's "Errors and status codes" page lists them all, and a test holds the
-  page to the gateway's table.
+  gateway's own fault a `500` `internal`, and a request with no member in
+  scope a `404` `no-destination`; `ehr-id-collision` and
+  `controlling-system-unreachable` (`409`) are fixed for follow-up routing.
+  The codes are API and are only ever added. The book's "Errors and status
+  codes" page lists them all, and a test holds the page to the gateway's
+  table.
 
 ### Changed
 
@@ -104,9 +105,14 @@ binary follows from v0.0.2.
   are kebab-case (`not-found`, `not-implemented`). No error body quotes the
   query, a parameter value or a header value (§5.4.3); a `424` or `504` under
   all-or-nothing stays the §11.4 result set and echoes the client's own `q`
-  (N17). A node row shorter than the dispatched
-  query selects is now that node's `node-error` (`424`, or reported under
-  `partial`), where the whole query answered `502` (§11.1, §11.2).
+  (N17). A node row shorter than the dispatched query selects is now that
+  node's `node-error` (`424`, or reported under `partial`), where the whole
+  query answered `502` (§11.1, §11.2).
+- The `openehr-*` family moves from 0.0.74 to 0.0.76 (#57). 0.0.76 keeps the
+  members an open ITS-REST schema admits in an `additional_properties` map
+  (FerroEHR #3526), so every error body is the generated ITS-REST `Error`
+  with `code` and `request_id` in that map, and no FerroFED-side error type
+  remains. The generated request and result-set types carry the same map.
 
 - The quickstart and the end-to-end harness run two FerroEHR nodes (#155,
   decision A44). EHRbase left both, because it refuses a `.` in

@@ -59,6 +59,7 @@ fn the_federation_additions_sit_under_one_unprefixed_member() {
         q: None,
         columns: None,
         rows: Vec::new(),
+        additional_properties: BTreeMap::new(),
     };
     let text = serde_json::to_string(&result_set).expect("the envelope serializes");
     support::validate_text(support::RESULT_SET_SCHEMA, &text).expect("the envelope validates");

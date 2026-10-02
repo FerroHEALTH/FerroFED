@@ -27,7 +27,7 @@ use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::support::{ErrorBody, call, settings};
+use crate::support::{call, error_body, settings};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -594,7 +594,7 @@ async fn a_refused_query_is_a_400_that_quotes_nothing_and_asks_nobody() -> TestR
         )?;
         let (status, text) = call(app, post(body(&aql)?)?).await?;
         assert_eq!(StatusCode::BAD_REQUEST, status, "{aql}: {text}");
-        let error: ErrorBody = serde_json::from_str(&text)?;
+        let error = error_body(&text)?;
         assert!(
             !error.message.contains(PATIENT) && !error.message.contains("38a1"),
             "the refusal quotes nothing (§5.4.3): {}",

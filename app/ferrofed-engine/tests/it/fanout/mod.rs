@@ -142,6 +142,7 @@ fn validated_body(answer: FederatedAnswer) -> Result<String, Box<dyn Error>> {
     let columns = vec![ResultSetColumn {
         name: "#0".to_owned(),
         path: Some("c/uid/value".to_owned()),
+        additional_properties: BTreeMap::new(),
     }];
     let body = answer.into_result_set(Some(FACADE_AQL.to_owned()), Some(columns))?;
     let text = serde_json::to_string(&body)?;

@@ -128,6 +128,7 @@ impl NodeQuery {
             offset: self.offset.map(i64::from),
             fetch: self.fetch.map(i64::from),
             query_parameters: None,
+            additional_properties: BTreeMap::new(),
         }
     }
 }

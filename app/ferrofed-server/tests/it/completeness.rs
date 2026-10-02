@@ -29,7 +29,7 @@ use crate::facade::{
     Answer, EHR_A, EHR_B, body, crossref, node_answering, node_failing, patient_query, received,
     registry, schema, settings_with_room, statuses,
 };
-use crate::support::{ErrorBody, call};
+use crate::support::{ErrorBody, call, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -75,7 +75,7 @@ fn post(values: &[&str]) -> Result<Request<Body>, Box<dyn Error>> {
 
 /// The error body of a refusal.
 fn refusal(text: &str) -> Result<ErrorBody, Box<dyn Error>> {
-    Ok(serde_json::from_str::<ErrorBody>(text)?)
+    error_body(text)
 }
 
 /// Asserts that neither node received a request.

@@ -18,12 +18,13 @@
 //! text, a path or a header value (§5.4.3). No specification defines the
 //! `code` member or its values: our own design.
 
+use std::collections::BTreeMap;
+
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use http::StatusCode;
 use openehr_federation::aql::refusal::Refusal;
-use openehr_its::rest::generated::common::Error as ItsError;
-use serde::Serialize;
+use openehr_its::rest::generated::common::Error;
 
 /// The stable code of a failure the gateway answers with an error body.
 ///
@@ -159,59 +160,40 @@ impl Code {
     }
 }
 
-/// The body of every error the gateway answers on its own behalf.
+/// The member of the ITS-REST `Error` that carries the stable [`Code`].
+pub const CODE_MEMBER: &str = "code";
+
+/// The member of the ITS-REST `Error` that carries the request id, so a client
+/// and an operator name the same request.
+pub const REQUEST_ID_MEMBER: &str = "request_id";
+
+/// The ITS-REST `Error` of `code`, with `message` and `request_id`.
 ///
-/// It is the ITS-REST `Error` with the stable [`Code`] and the request id
-/// added. It never carries the request's path, query, headers or body, any of
+/// The code and the request id ride in the generated type's
+/// `additional_properties`, which the open ITS-REST `Error` schema admits.
+/// The body never carries the request's path, query, headers or body, any of
 /// which may carry a patient identifier (§5.4.3).
-// TODO(#57): emit the generated openehr_its Error once FerroHEALTH/FerroEHR#3526 ships
-#[derive(Debug, Clone, Serialize)]
-pub struct ErrorBody {
-    /// The ITS-REST `message` and `validationErrors`.
-    #[serde(flatten)]
-    error: ItsError,
-    /// The stable, machine-readable code.
-    code: &'static str,
-    /// The request id, so a client and an operator name the same request.
-    request_id: String,
+#[must_use]
+pub fn body(code: Code, message: impl Into<String>, request_id: &str) -> Error {
+    let mut error = Error {
+        message: message.into(),
+        validation_errors: Vec::new(),
+        additional_properties: BTreeMap::new(),
+    };
+    error
+        .additional_properties
+        .insert(CODE_MEMBER.to_owned(), code.as_str().into());
+    error
+        .additional_properties
+        .insert(REQUEST_ID_MEMBER.to_owned(), request_id.into());
+    error
 }
 
-impl ErrorBody {
-    /// The body of `code` with `message` and `request_id`.
-    #[must_use]
-    pub fn new(code: Code, message: impl Into<String>, request_id: &str) -> Self {
-        Self {
-            error: ItsError {
-                message: message.into(),
-                validation_errors: Vec::new(),
-            },
-            code: code.as_str(),
-            request_id: request_id.to_owned(),
-        }
-    }
-
-    /// The stable code the body names.
-    #[must_use]
-    pub fn code(&self) -> &'static str {
-        self.code
-    }
-
-    /// The ITS-REST `message`.
-    #[must_use]
-    pub fn message(&self) -> &str {
-        &self.error.message
-    }
-}
-
-/// Answers `code` with its status and an [`ErrorBody`] carrying `message` and
-/// `request_id`.
+/// Answers `code` with its status and the ITS-REST `Error` carrying `message`
+/// and `request_id`.
 #[must_use]
 pub fn response(code: Code, message: impl Into<String>, request_id: &str) -> Response {
-    (
-        code.status(),
-        Json(ErrorBody::new(code, message, request_id)),
-    )
-        .into_response()
+    (code.status(), Json(body(code, message, request_id))).into_response()
 }
 
 /// Answers `code` with its status and its fixed [`Code::message`].
@@ -224,7 +206,7 @@ pub fn fixed(code: Code, request_id: &str) -> Response {
 mod tests {
     use std::collections::BTreeSet;
 
-    use super::{Code, ErrorBody, RefusalCode};
+    use super::{CODE_MEMBER, Code, Error, REQUEST_ID_MEMBER, RefusalCode, body};
     use http::StatusCode;
     use openehr_federation::aql::refusal::Refusal;
 
@@ -324,10 +306,33 @@ mod tests {
 
     #[test]
     fn the_body_is_the_its_rest_error_with_the_code_and_the_request_id() {
-        let body = ErrorBody::new(Code::EhrIdCollision, "two claimants", "corr-1");
+        let answer = body(Code::EhrIdCollision, "two claimants", "corr-1");
         assert_eq!(
             r#"{"message":"two claimants","validationErrors":[],"code":"ehr-id-collision","request_id":"corr-1"}"#,
-            serde_json::to_string(&body).unwrap()
+            serde_json::to_string(&answer).unwrap()
+        );
+    }
+
+    #[test]
+    fn the_body_round_trips_through_the_generated_error_with_both_members() {
+        let sent = body(Code::NoDestination, "no member in scope", "corr-2");
+        let text = serde_json::to_string(&sent).unwrap();
+        let read: Error = serde_json::from_str(&text).unwrap();
+        assert_eq!("no member in scope", read.message);
+        assert!(read.validation_errors.is_empty());
+        let member = |name: &str| {
+            read.additional_properties
+                .get(name)
+                .and_then(|value| value.as_str())
+                .map(str::to_owned)
+        };
+        assert_eq!(Some("no-destination".to_owned()), member(CODE_MEMBER));
+        assert_eq!(Some("corr-2".to_owned()), member(REQUEST_ID_MEMBER));
+        assert_eq!(2, read.additional_properties.len(), "nothing else is added");
+        assert_eq!(
+            text,
+            serde_json::to_string(&read).unwrap(),
+            "byte-identical"
         );
     }
 }
