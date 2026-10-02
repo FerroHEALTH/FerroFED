@@ -113,8 +113,11 @@ fn closed_port() -> Result<String, Box<dyn Error>> {
 
 /// Asserts that `text` quotes none of the synthetic identifiers and no AQL.
 fn quotes_nothing(text: &str) {
-    for secret in [PATIENT, "38a1", PARAMETER_VALUE, NAMESPACE] {
-        assert!(!text.contains(secret), "the body quotes {secret}: {text}");
+    for quoted in [PATIENT, "38a1", PARAMETER_VALUE, NAMESPACE] {
+        assert!(
+            !text.contains(quoted),
+            "the body quotes the synthetic identifier {quoted}: {text}"
+        );
     }
     for aql in ["SELECT", "FROM EHR"] {
         assert!(!text.contains(aql), "the body quotes the AQL: {text}");

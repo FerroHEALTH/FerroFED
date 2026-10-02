@@ -237,12 +237,12 @@ fn example(file: &str) -> Result<(Vec<u8>, Option<String>), Box<dyn Error>> {
         expect_object(&value, &Path::root("Patient"))?,
         &mut Path::root("Patient"),
     )?;
-    let token = patient.identifier.first().and_then(|id| {
+    let identifier = patient.identifier.first().and_then(|id| {
         let system = id.system.as_ref()?.value.clone()?;
         let value = id.value.as_ref()?.value.clone()?;
         Some(format!("{system}|{value}"))
     });
-    Ok((bytes, token))
+    Ok((bytes, identifier))
 }
 
 /// Sends a vendored example Patient as an ITI-104 conditional update.
@@ -279,9 +279,9 @@ async fn the_feed_accepts_every_vendored_example_that_claims_the_pixm_profile() 
     // share an identifier, so each is fed to a device of its own.
     for file in PROFILED {
         let pix = PixManager::start().await?;
-        let (_, token) = example(file)?;
-        let token = token.ok_or("a profiled example carries an identifier")?;
-        let status = feed_example(&pix, file, &token).await?;
+        let (_, identifier) = example(file)?;
+        let identifier = identifier.ok_or("a profiled example carries an identifier")?;
+        let status = feed_example(&pix, file, &identifier).await?;
         assert_eq!(StatusCode::CREATED, status, "{file}");
     }
     Ok(())
@@ -345,9 +345,9 @@ async fn the_feed_refuses_the_example_that_claims_no_pixm_profile() -> TestResul
 #[tokio::test]
 async fn identifiers_fed_together_cross_reference_each_other() -> TestResult {
     let pix = PixManager::start().await?;
-    let (_, token) = example("Patient-Patient-MohrAlice.json")?;
-    let token = token.ok_or("the example carries identifiers")?;
-    feed_example(&pix, "Patient-Patient-MohrAlice.json", &token).await?;
+    let (_, identifier) = example("Patient-Patient-MohrAlice.json")?;
+    let identifier = identifier.ok_or("the example carries identifiers")?;
+    feed_example(&pix, "Patient-Patient-MohrAlice.json", &identifier).await?;
     let blue = SourceIdentifier::new(
         "urn:oid:1.3.6.1.4.1.21367.13.20.3000",
         SecretString::from("IHEBLUE-994".to_owned()),
@@ -374,9 +374,9 @@ async fn identifiers_fed_together_cross_reference_each_other() -> TestResult {
 async fn a_deprecated_patient_answers_the_empty_bundle_of_a_merge() -> TestResult {
     let pix = PixManager::start().await?;
     let file = "Patient-Patient-MohrMaidenResolvedByMohrMalice-Red.json";
-    let (_, token) = example(file)?;
-    let token = token.ok_or("the example carries an identifier")?;
-    feed_example(&pix, file, &token).await?;
+    let (_, identifier) = example(file)?;
+    let identifier = identifier.ok_or("the example carries an identifier")?;
+    feed_example(&pix, file, &identifier).await?;
     let deprecated = SourceIdentifier::new(
         "urn:oid:1.3.6.1.4.1.21367.13.20.1000",
         SecretString::from("IHERED-m94".to_owned()),
