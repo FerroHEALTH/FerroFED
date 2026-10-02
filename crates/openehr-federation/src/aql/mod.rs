@@ -48,6 +48,7 @@
 
 mod aggregate;
 mod fold;
+mod function;
 mod rewrite;
 mod scan;
 
@@ -400,7 +401,10 @@ impl UnscopedQuery {
 /// An aggregate query directed to one endpoint is dispatched unchanged (N14).
 /// An undirected one is recombined at the Tier when every function it applies
 /// is declared decomposable in `context`, with `AVG` asked of each node as its
-/// `SUM` and `COUNT` (§11.6.3), and is refused otherwise.
+/// `SUM` and `COUNT` (§11.6.3), and is refused otherwise. A query that calls a
+/// function AQL 1.1.0 does not define is dispatched unchanged to one directed
+/// endpoint, and refused when it would reach more than one node, because the
+/// gateway cannot tell whether the function aggregates (§11.6.3).
 ///
 /// # Errors
 /// A [`Refusal`], each an HTTP `400`, when the query is not AQL, a parameter
@@ -418,6 +422,15 @@ pub fn analyse(
     })?;
     bind(&mut query, parameters).map_err(Refusal::Parameters)?;
     let findings = scan::scan(&query)?;
+    // NOTE: §11.6.3 [[aggregate-block]] forbids per-node aggregate rows, and nothing tells the
+    // gateway whether a function outside AQL aggregates, so a fan-out refuses it (N14).
+    if let Some(found) = &findings.undefined
+        && !context.targeting.single_endpoint()
+    {
+        return Err(Refusal::UndefinedFunction {
+            at: found.at.clone(),
+        });
+    }
     let skip = page(&mut query, paging, context.offset)?;
     let columns = render_columns(&query.select);
     let recombination = match &findings.aggregate {

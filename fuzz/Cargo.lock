@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "fhir-types",
  "http",
@@ -1271,7 +1271,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.13"
+version = "0.0.15"
 dependencies = [
  "openehr-base",
  "openehr-its",

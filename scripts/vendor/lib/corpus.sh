@@ -36,7 +36,7 @@ corpus_require() {
 }
 
 # The Pin cell of the docs/VERSIONS.md row whose Item cell is $1, backticks
-# removed. This is the single source of truth for every pin (docs/VERSIONS.md).
+# removed. The matrix is the single source of truth for every pin.
 corpus_pin_cell() {
   local cell
   cell="$(awk -F'|' -v item="$1" '

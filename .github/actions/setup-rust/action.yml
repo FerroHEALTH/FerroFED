@@ -6,7 +6,7 @@ description: >-
   asks for. The calling job checks out the repository first: a local action
   path (./.github/actions/setup-rust) resolves only after checkout, so this
   action does not check out. The channel is read from rust-toolchain.toml by
-  the wrapped action, so the pin lives in one file (docs/VERSIONS.md).
+  the wrapped action, so the pin lives in that one file.
 inputs:
   components:
     description: Comma-separated toolchain components (rustfmt, clippy), none by default.

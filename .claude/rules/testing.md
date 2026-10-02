@@ -85,7 +85,7 @@ section records what the oracles are, whatever harness runs them.
 ## Fuzz findings
 
 The `fuzz/` crate feeds arbitrary bytes to the parsers a caller reaches first
-(`docs/ci-cd.md` §The fuzz lane): the AQL rewrite, the ITS-REST query body,
+(the `fuzz.yml` lane): the AQL rewrite, the ITS-REST query body,
 and the federated `RESULT_SET` and `OPTIONS` bodies. A finding is a panic, an
 abort or a hang in library code: that is a violation of `reliability.md` (no
 panicking path on caller-controlled input) and becomes a `Bug` issue with the

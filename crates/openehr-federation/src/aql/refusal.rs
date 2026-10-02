@@ -155,6 +155,21 @@ pub enum Refusal {
         "partial completeness cannot be combined with an aggregate recombined across nodes, which is exactly correct only over every node (§11.6.3, §11.4); send the query without partial, direct it to one node, or select the rows"
     )]
     PartialAggregate,
+    /// A function AQL 1.1.0 does not define (AQL master03-syntax §Functions),
+    /// in a query that would reach more than one node. The gateway cannot tell
+    /// whether the function aggregates, and an aggregate fanned out answers
+    /// one row per node, which §11.6.3 forbids (N14, N39). Pin the query to
+    /// one node (§8), or select the rows and compute the function in the
+    /// application.
+    #[error(
+        "the query calls a function AQL 1.1.0 does not define, which may aggregate and so cannot be shown correct across nodes; direct the query to one node, or select the rows and compute it in the application (N14, §11.6.3){}",
+        At(.at)
+    )]
+    UndefinedFunction {
+        /// Where the call was written: its first path argument, or the
+        /// `WHERE` condition it sits in.
+        at: Option<Range<usize>>,
+    },
     /// Offset-based paging is not supported across a fan-out (§11.6.2, N39).
     #[error("offset-based paging is not supported across a fan-out (§11.6.2, N39)")]
     OffsetUnsupported,
@@ -244,6 +259,7 @@ impl Refusal {
         "undirected-aggregate",
         "indecomposable-aggregate",
         "partial-aggregate",
+        "undefined-function",
         "offset-unsupported",
         "offset-page",
         "paging-conflict",
@@ -279,6 +295,7 @@ impl Refusal {
             Self::UndirectedAggregate { .. } => "undirected-aggregate",
             Self::Indecomposable { .. } => "indecomposable-aggregate",
             Self::PartialAggregate => "partial-aggregate",
+            Self::UndefinedFunction { .. } => "undefined-function",
             Self::OffsetUnsupported => "offset-unsupported",
             Self::OffsetPage { .. } => "offset-page",
             Self::PagingConflict { .. } => "paging-conflict",
@@ -309,6 +326,7 @@ impl Refusal {
             | Self::UnfoldableFunction { at }
             | Self::UndirectedAggregate { at }
             | Self::Indecomposable { at, .. }
+            | Self::UndefinedFunction { at }
             | Self::OrderNotSelected { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
@@ -470,6 +488,7 @@ mod tests {
                 at: None,
             },
             Refusal::PartialAggregate,
+            Refusal::UndefinedFunction { at: None },
             Refusal::OffsetUnsupported,
             Refusal::OffsetPage {
                 reason: OffsetPage::NoLimit,
@@ -506,15 +525,16 @@ mod tests {
             Refusal::UndirectedAggregate { .. } => 13,
             Refusal::Indecomposable { .. } => 14,
             Refusal::PartialAggregate => 15,
-            Refusal::OffsetUnsupported => 16,
-            Refusal::OffsetPage { .. } => 17,
-            Refusal::PagingConflict { .. } => 18,
-            Refusal::NegativePaging { .. } => 19,
-            Refusal::TopBackward => 20,
-            Refusal::TopWithLimit => 21,
-            Refusal::TopWithFetch => 22,
-            Refusal::OrderNotSelected { .. } => 23,
-            Refusal::NodeSetUndefined => 24,
+            Refusal::UndefinedFunction { .. } => 16,
+            Refusal::OffsetUnsupported => 17,
+            Refusal::OffsetPage { .. } => 18,
+            Refusal::PagingConflict { .. } => 19,
+            Refusal::NegativePaging { .. } => 20,
+            Refusal::TopBackward => 21,
+            Refusal::TopWithLimit => 22,
+            Refusal::TopWithFetch => 23,
+            Refusal::OrderNotSelected { .. } => 24,
+            Refusal::NodeSetUndefined => 25,
         }
     }
 

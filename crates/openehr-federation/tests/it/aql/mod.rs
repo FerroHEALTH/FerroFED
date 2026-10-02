@@ -10,6 +10,7 @@
 mod aggregate;
 mod entry;
 mod folding;
+mod function;
 mod golden;
 mod guard;
 mod hygiene;

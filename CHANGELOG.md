@@ -147,6 +147,19 @@ federated query and identity resolution shipped in 0.0.3.
   official documentation it rests on, or says that no specification governs
   it. The six vendor scripts no longer write an internal path into their
   `PROVENANCE.md`.
+- The `comment-style` citation checks refuse a citation of any markdown file
+  under `docs/` outside the vendored `docs/specs/` tree (#184): a path that
+  opens a parenthetical or is followed by `section` or `§`. Naming
+  `docs/VERSIONS.md` as the file a script or test reads still passes. The
+  checks also read every YAML `description:` scalar and the trailing `#`
+  comment after a YAML or TOML value, outside quoted strings and block
+  scalars, and the guard runs the same under mawk. The citations this
+  catches cite the GitHub documentation or say that no specification
+  governs them, among them `fuzz.yml`, the `setup-rust` action
+  description, the version and corpus scripts and the CI rule. The crate
+  manifests' comment on the 0.0.0 name reservation changes with them, so
+  `openehr-federation` moves to 0.0.15, `ihe-iti` to 0.0.7 and
+  `nl-generic-functions` to 0.0.4 with no change to their code.
 - Error bodies (#57): the gateway's own refusals (`404`, `501`, a caught
   panic's `500`) answer the ITS-REST `Error` shape with `code` and
   `request_id`, where they named the code in an `error` member, and the codes
@@ -190,6 +203,17 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- A query that calls a function AQL 1.1.0 does not define, such as a
+  product-specific `MEDIAN(x)`, in `SELECT` or `WHERE` is refused `400`
+  (`undefined-function`) when it would reach more than one node, where it was
+  sent to every node and answered one row per node (#187; §11.6.3, N14, N39,
+  CP-10, CP-32). The gateway cannot tell whether such a function aggregates,
+  and per-node aggregate rows are the answer §11.6.3 forbids. Directed to one
+  endpoint, the query is sent unchanged. The single-row functions AQL defines
+  (AQL §Functions: the string, numeric, and date and time functions, and
+  `TERMINOLOGY`) are still sent to every node as written, and the five
+  aggregates keep the decomposition rules. `openehr-federation` 0.0.14 adds
+  `aql::refusal::Refusal::UndefinedFunction`.
 - A query that uses `TOP` together with a `LIMIT` clause is refused `400`
   (`top-with-limit`), whether or not the two counts agree, because AQL
   forbids the pair (#162; AQL §TOP, §LIMIT). A `TOP` query sent with the

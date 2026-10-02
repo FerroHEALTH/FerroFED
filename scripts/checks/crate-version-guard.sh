@@ -9,7 +9,8 @@
 # `cargo package` renders the concrete requirement.
 #
 # Versions are per crate, not lockstep: a member that holds its crates.io name
-# sits at the 0.0.0 placeholder until its first real version (docs/VERSIONS.md).
+# sits at the 0.0.0 placeholder until its first real version, as the pin
+# matrix, docs/VERSIONS.md, records.
 #
 #   crate-version-guard.sh <base-ref> [head-ref]
 #
@@ -110,7 +111,7 @@ for manifest in crates/*/Cargo.toml; do
   new_ver="$(package_field version < "$manifest")"
   old_ver="$(git show "$base:$manifest" 2>/dev/null | package_field version || true)"
   # A 0.0.0 manifest is a crates.io name reservation outside the crate line
-  # (docs/VERSIONS.md); its content changes until the first real version.
+  # the pin matrix records; its content changes until the first real version.
   if [[ "$new_ver" = "0.0.0" ]] && [[ "${old_ver:-0.0.0}" = "0.0.0" ]]; then
     reserved="$reserved $name"
     continue
