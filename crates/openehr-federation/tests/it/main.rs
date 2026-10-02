@@ -13,6 +13,8 @@
 #[cfg(test)]
 mod aql;
 #[cfg(test)]
+mod attributes;
+#[cfg(test)]
 mod combine;
 #[cfg(test)]
 mod dedup;

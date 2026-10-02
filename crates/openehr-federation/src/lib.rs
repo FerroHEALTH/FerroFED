@@ -29,7 +29,8 @@
 //! order the rewrite produces and the merge reads, and
 //! [`aggregate::Recombination`] the plain description of how the answers of an
 //! aggregate query recombine across nodes. [`dedup::DedupMode`] names the
-//! §10 deduplication a request selects.
+//! §10 deduplication a request selects, and [`attribute::EndpointAttribute`]
+//! the §9.3 ENDPOINT attributes a query adds to its rows.
 //!
 //! # Examples
 //!
@@ -50,6 +51,7 @@
 pub mod object;
 
 pub mod aggregate;
+pub mod attribute;
 pub mod dedup;
 pub mod envelope;
 pub mod error;

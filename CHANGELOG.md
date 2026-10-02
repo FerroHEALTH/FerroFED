@@ -22,6 +22,29 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- ENDPOINT attributes in rows (#72; §9.2, §9.3, §9.4, N12, N17, N18,
+  CP-35, CP-37). A directed query that selects `p/id` or `p/endpoint_id`,
+  `p/organisation` or `p/organization_id`, `p/system_id` or `p/url` through
+  the `FROM ENDPOINT` variable gets each value in every row, as a string, from
+  the registry entry of the endpoint the row came from: the values
+  `meta.federation.endpoints[]` reports for it. No node is asked for an
+  attribute, and a query that selects none keeps the row shape of a single
+  CDR. The §9.4 example answers the §9.4 columns and rows, with `columns[]`
+  paths in the ITS-REST form (`/id`, `/system_id`, `/uid/value`). An alias on
+  an attribute keeps it apart from an EHR-derived column of the same name;
+  giving both the same name is refused `400` with the new refusal
+  `endpoint-name-collision`, and a path through the variable that is no §9.3
+  attribute with `endpoint-attribute-unknown`. Under `DISTINCT` the
+  attributes take part in which rows are equal. An attribute beside an
+  aggregate recombined across endpoints is refused `400`
+  `indecomposable-aggregate`, and ordering on an attribute stays refused `400`
+  `endpoint-variable`. The `501 not-implemented` answer for these queries is
+  gone. `openehr-federation` 0.0.27 adds the `attribute` module with
+  `EndpointAttribute`, `ColumnSource::Endpoint(EndpointAttribute)`,
+  `Analysis::attributes`, `NodeAnswer::with_attributes` and
+  `Merged::attributes`; the engine adds `Plan::annotating` and
+  `FederatedAnswer::attributes`. CP-37 is covered.
+
 - The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
   request headers, the targeting mechanism beside the AQL (#71; §8.4,
   §8.4.1, N35, CP-28). Each carries a comma-separated list of registry ids,
@@ -58,6 +81,7 @@ federated query and identity resolution shipped in 0.0.3.
   repeated, and a node its endpoints disagree on. `ihe-iti` 0.0.8 reads the
   directory content under its `mcsd` feature, resolving references inside the
   Bundle as FHIR R4 §2.36.4.1 does.
+
 - The `FROM ENDPOINT` and `ORGANISATION` directive in AQL (#70; §8.1,
   §8.4.1, N11, N19, N20, CP-6). `FROM ENDPOINT p ["node-a-pub", …]` asks
   exactly the listed endpoints, and `FROM ORGANISATION ["org-a"]` asks every
@@ -74,9 +98,8 @@ federated query and identity resolution shipped in 0.0.3.
   that manages no endpoint answers `404 no-destination`. A query directed at
   one endpoint dispatches an aggregate or a function AQL does not define
   unchanged (N14, §11.6.3). The directive's variable may only be selected, as
-  an ENDPOINT attribute: selecting one answers `501 not-implemented` until
-  #72 adds those columns to the rows, and any other use is refused `400`
-  with the new refusal `endpoint-variable`. `openehr-federation` adds
+  an ENDPOINT attribute, which #72 adds to the rows, and any other use is
+  refused `400` with the new refusal `endpoint-variable`. `openehr-federation` adds
   `aql::directive::FacadeQuery`, `Context::with_targeting`,
   `Analysis::sources` and `ColumnSource::Endpoint`. Golden case 02 now
   passes, and CP-6 is covered. The endpoint and organisation headers of §8.4

@@ -44,15 +44,15 @@ use crate::support::{call, settings};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The synthetic patient the gateway resolves, in the example arc.
-const PATIENT: PatientId = PatientId::new(1, 38);
+pub(crate) const PATIENT: PatientId = PatientId::new(1, 38);
 
 /// The patient's `ehr_id` on node A and on node B.
-const EHR_A: Uuid = Uuid::from_u128(0x3333_3333_3333_4333_8333_3333_3333_3333);
-const EHR_B: Uuid = Uuid::from_u128(0x4444_4444_4444_4444_8444_4444_4444_4444);
+pub(crate) const EHR_A: Uuid = Uuid::from_u128(0x3333_3333_3333_4333_8333_3333_3333_3333);
+pub(crate) const EHR_B: Uuid = Uuid::from_u128(0x4444_4444_4444_4444_8444_4444_4444_4444);
 
 /// A seed of the patient's EHR, its subject naming [`PATIENT`], and one
 /// composition in it.
-fn plan(ehr_id: Uuid, composition: DemoComposition) -> SeedPlan {
+pub(crate) fn plan(ehr_id: Uuid, composition: DemoComposition) -> SeedPlan {
     SeedPlan {
         ehrs: vec![EhrSeed {
             ehr_id,
@@ -68,7 +68,7 @@ fn plan(ehr_id: Uuid, composition: DemoComposition) -> SeedPlan {
 
 /// The gateway over node A and node B, resolving the patient at both through
 /// the development cross-reference.
-fn gateway(
+pub(crate) fn gateway(
     dir: &std::path::Path,
     a: &ProxiedNode,
     b: &ProxiedNode,
@@ -166,7 +166,7 @@ fn body_holds(capture: &Capture, needle: &str) -> bool {
 }
 
 /// `POST /v1/query/aql` with `aql`.
-fn query(aql: &str) -> Result<Request<Body>, Box<dyn Error>> {
+pub(crate) fn query(aql: &str) -> Result<Request<Body>, Box<dyn Error>> {
     #[derive(serde::Serialize)]
     struct Adhoc<'a> {
         q: &'a str,
@@ -452,7 +452,7 @@ fn patient_query() -> String {
 
 /// Asserts that, since the journals were last cleared, neither node saw
 /// [`PATIENT`]'s identifier or its namespace in any carrier (N33).
-fn assert_no_patient_identifier_on_the_wire(nodes: &containers::TwoNodes) {
+pub(crate) fn assert_no_patient_identifier_on_the_wire(nodes: &containers::TwoNodes) {
     for node in [&nodes.a, &nodes.b] {
         for carried in [PATIENT.value(), PATIENT.namespace()] {
             assert!(

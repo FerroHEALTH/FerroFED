@@ -262,6 +262,32 @@ pub enum Refusal {
         /// Where the variable was used or bound.
         at: Option<Range<usize>>,
     },
+    /// A path through the directive's variable selects no ENDPOINT attribute:
+    /// §9.3 lists `endpoint_id` (selected as `p/id`, §8.3, §9.4),
+    /// `organisation` / `organization_id`, `system_id` and `url`, each one
+    /// attribute name after the variable with no predicate.
+    #[error(
+        "this path through the endpoint directive's variable selects no ENDPOINT attribute; the attributes are id or endpoint_id, organisation or organization_id, system_id and url (§9.3){}",
+        At(.at)
+    )]
+    EndpointAttributeUnknown {
+        /// Where the path was written.
+        at: Option<Range<usize>>,
+    },
+    /// An ENDPOINT attribute column carries the name of an EHR-derived column,
+    /// one selected from the EHR rather than through the directive. N18 has
+    /// an alias resolve such a collision, and these aliases leave it
+    /// standing, so one name would denote two columns (CP-35: "no column is
+    /// shadowed"). Alias the ENDPOINT attribute to a name no other column
+    /// carries.
+    #[error(
+        "an ENDPOINT attribute column has the name of an EHR-derived column; alias it to a name no other column carries (N18, CP-35){}",
+        At(.at)
+    )]
+    EndpointNameCollision {
+        /// Where the ENDPOINT attribute was written.
+        at: Option<Range<usize>>,
+    },
 }
 
 impl Refusal {
@@ -299,6 +325,8 @@ impl Refusal {
         "unordered-distinct-cut",
         "node-set-undefined",
         "endpoint-variable",
+        "endpoint-attribute-unknown",
+        "endpoint-name-collision",
     ];
 
     /// A stable name for this refusal: the code a gateway's error body
@@ -337,6 +365,8 @@ impl Refusal {
             Self::UnorderedDistinctCut { .. } => "unordered-distinct-cut",
             Self::NodeSetUndefined => "node-set-undefined",
             Self::EndpointVariable { .. } => "endpoint-variable",
+            Self::EndpointAttributeUnknown { .. } => "endpoint-attribute-unknown",
+            Self::EndpointNameCollision { .. } => "endpoint-name-collision",
         }
     }
 
@@ -361,7 +391,9 @@ impl Refusal {
             | Self::UndefinedFunction { at }
             | Self::OrderNotSelected { at }
             | Self::UnorderedDistinctCut { at }
-            | Self::EndpointVariable { at } => at.as_ref(),
+            | Self::EndpointVariable { at }
+            | Self::EndpointAttributeUnknown { at }
+            | Self::EndpointNameCollision { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
             | Self::PartialAggregate
@@ -546,6 +578,8 @@ mod tests {
             Refusal::UnorderedDistinctCut { at: None },
             Refusal::NodeSetUndefined,
             Refusal::EndpointVariable { at: None },
+            Refusal::EndpointAttributeUnknown { at: None },
+            Refusal::EndpointNameCollision { at: None },
         ]
     }
 
@@ -580,6 +614,8 @@ mod tests {
             Refusal::UnorderedDistinctCut { .. } => 25,
             Refusal::NodeSetUndefined => 26,
             Refusal::EndpointVariable { .. } => 27,
+            Refusal::EndpointAttributeUnknown { .. } => 28,
+            Refusal::EndpointNameCollision { .. } => 29,
         }
     }
 

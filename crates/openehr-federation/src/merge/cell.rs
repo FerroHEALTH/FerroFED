@@ -119,6 +119,12 @@ pub(super) fn decode(value: &Value) -> Cell {
     }
 }
 
+/// Decodes a string cell the gateway writes itself, an ENDPOINT attribute
+/// value, as the client receives it: a JSON string (§9.3).
+pub(super) fn text(value: &str) -> Cell {
+    decode(&Value::String(value.to_owned()))
+}
+
 /// Reads the version uid of a row, the dedup key of §10.2: `Ok(None)` for
 /// `null`, the `OBJECT_VERSION_ID` that `openehr-base` reads for a string, and
 /// `Err` for any other cell, which is not a version uid at all.

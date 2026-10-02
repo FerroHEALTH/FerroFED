@@ -4,7 +4,9 @@
 //! `SELECT DISTINCT` at the Tier (N13, CP-8).
 //!
 //! A row is a duplicate when another row has the same value in every column
-//! the client selected (AQL 1.1.0 §DISTINCT). Each node removed its own
+//! the client selected (AQL 1.1.0 §DISTINCT), the ENDPOINT attributes the
+//! gateway adds among them (§9.3), so rows of two endpoints whose attributes
+//! differ are two values. Each node removed its own
 //! duplicates; the Tier removes the ones across nodes. Two cells hold the same
 //! value when the Tier comparator puts neither before the other (no
 //! specification governs it: our own design): numbers by value, so `2` and
@@ -59,8 +61,6 @@ pub(super) fn has_duplicates(tuples: &[&[Cell]]) -> bool {
 /// The result is what DISTINCT and then `ORDER BY` give, because the copies
 /// of one value are ordered among themselves by the same Tier order that
 /// picks the kept one. Collapsing again changes nothing.
-// TODO(#72): an ENDPOINT projection makes rows from two endpoints distinct, so
-// the endpoint joins the tuple once the projection is re-injected.
 pub(super) fn collapse<T>(rows: Vec<T>, tuple: impl Fn(&T) -> &[Cell]) -> Vec<T> {
     let tuples: Vec<&[Cell]> = rows.iter().map(&tuple).collect();
     let mut keep = vec![false; rows.len()];

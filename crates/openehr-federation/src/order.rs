@@ -103,7 +103,9 @@ impl ResultOrder {
     /// set of rows equal on the node columns `columns` (N13).
     ///
     /// `columns` are the node columns the client sees, so a column the gateway
-    /// adds for its own use never makes two rows distinct. With no column,
+    /// adds for its own use never makes two rows distinct. The ENDPOINT
+    /// attributes the query selects are no node column, and the merge adds
+    /// them to every row's tuple (§9.3). With no column and no attribute,
     /// every row is equal to every other, and the answer has at most one row.
     #[must_use]
     pub fn with_distinct(mut self, columns: Vec<usize>) -> Self {

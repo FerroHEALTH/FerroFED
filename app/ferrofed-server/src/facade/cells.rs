@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The result-cell seam: each node row read against the façade's own columns,
-//! with the subject columns re-injected (N5, §7.1).
+//! with the subject columns re-injected (N5, §7.1) and the ENDPOINT attributes
+//! added (§9.3, N12).
 //!
 //! A node answers the rewritten query, whose `SELECT` lacks the subject
-//! columns, so a façade row is built column by column from where each one
-//! comes from: a node cell by position, or the resolution input as a constant
-//! `STRING` (N5). A cell travels as the node sent it.
+//! columns and the ENDPOINT attributes, so a façade row is built column by
+//! column from where each one comes from: a node cell by position, the
+//! resolution input as a constant `STRING` (N5), or the value the registry
+//! holds for the endpoint the row came from, as a `STRING` (§9.3). A cell
+//! travels as the node sent it.
 #![expect(
     clippy::disallowed_types,
     reason = "the result-cell seam: ITS-REST types a RESULT_SET cell as a JSON value"
@@ -15,6 +18,7 @@
 
 use openehr_federation::aql::ColumnSource;
 use openehr_federation::aql::subject::Subject;
+use openehr_federation::attribute::EndpointAttribute;
 use openehr_its::rest::generated::query::ResultSetRow;
 use serde_json::Value;
 
@@ -33,87 +37,123 @@ pub enum CellError {
     /// A column re-injects the subject, and the query names none.
     #[error("a column re-injects the patient, and the query names none")]
     NoSubject,
-    /// A column is an ENDPOINT attribute, which no node row carries (§9.3).
-    #[error("a column is an ENDPOINT attribute, which no node row carries")]
+    /// A column is an ENDPOINT attribute, and the fan-out answered no value
+    /// of it beside the row (§9.3).
+    #[error("a column is an ENDPOINT attribute, and no value of it came with the row")]
     EndpointAttribute,
 }
 
+/// What the gateway adds to the node rows: the patient the query names, and
+/// the ENDPOINT attributes the fan-out answered beside each row.
+#[derive(Debug, Clone, Copy)]
+pub struct Added<'a> {
+    /// The resolution input the subject columns re-inject (N5).
+    pub subject: Option<&'a Subject>,
+    /// The ENDPOINT attributes the plan added, in the order of each row's
+    /// values ([`openehr_federation::aql::Analysis::attributes`]).
+    pub attributes: &'a [EndpointAttribute],
+    /// The values of `attributes` beside each row, one entry per row
+    /// ([`ferrofed_engine::fanout::FederatedAnswer::attributes`]).
+    pub values: &'a [Vec<String>],
+}
+
 /// The cells every node row must carry for `sources` to read it: one past the
-/// highest node column, or none when every column is re-injected.
+/// highest node column, or none when every column is added by the gateway.
 #[must_use]
 pub fn width(sources: &[ColumnSource]) -> usize {
     sources
         .iter()
         .filter_map(|source| match source {
             ColumnSource::Node(index) => index.checked_add(1),
-            ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint => None,
+            ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint(_) => None,
         })
         .max()
         .unwrap_or(0)
 }
 
-/// The façade rows of `rows`, each built from `sources`.
+/// The façade rows of `rows`, each built from `sources` and what `added`
+/// holds.
 ///
 /// # Errors
 /// Returns [`CellError::ShortRow`] for a node row too short for the node
-/// columns `sources` reads, and [`CellError::NoSubject`] when a source
-/// re-injects a subject the query does not name.
+/// columns `sources` reads, [`CellError::NoSubject`] when a source
+/// re-injects a subject the query does not name, and
+/// [`CellError::EndpointAttribute`] when a source is an ENDPOINT attribute no
+/// value of which came with the row.
 pub fn reinject(
     rows: Vec<ResultSetRow>,
     sources: &[ColumnSource],
-    subject: Option<&Subject>,
+    added: &Added<'_>,
 ) -> Result<Vec<ResultSetRow>, CellError> {
     let needed = width(sources);
     rows.into_iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(index, row)| {
             if row.len() < needed {
                 return Err(CellError::ShortRow {
                     found: row.len(),
                     needed,
                 });
             }
+            let values = added.values.get(index).map(Vec::as_slice);
             sources
                 .iter()
-                .map(|source| cell(&row, *source, subject))
+                .map(|source| cell(&row, *source, added, values))
                 .collect()
         })
         .collect()
 }
 
-/// The cell `source` names in `row`.
+/// The cell `source` names in `row`, whose ENDPOINT attribute values are
+/// `values`.
 fn cell(
     row: &[Value],
     source: ColumnSource,
-    subject: Option<&Subject>,
+    added: &Added<'_>,
+    values: Option<&[String]>,
 ) -> Result<Value, CellError> {
     match source {
         ColumnSource::Node(index) => row.get(index).cloned().ok_or(CellError::ShortRow {
             found: row.len(),
             needed: index.saturating_add(1),
         }),
-        ColumnSource::Subject => subject
+        ColumnSource::Subject => added
+            .subject
             .map(|subject| Value::String(subject.value().to_owned()))
             .ok_or(CellError::NoSubject),
-        ColumnSource::Namespace => subject
+        ColumnSource::Namespace => added
+            .subject
             .map(|subject| Value::String(subject.namespace().to_owned()))
             .ok_or(CellError::NoSubject),
-        // TODO(#72): the attribute's value from the registry and the node that answered the row.
-        ColumnSource::Endpoint => Err(CellError::EndpointAttribute),
+        ColumnSource::Endpoint(attribute) => added
+            .attributes
+            .iter()
+            .position(|added| *added == attribute)
+            .and_then(|position| values?.get(position))
+            .map(|value| Value::String(value.clone()))
+            .ok_or(CellError::EndpointAttribute),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CellError, reinject};
+    use super::{Added, CellError, reinject};
     use openehr_federation::aql::ColumnSource;
+    use openehr_federation::attribute::EndpointAttribute;
     use serde_json::json;
+
+    const NOTHING: Added<'static> = Added {
+        subject: None,
+        attributes: &[],
+        values: &[],
+    };
 
     #[test]
     fn node_cells_keep_their_position_without_a_subject() {
         let rows = vec![vec![json!("a"), json!(1)], vec![json!("b"), json!(2)]];
         let sources = [ColumnSource::Node(1), ColumnSource::Node(0)];
         assert_eq!(
-            reinject(rows, &sources, None).unwrap(),
+            reinject(rows, &sources, &NOTHING).unwrap(),
             vec![vec![json!(1), json!("a")], vec![json!(2), json!("b")]],
             "each façade column reads its node column"
         );
@@ -124,7 +164,7 @@ mod tests {
         let rows = vec![vec![json!("a")]];
         let sources = [ColumnSource::Node(0), ColumnSource::Node(1)];
         assert_eq!(
-            reinject(rows, &sources, None),
+            reinject(rows, &sources, &NOTHING),
             Err(CellError::ShortRow {
                 found: 1,
                 needed: 2
@@ -137,9 +177,58 @@ mod tests {
     fn a_subject_column_without_a_subject_is_refused() {
         let rows = vec![vec![json!("a")]];
         assert_eq!(
-            reinject(rows, &[ColumnSource::Subject], None),
+            reinject(rows, &[ColumnSource::Subject], &NOTHING),
             Err(CellError::NoSubject),
             "nothing to re-inject"
+        );
+    }
+
+    #[test]
+    fn each_row_carries_the_attributes_of_its_own_endpoint() {
+        let rows = vec![vec![json!("a1")], vec![json!("b1")]];
+        let values = [
+            vec!["node-a".to_owned(), "cdr-a".to_owned()],
+            vec!["node-b".to_owned(), "cdr-b".to_owned()],
+        ];
+        let added = Added {
+            subject: None,
+            attributes: &[EndpointAttribute::EndpointId, EndpointAttribute::SystemId],
+            values: &values,
+        };
+        let sources = [
+            ColumnSource::Endpoint(EndpointAttribute::SystemId),
+            ColumnSource::Node(0),
+            ColumnSource::Endpoint(EndpointAttribute::EndpointId),
+        ];
+        assert_eq!(
+            reinject(rows, &sources, &added).unwrap(),
+            vec![
+                vec![json!("cdr-a"), json!("a1"), json!("node-a")],
+                vec![json!("cdr-b"), json!("b1"), json!("node-b")],
+            ],
+            "§9.3, N12: a row's attributes are its endpoint's"
+        );
+    }
+
+    #[test]
+    fn an_attribute_with_no_value_beside_the_row_is_refused() {
+        let rows = vec![vec![json!("a1")]];
+        let values = [Vec::new()];
+        let added = Added {
+            subject: None,
+            attributes: &[EndpointAttribute::Url],
+            values: &values,
+        };
+        let sources = [ColumnSource::Endpoint(EndpointAttribute::Url)];
+        assert_eq!(
+            reinject(rows.clone(), &sources, &added),
+            Err(CellError::EndpointAttribute),
+            "a recombined row comes from no endpoint, so it has no attribute to add"
+        );
+        assert_eq!(
+            reinject(rows, &sources, &NOTHING),
+            Err(CellError::EndpointAttribute),
+            "an attribute the plan did not add is never filled in"
         );
     }
 }

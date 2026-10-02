@@ -20,6 +20,7 @@ use openehr_federation::aggregate::{AggregateFunction, Recombination, Recombine}
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::{Refusal, Unreducible};
 use openehr_federation::aql::{Analysis, ColumnSource, Context, OffsetStrategy, Paging, Targeting};
+use openehr_federation::attribute::EndpointAttribute;
 use openehr_query::bind::Parameters;
 
 use super::{analysed, ask_all, assert_same_aql};
@@ -403,8 +404,8 @@ fn golden_case_02_keeps_the_directive_and_its_projections_out_of_the_node_query(
     let node = query.for_node(&ehr_id);
     assert_eq!(
         [
-            ColumnSource::Endpoint,
-            ColumnSource::Endpoint,
+            ColumnSource::Endpoint(EndpointAttribute::EndpointId),
+            ColumnSource::Endpoint(EndpointAttribute::SystemId),
             ColumnSource::Node(0)
         ],
         node.columns(),

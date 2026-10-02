@@ -14,13 +14,16 @@
 use std::ops::Range;
 
 use openehr_its::rest::generated::query::ResultSetColumn;
-use openehr_query::ast::{ClassExprOperand, ColumnExpr, ContainsExpr, IdentifiedPath, SelectQuery};
+use openehr_query::ast::{
+    ClassExprOperand, ColumnExpr, ContainsExpr, IdentifiedPath, SelectClause, SelectQuery,
+};
 use openehr_query::bind::Parameters;
 use openehr_query::federation::{Directive, Federated, parse_federated};
 use openehr_query::visit::{Visit, walk_identified_path};
 
 use super::refusal::Refusal;
 use super::{Analysis, ColumnSource, Context, Paging, rewrite};
+use crate::attribute::EndpointAttribute;
 
 /// A façade query as parsed: the `FROM ENDPOINT` or `ORGANISATION`
 /// directive when it carries one (§8.1), and the strict AQL that remains.
@@ -63,8 +66,11 @@ impl FacadeQuery {
     /// node (§9.3).
     ///
     /// # Errors
-    /// The refusals of [`super::analyse`], and [`Refusal::EndpointVariable`] when
-    /// the directive's variable is used other than as a selected column.
+    /// The refusals of [`super::analyse`]; [`Refusal::EndpointVariable`] when
+    /// the directive's variable is used other than as a selected column;
+    /// [`Refusal::EndpointAttributeUnknown`] when a selected path through it
+    /// is no §9.3 attribute; and [`Refusal::EndpointNameCollision`] when an
+    /// ENDPOINT attribute column is named as an EHR-derived column is (N18).
     pub fn analyse(
         self,
         parameters: &Parameters,
@@ -77,13 +83,30 @@ impl FacadeQuery {
 }
 
 impl Analysis {
-    /// Puts the ENDPOINT attribute columns back at their façade `positions`:
-    /// `columns[]` becomes the façade's own, and each of those columns is
-    /// [`ColumnSource::Endpoint`] (§9.3, N17).
+    /// The ENDPOINT attributes the query selects, each once, in the order of
+    /// their first column (§9.3, N12): the values the gateway takes from the
+    /// registry for every endpoint it asks. Empty when the query selects
+    /// none, and the rows then carry no endpoint column (N17).
+    #[must_use]
+    pub fn attributes(&self) -> Vec<EndpointAttribute> {
+        let mut attributes = Vec::new();
+        for source in self.sources() {
+            if let ColumnSource::Endpoint(attribute) = source
+                && !attributes.contains(attribute)
+            {
+                attributes.push(*attribute);
+            }
+        }
+        attributes
+    }
+
+    /// Puts the ENDPOINT attribute columns back at their façade positions:
+    /// `columns[]` becomes the façade's own, and each of those columns is the
+    /// [`ColumnSource::Endpoint`] of its attribute (§9.3, N17).
     pub(super) fn select_endpoint_attributes(
         &mut self,
         facade: Vec<ResultSetColumn>,
-        positions: &[usize],
+        selected: &[Selected],
     ) {
         let (columns, sources) = match self {
             Self::Patient(query) => (&mut query.columns, &mut query.sources),
@@ -91,28 +114,41 @@ impl Analysis {
         };
         let mut node = std::mem::take(sources).into_iter();
         *sources = (0..facade.len())
-            .filter_map(|index| {
-                if positions.contains(&index) {
-                    Some(ColumnSource::Endpoint)
-                } else {
-                    node.next()
-                }
-            })
+            .filter_map(
+                |index| match selected.iter().find(|column| column.position == index) {
+                    Some(column) => Some(ColumnSource::Endpoint(column.attribute)),
+                    None => node.next(),
+                },
+            )
             .collect();
         *columns = facade;
     }
 }
 
+/// A column the façade query selects through the directive's variable.
+#[derive(Debug, Clone)]
+pub(super) struct Selected {
+    /// Its position among the façade's columns.
+    pub(super) position: usize,
+    /// The ENDPOINT attribute it selects (§9.3).
+    pub(super) attribute: EndpointAttribute,
+    /// Where it was written.
+    pub(super) at: Option<Range<usize>>,
+}
+
 /// Removes the columns `query` selects through the directive's variable, and
-/// returns their façade positions in order.
+/// returns them in façade order.
 ///
 /// # Errors
 /// [`Refusal::EndpointVariable`] when the `FROM` clause also binds the
-/// variable, or a path through it appears anywhere but as a selected column.
+/// variable, or a path through it appears anywhere but as a selected column;
+/// [`Refusal::EndpointAttributeUnknown`] for a selected path that is no
+/// §9.3 attribute; and [`Refusal::EndpointNameCollision`] for an attribute
+/// column named as an EHR-derived column is (N18, CP-35).
 pub(super) fn strip_endpoint_columns(
     query: &mut SelectQuery,
     directive: &Directive,
-) -> Result<Vec<usize>, Refusal> {
+) -> Result<Vec<Selected>, Refusal> {
     let Some(variable) = directive.variable.as_deref() else {
         return Ok(Vec::new());
     };
@@ -121,19 +157,23 @@ pub(super) fn strip_endpoint_columns(
             at: directive.span.bytes(),
         });
     }
-    let positions: Vec<usize> = query
-        .select
-        .columns
-        .iter()
-        .enumerate()
-        .filter_map(|(index, column)| match &column.column {
-            ColumnExpr::Path(path) if path.root == variable => Some(index),
-            ColumnExpr::Path(_)
-            | ColumnExpr::Primitive(_)
-            | ColumnExpr::Aggregate(_)
-            | ColumnExpr::Function(_) => None,
-        })
-        .collect();
+    let mut selected = Vec::new();
+    for (position, column) in query.select.columns.iter().enumerate() {
+        if let ColumnExpr::Path(path) = &column.column
+            && path.root == variable
+        {
+            let at = path.span.bytes();
+            let attribute =
+                attribute(path).ok_or(Refusal::EndpointAttributeUnknown { at: at.clone() })?;
+            selected.push(Selected {
+                position,
+                attribute,
+                at,
+            });
+        }
+    }
+    collision(&query.select, &selected)?;
+    let positions: Vec<usize> = selected.iter().map(|column| column.position).collect();
     rewrite::strip_columns(query, &positions);
     let mut search = Through {
         variable,
@@ -144,7 +184,45 @@ pub(super) fn strip_endpoint_columns(
     if search.found {
         return Err(Refusal::EndpointVariable { at: search.at });
     }
-    Ok(positions)
+    Ok(selected)
+}
+
+/// The attribute `path` selects: one attribute name after the variable, with
+/// no predicate on either (§9.3).
+fn attribute(path: &IdentifiedPath) -> Option<EndpointAttribute> {
+    if path.predicate.is_some() {
+        return None;
+    }
+    match path.path.as_ref()?.parts.as_slice() {
+        [part] if part.predicate.is_none() => EndpointAttribute::from_name(&part.name),
+        _ => None,
+    }
+}
+
+/// Refuses an ENDPOINT attribute column that carries the name of an
+/// EHR-derived column (N18, CP-35).
+///
+/// A column is named by its alias, or `#<index>` without one, so only two
+/// aliases can collide, and an alias resolves the collision as N18 requires
+/// unless the client gives the same one to both columns.
+fn collision(select: &SelectClause, selected: &[Selected]) -> Result<(), Refusal> {
+    let names = super::render_columns(select);
+    let endpoint = |index: usize| selected.iter().any(|column| column.position == index);
+    for column in selected {
+        let Some(name) = names.get(column.position).map(|rendered| &rendered.name) else {
+            continue;
+        };
+        let shadowed = names
+            .iter()
+            .enumerate()
+            .any(|(index, other)| !endpoint(index) && other.name == *name);
+        if shadowed {
+            return Err(Refusal::EndpointNameCollision {
+                at: column.at.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Whether the containment binds `variable` to a class or a version.
