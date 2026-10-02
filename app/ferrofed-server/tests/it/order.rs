@@ -25,7 +25,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 use crate::facade::{Answer, body, gateway, post, received, registry, schema, statuses};
-use crate::support::call;
+use crate::support::{call, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -469,6 +469,145 @@ async fn bounded_pages_tied_across_their_edges_repeat_and_tile() -> TestResult {
         assert!(
             !sent.contains("OFFSET"),
             "§11.6.2: never pushed down: {sent}"
+        );
+    }
+    Ok(())
+}
+
+/// One synthetic `COMPOSITION` a node holds: its name and its uid.
+type Composition = (&'static str, &'static str);
+
+/// A node answering `SELECT DISTINCT CONCAT(name, '/', uid), name, uid` as a
+/// CDR would: it orders on the name, then on the uid when it is asked to, and
+/// cuts at the `LIMIT` it was sent. Asked for no uid key, it returns a
+/// different choice among the rows tied on the name on every call, as AQL
+/// lets it (AQL master03-syntax §LIMIT).
+struct DistinctNode {
+    compositions: Vec<Composition>,
+    calls: AtomicUsize,
+}
+
+impl Respond for DistinctNode {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let call = self.calls.fetch_add(1, Ordering::SeqCst);
+        let Ok(sent) = serde_json::from_slice::<Sent>(&request.body) else {
+            return ResponseTemplate::new(400);
+        };
+        let keyed = sent.q.contains("c/name/value, c/uid/value ASC");
+        let limit = sent
+            .q
+            .rsplit_once("LIMIT ")
+            .and_then(|(_, count)| count.trim().parse::<usize>().ok())
+            .unwrap_or(usize::MAX);
+        let mut held = self.compositions.clone();
+        held.sort_by(|a, b| a.0.cmp(b.0));
+        for tied in held.chunk_by_mut(|a, b| a.0 == b.0) {
+            if keyed {
+                tied.sort_by(|a, b| a.1.cmp(b.1));
+            } else {
+                let turn = call % tied.len();
+                tied.rotate_left(turn);
+            }
+        }
+        held.truncate(limit);
+        let rows: Vec<String> = held
+            .iter()
+            .map(|(name, uid)| format!(r#"["{name}/{uid}","{name}","{uid}"]"#))
+            .collect();
+        let answer = format!(r#"{{"q":"node","rows":[{}]}}"#, rows.join(","));
+        ResponseTemplate::new(200).set_body_raw(answer.into_bytes(), "application/json")
+    }
+}
+
+async fn distinct_node(compositions: &[Composition]) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/query/aql"))
+        .respond_with(DistinctNode {
+            compositions: compositions.to_vec(),
+            calls: AtomicUsize::new(0),
+        })
+        .mount(&server)
+        .await;
+    server
+}
+
+/// Node A holds three compositions named `Visit`, stored out of uid order,
+/// and one `Zeta`; node B one `Visit` and one `Alpha`.
+const COMPOSITIONS_A: [Composition; 4] = [
+    ("Visit", "a-uid-3"),
+    ("Visit", "a-uid-1"),
+    ("Visit", "a-uid-2"),
+    ("Zeta", "a-uid-4"),
+];
+const COMPOSITIONS_B: [Composition; 2] = [("Visit", "b-uid-1"), ("Alpha", "b-uid-2")];
+
+// conformance: CP-8 CP-32
+#[tokio::test]
+async fn a_distinct_function_of_selected_paths_returns_the_same_rows_on_every_repeat() -> TestResult
+{
+    let a = distinct_node(&COMPOSITIONS_A).await;
+    let b = distinct_node(&COMPOSITIONS_B).await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), "", "")?;
+    let aql = "SELECT DISTINCT CONCAT(c/name/value, '/', c/uid/value), c/name/value, c/uid/value \
+               FROM EHR e CONTAINS COMPOSITION c ORDER BY c/name/value LIMIT 2";
+
+    let mut answers = Vec::new();
+    for _ in 0..2 {
+        let (status, text) = call(app.clone(), post(body(aql)?)?).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+        schema::validate(&text)?;
+        let answer: Answer = serde_json::from_str(&text)?;
+        answers.push(answer.rows);
+    }
+    let row = |cells: [&str; 3]| cells.map(str::to_owned).to_vec();
+    assert_eq!(
+        vec![
+            row(["Alpha/b-uid-2", "Alpha", "b-uid-2"]),
+            row(["Visit/a-uid-1", "Visit", "a-uid-1"]),
+        ],
+        answers.first().cloned().unwrap_or_default(),
+        "§11.6.1: tied on the name, broken on endpoint_id, then on the selected uid"
+    );
+    assert_eq!(
+        answers.first(),
+        answers.get(1),
+        "§11.6.1: repeating a query returns the same rows"
+    );
+    for server in [&a, &b] {
+        for sent in received(server).await? {
+            assert!(
+                sent.contains("ORDER BY c/name/value, c/uid/value ASC LIMIT 2"),
+                "the selected uid is the tie-break, and no column is added: {sent}"
+            );
+        }
+    }
+    Ok(())
+}
+
+// conformance: CP-8 CP-32
+#[tokio::test]
+async fn a_distinct_function_of_an_unselected_path_under_a_limit_is_refused_400() -> TestResult {
+    let a = distinct_node(&COMPOSITIONS_A).await;
+    let b = distinct_node(&COMPOSITIONS_B).await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), "", "")?;
+    let aql = "SELECT DISTINCT LENGTH(c/uid/value), c/name/value \
+               FROM EHR e CONTAINS COMPOSITION c ORDER BY c/name/value LIMIT 2";
+
+    let (status, text) = call(app, post(body(aql)?)?).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert_eq!(
+        "unordered-distinct-cut",
+        error_body(&text)?.code,
+        "§11.6.1: a node can order only on paths, so its cut among rows tied on the name \
+         could change on every repeat"
+    );
+    for server in [&a, &b] {
+        assert!(
+            received(server).await?.is_empty(),
+            "a refused query asks no node"
         );
     }
     Ok(())

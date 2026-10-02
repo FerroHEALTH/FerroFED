@@ -331,7 +331,7 @@ impl<'ast> Visit<'ast> for Scan {
 
 /// Where the first path among a call's arguments was written, nested calls
 /// included.
-fn first_path(call: &FunctionCall) -> Option<Range<usize>> {
+pub(super) fn first_path(call: &FunctionCall) -> Option<Range<usize>> {
     let FunctionCall::Named { args, .. } = call else {
         return None;
     };

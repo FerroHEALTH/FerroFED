@@ -134,6 +134,7 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `top-with-limit` | 400 | The query uses the deprecated `TOP` together with a `LIMIT` clause, which AQL forbids; write `ORDER BY … LIMIT n`. |
 | `top-with-fetch` | 400 | The query uses `TOP` and the request carries the ITS-REST `fetch` member, which cannot be combined with it; write `ORDER BY … LIMIT n`, or send `fetch` alone. |
 | `order-not-selected` | 400 | Under `DISTINCT`, an `ORDER BY` path is not also selected (N13). |
+| `unordered-distinct-cut` | 400 | Under `DISTINCT` with `ORDER BY` and `LIMIT`, a selected function column reads a path that is not selected, or a value from outside the row (`NOW()` and the other clock functions, `TERMINOLOGY`). AQL orders a node only on paths, so a node cut at its `LIMIT` could keep different rows on each repeat (§11.6.1, AQL §ORDER BY). Select the paths the function reads, or drop the `LIMIT`. |
 | `node-set-undefined` | 400 | The query names no patient and no endpoints, so no node set is defined (N4, §8). |
 
 ## Other answers

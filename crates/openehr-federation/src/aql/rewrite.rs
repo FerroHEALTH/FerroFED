@@ -5,9 +5,9 @@
 //! template and scoped to each node's `ehr_id` by one substitution.
 
 use openehr_query::ast::{
-    ClassExprOperand, ColumnExpr, CompareOperand, ContainsConstraint, ContainsExpr, IdentifiedExpr,
-    IdentifiedPath, ObjectPath, OrderByExpr, PathPart, Primitive, SelectExpr, SelectQuery,
-    SortOrder, Terminal, WhereExpr,
+    ClassExprOperand, ColumnExpr, CompareOperand, ContainsConstraint, ContainsExpr, FunctionCall,
+    IdentifiedExpr, IdentifiedPath, ObjectPath, OrderByExpr, PathPart, Primitive, SelectExpr,
+    SelectQuery, SortOrder, Terminal, WhereExpr,
 };
 use openehr_query::lexer::CompOp;
 use openehr_query::visit::{VisitMut, walk_terminal_mut};
@@ -250,8 +250,9 @@ pub(super) fn order_for(
 /// `ORDER BY`, and the node picks the same tied rows at its cut on every
 /// repeat, for `LIMIT n` and for the `LIMIT k + n` of a page (§11.6.2). Under
 /// `DISTINCT` no column is added, since it would change which rows are
-/// distinct: every `ORDER BY` path must be selected, and the remaining
-/// selected paths are the tie-break in place of the row key.
+/// distinct: every `ORDER BY` path must be selected, the remaining selected
+/// paths are the tie-break in place of the row key, and with a `LIMIT` every
+/// other selected column must be fixed by those paths (`pinned_by_paths`).
 ///
 /// `one_ehr` says the gateway scoped the node query to one `ehr_id`, so an
 /// `EHR`'s own id is the same on every row and is not a key.
@@ -265,7 +266,9 @@ pub(super) fn order_for(
 ///
 /// # Errors
 /// [`Refusal::OrderNotSelected`] for a `DISTINCT` query ordered on a path it
-/// does not select, and [`Refusal::NegativePaging`] for a negative `LIMIT`.
+/// does not select, [`Refusal::UnorderedDistinctCut`] for a `DISTINCT` query
+/// with a `LIMIT` whose selected paths do not fix every column, and
+/// [`Refusal::NegativePaging`] for a negative `LIMIT`.
 fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<ResultOrder, Refusal> {
     let limit = dispatched_limit(query)?;
     let distinct = query.select.distinct;
@@ -304,6 +307,9 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
         keys.push(SortKey::new(column, direction(term.order)));
     }
     let tie_break = if distinct {
+        if limit.is_some() {
+            pinned_by_paths(&query.select.columns)?;
+        }
         let ordered: Vec<usize> = keys.iter().map(SortKey::column).collect();
         let tie_break: Vec<(usize, IdentifiedPath)> = query
             .select
@@ -336,6 +342,59 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
     };
     let order = ResultOrder::new(keys, tie_break, limit);
     Ok(keyed(order, &mut query.select.columns))
+}
+
+/// Checks that every selected column of a `DISTINCT` query is fixed by its
+/// selected paths, the only columns a node can order on.
+///
+/// AQL orders on identified paths alone (AQL master03-syntax §ORDER BY,
+/// `orderByExpr : identifiedPath`), so under `DISTINCT` the node is sent the
+/// selected paths as its keys and nothing else. Two distinct rows tied on all
+/// of them differ only in a column that is not a path, and a node cut at its
+/// `LIMIT` may keep either, a different one on each repeat, where §11.6.1
+/// requires that "repeating a query returns rows in the same order". A literal
+/// is one value on every row. A call to a single-row function AQL defines is
+/// fixed when every argument is a literal, a parameter, a selected path or
+/// such a call. A call with no argument (`NOW()` and the other clock
+/// functions, which return "the current" date or time), `TERMINOLOGY` (whose
+/// result comes from a terminology server), and a function AQL does not
+/// define are not fixed by the row.
+///
+/// # Errors
+/// [`Refusal::UnorderedDistinctCut`] for the first selected column that is not
+/// fixed.
+fn pinned_by_paths(columns: &[SelectExpr]) -> Result<(), Refusal> {
+    let paths: Vec<&IdentifiedPath> = columns
+        .iter()
+        .filter_map(|column| match &column.column {
+            ColumnExpr::Path(path) => Some(path),
+            ColumnExpr::Primitive(_) | ColumnExpr::Aggregate(_) | ColumnExpr::Function(_) => None,
+        })
+        .collect();
+    for column in columns {
+        if let ColumnExpr::Function(call) = &column.column
+            && !fixed(call, &paths)
+        {
+            return Err(Refusal::UnorderedDistinctCut {
+                at: super::scan::first_path(call),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Whether `call` returns one value for every row whose `paths` are equal.
+fn fixed(call: &FunctionCall, paths: &[&IdentifiedPath]) -> bool {
+    let FunctionCall::Named { args, .. } = call else {
+        return false;
+    };
+    super::function::single_row(call)
+        && !args.is_empty()
+        && args.iter().all(|arg| match arg {
+            Terminal::Primitive(_) | Terminal::Parameter(_) => true,
+            Terminal::Path(path) => paths.contains(&path),
+            Terminal::Function(inner) => fixed(inner, paths),
+        })
 }
 
 /// The `LIMIT` the node query carries.
