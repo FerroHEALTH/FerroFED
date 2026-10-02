@@ -84,4 +84,9 @@ jobs:
             echo
             echo "Reported by [this run]($RUN_URL)."
           } > body.md
-          gh issue create --title "$TITLE" --body-file body.md --label ci --label P3
+          # fields.sh files the issue as a Task at Low priority and Low effort;
+          # this job's default token may not read the organisation's issue
+          # types, and then the issue lands with its label alone and whoever
+          # picks it up sets the three (.claude/rules/issue-workflow.md).
+          bash scripts/gh/fields.sh new task low low \
+            --title "$TITLE" --body-file body.md --label ci

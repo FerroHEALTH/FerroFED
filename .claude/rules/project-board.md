@@ -3,9 +3,11 @@
 
 # The public roadmap board (GitHub Project v2)
 
-The tracker is GitHub Issues (`issue-workflow.md`); milestones are
-the release spine; labels carry type + priority; native edges carry
-decomposition/sequencing (`issue-relationships.md`). The **"FerroFED Roadmap"
+The tracker is GitHub Issues (`issue-workflow.md`); milestones are the
+release spine; the native issue type and the organisation's `Priority` and
+`Effort` issue fields carry type, priority and effort; labels carry work kind
+and domain; native edges carry decomposition and sequencing
+(`issue-relationships.md`). The **"FerroFED Roadmap"
 Project** (a GitHub Project v2 under the `FerroHEALTH` organization) exists for one
 reason: **outward transparency:** anyone can see what is planned, in progress,
 and shipped, without reading the raw issue list. It is a **VIEW over the
@@ -33,8 +35,9 @@ has a canonical home:
 
 | Fact | Canonical home | NEVER duplicated as |
 |---|---|---|
-| Priority | `P0` to `P3` labels | a board Priority field |
-| Type | `bug`/`enhancement`/… labels | a board Type field |
+| Priority | the organisation's `Priority` issue field (`scripts/gh/fields.sh`) | a board Priority field |
+| Type | the native issue type (`Bug`/`Feature`/`Task`) | a board Type field |
+| Effort | the organisation's `Effort` issue field (`scripts/gh/fields.sh`) | a board Effort/estimate field |
 | Release | the `vX.Y.Z` milestone | a board Release/Iteration field |
 | Decomposition | native sub-issue edges | a board hierarchy field |
 | Sequencing | native blocked-by edges | a board Blocked column/field |
@@ -42,10 +45,11 @@ has a canonical home:
 Do not add custom fields, iteration fields, estimate fields, or extra Status
 options. A board-only fact has no backlink, is invisible to `gh issue`
 consumers (the SessionStart dump, `/phase-status`, `/next-task`), and rots the
-first time it disagrees with the label/milestone it shadows, the same decay
-class `issue-relationships.md` §No duplication bans for issue bodies. If the
-board ever needs to show a new fact, give the fact a canonical home on the
-ISSUE (label, milestone, native edge) and let the board filter/group on it.
+first time it disagrees with the field, label or milestone it shadows, the
+same decay class `issue-relationships.md` §No duplication bans for issue
+bodies. If the board ever needs to show a new fact, give the fact a canonical
+home on the ISSUE (issue field, label, milestone, native edge) and let the
+board filter/group on it.
 
 **The ONE sanctioned derived field: `Target date`.** The roadmap layout places
 items only by date/iteration fields (milestone due dates draw timeline
@@ -127,9 +131,11 @@ plus a Date field `Target date` (kept true by `sync-dates`). Views:
    "what is going on right now" surface.
 2. **Roadmap:** roadmap layout, filter `is:open`; items placed by the derived
    `Target date` field; group by Milestone; milestone markers on.
-3. **Current focus:** table layout, filter `is:open label:P0,P1`; columns
-   Title/Status/Labels/Milestone/Sub-issues progress.
-4. **Needs attention:** table layout, filter `is:open label:P0`.
+3. **Current focus:** table layout, filter `is:open` with the `Priority`
+   field at `Urgent` or `High`; columns
+   Title/Status/Type/Priority/Labels/Milestone/Sub-issues progress.
+4. **Needs attention:** table layout, filter `is:open` with the `Priority`
+   field at `Urgent`.
 
 Built-in workflows: Auto-add to project (`is:issue is:open` → Todo), Item
 reopened → Todo, Item closed → Done, Pull request linked to issue → In Progress.

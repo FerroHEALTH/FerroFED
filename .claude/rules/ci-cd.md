@@ -22,7 +22,8 @@ Ten workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 runs now (zizmor,
   actionlint, shellcheck, hadolint, the comment-style guard, the versions
-  guard, the favicon guard, the conformance-matrix guard); tier 2 is the Rust
+  guard, the favicon guard, the conformance-matrix guard, the tracker-helper
+  self-tests); tier 2 is the Rust
   set, gated behind a `detect` job that looks for a root `Cargo.toml`. The `conclusion` job is the single required status check
   on `main`. The design is `docs/ci-cd.md`.
 - `.github/workflows/scorecard.yml`: OpenSSF Scorecard, an independent score of
@@ -61,8 +62,10 @@ Ten workflows:
 - `.github/workflows/pin-freshness.yml`: the weekly freshness read over every
   pin no Dependabot ecosystem covers, the analyzer versions in `ci.yml` and the
   documentation toolchain. It opens one issue when a pin is behind its newest
-  upstream release and fails only when a release could not be read
-  (`docs/ci-cd.md`).
+  upstream release, through `scripts/gh/fields.sh new` (its default token may
+  not set the issue type and fields, and the issue then lands with its label
+  alone, `issue-workflow.md` §Type, priority and labels), and fails only when a
+  release could not be read (`docs/ci-cd.md`).
 - `.github/workflows/publish-crates.yml`: the crates.io lane behind the
   workspace `publish` switch. It runs on every `v*` tag (and on a manual
   dispatch, a dry run unless `publish` is set), reads the publishable set from

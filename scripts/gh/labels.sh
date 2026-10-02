@@ -4,20 +4,31 @@
 # scripts/gh/labels.sh: bootstrap the FerroFED issue-label taxonomy.
 #
 # Creates (idempotently) the labels the tracker workflow assumes:
-#   * exactly one TYPE label per issue, mapped to the conventional-commit types
-#     (bug/enhancement/documentation/chore/refactor/perf/test/ci);
-#   * a PRIORITY (P0 to P3);
+#   * the WORK-KIND labels a Task carries to pick its commit type
+#     (documentation/chore/refactor/perf/test/ci); a Bug and a Feature carry
+#     none, because the native issue type already says fix or feat;
 #   * the DOMAIN labels, one per conformance surface;
 #   * a few workflow labels.
+# The type of an issue (Bug, Feature, Task) and its priority (Urgent, High,
+# Medium, Low) are NOT labels since 2026-10-02: they are GitHub's native issue
+# type and the organisation's Priority issue field, set with
+# scripts/gh/fields.sh. The six labels that carried them before (bug,
+# enhancement, P0 to P3) are deleted here, so a re-run converges a repository
+# that still has them. Run scripts/gh/migrate-fields.sh first on a repository
+# whose issues still carry them, or the old values are lost with the labels.
 #
 # `gh label create --force` updates an existing label in place, so re-running
 # this is safe and converges the colours and descriptions to the values below.
-# Run it ONCE after the repository is created (owner action).
 #
 # Taxonomy policy: .claude/rules/issue-workflow.md
 # Official docs: https://cli.github.com/manual/gh_label_create
 #
-# Usage: scripts/gh/labels.sh
+# Usage:
+#   scripts/gh/labels.sh
+#   scripts/gh/labels.sh --self-test
+#       Drives this program against a stub gh on PATH: every label is created
+#       with --force, a retired name is deleted only when the repository
+#       carries it, and a refused gh call fails the run.
 
 set -euo pipefail
 
@@ -26,9 +37,146 @@ die() {
   exit 1
 }
 
+# The self-test stands before the preflight below, because it answers every
+# gh call from a stub on PATH and the real `gh repo view` refuses a runner
+# that holds no token for this repository.
+self_test() {
+  command -v jq >/dev/null 2>&1 || die "jq is not installed"
+  local work stub calls
+  work="$(mktemp -d)"
+  stub="$work/bin"
+  calls="$work/calls"
+  mkdir -p "$stub"
+  cat > "$stub/gh" <<'STUB'
+#!/usr/bin/env bash
+# The gh a self-test run of scripts/gh/labels.sh speaks to. It writes every
+# call where the test reads it, applies a --jq filter when one is passed, and
+# lists the labels the run is told the repository carries.
+set -euo pipefail
+filter=""
+previous=""
+for argument in "$@"; do
+  if [ "$previous" = --jq ]; then
+    filter="$argument"
+  fi
+  previous="$argument"
+done
+emit() {
+  if [ -n "$filter" ]; then
+    printf '%s' "$1" | jq -r "$filter"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+printf '%s\n' "$*" >> "$GH_STUB_CALLS"
+case "${1:-} ${2:-}" in
+  "repo view")
+    emit '{"nameWithOwner":"Example-Org/Example"}'
+    ;;
+  "label list")
+    emit "$GH_STUB_LABELS"
+    ;;
+  "label create")
+    if [ "${GH_STUB_CREATE:-ok}" != ok ]; then
+      echo "stub: gh label create refused" >&2
+      exit 1
+    fi
+    ;;
+  "label delete") ;;
+  *)
+    echo "stub: an unexpected call: $*" >&2
+    exit 90
+    ;;
+esac
+STUB
+  chmod 0755 "$stub/gh"
+
+  local labels create rc out
+  # run NAME CODE: this program through the stub, landing on CODE.
+  run() {
+    local name=$1 code=$2
+    rc=0
+    : > "$calls"
+    PATH="$stub:$PATH" GH_STUB_CALLS="$calls" \
+      GH_STUB_LABELS="$labels" GH_STUB_CREATE="$create" \
+      bash "$0" > "$work/out" 2> "$work/err" || rc=$?
+    out="$work/out"
+    if [[ "$rc" -ne "$code" ]]; then
+      echo "gh-labels: self-test failed: $name exited $rc, wanted $code." >&2
+      cat "$work/out" "$work/err" >&2
+      exit 1
+    fi
+  }
+  # said NAME FILE NEEDLE: the case left that sentence where it belongs.
+  said() {
+    local name=$1 file=$2 needle=$3
+    if ! grep -qF -- "$needle" "$file"; then
+      echo "gh-labels: self-test failed: $name did not say '$needle'." >&2
+      cat "$work/out" "$work/err" "$calls" >&2
+      exit 1
+    fi
+  }
+  # never NAME FILE NEEDLE: and never that one.
+  never() {
+    local name=$1 file=$2 needle=$3
+    if grep -qF -- "$needle" "$file"; then
+      echo "gh-labels: self-test failed: $name said '$needle'." >&2
+      cat "$work/out" "$work/err" "$calls" >&2
+      exit 1
+    fi
+  }
+
+  # A repository that carries none of the retired names: nothing is deleted,
+  # and every label of the taxonomy is created in place with --force.
+  labels='[{"name":"documentation"}]'
+  create=ok
+  run "a repository without the retired labels" 0
+  said "a repository without the retired labels" "$out" "ok: documentation"
+  said "a repository without the retired labels" "$out" "ok: spec:federation"
+  said "a repository without the retired labels" "$out" "ok: upstream-report"
+  said "a repository without the retired labels" "$out" "ok: no-crate-bump"
+  said "a repository without the retired labels" "$calls" "label create spec:NL-GF --color 0e8a16"
+  said "a repository without the retired labels" "$calls" "label create documentation --color 0075ca"
+  said "a repository without the retired labels" "$calls" "--force"
+  never "a repository without the retired labels" "$out" "retired:"
+  never "a repository without the retired labels" "$calls" "label delete"
+  never "a repository without the retired labels" "$calls" "label create bug"
+  never "a repository without the retired labels" "$calls" "label create P1"
+
+  # The same repository with two of the six the native issue type and the
+  # Priority field replaced on 2026-10-02: both go, and no other name does.
+  labels='[{"name":"enhancement"},{"name":"P1"},{"name":"documentation"}]'
+  run "a repository that still carries two retired labels" 0
+  said "a repository that still carries two retired labels" "$out" "retired: enhancement"
+  said "a repository that still carries two retired labels" "$out" "retired: P1"
+  said "a repository that still carries two retired labels" "$calls" "label delete enhancement --yes"
+  said "a repository that still carries two retired labels" "$calls" "label delete P1 --yes"
+  never "a repository that still carries two retired labels" "$out" "retired: P0"
+  never "a repository that still carries two retired labels" "$calls" "label delete documentation"
+
+  # A gh that refuses the first create stops the run rather than reporting a
+  # taxonomy it did not write.
+  create=fail
+  run "a refused gh label create" 1
+  never "a refused gh label create" "$out" "done."
+
+  rm -r "$work"
+  echo "gh-labels: self-test OK."
+}
+
+if [[ "${1:-}" == "--self-test" ]]; then
+  self_test
+  exit 0
+fi
+
 command -v gh >/dev/null 2>&1 || die "the GitHub CLI (gh) is not installed"
+command -v jq >/dev/null 2>&1 || die "jq is not installed"
 gh repo view --json nameWithOwner --jq .nameWithOwner >/dev/null 2>&1 ||
   die "could not resolve the current repository (run inside a gh-authenticated clone)"
+
+# The labels the repository carries today, read once, so no gh call writes
+# into a pipe grep has already stopped reading under `set -o pipefail`.
+EXISTING="$(gh label list --limit 200 --json name --jq '.[].name')"
 
 # label <name> <hex-color> <description>
 label() {
@@ -36,21 +184,24 @@ label() {
   echo "ok: $1"
 }
 
-echo "== type labels (exactly one per issue; maps to the conventional-commit type) =="
-label bug           d73a4a "A defect. Maps to a fix/ branch and a fix: commit."
-label enhancement   a2eeef "A new capability. Maps to a feat/ branch and a feat: commit."
+# retire <name>: delete a label the taxonomy no longer carries, if it exists.
+retire() {
+  if grep -qx -- "$1" <<<"$EXISTING"; then
+    gh label delete "$1" --yes >/dev/null
+    echo "retired: $1"
+  fi
+}
+
+echo "== retired labels (the native issue type and the Priority field carry these now) =="
+for l in bug enhancement P0 P1 P2 P3; do retire "$l"; done
+
+echo "== work-kind labels (on a Task only; picks the conventional-commit type) =="
 label documentation 0075ca "Docs-only work. Maps to a docs/ branch and a docs: commit."
 label chore         fef2c0 "Maintenance with no product change. chore/ and chore:."
 label refactor      cfd3d7 "Behaviour-preserving code change. refactor/ and refactor:."
 label perf          fbca04 "Performance work. perf/ and perf:."
 label test          c2e0c6 "Test-only work. test/ and test:."
 label ci            ededed "CI, build, and tooling. ci/ and ci:."
-
-echo "== priority labels (P0 critical to P3 backlog) =="
-label P0 b60205 "Critical, drop everything."
-label P1 d93f0b "High, current focus."
-label P2 fbca04 "Normal."
-label P3 0e8a16 "Backlog."
 
 echo "== domain labels (one per conformance surface) =="
 label spec:federation 5319e7 "The Federation Tier with AQL specification: sections, N# requirements, CP# conformance points."

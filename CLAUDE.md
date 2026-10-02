@@ -95,7 +95,8 @@ Today:
   oracle and never a source of code.
 - `scripts/checks/`: the committed guards, starting with
   `contribution-licence.sh` (the pull-request licence checkbox).
-- `scripts/gh/`: the tracker helpers (`rel.sh`, `project.sh`, `labels.sh`).
+- `scripts/gh/`: the tracker helpers (`rel.sh`, `project.sh`, `fields.sh`,
+  `labels.sh`, `migrate-fields.sh`).
 - `scripts/vendor/`: the fetch scripts for every vendored corpus.
 - `assets/brand/`: the mark and the "Azure & Iron" tokens.
 - `.github/`: issue and pull-request templates, CODEOWNERS, Dependabot, and
@@ -151,10 +152,16 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 ## Issue workflow (the loop)
 
 The tracker is GitHub Issues; the open issue list is the worklist
-(`.claude/rules/issue-workflow.md`). One type label per issue
-(bug/enhancement/documentation/chore/refactor/perf/test/ci), one priority
-label (P0 to P3), and domain labels as needed (`spec:federation`,
-`spec:openEHR`, `spec:IHE`, `spec:NL-GF`). Milestones are releases, starting
+(`.claude/rules/issue-workflow.md`). The type (Bug, Feature, Task), the
+priority (Urgent, High, Medium, Low) and the effort (High, Medium, Low) are
+GitHub's native issue type and the organisation's `Priority` and `Effort`
+issue fields, never labels, set with `scripts/gh/fields.sh`; an issue is
+filed with `scripts/gh/fields.sh new` so it carries all three from the start.
+A Task carries exactly one work-kind label (documentation/chore/refactor/
+perf/test/ci), and domain labels are added as needed (`spec:federation`,
+`spec:openEHR`, `spec:IHE`, `spec:NL-GF`). Read an issue with
+`gh issue view <n> --json title,body,comments`, never `--comments`, which
+prints nothing for an issue without comments. Milestones are releases, starting
 at v0.0.1 and stepping by a patch number
 (`.claude/memory/milestones-0-0-x.md`). Record progress on the issue (tick
 criteria, comment); a PR declares `Closes #N`. New work found while working an
@@ -162,7 +169,9 @@ issue is filed and fixed before the next unit starts. Native sub-issue and
 dependency edges are set only with `scripts/gh/rel.sh`; the "FerroFED Roadmap"
 board is a view over the tracker, written only with `scripts/gh/project.sh`
 (`.claude/rules/issue-relationships.md`, `.claude/rules/project-board.md`).
-The SessionStart hook prints the open issue list.
+The SessionStart hook prints the open issue list with `<Type/Priority>` after
+each title, and `/next-task` takes the highest priority first, the oldest
+first within a priority.
 
 ## Model orchestration (workflows and subagents)
 

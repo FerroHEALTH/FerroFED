@@ -57,6 +57,7 @@ under the pins below.
 | `versions` | `scripts/checks/versions.sh`, the pin matrix against every file that repeats a pin, the vendored provenance stamps and the SPDX licence claims |
 | `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
 | `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, the conformance matrix against the vendored specification, the test markers against the matrix, and the rendered book page against the matrix (`docs/architecture.md` section 12) |
+| `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh` and `migrate-fields.sh`, each driven against a stub `gh` on `PATH` |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
 reference implementation ships its own shell scripts, Dockerfile and
@@ -181,7 +182,11 @@ from cooldown by design and still arrive at once.
 installer input, nor a commit a vendor script fetches. `pin-freshness.sh`
 reads those pins from `docs/VERSIONS.md`, compares each with the newest
 upstream release or commit, and opens one issue carrying the report when one
-is behind, adding nothing when an open issue already carries it. A pin it
+is behind, adding nothing when an open issue already carries it. The issue
+goes through `scripts/gh/fields.sh new` as a Task at Low priority and Low
+effort; the job's default token may not read the organisation's issue types,
+and then the issue lands with its `ci` label alone and whoever picks it up
+sets the type, the priority and the effort. A pin it
 cannot read fails the job, so a network failure never reads as a fresh pin.
 It opens an issue rather than failing red, because a weekly red job on a lint
 version trains a maintainer to ignore red jobs. For the specification the
@@ -224,7 +229,7 @@ one minute per target on a pull request that touches the code a target reads.
 It is a time-boxed search, so it is never a `conclusion` input.
 
 A panic, an abort or a hang is a defect: the run fails, uploads the
-reproducing input as an artifact for 90 days, and the finding becomes a `bug`
+reproducing input as an artifact for 90 days, and the finding becomes a `Bug`
 issue with the input attached. An `Err` or a refusal is never a finding.
 `aql_rewrite` also asserts the identifier-hygiene property of §5.4.1 (N33) on
 every query the rewrite accepts, so a node query that still carries the
