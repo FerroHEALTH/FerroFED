@@ -284,6 +284,22 @@ jobs:
           bash scripts/gh/migrate-fields.sh --self-test
           bash scripts/gh/rel.sh --self-test
 
+  # The crate-version guard below runs only on a pull request without the
+  # `no-crate-bump` label, so its self-test runs here on every event: a stub
+  # repository whose main bumped a crate after the branch forked, to pin that
+  # the guard judges only what the branch changed.
+  crate-version-guard-self-test:
+    name: crate-version-guard self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/checks/crate-version-guard.sh --self-test
+
   # ---- Tier 2: the Rust lanes, gated on the workspace existing --------------
 
   # The one job that decides whether the cargo tier runs at all: it checks out
@@ -530,7 +546,9 @@ jobs:
   # upload (the Cargo reference, Publishing on crates.io: a publish is
   # generally permanent). The script exits 0 while no
   # crates/* member exists. `no-crate-bump` is the escape for a diff that
-  # provably does not alter packaged bytes.
+  # provably does not alter packaged bytes. The script diffs from the merge
+  # base of the two shas, so the full history is fetched, and a base that
+  # moved on after the branch forked is never read as the branch's change.
   crate-version-guard:
     name: crate-version-guard
     if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-crate-bump')
@@ -593,6 +611,7 @@ jobs:
       - favicon-sync
       - conformance-matrix
       - tracker-helpers
+      - crate-version-guard-self-test
       - detect
       - fmt
       - fuzz-lockfile
