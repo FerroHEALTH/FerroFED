@@ -14,6 +14,8 @@
 //!   journal the tests read;
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
 //!   what an ITI-104 feed delivered (#47);
+//! - [`unreachable`](mod@unreachable): a base URL no connection can
+//!   reach, the unreachable node of a test;
 //! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
 //!   feeds the PIX Manager over ITI-104, and names patients only inside the
 //!   `urn:oid:2.999` example arc.
@@ -26,6 +28,7 @@ pub mod containers;
 pub mod pix;
 pub mod proxy;
 pub mod seed;
+pub mod unreachable;
 
 use std::fmt;
 use std::path::PathBuf;

@@ -267,12 +267,11 @@ async fn a_refuse_fault_closes_the_connection_without_an_answer() {
 
 #[tokio::test]
 async fn an_unreachable_node_is_a_bad_gateway() {
-    // A port that was bound and released has nothing listening on it, unlike
-    // a dropped `MockServer`, which returns to wiremock's pool still serving.
-    let released = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let upstream = format!("http://{}", released.local_addr().unwrap());
-    drop(released);
-    let proxy = CapturingProxy::start(upstream).await.unwrap();
+    // A dropped `MockServer` returns to wiremock's pool still serving, so the
+    // node is the base nothing can listen on.
+    let proxy = CapturingProxy::start(ferrofed_testkit::unreachable::BASE.to_owned())
+        .await
+        .unwrap();
 
     let answer = reqwest::get(format!(
         "{}/ferroehr/rest/openehr/v1/ehr/7f4c",

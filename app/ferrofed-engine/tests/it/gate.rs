@@ -162,15 +162,21 @@ async fn a_clean_request_is_sent_with_identifiers_withheld() -> TestResult {
     Ok(())
 }
 
-/// The scope `ehr_id` of [`CLEAN`], which holds `4199` by chance.
+/// The scope `ehr_id` of [`CLEAN`], which holds [`SHORT`] by chance.
 const SCOPE: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
+
+/// A short withheld value inside [`SCOPE`].
+///
+/// It holds letters, so no port and no loopback address in a mock node's URL
+/// can contain it.
+const SHORT: &str = "4bad";
 
 fn short_options() -> Result<DispatchOptions, Box<dyn Error>> {
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(5))
         .ok_or("the deadline is past the platform clock")?;
     Ok(DispatchOptions::new(deadline)
-        .with_withheld(Arc::new(Withheld::new([SecretString::from("4199")]))))
+        .with_withheld(Arc::new(Withheld::new([SecretString::from(SHORT)]))))
 }
 
 // conformance: CP-26
@@ -197,7 +203,7 @@ async fn a_short_identifier_inside_the_scope_ehr_id_is_sent() -> TestResult {
 async fn the_same_short_identifier_elsewhere_is_never_sent() -> TestResult {
     let server = node().await;
     let snapshot = registry(&server.uri())?;
-    let scoped = NodeQuery::new(format!("{CLEAN} AND c/name/value = '4199'"))
+    let scoped = NodeQuery::new(format!("{CLEAN} AND c/name/value = '{SHORT}'"))
         .with_scope(&HierObjectId::new(SCOPE)?);
     let refused = client(&snapshot)?.query(&scoped, &short_options()?).await;
     let Err(DispatchError::Withheld { part, .. }) = refused else {
@@ -244,6 +250,63 @@ async fn a_withheld_value_inside_the_minted_id_is_sent_with_that_id() -> TestRes
             .map(http::HeaderValue::as_bytes),
         "the gate let the minted id through unchanged"
     );
+    Ok(())
+}
+
+/// A node query with no digit in it, so a port number cannot occur in it.
+const NO_DIGITS: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
+
+/// Options with `value` withheld.
+fn withholding(value: &str) -> Result<DispatchOptions, Box<dyn Error>> {
+    let deadline = Instant::now()
+        .checked_add(Duration::from_secs(5))
+        .ok_or("the deadline is past the platform clock")?;
+    Ok(DispatchOptions::new(deadline)
+        .with_withheld(Arc::new(Withheld::new([SecretString::from(value)]))))
+}
+
+// conformance: CP-26
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+async fn a_withheld_value_in_the_registry_authority_is_sent() -> TestResult {
+    let server = node().await;
+    let snapshot = registry(&server.uri())?;
+    let port = server.address().port().to_string();
+    assert!(server.uri().contains(&port), "the port is in the URL");
+    client(&snapshot)?
+        .query(&NodeQuery::new(NO_DIGITS), &withholding(&port)?)
+        .await?;
+    assert_eq!(
+        1,
+        requests_at(&server).await?,
+        "the operator's host and port are not request-derived (§5.4.1)"
+    );
+    Ok(())
+}
+
+/// A withheld value in the path of an endpoint URL.
+const IN_PATH: &str = "node-38kq";
+
+// conformance: CP-26
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+async fn a_withheld_value_in_the_registry_path_is_never_sent() -> TestResult {
+    let server = node().await;
+    let snapshot = registry(&format!("{}/{IN_PATH}", server.uri()))?;
+    let refused = client(&snapshot)?
+        .query(&NodeQuery::new(NO_DIGITS), &withholding(IN_PATH)?)
+        .await;
+    let Err(DispatchError::Withheld { part, .. }) = refused else {
+        return Err(format!("the gate let a leaking path through: {refused:?}").into());
+    };
+    assert_eq!(Part::Url, part);
+    assert_eq!(0, requests_at(&server).await?, "nothing reached the node");
     Ok(())
 }
 
