@@ -5,7 +5,7 @@ name = "openehr-federation"
 description = "The openEHR Federation Tier with AQL specification: the federation wire types held to the published schemas, the AQL rewrite with identifier hygiene (feature `aql`) and the federated result merge (feature `merge`)"
 # The crate line starts above the 0.0.0 name reservation on crates.io (no
 # specification governs this: our own design).
-version = "0.0.27"
+version = "0.0.28"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -25,8 +25,9 @@ include = ["src/**", "README.md", "LICENSE"]
 # One crate per specification, one feature per layer (no specification
 # governs this: our own design). The wire types are always on.
 [features]
-# The section 7 AQL rewrite and identifier hygiene on the openEHR AQL tree (#35).
-aql = ["dep:openehr-query", "dep:openehr-base"]
+# The section 7 AQL rewrite and identifier hygiene on the openEHR AQL tree (#35),
+# with the RM model that decides which paths a node can order (#234).
+aql = ["dep:openehr-query", "dep:openehr-base", "dep:openehr-rm"]
 # The section 9 to 11 merge over node result sets (#52), with the aggregates
 # recombined across nodes (#54).
 merge = ["dep:openehr-rm", "dep:openehr-base", "dep:rust_decimal"]

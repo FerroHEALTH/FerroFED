@@ -77,9 +77,9 @@
 //! Two copies of one version can spell its id in different cases, which BASE
 //! holds to be one identifier (`master05-identification_package.adoc`
 //! §"Composite Identifiers and Case"). Under dedup the Tier therefore reads
-//! the version uid by `openehr-base`'s `composite_id_key`, as a key and as a
-//! tie-break column, so the copies rank as one, and every row keeps its text
-//! as its node sent it. The argument then holds for a node whose own order on
+//! the version uid by `openehr-base`'s `composite_id_key`, as a key, as a
+//! tie-break column and as a `DISTINCT` column, so the copies rank as one and
+//! are one value, and every row keeps its text as its node sent it. The argument then holds for a node whose own order on
 //! the uid ignores case as well. The Tier cannot change how a node sorts the
 //! `ORDER BY` on the uid it is sent. A node that orders uids byte for byte
 //! and returned `n` rows in an order this one disagrees with is refused, and
@@ -388,9 +388,9 @@ type Placed = (String, Decoded, ResultSetRow);
 /// the lowest endpoint id, with identifiers that differ only in case taken as
 /// one (BASE `master05-identification_package.adoc` §"Composite Identifiers
 /// and Case"). A tie on the keys is then broken by the tie-break columns
-/// before the endpoint id, and the version uid, as a key or a tie-break
-/// column, is ordered by `openehr-base`'s `composite_id_key`, so two copies
-/// of one version rank as one. A node with a version uid that is not an
+/// before the endpoint id, and the version uid, as a key, a tie-break column
+/// or a `DISTINCT` column, is read by `openehr-base`'s `composite_id_key`, so
+/// two copies of one version rank as one and are one value. A node with a version uid that is not an
 /// `OBJECT_VERSION_ID` is refused with [`Disagreement::VersionId`].
 #[must_use]
 pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
@@ -566,7 +566,7 @@ fn decode_node(
                 .distinct()
                 .unwrap_or_default()
                 .iter()
-                .map(|column| raw.get(*column).map(decode))
+                .map(|column| ordered(&raw, *column, order))
                 .collect::<Option<Vec<Cell>>>()
                 .ok_or(Disagreement::ShortRow)?;
             if order.distinct().is_some() {
@@ -600,8 +600,10 @@ fn decode_node(
 ///
 /// Under version-identity dedup the version uid is read by its BASE
 /// comparison key, so the copies of one version whose ids differ only in case
-/// rank as one, in the Tier order and in the check of a node's order. The row
-/// itself keeps its text as the node sent it.
+/// rank as one, in the Tier order and in the check of a node's order, and are
+/// one value under `DISTINCT` (AQL master03-syntax §DISTINCT: "the same value
+/// for each corresponding column expression"). The row itself keeps its text as
+/// the node sent it.
 // NOTE: BASE master05 §"Composite Identifiers and Case", §11.6.1: outside dedup the uid orders as
 // sent, since a node that changes a uid's case is outside the containment argument of §11.6.1.
 fn ordered(raw: &ResultSetRow, column: usize, order: &ResultOrder) -> Option<Cell> {

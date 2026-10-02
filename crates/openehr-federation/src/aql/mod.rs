@@ -47,6 +47,7 @@
 //! ```
 
 mod aggregate;
+mod comparable;
 mod fold;
 mod function;
 mod paging;

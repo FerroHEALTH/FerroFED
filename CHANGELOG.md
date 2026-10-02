@@ -313,6 +313,11 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Changed
 
+- The `openehr-*` family moves from 0.0.78 to 0.0.79 (#234). The
+  `openehr-rm` attribute model now holds the BASE primitives, the `Ordered`
+  marker and the target class of a reference-typed attribute (FerroEHR
+  #3537), which the AQL rewrite reads to decide which selected paths a node
+  can order under `DISTINCT`. `openehr-federation` is 0.0.28.
 - The `openehr-*` family moves from 0.0.77 to 0.0.78 (#237), and an onward
   credential is checked at configuration load by the node client's own
   `Authorization` composition (FerroEHR #3535), for each endpoint and each
@@ -458,6 +463,33 @@ federated query and identity resolution shipped in 0.0.3.
   gate still reads the path, the query and the fragment, raw and
   percent-decoded, with the AQL text, the paging and the headers the
   gateway adds.
+- A `SELECT DISTINCT` query with `ORDER BY` and `LIMIT` (or a bounded
+  `OFFSET` page) that selects a path whose value AQL defines no order for is
+  refused `400` (`incomparable-distinct-key`), where a node could cut among
+  distinct rows differently on each repeat (#234; §11.6.1, N13, CP-8,
+  CP-32). AQL orders on data "available to primitives and `Ordered` types"
+  (AQL master03-syntax §ORDER BY), so a whole RM object (`SELECT DISTINCT
+  c`), a data value that is not a `DV_ORDERED` (`c/name`, a `DV_TEXT`), the
+  `DATA_VALUE` of an `ELEMENT`, a collection and a path the RM does not
+  resolve are not keys. The rewrite decides it by walking the path through
+  `openehr-rm`'s static model from the class `FROM` binds, asking the
+  model's `is_primitive` and `conforms_to_ordered` lookups and following a
+  reference to the target class the model names (FerroEHR #3537). Under
+  `DISTINCT` only the selected paths to a primitive or a `DV_ORDERED` are
+  pushed as `ORDER BY` keys, so the same query without a `LIMIT` is answered
+  and the other paths are compared at the Tier alone. A path to a primitive
+  value, such as `c/name/value` or `…/value/magnitude`, and an ordered data
+  value, such as `c/context/start_time`, are pinned as before. The `aql`
+  feature of `openehr-federation` now depends on `openehr-rm`; the crate is
+  0.0.28 and adds `Refusal::IncomparableDistinctKey`.
+- Under version-identity dedup, `SELECT DISTINCT` compares the version uid
+  without regard to case, as the dedup and the Tier order already do (#234;
+  §10.2, CP-8, CP-9; BASE `master05-identification_package.adoc`
+  §"Composite Identifiers and Case"; AQL master03-syntax §DISTINCT). Two
+  rows of one node whose uids differ only in case are one distinct row, the
+  first in the Tier order, with its text as the node sent it; a node cut at
+  its `LIMIT` that returns both is refused as `node-error`. Outside dedup a
+  uid compares as sent, in step with the Tier order.
 - A `SELECT DISTINCT` query with `ORDER BY` and `LIMIT` (or a bounded
   `OFFSET` page) whose selected function column the selected paths do not
   fix is refused `400` (`unordered-distinct-cut`), where a node could cut

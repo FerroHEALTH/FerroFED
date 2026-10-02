@@ -612,3 +612,30 @@ async fn a_distinct_function_of_an_unselected_path_under_a_limit_is_refused_400(
     }
     Ok(())
 }
+
+// conformance: CP-8 CP-32
+#[tokio::test]
+async fn a_distinct_whole_object_under_a_limit_is_refused_400() -> TestResult {
+    let a = distinct_node(&COMPOSITIONS_A).await;
+    let b = distinct_node(&COMPOSITIONS_B).await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), "", "")?;
+    let aql = "SELECT DISTINCT c, c/name/value \
+               FROM EHR e CONTAINS COMPOSITION c ORDER BY c/name/value LIMIT 2";
+
+    let (status, text) = call(app, post(body(aql)?)?).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert_eq!(
+        "incomparable-distinct-key",
+        error_body(&text)?.code,
+        "AQL §ORDER BY defines no order for a whole COMPOSITION, so a node's cut among rows \
+         tied on the name could change on every repeat (§11.6.1)"
+    );
+    for server in [&a, &b] {
+        assert!(
+            received(server).await?.is_empty(),
+            "a refused query asks no node"
+        );
+    }
+    Ok(())
+}

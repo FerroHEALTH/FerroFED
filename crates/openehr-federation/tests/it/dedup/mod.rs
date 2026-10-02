@@ -8,6 +8,7 @@
 //! the Tier's top `n` of the deduplicated union (§11.6.1, §11.6.2).
 #![cfg(feature = "merge")]
 
+mod distinct;
 mod order;
 mod properties;
 
