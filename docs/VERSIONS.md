@@ -143,8 +143,8 @@ used only as the optional backend of the stored-query store when several
 gateway replicas run. Every PostgreSQL FerroFED itself tests against or
 documents is the latest release line, so the image row, added with its first
 consumer, pins the latest `postgres:18.x` image by tag and by the digest of its
-image index. A member node in the test harness runs its product's documented
-database image instead (EHRbase on 16.2, §13).
+image index. A member node in the test harness runs FerroEHR's documented
+database image, which is part of the product under test (§13).
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -153,20 +153,17 @@ database image instead (EHRbase on 16.2, §13).
 ## Container images
 
 The gateway image builds on distroless static, and the quickstart runs two
-member CDRs of different products beside it (`docs/architecture.md` §13,
-decision A41). Every image is pinned by tag and by the digest of its image
-index, resolved on 2026-10-01. Each member node runs its product's documented
-image, database included, so EHRbase keeps its PostgreSQL 16.2 image (decision
-A40). `scripts/checks/versions.sh` holds every row equal to the file that
-repeats it.
+member CDRs beside it, two FerroEHR instances on the same pins, each with its
+own database and `system_id` (`docs/architecture.md` §13, decision A44). Every
+image is pinned by tag and by the digest of its image index, resolved on
+2026-10-01. `scripts/checks/versions.sh` holds every row equal to the file
+that repeats it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM` |
 | FerroEHR node image | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | FerroEHR node database image | `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | `compose.yaml`, the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | `compose.yaml`, the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 
 The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
 product version below as its tag default, and the guard holds the two equal.

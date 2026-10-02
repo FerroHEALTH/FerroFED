@@ -93,8 +93,8 @@ updates:
       prefix: "build"
 
   - package-ecosystem: "docker-compose"
-    # The quickstart's member-node images (FerroEHR and EHRbase with their
-    # databases), each pinned by tag and index digest. A bump must move the
+    # The quickstart's member-node images (FerroEHR and its database, run as
+    # two nodes), each pinned by tag and index digest. A bump must move the
     # matching docs/VERSIONS.md row in the same pull request, or the versions
     # guard fails it.
     directory: "/"

@@ -5,16 +5,12 @@
 //!
 //! A container-backed test asks [`e2e_enabled`] first and returns without
 //! touching Docker when the gate is unset, so the ordinary suite stays
-//! offline. The harness starts the two CDR products the end-to-end lane runs
-//! against (`docs/architecture.md` section 13): FerroEHR as node A and
-//! EHRbase as node B, each on its own documented database image, and
-//! [`two_nodes`] puts a [`CapturingProxy`] in front of each. Every image is
-//! pinned by tag and digest in a [`PinnedImage`] constant, which
-//! `docs/VERSIONS.md` repeats and `scripts/checks/versions.sh` compares.
-//!
-//! EHRbase ships its database as `ehrbase-v2-postgres:16.2`. The family rule
-//! is PostgreSQL 18 for FerroFED's own database; a member node is the product
-//! under test and runs the image its product documents (decision A40).
+//! offline. The harness starts the two member CDRs the end-to-end lane runs
+//! against (`docs/architecture.md` section 13): two FerroEHR instances, node A
+//! and node B, each on its own database and each stamping its own
+//! `system_id`, and [`two_nodes`] puts a [`CapturingProxy`] in front of each.
+//! Every image is pinned by tag and digest in a [`PinnedImage`] constant,
+//! which `docs/VERSIONS.md` repeats and `scripts/checks/versions.sh` compares.
 //!
 //! No specification governs the harness; it is FerroFED's own design.
 
@@ -34,11 +30,23 @@ pub const E2E_GATE_VALUE: &str = "1";
 /// The PostgreSQL port inside a database container.
 const POSTGRES_PORT: u16 = 5432;
 
-/// The HTTP port both CDR products listen on inside their containers.
+/// The HTTP port a CDR listens on inside its container.
 const CDR_PORT: u16 = 8080;
 
-/// How long the readiness poll of a CDR waits before it gives up. EHRbase is
-/// a Spring Boot application and needs most of a minute on a cold runner.
+/// The path of FerroEHR's ITS-REST API root, the path `/v1/ehr` lives under.
+pub const API_PATH: &str = "/ferroehr/rest/openehr";
+
+/// The path that answers `200` once FerroEHR serves requests.
+const READINESS_PATH: &str = "/health/readiness";
+
+/// The `system_id` node A stamps into every EHR and version it creates.
+pub const NODE_A_SYSTEM_ID: &str = "cdr-a.example.org";
+
+/// The `system_id` node B stamps into every EHR and version it creates.
+pub const NODE_B_SYSTEM_ID: &str = "cdr-b.example.org";
+
+/// How long the readiness poll of a CDR waits before it gives up. A cold
+/// runner pulls both images and migrates the database first.
 const READINESS_BUDGET: Duration = Duration::from_secs(240);
 
 /// How long the readiness poll sleeps between two probes.
@@ -86,8 +94,8 @@ impl PinnedImage {
     /// # Examples
     ///
     /// ```
-    /// let reference = ferrofed_testkit::containers::EHRBASE.reference();
-    /// assert!(reference.starts_with("ehrbase/ehrbase:"));
+    /// let reference = ferrofed_testkit::containers::FERROEHR.reference();
+    /// assert!(reference.starts_with("ghcr.io/rubentalstra/ferroehr:"));
     /// assert!(reference.contains("@sha256:"));
     /// ```
     #[must_use]
@@ -105,7 +113,7 @@ impl PinnedImage {
     }
 }
 
-/// Node A: FerroEHR, an openEHR CDR speaking ITS-REST 1.1.0.
+/// FerroEHR, an openEHR CDR speaking ITS-REST 1.1.0, which both nodes run.
 pub const FERROEHR: PinnedImage = PinnedImage {
     repository: "ghcr.io/rubentalstra/ferroehr",
     tag: "4.3.1",
@@ -119,50 +127,6 @@ pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
     tag: "4.3.1",
     digest: "sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9",
 };
-
-/// Node B: EHRbase, a second openEHR CDR speaking ITS-REST.
-pub const EHRBASE: PinnedImage = PinnedImage {
-    repository: "ehrbase/ehrbase",
-    tag: "2.36.0",
-    digest: "sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a",
-};
-
-/// The database image EHRbase documents, on PostgreSQL 16.2 (decision A40).
-pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
-    repository: "ehrbase/ehrbase-v2-postgres",
-    tag: "16.2",
-    digest: "sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7",
-};
-
-/// The CDR product a node runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum Product {
-    /// FerroEHR, on [`FERROEHR`].
-    FerroEhr,
-    /// EHRbase, on [`EHRBASE`].
-    Ehrbase,
-}
-
-impl Product {
-    /// Returns the path of the product's ITS-REST API root, the path
-    /// `/v1/ehr` lives under.
-    #[must_use]
-    pub const fn api_path(self) -> &'static str {
-        match self {
-            Self::FerroEhr => "/ferroehr/rest/openehr",
-            Self::Ehrbase => "/ehrbase/rest/openehr",
-        }
-    }
-
-    /// Returns the path that answers `200` once the product serves requests.
-    const fn readiness_path(self) -> &'static str {
-        match self {
-            Self::FerroEhr => "/health/readiness",
-            Self::Ehrbase => "/ehrbase/rest/status",
-        }
-    }
-}
 
 /// A container could not be started, or did not become usable.
 #[derive(Debug, thiserror::Error)]
@@ -204,8 +168,8 @@ pub enum HarnessError {
 /// The two containers are fields, so dropping this value stops both.
 #[derive(Debug)]
 pub struct Node {
-    /// The product the node runs.
-    product: Product,
+    /// The `system_id` the CDR was configured with.
+    system_id: &'static str,
     /// The CDR itself.
     server: ContainerAsync<GenericImage>,
     /// The database it was started against.
@@ -215,10 +179,11 @@ pub struct Node {
 }
 
 impl Node {
-    /// Returns the product the node runs.
+    /// Returns the `system_id` the CDR stamps into every EHR and version it
+    /// creates.
     #[must_use]
-    pub fn product(&self) -> Product {
-        self.product
+    pub fn system_id(&self) -> &'static str {
+        self.system_id
     }
 
     /// Returns the origin the CDR is reachable at, with no path.
@@ -230,7 +195,7 @@ impl Node {
     /// Returns the ITS-REST API root reached directly, bypassing any proxy.
     #[must_use]
     pub fn api_root(&self) -> String {
-        format!("{}{}", self.origin, self.product.api_path())
+        format!("{}{API_PATH}", self.origin)
     }
 
     /// Returns the CDR container.
@@ -256,16 +221,9 @@ impl Node {
             .stop()
             .await
             .map_err(|source| HarnessError::Container {
-                image: self.image().repository,
+                image: FERROEHR.repository,
                 source,
             })
-    }
-
-    fn image(&self) -> PinnedImage {
-        match self.product {
-            Product::FerroEhr => FERROEHR,
-            Product::Ehrbase => EHRBASE,
-        }
     }
 }
 
@@ -295,17 +253,18 @@ impl ProxiedNode {
     /// gateway under test is configured with.
     #[must_use]
     pub fn api_root(&self) -> String {
-        format!("{}{}", self.proxy.origin(), self.node.product().api_path())
+        format!("{}{API_PATH}", self.proxy.origin())
     }
 }
 
-/// The two-node topology: FerroEHR as node A and EHRbase as node B, each
-/// behind its own proxy.
+/// The two-node topology: two FerroEHR instances, node A on
+/// [`NODE_A_SYSTEM_ID`] and node B on [`NODE_B_SYSTEM_ID`], each behind its
+/// own proxy.
 #[derive(Debug)]
 pub struct TwoNodes {
-    /// Node A, FerroEHR.
+    /// Node A.
     pub a: ProxiedNode,
-    /// Node B, EHRbase.
+    /// Node B.
     pub b: ProxiedNode,
 }
 
@@ -315,14 +274,15 @@ pub struct TwoNodes {
 ///
 /// Returns the first [`HarnessError`] either node reports.
 pub async fn two_nodes() -> Result<TwoNodes, HarnessError> {
-    let (a, b) = tokio::try_join!(ferroehr(), ehrbase())?;
+    let (a, b) = tokio::try_join!(ferroehr(NODE_A_SYSTEM_ID), ferroehr(NODE_B_SYSTEM_ID))?;
     Ok(TwoNodes {
         a: ProxiedNode::new(a).await?,
         b: ProxiedNode::new(b).await?,
     })
 }
 
-/// Starts FerroEHR on its own database and waits for its readiness endpoint.
+/// Starts FerroEHR as `system_id` on its own database and waits for its
+/// readiness endpoint.
 ///
 /// Authentication and role-based authorisation are switched off, the posture
 /// the image documents for development, so the API root needs no credentials.
@@ -331,8 +291,8 @@ pub async fn two_nodes() -> Result<TwoNodes, HarnessError> {
 ///
 /// Returns [`HarnessError::Container`] when Docker refuses a container and
 /// [`HarnessError::NotReady`] when the CDR does not become ready in time.
-pub async fn ferroehr() -> Result<Node, HarnessError> {
-    let (network, database_name) = names("ferroehr");
+pub async fn ferroehr(system_id: &'static str) -> Result<Node, HarnessError> {
+    let (network, database_name) = names();
     let database = FERROEHR_POSTGRES
         .image()
         .with_wait_for(WaitFor::healthcheck())
@@ -357,6 +317,7 @@ pub async fn ferroehr() -> Result<Node, HarnessError> {
             "FERROEHR__DB__URL",
             format!("postgres://ferroehr:ferroehr@{database_name}:{POSTGRES_PORT}/ferroehr"),
         )
+        .with_env_var("FERROEHR__SERVER__SYSTEM_ID", system_id)
         .with_env_var("FERROEHR__AUTH__ENABLED", "false")
         .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "false")
         .start()
@@ -365,81 +326,27 @@ pub async fn ferroehr() -> Result<Node, HarnessError> {
             image: FERROEHR.repository,
             source,
         })?;
-    ready(Product::FerroEhr, server, database).await
-}
-
-/// Starts EHRbase on its own database and waits for its status endpoint.
-///
-/// Authentication is switched off (`SECURITY_AUTHTYPE=NONE`), so the API root
-/// needs no credentials.
-///
-/// # Errors
-///
-/// Returns [`HarnessError::Container`] when Docker refuses a container and
-/// [`HarnessError::NotReady`] when the CDR does not become ready in time.
-pub async fn ehrbase() -> Result<Node, HarnessError> {
-    let (network, database_name) = names("ehrbase");
-    let database = EHRBASE_POSTGRES
-        .image()
-        .with_wait_for(WaitFor::healthcheck())
-        .with_health_check(postgres_health_check("postgres", "ehrbase"))
-        .with_env_var("POSTGRES_USER", "postgres")
-        .with_env_var("POSTGRES_PASSWORD", "postgres")
-        .with_env_var("EHRBASE_USER_ADMIN", "ehrbase")
-        .with_env_var("EHRBASE_PASSWORD_ADMIN", "ehrbase")
-        .with_env_var("EHRBASE_USER", "ehrbase_restricted")
-        .with_env_var("EHRBASE_PASSWORD", "ehrbase_restricted")
-        .with_network(network.clone())
-        .with_container_name(database_name.clone())
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: EHRBASE_POSTGRES.repository,
-            source,
-        })?;
-    let server = EHRBASE
-        .image()
-        .with_exposed_port(CDR_PORT.tcp())
-        .with_network(network)
-        .with_env_var(
-            "DB_URL",
-            format!("jdbc:postgresql://{database_name}:{POSTGRES_PORT}/ehrbase"),
-        )
-        .with_env_var("DB_USER_ADMIN", "ehrbase")
-        .with_env_var("DB_PASS_ADMIN", "ehrbase")
-        .with_env_var("DB_USER", "ehrbase_restricted")
-        .with_env_var("DB_PASS", "ehrbase_restricted")
-        .with_env_var("SECURITY_AUTHTYPE", "NONE")
-        .start()
-        .await
-        .map_err(|source| HarnessError::Container {
-            image: EHRBASE.repository,
-            source,
-        })?;
-    ready(Product::Ehrbase, server, database).await
+    ready(system_id, server, database).await
 }
 
 /// Returns a network name and a database container name unique to this
 /// process and call.
-fn names(product: &str) -> (String, String) {
+fn names() -> (String, String) {
     let sequence = NETWORK_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let process = std::process::id();
     (
-        format!("ferrofed-e2e-{product}-{process}-{sequence}"),
-        format!("ferrofed-e2e-{product}-db-{process}-{sequence}"),
+        format!("ferrofed-e2e-ferroehr-{process}-{sequence}"),
+        format!("ferrofed-e2e-ferroehr-db-{process}-{sequence}"),
     )
 }
 
 /// Resolves the host origin of `server` and waits until it is ready.
 async fn ready(
-    product: Product,
+    system_id: &'static str,
     server: ContainerAsync<GenericImage>,
     database: ContainerAsync<GenericImage>,
 ) -> Result<Node, HarnessError> {
-    let image = match product {
-        Product::FerroEhr => FERROEHR.repository,
-        Product::Ehrbase => EHRBASE.repository,
-    };
+    let image = FERROEHR.repository;
     let host = server
         .get_host()
         .await
@@ -449,9 +356,9 @@ async fn ready(
         .await
         .map_err(|source| HarnessError::Container { image, source })?;
     let origin = format!("http://{host}:{port}");
-    await_readiness(&format!("{origin}{}", product.readiness_path())).await?;
+    await_readiness(&format!("{origin}{READINESS_PATH}")).await?;
     Ok(Node {
-        product,
+        system_id,
         server,
         database,
         origin,

@@ -68,6 +68,16 @@ binary follows from v0.0.2.
 
 ### Changed
 
+- The quickstart and the end-to-end harness run two FerroEHR nodes (#155,
+  decision A44). EHRbase left both, because it refuses a `.` in
+  `PARTY_REF.namespace`, which openEHR BASE admits (#118). In `compose.yaml`
+  the services are `ferroehr-a` and `ferroehr-b`, each on its own database
+  and with its own `system_id` (`node-a.quickstart.local`,
+  `node-b.quickstart.local`, which the quickstart registry declares), and
+  node B moved from port 8091 to 8082 (`FERROEHR_B_PORT`; node A's
+  `FERROEHR_PORT` is now `FERROEHR_A_PORT`). Every end-to-end case seeds the
+  patient's subject on both nodes, and the `e2e (containers)` CI job now runs
+  the server's container tests as well as the testkit's.
 - The tracker records the kind, the urgency and the size of an issue in
   GitHub's native issue type (Bug, Feature, Task) and the organisation's
   Priority and Effort fields (#154). The `bug`, `enhancement` and `P0` to

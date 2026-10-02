@@ -401,7 +401,12 @@ jobs:
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
           tool: cargo-nextest
-      - run: cargo nextest run --locked -p ferrofed-testkit --no-tests=pass
+      # The testkit's whole suite, and the server's container tests alone,
+      # since the test job already runs the rest of the server offline.
+      - run: >-
+          cargo nextest run --locked -p ferrofed-testkit -p ferrofed-server
+          -E 'package(ferrofed-testkit) or (package(ferrofed-server) and test(/^e2e::/))'
+          --no-tests=pass
 
   doc:
     name: rustdoc

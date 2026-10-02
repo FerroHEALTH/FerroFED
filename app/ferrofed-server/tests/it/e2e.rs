@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The first federated query end to end, behind the `FERROFED_E2E` gate: one
-//! `RESULT_SET` over FerroEHR and EHRbase, each behind its capturing proxy,
+//! `RESULT_SET` over two FerroEHR nodes, each behind its capturing proxy,
 //! and no node request carrying the patient identifier (§7, §9, §11; N1, N5,
 //! N7, N16, N17, N33).
 //!
-//! The gateway resolves the patient through the development cross-reference,
-//! which the gateway alone holds: the nodes are seeded with no subject at all,
-//! so a row can only reach the answer through the `ehr_id` the gateway sent.
+//! The gateway resolves the patient through the development cross-reference
+//! or the harness PIX Manager. Both nodes hold the patient's identifier on
+//! `EHR_STATUS.subject`, so a subject predicate the gateway leaked would
+//! match there, and the journals show that none reached either node.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -23,7 +24,7 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::containers::{self, ProxiedNode};
+use ferrofed_testkit::containers::{self, API_PATH, ProxiedNode};
 use ferrofed_testkit::pix::PixManager;
 use ferrofed_testkit::seed::{
     self, CompositionSeed, CrossReferenceSeed, DemoComposition, EhrDomain, EhrSeed, PatientId,
@@ -37,22 +38,20 @@ use crate::support::{call, settings};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// The synthetic patient the gateway's cross-reference knows.
-const PATIENT: &str = "SENTINEL-PATIENT-e2e-38";
+/// The synthetic patient the gateway resolves, in the example arc.
+const PATIENT: PatientId = PatientId::new(1, 38);
 
-/// The synthetic issuing namespace, under the example OID arc.
-const NAMESPACE: &str = "urn:oid:2.999.1";
-
-/// The patient's `ehr_id` on node A (FerroEHR) and on node B (EHRbase).
+/// The patient's `ehr_id` on node A and on node B.
 const EHR_A: Uuid = Uuid::from_u128(0x3333_3333_3333_4333_8333_3333_3333_3333);
 const EHR_B: Uuid = Uuid::from_u128(0x4444_4444_4444_4444_8444_4444_4444_4444);
 
-/// A seed of one EHR with no subject and one composition in it.
+/// A seed of the patient's EHR, its subject naming [`PATIENT`], and one
+/// composition in it.
 fn plan(ehr_id: Uuid, composition: DemoComposition) -> SeedPlan {
     SeedPlan {
         ehrs: vec![EhrSeed {
             ehr_id,
-            subject: None,
+            subject: Some(PATIENT),
         }],
         template: true,
         compositions: vec![CompositionSeed {
@@ -69,18 +68,19 @@ fn gateway(
     a: &ProxiedNode,
     b: &ProxiedNode,
 ) -> Result<axum::Router, Box<dyn Error>> {
+    let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
     let resolver = format!(
         r#"profile = "development"
 
 [[dev.crossref]]
-namespace = "{NAMESPACE}"
-value = "{PATIENT}"
+namespace = "{namespace}"
+value = "{value}"
 member = "node-a"
 ehr_id = "{EHR_A}"
 
 [[dev.crossref]]
-namespace = "{NAMESPACE}"
-value = "{PATIENT}"
+namespace = "{namespace}"
+value = "{value}"
 member = "node-b"
 ehr_id = "{EHR_B}"
 "#
@@ -107,12 +107,12 @@ id = "org-b"
 [[node]]
 id = "node-a"
 organisation = "org-a"
-system_id = "cdr-a.example.org"
+system_id = "{}"
 
 [[node]]
 id = "node-b"
 organisation = "org-b"
-system_id = "cdr-b.example.org"
+system_id = "{}"
 
 [[endpoint]]
 id = "node-a-pub"
@@ -128,6 +128,8 @@ url = "{}"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-b"
 "#,
+        a.node.system_id(),
+        b.node.system_id(),
         a.api_root(),
         b.api_root()
     );
@@ -186,7 +188,7 @@ struct Endpoint {
 
 // conformance: CP-1 CP-2 CP-4 CP-35
 #[tokio::test]
-async fn one_result_set_over_two_cdr_products_and_no_identifier_on_the_wire() -> TestResult {
+async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> TestResult {
     if !containers::e2e_enabled() {
         return Ok(());
     }
@@ -205,16 +207,15 @@ async fn one_result_set_over_two_cdr_products_and_no_identifier_on_the_wire() ->
     nodes.b.proxy.clear_journal();
     let dir = tempfile::tempdir()?;
 
-    let patient = format!(
-        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
-         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
-         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
-    );
-    let (status, text) = call(gateway(dir.path(), &nodes.a, &nodes.b)?, query(&patient)?).await?;
+    let (status, text) = call(
+        gateway(dir.path(), &nodes.a, &nodes.b)?,
+        query(&patient_query())?,
+    )
+    .await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     crate::facade::schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
-    assert!(answer.meta.federation.complete, "both products answered");
+    assert!(answer.meta.federation.complete, "both nodes answered");
     let reported: Vec<(&str, &str, Option<u64>)> = answer
         .meta
         .federation
@@ -228,22 +229,21 @@ async fn one_result_set_over_two_cdr_products_and_no_identifier_on_the_wire() ->
             ("node-b-pub", "active", Some(1)),
         ],
         reported,
-        "one composition from each product (N16)"
+        "one composition from each node (N16)"
     );
     assert_eq!(2, answer.rows.len(), "rows from both nodes: {text}");
 
     for (node, own, other) in [(&nodes.a, EHR_A, EHR_B), (&nodes.b, EHR_B, EHR_A)] {
         let journal = node.proxy.journal();
-        let api = node.node.product().api_path();
         let steps: Vec<(&str, &str)> = journal
             .iter()
             .map(|capture| (capture.method.as_str(), capture.path.as_str()))
             .collect();
         assert_eq!(
-            vec![("POST", format!("{api}/v1/query/aql").as_str())],
+            vec![("POST", format!("{API_PATH}/v1/query/aql").as_str())],
             steps,
-            "{:?} received one ITS-REST query and nothing else",
-            node.node.product()
+            "{} received one ITS-REST query and nothing else",
+            node.node.system_id()
         );
         let sent = journal.first().ok_or("one capture")?;
         let body = String::from_utf8_lossy(&sent.body);
@@ -255,12 +255,8 @@ async fn one_result_set_over_two_cdr_products_and_no_identifier_on_the_wire() ->
             !body.contains(&other.to_string()),
             "a node never learns another node's ehr_id: {body}"
         );
-        assert!(
-            !node.proxy.journal_contains(PATIENT.as_bytes()),
-            "{:?} saw the patient identifier in some carrier (N33)",
-            node.node.product()
-        );
     }
+    assert_no_patient_identifier_on_the_wire(&nodes);
 
     // The README quickstart query: no patient, every member asked (N4).
     let (status, text) = call(
@@ -289,7 +285,7 @@ async fn sorted_rows(router: axum::Router, aql: &str) -> Result<Vec<Vec<String>>
     assert_eq!(StatusCode::OK, status, "{text}");
     crate::facade::schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
-    assert!(answer.meta.federation.complete, "both products answered");
+    assert!(answer.meta.federation.complete, "both nodes answered");
     let mut rows = answer.rows;
     rows.sort();
     Ok(rows)
@@ -297,7 +293,7 @@ async fn sorted_rows(router: axum::Router, aql: &str) -> Result<Vec<Vec<String>>
 
 // conformance: CP-38
 #[tokio::test]
-async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_products() -> TestResult {
+async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_nodes() -> TestResult {
     if !containers::e2e_enabled() {
         return Ok(());
     }
@@ -318,15 +314,16 @@ async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_products() 
 
     // §5.4.3, CP-38: the same patient query once per carrier.
     let from = "FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o";
+    let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
     let via_external_ref = format!(
         "SELECT c/uid/value {from} \
-         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
-         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+         WHERE e/ehr_status/subject/external_ref/id/value = '{value}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{namespace}'"
     );
     let via_entry = format!(
         "SELECT c/uid/value {from} \
-         WHERE o/subject/identifiers/id = '{PATIENT}' \
-         AND o/subject/identifiers/issuer = '{NAMESPACE}'"
+         WHERE o/subject/identifiers/id = '{value}' \
+         AND o/subject/identifiers/issuer = '{namespace}'"
     );
     let external_ref_rows =
         sorted_rows(gateway(dir.path(), &nodes.a, &nodes.b)?, &via_external_ref).await?;
@@ -349,37 +346,28 @@ async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_products() 
         assert_eq!(
             2,
             bodies.len(),
-            "{:?} received one query per carrier",
-            node.node.product()
+            "{} received one query per carrier",
+            node.node.system_id()
         );
         assert_eq!(
             bodies.first(),
             bodies.get(1),
-            "{:?} received the same node query from both carriers (§7.1)",
-            node.node.product()
-        );
-        assert!(
-            !node.proxy.journal_contains(PATIENT.as_bytes()),
-            "{:?} saw the patient identifier in some carrier (N33)",
-            node.node.product()
+            "{} received the same node query from both carriers (§7.1)",
+            node.node.system_id()
         );
         assert!(
             !node.proxy.journal_contains(b"subject/identifiers"),
-            "{:?} received the ENTRY carrier (N33)",
-            node.node.product()
+            "{} received the ENTRY carrier (N33)",
+            node.node.system_id()
         );
     }
+    assert_no_patient_identifier_on_the_wire(&nodes);
     Ok(())
 }
 
 /// The `ehr_id` domains of node A and node B at the harness PIX Manager.
 const DOMAIN_A: EhrDomain = EhrDomain::new(1);
 const DOMAIN_B: EhrDomain = EhrDomain::new(2);
-
-/// The patient the harness PIX Manager is fed with, in the example arc.
-fn pix_patient() -> PatientId {
-    PatientId::new(1, 38)
-}
 
 /// The two nodes, seeded, and the harness PIX Manager fed over ITI-104 with
 /// the patient at `ehrs`, plus an unrelated patient so both domains are known.
@@ -402,7 +390,7 @@ async fn nodes_and_pix(
     let pix = PixManager::start().await?;
     let fed = [
         CrossReferenceSeed {
-            patient: pix_patient(),
+            patient: PATIENT,
             ehrs,
         },
         CrossReferenceSeed {
@@ -436,28 +424,26 @@ fn pixm_resolver(pix: &PixManager) -> String {
     )
 }
 
-/// The patient query for the PIX-fed patient, through `external_ref`.
-fn pix_patient_query() -> String {
-    let patient = pix_patient();
+/// The patient query for [`PATIENT`], through `external_ref`.
+fn patient_query() -> String {
     format!(
         "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
          WHERE e/ehr_status/subject/external_ref/id/value = '{}' \
          AND e/ehr_status/subject/external_ref/namespace = '{}'",
-        patient.value(),
-        patient.namespace()
+        PATIENT.value(),
+        PATIENT.namespace()
     )
 }
 
-/// Asserts that neither node saw the PIX-fed patient's identifier or its
-/// namespace in any carrier (N33).
+/// Asserts that, since the journals were last cleared, neither node saw
+/// [`PATIENT`]'s identifier or its namespace in any carrier (N33).
 fn assert_no_patient_identifier_on_the_wire(nodes: &containers::TwoNodes) {
-    let patient = pix_patient();
     for node in [&nodes.a, &nodes.b] {
-        for carried in [patient.value(), patient.namespace()] {
+        for carried in [PATIENT.value(), PATIENT.namespace()] {
             assert!(
                 !node.proxy.journal_contains(carried.as_bytes()),
-                "{:?} saw the patient identifier or its namespace (N33)",
-                node.node.product()
+                "{} saw the patient identifier or its namespace (N33)",
+                node.node.system_id()
             );
         }
     }
@@ -473,7 +459,7 @@ async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> T
     let resolver = pixm_resolver(&pix);
     let dir = tempfile::tempdir()?;
 
-    let patient = pix_patient_query();
+    let patient = patient_query();
     let app = gateway_resolving(dir.path(), &nodes.a, &nodes.b, &resolver)?;
     let (status, text) = call(app, query(&patient)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -526,7 +512,7 @@ async fn a_patient_fed_at_both_members_resolves_through_pix_at_both() -> TestRes
     let dir = tempfile::tempdir()?;
 
     let app = gateway_resolving(dir.path(), &nodes.a, &nodes.b, &resolver)?;
-    let (status, text) = call(app, query(&pix_patient_query())?).await?;
+    let (status, text) = call(app, query(&patient_query())?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     crate::facade::schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
@@ -555,8 +541,8 @@ async fn a_patient_fed_at_both_members_resolves_through_pix_at_both() -> TestRes
         let body = String::from_utf8_lossy(&sent.body);
         assert!(
             body.contains(&own.to_string()) && !body.contains(&other.to_string()),
-            "{:?} is asked by its own ehr_id alone (N7)",
-            node.node.product()
+            "{} is asked by its own ehr_id alone (N7)",
+            node.node.system_id()
         );
     }
     assert_no_patient_identifier_on_the_wire(&nodes);

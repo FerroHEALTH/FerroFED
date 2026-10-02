@@ -1275,23 +1275,28 @@ the variable first and returns early, and CI runs an `e2e (containers)` job.
 
 | Role | Image, pinned by tag and image-index digest (2026-10-01) |
 |---|---|
-| node A, FerroEHR | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6`, with `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` |
-| node B, EHRbase | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a`, with `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` |
-| node C, for three-node cases | a second FerroEHR on the same pins (decision A41) |
+| node A, FerroEHR, `system_id` `cdr-a.example.org` | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6`, with `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` |
+| node B, FerroEHR, `system_id` `cdr-b.example.org` | the same pins, on its own database container (decision A44) |
+| node C, for three-node cases | a third FerroEHR on the same pins, with its own database and `system_id` (decision A44) |
 | the stored-query HA backend, when tested | `postgres:18.6`, pinned by digest in the change that adds it |
 | PIX Manager | the in-testkit PIXm fake, no image (decision A39) |
 | capture and fault proxy | in-testkit, one per node, no image |
 | localizer, consent pre-filter | in-testkit stubs |
 | gateway under test | in process on the library run path; the release image in one smoke test |
 
-Two products, because the differences between them are exactly what the
-federation must absorb: EHRbase 2.35 did not implement `OPTIONS` on its API
-root, and the §9.2 alias example is product behaviour. EHRbase ships its
-database as `ehrbase-v2-postgres:16.2`; the family rule is PostgreSQL 18, and
-FerroFED applies it to its own database while a member node runs its product's
-documented image (decision A40). A new image is a `PinnedImage` constant plus a
-`docs/VERSIONS.md` row the versions guard checks, and pin freshness watches the
-tags.
+One product, two instances (decision A44, superseding A40 and A41). The
+research on #27 chose FerroEHR and EHRbase, because the differences between two
+products are what the federation must absorb. EHRbase 2.36.0 refuses a
+`PARTY_REF.namespace` that contains a `.`, which BASE `object_ref.adoc`
+§Attributes allows (`[a-zA-Z][a-zA-Z0-9_.:/&?=+-]*`), so an EHR seeded on it
+could not carry the example-arc namespace and one of the two nodes could not
+exercise the patient carriers at all (#118 holds the record). Two FerroEHR
+instances still exercise the federation: each has its own database, stamps its
+own `system_id` into every EHR and version it creates, and mints its own
+`ehr_id`s, and a patient is known at one node, both or neither. A second
+product returns when one is found that admits the BASE namespace. A new image
+is a `PinnedImage` constant plus a `docs/VERSIONS.md` row the versions guard
+checks, and pin freshness watches the tags.
 
 **The PIX Manager.** No lightweight container answers `$ihe-pix` and accepts
 ITI-104 seeding on its own: HAPI FHIR does not implement the operation out of
@@ -1337,13 +1342,12 @@ scheme validates. `ehr_id`s are fixed UUIDs per scenario. Compositions are built
 from the RM types in `openehr-rm` on the vendored `International Patient
 Summary.opt`, and every seed goes over ITS-REST alone (`PUT /ehr/{ehr_id}`,
 `POST /definition/template/adl1.4`, `POST /ehr/{ehr_id}/composition`), never
-into a node's database, so the harness is product-neutral. EHRbase 2.36.0
-refuses a `PARTY_REF.namespace` that contains a `.`, which BASE
-`object_ref.adoc` §Attributes allows (`[a-zA-Z][a-zA-Z0-9_.:/&?=+-]*`) and
-FerroEHR accepts; the arc is not bent to suit the node, so an EHR seeded on
-EHRbase carries no subject. Nothing is lost, because FerroFED resolves a
-patient through the cross-reference and never through a node's
-`EHR_STATUS.subject` (section 6).
+into a node's database, so the harness is product-neutral. Every seeded EHR
+names its patient on `EHR_STATUS.subject` in the example arc, on both nodes.
+FerroFED resolves a patient through the cross-reference and never through a
+node's `EHR_STATUS.subject` (section 6), so the subject is there for the
+hygiene tracks: a leaked subject predicate would match it, and the journals
+show that none reached a node.
 
 **The differential run** (#94). The reference implementation's image refused an
 anonymous pull on 2026-10-01, so the run builds from the vendored tree's
@@ -1415,7 +1419,8 @@ change what some of them carry.
 ## 15. The decision register
 
 Every choice this pass put to the owner, all decided by the owner on
-2026-10-01; A43, which supersedes A27, was decided on 2026-10-02. The bracket names the report and its
+2026-10-01; A43, which supersedes A27, and A44, which supersedes A40 and A41,
+were decided on 2026-10-02. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -1460,7 +1465,8 @@ R4 is #23, #25 and #27).
 | A37 | Deferral authority [R4 D3] | only the owner defers a Gateway point; track 8 deferred from the start | §16.3 "provisional", §18 | decided (owner, 2026-10-01) |
 | A38 | Node points [R4 D4] | CP-18, CP-19 and CP-27 scored against the member CDRs as the node profile | §16.2; the reference implementation defers them | decided (owner, 2026-10-01) |
 | A39 | The PIX Manager [R4 D5] | an in-testkit PIXm fake now; the PIXm client also runs against FerroPIX once it exists, as a differential | no lightweight image answers `$ihe-pix` and accepts ITI-104 | decided (owner, 2026-10-01) |
-| A40 | EHRbase's PostgreSQL 16.2 [R4 D6] | the PostgreSQL 18 rule governs FerroFED's own database; a member node runs its product's documented image, recorded in the memory | the node's database is part of the product under test | decided (owner, 2026-10-01) |
-| A41 | The number of nodes [R4 D7] | two products, a second FerroEHR for three-node cases | no third open CDR image was evaluated | decided (owner, 2026-10-01) |
+| A40 | EHRbase's PostgreSQL 16.2 [R4 D6] | the PostgreSQL 18 rule governs FerroFED's own database; a member node runs its product's documented image, recorded in the memory | the node's database is part of the product under test | superseded by A44 (owner, 2026-10-02: EHRbase leaves the topology, so no member node runs PostgreSQL 16.2) |
+| A41 | The number of nodes [R4 D7] | two products, a second FerroEHR for three-node cases | no third open CDR image was evaluated | superseded by A44 (owner, 2026-10-02: "we should use two FerroEHR setups for the test because EHRbase will not work") |
 | A42 | The reference implementation's image [R4 D8] | build from the vendored `Dockerfile` outside CI, or wait for a public image | its image refused an anonymous pull on 2026-10-01 | decided (owner, 2026-10-01) |
 | A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |
+| A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject (#118); a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |

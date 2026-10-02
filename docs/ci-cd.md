@@ -84,12 +84,13 @@ by themselves.
 `e2e (containers)` is the Rust lane that needs Docker. A container-backed test
 checks the `FERROFED_E2E` gate first and returns early without it, so the
 `test` job stays offline and fast; this job sets `FERROFED_E2E=1` and runs the
-crates that carry container tests (`tools/ferrofed-testkit` today) against the
-digest-pinned images of `docs/VERSIONS.md` §Container images: FerroEHR and
-EHRbase as the two nodes, each behind the testkit's capturing and fault proxy
-(`docs/architecture.md` §13). It feeds `conclusion` like every other lane.
-Locally: `FERROFED_E2E=1 cargo nextest run -p ferrofed-testkit` with Docker
-running.
+container tests (the whole `tools/ferrofed-testkit` suite and the `e2e` module
+of `app/ferrofed-server`) against the digest-pinned images of
+`docs/VERSIONS.md` §Container images: two FerroEHR instances as the two nodes,
+each behind the testkit's capturing and fault proxy (`docs/architecture.md`
+§13). It feeds `conclusion` like every other lane. Locally:
+`FERROFED_E2E=1 cargo nextest run -p ferrofed-testkit -p ferrofed-server -E
+'test(/^e2e::/)'` with Docker running.
 
 `features (cargo-hack)` lints every feature of the three published crates on
 its own: `cargo hack clippy --each-feature --all-targets` over

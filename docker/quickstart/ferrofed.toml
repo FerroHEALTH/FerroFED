@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # The gateway configuration of the compose.yaml quickstart. It federates the
-# two nodes of registry.toml and sends each the quickstart Basic-auth user of
-# its product: development credentials, NOT for anything real.
+# two nodes of registry.toml and sends each FerroEHR's quickstart Basic-auth
+# user: development credentials, NOT for anything real.
 #
 # No identity binding is configured, so a query that names a patient fails
 # closed with 424 (decision A17); a query that names no patient is asked of

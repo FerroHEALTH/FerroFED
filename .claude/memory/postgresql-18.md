@@ -1,6 +1,6 @@
 ---
 name: postgresql-18
-description: "Every PostgreSQL FerroFED itself tests against or documents is the latest release (18.6 on 2026-09-12), never 16; family ruling carried from FerroBRIDGE; it applies to FerroFED's own optional stored-query backend, and a member node in the harness runs its product's documented image (EHRbase on 16.2), owner 2026-10-01"
+description: "Every PostgreSQL FerroFED itself tests against or documents is the latest release (18.6 on 2026-09-12), never 16; family ruling carried from FerroBRIDGE; it applies to FerroFED's own optional stored-query backend, and the harness nodes run FerroEHR's own database image (on 18.6), owner 2026-10-01 and 2026-10-02"
 metadata:
   type: project
 ---
@@ -22,10 +22,9 @@ consumer, and every issue or page naming a version names that row. The
 reference implementation's all-PostgreSQL registry is evidence, never a
 decision.
 
-**The rule governs FerroFED's own database only.** A member node in the test
-harness runs its product's documented image, because the node's database is
-part of the product under test: EHRbase ships `ehrbase/ehrbase-v2-postgres:16.2`,
-and the harness runs exactly that, pinned by digest (`docs/architecture.md`
-§13, owner decision 2026-10-01). Bootstrapping EHRbase on 18 would test a
-configuration EHRbase does not ship. The exception covers a member node's own
-image and nothing else.
+**A member node runs its product's documented database image,** because the
+node's database is part of the product under test. Both harness nodes are
+FerroEHR (owner ruling 2026-10-02, decision A44, [[two-ferroehr-nodes]]), and
+FerroEHR's `ghcr.io/rubentalstra/ferroehr-postgres` image is built on
+`postgres:18.6`, so no node runs an older PostgreSQL. The PostgreSQL 16.2
+exception for EHRbase's database (decision A40) left with EHRbase.

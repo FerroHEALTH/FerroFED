@@ -5,8 +5,8 @@
 
 FerroFED ships one static binary, `ferrofed`, and an image that carries it on
 distroless static. The repository's `compose.yaml` starts that image beside
-two member CDRs of different products, FerroEHR and EHRbase, so the topology a
-federated query runs over is up in one command.
+two member CDRs, two FerroEHR instances, so the topology a federated query runs
+over is up in one command.
 
 ## The image
 
@@ -52,15 +52,18 @@ curl http://127.0.0.1:8080/health
 | Service | What it is | On the host |
 |---|---|---|
 | `ferrofed` | the gateway | `127.0.0.1:8080` |
-| `ferroehr`, `ferroehr-postgres` | member node A, FerroEHR on its own PostgreSQL image | `127.0.0.1:8081/ferroehr/rest/openehr/v1` |
-| `ehrbase`, `ehrbase-db` | member node B, EHRbase on its companion PostgreSQL 16.2 image | `127.0.0.1:8091/ehrbase/rest/openehr/v1` |
+| `ferroehr-a`, `ferroehr-a-postgres` | member node A, FerroEHR with `system_id` `node-a.quickstart.local` | `127.0.0.1:8081/ferroehr/rest/openehr/v1` |
+| `ferroehr-b`, `ferroehr-b-postgres` | member node B, FerroEHR with `system_id` `node-b.quickstart.local` | `127.0.0.1:8082/ferroehr/rest/openehr/v1` |
 
-Each node runs its product's documented image, database included, which is why
-EHRbase keeps PostgreSQL 16.2: the PostgreSQL 18 rule covers FerroFED's own
-database only. Both nodes use their products' quickstart Basic-auth user,
-`ferroehr` / `ferroehr`, a development credential that must not reach anything
-real. Every image is pinned by tag and digest, and `docs/VERSIONS.md` carries
-each pin.
+Both nodes run FerroEHR's documented image, each on its own FerroEHR PostgreSQL
+container, and each stamps its own `system_id` into every EHR and version it
+creates, the value the quickstart registry declares for it. Two instances of
+one product: EHRbase, the second product the topology first used, refuses a
+`.` in `PARTY_REF.namespace`, which openEHR BASE admits, so its EHRs could not
+carry the OID-style issuing namespace the synthetic patients use. Both nodes
+use FerroEHR's quickstart Basic-auth user, `ferroehr` / `ferroehr`, a
+development credential that must not reach anything real. Every image is
+pinned by tag and digest, and `docs/VERSIONS.md` carries each pin.
 
 Every published port binds the loopback interface. A published port is
 DNAT'd ahead of the host firewall's own rules, so a port on `0.0.0.0` is
