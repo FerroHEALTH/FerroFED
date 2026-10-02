@@ -203,6 +203,104 @@ fn no_refusal_names_the_identifier() {
     }
 }
 
+/// Where a second value sits beside the patient predicate: the places a client
+/// can carry the identifier to a node that are not the patient predicate
+/// itself (#45).
+#[derive(Debug, Clone, Copy)]
+enum Seat {
+    /// A selected literal.
+    Projection,
+    /// A predicate on an `ORDER BY` path.
+    OrderBy,
+    /// A predicate over a `PARTY_RELATED` subject's relationship.
+    PartyRelated,
+    /// A parameter bound on a clinician path.
+    Parameter,
+}
+
+const SEATS: [Seat; 4] = [
+    Seat::Projection,
+    Seat::OrderBy,
+    Seat::PartyRelated,
+    Seat::Parameter,
+];
+
+/// The façade query naming the patient `id`, with `seeded` sat per `seat`,
+/// and the parameters it needs.
+fn seated(id: &str, seat: Seat, seeded: &str) -> (String, Parameters) {
+    let subject = format!("e/ehr_status/subject/external_ref/id/value = '{id}'");
+    let mut parameters = Parameters::new();
+    let aql = match seat {
+        Seat::Projection => format!(
+            "SELECT '{seeded}' AS marker, c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE {subject}"
+        ),
+        Seat::OrderBy => format!(
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE {subject} \
+             ORDER BY c/content[at0001, '{seeded}']/time/value"
+        ),
+        Seat::PartyRelated => format!(
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o \
+             WHERE {subject} AND o/subject/relationship/value = '{seeded}'"
+        ),
+        Seat::Parameter => {
+            parameters.insert("clinician", Primitive::String(seeded.to_owned()));
+            format!(
+                "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE {subject} \
+                 AND c/composer/identifiers/id = $clinician"
+            )
+        }
+    };
+    (aql, parameters)
+}
+
+proptest! {
+    // conformance: CP-26
+    #[test]
+    fn a_seated_identifier_is_either_kept_from_the_node_or_refused(
+        id in identifier(),
+        seat in prop_oneof![
+            Just(Seat::Projection),
+            Just(Seat::OrderBy),
+            Just(Seat::PartyRelated),
+            Just(Seat::Parameter),
+        ],
+        same in prop::bool::ANY,
+    ) {
+        // NOTE: a different value is a word, which the digits-only identifier
+        // cannot be part of.
+        let seeded = if same { id.clone() } else { "clinician".to_owned() };
+        let (aql, parameters) = seated(&id, seat, &seeded);
+        match analyse(&aql, &parameters, Paging::default(), &ask_all()) {
+            Err(refusal) => {
+                let shown = format!("{refusal} {refusal:?}");
+                prop_assert!(!shown.contains(&id), "the refusal named the identifier: {shown}");
+            }
+            Ok(Analysis::Patient(query)) => {
+                prop_assert!(!same, "a query seating the identifier again was dispatched: {aql}");
+                let node = query.for_node(&HierObjectId::new(EHR_ID).unwrap());
+                prop_assert!(!node.aql().contains(&id), "node query {} carries {}", node.aql(), id);
+            }
+            Ok(other) => prop_assert!(false, "a patient query analysed as {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn every_seat_with_a_different_value_is_dispatched() {
+    // The property above is not vacuous: the value decides, not the shape
+    // (§5.4.3). With a different value in the seat, every seat reaches the
+    // node; a `PARTY_RELATED` relationship code is not an identifier, so a
+    // predicate on it is ordinary query material.
+    for seat in SEATS {
+        let (aql, parameters) = seated("460193", seat, "clinician");
+        let outcome = analyse(&aql, &parameters, Paging::default(), &ask_all());
+        assert!(
+            matches!(outcome, Ok(Analysis::Patient(_))),
+            "{seat:?} with a different value is dispatched: {aql} -> {outcome:?}"
+        );
+    }
+}
+
 #[test]
 fn a_parameter_fault_names_the_parameter_never_its_value() {
     let mut parameters = Parameters::new();

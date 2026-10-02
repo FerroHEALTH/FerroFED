@@ -28,6 +28,7 @@
 //! re-injected columns arrive with #52 and the issues after it.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_registry::id::EndpointId;
@@ -47,6 +48,7 @@ use openehr_its::rest::generated::query::{
 use tokio::task::{JoinError, JoinSet};
 
 use crate::dispatch::{DispatchError, DispatchOptions, NodeClients, NodeQuery, NodeReply};
+use crate::hygiene::Withheld;
 
 /// The completion policy the budget applies under, as `OPTIONS {base}/` and
 /// `meta.federation.timeout` name it (`docs/architecture.md` section 9).
@@ -120,6 +122,7 @@ pub enum BudgetError {
 pub struct Plan {
     dispatch: BTreeMap<EndpointId, NodeQuery>,
     settled: BTreeMap<EndpointId, Outcome>,
+    withheld: Arc<Withheld>,
 }
 
 impl Plan {
@@ -127,6 +130,14 @@ impl Plan {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// This plan refusing to send any request that carries one of the
+    /// identifiers `withheld`, the ones resolution consumed (§5.4.1, N33).
+    #[must_use]
+    pub fn withholding(mut self, withheld: Withheld) -> Self {
+        self.withheld = Arc::new(withheld);
+        self
     }
 
     /// Adds `endpoint`, to be asked `query`.
@@ -388,7 +399,11 @@ where
     let node_deadline = started
         .checked_add(budget.per_node())
         .map_or(deadline, |at| at.min(deadline));
-    let Plan { dispatch, settled } = plan;
+    let Plan {
+        dispatch,
+        settled,
+        withheld,
+    } = plan;
     let order: Vec<EndpointId> = dispatch.keys().cloned().collect();
     let mut tasks = JoinSet::new();
     for (index, (endpoint, query)) in dispatch.into_iter().enumerate() {
@@ -398,7 +413,7 @@ where
                 endpoint: endpoint.clone(),
             })?
             .clone();
-        let mut options = DispatchOptions::new(node_deadline);
+        let mut options = DispatchOptions::new(node_deadline).with_withheld(Arc::clone(&withheld));
         if let Some(id) = request_id {
             options = options.with_request_id(id);
         }

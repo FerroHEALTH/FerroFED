@@ -518,6 +518,8 @@ dependencies = [
  "http",
  "openehr-federation",
  "openehr-its",
+ "openehr-query",
+ "secrecy",
  "thiserror",
  "tokio",
  "url",
@@ -541,11 +543,17 @@ name = "ferrofed-identity"
 version = "0.0.2"
 dependencies = [
  "async-trait",
+ "base64",
  "ferrofed-registry",
+ "http",
+ "ihe-iti",
+ "reqwest",
  "secrecy",
  "serde",
  "thiserror",
+ "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -582,7 +590,20 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
+]
+
+[[package]]
+name = "fhir-types"
+version = "0.1.107"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "134ed7a0099088de336764be13e465370384b91bdf6e75eb93712b2869305214"
+dependencies = [
+ "quick-xml",
+ "regex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -952,6 +973,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ihe-iti"
+version = "0.0.4"
+dependencies = [
+ "fhir-types",
+ "http",
+ "reqwest",
+ "secrecy",
+ "serde_json",
+ "thiserror",
+ "url",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1236,7 +1270,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "openehr-base",
  "openehr-its",
@@ -1400,6 +1434,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1560,6 +1603,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
 dependencies = [
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "regex"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]

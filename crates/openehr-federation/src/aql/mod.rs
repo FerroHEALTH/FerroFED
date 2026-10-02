@@ -53,6 +53,7 @@ pub mod refusal;
 pub mod subject;
 
 use std::num::NonZeroUsize;
+use std::ops::Range;
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_its::rest::generated::query::ResultSetColumn;
@@ -193,6 +194,7 @@ pub struct PatientQuery {
     template: Box<SelectQuery>,
     columns: Vec<ResultSetColumn>,
     sources: Vec<ColumnSource>,
+    stripped: Vec<Option<Range<usize>>>,
 }
 
 impl PatientQuery {
@@ -206,6 +208,14 @@ impl PatientQuery {
     #[must_use]
     pub fn columns(&self) -> &[ResultSetColumn] {
         &self.columns
+    }
+
+    /// Where the patient predicates the rewrite consumed were written, one
+    /// byte range per stripped predicate (`None` where the parser gave none):
+    /// what a security event records of a strip, never the text (§5.4.3).
+    #[must_use]
+    pub fn stripped(&self) -> &[Option<Range<usize>>] {
+        &self.stripped
     }
 
     /// The node query for a node where the patient resolved to `ehr_id`: the
@@ -286,7 +296,7 @@ pub fn analyse(
     }
 }
 
-fn first_fault(error: &ParseError) -> Option<std::ops::Range<usize>> {
+fn first_fault(error: &ParseError) -> Option<Range<usize>> {
     match error {
         ParseError::Syntax { faults } => faults.iter().find_map(|fault| fault.bytes.clone()),
         ParseError::Lex(_) => None,
@@ -421,6 +431,12 @@ fn patient(
     columns: Vec<ResultSetColumn>,
 ) -> Result<Analysis, Refusal> {
     let inputs: Vec<usize> = findings.inputs.iter().map(|(index, _, _)| *index).collect();
+    let stripped = findings
+        .ids
+        .iter()
+        .chain(&findings.namespaces)
+        .map(|found| found.at.clone())
+        .collect();
     let mut dispatched = query.clone();
     rewrite::strip_where(&mut dispatched, consumed, None);
     rewrite::strip_columns(&mut dispatched, &inputs);
@@ -458,6 +474,7 @@ fn patient(
         template: Box::new(template),
         columns,
         sources,
+        stripped,
     }))
 }
 

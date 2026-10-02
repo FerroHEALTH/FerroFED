@@ -10,6 +10,7 @@
 mod entry;
 mod folding;
 mod golden;
+mod guard;
 mod hygiene;
 mod rules;
 

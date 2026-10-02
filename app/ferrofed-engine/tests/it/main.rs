@@ -8,4 +8,5 @@
 mod architecture;
 mod dispatch;
 mod fanout;
+mod gate;
 mod pins;

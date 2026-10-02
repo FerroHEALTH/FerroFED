@@ -17,10 +17,17 @@ publish = false
 
 [dependencies]
 ferrofed-registry.workspace = true
+# The typed `ehr_id` a node query is scoped to (#45).
+openehr-base.workspace = true
 openehr-federation.workspace = true
 # The node client: every request to a node is built by its runtime, never in
 # this crate (docs/architecture.md section 5, #34).
 openehr-its = { workspace = true, features = ["rest-client"] }
+# The outbound gate reads the AQL text with the printer's own string escaping
+# (#45).
+openehr-query.workspace = true
+# The identifiers the gate withholds are never printed (#45).
+secrecy.workspace = true
 http.workspace = true
 thiserror.workspace = true
 # One task per in-scope node under one deadline (docs/architecture.md section 9).

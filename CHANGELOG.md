@@ -35,7 +35,22 @@ binary follows from v0.0.2.
   failure classes stay on stubbed Managers. The IG's ITI-104 artefacts (the
   Source `CapabilityStatement`, the `Patient` profiles and the example
   Patients) are added to the vendored PIXm corpus.
-
+- The outbound identifier-hygiene gate and the security events of the
+  analysis guard (#45, §5.4, N33, CP-26). Right before a request leaves for a
+  node, the engine re-reads its AQL text (raw and as the printer escapes a
+  literal), its paging members, its URL (raw and percent-decoded) and the
+  headers the gateway adds, against the identifiers resolution consumed, and
+  refuses to send a request that still carries one: nothing reaches the node,
+  the query fails closed, and the refusal names the part of the request and
+  never the value. The gate reads past the `ehr_id` literal the rewrite
+  scoped the query to, so a short identifier that occurs inside the node's
+  own `ehr_id` is answered. Every patient predicate the rewrite strips, every refused
+  query and every gate stop is a security event under `ferrofed::security`,
+  located by byte range and carrying no identifier. A clinician or facility
+  predicate (composer, care facility, performer, committer) is dispatched
+  unchanged; the same path compared with the patient identifier is refused.
+  `openehr-federation` 0.0.5 adds `Refusal::kind`, `Refusal::at` and
+  `PatientQuery::stripped` for those events.
 - The resolution step through a PIX Manager (#43). A `[pixm]` table selects
   the PIXm resolver: each `[[pixm.manager]]` names a PIX Manager's FHIR base,
   its credentials, and the `ehr_id` domain of every member it resolves, and
