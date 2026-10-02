@@ -262,7 +262,10 @@ pub(super) fn order_for(
 /// where a query that does not select it has no key and nothing is
 /// suppressed. A query with a `LIMIT` and no `ORDER BY` is then ordered on
 /// the uid, so the copy a node returns before its cut is the one the Tier
-/// keeps.
+/// keeps. AQL leaves the collation of strings undefined (`master03-syntax.adoc`
+/// §ORDER BY), so each node orders the uid under its own collation; the merge
+/// orders it without regard to case and refuses a node cut at its `LIMIT`
+/// whose rows disagree with that order.
 ///
 /// # Errors
 /// [`Refusal::OrderNotSelected`] for a `DISTINCT` query ordered on a path it

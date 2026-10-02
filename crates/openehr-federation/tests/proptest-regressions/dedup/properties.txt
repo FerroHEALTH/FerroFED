@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc aaeb35a3e5eee0bf4664b2d8510b49f6f26b00c27e176a98bc720aac1dfbfac9 # shrinks to (versions, held) = ([Version { object: 0, created: 0, tree: 1, key: None }, Version { object: 0, created: 1, tree: 1, key: Some(2) }], [[0, 1]]), direction = None, k = 2, n = None, distinct = true, cases = [[0, 2, 0, 2, 2, 1], [0, 1, 1, 2, 1, 2], [1, 1, 0, 0, 1, 2], [2, 2, 2, 1, 1, 0]]
