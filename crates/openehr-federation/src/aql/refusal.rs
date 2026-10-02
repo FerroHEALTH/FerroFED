@@ -144,11 +144,10 @@ pub enum Refusal {
         reason: OffsetPage,
     },
     /// The query clause and the ITS-REST member of the same name page
-    /// differently (decision A10), or the deprecated `TOP` and `LIMIT` name
-    /// different counts.
+    /// differently (decision A10).
     #[error("the {member} member and the query's {clause} clause disagree")]
     PagingConflict {
-        /// The ITS-REST member, or `TOP`.
+        /// The ITS-REST member.
         member: &'static str,
         /// The AQL clause it pages like.
         clause: &'static str,
@@ -165,6 +164,20 @@ pub enum Refusal {
     /// section 9: `TOP n` is treated as `LIMIT n`).
     #[error("TOP … BACKWARD is not supported across a fan-out; write ORDER BY … DESC LIMIT n")]
     TopBackward,
+    /// The query uses the deprecated `TOP` together with a `LIMIT` clause,
+    /// which AQL forbids whether or not the two counts agree (AQL
+    /// master03-syntax §TOP and §LIMIT).
+    #[error(
+        "TOP and a LIMIT clause cannot be used in the same query (AQL §TOP, §LIMIT); write ORDER BY … LIMIT n"
+    )]
+    TopWithLimit,
+    /// The query uses the deprecated `TOP` and the request carries the
+    /// ITS-REST `fetch` member, which "cannot be combined with AQL-top"
+    /// (ITS-REST Query API, Common Headers and Query Parameters).
+    #[error(
+        "the fetch member cannot be combined with TOP (ITS-REST Query API); write ORDER BY … LIMIT n, or send fetch alone"
+    )]
+    TopWithFetch,
     /// Under `DISTINCT`, an `ORDER BY` path that is not selected: the gateway
     /// cannot add it to the node query as a hidden column without changing
     /// which rows are distinct (decision A28; FerroFED's own).
@@ -210,6 +223,8 @@ impl Refusal {
             Self::PagingConflict { .. } => "paging-conflict",
             Self::NegativePaging { .. } => "negative-paging",
             Self::TopBackward => "top-backward",
+            Self::TopWithLimit => "top-with-limit",
+            Self::TopWithFetch => "top-with-fetch",
             Self::OrderNotSelected { .. } => "order-not-selected",
             Self::NodeSetUndefined => "node-set-undefined",
         }
@@ -240,6 +255,8 @@ impl Refusal {
             | Self::PagingConflict { .. }
             | Self::NegativePaging { .. }
             | Self::TopBackward
+            | Self::TopWithLimit
+            | Self::TopWithFetch
             | Self::NodeSetUndefined => None,
         }
     }
