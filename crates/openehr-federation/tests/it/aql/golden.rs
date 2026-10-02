@@ -7,8 +7,10 @@
 //! outcome differs from the case, the row below says which section decides.
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
-use openehr_federation::aql::Analysis;
+use std::num::NonZeroU32;
+
 use openehr_federation::aql::refusal::{Refusal, Unreducible};
+use openehr_federation::aql::{Analysis, Context, OffsetStrategy};
 
 use super::{analysed, ask_all, assert_same_aql};
 
@@ -54,7 +56,7 @@ fn verdict(case: &str) -> Verdict {
         "17-entry-subject-second-value-rejected.case" => {
             Verdict::Refuses(|r| matches!(r, Refusal::SecondSubject { .. }))
         }
-        // §11.6.2 option 1, declared; the exact k + n page is #53.
+        // §11.6.2 option 1: the corpus runs under the reject strategy.
         "05-offset-rejected.case" => Verdict::Refuses(|r| *r == Refusal::OffsetUnsupported),
         // N14, §11.6.3: the corpus runs undirected.
         "06-undirected-aggregate-rejected.case" => {
@@ -92,6 +94,12 @@ fn verdict(case: &str) -> Verdict {
         }
         other => panic!("golden case {other} has no adjudication; add one before it runs"),
     }
+}
+
+/// The deployment the corpus runs in: undirected ask-all, and the reject
+/// `OFFSET` strategy, the one case 05 expects (§11.6.2 option 1).
+fn corpus() -> Context {
+    ask_all().with_offset_strategy(OffsetStrategy::Reject)
 }
 
 /// One case file: its sections by heading.
@@ -145,7 +153,7 @@ fn every_golden_case_has_its_adjudicated_outcome() {
             .expect("a UTF-8 file name")
             .to_owned();
         let case = read(&path);
-        let outcome = analysed(&case.facade, &ask_all());
+        let outcome = analysed(&case.facade, &corpus());
         match verdict(&name) {
             verdict @ (Verdict::Rewrites | Verdict::RewritesTo(_)) => {
                 let analysis =
@@ -182,4 +190,39 @@ fn every_golden_case_has_its_adjudicated_outcome() {
             }
         }
     }
+}
+
+// conformance: CP-32
+#[test]
+fn golden_case_05_is_refused_under_reject_and_paged_under_bounded() {
+    let case = read(&std::path::Path::new(CORPUS).join("05-offset-rejected.case"));
+    assert_eq!(case.expected, "ERROR:FED_OFFSET_UNSUPPORTED");
+    let refusal = analysed(&case.facade, &corpus()).expect_err("§11.6.2 option 1");
+    assert_eq!(refusal, Refusal::OffsetUnsupported, "N39");
+    let window = NonZeroU32::new(1000).expect("1000 is not zero");
+    let bounded = ask_all().with_offset_strategy(OffsetStrategy::Bounded { max_window: window });
+    let Ok(Analysis::Patient(query)) = analysed(&case.facade, &bounded) else {
+        panic!("case 05 names a patient and its page is bounded");
+    };
+    let ehr_id = HierObjectId::new(case.ehr_id.as_str()).expect("a HIER_OBJECT_ID");
+    assert_same_aql(
+        query.for_node(&ehr_id).aql(),
+        &format!(
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+             WHERE e/ehr_id/value = '{}' ORDER BY c/uid/value LIMIT 15",
+            case.ehr_id
+        ),
+    );
+    assert_eq!(
+        query_offset(&case.facade, &bounded),
+        5,
+        "§11.6.2: the Tier skips k"
+    );
+}
+
+fn query_offset(facade: &str, context: &Context) -> u64 {
+    analysed(facade, context)
+        .expect("the page is bounded")
+        .order()
+        .offset()
 }

@@ -52,7 +52,7 @@ mod scan;
 pub mod refusal;
 pub mod subject;
 
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::ops::Range;
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
@@ -63,7 +63,7 @@ use openehr_query::parser::{ParseError, parse_str};
 use openehr_query::printer::to_aql;
 
 use crate::order::ResultOrder;
-use refusal::{Refusal, Unreducible};
+use refusal::{OffsetPage, Refusal, Unreducible};
 use scan::{Findings, Input};
 use subject::{NamespaceOrigin, Subject};
 
@@ -104,21 +104,83 @@ impl Targeting {
     }
 }
 
+/// How the gateway answers `LIMIT n OFFSET k` with `k > 0` across a fan-out
+/// (§11.6.2, N39), the strategy `OPTIONS {base}/` declares as
+/// `paging.offset_strategy` (§7a.2).
+///
+/// Whichever is chosen, `OFFSET` is never pushed down to a node: per-node
+/// rows `k..k + n` do not contain the global rows `k..k + n` (§11.6.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum OffsetStrategy {
+    /// Every `OFFSET k > 0` is refused with [`Refusal::OffsetUnsupported`]
+    /// (§11.6.2, the first option).
+    Reject,
+    /// The page is computed from `k + n` rows per node: each node is sent
+    /// `LIMIT k + n` with no `OFFSET`, and the Tier merges, orders and keeps
+    /// the rows `[k, k + n)` (§11.6.2, the second option). A page whose
+    /// `k + n` is past `max_window`, or that has no `LIMIT` or no `ORDER BY`,
+    /// is refused with [`Refusal::OffsetPage`].
+    Bounded {
+        /// The most rows one node is asked for, `k + n`.
+        max_window: NonZeroU32,
+    },
+}
+
+impl OffsetStrategy {
+    /// The value `OPTIONS {base}/` declares as `paging.offset_strategy`
+    /// (§7a.2): `reject` or `bounded`.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Reject => "reject",
+            Self::Bounded { .. } => "bounded",
+        }
+    }
+
+    /// The most rows one node is asked for a page, when the strategy bounds
+    /// `k + n`.
+    #[must_use]
+    pub fn max_window(self) -> Option<NonZeroU32> {
+        match self {
+            Self::Reject => None,
+            Self::Bounded { max_window } => Some(max_window),
+        }
+    }
+}
+
 /// What the deployment and the request add to the query text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {
     default_namespace: Option<String>,
     targeting: Targeting,
+    offset: OffsetStrategy,
 }
 
 impl Context {
-    /// A context with no default issuing namespace.
+    /// A context with no default issuing namespace, which refuses every
+    /// `OFFSET k > 0` ([`OffsetStrategy::Reject`]).
     #[must_use]
     pub fn new(targeting: Targeting) -> Self {
         Self {
             default_namespace: None,
             targeting,
+            offset: OffsetStrategy::Reject,
         }
+    }
+
+    /// Declares how `OFFSET k > 0` is answered (§11.6.2, N39).
+    #[must_use]
+    pub fn with_offset_strategy(mut self, strategy: OffsetStrategy) -> Self {
+        self.offset = strategy;
+        self
+    }
+
+    /// How `OFFSET k > 0` is answered, the strategy `OPTIONS {base}/`
+    /// declares (§11.6.2, §7a.2).
+    #[must_use]
+    pub fn offset_strategy(&self) -> OffsetStrategy {
+        self.offset
     }
 
     /// Declares the issuing namespace an unqualified patient identifier
@@ -295,7 +357,7 @@ pub fn analyse(
     })?;
     bind(&mut query, parameters).map_err(Refusal::Parameters)?;
     let findings = scan::scan(&query)?;
-    page(&mut query, paging)?;
+    let skip = page(&mut query, paging, context.offset)?;
     if let Some(aggregate) = &findings.aggregate
         && !context.targeting.single_endpoint()
     {
@@ -305,12 +367,18 @@ pub fn analyse(
     }
     let columns = render_columns(&query.select);
     let ordered = findings.aggregate.is_none();
-    match subject(&findings, context)? {
+    let mut analysis = match subject(&findings, context)? {
         Some((subject, consumed)) => {
-            patient(query, &findings, subject, &consumed, columns, ordered)
+            patient(query, &findings, subject, &consumed, columns, ordered)?
         }
-        None => unscoped(query, &findings, context, columns, ordered),
-    }
+        None => unscoped(query, &findings, context, columns, ordered)?,
+    };
+    let order = match &mut analysis {
+        Analysis::Patient(query) => &mut query.order,
+        Analysis::Unscoped(query) => &mut query.order,
+    };
+    *order = std::mem::take(order).with_offset(skip);
+    Ok(analysis)
 }
 
 fn first_fault(error: &ParseError) -> Option<Range<usize>> {
@@ -321,15 +389,20 @@ fn first_fault(error: &ParseError) -> Option<Range<usize>> {
 }
 
 /// Applies the ITS-REST paging members to the query's `LIMIT` and `OFFSET`
-/// (decision A10).
-fn page(query: &mut SelectQuery, paging: Paging) -> Result<(), Refusal> {
+/// (decision A10), and returns the rows the Tier skips.
+///
+/// `OFFSET` never reaches a node (§11.6.2). Under
+/// [`OffsetStrategy::Bounded`], a page at `OFFSET k` is dispatched as
+/// `LIMIT k + n`, and the Tier skips `k` rows of the merged order.
+fn page(query: &mut SelectQuery, paging: Paging, strategy: OffsetStrategy) -> Result<u64, Refusal> {
     if paging.offset.is_some_and(i64::is_negative) {
         return Err(Refusal::NegativePaging { member: "offset" });
     }
     if paging.fetch.is_some_and(i64::is_negative) {
         return Err(Refusal::NegativePaging { member: "fetch" });
     }
-    // NOTE: the deprecated `TOP n` is `LIMIT n` (docs/architecture.md section 9).
+    // NOTE: AQL master03-syntax §TOP deprecates `TOP` "in favour of the `LIMIT`
+    // clause combined with `ORDER BY`", so `TOP n` is read as `LIMIT n`.
     let top = query.select.top.take();
     if top
         .as_ref()
@@ -369,15 +442,47 @@ fn page(query: &mut SelectQuery, paging: Paging) -> Result<(), Refusal> {
             clause: "OFFSET",
         });
     }
-    // TODO(#53): compute an exact page from k + n rows per node, within a bound.
-    if clause_offset.or(paging.offset).unwrap_or(0) > 0 {
-        return Err(Refusal::OffsetUnsupported);
+    if clause_offset.is_some_and(i64::is_negative) {
+        return Err(Refusal::NegativePaging { member: "OFFSET" });
     }
-    query.limit = clause_limit.or(paging.fetch).map(|limit| Limit {
+    let limit = clause_limit.or(paging.fetch);
+    let offset = clause_offset.or(paging.offset).unwrap_or(0);
+    let (dispatched, skip) = if offset == 0 {
+        (limit, 0)
+    } else {
+        let OffsetStrategy::Bounded { max_window } = strategy else {
+            return Err(Refusal::OffsetUnsupported);
+        };
+        let Some(limit) = limit else {
+            return Err(Refusal::OffsetPage {
+                reason: OffsetPage::NoLimit,
+            });
+        };
+        // NOTE: §11.6.2 is silent on OFFSET without ORDER BY, so this is our own
+        // design: its "merging, ordering and slicing" has no order to slice.
+        if query.order_by.is_empty() {
+            return Err(Refusal::OffsetPage {
+                reason: OffsetPage::NoOrder,
+            });
+        }
+        let past = Refusal::OffsetPage {
+            reason: OffsetPage::PastTheBound {
+                max_window: max_window.get(),
+            },
+        };
+        let window = offset
+            .checked_add(limit)
+            .filter(|window| *window <= i64::from(max_window.get()))
+            .ok_or(past)?;
+        let skip = u64::try_from(offset)
+            .map_err(|_negative| Refusal::NegativePaging { member: "OFFSET" })?;
+        (Some(window), skip)
+    };
+    query.limit = dispatched.map(|limit| Limit {
         limit,
         offset: None,
     });
-    Ok(())
+    Ok(skip)
 }
 
 /// The `columns[]` of the façade query: each column's alias, or `#<index>`,

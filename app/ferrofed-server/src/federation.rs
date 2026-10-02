@@ -25,7 +25,7 @@ use ferrofed_identity::resolver::Resolver;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use openehr_federation::aql::{Context, Targeting};
+use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::NodeSelection;
@@ -166,7 +166,8 @@ impl Federation {
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
         let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)
             .map_err(FederationError::Clients)?;
-        let mut context = Context::new(targeting(selection));
+        let mut context =
+            Context::new(targeting(selection)).with_offset_strategy(settings.federation.offset);
         if let Some(namespace) = &settings.federation.default_namespace {
             context = context.with_default_namespace(namespace.clone());
         }
@@ -255,8 +256,8 @@ impl Federation {
         self.resolver.as_deref()
     }
 
-    /// What the deployment adds to the query text: the targeting and the
-    /// default issuing namespace.
+    /// What the deployment adds to the query text: the targeting, the
+    /// default issuing namespace and the `OFFSET` strategy.
     #[must_use]
     pub fn context(&self) -> &Context {
         &self.context
@@ -275,6 +276,14 @@ impl Federation {
     pub fn best_effort(&self) -> bool {
         self.best_effort
     }
+
+    /// How `OFFSET k > 0` is answered across the fan-out, with its bound
+    /// (§11.6.2, N39).
+    // TODO(#73): declare paging.offset_strategy and paging.max_window in the OPTIONS {base}/ body (§7a.2, §11.6.2).
+    #[must_use]
+    pub fn offset_strategy(&self) -> OffsetStrategy {
+        self.context.offset_strategy()
+    }
 }
 
 impl std::fmt::Debug for Federation {
@@ -284,6 +293,7 @@ impl std::fmt::Debug for Federation {
             .field("resolver", &self.resolver.is_some())
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
+            .field("offset_strategy", &self.context.offset_strategy())
             .finish_non_exhaustive()
     }
 }

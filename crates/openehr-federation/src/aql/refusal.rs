@@ -136,6 +136,13 @@ pub enum Refusal {
     /// Offset-based paging is not supported across a fan-out (§11.6.2, N39).
     #[error("offset-based paging is not supported across a fan-out (§11.6.2, N39)")]
     OffsetUnsupported,
+    /// The gateway computes an `OFFSET` page from `k + n` rows per node, and
+    /// this page cannot be computed that way (§11.6.2, N39).
+    #[error("this OFFSET page cannot be computed across a fan-out: {reason} (§11.6.2, N39)")]
+    OffsetPage {
+        /// Why it cannot.
+        reason: OffsetPage,
+    },
     /// The query clause and the ITS-REST member of the same name page
     /// differently (decision A10), or the deprecated `TOP` and `LIMIT` name
     /// different counts.
@@ -199,6 +206,7 @@ impl Refusal {
             Self::UnfoldableFunction { .. } => "unfoldable-function",
             Self::UndirectedAggregate { .. } => "undirected-aggregate",
             Self::OffsetUnsupported => "offset-unsupported",
+            Self::OffsetPage { .. } => "offset-page",
             Self::PagingConflict { .. } => "paging-conflict",
             Self::NegativePaging { .. } => "negative-paging",
             Self::TopBackward => "top-backward",
@@ -228,6 +236,7 @@ impl Refusal {
             Self::Parameters(_)
             | Self::NoNamespace
             | Self::OffsetUnsupported
+            | Self::OffsetPage { .. }
             | Self::PagingConflict { .. }
             | Self::NegativePaging { .. }
             | Self::TopBackward
@@ -268,6 +277,39 @@ impl fmt::Display for Unreducible {
             Self::SeveralEhrs => "the FROM clause binds more than one EHR",
             Self::InsideAnExpression => "it sits inside a function call or an aggregate",
         })
+    }
+}
+
+/// Why an `OFFSET` page cannot be computed from `k + n` rows per node: the
+/// strategy is "permitted only where the gateway can bound `k + n` (it MUST
+/// reject when it cannot)" (§11.6.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum OffsetPage {
+    /// `k + n` is past the rows the gateway asks of one node.
+    PastTheBound {
+        /// The most rows the gateway asks of one node for a page.
+        max_window: u32,
+    },
+    /// The query has no `LIMIT`, so `k + n` has no bound.
+    NoLimit,
+    /// The query has no `ORDER BY`, so its rows have no order across nodes
+    /// to page through.
+    NoOrder,
+}
+
+impl fmt::Display for OffsetPage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PastTheBound { max_window } => write!(
+                f,
+                "OFFSET plus LIMIT is past this gateway's bound of {max_window} rows per node"
+            ),
+            Self::NoLimit => f.write_str("OFFSET without LIMIT has no bound"),
+            Self::NoOrder => {
+                f.write_str("OFFSET without ORDER BY has no order across nodes to page through")
+            }
+        }
     }
 }
 

@@ -8,10 +8,12 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::telemetry::Format;
+use openehr_federation::aql::OffsetStrategy;
 use secrecy::ExposeSecret;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::io::Write;
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 /// A file with every section set, so a test can override one key at a time.
@@ -147,6 +149,54 @@ fn best_effort_is_offered_by_default_and_can_be_withdrawn() -> Result<(), Box<dy
     )?
     .resolve()?;
     assert!(!settings.federation.best_effort);
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn offset_paging_is_bounded_at_1000_rows_per_node_by_default() -> Result<(), Box<dyn StdError>> {
+    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    assert_eq!(
+        settings.federation.offset,
+        OffsetStrategy::Bounded {
+            max_window: NonZeroU32::new(1000).ok_or("1000 is not zero")?
+        },
+        "§11.6.2 option 2, with its bound"
+    );
+    let narrowed = format!("{FULL}\n[federation]\nmax_offset_window = 50\n");
+    let settings = Config::from_sources(Some(&narrowed), &BTreeMap::new())?.resolve()?;
+    assert_eq!(
+        settings.federation.offset.max_window().map(NonZeroU32::get),
+        Some(50)
+    );
+    let settings = Config::from_sources(
+        Some(FULL),
+        &env("FERROFED__FEDERATION__OFFSET_STRATEGY", "reject"),
+    )?
+    .resolve()?;
+    assert_eq!(settings.federation.offset, OffsetStrategy::Reject);
+    assert_eq!(settings.federation.offset.name(), "reject");
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_zero_offset_window_or_an_unknown_strategy_refuses_to_boot() -> Result<(), Box<dyn StdError>> {
+    let zero = refusal(&format!("{FULL}\n[federation]\nmax_offset_window = 0\n"))?;
+    assert!(
+        matches!(&zero, Error::Zero { key } if key == "federation.max_offset_window"),
+        "{zero:?}"
+    );
+    let unknown = refusal(&format!(
+        "{FULL}\n[federation]\noffset_strategy = \"cursor\"\n"
+    ))?;
+    assert!(matches!(unknown, Error::Parse { .. }), "{unknown:?}");
     Ok(())
 }
 

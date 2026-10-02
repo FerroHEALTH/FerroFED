@@ -1,17 +1,21 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The federated merge of node answers (feature `merge`): `ORDER BY` with
-//! `LIMIT` re-applied at the Tier with a deterministic tie-break (§11.6.1,
-//! N13, N39; `docs/architecture.md` section 9).
+//! The federated merge of node answers (feature `merge`).
 //!
-//! Per-node `ORDER BY` and `LIMIT` alone are not a federated answer (N9).
+//! `ORDER BY` with `LIMIT` is re-applied at the Tier with a deterministic
+//! tie-break (§11.6.1, N13, N39), and `LIMIT n OFFSET k` is sliced from the
+//! merged order (§11.6.2). Per-node `ORDER BY` and `LIMIT` alone are not a federated answer (N9).
 //! Every node is sent the client's `LIMIT n`; [`merge`] orders the rows of
 //! every node under one Tier comparator and keeps the first `n` (§11.6.1
 //! MUST). The row order is the `ORDER BY` keys in turn, then the endpoint id,
 //! then the tie-break columns (the row's uid, §11.6.1 RECOMMENDED), then the
 //! row's cells by canonical JSON, so a repeated query returns the same rows in
-//! the same order.
+//! the same order. For a page at `OFFSET k`, every node is sent `LIMIT k + n`
+//! with no `OFFSET`, and the merge keeps the rows `[k, k + n)` of the Tier
+//! order: the global first `k + n` rows lie in the union of every node's first
+//! `k + n`, so the slice is the global page (§11.6.2, "retrieving `k + n` rows
+//! per node, merging, ordering and slicing").
 //!
 //! §11.6.1 makes `LIMIT n` per node correct "under a total order". AQL fixes no
 //! total order for nulls, collation or data values, so a node may order
@@ -165,13 +169,15 @@ type Placed = (String, Decoded, ResultSetRow);
 /// cut at the limit: any `limit` rows of the union answer a query that fixes
 /// no order. With keys, every node that returned `limit` rows is checked, the
 /// rows of the nodes that pass are put in the Tier order, and the first
-/// `limit` are kept. The result does not depend on the order of `nodes`.
+/// `limit` are kept. Either way, the first [`ResultOrder::offset`] of the kept
+/// rows are then dropped (§11.6.2). The result does not depend on the order of
+/// `nodes`.
 #[must_use]
 pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     nodes.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
     if order.keys().is_empty() {
         let mut rows: Vec<ResultSetRow> = nodes.into_iter().flat_map(|node| node.rows).collect();
-        cut(&mut rows, order.limit());
+        cut(&mut rows, order);
         return Merged {
             rows,
             refused: Vec::new(),
@@ -212,7 +218,7 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     refused.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
     accepted.sort_by(|a, b| tier(a, b, order));
     let mut rows: Vec<ResultSetRow> = accepted.into_iter().map(|(_, _, raw)| raw).collect();
-    cut(&mut rows, order.limit());
+    cut(&mut rows, order);
     Merged { rows, refused }
 }
 
@@ -300,10 +306,15 @@ fn tie(a: &Decoded, b: &Decoded) -> Ordering {
         .unwrap_or(Ordering::Equal)
 }
 
-fn cut(rows: &mut Vec<ResultSetRow>, limit: Option<u64>) {
-    if let Some(limit) = limit {
+/// Keeps the rows `[offset, limit)` of the ordered rows (§11.6.1, §11.6.2).
+fn cut(rows: &mut Vec<ResultSetRow>, order: &ResultOrder) {
+    if let Some(limit) = order.limit() {
         // NOTE: no specification governs this: our own design; a limit past
         // usize::MAX keeps every row.
         rows.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
     }
+    // NOTE: no specification governs this: our own design; an offset past
+    // usize::MAX skips every row, as an offset past the row count does.
+    let skip = usize::try_from(order.offset()).unwrap_or(usize::MAX);
+    rows.drain(..skip.min(rows.len()));
 }

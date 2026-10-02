@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The federated merge (feature `merge`): `ORDER BY` with `LIMIT` re-applied
-//! at the Tier with a deterministic tie-break (§11.6.1, N13, N39), and the
-//! check of a node's visible order (decision A43, `docs/architecture.md`
-//! section 9).
+//! at the Tier with a deterministic tie-break (§11.6.1, N13, N39), the page
+//! of `LIMIT n OFFSET k` sliced from `k + n` rows per node (§11.6.2), and the
+//! check of a node's visible order (FerroFED's own, within §11.6.1).
 #![cfg(feature = "merge")]
 
 use std::cmp::Ordering;
@@ -192,6 +192,159 @@ proptest! {
         prop_assert_eq!(merged.refused().len(), 1);
         prop_assert_eq!(merged.refused()[0].reason(), Disagreement::Order, "A43");
     }
+}
+
+/// The page `[k, k + n)` of the federated answer computed from every row of
+/// every node.
+fn oracle_page(nodes: &[Vec<Row>], direction: Direction, k: u64, n: u64) -> Vec<ResultSetRow> {
+    let skip = usize::try_from(k).expect("a small offset");
+    let take = usize::try_from(n).expect("a small limit");
+    oracle(nodes, direction, None)
+        .into_iter()
+        .skip(skip)
+        .take(take)
+        .collect()
+}
+
+/// The bounded `OFFSET` merge: every node sent `LIMIT k + n` and the Tier
+/// keeping rows `[k, k + n)` (§11.6.2).
+fn bounded_page(nodes: &[Vec<Row>], direction: Direction, k: u64, n: u64) -> Vec<ResultSetRow> {
+    let window = k + n;
+    let dispatched: Vec<Vec<Row>> = nodes
+        .iter()
+        .map(|rows| conforming(rows.clone(), direction, Some(window)))
+        .collect();
+    let merged = merge(
+        answers(&dispatched),
+        &order(direction, Some(window)).with_offset(k),
+    );
+    assert!(
+        merged.refused().is_empty(),
+        "a conforming node is never refused: {:?}",
+        merged.refused()
+    );
+    merged.rows().to_vec()
+}
+
+proptest! {
+    // conformance: CP-32
+    #[test]
+    fn the_bounded_offset_page_is_the_page_of_the_full_merged_set(
+        nodes in nodes(),
+        direction in direction(),
+        k in 0_u64..9,
+        n in 0_u64..7,
+    ) {
+        prop_assert_eq!(
+            bounded_page(&nodes, direction, k, n),
+            oracle_page(&nodes, direction, k, n),
+            "§11.6.2, N39: k + n rows per node, merged, ordered and sliced"
+        );
+    }
+}
+
+/// Node splits for the table-driven page check: ties at both slice edges,
+/// across and within nodes, and nodes holding fewer than `k + n` rows.
+fn splits() -> Vec<(&'static str, Vec<Vec<Row>>)> {
+    let rows = |node: usize, keys: &[Option<i64>]| -> Vec<Row> {
+        keys.iter()
+            .enumerate()
+            .map(|(index, key)| Row {
+                key: *key,
+                uid: format!("{}::{index:02}", endpoint(node)),
+            })
+            .collect()
+    };
+    vec![
+        (
+            "every row on one node",
+            vec![rows(
+                0,
+                &[Some(1), Some(2), Some(2), Some(3), Some(4), Some(5)],
+            )],
+        ),
+        (
+            "ties straddling both edges across nodes",
+            vec![
+                rows(0, &[Some(2), Some(2), Some(4)]),
+                rows(1, &[Some(2), Some(4), Some(4)]),
+                rows(2, &[Some(1), Some(2), Some(4), Some(9)]),
+            ],
+        ),
+        (
+            "nodes with fewer rows than the window",
+            vec![rows(0, &[Some(7)]), rows(1, &[]), rows(2, &[Some(3), None])],
+        ),
+        (
+            "nulls at the edge",
+            vec![rows(0, &[None, None, Some(1)]), rows(1, &[None, Some(0)])],
+        ),
+        (
+            "one node holding the whole page past the others",
+            vec![
+                rows(0, &[Some(0), Some(0), Some(0), Some(0), Some(0)]),
+                rows(1, &[Some(5), Some(6)]),
+            ],
+        ),
+    ]
+}
+
+// conformance: CP-32
+#[test]
+fn the_bounded_offset_page_matches_the_full_merge_for_every_split() {
+    for (split, nodes) in splits() {
+        for direction in [Direction::Ascending, Direction::Descending] {
+            for k in 0..8 {
+                for n in 0..5 {
+                    assert_eq!(
+                        bounded_page(&nodes, direction, k, n),
+                        oracle_page(&nodes, direction, k, n),
+                        "{split}, {direction:?}, OFFSET {k} LIMIT {n} (§11.6.2)"
+                    );
+                }
+            }
+        }
+    }
+}
+
+// conformance: CP-32
+#[test]
+fn a_node_whose_k_plus_n_rows_disagree_with_the_federation_order_is_refused() {
+    let merged = merge(
+        vec![
+            NodeAnswer::new(
+                "node-a",
+                vec![
+                    vec![json!(1), json!("a1")],
+                    vec![json!(3), json!("a2")],
+                    vec![json!(2), json!("a3")],
+                ],
+            ),
+            NodeAnswer::new("node-b", vec![vec![json!(0), json!("b1")]]),
+        ],
+        &order(Direction::Ascending, Some(3)).with_offset(1),
+    );
+    assert_eq!(merged.refused().len(), 1);
+    assert_eq!(merged.refused()[0].endpoint(), "node-a");
+    assert_eq!(
+        merged.refused()[0].reason(),
+        Disagreement::Order,
+        "the A43 check runs on the k + n rows the node was sent"
+    );
+    assert!(merged.rows().is_empty(), "OFFSET 1 skips node-b's one row");
+}
+
+#[test]
+fn an_offset_past_every_row_leaves_an_empty_page() {
+    let merged = merge(
+        vec![NodeAnswer::new("node-a", vec![vec![json!(1), json!("a1")]])],
+        &order(Direction::Ascending, Some(12)).with_offset(10),
+    );
+    assert!(merged.refused().is_empty());
+    assert!(
+        merged.rows().is_empty(),
+        "AQL: OFFSET skips rows that exist"
+    );
 }
 
 #[test]

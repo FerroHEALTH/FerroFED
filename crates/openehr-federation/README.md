@@ -10,10 +10,10 @@ specification, with a feature per layer.
 |---|---|
 | (always on) | the federation wire types, held to the two published JSON Schemas |
 | `aql` | the §7 rewrite of a client query into one `ehr_id`-scoped query per node, with identifier hygiene (§5.4), on the `openehr-query` syntax tree |
-| `merge` | the §9 to §11 merge of node answers: `ORDER BY` with `LIMIT`, `DISTINCT`, version-identity dedup, decomposable aggregates |
+| `merge` | the §9 to §11 merge of node answers: `ORDER BY` with `LIMIT` and `OFFSET`, `DISTINCT`, version-identity dedup, decomposable aggregates |
 
-The `merge` feature carries `ORDER BY` with `LIMIT` today; `DISTINCT`, dedup and
-the decomposable aggregates follow in build order.
+The `merge` feature carries `ORDER BY` with `LIMIT` and `OFFSET` today;
+`DISTINCT`, dedup and the decomposable aggregates follow in build order.
 
 ## The `merge` feature
 
@@ -24,7 +24,11 @@ in one total order: the `ORDER BY` keys (null greatest, numbers exactly,
 complete date-times by instant, strings by code point, `DV_ORDERED` values by
 `openehr-rm`), then the endpoint id, then the uid, and cut at the `LIMIT`, which
 every node was sent unchanged. A node that returned `n` rows out of that order
-is refused, and the gateway reports it `node-error`.
+is refused, and the gateway reports it `node-error`. For `LIMIT n OFFSET k`,
+every node is sent `LIMIT k + n` with no `OFFSET`, and the merge keeps rows `k`
+to `k + n` of the same order (§11.6.2); `aql::OffsetStrategy` says whether a
+deployment computes that page within a bound or refuses every `OFFSET` past
+zero.
 
 ## The `aql` feature
 

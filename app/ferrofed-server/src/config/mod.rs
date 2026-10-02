@@ -11,10 +11,12 @@
 
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::{DevTable, Profile};
+use openehr_federation::aql::OffsetStrategy;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::net::SocketAddr;
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -149,6 +151,26 @@ pub struct Federation {
     /// all-or-nothing stays the default, and a gateway that does not offer
     /// best-effort refuses `partial` with a `400`.
     pub best_effort: bool,
+    /// How `LIMIT n OFFSET k` with `k > 0` is answered across a fan-out
+    /// (§11.6.2, N39): `bounded`, the default, or `reject`.
+    pub offset_strategy: OffsetPaging,
+    /// The most rows the `bounded` strategy asks of one node for a page,
+    /// `k + n` (§11.6.2: "permitted only where the gateway can bound
+    /// `k + n`"). A page past it is a `400` naming the bound; zero is refused.
+    pub max_offset_window: u32,
+}
+
+/// How `LIMIT n OFFSET k` with `k > 0` is answered across a fan-out
+/// (§11.6.2, N39).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum OffsetPaging {
+    /// Every `OFFSET k > 0` is refused with a `400`.
+    Reject,
+    /// The page is computed from `k + n` rows per node, merged, ordered and
+    /// sliced, within `max_offset_window`.
+    Bounded,
 }
 
 /// How the node set of an undirected patient query is chosen (§4.3, N4,
@@ -172,6 +194,8 @@ impl Default for Federation {
             binding_ttl_ms: 900_000,
             node_selection: None,
             best_effort: true,
+            offset_strategy: OffsetPaging::Bounded,
+            max_offset_window: 1000,
         }
     }
 }
@@ -457,12 +481,21 @@ impl Config {
             });
         }
         let binding_ttl = positive_ms("federation.binding_ttl_ms", self.federation.binding_ttl_ms)?;
+        let max_window =
+            NonZeroU32::new(self.federation.max_offset_window).ok_or_else(|| Error::Zero {
+                key: String::from("federation.max_offset_window"),
+            })?;
+        let offset = match self.federation.offset_strategy {
+            OffsetPaging::Reject => OffsetStrategy::Reject,
+            OffsetPaging::Bounded => OffsetStrategy::Bounded { max_window },
+        };
         Ok(FederationSettings {
             budget,
             default_namespace: self.federation.default_namespace.clone(),
             binding_ttl,
             node_selection: self.federation.node_selection,
             best_effort: self.federation.best_effort,
+            offset,
         })
     }
 }

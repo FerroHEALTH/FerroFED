@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! How the rows a node query returns are ordered and cut at the Tier
-//! (§11.6.1, N13, N39).
+//! (§11.6.1, §11.6.2, N13, N39).
 //!
 //! The rewrite of the `aql` feature describes, for the node query it builds,
 //! which node columns carry the `ORDER BY` keys, which carry the tie-break
-//! after `endpoint_id`, and the façade's `LIMIT`; the merge of the `merge`
-//! feature reads the same description. It is plain data, so neither feature
+//! after `endpoint_id`, the `LIMIT` every node was sent, and the rows the Tier
+//! skips for an `OFFSET`; the merge of the `merge` feature reads the same
+//! description. It is plain data, so neither feature
 //! depends on the other.
 
 /// The direction of one `ORDER BY` key.
@@ -46,18 +47,22 @@ impl SortKey {
     }
 }
 
-/// The Tier order of a federated answer and its `LIMIT`.
+/// The Tier order of a federated answer, its `LIMIT` and its `OFFSET`.
 ///
-/// Every node was sent the client's `LIMIT n`, ordered by the keys and then
-/// by the tie-break columns ascending. The Tier orders the merged rows by the
+/// Every node was sent one `LIMIT`, ordered by the keys and then by the
+/// tie-break columns ascending: the client's `n`, or `k + n` for a page that
+/// starts at `OFFSET k` (§11.6.2). The Tier orders the merged rows by the
 /// keys, then `endpoint_id`, then the tie-break columns (§11.6.1: "RECOMMENDED:
-/// `endpoint_id`, then uid"), and keeps the first `n`. With no keys, any `n`
-/// rows of the union are a correct answer.
+/// `endpoint_id`, then uid"), keeps the first [`ResultOrder::limit`] and drops
+/// the first [`ResultOrder::offset`] of those, so the answer is the rows
+/// `[k, k + n)`. With no keys, any `n` rows of the union are a correct answer
+/// to a query with no `OFFSET`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResultOrder {
     keys: Vec<SortKey>,
     tie_break: Vec<usize>,
     limit: Option<u64>,
+    offset: u64,
 }
 
 impl ResultOrder {
@@ -76,7 +81,20 @@ impl ResultOrder {
             keys,
             tie_break,
             limit,
+            offset: 0,
         }
+    }
+
+    /// This answer starting at row `offset` of the Tier order: the merge keeps
+    /// the first [`ResultOrder::limit`] rows and drops the first `offset` of
+    /// them (§11.6.2).
+    ///
+    /// For the page `LIMIT n OFFSET k`, every node was sent `LIMIT k + n`, so
+    /// `limit` is `k + n` and `offset` is `k`.
+    #[must_use]
+    pub fn with_offset(mut self, offset: u64) -> Self {
+        self.offset = offset;
+        self
     }
 
     /// The `ORDER BY` keys, in order.
@@ -93,9 +111,17 @@ impl ResultOrder {
         &self.tie_break
     }
 
-    /// The façade's `LIMIT`, which every node was sent unchanged.
+    /// The `LIMIT` every node was sent: the façade's `n`, or `k + n` for a
+    /// page that starts at `OFFSET k` (§11.6.1, §11.6.2).
     #[must_use]
     pub fn limit(&self) -> Option<u64> {
         self.limit
+    }
+
+    /// The rows the Tier drops from the front of the cut answer: the façade's
+    /// `OFFSET k`, zero when the query pages from the first row (§11.6.2).
+    #[must_use]
+    pub fn offset(&self) -> u64 {
+        self.offset
     }
 }

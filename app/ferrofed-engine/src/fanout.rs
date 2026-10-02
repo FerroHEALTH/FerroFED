@@ -28,8 +28,9 @@
 //! `complete`, which the envelope derives from the statuses and never takes as
 //! an input.
 //!
-//! The rows of the `active` nodes are merged under the plan's Tier order and
-//! cut at its `LIMIT` (§11.6.1, N39) by `openehr_federation::merge`. A node
+//! The rows of the `active` nodes are merged under the plan's Tier order, cut
+//! at its `LIMIT` (§11.6.1, N39) and, for a page at `OFFSET k`, sliced from
+//! row `k` (§11.6.2) by `openehr_federation::merge`. A node
 //! that returned `n` rows out of the federation order is reported `node-error`,
 //! so under all-or-nothing the query fails `424` (decision A43).
 
@@ -191,7 +192,8 @@ impl Plan {
     }
 
     /// This plan merging the node answers under `order`, the Tier order and
-    /// `LIMIT` the rewrite wrote into the node queries (§11.6.1, N39).
+    /// `LIMIT` the rewrite wrote into the node queries, and the `OFFSET` the
+    /// Tier skips (§11.6.1, §11.6.2, N39).
     #[must_use]
     pub fn ordered(mut self, order: ResultOrder) -> Self {
         self.order = order;

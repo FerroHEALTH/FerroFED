@@ -6,7 +6,8 @@
 //! deterministic tie-break whatever order the nodes answer in, and a node
 //! whose `n` rows disagree with the federation order reported `node-error`
 //! (§11.1; decision A43), which fails the query `424` under all-or-nothing
-//! and leaves the other nodes' rows under best-effort (§11.4, N37).
+//! and leaves the other nodes' rows under best-effort (§11.4, N37). A page at
+//! `OFFSET k` is sliced from the `k + n` rows each node was sent (§11.6.2).
 
 use std::error::Error;
 use std::time::Duration;
@@ -187,6 +188,71 @@ async fn under_best_effort_a_disagreeing_node_leaves_the_others_top_n() -> TestR
         rows_text(&answer)?,
         r#"[[2,"b1"],[4,"b2"]]"#,
         "the answering node's top 2, none of the refused node's rows"
+    );
+    validated_body(answer)?;
+    Ok(())
+}
+
+/// The façade asked for `ORDER BY` node column 0 `LIMIT n OFFSET k`: every
+/// node was sent `LIMIT k + n` (`window`) and the Tier skips `k` (§11.6.2).
+fn paged_plan(endpoints: &[&str], window: u64, offset: u64) -> Result<Plan, Box<dyn Error>> {
+    let mut plan = Plan::new().ordered(
+        ResultOrder::new(
+            vec![SortKey::new(0, Direction::Ascending)],
+            vec![1],
+            Some(window),
+        )
+        .with_offset(offset),
+    );
+    for id in endpoints {
+        plan = plan.dispatch(EndpointId::new(*id)?, NodeQuery::new(NODE_AQL))?;
+    }
+    Ok(plan)
+}
+
+// conformance: CP-32
+#[tokio::test]
+async fn a_bounded_offset_page_is_sliced_from_k_plus_n_rows_per_node() -> TestResult {
+    let a = ordered_node(
+        &[(1, "a1"), (4, "a2"), (5, "a3"), (8, "a4")],
+        Duration::ZERO,
+    )
+    .await;
+    let b = ordered_node(&[(2, "b1"), (3, "b2"), (6, "b3")], Duration::ZERO).await;
+    let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &b.uri())])?;
+    let plan = paged_plan(&["node-a-pub", "node-b-pub"], 4, 2)?;
+    let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
+    assert_eq!(answer.status(), StatusCode::OK);
+    assert_eq!(
+        rows_text(&answer)?,
+        r#"[[3,"b2"],[4,"a2"]]"#,
+        "§11.6.2: LIMIT 2 OFFSET 2 is rows 2 and 3 of the merged order"
+    );
+    assert_eq!(
+        record(&answer, "node-a-pub")?.row_count(),
+        Some(4),
+        "§9.5: the k + n rows the endpoint contributed"
+    );
+    assert_eq!(record(&answer, "node-b-pub")?.row_count(), Some(3));
+    validated_body(answer)?;
+    Ok(())
+}
+
+// conformance: CP-32
+#[tokio::test]
+async fn a_bounded_window_out_of_the_federation_order_fails_the_query_424() -> TestResult {
+    let disagreeing = ordered_node(&[(1, "a1"), (5, "a2"), (4, "a3")], Duration::ZERO).await;
+    let b = ordered_node(&[(2, "b1")], Duration::ZERO).await;
+    let snapshot = federation(&[("node-a-pub", &disagreeing.uri()), ("node-b-pub", &b.uri())])?;
+    let plan = paged_plan(&["node-a-pub", "node-b-pub"], 3, 1)?;
+    let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
+    assert_eq!(answer.status(), StatusCode::FAILED_DEPENDENCY, "N37");
+    assert!(answer.rows().is_empty());
+    let refused = record(&answer, "node-a-pub")?;
+    assert_eq!(refused.status(), EndpointStatus::NodeError, "§11.1, A43");
+    assert_eq!(
+        error_text(refused)?,
+        "result order disagrees with the federation order"
     );
     validated_body(answer)?;
     Ok(())
