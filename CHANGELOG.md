@@ -20,6 +20,19 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-02
+
+The first two federated milestones in one release (v0.0.2 and v0.0.3; no
+v0.0.2 tag was cut). `POST {base}/v1/query/aql` answers one ITS-REST
+`RESULT_SET` over two openEHR CDRs, with the patient resolved outside AQL
+through a PIXm PIX Manager (or the development cross-reference) on either
+patient carrier, and no directly identifying identifier sent to a node: the
+rewrite refuses it, and an outbound gate re-checks every request before it
+leaves. Also the Cargo workspace and its spec-named crates, the PIXm and PDQm
+clients, the container and compose quickstart, the end-to-end harness with a
+PIX Manager, the fuzz lane, and the release lane at SLSA Build Level 3,
+rehearsed as `v0.0.2-rc.1`.
+
 ### Added
 
 - The PDQm ITI-78 patient demographics query client in `ihe-iti`, feature
@@ -126,22 +139,6 @@ binary follows from v0.0.2.
   `external_ref`, and the carrier selected, ordered on or inside a function.
   `openehr-federation` is 0.0.4, and the interim `Refusal::EntrySubject` is
   gone.
-
-### Fixed
-
-- `ihe-iti` 0.0.4 names PMIR's transactions as ITI-93 and ITI-94 in its
-  description, feature list and README. ITI-104, which it attributed to PMIR,
-  is the PIXm Patient Identity Feed FHIR (#47).
-
-## [0.0.2-rc.1] - 2026-10-01
-
-A pre-release that rehearses the release lane at SLSA Build Level 3 (#31):
-attested binaries, the image `ghcr.io/ferrohealth/ferrofed` by digest, and
-their SBOMs. It carries the first federated query (#38) and everything merged
-since v0.0.1.
-
-### Added
-
 - The release lane at SLSA Build Level 3 (#31): the reusable
   `release-build.yml` builds `ferrofed` per target with `cargo auditable`,
   writes a CycloneDX and a syft SBOM, and attests the tarball's provenance and
@@ -260,6 +257,12 @@ since v0.0.1.
   identifiers only inside the `urn:oid:2.999` example arc. CI runs the
   container suite in its own `e2e (containers)` job, and the versions guard
   holds the image pins to `docs/VERSIONS.md`.
+
+### Fixed
+
+- `ihe-iti` 0.0.4 names PMIR's transactions as ITI-93 and ITI-94 in its
+  description, feature list and README. ITI-104, which it attributed to PMIR,
+  is the PIXm Patient Identity Feed FHIR (#47).
 
 ### Changed
 
@@ -409,7 +412,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.2-rc.1...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.3
 [0.0.2-rc.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.2-rc.1
 [0.0.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1-rc.1...v0.0.1
 [0.0.1-rc.1]: https://github.com/FerroHEALTH/FerroFED/releases/tag/v0.0.1-rc.1
