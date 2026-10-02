@@ -99,6 +99,16 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Changed
 
+- The `comment-style` citation checks cover the rest of the tree (#178): the
+  full-line comments of the workflow and composite-action YAML under
+  `.github/`, the `echo` and `printf` text of a workflow `run:` block,
+  `clippy.toml` with its `reason` strings, and the quickstart TOML under
+  `docker/`. The per-edit hook runs the guard on every file kind CI checks.
+  Every comment, lint reason and printed line there that cited an internal
+  file or a decision-register entry now cites the specification section or
+  official documentation it rests on, or says that no specification governs
+  it. The six vendor scripts no longer write an internal path into their
+  `PROVENANCE.md`.
 - Error bodies (#57): the gateway's own refusals (`404`, `501`, a caught
   panic's `500`) answer the ITS-REST `Error` shape with `code` and
   `request_id`, where they named the code in an `error` member, and the codes
