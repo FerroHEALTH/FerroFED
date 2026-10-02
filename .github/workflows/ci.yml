@@ -298,6 +298,26 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
 
+  # fuzz/ is a cargo-fuzz crate outside the workspace with its own lockfile
+  # (#134). Resolving it with --locked fails when a workspace change moved a
+  # crate the fuzz targets depend on without refreshing that lockfile, which
+  # no other job reads (#143). `cargo metadata` resolves without a fuzz build.
+  fuzz-lockfile:
+    name: fuzz lockfile
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - name: fuzz/Cargo.lock matches the workspace
+        run: cargo metadata --manifest-path fuzz/Cargo.toml --locked --format-version 1 > /dev/null
+
   clippy:
     name: clippy
     needs: detect
@@ -535,6 +555,7 @@ jobs:
       - conformance-matrix
       - detect
       - fmt
+      - fuzz-lockfile
       - clippy
       - test
       - e2e

@@ -169,6 +169,7 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows; a bump is a deliberate change to both |
 | the release and fuzz tool versions (`cargo-auditable`, `cargo-cyclonedx`, `syft`, `cargo-fuzz`) | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` tool rows |
 | the fuzz seeds generated from the vendored corpora (`fuzz/seeds/*/gen-*`) | `scripts/fuzz/seeds.sh --check`, the first job of `fuzz.yml` |
+| `fuzz/Cargo.lock` against the workspace crates the fuzz targets depend on | the `fuzz lockfile` job of `ci.yml`, on every pull request (`cargo metadata --locked`) |
 | every pin repeated in a second file | `scripts/checks/versions.sh` against `docs/VERSIONS.md` |
 
 Every Dependabot ecosystem carries a 7-day cooldown. CI is where the
@@ -238,6 +239,12 @@ composite, because cargo-fuzz needs sanitizer flags stable does not carry. The
 `fuzz/` crate is its own workspace, excluded from the root one, so the product
 stays on the pinned stable toolchain. Its `cargo-fuzz` pin is a
 `docs/VERSIONS.md` row the versions guard checks.
+
+Because `fuzz/` keeps its own `Cargo.lock`, a workspace change that moves a
+crate the targets depend on can leave that lockfile stale while every
+workspace job stays green. The `fuzz lockfile` job of `ci.yml` resolves it
+with `--locked` on every pull request and feeds `conclusion`, so the change
+that makes it stale refreshes it in the same pull request (#143).
 
 ## Triggers and concurrency
 
