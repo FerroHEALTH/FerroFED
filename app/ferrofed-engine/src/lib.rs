@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The federation engine: dispatch and fan-out to each node over ITS-REST, the
-//! per-node and overall budgets, the completeness decision and follow-up
-//! routing on the creating system id.
+//! per-node and overall budgets, the completeness decision and the outbound
+//! identifier-hygiene gate.
 //!
 //! [`dispatch`] holds the per-endpoint node client and the mapping from a
 //! node's answer to its §11.1 endpoint status (#34). [`fanout`] sends one
@@ -12,6 +12,8 @@
 //! N37, N38). [`hygiene`] is the outbound gate
 //! every request to a node passes before it is sent (#45).
 #![doc(test(attr(deny(warnings))))]
+
+// TODO(#64): follow-up reads routed on creating_system_id, then endpoint_id, then ask-all (§12.3).
 
 pub mod dispatch;
 pub mod fanout;

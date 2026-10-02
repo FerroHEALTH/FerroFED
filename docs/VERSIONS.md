@@ -125,8 +125,8 @@ from the same set.
 
 ## Language and runtime
 
-`rust-toolchain.toml` carries the toolchain, and the root `Cargo.toml` will
-carry the edition, the resolver and the MSRV. The release lane builds every
+`rust-toolchain.toml` carries the toolchain, and the root `Cargo.toml` carries
+the edition, the resolver and the MSRV. The release lane builds every
 published binary on this toolchain, with no cache.
 
 | Item | Pin | Repeated in |

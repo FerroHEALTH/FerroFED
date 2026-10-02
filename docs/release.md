@@ -111,11 +111,11 @@ slow one.
 1. **The milestone is empty.** `gh issue list --milestone vX.Y.Z --state open`
    answers nothing, or the owner calls the cut and moves the stragglers to the
    next milestone.
-2. **The version moves in every file the pin matrix names.** Today that is
-   `CITATION.cff` and the product-version row of `docs/VERSIONS.md`; the root
-   `Cargo.toml` `[workspace.package]` `version` joins them when the workspace
-   lands. `scripts/checks/versions.sh` fails on any file left behind, and the
-   `plan` job checks the same files against the tag.
+2. **The version moves in every file the pin matrix names:** `CITATION.cff`,
+   the product-version row of `docs/VERSIONS.md` and the root `Cargo.toml`
+   `[workspace.package]` `version`. `scripts/checks/versions.sh` fails on any
+   file left behind, and the `plan` job checks the same files against the
+   tag.
 3. **The changelog names the release.** `[Unreleased]` becomes the version and
    the date, with a fresh empty `[Unreleased]` above it and a new link
    reference. What sits under the version heading is what the release notes
@@ -126,9 +126,8 @@ slow one.
    request is where it changes; the release lane never writes to `main`.
 4. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
-   style, file length, versions) and the `contribution-licence-guard` are
-   green on it. The Rust lanes join them when the workspace exists
-   (`docs/ci-cd.md`).
+   style, file length, versions), the tier-2 Rust lanes and the
+   `contribution-licence-guard` are green on it (`docs/ci-cd.md`).
 
 ## The tag
 

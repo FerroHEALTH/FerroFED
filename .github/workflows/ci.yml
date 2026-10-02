@@ -3,20 +3,20 @@
 
 # CI in two tiers.
 #
-#   1. The workflow, shell, container and guard tier runs NOW, on a repository
-#      with no code: zizmor over .github, actionlint over .github/workflows,
-#      shellcheck over the tracked shell programs, hadolint over any
-#      Dockerfile, and the committed comment-style, file-length and versions
-#      guards. These keep this very file honest, so none of them may depend on
-#      Rust existing.
+#   1. The workflow, shell, container and guard tier needs no Rust: zizmor
+#      over .github, actionlint over .github/workflows, shellcheck over the
+#      tracked shell programs, hadolint over any Dockerfile, and the committed
+#      comment-style, file-length and versions guards. These keep this very
+#      file honest, so none of them may depend on the Rust toolchain.
 #   2. The Rust tier is gated behind a detection job that looks for a root
-#      Cargo.toml. Every cargo lane is skipped cleanly until the workspace
-#      lands and then activates by itself, with no workflow edit. hashFiles()
-#      cannot gate a job at `if:` time, because the workspace is empty before
-#      checkout, so a real detection job is the correct primitive.
+#      Cargo.toml. The workspace carries one, so every cargo lane runs on
+#      every change, and a tree without one would skip them cleanly.
+#      hashFiles() cannot gate a job at `if:` time, because the runner
+#      workspace is empty before checkout, so a real detection job is the
+#      correct primitive.
 #
 # The `conclusion` job is the single required status check on main; it is what
-# makes a mostly-skipped pipeline enforceable. The contribution-licence guard
+# makes a pipeline of gated jobs enforceable. The contribution-licence guard
 # is its own workflow (contribution-licence.yml) with its own check.
 name: CI
 
@@ -39,7 +39,7 @@ concurrency:
 permissions: {}
 
 jobs:
-  # ---- Tier 1: the checks that run on a repository with no code -------------
+  # ---- Tier 1: the checks that need no Rust ---------------------------------
 
   # zizmor (https://docs.zizmor.sh/) is the static security analysis for GitHub
   # Actions, the machine check behind three properties this repository treats
@@ -263,9 +263,9 @@ jobs:
 
   # The tracker helpers that carry a self-test. Their real branches run only
   # against the live tracker: the fallback of fields.sh needs a token that
-  # cannot read the organisation's issue types, and the migration and the
-  # label run write to every issue. Each drives itself against a stub gh on
-  # PATH instead.
+  # cannot read the organisation's issue types, the migration and the label
+  # run write to every issue, and a relationship write changes the tracker.
+  # Each drives itself against a stub gh on PATH instead.
   tracker-helpers:
     name: tracker-helpers
     runs-on: ubuntu-latest
@@ -281,6 +281,7 @@ jobs:
           bash scripts/gh/fields.sh --self-test
           bash scripts/gh/labels.sh --self-test
           bash scripts/gh/migrate-fields.sh --self-test
+          bash scripts/gh/rel.sh --self-test
 
   # ---- Tier 2: the Rust lanes, gated on the workspace existing --------------
 

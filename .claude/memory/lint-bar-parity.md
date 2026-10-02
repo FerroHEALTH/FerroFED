@@ -12,9 +12,9 @@ On FerroTERM on 2026-09-04 the owner asked "do we allow unwrap in this repo??
 our FerroEHR repo is very very strict ... we also need a very very strict code
 style", and on finding the table looser, "update that immediately".
 
-**How to apply:** when the workspace lands (v0.0.2), `[workspace.lints]`
-mirrors FerroEHR's and FerroBRIDGE's root `Cargo.toml`: `clippy::all` and
-`pedantic` at `deny`, `as_conversions`, `pub_use`, `dead_code`,
+**How to apply:** the root `Cargo.toml` `[workspace.lints]`, in place since
+v0.0.2, mirrors FerroEHR's and FerroBRIDGE's: `clippy::all` and `pedantic` at
+`deny`, `as_conversions`, `pub_use`, `dead_code`,
 `missing_assert_message`, `map_err_ignore`, `unused_qualifications`, the
 feature-name lints, `non_ascii_idents = forbid`, `unsafe_code = forbid`, and
 the rest. `clippy.toml` already relaxes the panicking lints inside tests

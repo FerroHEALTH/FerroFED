@@ -109,9 +109,8 @@ jobs:
 
       - name: The tag matches the declared product version
         # Every file that declares the product version has to agree with the
-        # tag. Today that is CITATION.cff and the product row of
-        # docs/VERSIONS.md; the root Cargo.toml joins them the moment it
-        # exists, so the workspace needs no edit here.
+        # tag: CITATION.cff, the product row of docs/VERSIONS.md and the root
+        # Cargo.toml [workspace.package] version.
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           VERSION: ${{ steps.tag.outputs.version }}
@@ -164,7 +163,7 @@ jobs:
             ' Cargo.toml)"
             check "the root Cargo.toml [workspace.package] version" "$manifest"
           else
-            echo "no root Cargo.toml at $TAG: the manifest joins this check when the workspace lands."
+            echo "no root Cargo.toml at $TAG, so no manifest version is checked."
           fi
 
           [ "$fail" -eq 0 ] || exit 1
