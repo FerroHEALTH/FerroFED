@@ -169,6 +169,10 @@ federated query and identity resolution shipped in 0.0.3.
   under the configuration file it describes. Code and doc comments cite the
   specification sections a decision rests on, or say that no specification
   governs it.
+- The landing page no longer scrolls sideways on a phone narrower than about
+  380 px (#182). The audience cards and the other card grids take a column
+  minimum that shrinks to the page width, so a 320 px viewport shows one
+  full-width column in the light and dark themes.
 
 ## [0.0.3] - 2026-10-02
 
