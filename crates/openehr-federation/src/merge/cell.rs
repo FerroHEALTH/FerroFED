@@ -18,6 +18,7 @@
 
 use std::collections::BTreeMap;
 
+use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVersionId;
 use openehr_base::v1_3::foundation_types::time::iso8601_date_time::Iso8601DateTime;
 use openehr_its::json::from_canonical_value;
 use openehr_rm::v1_2::data_types::quantity::dv_ordered::DvOrdered;
@@ -117,6 +118,28 @@ pub(super) fn decode(value: &Value) -> Cell {
         Value::Array(_) => Cell::Other(canonical(value)),
     }
 }
+
+/// Reads the version uid of a row, the dedup key of §10.2: `Ok(None)` for
+/// `null`, the `OBJECT_VERSION_ID` that `openehr-base` reads for a string, and
+/// `Err` for any other cell, which is not a version uid at all.
+///
+/// A row whose version variable is unbound has no uid, so `null` is an
+/// absent version and the row is never suppressed (AQL 1.1.0 §CONTAINS: an
+/// `OR` binds one side). A string that is not an `OBJECT_VERSION_ID` is a
+/// node defect, never a row without a duplicate.
+pub(super) fn version(value: &Value) -> Result<Option<ObjectVersionId>, NotAVersion> {
+    match value {
+        Value::Null => Ok(None),
+        Value::String(text) => ObjectVersionId::new(text.as_str())
+            .map(Some)
+            .map_err(|_malformed| NotAVersion),
+        Value::Bool(_) | Value::Number(_) | Value::Array(_) | Value::Object(_) => Err(NotAVersion),
+    }
+}
+
+/// A cell where a version uid was expected that is not one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct NotAVersion;
 
 fn number_cell(number: &Number) -> Cell {
     if let Some(integer) = number.as_i64() {

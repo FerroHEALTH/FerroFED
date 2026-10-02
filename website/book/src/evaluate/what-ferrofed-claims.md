@@ -52,7 +52,8 @@ per-endpoint report, the best-effort completeness opt-in, the client's
 `Prefer: wait` budget, `ORDER BY` with `LIMIT` merged across nodes,
 `SELECT DISTINCT` across nodes, `OFFSET` paging, decomposable aggregates
 (`COUNT`, `SUM`, `MIN`, `MAX` and `AVG`) recombined into one row across
-nodes (§9.5, §11.2 to §11.6), and the §11.2 status mapping with the stable error codes of
+nodes, opt-in version-identity de-duplication (§9.5, §10, §11.2 to
+§11.6), and the §11.2 status mapping with the stable error codes of
 [Errors and status codes](../integrate/errors.md), on the `openehr-*` crates
 at the pin [Pinned versions](versions.md) records.
 
@@ -62,7 +63,6 @@ Each milestone on the
 [roadmap](https://github.com/FerroHEALTH/FerroFED/milestones) is a release,
 and every issue in it names the sections it answers:
 
-- the rest of the federated answer: de-duplication (v0.0.4, §10);
 - the ITS-REST surface and follow-up routing to the owning CDR (v0.0.5, §7a,
   §12);
 - targeting and the `OPTIONS {base}/` self-description (v0.0.6, §8, §7a.2);

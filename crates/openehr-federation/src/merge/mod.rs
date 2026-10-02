@@ -46,6 +46,20 @@
 //! ahead of it in the Tier order. There are fewer than `n` of those, so the
 //! value is within the node's distinct top `n`, and the node returned it.
 //!
+//! Under version-identity dedup (§10.2) the rows of a version held at several
+//! endpoints are suppressed at every endpoint but the one kept, before
+//! `DISTINCT` and the cut, and a tie on the keys is broken by the tie-break
+//! columns, the version uid among them, before the endpoint id. That order is
+//! what keeps `LIMIT n` per node exact. Take a row of the global top `n` of
+//! the deduplicated union, and its node. A row that node orders ahead of it is
+//! either kept, and then ahead of it in the Tier order, or a copy of a version
+//! kept at another endpoint. One version id names one immutable version, so
+//! the kept copy has the same keys and uid, and ranks ahead of the row too.
+//! Fewer than `n` kept rows are ahead of it, so the node returned it, and the
+//! endpoint that keeps a version of the top `n` returned its copy. With the
+//! endpoint id before the uid, a copy tied on the keys could take the slot of
+//! a row that belongs in the top `n`.
+//!
 //! # Examples
 //!
 //! ```
@@ -66,14 +80,21 @@
 mod aggregate;
 mod cell;
 mod compare;
+mod dedup;
 mod distinct;
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt;
 
+use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVersionId;
 use openehr_its::rest::generated::query::ResultSetRow;
 
 use crate::aggregate::Recombination;
+use crate::dedup::DedupMode;
+use crate::error::WireError;
+use crate::id::EndpointId;
+use crate::meta::DedupRecord;
 use crate::order::{Direction, ResultOrder};
 use cell::{Cell, canonical, decode};
 use compare::{cmp_cell, rank_classes};
@@ -82,6 +103,7 @@ use compare::{cmp_cell, rank_classes};
 #[derive(Debug, Clone)]
 pub struct NodeAnswer {
     endpoint: String,
+    system_id: Option<String>,
     rows: Vec<ResultSetRow>,
 }
 
@@ -91,17 +113,78 @@ impl NodeAnswer {
     pub fn new(endpoint: impl Into<String>, rows: Vec<ResultSetRow>) -> Self {
         Self {
             endpoint: endpoint.into(),
+            system_id: None,
             rows,
         }
     }
+
+    /// This answer from an endpoint whose node has the openEHR `system_id`
+    /// `system_id`: under version-identity dedup, its copy of a version whose
+    /// `creating_system_id` is `system_id` is the originating copy (§10.2).
+    #[must_use]
+    pub fn with_system_id(mut self, system_id: impl Into<String>) -> Self {
+        self.system_id = Some(system_id.into());
+        self
+    }
 }
 
-/// The merged answer: the rows in the Tier order, cut at the `LIMIT`, and the
-/// endpoints whose answer could not be used.
+/// The merged answer: the rows in the Tier order, cut at the `LIMIT`, the
+/// endpoints whose answer could not be used, and what dedup suppressed.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Merged {
     rows: Vec<ResultSetRow>,
     refused: Vec<Refused>,
+    suppressed: Suppressed,
+}
+
+/// The rows version-identity dedup suppressed (§10.2, §10.3, N36).
+///
+/// Every row of a copy dropped for another endpoint's copy of the same
+/// version counts, before `DISTINCT`, `OFFSET` and `LIMIT`, so the endpoints'
+/// `row_count`s reconcile with the answer (§9.5).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Suppressed {
+    rows: u64,
+    endpoints: Vec<String>,
+}
+
+impl Suppressed {
+    /// How many rows were suppressed.
+    #[must_use]
+    pub fn rows(&self) -> u64 {
+        self.rows
+    }
+
+    /// The endpoints whose copies were dropped, in endpoint id order, each
+    /// once.
+    #[must_use]
+    pub fn endpoints(&self) -> &[String] {
+        &self.endpoints
+    }
+
+    /// The `meta.federation.dedup` record of an answer under `mode` (§10.2):
+    /// the mode always, and under version-identity the count of suppressed
+    /// rows, with the endpoints whose copies were dropped when there are any
+    /// (§10.3).
+    ///
+    /// # Errors
+    /// Returns [`WireError::EmptyMember`] when a suppressed endpoint id is
+    /// empty.
+    pub fn record(&self, mode: DedupMode) -> Result<DedupRecord, WireError> {
+        let mut record = mode.record();
+        if mode == DedupMode::VersionIdentity {
+            record.suppressed_rows = Some(self.rows);
+            if !self.endpoints.is_empty() {
+                let endpoints = self
+                    .endpoints
+                    .iter()
+                    .map(|endpoint| EndpointId::new(endpoint.as_str()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                record.suppressed_endpoints = Some(endpoints);
+            }
+        }
+        Ok(record)
+    }
 }
 
 impl Merged {
@@ -116,6 +199,12 @@ impl Merged {
     #[must_use]
     pub fn refused(&self) -> &[Refused] {
         &self.refused
+    }
+
+    /// What version-identity dedup suppressed; nothing under any other mode.
+    #[must_use]
+    pub fn suppressed(&self) -> &Suppressed {
+        &self.suppressed
     }
 
     /// The rows and the refusals.
@@ -173,6 +262,9 @@ pub enum Disagreement {
     /// Under `SELECT DISTINCT`, a node that returned `n` rows returned two
     /// that the Tier holds equal, so a distinct row can lie past its cut.
     Distinct,
+    /// Under version-identity dedup, a row's version uid is neither `null`
+    /// nor an `OBJECT_VERSION_ID` (§10.2).
+    VersionId,
 }
 
 impl fmt::Display for Disagreement {
@@ -191,6 +283,7 @@ impl fmt::Display for Disagreement {
             Self::Distinct => {
                 "the node returned, at its LIMIT, two rows the federation holds equal under DISTINCT"
             }
+            Self::VersionId => "a row's version uid is not an OBJECT_VERSION_ID",
         })
     }
 }
@@ -217,6 +310,7 @@ struct Decoded {
     keys: Vec<Cell>,
     tie: Vec<Cell>,
     distinct: Vec<Cell>,
+    version: Option<ObjectVersionId>,
     cells: Vec<String>,
 }
 
@@ -237,17 +331,29 @@ type Placed = (String, Decoded, ResultSetRow);
 /// are collapsed to the first of them in that order before the cut (N13, AQL
 /// 1.1.0 §LIMIT), and a node that returned `limit` rows two of which are
 /// equal is refused with [`Disagreement::Distinct`].
+///
+/// Under [`ResultOrder::version_key`], the rows of the nodes that pass are
+/// deduplicated first (§10.2): of the endpoints holding one
+/// `OBJECT_VERSION_ID`, only one keeps its rows, the one whose
+/// [`NodeAnswer::with_system_id`] is the version's `creating_system_id`, else
+/// the lowest endpoint id. A tie on the keys is then broken by the tie-break
+/// columns before the endpoint id. A node with a version uid that is not an
+/// `OBJECT_VERSION_ID` is refused with [`Disagreement::VersionId`].
 #[must_use]
 pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     nodes.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
-    if order.keys().is_empty() && order.distinct().is_none() {
+    if order.keys().is_empty() && order.distinct().is_none() && order.version_key().is_none() {
         let mut rows: Vec<ResultSetRow> = nodes.into_iter().flat_map(|node| node.rows).collect();
         cut(&mut rows, order);
         return Merged {
             rows,
-            refused: Vec::new(),
+            ..Merged::default()
         };
     }
+    let systems: BTreeMap<String, String> = nodes
+        .iter()
+        .filter_map(|node| Some((node.endpoint.clone(), node.system_id.clone()?)))
+        .collect();
     let mut refused = Vec::new();
     let mut decoded: Vec<(String, Vec<(Decoded, ResultSetRow)>)> = Vec::new();
     for node in nodes {
@@ -282,6 +388,10 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
         }
     }
     refused.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
+    let mut suppressed = Suppressed::default();
+    if order.version_key().is_some() {
+        (accepted, suppressed) = dedup::suppress(accepted, &systems);
+    }
     // NOTE: no specification governs this: our own design; with no `ORDER BY`
     // key the rows stay in endpoint id order, as the nodes sent them.
     if !order.keys().is_empty() {
@@ -294,7 +404,11 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     }
     let mut rows: Vec<ResultSetRow> = accepted.into_iter().map(|(_, _, raw)| raw).collect();
     cut(&mut rows, order);
-    Merged { rows, refused }
+    Merged {
+        rows,
+        refused,
+        suppressed,
+    }
 }
 
 /// Recombines the one-row answers of an aggregate query into the
@@ -342,13 +456,17 @@ pub fn combine(
     refused.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
     if !refused.is_empty() || answers.is_empty() {
         return Ok(Merged {
-            rows: Vec::new(),
             refused,
+            ..Merged::default()
         });
     }
     let mut rows = vec![aggregate::recombine(&answers, recombination)?];
     cut(&mut rows, order);
-    Ok(Merged { rows, refused })
+    Ok(Merged {
+        rows,
+        refused,
+        ..Merged::default()
+    })
 }
 
 /// Decodes the cells the order reads from every row of one node.
@@ -377,12 +495,20 @@ fn decode_node(
                 .map(|column| raw.get(*column).map(decode))
                 .collect::<Option<Vec<Cell>>>()
                 .ok_or(Disagreement::ShortRow)?;
+            // NOTE: our own design; the node's malformed value is not carried, since the
+            // refusal names the defect and a node-error never quotes the node's data.
+            let version = match order.version_key() {
+                Some(column) => cell::version(raw.get(column).ok_or(Disagreement::ShortRow)?)
+                    .map_err(|_not_a_version| Disagreement::VersionId)?,
+                None => None,
+            };
             let cells = raw.iter().map(canonical).collect();
             Ok((
                 Decoded {
                     keys,
                     tie,
                     distinct,
+                    version,
                     cells,
                 },
                 raw,
@@ -430,12 +556,18 @@ fn dispatched(a: &Decoded, b: &Decoded, order: &ResultOrder) -> Ordering {
     keys(a, b, order).then_with(|| tie(a, b))
 }
 
-/// The Tier order: the keys, the endpoint, the tie-break, then the cells.
+/// The Tier order: the keys, the endpoint, the tie-break, then the cells;
+/// under version-identity dedup the tie-break comes before the endpoint.
+// NOTE: §11.6.1 asks only for a stable secondary key (endpoint_id first is RECOMMENDED);
+// under dedup the uid ranks a version's copies as one, so the kept copy lies in its node's cut.
 fn tier(a: &Placed, b: &Placed, order: &ResultOrder) -> Ordering {
-    keys(&a.1, &b.1, order)
-        .then_with(|| a.0.cmp(&b.0))
-        .then_with(|| tie(&a.1, &b.1))
-        .then_with(|| a.1.cells.cmp(&b.1.cells))
+    let endpoint = || a.0.cmp(&b.0);
+    let keyed = keys(&a.1, &b.1, order);
+    match order.version_key() {
+        Some(_) => keyed.then_with(|| tie(&a.1, &b.1)).then_with(endpoint),
+        None => keyed.then_with(endpoint).then_with(|| tie(&a.1, &b.1)),
+    }
+    .then_with(|| a.1.cells.cmp(&b.1.cells))
 }
 
 fn keys(a: &Decoded, b: &Decoded, order: &ResultOrder) -> Ordering {

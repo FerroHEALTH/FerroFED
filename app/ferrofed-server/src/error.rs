@@ -39,6 +39,9 @@ pub enum Code {
     /// The request asks for best-effort, which this gateway does not offer
     /// (§11.4, N37).
     PartialUnsupported,
+    /// The `openEHR-federation-dedup` header is repeated, or names no dedup
+    /// mode the gateway offers (§10, §7a.2).
+    DedupInvalid,
     /// A query parameter is not an AQL literal. The body names the parameter
     /// and never its value.
     ParameterInvalid,
@@ -76,10 +79,11 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 11] = [
+    pub const GATEWAY: [Self; 12] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
+        Self::DedupInvalid,
         Self::ParameterInvalid,
         Self::PatientInvalid,
         Self::NoDestination,
@@ -106,6 +110,7 @@ impl Code {
             Self::BodyInvalid => "body-invalid",
             Self::CompletenessInvalid => "completeness-invalid",
             Self::PartialUnsupported => "partial-unsupported",
+            Self::DedupInvalid => "dedup-invalid",
             Self::ParameterInvalid => "parameter-invalid",
             Self::PatientInvalid => "patient-invalid",
             Self::Refused(RefusalCode(kind)) => kind,
@@ -125,6 +130,7 @@ impl Code {
             Self::BodyInvalid
             | Self::CompletenessInvalid
             | Self::PartialUnsupported
+            | Self::DedupInvalid
             | Self::ParameterInvalid
             | Self::PatientInvalid
             | Self::Refused(_) => StatusCode::BAD_REQUEST,
@@ -145,6 +151,9 @@ impl Code {
                 "the openEHR-federation-completeness header takes \"all\" or \"partial\", once"
             }
             Self::PartialUnsupported => "best-effort completion is not offered (§11.4)",
+            Self::DedupInvalid => {
+                "the openEHR-federation-dedup header takes \"none\" or \"version-identity\", once"
+            }
             Self::ParameterInvalid => "a query parameter is not an AQL literal",
             Self::PatientInvalid => "the patient reference cannot be formed (§5.2)",
             Self::Refused(_) => "the query is refused",
@@ -217,15 +226,16 @@ mod tests {
             Code::BodyInvalid => Some(0),
             Code::CompletenessInvalid => Some(1),
             Code::PartialUnsupported => Some(2),
-            Code::ParameterInvalid => Some(3),
-            Code::PatientInvalid => Some(4),
+            Code::DedupInvalid => Some(3),
+            Code::ParameterInvalid => Some(4),
+            Code::PatientInvalid => Some(5),
             Code::Refused(_) => None,
-            Code::NoDestination => Some(5),
-            Code::EhrIdCollision => Some(6),
-            Code::ControllingSystemUnreachable => Some(7),
-            Code::Internal => Some(8),
-            Code::NotFound => Some(9),
-            Code::NotImplemented => Some(10),
+            Code::NoDestination => Some(6),
+            Code::EhrIdCollision => Some(7),
+            Code::ControllingSystemUnreachable => Some(8),
+            Code::Internal => Some(9),
+            Code::NotFound => Some(10),
+            Code::NotImplemented => Some(11),
         }
     }
 
@@ -273,6 +283,7 @@ mod tests {
             (Code::BodyInvalid, StatusCode::BAD_REQUEST),
             (Code::CompletenessInvalid, StatusCode::BAD_REQUEST),
             (Code::PartialUnsupported, StatusCode::BAD_REQUEST),
+            (Code::DedupInvalid, StatusCode::BAD_REQUEST),
             (Code::ParameterInvalid, StatusCode::BAD_REQUEST),
             (Code::PatientInvalid, StatusCode::BAD_REQUEST),
             (Code::NoDestination, StatusCode::NOT_FOUND),

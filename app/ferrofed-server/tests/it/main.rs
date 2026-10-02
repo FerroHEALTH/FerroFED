@@ -7,6 +7,7 @@ mod aggregate;
 mod ask_all;
 mod completeness;
 mod config;
+mod dedup;
 mod distinct;
 mod e2e;
 mod endpoint_report;

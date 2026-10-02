@@ -12,7 +12,8 @@
 //! cannot (N37, §11.4).
 //!
 //! One request runs the reference flow of §4: [`completeness`] reads the
-//! completion strategy the request selects (§11.4), [`prefer`] reads the
+//! completion strategy the request selects (§11.4), [`dedup`] the dedup mode
+//! (§10), [`prefer`] reads the
 //! client deadline that can shorten the budget (§11.5), [`intake`] types the query
 //! parameters, the rewrite analyses the query and names the patient,
 //! [`plan`] resolves the patient at every member and builds one node query
@@ -26,6 +27,7 @@
 
 pub mod cells;
 pub mod completeness;
+pub mod dedup;
 pub mod intake;
 pub mod plan;
 pub mod prefer;
@@ -43,6 +45,7 @@ use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::{Analysis, Paging, analyse};
+use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
 
 use crate::error::{self, Code};
@@ -73,12 +76,17 @@ pub async fn query_aql(
         Ok(completion) => completion,
         Err(error) => return Failure::Completeness(error).respond(&request_id),
     };
+    let dedup = match dedup::of(&headers) {
+        Ok(mode) => mode,
+        Err(error) => return Failure::Dedup(error).respond(&request_id),
+    };
     let configured = federation.budget();
     let wait = prefer::wait(&headers);
     let budget = wait.map_or(configured, |wait| configured.shortened_to(wait));
     let query = Query {
         body: &body,
         completion,
+        dedup,
         budget,
         started,
         request_id: &request_id,
@@ -119,6 +127,9 @@ enum Failure {
     /// The completeness header is refused.
     #[error(transparent)]
     Completeness(#[from] completeness::CompletenessError),
+    /// The dedup header is refused.
+    #[error(transparent)]
+    Dedup(#[from] dedup::DedupError),
     /// A query parameter is not an AQL literal.
     #[error(transparent)]
     Parameter(#[from] intake::IntakeError),
@@ -156,6 +167,7 @@ impl Failure {
             Self::Completeness(
                 completeness::CompletenessError::Repeated | completeness::CompletenessError::Value,
             ) => Code::CompletenessInvalid,
+            Self::Dedup(_) => Code::DedupInvalid,
             Self::Parameter(_) => Code::ParameterInvalid,
             Self::Refused(refusal) => Code::Refused(refusal.into()),
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
@@ -190,6 +202,8 @@ struct Query<'a> {
     body: &'a [u8],
     /// The completion strategy the request selects (§11.4).
     completion: Completion,
+    /// The dedup mode the request selects (§10).
+    dedup: DedupMode,
     /// The effective budget: the configured one, shortened by the client's
     /// `Prefer: wait` (§11.5).
     budget: Budget,
@@ -201,8 +215,9 @@ struct Query<'a> {
     session: Option<&'a SessionKey>,
 }
 
-/// Analyses the façade query of `request` under the request's `completion`,
-/// recording a refusal or a strip as a security event (§5.4.3).
+/// Analyses the façade query of `request` under the request's `completion`
+/// and `dedup` mode, recording a refusal or a strip as a security event
+/// (§5.4.3).
 ///
 /// An aggregate recombined across nodes is refused under best-effort: it is
 /// exactly correct only over every node in scope (§11.6.3), and the gateway
@@ -211,7 +226,7 @@ struct Query<'a> {
 fn analysed(
     federation: &Federation,
     request: &AdhocQueryExecute,
-    completion: Completion,
+    (completion, dedup): (Completion, DedupMode),
     request_id: &str,
 ) -> Result<Analysis, Failure> {
     let parameters = intake::parameters(request.query_parameters.as_ref())?;
@@ -219,7 +234,8 @@ fn analysed(
         offset: request.offset,
         fetch: request.fetch,
     };
-    let analysis = analyse(&request.q, &parameters, paging, federation.context())
+    let context = federation.context().clone().with_dedup(dedup);
+    let analysis = analyse(&request.q, &parameters, paging, &context)
         .and_then(|analysis| {
             if completion == Completion::BestEffort {
                 analysis.admit_best_effort()?;
@@ -247,6 +263,7 @@ async fn federate(
     let Query {
         body,
         completion,
+        dedup,
         budget,
         started,
         request_id,
@@ -256,7 +273,7 @@ async fn federate(
     // body is refused with a fixed message.
     let request: AdhocQueryExecute =
         serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?;
-    let analysis = analysed(federation, &request, completion, request_id)?;
+    let analysis = analysed(federation, &request, (completion, dedup), request_id)?;
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
@@ -293,7 +310,8 @@ async fn federate(
     let mut plan = targets
         .plan
         .completing(completion)
-        .ordered(analysis.order().clone());
+        .ordered(analysis.order().clone())
+        .deduplicating(dedup);
     if let Some(recombination) = analysis.recombination() {
         plan = plan.recombining(recombination.clone());
     }
@@ -339,7 +357,7 @@ async fn federate(
 
 #[cfg(test)]
 mod tests {
-    use super::{Failure, cells, completeness, plan};
+    use super::{Failure, cells, completeness, dedup, plan};
     use crate::error::Code;
     use ferrofed_engine::fanout::FanOutError;
     use ferrofed_identity::patient::PatientRefError;
@@ -363,6 +381,16 @@ mod tests {
             (
                 Failure::Completeness(completeness::CompletenessError::NotOffered),
                 "partial-unsupported",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Dedup(dedup::DedupError::Value),
+                "dedup-invalid",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Dedup(dedup::DedupError::Repeated),
+                "dedup-invalid",
                 StatusCode::BAD_REQUEST,
             ),
             (

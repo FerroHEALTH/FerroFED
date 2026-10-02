@@ -63,6 +63,10 @@ impl SortKey {
 /// them before the `OFFSET` and the `LIMIT` (N13; AQL 1.1.0 §LIMIT: "the
 /// `LIMIT` and `OFFSET` applies to remaining rows, after duplicates were
 /// filtered out").
+///
+/// Under version-identity dedup (§10.2), [`ResultOrder::version_key`] names
+/// the node column that holds each row's version uid, and the Tier breaks a
+/// tie on the keys by the tie-break columns before `endpoint_id`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResultOrder {
     keys: Vec<SortKey>,
@@ -70,6 +74,7 @@ pub struct ResultOrder {
     limit: Option<u64>,
     offset: u64,
     distinct: Option<Vec<usize>>,
+    version_key: Option<usize>,
 }
 
 impl ResultOrder {
@@ -90,6 +95,7 @@ impl ResultOrder {
             limit,
             offset: 0,
             distinct: None,
+            version_key: None,
         }
     }
 
@@ -102,6 +108,19 @@ impl ResultOrder {
     #[must_use]
     pub fn with_distinct(mut self, columns: Vec<usize>) -> Self {
         self.distinct = Some(columns);
+        self
+    }
+
+    /// This answer deduplicated on version identity (§10.2): node column
+    /// `column` holds each row's version uid, an `OBJECT_VERSION_ID`, and the
+    /// merge keeps one endpoint's copy of every version.
+    ///
+    /// For a query with a `LIMIT`, the rewrite also orders every node on the
+    /// column, as a key or a tie-break column, which keeps the Tier's top `n`
+    /// exact after the suppression (§11.6.1).
+    #[must_use]
+    pub fn with_version_key(mut self, column: usize) -> Self {
+        self.version_key = Some(column);
         self
     }
 
@@ -150,5 +169,13 @@ impl ResultOrder {
     #[must_use]
     pub fn distinct(&self) -> Option<&[usize]> {
         self.distinct.as_deref()
+    }
+
+    /// The node column holding each row's version uid under version-identity
+    /// dedup (§10.2), or `None` when the rows are not deduplicated: the mode
+    /// is `none`, or the query reads no version.
+    #[must_use]
+    pub fn version_key(&self) -> Option<usize> {
+        self.version_key
     }
 }

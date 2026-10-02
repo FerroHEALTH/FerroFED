@@ -68,6 +68,7 @@ use openehr_query::parser::{ParseError, parse_str};
 use openehr_query::printer::to_aql;
 
 use crate::aggregate::{AggregateFunction, Recombination};
+use crate::dedup::DedupMode;
 use crate::order::ResultOrder;
 use refusal::{Refusal, Unreducible};
 use scan::{Findings, Input};
@@ -163,12 +164,14 @@ pub struct Context {
     targeting: Targeting,
     offset: OffsetStrategy,
     decomposable: BTreeSet<AggregateFunction>,
+    dedup: DedupMode,
 }
 
 impl Context {
     /// A context with no default issuing namespace, which refuses every
     /// `OFFSET k > 0` ([`OffsetStrategy::Reject`]) and every undirected
-    /// aggregate (no function is decomposable).
+    /// aggregate (no function is decomposable), and deduplicates nothing
+    /// (N15).
     #[must_use]
     pub fn new(targeting: Targeting) -> Self {
         Self {
@@ -176,7 +179,23 @@ impl Context {
             targeting,
             offset: OffsetStrategy::Reject,
             decomposable: BTreeSet::new(),
+            dedup: DedupMode::None,
         }
+    }
+
+    /// Declares the dedup mode the request selects (§10, N15). Under
+    /// [`DedupMode::VersionIdentity`] every node is also asked the version
+    /// uid of each row, and an undirected aggregate is refused (§11.6.3).
+    #[must_use]
+    pub fn with_dedup(mut self, mode: DedupMode) -> Self {
+        self.dedup = mode;
+        self
+    }
+
+    /// The dedup mode the request selects.
+    #[must_use]
+    pub fn dedup(&self) -> DedupMode {
+        self.dedup
     }
 
     /// Declares the aggregate functions recombined across a fan-out instead of
@@ -435,14 +454,12 @@ pub fn analyse(
     let skip = paging::page(&mut query, paging, context.offset)?;
     let columns = render_columns(&query.select);
     let recombination = match &findings.aggregate {
-        Some(found) if !context.targeting.single_endpoint() => Some(aggregate::decompose(
-            &mut query,
-            &context.decomposable,
-            found.at.clone(),
-        )?),
+        Some(found) if !context.targeting.single_endpoint() => {
+            Some(aggregate::decompose(&mut query, context, found.at.clone())?)
+        }
         Some(_) | None => None,
     };
-    let ordered = findings.aggregate.is_none();
+    let ordered = rewrite::Rows::of(findings.aggregate.is_none(), context.dedup);
     let distinct = query.select.distinct;
     let mut analysis = match subject(&findings, context)? {
         Some((subject, consumed)) => {
@@ -580,7 +597,7 @@ fn patient(
     subject: Subject,
     consumed: &[usize],
     columns: Vec<ResultSetColumn>,
-    ordered: bool,
+    ordered: rewrite::Rows,
 ) -> Result<Analysis, Refusal> {
     let inputs: Vec<usize> = findings.inputs.iter().map(|(index, _, _)| *index).collect();
     let stripped = findings
@@ -592,7 +609,7 @@ fn patient(
     let mut dispatched = query.clone();
     rewrite::strip_where(&mut dispatched, consumed, None);
     rewrite::strip_columns(&mut dispatched, &inputs);
-    order_for(&mut dispatched, ordered, true)?;
+    rewrite::order_for(&mut dispatched, ordered, true)?;
     if let Some(leak) = scan::reaches(&dispatched, subject.value()) {
         return Err(match leak.kind {
             scan::LeakKind::Value => Refusal::IdentifierElsewhere { at: leak.at },
@@ -604,7 +621,7 @@ fn patient(
     rewrite::strip_where(&mut template, consumed, Some(&ehr));
     rewrite::strip_columns(&mut template, &inputs);
     rewrite::keep_a_column(&mut template, &ehr);
-    let order = order_for(&mut template, ordered, true)?;
+    let order = rewrite::order_for(&mut template, ordered, true)?;
     let mut node = 0_usize;
     let sources = (0..columns.len())
         .map(|index| {
@@ -634,35 +651,17 @@ fn patient(
     }))
 }
 
-/// The Tier order of a node query, written into it (§11.6.1).
-///
-/// A query with an aggregate answers one row per node: the federated one at a
-/// single directed endpoint (N14), or the row the Tier recombines (§11.6.3).
-/// Either way its node query keeps the client's order as written, and the
-/// merge only applies its `LIMIT`.
-fn order_for(
-    query: &mut SelectQuery,
-    ordered: bool,
-    one_ehr: bool,
-) -> Result<ResultOrder, Refusal> {
-    if ordered {
-        return rewrite::push_order(query, one_ehr);
-    }
-    let limit = rewrite::dispatched_limit(query)?;
-    Ok(ResultOrder::new(Vec::new(), Vec::new(), limit))
-}
-
 fn unscoped(
     mut query: SelectQuery,
     findings: &Findings,
     context: &Context,
     columns: Vec<ResultSetColumn>,
-    ordered: bool,
+    ordered: rewrite::Rows,
 ) -> Result<Analysis, Refusal> {
     if context.targeting == Targeting::Localized {
         return Err(Refusal::NodeSetUndefined);
     }
-    let order = order_for(&mut query, ordered, false)?;
+    let order = rewrite::order_for(&mut query, ordered, false)?;
     let sources = (0..columns.len()).map(ColumnSource::Node).collect();
     Ok(Analysis::Unscoped(UnscopedQuery {
         node: NodeQuery {

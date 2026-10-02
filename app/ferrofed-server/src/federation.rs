@@ -27,6 +27,7 @@ use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
+use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::NodeSelection;
@@ -287,6 +288,14 @@ impl Federation {
     #[must_use]
     pub fn offset_strategy(&self) -> OffsetStrategy {
         self.context.offset_strategy()
+    }
+
+    /// The dedup modes a request may select with `openEHR-federation-dedup`,
+    /// the default `none` first (§10, N15).
+    // TODO(#73): declare dedup.default, dedup.modes and dedup.request_header in the OPTIONS {base}/ body (§7a.2, §10).
+    #[must_use]
+    pub fn dedup_modes() -> &'static [DedupMode] {
+        &DedupMode::OFFERED
     }
 
     /// The aggregate functions recombined across the fan-out, in declaration

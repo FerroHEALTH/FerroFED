@@ -52,7 +52,7 @@ every node with its status (§11.1, §11.4):
 | Status | When | The cause, in `meta.federation.endpoints[]` |
 |---|---|---|
 | 504 | a node did not answer in time, or could not be reached | `time-out` or `offline`, with the node's `error` |
-| 424 | a node answered with an error, or with a result the gateway cannot use | `node-error`, with the node's own failure in `error` |
+| 424 | a node answered with an error, or with a result the gateway cannot use (under `version-identity`, a version uid that is not an `OBJECT_VERSION_ID`) | `node-error`, with the node's own failure in `error` |
 | 424 | the cross-reference service could not answer for a member | `not-resolved`, with the service's failure in `error` |
 
 When both a 504 and a 424 cause occur, the answer is `504` (§11.4). With
@@ -84,6 +84,7 @@ the node is reported and the query succeeds.
 | `body-invalid` | 400 | The request body is not the ITS-REST request the route takes, for example an `AdhocQueryExecute` without a string `q`. |
 | `completeness-invalid` | 400 | The `openEHR-federation-completeness` header is repeated, or carries neither `all` nor `partial` (§11.4). |
 | `partial-unsupported` | 400 | The request asks for `partial`, and this gateway does not offer best-effort (§11.4, N37). |
+| `dedup-invalid` | 400 | The `openEHR-federation-dedup` header is repeated, or names neither `none` nor `version-identity` (§10, §7a.2). |
 | `parameter-invalid` | 400 | A query parameter is `null`, an array, an object, or an integer outside 64 bits. |
 | `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). |
 | `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope (§11.2, §11.3). |
@@ -118,7 +119,7 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `identifier-elsewhere` | 400 | The patient identifier appears in another position of the query, where it would reach a node (§5.4.1, N33). |
 | `unfoldable-function` | 400 | A string function over a literal is compared with an identifier path and cannot be folded at the gateway (§5.4.1). |
 | `undirected-aggregate` | 400 | An aggregate cannot be computed correctly across nodes; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). The function is not one the gateway declares decomposable. |
-| `indecomposable-aggregate` | 400 | A declared decomposable aggregate cannot be recombined exactly in this query: it selects `DISTINCT`, uses `COUNT(DISTINCT …)`, or selects a column that is not an aggregate beside it; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). |
+| `indecomposable-aggregate` | 400 | A declared decomposable aggregate cannot be recombined exactly in this query: it selects `DISTINCT`, uses `COUNT(DISTINCT …)`, selects a column that is not an aggregate beside it, or the request selects `openEHR-federation-dedup: version-identity`; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). |
 | `partial-aggregate` | 400 | The request asks for `partial`, and the query is an aggregate recombined across nodes, which is exactly correct only over every node (§11.6.3, §11.4). |
 | `undefined-function` | 400 | The query calls a function AQL 1.1.0 does not define, such as a product-specific `MEDIAN`, and would reach more than one node. The gateway cannot tell whether the function aggregates; direct the query to one node, or select the rows and compute it in the application (N14, §11.6.3). The functions AQL defines (`LENGTH`, `ROUND`, `NOW`, `TERMINOLOGY` and the rest) are sent to every node as written. |
 | `offset-unsupported` | 400 | Offset-based paging is not supported across a fan-out (§11.6.2, N39). |
