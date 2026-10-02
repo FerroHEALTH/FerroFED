@@ -10,8 +10,9 @@ use std::num::NonZeroUsize;
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::aql::refusal::Refusal;
-use openehr_federation::aql::{Analysis, ColumnSource, Context, Targeting};
+use openehr_federation::aql::{Analysis, ColumnSource, Context, Paging, Targeting, analyse};
 use openehr_federation::order::{Direction, ResultOrder, SortKey};
+use openehr_query::bind::Parameters;
 
 use super::{EHR_ID, NAMESPACE, analysed, ask_all, assert_same_aql, node_aql, refused};
 
@@ -199,26 +200,78 @@ fn top_is_folded_into_limit() {
     assert_eq!(order(&aql).limit(), Some(4));
 }
 
+/// AQL master03-syntax §TOP: "It is not allowed to use `TOP` while also using
+/// `LIMIT` clause in the same query", so counts that agree are no excuse.
 #[test]
-fn top_and_a_limit_that_agree_are_accepted() {
+fn top_and_a_limit_that_agree_are_refused() {
     let aql = format!(
         "SELECT TOP 4 c/name/value {FROM} WHERE {SUBJECT} = '4711' ORDER BY c/name/value LIMIT 4"
     );
-    assert_eq!(order(&aql).limit(), Some(4));
+    let refusal = refused(&aql);
+    assert_eq!(refusal, Refusal::TopWithLimit);
+    assert_eq!(refusal.kind(), "top-with-limit");
 }
 
+/// AQL master03-syntax §LIMIT: "It is not allowed to use `LIMIT` while also
+/// using `TOP` clause in the same query".
 #[test]
 fn top_and_a_limit_that_disagree_are_refused() {
     let aql = format!(
         "SELECT TOP 4 c/name/value {FROM} WHERE {SUBJECT} = '4711' ORDER BY c/name/value LIMIT 5"
     );
-    assert_eq!(
-        refused(&aql),
-        Refusal::PagingConflict {
-            member: "TOP",
-            clause: "LIMIT"
-        }
+    assert_eq!(refused(&aql), Refusal::TopWithLimit);
+}
+
+/// AQL master03-syntax §TOP forbids the pair before anything reads the
+/// direction or the `OFFSET`.
+#[test]
+fn top_with_a_limit_and_an_offset_is_refused() {
+    let aql = format!(
+        "SELECT TOP 4 BACKWARD c/name/value {FROM} WHERE {SUBJECT} = '4711' \
+         ORDER BY c/name/value LIMIT 4 OFFSET 2"
     );
+    assert_eq!(refused(&aql), Refusal::TopWithLimit);
+}
+
+/// ITS-REST Query API, Common Headers and Query Parameters: `fetch` "cannot
+/// be combined with AQL-top".
+#[test]
+fn top_and_the_fetch_member_are_refused() {
+    let aql =
+        format!("SELECT TOP 4 c/name/value {FROM} WHERE {SUBJECT} = '4711' ORDER BY c/name/value");
+    for fetch in [4, 10] {
+        let refusal = analyse(
+            &aql,
+            &Parameters::new(),
+            Paging {
+                offset: None,
+                fetch: Some(fetch),
+            },
+            &ask_all(),
+        )
+        .expect_err("fetch cannot be combined with TOP");
+        assert_eq!(refusal, Refusal::TopWithFetch, "fetch {fetch}");
+        assert_eq!(refusal.kind(), "top-with-fetch");
+    }
+}
+
+/// The ITS-REST text restricts only `fetch`, so `TOP n` with an `offset`
+/// member of zero is still `LIMIT n`.
+#[test]
+fn top_with_a_zero_offset_member_is_read_as_limit() {
+    let aql =
+        format!("SELECT TOP 4 c/name/value {FROM} WHERE {SUBJECT} = '4711' ORDER BY c/name/value");
+    let analysis = analyse(
+        &aql,
+        &Parameters::new(),
+        Paging {
+            offset: Some(0),
+            fetch: None,
+        },
+        &ask_all(),
+    )
+    .expect("an offset member of zero skips nothing");
+    assert_eq!(analysis.order().limit(), Some(4));
 }
 
 #[test]

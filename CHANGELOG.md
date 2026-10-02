@@ -61,8 +61,8 @@ binary follows from v0.0.2.
   RM's own comparison), breaks ties on the endpoint id and then the uid, and
   cuts the result at `n`. A node that returned `n` rows out of that order, or
   more than `n`, is reported `node-error`, so the query fails `424` under
-  all-or-nothing. `TOP n` is read as `LIMIT n`; `TOP n BACKWARD`, a `TOP` that
-  disagrees with `LIMIT`, and a `DISTINCT` query ordered on a path it does not
+  all-or-nothing. `TOP n` is read as `LIMIT n`; `TOP n BACKWARD`, a `TOP` beside a
+  `LIMIT` clause, and a `DISTINCT` query ordered on a path it does not
   select are refused `400`. A query with `LIMIT` and no `ORDER BY` now returns
   at most `n` rows across all nodes.
 - `OFFSET` paging across a fan-out (#53; §11.6.2, N9, N39, CP-32). `OFFSET`
@@ -94,6 +94,15 @@ binary follows from v0.0.2.
   `P3` labels are retired, the bug and feature forms set the issue type, and
   `scripts/gh/fields.sh` and `scripts/gh/migrate-fields.sh` carry the model
   and the migration.
+
+### Fixed
+
+- A query that uses `TOP` together with a `LIMIT` clause is refused `400`
+  (`top-with-limit`), whether or not the two counts agree, because AQL
+  forbids the pair (#162; AQL §TOP, §LIMIT). A `TOP` query sent with the
+  ITS-REST `fetch` member is refused `400` (`top-with-fetch`), because
+  ITS-REST says `fetch` "cannot be combined with AQL-top". `TOP n` alone is
+  still read as `LIMIT n`.
 
 ## [0.0.3] - 2026-10-02
 

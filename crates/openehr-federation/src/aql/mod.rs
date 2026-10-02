@@ -404,24 +404,22 @@ fn page(query: &mut SelectQuery, paging: Paging, strategy: OffsetStrategy) -> Re
     // NOTE: AQL master03-syntax §TOP deprecates `TOP` "in favour of the `LIMIT`
     // clause combined with `ORDER BY`", so `TOP n` is read as `LIMIT n`.
     let top = query.select.top.take();
-    if top
-        .as_ref()
-        .is_some_and(|top| top.direction == Some(TopDirection::Backward))
-    {
-        return Err(Refusal::TopBackward);
-    }
-    let clause_limit = match (
-        query.limit.as_ref().map(|limit| limit.limit),
-        top.map(|top| top.count),
-    ) {
-        (Some(limit), Some(top)) if limit != top => {
-            return Err(Refusal::PagingConflict {
-                member: "TOP",
-                clause: "LIMIT",
-            });
+    if let Some(top) = &top {
+        if query.limit.is_some() {
+            return Err(Refusal::TopWithLimit);
         }
-        (limit, top) => limit.or(top),
-    };
+        if paging.fetch.is_some() {
+            return Err(Refusal::TopWithFetch);
+        }
+        if top.direction == Some(TopDirection::Backward) {
+            return Err(Refusal::TopBackward);
+        }
+    }
+    let clause_limit = query
+        .limit
+        .as_ref()
+        .map(|limit| limit.limit)
+        .or(top.map(|top| top.count));
     if clause_limit.is_some_and(i64::is_negative) {
         return Err(Refusal::NegativePaging { member: "LIMIT" });
     }
