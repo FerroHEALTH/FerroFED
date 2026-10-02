@@ -331,6 +331,18 @@ federated query and identity resolution shipped in 0.0.3.
   `NOW()`, and `TERMINOLOGY` are refused. The same query without a `LIMIT`
   is answered. `openehr-federation` 0.0.22 adds
   `Refusal::UnorderedDistinctCut`.
+- Under version-identity dedup, the Tier orders the version uid without
+  regard to case (#229; §10.2, §11.6.1, §11.6.2, CP-9, CP-32; BASE
+  `master05-identification_package.adoc` §"Composite Identifiers and
+  Case"). Two copies of one version whose ids differ only in case rank as
+  one in the merged order and in the check of each node's order, as an
+  `ORDER BY` key and as the tie-break, so an `ORDER BY` with `LIMIT` and a
+  page under dedup stay exact for them. Every row keeps its uid as its node
+  sent it. The comparison is `openehr-base`'s `composite_id_key`. A node cut
+  at its `LIMIT` that orders uids byte for byte and returns them in an order
+  the Tier's disagrees with is refused as `node-error`, since the Tier
+  cannot change how a node sorts. Outside dedup the uid orders as before, by
+  code point. `openehr-federation` is 0.0.23.
 - Version-identity dedup compares identifiers without regard to case (#225;
   §10.2, CP-9; BASE `master05-identification_package.adoc` §"Composite
   Identifiers and Case"). Two copies whose version ids differ only in case
