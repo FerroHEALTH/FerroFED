@@ -39,6 +39,7 @@ pub struct Federation {
     bindings: ResolutionBindings,
     context: Context,
     budget: Budget,
+    best_effort: bool,
 }
 
 /// A federation that cannot be built from the settings.
@@ -176,10 +177,14 @@ impl Federation {
             bindings: ResolutionBindings::new(settings.federation.binding_ttl),
             context,
             budget: settings.federation.budget,
+            best_effort: settings.federation.best_effort,
         }))
     }
 
     /// Assembles a federation from parts, for a test that builds its own.
+    ///
+    /// It offers best-effort completion, as the configuration does by
+    /// default; [`Federation::with_best_effort`] withdraws it.
     #[must_use]
     pub fn new(
         snapshot: RegistrySnapshot,
@@ -197,7 +202,16 @@ impl Federation {
             )),
             context,
             budget,
+            best_effort: crate::config::Federation::default().best_effort,
         }
+    }
+
+    /// This federation, offering best-effort completion when `offered` is
+    /// `true` (§11.4).
+    #[must_use]
+    pub fn with_best_effort(mut self, offered: bool) -> Self {
+        self.best_effort = offered;
+        self
     }
 
     /// The resolution bindings of every client session (§12.5.1 step 2).
@@ -253,6 +267,14 @@ impl Federation {
     pub fn budget(&self) -> Budget {
         self.budget
     }
+
+    /// Whether a request may opt into best-effort completion with
+    /// `openEHR-federation-completeness: partial` (§11.4, N37).
+    // TODO(#73): declare completeness.best_effort and its opt_in in the OPTIONS {base}/ body (§7a.2, §11.4).
+    #[must_use]
+    pub fn best_effort(&self) -> bool {
+        self.best_effort
+    }
 }
 
 impl std::fmt::Debug for Federation {
@@ -261,6 +283,7 @@ impl std::fmt::Debug for Federation {
             .field("endpoints", &self.clients.len())
             .field("resolver", &self.resolver.is_some())
             .field("budget", &self.budget)
+            .field("best_effort", &self.best_effort)
             .finish_non_exhaustive()
     }
 }

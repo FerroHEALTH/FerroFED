@@ -132,6 +132,29 @@ fn an_environment_override_wins_over_the_file_and_keeps_its_type() -> Result<(),
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
+fn best_effort_is_offered_by_default_and_can_be_withdrawn() -> Result<(), Box<dyn StdError>> {
+    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    assert!(
+        settings.federation.best_effort,
+        "offered, and opt-in per request"
+    );
+    let withdrawn = format!("{FULL}\n[federation]\nbest_effort = false\n");
+    let settings = Config::from_sources(Some(&withdrawn), &BTreeMap::new())?.resolve()?;
+    assert!(!settings.federation.best_effort);
+    let settings = Config::from_sources(
+        Some(FULL),
+        &env("FERROFED__FEDERATION__BEST_EFFORT", "false"),
+    )?
+    .resolve()?;
+    assert!(!settings.federation.best_effort);
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
 fn an_environment_override_adds_a_credentials_section_with_no_file() -> Result<(), Box<dyn StdError>>
 {
     let settings = Config::from_sources(

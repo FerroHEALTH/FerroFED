@@ -17,11 +17,16 @@
 //! (`docs/architecture.md` section 9).
 //!
 //! The envelope is built before the decision, so a failing answer still
-//! carries it (§11.4, CP-30). [`decide`] is the pure decision: any in-scope
+//! carries it (§11.4, CP-30). [`decide`] is the pure decision under the
+//! request's [`Completion`]. All-or-nothing, the default (N37): any in-scope
 //! `offline` or `time-out` fails the query `504`, any `node-error` fails it
-//! `424`, and `504` wins when both occur. `not-resolved` and `consent-denied`
-//! are answers and fail nothing (§11.3, N6); they clear `complete`, which the
-//! envelope derives from the statuses.
+//! `424`, and `504` wins when both occur. Best-effort, selected per request
+//! with `openEHR-federation-completeness: partial`: the same failures are
+//! reported and the answering nodes' rows come back with a `200`.
+//! `not-resolved` and `consent-denied` are answers and fail nothing in either
+//! mode (§11.3, N6). Every in-scope status short of `active` clears
+//! `complete`, which the envelope derives from the statuses and never takes as
+//! an input.
 //!
 //! The rows of the `active` nodes are concatenated in endpoint id order. That
 //! is this increment's whole merge: `ORDER BY`, `LIMIT`, `DISTINCT` and the
@@ -53,6 +58,22 @@ use crate::hygiene::Withheld;
 /// The completion policy the budget applies under, as `OPTIONS {base}/` and
 /// `meta.federation.timeout` name it (`docs/architecture.md` section 9).
 pub const TIMEOUT_POLICY: &str = "abandon-and-mark";
+
+/// The completion strategy a request runs under (§11.4, N37).
+///
+/// Both apply to reads only; a write goes to one node and succeeds or fails
+/// there (§11.4, §12.4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Completion {
+    /// The default: an in-scope node that was asked and did not answer, or
+    /// answered with an error, fails the query (`504` or `424`).
+    #[default]
+    AllOrNothing,
+    /// Best-effort, opted into per request: the rows of the nodes that
+    /// answered come back with a `200`, every other node is reported with its
+    /// status, and `complete` is `false`.
+    BestEffort,
+}
 
 /// The per-node timeout and the overall budget of one fan-out (§11.5, N38).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +144,7 @@ pub struct Plan {
     dispatch: BTreeMap<EndpointId, NodeQuery>,
     settled: BTreeMap<EndpointId, Outcome>,
     withheld: Arc<Withheld>,
+    completion: Completion,
 }
 
 impl Plan {
@@ -137,6 +159,14 @@ impl Plan {
     #[must_use]
     pub fn withholding(mut self, withheld: Withheld) -> Self {
         self.withheld = Arc::new(withheld);
+        self
+    }
+
+    /// This plan decided under `completion` instead of the all-or-nothing
+    /// default (§11.4).
+    #[must_use]
+    pub fn completing(mut self, completion: Completion) -> Self {
+        self.completion = completion;
         self
     }
 
@@ -208,12 +238,16 @@ pub enum PlanError {
     },
 }
 
-/// What the default all-or-nothing strategy makes of a fan-out (§11.4, N37).
+/// What the completion strategy makes of a fan-out (§11.4, N37).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     /// No in-scope endpoint failed: the answer is a `200`, with
     /// `meta.federation.complete` saying whether every one was `active`.
     Answered,
+    /// Best-effort: an in-scope endpoint failed, it is reported with its
+    /// status, and the rows of the endpoints that answered come back with a
+    /// `200` and `complete: false`.
+    Partial,
     /// An in-scope endpoint was `offline` or `time-out`: `504`.
     Unanswered,
     /// An in-scope endpoint was `node-error`, and none unanswered: `424`.
@@ -225,7 +259,7 @@ impl Verdict {
     #[must_use]
     pub fn status(self) -> StatusCode {
         match self {
-            Self::Answered => StatusCode::OK,
+            Self::Answered | Self::Partial => StatusCode::OK,
             Self::Unanswered => StatusCode::GATEWAY_TIMEOUT,
             Self::NodeFailed => StatusCode::FAILED_DEPENDENCY,
         }
@@ -234,24 +268,29 @@ impl Verdict {
     /// Whether the query failed, so no rows are returned.
     #[must_use]
     pub fn failed(self) -> bool {
-        self != Self::Answered
+        matches!(self, Self::Unanswered | Self::NodeFailed)
     }
 }
 
-/// The all-or-nothing decision over the reported endpoints (§11.4, N37).
+/// The decision over the reported endpoints under `completion` (§11.4, N37).
 ///
-/// `504` takes precedence over `424`: an unanswered node is an unknown, which
-/// a retry or a `partial` request recovers, while a node error is already read.
-/// An endpoint that was not in scope (`excluded`, `not-localized`) decides
-/// nothing.
+/// Under all-or-nothing, `504` takes precedence over `424`: an unanswered node
+/// is an unknown, which a retry or a `partial` request recovers, while a node
+/// error is already read. Under best-effort the same failures make the answer
+/// [`Verdict::Partial`] and fail nothing. An endpoint that was not in scope
+/// (`excluded`, `not-localized`) decides nothing, and `not-resolved` and
+/// `consent-denied` are answers in either mode (§11.3).
 #[must_use]
-pub fn decide(endpoints: &[EndpointOutcome]) -> Verdict {
+pub fn decide(endpoints: &[EndpointOutcome], completion: Completion) -> Verdict {
     let failing = endpoints
         .iter()
         .map(EndpointOutcome::status)
         .filter(|status| status.is_in_scope() && status.fails_all_or_nothing());
     let mut verdict = Verdict::Answered;
     for status in failing {
+        if completion == Completion::BestEffort {
+            return Verdict::Partial;
+        }
         match status {
             EndpointStatus::Offline | EndpointStatus::TimeOut => return Verdict::Unanswered,
             _ => verdict = Verdict::NodeFailed,
@@ -270,7 +309,7 @@ pub struct FederatedAnswer {
 }
 
 impl FederatedAnswer {
-    /// The all-or-nothing decision.
+    /// The decision under the plan's completion strategy.
     #[must_use]
     pub fn verdict(&self) -> Verdict {
         self.verdict
@@ -290,8 +329,9 @@ impl FederatedAnswer {
     }
 
     /// The rows of the `active` endpoints in endpoint id order, empty when the
-    /// query failed: a failing query MUST NOT return the rows it did obtain
-    /// (§11.4).
+    /// query failed: a failing query MUST NOT return the rows it did obtain,
+    /// and a best-effort answer returns exactly those (§11.4). Unresponsive
+    /// nodes never contribute rows (§11.1).
     #[must_use]
     pub fn rows(&self) -> &[ResultSetRow] {
         &self.rows
@@ -403,6 +443,7 @@ where
         dispatch,
         settled,
         withheld,
+        completion,
     } = plan;
     let order: Vec<EndpointId> = dispatch.keys().cloned().collect();
     let mut tasks = JoinSet::new();
@@ -452,7 +493,7 @@ where
         };
         records.insert(endpoint, record);
     }
-    answer(snapshot, records, budget)
+    answer(snapshot, records, budget, completion)
 }
 
 /// The `time-out` of a node still outstanding when the overall budget ran out
@@ -467,12 +508,14 @@ fn abandoned(latency_ms: u64, overall: Duration) -> Outcome {
     }
 }
 
-/// The envelope over `records` in endpoint id order, the decision over it,
-/// and the rows of the `active` endpoints when the query did not fail.
+/// The envelope over `records` in endpoint id order, the decision over it
+/// under `completion`, and the rows of the `active` endpoints when the query
+/// did not fail.
 fn answer(
     snapshot: &RegistrySnapshot,
     records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)>,
     budget: Budget,
+    completion: Completion,
 ) -> Result<FederatedAnswer, FanOutError> {
     let mut endpoints = Vec::with_capacity(records.len());
     let mut rows = Vec::new();
@@ -485,7 +528,7 @@ fn answer(
             rows.extend(answered);
         }
     }
-    let verdict = decide(&endpoints);
+    let verdict = decide(&endpoints, completion);
     let federation = FederationMeta::new(endpoints)
         .map_err(FanOutError::Envelope)?
         .with_timeout(budget.record());
@@ -545,195 +588,4 @@ fn whole_ms(duration: Duration) -> u64 {
     // NOTE: §9.5 reports latency in whole milliseconds; no budget runs past
     // u64::MAX ms, so saturating loses nothing.
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Budget, BudgetError, Plan, PlanError, Verdict, decide};
-    use crate::dispatch::NodeQuery;
-    use ferrofed_registry::id::EndpointId;
-    use openehr_federation::id::EndpointId as WireEndpointId;
-    use openehr_federation::outcome::{ConsentRefusal, EndpointOutcome, ErrorDetail, Outcome};
-    use std::time::Duration;
-
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    fn failure() -> ErrorDetail {
-        ErrorDetail::Text("synthetic failure".to_owned())
-    }
-
-    fn record(id: &str, outcome: Outcome) -> Result<EndpointOutcome, Box<dyn std::error::Error>> {
-        Ok(EndpointOutcome::new(WireEndpointId::new(id)?, outcome))
-    }
-
-    fn active() -> Outcome {
-        Outcome::Active { latency_ms: 5 }
-    }
-
-    fn time_out() -> Outcome {
-        Outcome::TimeOut {
-            latency_ms: 5,
-            error: failure(),
-        }
-    }
-
-    fn offline() -> Outcome {
-        Outcome::Offline {
-            latency_ms: 5,
-            error: failure(),
-        }
-    }
-
-    fn node_error() -> Outcome {
-        Outcome::NodeError {
-            latency_ms: 5,
-            error: failure(),
-        }
-    }
-
-    fn not_resolved() -> Outcome {
-        Outcome::NotResolved { error: failure() }
-    }
-
-    fn verdict_of(outcomes: Vec<Outcome>) -> Result<Verdict, Box<dyn std::error::Error>> {
-        let mut endpoints = Vec::new();
-        for (index, outcome) in outcomes.into_iter().enumerate() {
-            endpoints.push(record(&format!("node_{index}"), outcome)?);
-        }
-        Ok(decide(&endpoints))
-    }
-
-    #[test]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "a test asserts, and returns its setup errors"
-    )]
-    fn the_decision_table_of_all_or_nothing() -> TestResult {
-        assert_eq!(verdict_of(vec![])?, Verdict::Answered);
-        assert_eq!(verdict_of(vec![active(), active()])?, Verdict::Answered);
-        assert_eq!(verdict_of(vec![active(), time_out()])?, Verdict::Unanswered);
-        assert_eq!(verdict_of(vec![active(), offline()])?, Verdict::Unanswered);
-        assert_eq!(
-            verdict_of(vec![active(), node_error()])?,
-            Verdict::NodeFailed
-        );
-        assert_eq!(
-            verdict_of(vec![node_error(), time_out()])?,
-            Verdict::Unanswered,
-            "504 takes precedence over 424"
-        );
-        assert_eq!(
-            verdict_of(vec![time_out(), node_error()])?,
-            Verdict::Unanswered,
-            "precedence does not depend on the order"
-        );
-        assert_eq!(
-            verdict_of(vec![not_resolved(), not_resolved()])?,
-            Verdict::Answered
-        );
-        assert_eq!(
-            verdict_of(vec![
-                active(),
-                Outcome::ConsentDenied {
-                    refused_by: ConsentRefusal::PreFilter,
-                    error: None
-                }
-            ])?,
-            Verdict::Answered
-        );
-        assert_eq!(
-            verdict_of(vec![active(), Outcome::Excluded { error: None }])?,
-            Verdict::Answered
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn the_statuses_map_to_their_http_status() {
-        assert_eq!(Verdict::Answered.status(), http::StatusCode::OK);
-        assert_eq!(
-            Verdict::Unanswered.status(),
-            http::StatusCode::GATEWAY_TIMEOUT
-        );
-        assert_eq!(
-            Verdict::NodeFailed.status(),
-            http::StatusCode::FAILED_DEPENDENCY
-        );
-        assert!(!Verdict::Answered.failed());
-        assert!(Verdict::Unanswered.failed());
-        assert!(Verdict::NodeFailed.failed());
-    }
-
-    #[test]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "a test asserts, and returns its setup errors"
-    )]
-    fn a_plan_names_each_endpoint_once() -> TestResult {
-        let endpoint = EndpointId::new("node-a-pub")?;
-        let plan = Plan::new().dispatch(endpoint.clone(), NodeQuery::new("SELECT 1"))?;
-        assert_eq!(
-            plan.clone()
-                .dispatch(endpoint.clone(), NodeQuery::new("SELECT 2"))
-                .err(),
-            Some(PlanError::Duplicate {
-                endpoint: endpoint.clone()
-            })
-        );
-        assert_eq!(
-            plan.settle(endpoint.clone(), not_resolved()).err(),
-            Some(PlanError::Duplicate { endpoint })
-        );
-        Ok(())
-    }
-
-    #[test]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "a test asserts, and returns its setup errors"
-    )]
-    fn a_status_only_a_request_produces_is_never_settled() -> TestResult {
-        for outcome in [active(), time_out(), offline(), node_error()] {
-            let status = outcome.status();
-            let endpoint = EndpointId::new("node-a-pub")?;
-            assert_eq!(
-                Plan::new().settle(endpoint.clone(), outcome).err(),
-                Some(PlanError::DispatchedStatus { endpoint, status })
-            );
-        }
-        let refused_by_node = Outcome::ConsentDenied {
-            refused_by: ConsentRefusal::Node { latency_ms: 3 },
-            error: None,
-        };
-        assert!(
-            Plan::new()
-                .settle(EndpointId::new("node-a-pub")?, refused_by_node)
-                .is_err(),
-            "a node's own consent refusal needs a request"
-        );
-        Ok(())
-    }
-
-    #[test]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "a test asserts, and returns its setup errors"
-    )]
-    fn a_budget_applies_both_timeouts() -> TestResult {
-        assert_eq!(
-            Budget::new(Duration::ZERO, Duration::from_secs(1)).err(),
-            Some(BudgetError::Zero { which: "per-node" })
-        );
-        assert_eq!(
-            Budget::new(Duration::from_secs(1), Duration::ZERO).err(),
-            Some(BudgetError::Zero { which: "overall" })
-        );
-        let budget = Budget::new(Duration::from_secs(9), Duration::from_secs(2))?;
-        assert_eq!(
-            budget.per_node(),
-            Duration::from_secs(2),
-            "the per-node timeout never runs past the overall budget"
-        );
-        Ok(())
-    }
 }

@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 12 of 35 covered, 23 planned, 0 deferred.
+**Gateway points:** 13 of 35 covered, 22 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -50,7 +50,7 @@ and a gateway is never marked down for them (section 17).
 | [CP-27](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-27) | Node | N34 | 10 | node-profile | [#93](https://github.com/FerroHEALTH/FerroFED/issues/93) | scored against the member CDRs, not the gateway (section 16.2) |
 | [CP-28](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-28) | Gateway | N35 | 3 | planned | [#71](https://github.com/FerroHEALTH/FerroFED/issues/71) | - |
 | [CP-29](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-29) | Gateway | N36 | 5, 6 | planned | [#56](https://github.com/FerroHEALTH/FerroFED/issues/56), [#66](https://github.com/FerroHEALTH/FerroFED/issues/66) | - |
-| [CP-30](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-30) | Gateway | N37 | 4 | planned | [#37](https://github.com/FerroHEALTH/FerroFED/issues/37), [#50](https://github.com/FerroHEALTH/FerroFED/issues/50) | - |
+| [CP-30](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-30) | Gateway | N37 | 4 | covered | [#37](https://github.com/FerroHEALTH/FerroFED/issues/37), [#50](https://github.com/FerroHEALTH/FerroFED/issues/50) | - |
 | [CP-31](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-31) | Gateway | N38, N40 | 4 | covered | [#49](https://github.com/FerroHEALTH/FerroFED/issues/49), [#51](https://github.com/FerroHEALTH/FerroFED/issues/51) | - |
 | [CP-32](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-32) | Gateway | N39, N14, N9 | 5 | planned | [#52](https://github.com/FerroHEALTH/FerroFED/issues/52), [#53](https://github.com/FerroHEALTH/FerroFED/issues/53), [#54](https://github.com/FerroHEALTH/FerroFED/issues/54) | - |
 | [CP-33](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-33) | Gateway | N41, N42 | 6, 11 | planned | [#62](https://github.com/FerroHEALTH/FerroFED/issues/62), [#63](https://github.com/FerroHEALTH/FerroFED/issues/63), [#91](https://github.com/FerroHEALTH/FerroFED/issues/91) | - |

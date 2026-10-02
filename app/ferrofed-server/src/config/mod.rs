@@ -144,6 +144,11 @@ pub struct Federation {
     /// How the node set of an undirected patient query is chosen (§4.3, N4).
     /// It has no default: a federating gateway declares it.
     pub node_selection: Option<NodeSelection>,
+    /// Whether the gateway offers best-effort completion (§11.4, N37). A
+    /// request opts into it with `openEHR-federation-completeness: partial`;
+    /// all-or-nothing stays the default, and a gateway that does not offer
+    /// best-effort refuses `partial` with a `400`.
+    pub best_effort: bool,
 }
 
 /// How the node set of an undirected patient query is chosen (§4.3, N4,
@@ -166,6 +171,7 @@ impl Default for Federation {
             default_namespace: None,
             binding_ttl_ms: 900_000,
             node_selection: None,
+            best_effort: true,
         }
     }
 }
@@ -456,6 +462,7 @@ impl Config {
             default_namespace: self.federation.default_namespace.clone(),
             binding_ttl,
             node_selection: self.federation.node_selection,
+            best_effort: self.federation.best_effort,
         })
     }
 }
