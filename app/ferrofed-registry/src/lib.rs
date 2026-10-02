@@ -45,11 +45,15 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! The learned maps (observed `creating_system_id`, the `ehr_id` index), the
-//! integrity incidents and the definition store land with their own issues.
+//! The follow-up routing table maps every observed `creating_system_id`, not
+//! only the members' own `system_id`s (N21, §12.2): the document registers
+//! more, a [`LearnedMap`](creating_system::LearnedMap) learns the rest from
+//! answers, and a conflict raises an [`Incident`](incident::Incident).
 #![doc(test(attr(deny(warnings))))]
 
+pub mod creating_system;
 mod document;
 pub mod error;
 pub mod id;
+pub mod incident;
 pub mod snapshot;

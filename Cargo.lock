@@ -905,9 +905,11 @@ name = "ferrofed-registry"
 version = "0.0.2"
 dependencies = [
  "openehr-base",
+ "proptest",
  "serde",
  "thiserror",
  "toml",
+ "tracing",
  "url",
 ]
 

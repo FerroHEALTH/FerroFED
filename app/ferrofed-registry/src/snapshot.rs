@@ -12,7 +12,8 @@ use std::path::Path;
 use serde::Deserialize;
 use url::Url;
 
-use crate::document::{Document, EndpointDoc, NodeDoc};
+use crate::creating_system::CreatingSystemRoute;
+use crate::document::{CreatingSystemDoc, Document, EndpointDoc, NodeDoc};
 use crate::error::{LoadError, Referrer, UrlFault};
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
 
@@ -213,6 +214,7 @@ pub struct RegistrySnapshot {
     nodes: BTreeMap<NodeId, Node>,
     endpoints: BTreeMap<EndpointId, Endpoint>,
     by_system_id: BTreeMap<SystemId, NodeId>,
+    creating_systems: BTreeMap<SystemId, EndpointId>,
 }
 
 impl RegistrySnapshot {
@@ -237,8 +239,9 @@ impl RegistrySnapshot {
     /// [`LoadError::Parse`] when the text is not a document of the registry's
     /// shape, and the other [`LoadError`] variants when it is but its content
     /// breaks a membership rule: a duplicate id or `system_id`, a dangling
-    /// reference, an unusable base URL, a node with no endpoint, or no node
-    /// at all.
+    /// reference, an unusable base URL, a node with no endpoint, no node at
+    /// all, or a `creating_system_id` mapped twice or mapped although it is a
+    /// member's own `system_id`.
     pub fn from_toml_str(text: &str) -> Result<Self, LoadError> {
         let document: Document = toml::from_str(text).map_err(|e| LoadError::Parse(Box::new(e)))?;
         Self::from_document(document)
@@ -261,11 +264,14 @@ impl RegistrySnapshot {
         {
             return Err(LoadError::NodeWithoutEndpoint(node.clone()));
         }
+        let creating_systems =
+            creating_systems(document.creating_systems, &endpoints, &by_system_id)?;
         Ok(Self {
             organisations,
             nodes,
             endpoints,
             by_system_id,
+            creating_systems,
         })
     }
 
@@ -294,6 +300,31 @@ impl RegistrySnapshot {
         self.by_system_id
             .get(system_id)
             .and_then(|node| self.nodes.get(node))
+    }
+
+    /// The route the document gives a `creating_system_id`, or `None` when
+    /// only a learned mapping could answer for it (N21, §12.2).
+    ///
+    /// A member's own `system_id` routes to that member, and a
+    /// `[[creating_system]]` mapping routes to its endpoint, both compared as
+    /// master05 §"Composite Identifiers and Case" requires.
+    #[must_use]
+    pub fn registered_route(&self, creating_system_id: &SystemId) -> Option<CreatingSystemRoute> {
+        if let Some(node) = self.by_system_id.get(creating_system_id) {
+            return Some(CreatingSystemRoute::Member { node: node.clone() });
+        }
+        let endpoint = self.creating_systems.get(creating_system_id)?;
+        self.endpoints
+            .get(endpoint)
+            .map(|declared| CreatingSystemRoute::Registered {
+                node: declared.node.clone(),
+                endpoint: endpoint.clone(),
+            })
+    }
+
+    /// Every `[[creating_system]]` mapping, ordered by `creating_system_id`.
+    pub fn creating_systems(&self) -> impl Iterator<Item = (&SystemId, &EndpointId)> {
+        self.creating_systems.iter()
     }
 
     /// Every organisation, ordered by id.
@@ -467,6 +498,41 @@ fn endpoints(
         endpoints.insert(doc.id, endpoint);
     }
     Ok(endpoints)
+}
+
+fn creating_systems(
+    declared: Vec<CreatingSystemDoc>,
+    endpoints: &BTreeMap<EndpointId, Endpoint>,
+    by_system_id: &BTreeMap<SystemId, NodeId>,
+) -> Result<BTreeMap<SystemId, EndpointId>, LoadError> {
+    let mut creating_systems: BTreeMap<SystemId, EndpointId> = BTreeMap::new();
+    for doc in declared {
+        if let Some(node) = by_system_id.get(&doc.creating_system_id) {
+            return Err(LoadError::CreatingSystemIdOfNode {
+                creating_system_id: doc.creating_system_id,
+                node: node.clone(),
+            });
+        }
+        if !endpoints.contains_key(&doc.endpoint) {
+            return Err(LoadError::UnknownCreatingSystemEndpoint {
+                creating_system_id: doc.creating_system_id,
+                endpoint: doc.endpoint,
+            });
+        }
+        match creating_systems.entry(doc.creating_system_id) {
+            Entry::Occupied(entry) => {
+                return Err(LoadError::DuplicateCreatingSystemId {
+                    creating_system_id: entry.key().clone(),
+                    first: entry.get().clone(),
+                    second: doc.endpoint,
+                });
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(doc.endpoint);
+            }
+        }
+    }
+    Ok(creating_systems)
 }
 
 // NOTE: §2.2 assumes transport security from the deployment's security profiles,

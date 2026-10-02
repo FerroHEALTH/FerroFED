@@ -722,6 +722,10 @@ validated strictly and published as an immutable snapshot through `arc-swap`.
 A `[[node]]` may record its CDR `product` and `version`; they reach
 `meta.federation.endpoints[]` only from there, and are absent when the registry
 does not say, never invented (§9.5, N40).
+A `[[creating_system]]` entry maps a `creating_system_id` that is no member's
+own `system_id` to an endpoint (N21, §12.2, #67); a member's own `system_id`
+maps to it implicitly, and a mapping that names an undeclared endpoint, maps
+one id twice, or re-maps a member's `system_id` refuses the document.
 A query takes the snapshot once at entry and uses it to the end, so a reload
 never changes membership under a running query. Admission is a reviewed act,
 so there is no registry write API; the document's own change process (review,
@@ -734,7 +738,16 @@ is planned.
 in three maps, with no conversion between them.
 
 **Learned state.** The observed `creating_system_id` map only adds candidates,
-so a stale entry is harmless. An index insert that finds the same `ehr_id` at
+so a stale entry is harmless. A route is looked up in the document first, then
+in the learned map, and an id neither answers is a typed miss. The map learns
+only an id the document does not route: an import keeps its uid (§10.2), so a
+routed id seen elsewhere is a copy and teaches nothing. One sighting learns a
+read route to the endpoint it was seen at, because more sightings would still
+not prove that the holder created the version (§12.2, §10.3), and a learned
+route is never a write's controlling CDR. A sighting at a second node, or a
+learned route a reloaded document contradicts, withdraws it and raises an
+integrity incident (`LearnedCreatingSystemConflict`,
+`RegisteredCreatingSystemConflict`). An index insert that finds the same `ehr_id` at
 another node raises the §12b.2 alarm. On a miss after a restart, or on another
 gateway instance, routing falls through to the explicit target, which is
 RECOMMENDED anyway, or to the ask-all probe for reads (N41). A miss costs a

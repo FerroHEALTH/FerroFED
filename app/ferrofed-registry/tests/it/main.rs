@@ -10,6 +10,7 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+mod creating_system;
 mod fixture;
 mod ids;
 mod load;

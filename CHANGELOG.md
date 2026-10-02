@@ -22,6 +22,21 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- The registry maps every observed `creating_system_id` (#67; §12.2, N21,
+  the mapping half of CP-13): a `[[creating_system]]` entry in the registry
+  document maps a `creating_system_id` that is no member's own `system_id` to
+  an endpoint, and a member's own `system_id` maps to that member without one.
+  The document is refused, by `config check` too and naming the
+  `creating_system_id`, when a mapping names an undeclared endpoint, maps one
+  id twice (ASCII case aside), or maps a member's own `system_id`.
+  `ferrofed-registry` adds the learned map: the first sighting of an id the
+  document does not route learns a read route to the endpoint it was seen
+  at, and a learned mapping never overrides the document. A sighting at a
+  second node, or a learned mapping the document contradicts, withdraws it
+  and raises an integrity incident, logged at `ERROR` with a stable kind and
+  routing ids only. An id nothing routes is a typed miss, never a default
+  endpoint. The follow-up read routing that consumes the table is #64.
+
 - Opt-in version-identity dedup (#56; §10, N15, N36, CP-9, CP-29): a request
   that sends `openEHR-federation-dedup: version-identity` gets one copy of a
   version held at several endpoints, keyed on the full `OBJECT_VERSION_ID`

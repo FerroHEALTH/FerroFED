@@ -18,6 +18,8 @@ pub(crate) struct Document {
     pub(crate) nodes: Vec<NodeDoc>,
     #[serde(default, rename = "endpoint")]
     pub(crate) endpoints: Vec<EndpointDoc>,
+    #[serde(default, rename = "creating_system")]
+    pub(crate) creating_systems: Vec<CreatingSystemDoc>,
 }
 
 #[derive(Deserialize)]
@@ -56,4 +58,11 @@ pub(crate) struct EndpointDoc {
     pub(crate) managing_organisation: OrganisationId,
     #[serde(default)]
     pub(crate) status: EndpointStatus,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CreatingSystemDoc {
+    pub(crate) creating_system_id: SystemId,
+    pub(crate) endpoint: EndpointId,
 }

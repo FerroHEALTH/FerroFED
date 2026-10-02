@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The registry's errors: an identifier that breaks its form, and a bootstrap
-//! document that refuses to load.
+//! The registry's errors: an identifier that breaks its form, a bootstrap
+//! document that refuses to load, a `creating_system_id` it cannot route, and
+//! a sighting the learned map refuses.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -227,4 +228,69 @@ pub enum LoadError {
     /// endpoints, § The four identifiers).
     #[error("node {0} has no endpoint")]
     NodeWithoutEndpoint(NodeId),
+    /// A `[[creating_system]]` mapping names an endpoint the document does
+    /// not declare.
+    #[error(
+        "creating_system {creating_system_id} names endpoint {endpoint}, which is not declared"
+    )]
+    UnknownCreatingSystemEndpoint {
+        /// The mapped `creating_system_id`.
+        creating_system_id: SystemId,
+        /// The undeclared endpoint.
+        endpoint: EndpointId,
+    },
+    /// One `creating_system_id` is mapped twice, so the follow-up routing
+    /// table would hold two answers for it (N21, §12.2).
+    #[error(
+        "creating_system {creating_system_id} is mapped to endpoint {first} and endpoint {second}"
+    )]
+    DuplicateCreatingSystemId {
+        /// The doubly mapped `creating_system_id`.
+        creating_system_id: SystemId,
+        /// The endpoint of the first mapping.
+        first: EndpointId,
+        /// The endpoint of the second mapping (the same endpoint for a
+        /// repeat).
+        second: EndpointId,
+    },
+    /// A `[[creating_system]]` mapping names a member's own `system_id`,
+    /// which already maps to that member (§12.4, N23).
+    #[error(
+        "creating_system {creating_system_id} is the system_id of node {node}, which maps to it already"
+    )]
+    CreatingSystemIdOfNode {
+        /// The mapped `creating_system_id`.
+        creating_system_id: SystemId,
+        /// The node whose `system_id` it is.
+        node: NodeId,
+    },
+}
+
+/// A `creating_system_id` the registry cannot route: no member, registered
+/// mapping or usable learned mapping answers for it (N21, §12.3).
+///
+/// A miss is never answered with a default endpoint: the caller falls back in
+/// the order §12.3 states.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
+pub enum CreatingSystemMiss {
+    /// No member, registered mapping or learned mapping names it.
+    #[error("creating_system_id {0} is neither a member's system_id nor mapped")]
+    Unknown(SystemId),
+    /// It was learned at two nodes, or against a registered mapping, and the
+    /// integrity incident withdrew it.
+    #[error("creating_system_id {0} has conflicting learned mappings and is not routed on")]
+    Conflicted(SystemId),
+}
+
+/// A sighting the learned map refuses to record.
+#[derive(Debug, Clone, PartialEq, Error)]
+#[non_exhaustive]
+pub enum ObserveError {
+    /// The endpoint the version was seen at is not in the snapshot.
+    #[error("endpoint {0} is not in the registry snapshot")]
+    UnknownEndpoint(EndpointId),
+    /// The version's `creating_system_id` is not an openEHR `uid`.
+    #[error("the version's creating_system_id is not usable")]
+    CreatingSystemId(#[source] IdError),
 }
