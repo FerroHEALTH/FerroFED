@@ -5,6 +5,7 @@
 //! carries the patient identifier, and no refusal names it.
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
+use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Analysis, Paging, analyse};
 use openehr_query::ast::Primitive;
 use openehr_query::bind::Parameters;
@@ -317,4 +318,97 @@ fn a_parameter_fault_names_the_parameter_never_its_value() {
         !shown.contains("sentinel4711"),
         "and never its value: {shown}"
     );
+}
+
+/// An aggregate select list the rewrite recombines, one of whose paths may
+/// seat `seeded` in a node predicate.
+fn aggregate_select(seeded: &str) -> impl Strategy<Value = String> + use<> {
+    let magnitude = "o/data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude";
+    prop_oneof![
+        Just("COUNT(*)".to_owned()),
+        Just("COUNT(c/uid/value)".to_owned()),
+        Just(format!("SUM({magnitude})")),
+        Just(format!("MIN({magnitude})")),
+        Just(format!("MAX({magnitude})")),
+        Just(format!("AVG({magnitude}) AS mean")),
+        Just(format!("COUNT(*), AVG({magnitude})")),
+        Just(format!("AVG(o/data[at0001, '{seeded}']/value/magnitude)")),
+    ]
+}
+
+/// A façade query of [`facade`] with its select list replaced by a
+/// recombined aggregate, and whether that aggregate seats the identifier.
+fn aggregate_facade() -> impl Strategy<Value = (String, String, bool, bool, bool)> {
+    facade().prop_flat_map(|(aql, id, bound, rebuilds)| {
+        prop::bool::ANY.prop_flat_map(move |same| {
+            // NOTE: a different seated value is a word, which the digits-only
+            // identifier cannot be part of.
+            let seeded = if same {
+                id.clone()
+            } else {
+                "clinician".to_owned()
+            };
+            let (aql, id) = (aql.clone(), id.clone());
+            aggregate_select(&seeded).prop_map(move |select| {
+                let tail = aql.split_once(" FROM ").map_or("", |(_, tail)| tail);
+                let seated = same && select.contains("at0001, '");
+                (
+                    format!("SELECT {select} FROM {tail}"),
+                    id.clone(),
+                    bound,
+                    rebuilds,
+                    seated,
+                )
+            })
+        })
+    })
+}
+
+proptest! {
+    // conformance: CP-10 CP-26
+    #[test]
+    fn no_recombined_aggregate_query_carries_the_patient_identifier(
+        (aql, id, bound, rebuilds, seated) in aggregate_facade(),
+    ) {
+        let mut parameters = Parameters::new();
+        if bound {
+            parameters.insert("patient", Primitive::String(id.clone()));
+        }
+        let declared = ask_all().with_decomposable_aggregates(AggregateFunction::ALL);
+        match analyse(&aql, &parameters, Paging::default(), &declared) {
+            Err(refusal) => {
+                let shown = format!("{refusal} {refusal:?}");
+                prop_assert!(!shown.contains(&id), "the refusal named the identifier: {shown}");
+            }
+            Ok(Analysis::Patient(query)) => {
+                prop_assert!(!rebuilds && !seated, "a query carrying the identifier was dispatched: {aql}");
+                let node = query.for_node(&HierObjectId::new(EHR_ID).unwrap());
+                let without_scope = node.aql().replace(&format!("'{EHR_ID}'"), "");
+                prop_assert!(!without_scope.contains(&id), "node query {} carries {}", node.aql(), id);
+                prop_assert!(!node.aql().contains("subject/"), "node query {} keeps a subject carrier", node.aql());
+            }
+            Ok(other) => prop_assert!(false, "a patient query analysed as {other:?}"),
+        }
+    }
+}
+
+// conformance: CP-10 CP-26
+#[test]
+fn the_avg_rewrite_reaches_the_node_without_the_patient() {
+    // The property above is not vacuous: a recombined AVG is dispatched.
+    let aql = "SELECT AVG(o/data[at0001]/value/magnitude) FROM EHR e CONTAINS COMPOSITION c \
+               CONTAINS OBSERVATION o WHERE e/ehr_status/subject/external_ref/id/value = '4711'";
+    let declared = ask_all().with_decomposable_aggregates(AggregateFunction::ALL);
+    let Ok(Analysis::Patient(query)) =
+        analyse(aql, &Parameters::new(), Paging::default(), &declared)
+    else {
+        panic!("a recombined patient aggregate");
+    };
+    let node = query.for_node(&HierObjectId::new(EHR_ID).unwrap());
+    assert!(
+        node.aql().contains("SUM(") && node.aql().contains("COUNT("),
+        "{}",
+        node.aql()
+    );
+    assert!(!node.aql().contains("4711"), "{}", node.aql());
 }

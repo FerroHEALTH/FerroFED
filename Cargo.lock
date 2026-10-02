@@ -2086,7 +2086,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema",
@@ -2095,6 +2095,7 @@ dependencies = [
  "openehr-query",
  "openehr-rm",
  "proptest",
+ "rust_decimal",
  "serde",
  "serde_json",
  "thiserror",

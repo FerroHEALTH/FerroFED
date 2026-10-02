@@ -11,6 +11,7 @@
 
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::{DevTable, Profile};
+use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -170,6 +171,41 @@ pub struct Federation {
     /// `k + n` (§11.6.2: "permitted only where the gateway can bound
     /// `k + n`"). A page past it is a `400` naming the bound; zero is refused.
     pub max_offset_window: u32,
+    /// The aggregate functions an undirected query may apply, recombined at
+    /// the Tier (§11.6.3, N39): by default every one, `COUNT`, `SUM`, `MIN`,
+    /// `MAX` and `AVG`. An empty list refuses every undirected aggregate with
+    /// a `400`.
+    pub decomposable_aggregates: Vec<DecomposableAggregate>,
+}
+
+/// An aggregate function the gateway recombines across a fan-out
+/// (§11.6.3), by the name `OPTIONS {base}/` declares it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[non_exhaustive]
+pub enum DecomposableAggregate {
+    /// `COUNT`, without `DISTINCT`: the sum of the node counts.
+    Count,
+    /// `SUM`: the sum of the node sums.
+    Sum,
+    /// `MIN`, over numbers and complete date-times.
+    Min,
+    /// `MAX`, over numbers and complete date-times.
+    Max,
+    /// `AVG`, asked of each node as its `SUM` and `COUNT`.
+    Avg,
+}
+
+impl From<DecomposableAggregate> for AggregateFunction {
+    fn from(function: DecomposableAggregate) -> Self {
+        match function {
+            DecomposableAggregate::Count => Self::Count,
+            DecomposableAggregate::Sum => Self::Sum,
+            DecomposableAggregate::Min => Self::Min,
+            DecomposableAggregate::Max => Self::Max,
+            DecomposableAggregate::Avg => Self::Avg,
+        }
+    }
 }
 
 /// How `LIMIT n OFFSET k` with `k > 0` is answered across a fan-out
@@ -208,6 +244,13 @@ impl Default for Federation {
             best_effort: true,
             offset_strategy: OffsetPaging::Bounded,
             max_offset_window: 1000,
+            decomposable_aggregates: vec![
+                DecomposableAggregate::Count,
+                DecomposableAggregate::Sum,
+                DecomposableAggregate::Min,
+                DecomposableAggregate::Max,
+                DecomposableAggregate::Avg,
+            ],
         }
     }
 }
@@ -514,6 +557,13 @@ impl Config {
             node_selection: self.federation.node_selection,
             best_effort: self.federation.best_effort,
             offset,
+            decomposable: self
+                .federation
+                .decomposable_aggregates
+                .iter()
+                .copied()
+                .map(AggregateFunction::from)
+                .collect(),
         })
     }
 }

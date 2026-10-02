@@ -41,7 +41,7 @@ openehr-sdt = { version = "0.0.76", default-features = false }
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.12" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.13" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.6" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
@@ -60,6 +60,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 # raw_value lets an open wire object keep the members it does not model as
 # raw JSON text (openehr-federation).
 serde_json = { version = "1.0.151", features = ["raw_value"] }
+# Exact decimal arithmetic for the aggregates the merge recombines across
+# nodes (openehr-federation): the decimal type openehr-rm already computes in.
+rust_decimal = { version = "1.43.0", default-features = false, features = ["std"] }
 # The configuration file format, parsed into the server's Config tree.
 toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "display", "serde"] }
 secrecy = "0.10.3"

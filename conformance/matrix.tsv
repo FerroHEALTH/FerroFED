@@ -37,7 +37,7 @@ CP-6	Gateway	N11	3	planned	#70	-
 CP-7	Gateway	N5	2	covered	#35,#38	-
 CP-8	Gateway	N13	5	covered	#52,#55	-
 CP-9	Gateway	N15	5	planned	#56	-
-CP-10	Gateway	N14	5	planned	#54	-
+CP-10	Gateway	N14	5	covered	#54	-
 CP-11	Gateway	N16	4	covered	#49,#85	-
 CP-12	Gateway	N6,N16	4	covered	#43,#50,#58	-
 CP-13	Gateway	N19,N20,N21	6	planned	#36,#67,#74	-

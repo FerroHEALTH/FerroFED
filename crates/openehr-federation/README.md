@@ -12,8 +12,8 @@ specification, with a feature per layer.
 | `aql` | the §7 rewrite of a client query into one `ehr_id`-scoped query per node, with identifier hygiene (§5.4), on the `openehr-query` syntax tree |
 | `merge` | the §9 to §11 merge of node answers: `ORDER BY` with `LIMIT` and `OFFSET`, `DISTINCT`, version-identity dedup, decomposable aggregates |
 
-The `merge` feature carries `ORDER BY` with `LIMIT` and `OFFSET` today;
-`DISTINCT`, dedup and the decomposable aggregates follow in build order.
+The `merge` feature carries `ORDER BY` with `LIMIT` and `OFFSET` and the
+decomposable aggregates today; `DISTINCT` and dedup follow in build order.
 
 ## The `merge` feature
 
@@ -29,6 +29,16 @@ every node is sent `LIMIT k + n` with no `OFFSET`, and the merge keeps rows `k`
 to `k + n` of the same order (§11.6.2); `aql::OffsetStrategy` says whether a
 deployment computes that page within a bound or refuses every `OFFSET` past
 zero.
+
+`merge::combine` recombines the one-row node answers of an aggregate query
+into the federation's row under the `aggregate::Recombination` the rewrite
+produced (§11.6.3): `COUNT` and `SUM` summed exactly, integers in checked
+arithmetic and reals in decimal arithmetic, `MIN` and `MAX` re-applied over
+numbers and complete date-times, and `AVG` as the sum of the node sums over
+the sum of the node counts. A node value that cannot take part in an exactly
+correct answer refuses its node, and then no row is returned. On the `aql`
+side, `aql::Context::with_decomposable_aggregates` declares which functions
+are recombined; with none declared, every undirected aggregate is refused.
 
 ## The `aql` feature
 

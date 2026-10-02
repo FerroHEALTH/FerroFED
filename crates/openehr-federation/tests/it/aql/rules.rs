@@ -514,6 +514,7 @@ fn a_query_with_the_parser_fix_of_ferroehr_3513_binds_and_analyses() {
 
 const AGGREGATE: &str = "SELECT COUNT(c/uid/value) FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '4711'";
 
+// conformance: CP-10 CP-32
 #[test]
 fn an_undirected_aggregate_is_refused_with_its_reason() {
     let refusal = refused(AGGREGATE);
@@ -527,6 +528,7 @@ fn an_undirected_aggregate_is_refused_with_its_reason() {
     );
 }
 
+// conformance: CP-10
 #[test]
 fn an_aggregate_directed_to_one_endpoint_is_dispatched_unchanged() {
     let one = Context::new(Targeting::Directed {
@@ -539,6 +541,7 @@ fn an_aggregate_directed_to_one_endpoint_is_dispatched_unchanged() {
     );
 }
 
+// conformance: CP-10
 #[test]
 fn an_aggregate_directed_to_two_endpoints_is_refused() {
     let two = Context::new(Targeting::Directed {

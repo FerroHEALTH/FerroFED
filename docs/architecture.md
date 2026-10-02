@@ -1008,6 +1008,26 @@ AQL 1.1.0 does not have, so §11.6.3's `GROUP BY` rule has no object (held on
 undirected aggregate is `400` (N14); a directed single-node aggregate passes
 through.
 
+As built (#54), the set is configured (`federation.decomposable_aggregates`,
+all five by default, `[]` for none) and the library `aql::Context` declares
+none until told, so the golden case 06 refusal holds there. "The result must
+be exactly correct" (§11.6.3) decides three further cases. A node value that
+cannot take part in an exact answer (a string for `MIN`, a real or a `NULL`
+for `COUNT`, an `AVG` whose `SUM` and `COUNT` disagree, more or less than one
+row, a number beside a date-time) refuses the node as `node-error`, a
+response the gateway could not use (§11.1), and no row is returned, so the
+query fails `424` under all-or-nothing. A request for `partial` on a
+recombined aggregate is `400` (`partial-aggregate`): a recombination over the
+nodes that answered is a wrong value for the federation, not a subset of a
+right one, and §11.4 forbids silently serving all-or-nothing to a request
+that asked for `partial`. A real arrives as the binary64 nearest the node's
+text and is read back as its shortest decimal; a sum the decimal or the JSON
+number cannot hold exactly is a `500`, never a rounding. The mean is the
+decimal quotient to 28 significant digits, written as the nearest JSON
+number, because AQL ties `AVG`'s return type to its input without saying how
+an integer mean rounds. With no node answering, the answer has
+no row, as §11.3 requires of a patient found nowhere.
+
 **Dedup** (decision A32, #56). `none` by default (N15), `version-identity` on
 request, with the header `openEHR-federation-dedup: version-identity`
 (FerroFED's spelling, since the specification leaves the name to the gateway

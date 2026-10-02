@@ -176,6 +176,46 @@ max_offset_window = 1000      # rows asked of one node for a page, k + n; 0 is r
 
 The strategy and the bound are named in the startup log line.
 
+## Aggregates across nodes
+
+Each node answers an aggregate with its own value, so one row per node is
+never the federation's answer (§11.6.3, N14). By default the gateway
+recombines the aggregate exactly: it sends the aggregate to every node, scoped
+to that node's `ehr_id`, and answers one row in your query's columns.
+
+- `COUNT(*)` and `COUNT(path)` are the sum of the node counts.
+- `SUM` is the sum of the node sums, or `NULL` when no node holds a value.
+- `MIN` and `MAX` are the least or greatest node value, over numbers and
+  complete date-times.
+- `AVG` is asked of each node as the `SUM` and the `COUNT` of its path, and
+  answered as their quotient, or `NULL` when no node counts a value.
+
+Integers add exactly, and reals add in decimal arithmetic, so `0.1 + 0.2` is
+`0.3`. A recombination over some of the nodes would be a wrong value, so:
+
+- a node that answers a value the recombination cannot use exactly (a string
+  for `MIN`, a real for `COUNT`, more or less than one row) is reported
+  `node-error`, and the query fails `424`;
+- a node that does not answer fails the query `504`, as for any query;
+- a request with `openEHR-federation-completeness: partial` is refused `400`
+  with the code `partial-aggregate`.
+
+`COUNT(DISTINCT …)`, `SELECT DISTINCT`, and a column that is not an
+aggregate beside the aggregates are refused `400`
+(`indecomposable-aggregate`), and the message suggests the two alternatives:
+direct the query to one node, or select the rows and aggregate them in your
+application. A query directed to one endpoint is sent to it unchanged.
+
+You can narrow the functions the gateway recombines, or turn recombination
+off, which refuses every undirected aggregate with `undirected-aggregate`:
+
+```toml
+[federation]
+decomposable_aggregates = ["COUNT", "SUM", "MIN", "MAX", "AVG"]   # the default; [] declares none
+```
+
+The list is named in the startup log line.
+
 ## The environment
 
 Any key can be set or overridden with `FERROFED__<SECTION>__<KEY>`, upper or

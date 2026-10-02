@@ -13,6 +13,8 @@
 #[cfg(test)]
 mod aql;
 #[cfg(test)]
+mod combine;
+#[cfg(test)]
 mod drift;
 #[cfg(test)]
 mod envelope;
