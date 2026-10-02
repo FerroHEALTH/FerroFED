@@ -50,11 +50,14 @@
 //! The follow-up routing table maps every observed `creating_system_id`, not
 //! only the members' own `system_id`s (N21, §12.2): the document registers
 //! more, a [`LearnedMap`](creating_system::LearnedMap) learns the rest from
-//! answers, and a conflict raises an [`Incident`](incident::Incident).
+//! answers, and a conflict raises an [`Incident`](incident::Incident). The
+//! [`EhrIndex`](ehr_index::EhrIndex) learns which member holds an `ehr_id`,
+//! the third step of path `ehr_id` routing (§12.5.1).
 #![doc(test(attr(deny(warnings))))]
 
 pub mod creating_system;
 pub mod document;
+pub mod ehr_index;
 pub mod error;
 pub mod id;
 pub mod incident;

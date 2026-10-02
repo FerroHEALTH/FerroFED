@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! Single-node routing: a request to `{base}/v1/ehr/{ehr_id}` or below it,
-//! forwarded to the one node it names and answered as that node answered
-//! (§7a.1, §7a.3, §12.5).
+//! forwarded to the one node that owns the `ehr_id` and answered as that node
+//! answered (§7a.1, §7a.3, §12.5).
 //!
 //! `openehr-its`'s `routes::lookup` names the ITS-REST operation from the
 //! method and the path without reading the body, and every operation of the
@@ -15,25 +15,31 @@
 //! answer carries `openEHR-federation-endpoint` and
 //! `openEHR-federation-system-id` (N31, §9.6).
 //!
-//! The node is the one the `openEHR-federation-endpoint` or
-//! `openEHR-federation-organisation` header selects, the first step of
-//! §12.5.1 (§8.4). A write that names none is a `400` (§12.5.1, N41).
+//! The owner is found in the order of §12.5.1 ([`owner`]): the
+//! targeting headers, a resolution binding of the client session, the `ehr_id` index,
+//! and for a read only, the ask-all probe of every member, all within the
+//! request's budget (§11.5). A write none of the first three routes is a
+//! `400`, and is never probed (N41). A successful answer teaches the index
+//! that its node holds the `ehr_id`.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use axum::body::{Body, Bytes};
 use axum::response::Response;
 use ferrofed_engine::dispatch::{DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded};
+use ferrofed_engine::hygiene;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
+use ferrofed_engine::probe::{self, Answer, Probe};
+use ferrofed_identity::binding::SessionKey;
+use ferrofed_registry::id::{EhrId, EndpointId};
+use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
 use openehr_federation::headers;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::error::{self, Code};
-use crate::facade::{security, target};
+use crate::facade::{owner, security};
 use crate::federation::Federation;
 
 /// The API group of the EHR area (§7a.1).
@@ -42,6 +48,9 @@ const EHR_GROUP: &str = "ehr";
 /// The path template every single-node EHR resource sits at or below
 /// (§7a.1).
 const EHR_RESOURCE: &str = "/ehr/{ehr_id}";
+
+/// The path parameter that names the EHR (§12.5).
+const EHR_ID_PARAM: &str = "ehr_id";
 
 /// One client request under the ITS-REST prefix, as it arrived.
 #[derive(Debug)]
@@ -79,7 +88,9 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
     // TODO(#68): DEMOGRAPHIC at 501 through the generated router, or routed as declared.
     // TODO(#75): definition requests routed to one explicitly chosen node.
     match routes::lookup(arrived.method, arrived.path) {
-        Lookup::Matched(matched) if in_ehr_area(&matched) => route(federation, arrived).await,
+        Lookup::Matched(matched) if in_ehr_area(&matched) => {
+            route(federation, arrived, &matched).await
+        }
         Lookup::Matched(_) | Lookup::MethodNotAllowed { .. } | Lookup::NotFound => {
             error::fixed(Code::NotImplemented, arrived.request_id)
         }
@@ -96,37 +107,166 @@ fn in_ehr_area(matched: &RouteMatch) -> bool {
             .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
 }
 
-/// Routes one request in the EHR area to its node and answers as the node
-/// did.
-async fn route(federation: &Federation, arrived: Arrived<'_>) -> Response {
+/// Routes one request in the EHR area to the owner of its path `ehr_id` and
+/// answers as the owner did.
+///
+/// The path `ehr_id` is parsed first, and a malformed one is a `400` before
+/// any routing (§12.5); so is a query parameter the operation does not
+/// declare, before anything is sent (§5.4.1, N33). The owner is then found in
+/// the order of §12.5.1 (N41): the targeting headers, a binding the client
+/// session holds, the `ehr_id` index, and for a read only, the ask-all probe.
+/// A write none of the first three routes is a `400` (`target-required`),
+/// and nothing is probed.
+async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMatch) -> Response {
+    let started = Instant::now();
     let request_id = arrived.request_id;
-    // TODO(#62): parse the path ehr_id as a HierObjectId, refusing a malformed one with 400 before routing.
-    let endpoint = match target(federation.snapshot(), arrived.headers) {
-        Ok(Some(endpoint)) => endpoint,
-        Ok(None) if arrived.method.is_safe() => {
-            // TODO(#62): route a read by the held binding, the ehr_id index, then an ask-all probe (§12.5.1).
-            return error::fixed(Code::NotImplemented, request_id);
-        }
-        // TODO(#62): route a write by the held binding or the ehr_id index before refusing it (§12.5.1).
-        Ok(None) => return error::fixed(Code::TargetRequired, request_id),
+    let Some((segment, ehr_id)) = path_ehr_id(matched) else {
+        return error::fixed(Code::EhrIdInvalid, request_id);
+    };
+    if let Some(query) = arrived.uri.query()
+        && let Err(unlisted) = hygiene::forwarded_query(matched, query)
+    {
+        security::forward_refused(unlisted.position, request_id);
+        return error::response(
+            Code::QueryParameterRefused,
+            unlisted.to_string(),
+            request_id,
+        );
+    }
+    // TODO(#80): the authenticated client session the resolution bindings belong to.
+    let session: Option<SessionKey> = None;
+    let held = session.as_ref().map(|session| owner::Held {
+        bindings: federation.bindings(),
+        session,
+        now: started,
+    });
+    let snapshot = federation.snapshot();
+    let located = match owner::located(snapshot, arrived.headers, held, federation.index(), &ehr_id)
+    {
+        Ok(located) => located,
         Err(untargeted) => {
             return error::response(untargeted.code(), untargeted.to_string(), request_id);
         }
+    };
+    let Some(budget) = Deadlines::from(federation, started) else {
+        tracing::error!("the routed request's deadline cannot be represented");
+        return error::fixed(Code::Internal, request_id);
+    };
+    let (endpoint, step, probed) = match located {
+        owner::Located::At { endpoint, step } => (endpoint, step, None),
+        owner::Located::Unreachable { .. } => {
+            return error::fixed(Code::NoDestination, request_id);
+        }
+        owner::Located::Unknown if arrived.method.is_safe() => {
+            let probe = Probe {
+                ehr_id_segment: segment,
+                headers: arrived.headers.clone(),
+                per_node: budget.per_node(),
+                overall: budget.overall,
+                request_id: arrived.outbound,
+            };
+            match ask_all(federation, &probe, request_id).await {
+                Ok((endpoint, answer)) => {
+                    let probed = (arrived.method == Method::GET
+                        && arrived.path == probe.path()
+                        && arrived.uri.query().is_none_or(str::is_empty))
+                    .then_some(answer);
+                    (endpoint, owner::Step::AskAll, probed)
+                }
+                Err((code, message)) => return error::response(code, message, request_id),
+            }
+        }
+        // TODO(#65): a versioned write routed to its controlling CDR by the target version's creating_system_id (§12.4, N23).
+        owner::Located::Unknown => return error::fixed(Code::TargetRequired, request_id),
     };
     // NOTE: §11.1 never contacts a suspended endpoint, so a request that names
     // one resolves to no destination (§11.2); the suspension rule is our own design.
     if endpoint.status() == EndpointStatus::Suspended {
         return error::fixed(Code::NoDestination, request_id);
     }
+    tracing::debug!(endpoint = %endpoint.id(), step = step.as_str(), "routed a path ehr_id");
+    let system_id = snapshot
+        .node(endpoint.node())
+        .map(|node| node.system_id().as_str());
+    let provenance = Provenance {
+        endpoint: endpoint.id(),
+        system_id,
+    };
+    let forwarded = match probed {
+        Some(answer) => Ok(answer),
+        None => forward(federation, endpoint, &arrived, &budget).await,
+    };
+    match forwarded {
+        Ok(forwarded) => {
+            if forwarded.status().is_success() {
+                owner::learn(federation.index(), &ehr_id, endpoint.node());
+            }
+            provenance.stamp(answered(forwarded))
+        }
+        Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
+        Err(Failure::Forward(failure)) => failed(&failure, provenance, request_id),
+    }
+}
+
+/// The `ehr_id` path segment of `matched` as received, and the `ehr_id` it
+/// decodes to, or `None` when it is no `HIER_OBJECT_ID`.
+fn path_ehr_id(matched: &RouteMatch) -> Option<(String, EhrId)> {
+    let param = matched.path_param(EHR_ID_PARAM)?;
+    // NOTE: §12.5, a segment that is not UTF-8 or not a HIER_OBJECT_ID names
+    // no EHR, so either failure is the malformed-ehr_id answer.
+    let ehr_id = EhrId::new(param.decoded().ok()?).ok()?;
+    Some((param.raw.clone(), ehr_id))
+}
+
+/// The per-node timeout and the overall budget of one routed request, the
+/// overall budget counted from its arrival (§11.5, N38).
+#[derive(Debug, Clone, Copy)]
+struct Deadlines {
+    per_node: Duration,
+    overall: Instant,
+}
+
+impl Deadlines {
+    /// The deadlines of a request to `federation` that arrived at `started`,
+    /// or `None` when the overall deadline cannot be represented.
+    fn from(federation: &Federation, started: Instant) -> Option<Self> {
+        let budget = federation.budget();
+        Some(Self {
+            per_node: budget.per_node(),
+            overall: started.checked_add(budget.overall())?,
+        })
+    }
+
+    /// The instant a node asked now must have answered by: the per-node
+    /// timeout, never past the overall budget.
+    fn per_node(&self) -> Instant {
+        Instant::now()
+            .checked_add(self.per_node)
+            .map_or(self.overall, |at| at.min(self.overall))
+    }
+}
+
+/// Why a routed request has no answer of the node's to pass on.
+#[derive(Debug)]
+enum Failure {
+    /// The gateway failed on its own side before sending.
+    Internal,
+    /// The node gave no answer.
+    Forward(ForwardError),
+}
+
+/// Forwards the client's request to `endpoint` once, within `budget`.
+async fn forward(
+    federation: &Federation,
+    endpoint: &Endpoint,
+    arrived: &Arrived<'_>,
+    budget: &Deadlines,
+) -> Result<Forwarded, Failure> {
     let Some(client) = federation.clients().get(endpoint.id()) else {
         tracing::error!(endpoint = %endpoint.id(), "a registry endpoint has no node client");
-        return error::fixed(Code::Internal, request_id);
+        return Err(Failure::Internal);
     };
-    let Some(deadline) = Instant::now().checked_add(federation.budget().per_node()) else {
-        tracing::error!("the routed request's deadline cannot be represented");
-        return error::fixed(Code::Internal, request_id);
-    };
-    let options = DispatchOptions::new(deadline).with_request_id(arrived.outbound);
+    let options = DispatchOptions::new(budget.per_node()).with_request_id(arrived.outbound);
     let request = ClientRequest {
         method: arrived.method.clone(),
         path: arrived.path.to_owned(),
@@ -134,80 +274,53 @@ async fn route(federation: &Federation, arrived: Arrived<'_>) -> Response {
         headers: arrived.headers.clone(),
         body: arrived.body.to_vec(),
     };
-    let system_id = federation
-        .snapshot()
-        .node(endpoint.node())
-        .map(|node| node.system_id().as_str());
-    let provenance = Provenance {
-        endpoint: endpoint.id(),
-        system_id,
-    };
-    match client.forward(request, &options).await {
-        Ok(forwarded) => provenance.stamp(answered(forwarded)),
-        Err(failure) => failed(&failure, provenance, request_id),
-    }
+    client
+        .forward(request, &options)
+        .await
+        .map_err(Failure::Forward)
 }
 
-/// The endpoint the targeting headers name, `None` without either header
-/// (§8.4, §12.5.1 step 1).
-///
-/// The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
-/// headers both apply to a routed request, read as [`target::requested`]
-/// reads them for a query; a routed request reaches one node, so together
-/// they select exactly one endpoint (§7a.1, §12.4).
-fn target<'a>(
-    snapshot: &'a RegistrySnapshot,
-    headers: &HeaderMap,
-) -> Result<Option<&'a Endpoint>, Untargeted> {
-    let Some(selected) = target::requested(snapshot, None, headers)? else {
-        return Ok(None);
-    };
-    let mut selected = selected.into_iter();
-    let id = match (selected.next(), selected.next()) {
-        (Some(id), None) => id,
-        (Some(_), Some(_)) => return Err(Untargeted::Several),
-        (None, _) => return Err(Untargeted::Nothing),
-    };
-    Ok(Some(registered(snapshot, &id)))
-}
-
-/// The endpoint `id` of `snapshot`, which selected it.
-#[expect(
-    clippy::expect_used,
-    reason = "target::requested selects only endpoints it found in this same snapshot"
-)]
-fn registered<'a>(snapshot: &'a RegistrySnapshot, id: &EndpointId) -> &'a Endpoint {
-    snapshot
-        .endpoint(id)
-        .expect("a selected endpoint should be in the snapshot that selected it")
-}
-
-/// Why the targeting headers of a routed request name no one endpoint.
-#[derive(Debug, thiserror::Error)]
-enum Untargeted {
-    /// A header names what the registry does not know, or the two headers
-    /// select different node sets (§8.4.1).
-    #[error(transparent)]
-    Target(#[from] target::TargetError),
-    /// The headers select more than one endpoint.
-    #[error(
-        "the targeting headers select more than one endpoint, and a request routed to one node selects exactly one (§7a.1, §12.4)"
-    )]
-    Several,
-    /// The headers select no endpoint: the organisation manages none.
-    #[error("the targeting headers select no endpoint, so the request has no destination (§11.2)")]
-    Nothing,
-}
-
-impl Untargeted {
-    /// The stable code the error body names.
-    fn code(&self) -> Code {
-        match self {
-            Self::Target(error) => error.code(),
-            Self::Several => Code::EndpointSeveral,
-            Self::Nothing => Code::NoDestination,
+/// Runs the ask-all probe and returns the one owner it found with its
+/// answer, or the code and the message that refuse the read (§12.5.1 step
+/// 4).
+async fn ask_all<'a>(
+    federation: &'a Federation,
+    probe: &Probe,
+    request_id: &str,
+) -> Result<(&'a Endpoint, Forwarded), (Code, String)> {
+    let internal = || (Code::Internal, Code::Internal.message().to_owned());
+    let snapshot = federation.snapshot();
+    let members = owner::probed(snapshot);
+    let answers = probe::ask_all(federation.clients(), &members, probe)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %crate::chain(&error), "the ask-all probe could not run");
+            internal()
+        })?;
+    for (endpoint, answer) in &answers {
+        if let Answer::Failed(ForwardError::Withheld { part, .. }) = answer {
+            security::forward_withheld(endpoint, *part, request_id);
         }
     }
+    let (endpoint, answer) = match owner::settled(answers) {
+        owner::Settled::Owner { endpoint, answer } => (endpoint, answer),
+        owner::Settled::Failed(unsettled) => {
+            let code = unsettled.code();
+            if code.status().is_server_error() {
+                tracing::error!(
+                    code = code.as_str(),
+                    error = %unsettled,
+                    "the ask-all probe named no owner"
+                );
+            }
+            return Err((code, unsettled.to_string()));
+        }
+    };
+    let declared = snapshot.endpoint(&endpoint).ok_or_else(|| {
+        tracing::error!(endpoint = %endpoint, "a probed endpoint left the snapshot");
+        internal()
+    })?;
+    Ok((declared, answer))
 }
 
 /// The node's answer as the client's response: its status, its headers and

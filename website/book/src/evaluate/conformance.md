@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 21 of 35 covered, 14 planned, 0 deferred.
+**Gateway points:** 22 of 35 covered, 13 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -53,7 +53,7 @@ and a gateway is never marked down for them (section 17).
 | [CP-30](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-30) | Gateway | N37 | 4 | covered | [#37](https://github.com/FerroHEALTH/FerroFED/issues/37), [#50](https://github.com/FerroHEALTH/FerroFED/issues/50) | - |
 | [CP-31](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-31) | Gateway | N38, N40 | 4 | covered | [#49](https://github.com/FerroHEALTH/FerroFED/issues/49), [#51](https://github.com/FerroHEALTH/FerroFED/issues/51) | - |
 | [CP-32](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-32) | Gateway | N39, N14, N9 | 5 | covered | [#52](https://github.com/FerroHEALTH/FerroFED/issues/52), [#53](https://github.com/FerroHEALTH/FerroFED/issues/53), [#54](https://github.com/FerroHEALTH/FerroFED/issues/54), [#55](https://github.com/FerroHEALTH/FerroFED/issues/55), [#157](https://github.com/FerroHEALTH/FerroFED/issues/157), [#187](https://github.com/FerroHEALTH/FerroFED/issues/187) | - |
-| [CP-33](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-33) | Gateway | N41, N42 | 6, 11 | planned | [#62](https://github.com/FerroHEALTH/FerroFED/issues/62), [#63](https://github.com/FerroHEALTH/FerroFED/issues/63), [#91](https://github.com/FerroHEALTH/FerroFED/issues/91) | - |
+| [CP-33](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-33) | Gateway | N41, N42 | 6, 11 | covered | [#62](https://github.com/FerroHEALTH/FerroFED/issues/62), [#63](https://github.com/FerroHEALTH/FerroFED/issues/63), [#91](https://github.com/FerroHEALTH/FerroFED/issues/91) | the routing clause is scored (explicit target, binding, index, then a read-only ask-all, and a write no earlier step routes refused 400 and never probed), with the 409 listing the claimants an ask-all finds; the integrity incident and the index-insert alarm of N42 are #63, and the two-node harness of tracks 6 and 11 is #91 |
 | [CP-33a](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-33a) | Operator | N42a | 11 | operator | [#79](https://github.com/FerroHEALTH/FerroFED/issues/79), [#91](https://github.com/FerroHEALTH/FerroFED/issues/91) | verified at admission or in the registry, not on a request (section 16.2) |
 | [CP-34](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-34) | Gateway | N43 | 9 | planned | [#75](https://github.com/FerroHEALTH/FerroFED/issues/75), [#76](https://github.com/FerroHEALTH/FerroFED/issues/76) | - |
 | [CP-35](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-35) | Gateway | N17, N18 | 1 | covered | [#33](https://github.com/FerroHEALTH/FerroFED/issues/33), [#38](https://github.com/FerroHEALTH/FerroFED/issues/38), [#72](https://github.com/FerroHEALTH/FerroFED/issues/72) | - |

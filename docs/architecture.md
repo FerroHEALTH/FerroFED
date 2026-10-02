@@ -357,8 +357,8 @@ in it; any other is a `400` before dispatch (§5.4.1, N33). `subject_id` and
 `subject_namespace` are refused wherever declared. The `openehr-its`
 transport follows no redirect (FerroEHR #3531), so a node's `3xx` is passed
 on as the node's answer and no request is re-sent to a host the registry does
-not name. Built in #61 for the EHR area, with the
-explicit target as the only routing step so far (#62). A CDR's `Location` is usually an
+not name. Built in #61 for the EHR area, with the full §12.5.1 order of a
+path `ehr_id` in #62. A CDR's `Location` is usually an
 absolute URL on the node, so a client that follows it bypasses the gateway,
 which works against N1 and N28. FerroFED passes it unmodified as N31 requires,
 and the conflict is a draft on #17 to revisit at the re-pin (decision A13).

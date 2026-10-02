@@ -656,16 +656,6 @@ async fn a_suspended_endpoint_is_never_contacted() -> TestResult {
     Ok(())
 }
 
-#[tokio::test]
-async fn a_read_that_names_no_node_is_not_routed_yet() -> TestResult {
-    let request = Request::get(format!("/v1/ehr/{EHR_A}")).body(Body::empty())?;
-    assert_eq!(
-        (StatusCode::NOT_IMPLEMENTED, "not-implemented".to_owned()),
-        refused(request, "").await?
-    );
-    Ok(())
-}
-
 /// The status, the code and the headers of a routed request to node A at
 /// `a`, answered by the gateway on the node's behalf.
 async fn failed_at(a: &str) -> Result<(StatusCode, String, HeaderMap), Box<dyn Error>> {

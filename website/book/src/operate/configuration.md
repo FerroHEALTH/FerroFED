@@ -200,6 +200,26 @@ bindings the moment a PMIR subscription reports a merge or split. No
 subscription is built yet, so the lifetime is the bound in practice; the
 specification marks this lifecycle track provisional.
 
+## The `ehr_id` index
+
+The gateway also keeps an index of which member holds which `ehr_id`, shared
+by every client. It learns an entry when a resolution finds the patient's
+`ehr_id` at a member, and when a member answers a request under that `ehr_id`
+with a success. A follow-up on a path `ehr_id` that names no node and has no
+binding is routed by the index before the gateway falls back to asking every
+member (§12.5.1). The index holds `ehr_id`s and member ids only, lives in
+memory, and forgets the least recently used `ehr_id` once it is full:
+
+```toml
+[federation]
+ehr_index_capacity = 100000   # ehr_ids held, the default; 0 is refused
+```
+
+A forgotten or never-learned entry costs a later request one fallback step,
+never a wrong route: a read then asks every member, and a write is refused
+until the client names its node. An `ehr_id` seen at two members is held at
+both, and the index then routes neither.
+
 ## Completeness
 
 A federated query is all-or-nothing by default (N37). If a node that was

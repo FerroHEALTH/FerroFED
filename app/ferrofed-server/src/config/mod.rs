@@ -171,6 +171,9 @@ pub struct Federation {
     /// step 2): a correctness bound, past which a binding is
     /// never routed on.
     pub binding_ttl_ms: u64,
+    /// How many `ehr_id`s the `ehr_id` to node index holds (§12.5.1 step 3)
+    /// before it forgets the least recently used; zero is refused.
+    pub ehr_index_capacity: u32,
     /// How the node set of an undirected patient query is chosen (§4.3, N4).
     /// It has no default: a federating gateway declares it.
     pub node_selection: Option<NodeSelection>,
@@ -255,6 +258,7 @@ impl Default for Federation {
             overall_timeout_ms: 25_000,
             default_namespace: None,
             binding_ttl_ms: 900_000,
+            ehr_index_capacity: 100_000,
             node_selection: None,
             best_effort: true,
             offset_strategy: OffsetPaging::Bounded,
@@ -560,6 +564,10 @@ impl Config {
             });
         }
         let binding_ttl = positive_ms("federation.binding_ttl_ms", self.federation.binding_ttl_ms)?;
+        let ehr_index_capacity =
+            NonZeroU32::new(self.federation.ehr_index_capacity).ok_or_else(|| Error::Zero {
+                key: String::from("federation.ehr_index_capacity"),
+            })?;
         let max_window =
             NonZeroU32::new(self.federation.max_offset_window).ok_or_else(|| Error::Zero {
                 key: String::from("federation.max_offset_window"),
@@ -572,6 +580,7 @@ impl Config {
             budget,
             default_namespace: self.federation.default_namespace.clone(),
             binding_ttl,
+            ehr_index_capacity,
             node_selection: self.federation.node_selection,
             best_effort: self.federation.best_effort,
             offset,

@@ -29,12 +29,15 @@
 //! a [`security`] event, by position and never by value.
 //!
 //! A request to an EHR resource under a path `ehr_id` is routed to one node
-//! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3).
+//! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3);
+//! [`owner`] finds that node in the order of §12.5.1, and a resolution here
+//! teaches its `ehr_id` index which member holds each resolved `ehr_id`.
 
 pub mod cells;
 pub mod completeness;
 pub mod dedup;
 pub mod intake;
+pub mod owner;
 pub mod plan;
 pub mod prefer;
 pub mod route;
@@ -386,6 +389,9 @@ async fn federate(
             Instant::now(),
             targets.resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
         );
+    }
+    for (node, ehr_id) in &targets.resolved {
+        owner::learn(federation.index(), ehr_id, node);
     }
     let attributes = analysis.attributes();
     let mut plan = targets
