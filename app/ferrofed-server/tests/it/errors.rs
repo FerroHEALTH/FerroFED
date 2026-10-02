@@ -35,8 +35,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::facade::{
-    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, crossref, node_answering, node_failing,
-    patient_query, received, registry, schema, settings_with_room, statuses,
+    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, node_answering,
+    node_failing, patient_query, received, registry, schema, settings_with_room, statuses,
 };
 use crate::support::{self, ErrorBody, call};
 
@@ -111,16 +111,34 @@ fn closed_port() -> Result<String, Box<dyn Error>> {
     Ok(format!("http://{address}"))
 }
 
+/// The synthetic identifiers no error body may quote.
+const IDENTIFIERS: [&str; 4] = [PATIENT, PATIENT_TAIL, PARAMETER_VALUE, NAMESPACE];
+
+/// The AQL fragments no error body may quote.
+const AQL: [&str; 2] = ["SELECT", "FROM EHR"];
+
 /// Asserts that `text` quotes none of the synthetic identifiers and no AQL.
 fn quotes_nothing(text: &str) {
-    for quoted in [PATIENT, "38a1", PARAMETER_VALUE, NAMESPACE] {
+    for quoted in IDENTIFIERS {
         assert!(
             !text.contains(quoted),
             "the body quotes the synthetic identifier {quoted}: {text}"
         );
     }
-    for aql in ["SELECT", "FROM EHR"] {
+    for aql in AQL {
         assert!(!text.contains(aql), "the body quotes the AQL: {text}");
+    }
+}
+
+#[test]
+fn no_minted_request_id_can_contain_a_searched_fragment() {
+    let minted = |c: char| c.is_ascii_digit() || ('a'..='f').contains(&c) || c == '-';
+    for fragment in IDENTIFIERS.into_iter().chain(AQL) {
+        assert!(
+            !fragment.chars().all(minted),
+            "{fragment} is spelled in the alphabet of a minted request id, \
+             which every error body carries"
+        );
     }
 }
 

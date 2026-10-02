@@ -32,7 +32,13 @@ use crate::support::{call, error_body, settings};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The synthetic patient identifier: visibly synthetic, under no real scheme.
-pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38a1";
+pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38kq";
+
+/// The tail of [`PATIENT`], which a test searches for as a partial echo.
+///
+/// It holds letters outside hexadecimal, so a minted request id (a version 4
+/// UUID, lowercase hexadecimal and hyphens) in a response can never contain it.
+pub(crate) const PATIENT_TAIL: &str = "38kq";
 
 /// The synthetic issuing namespace, under the example OID arc.
 pub(crate) const NAMESPACE: &str = "urn:oid:2.999.1";
@@ -591,7 +597,7 @@ async fn a_refused_query_is_a_400_that_quotes_nothing_and_asks_nobody() -> TestR
             "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
              WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
              AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}' \
-             AND c/name/value = CONCAT('SENTINEL-PATIENT', '-38a1')"
+             AND c/name/value = CONCAT('SENTINEL-PATIENT', '-{PATIENT_TAIL}')"
         ),
         format!("SELECT {PATIENT} FROM"),
     ];
@@ -606,7 +612,7 @@ async fn a_refused_query_is_a_400_that_quotes_nothing_and_asks_nobody() -> TestR
         assert_eq!(StatusCode::BAD_REQUEST, status, "{aql}: {text}");
         let error = error_body(&text)?;
         assert!(
-            !error.message.contains(PATIENT) && !error.message.contains("38a1"),
+            !error.message.contains(PATIENT) && !error.message.contains(PATIENT_TAIL),
             "the refusal quotes nothing (§5.4.3): {}",
             error.message
         );
