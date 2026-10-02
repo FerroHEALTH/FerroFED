@@ -913,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.2-rc.1"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -946,7 +946,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.2-rc.1"
+version = "0.0.3"
 dependencies = [
  "bytes",
  "fhir-types",
