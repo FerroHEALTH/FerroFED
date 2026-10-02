@@ -152,6 +152,17 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Changed
 
+- Incompleteness is carried by `meta.federation.complete` alone, and the
+  gateway emits no FHIR `OperationOutcome` (#58; §9.1, §11.4, N17, CP-12).
+  §11.4, CP-12 and track 4 ask for the resource only for a FHIR-facing
+  consumer, and the answer is an ITS-REST `RESULT_SET` whose federation
+  additions live under `meta.federation`. The conformance matrix gives CP-12
+  that reason beside its scored status codes, a test asserts that a
+  best-effort `200` and an all-or-nothing `424` each carry `complete: false`,
+  validate against `federated-result-set.schema.json` and hold no
+  `OperationOutcome`, and the client contract in the book says so. Where the
+  resource would travel for a gateway with FHIR-facing consumers is recorded
+  as an upstream report (#204).
 - The conformance record's loose ends (#196). The `comment-style` citation
   checks read the conformance tables under `conformance/`: their `#` comment
   lines and their `reason` column, which the book renders. The tables now
