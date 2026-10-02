@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use ferrofed_engine::dispatch::{NodeClients, SetupError, SharedCredentials};
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::binding::ResolutionBindings;
+use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
 use ferrofed_identity::dev::{DevCrossRefError, StaticResolver};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
@@ -204,6 +204,23 @@ impl Federation {
     #[must_use]
     pub fn bindings(&self) -> &ResolutionBindings {
         &self.bindings
+    }
+
+    /// The PMIR hook (track 8, provisional): a merge or split at the identity
+    /// source drops every resolution binding it could have made stale, in
+    /// every session (`docs/architecture.md` section 6).
+    ///
+    /// A PMIR subscription (ITI-94) that receives a merge or split (ITI-93)
+    /// calls this; until one is configured, the bindings' time-to-live is the
+    /// bound. The event names how many bindings went, never an identifier.
+    pub fn identity_changed(&self, change: &IdentityChange) -> usize {
+        let dropped = self.bindings.identity_changed(change);
+        tracing::info!(
+            dropped,
+            scoped = matches!(change, IdentityChange::Ehrs(_)),
+            "an identity change dropped resolution bindings"
+        );
+        dropped
     }
 
     /// The registry snapshot every query of this process runs over.

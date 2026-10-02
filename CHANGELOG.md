@@ -22,6 +22,12 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The identity-lifecycle hook for track 8 (#48): `ResolutionBindings::identity_changed`
+  drops every resolution binding a merge or split at the identity source could
+  have made stale, by `ehr_id` in every session or all of them for an
+  unscoped change, and `Federation::identity_changed` is the entry point a PMIR
+  subscription calls. The binding lifetime, `federation.binding_ttl_ms`, is the
+  bound until one exists. Track 8 stays provisional and is not claimed.
 - The ask-all node selection of a deployment with no localizer (#46; §4.3
   Variant B, N4, N10). `federation.node_selection = "ask-all"` declares it,
   and a gateway that federates refuses to boot without the declaration

@@ -45,6 +45,19 @@ pub enum Bound {
     Several(Vec<NodeId>),
 }
 
+/// What an identity change at the identity source touches, as the PMIR hook
+/// reports it (ITI-93 merge or split, track 8 of §16.3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum IdentityChange {
+    /// The change touches the patients these `ehr_id`s belong to: a binding
+    /// that names one of them is dropped, in every session.
+    Ehrs(Vec<EhrId>),
+    /// The change is known, but not which `ehr_id`s it touches: every binding
+    /// of every session is dropped.
+    Unscoped,
+}
+
 /// One session's bindings and when they expire.
 struct Session {
     expires: Instant,
@@ -122,6 +135,40 @@ impl ResolutionBindings {
     /// denial voids what it resolved (decision A20).
     pub fn forget(&self, session: &SessionKey) {
         self.lock().remove(session);
+    }
+
+    /// The PMIR hook: drops every binding an identity change at the identity
+    /// source could have made stale, in every session, and returns how many
+    /// `ehr_id` bindings it dropped.
+    ///
+    /// Track 8 (§16.3) is provisional and full propagation MAY be deferred
+    /// (§18); what FerroFED owes is that no binding outlives a change it could
+    /// have learned of. A PMIR subscription (ITI-94) that receives a merge or
+    /// split notification (ITI-93) calls this; the time-to-live bounds every
+    /// binding the subscription never hears about. A dropped binding costs one
+    /// re-resolution, never a misrouted follow-up.
+    pub fn identity_changed(&self, change: &IdentityChange) -> usize {
+        let mut sessions = self.lock();
+        let dropped = match change {
+            IdentityChange::Unscoped => {
+                let dropped = sessions.values().map(|held| held.by_ehr.len()).sum();
+                sessions.clear();
+                dropped
+            }
+            IdentityChange::Ehrs(ehr_ids) => {
+                let keys: BTreeSet<String> = ehr_ids.iter().map(ehr_key).collect();
+                let mut dropped = 0_usize;
+                for held in sessions.values_mut() {
+                    let before = held.by_ehr.len();
+                    held.by_ehr.retain(|ehr, _| !keys.contains(ehr));
+                    dropped = dropped.saturating_add(before.saturating_sub(held.by_ehr.len()));
+                }
+                sessions.retain(|_, held| !held.by_ehr.is_empty());
+                dropped
+            }
+        };
+        drop(sessions);
+        dropped
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<SessionKey, Session>> {

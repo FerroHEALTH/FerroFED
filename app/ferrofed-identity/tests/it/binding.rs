@@ -11,10 +11,11 @@
 
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::binding::{Bound, ResolutionBindings, SessionKey};
+use ferrofed_identity::binding::{Bound, IdentityChange, ResolutionBindings, SessionKey};
 use ferrofed_registry::id::{EhrId, NodeId};
 
 const EHR_A: &str = "2222aaaa-2222-4222-8222-222222222222";
+const EHR_B: &str = "3333bbbb-3333-4333-8333-333333333333";
 
 fn node(id: &str) -> NodeId {
     NodeId::new(id).expect("a node id")
@@ -99,5 +100,103 @@ fn forgetting_a_session_drops_its_bindings() {
     assert!(
         format!("{bindings:?}").contains("sessions: 0"),
         "Debug counts sessions and shows no binding: {bindings:?}"
+    );
+}
+
+#[test]
+fn a_configured_lifetime_is_the_bound_and_not_a_default() {
+    let bindings = ResolutionBindings::new(Duration::from_millis(1_500));
+    let session = SessionKey::new("session-1");
+    let now = Instant::now();
+    bindings.record(&session, now, [(&node("node-a"), &ehr(EHR_A))]);
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&session, now + Duration::from_millis(1_499), &ehr(EHR_A)),
+        "still live just inside the configured lifetime"
+    );
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&session, now + Duration::from_millis(1_500), &ehr(EHR_A)),
+        "gone exactly at the configured lifetime"
+    );
+}
+
+#[test]
+fn an_identity_change_on_an_ehr_id_drops_it_in_every_session() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let one = SessionKey::new("session-1");
+    let two = SessionKey::new("session-2");
+    let now = Instant::now();
+    bindings.record(
+        &one,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_B)),
+        ],
+    );
+    bindings.record(&two, now, [(&node("node-a"), &ehr(EHR_A))]);
+    let dropped = bindings.identity_changed(&IdentityChange::Ehrs(vec![ehr(EHR_A)]));
+    assert_eq!(2, dropped, "one binding of EHR_A in each session");
+    assert_eq!(Bound::None, bindings.lookup(&one, now, &ehr(EHR_A)));
+    assert_eq!(Bound::None, bindings.lookup(&two, now, &ehr(EHR_A)));
+    assert_eq!(
+        Bound::One(node("node-b")),
+        bindings.lookup(&one, now, &ehr(EHR_B)),
+        "a binding the change does not touch stays"
+    );
+}
+
+#[test]
+fn an_identity_change_matches_an_ehr_id_without_regard_to_case() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let now = Instant::now();
+    bindings.record(&session, now, [(&node("node-a"), &ehr(EHR_A))]);
+    let upper = EHR_A.to_ascii_uppercase();
+    assert_eq!(
+        1,
+        bindings.identity_changed(&IdentityChange::Ehrs(vec![ehr(&upper)]))
+    );
+    assert_eq!(Bound::None, bindings.lookup(&session, now, &ehr(EHR_A)));
+}
+
+#[test]
+fn an_unscoped_identity_change_drops_every_binding() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let one = SessionKey::new("session-1");
+    let two = SessionKey::new("session-2");
+    let now = Instant::now();
+    bindings.record(
+        &one,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_B)),
+        ],
+    );
+    bindings.record(&two, now, [(&node("node-a"), &ehr(EHR_A))]);
+    assert_eq!(3, bindings.identity_changed(&IdentityChange::Unscoped));
+    assert_eq!(Bound::None, bindings.lookup(&one, now, &ehr(EHR_B)));
+    assert_eq!(Bound::None, bindings.lookup(&two, now, &ehr(EHR_A)));
+    assert!(
+        format!("{bindings:?}").contains("sessions: 0"),
+        "no session is left holding anything: {bindings:?}"
+    );
+}
+
+#[test]
+fn an_identity_change_naming_no_bound_ehr_id_drops_nothing() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let now = Instant::now();
+    bindings.record(&session, now, [(&node("node-a"), &ehr(EHR_A))]);
+    assert_eq!(
+        0,
+        bindings.identity_changed(&IdentityChange::Ehrs(vec![ehr(EHR_B)]))
+    );
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&session, now, &ehr(EHR_A))
     );
 }
