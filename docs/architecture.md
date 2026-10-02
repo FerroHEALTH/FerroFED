@@ -871,7 +871,7 @@ therefore emits no `OperationOutcome` on its ITS-REST face, since one in the
 `RESULT_SET` would break N17, and `meta.federation.complete` alone carries
 incompleteness. CP-12 is scored on its status-code half. Where the resource
 would travel for a gateway that does face FHIR consumers is a specification
-gap, recorded as an upstream report (#204).
+gap, recorded as an upstream report on #212.
 
 **The merge**, in order (FerroFED's own sequence where the specification gives
 none):
@@ -1366,7 +1366,7 @@ products are what the federation must absorb. EHRbase 2.36.0 refuses a
 `PARTY_REF.namespace` that contains a `.`, which BASE `object_ref.adoc`
 §Attributes allows (`[a-zA-Z][a-zA-Z0-9_.:/&?=+-]*`), so an EHR seeded on it
 could not carry the example-arc namespace and one of the two nodes could not
-exercise the patient carriers at all (#118 holds the record). Two FerroEHR
+exercise the patient carriers at all (the upstream report on #212 holds the record). Two FerroEHR
 instances still exercise the federation: each has its own database, stamps its
 own `system_id` into every EHR and version it creates, and mints its own
 `ehr_id`s, and a patient is known at one node, both or neither. A second
@@ -1468,7 +1468,7 @@ the milestone in progress.
   check (#52, A28, A43), bounded `OFFSET` (#53, A29), decomposable aggregates
   (#54, A30), `DISTINCT` (#55), dedup on the full version id (#56, A32), the
   status mapping (#57), CP-12 with no `OperationOutcome` on the ITS-REST face
-  (#58, A45, upstream report #204). #59 and #60 are not built (A31); tests pin
+  (#58, A45, upstream report on #212). #59 and #60 are not built (A31); tests pin
   the synchronous answer to `respond-async` and the absent cursor.
 - **v0.0.5, the ITS-REST surface and follow-up routing** (#61 to #69). The
   single-node proxy with `Location` unmodified and `subject_id` resolved (#61,
@@ -1548,5 +1548,5 @@ R4 is #23, #25 and #27).
 | A41 | The number of nodes [R4 D7] | two products, a second FerroEHR for three-node cases | no third open CDR image was evaluated | superseded by A44 (owner, 2026-10-02: "we should use two FerroEHR setups for the test because EHRbase will not work") |
 | A42 | The reference implementation's image [R4 D8] | build from the vendored `Dockerfile` outside CI, or wait for a public image | its image refused an anonymous pull on 2026-10-01 | decided (owner, 2026-10-01) |
 | A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |
-| A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject (#118); a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
-| A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (#204) | decided (owner, 2026-10-02) |
+| A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject (upstream report on #212); a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
+| A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (upstream report on #212) | decided (owner, 2026-10-02) |

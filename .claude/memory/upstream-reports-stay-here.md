@@ -1,6 +1,6 @@
 ---
 name: upstream-reports-stay-here
-description: "An upstream-report issue is the record and stays in this tracker; nothing is filed on an external specification tracker and no 'owner action: file upstream' issue is created; carried from FerroBRIDGE (2026-09-13)"
+description: "Upstream reports are comments on the one standing upstream-reports issue (#212), never issues of their own; that issue is the record and stays in this tracker; nothing is filed on an external specification tracker; owner 2026-09-13 (FerroBRIDGE) and 2026-10-02"
 metadata:
   type: feedback
 ---
@@ -17,11 +17,18 @@ these upstream issue reports".
 **Why:** the value of a report is the cited record of the defect and of the
 project's own decision, which the tracker holds.
 
-**How to apply:** keep writing `upstream-report` issues for defects in the
-Federation Tier specification, its schemas, its reference implementation, or
-a bound profile (the label, the citations, what FerroFED does, the resolution
-an upstream would need), with no milestone ([[upstream-reports-no-milestone]]).
-Never create an issue, checklist item or sentence that asks anyone to file
-them externally. Prose says "recorded as an upstream-report issue". While the
+On FerroFED on 2026-10-02, after four separate `upstream-report` issues, the
+owner: "we will have just one issue for upstream and when you find more issues
+… then create another comment in that one issue so we have just one big issue
+with a lot of comments with upstream reports". The four were moved into #212 as
+comments and closed.
+
+**How to apply:** record each defect in the Federation Tier specification, its
+schemas, its reference implementation, or a bound profile as a new comment on
+#212 (a bold one-line title, the citations, what FerroFED does, the resolution
+an upstream would need). Never open a new `upstream-report` issue, and give #212
+no milestone ([[upstream-reports-no-milestone]]). Never create an issue,
+checklist item or sentence that asks anyone to file them externally. Prose
+says "recorded as an upstream report on #212". While the
 specification is a release candidate these reports matter more, since the 1.0
 text may resolve them ([[spec-pin-0-9-0-rc]]).

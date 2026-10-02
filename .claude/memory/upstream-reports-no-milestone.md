@@ -16,8 +16,9 @@ milestone because they can not be solved right!!!"
 upstream report closes when the specification or library changes, on a
 timeline nobody here controls.
 
-**How to apply:** file an `upstream-report` issue with labels only, never
-`--milestone`. When one is found in a milestone, take it out
-(`gh issue edit <n> --milestone ""`). The FerroFED-side decision the defect
+**How to apply:** the one `upstream-report` issue, #212, never carries a
+milestone, and a report is a comment on it, never a new issue
+([[upstream-reports-stay-here]]). If #212 is ever found in a milestone, take it
+out (`gh issue edit 212 --milestone ""`). The FerroFED-side decision the defect
 forces (the adjudication, the refusal, the workaround) is its own issue, and
 that one carries the milestone.
