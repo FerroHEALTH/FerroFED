@@ -69,6 +69,7 @@ use tokio::task::{JoinError, JoinSet};
 
 use crate::dispatch::{DispatchError, DispatchOptions, NodeClients, NodeQuery, NodeReply};
 use crate::hygiene::Withheld;
+use crate::outbound_id::OutboundId;
 
 /// The completion policy the budget applies under, as `OPTIONS {base}/` and
 /// `meta.federation.timeout` name it (§7a.2, §11.5; the value is our own
@@ -504,10 +505,10 @@ pub enum FanOutError {
 /// (§11.4, §11.5).
 ///
 /// Each request carries a per-node deadline, the budget's per-node timeout
-/// from now and never past the overall deadline; `request_id` travels to
-/// every node. When the overall budget runs out, every node still outstanding
-/// is abandoned and reported `time-out` with the time it was given, and its
-/// task is dropped: a late answer contributes nothing.
+/// from now and never past the overall deadline; the one minted `request_id`
+/// travels to every node. When the overall budget runs out, every node still
+/// outstanding is abandoned and reported `time-out` with the time it was
+/// given, and its task is dropped: a late answer contributes nothing.
 ///
 /// # Errors
 ///
@@ -525,7 +526,7 @@ pub async fn fan_out<T>(
     snapshot: &RegistrySnapshot,
     plan: Plan,
     budget: Budget,
-    request_id: Option<&str>,
+    request_id: Option<OutboundId>,
 ) -> Result<FederatedAnswer, FanOutError>
 where
     T: Transport + Clone + 'static,
@@ -553,7 +554,7 @@ pub async fn fan_out_within<T>(
     plan: Plan,
     budget: Budget,
     started: Instant,
-    request_id: Option<&str>,
+    request_id: Option<OutboundId>,
 ) -> Result<FederatedAnswer, FanOutError>
 where
     T: Transport + Clone + 'static,

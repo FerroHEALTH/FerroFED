@@ -11,10 +11,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::{
-    DispatchError, DispatchOptions, NodeClient, NodeClients, NodeQuery,
+    DispatchError, DispatchOptions, NodeClient, NodeClients, NodeQuery, REQUEST_ID_HEADER,
 };
 use ferrofed_engine::fanout::{Budget, FanOutError, Plan, fan_out};
 use ferrofed_engine::hygiene::{Part, Withheld};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
@@ -112,20 +113,33 @@ async fn an_identifier_in_the_aql_text_is_never_sent() -> TestResult {
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
-async fn an_identifier_in_a_header_the_gateway_adds_is_never_sent() -> TestResult {
+async fn the_header_the_gateway_adds_is_its_minted_id_and_carries_no_identifier() -> TestResult {
     let server = node().await;
     let snapshot = registry(&server.uri())?;
-    let refused = client(&snapshot)?
-        .query(
-            &NodeQuery::new(CLEAN),
-            &options()?.with_request_id(format!("req-{PATIENT}")),
-        )
-        .await;
-    let Err(DispatchError::Withheld { part, .. }) = refused else {
-        return Err(format!("the gate let a leaking header through: {refused:?}").into());
+    let id = OutboundId::mint();
+    client(&snapshot)?
+        .query(&NodeQuery::new(CLEAN), &options()?.with_request_id(id))
+        .await?;
+    let requests = server.received_requests().await.ok_or("recording is on")?;
+    let [request] = requests.as_slice() else {
+        return Err(format!("expected one request, got {}", requests.len()).into());
     };
-    assert_eq!(Part::Header("X-Request-Id"), part);
-    assert_eq!(0, requests_at(&server).await?, "nothing reached the node");
+    for (name, value) in &request.headers {
+        let raw = value.as_bytes();
+        assert!(
+            !raw.windows(PATIENT.len())
+                .any(|window| window == PATIENT.as_bytes()),
+            "the {name} header carries the identifier"
+        );
+    }
+    assert_eq!(
+        Some(id.to_string().as_bytes()),
+        request
+            .headers
+            .get(REQUEST_ID_HEADER)
+            .map(http::HeaderValue::as_bytes),
+        "the one header the gateway adds is the id it minted"
+    );
     Ok(())
 }
 
@@ -141,7 +155,7 @@ async fn a_clean_request_is_sent_with_identifiers_withheld() -> TestResult {
     client(&snapshot)?
         .query(
             &NodeQuery::new(CLEAN).with_fetch(10),
-            &options()?.with_request_id("req-1"),
+            &options()?.with_request_id(OutboundId::mint()),
         )
         .await?;
     assert_eq!(1, requests_at(&server).await?, "the clean query was sent");

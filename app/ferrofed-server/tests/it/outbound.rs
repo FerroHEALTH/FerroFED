@@ -277,11 +277,15 @@ fn strips_and_refusals_are_security_events_that_name_no_value() -> TestResult {
     )?;
     let (_, stripped) = carriers().into_iter().next().ok_or("one carrier")?;
     let refused = patient_and(&format!("c/composer/identifiers/id = '{PATIENT}'"));
-    let text = logged(
-        &app,
-        "trace",
-        vec![post(body(&stripped)?)?, post(body(&refused)?)?],
-    )?;
+    let mut requests = vec![post(body(&stripped)?)?, post(body(&refused)?)?];
+    for request in &mut requests {
+        // NOTE: §5.4.3, the client's own request id names the patient here, and
+        // an event carries the gateway's id, so the value still reaches no line.
+        request
+            .headers_mut()
+            .insert("x-request-id", http::HeaderValue::from_static(PATIENT));
+    }
+    let text = logged(&app, "trace", requests)?;
     let events = security_lines(&text);
     let strips: Vec<&&str> = events
         .iter()

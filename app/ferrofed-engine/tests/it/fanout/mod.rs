@@ -27,6 +27,7 @@ use std::time::Duration;
 
 use ferrofed_engine::dispatch::{NodeClients, NodeQuery};
 use ferrofed_engine::fanout::{Budget, FederatedAnswer, Plan, fan_out};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::status::EndpointStatus;
@@ -119,7 +120,7 @@ async fn run(
         snapshot,
         plan,
         budget,
-        Some("req-fanout-1"),
+        Some(OutboundId::mint()),
     )
     .await?)
 }

@@ -22,7 +22,11 @@ ITS-REST `Error` body and two more members:
 - `validationErrors`: the ITS-REST list, which is empty.
 - `code`: the stable code, from the tables below.
 - `request_id`: the request id, the value of the `X-Request-Id` response
-  header, so you and the operator name the same request.
+  header. It is your own `X-Request-Id` when you sent one, and otherwise the
+  gateway's own id, the one its log and every node record. Your own id never
+  leaves the gateway: no node receives it and the log does not record it,
+  because the gateway cannot tell whether free text names a patient (§5.4.1,
+  N33). To name a request the operator can find by its id, send none.
 
 ```json
 {
@@ -90,7 +94,7 @@ the node is reported and the query succeeds.
 | `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope (§11.2, §11.3). |
 | `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node; the gateway never chooses between them (§12.5.2, N42). |
 | `controlling-system-unreachable` | 409 | A versioned write's controlling system is not reachable, and the gateway never writes to a copy (§10.3, N36). |
-| `internal` | 500 | The gateway failed on its own side. The operator's log carries the cause under the request id. |
+| `internal` | 500 | The gateway failed on its own side. The operator's log records the failure under the gateway's request id. |
 | `not-found` | 404 | The path is outside every surface the gateway serves. |
 | `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32). |
 

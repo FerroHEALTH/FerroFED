@@ -6,7 +6,9 @@
 //!
 //! An error body is the ITS-REST `Error`, `message` and `validationErrors`,
 //! with two members added: `code`, one of the codes of [`Code`], and
-//! `request_id`, so a client and an operator name the same request. Two
+//! `request_id`, the exchange id of [`crate::request_id`]: the client's own
+//! when it named the request, otherwise the gateway's, which the log records
+//! too. Two
 //! failures answer with another body. A fan-out that fails under
 //! all-or-nothing (`504`, `424`) answers the `RESULT_SET` of §11.4, whose
 //! `meta.federation.endpoints[]` statuses say which node failed and why,

@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::REQUEST_ID_HEADER;
 use ferrofed_engine::fanout::{FanOutError, Plan, TIMEOUT_POLICY, Verdict, fan_out};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
@@ -303,15 +304,19 @@ async fn a_node_answering_after_the_overall_budget_contributes_nothing() -> Test
     Ok(())
 }
 
+// conformance: CP-26
 #[tokio::test]
-async fn the_request_id_reaches_every_node() -> TestResult {
+async fn the_one_outbound_id_reaches_every_node() -> TestResult {
     let a = node(json(200, &result_set(&[]))).await;
     let b = node(json(200, &result_set(&[]))).await;
     let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &b.uri())])?;
-    run(
+    let outbound = OutboundId::mint();
+    fan_out(
+        &clients(&snapshot)?,
         &snapshot,
         plan_for(&["node-a-pub", "node-b-pub"])?,
         budget(2_000, 5_000)?,
+        Some(outbound),
     )
     .await?;
     for server in [&a, &b] {
@@ -324,7 +329,7 @@ async fn the_request_id_reaches_every_node() -> TestResult {
             .first()
             .and_then(|request| request.headers.get(REQUEST_ID_HEADER))
             .and_then(|value| value.to_str().ok());
-        assert_eq!(id, Some("req-fanout-1"));
+        assert_eq!(id, Some(outbound.to_string().as_str()));
     }
     Ok(())
 }

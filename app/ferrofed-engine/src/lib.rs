@@ -10,7 +10,9 @@
 //! request per in-scope node under one deadline, builds `meta.federation` from
 //! every outcome and applies the all-or-nothing decision (#37; §11.4, §11.5,
 //! N37, N38). [`hygiene`] is the outbound gate
-//! every request to a node passes before it is sent (#45).
+//! every request to a node passes before it is sent (#45). [`outbound_id`] is
+//! the correlation id the gateway mints for a node request, with the inventory
+//! of every header a node request carries (§5.4.1, N33).
 #![doc(test(attr(deny(warnings))))]
 
 // TODO(#64): follow-up reads routed on creating_system_id, then endpoint_id, then ask-all (§12.3).
@@ -18,6 +20,7 @@
 pub mod dispatch;
 pub mod fanout;
 pub mod hygiene;
+pub mod outbound_id;
 
 /// The openEHR ITS-REST release the engine dispatches to each node.
 ///

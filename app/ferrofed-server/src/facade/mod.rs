@@ -36,11 +36,12 @@ pub mod security;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::Json;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
+use axum::{Extension, Json};
 use ferrofed_engine::fanout::{Budget, Completion, FanOutError, fan_out_within};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::refusal::Refusal;
@@ -59,14 +60,18 @@ pub const QUERY_AQL: &str = "/v1/query/aql";
 /// `POST {base}/v1/query/aql`: the federated ad hoc query.
 ///
 /// Without a federation, the gateway federates nothing and answers as the
-/// unserved ITS-REST surface does.
+/// unserved ITS-REST surface does. Every node the query reaches receives the
+/// request's [`OutboundId`], never the client's `x-request-id` (§5.4.1, N33);
+/// the client's id names the request only in the answer.
 pub async fn query_aql(
     State(state): State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
     let started = Instant::now();
     let request_id = request_id::of(&headers).unwrap_or_default().to_owned();
+    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, &request_id);
     };
@@ -89,7 +94,7 @@ pub async fn query_aql(
         dedup,
         budget,
         started,
-        request_id: &request_id,
+        outbound,
         session: session.as_ref(),
     };
     match federate(federation, query).await {
@@ -209,8 +214,9 @@ struct Query<'a> {
     budget: Budget,
     /// When the request arrived, the instant the overall budget runs from.
     started: Instant,
-    /// The request id, empty when the client sent none.
-    request_id: &'a str,
+    /// The gateway's id of the request: the one every node receives and the
+    /// security events record, never the client's.
+    outbound: OutboundId,
     /// The client session the resolution bindings belong to.
     session: Option<&'a SessionKey>,
 }
@@ -266,9 +272,11 @@ async fn federate(
         dedup,
         budget,
         started,
-        request_id,
+        outbound,
         session,
     } = query;
+    let logged = outbound.to_string();
+    let request_id = logged.as_str();
     // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
     // body is refused with a fixed message.
     let request: AdhocQueryExecute =
@@ -321,7 +329,7 @@ async fn federate(
         plan,
         budget,
         started,
-        (!request_id.is_empty()).then_some(request_id),
+        Some(outbound),
     )
     .await
     .map_err(|error| {

@@ -8,9 +8,9 @@
 //! (`POST {base}/v1/query/aql`) of `openehr-its`'s `rest-client`, so the
 //! request line, the headers and the body are composed by that runtime and
 //! nowhere in FerroFED (no specification governs this: our own design). This
-//! module adds
-//! the per-endpoint client, the call's deadline and request id, and the
-//! classification of the answer:
+//! module adds the per-endpoint client, the call's deadline and the gateway's
+//! [`OutboundId`], and the classification of the answer. Every header a node
+//! request carries is listed in [`crate::outbound_id`]:
 //!
 //! | The node | Status |
 //! |---|---|
@@ -22,15 +22,15 @@
 //! A `node-error` carries the node's own status and message (§11.2), never
 //! folded into `offline`; a refused connection still carries its reason. A
 //! failure on the gateway's side before any request left (a credential the
-//! provider could not produce, a request id that is not a legal header value)
-//! is a [`DispatchError`], never an endpoint status: nothing was sent to
-//! report on.
+//! provider could not produce, a body that would not serialize) is a
+//! [`DispatchError`], never an endpoint status: nothing was sent to report on.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
 use crate::hygiene::{Outbound, Part, Withheld};
+use crate::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
@@ -50,7 +50,7 @@ use url::Url;
 /// (`{baseUrl}/v1/...`), appended to the endpoint's base URL.
 pub const API_VERSION_SEGMENT: &str = "v1";
 
-/// The header that carries the gateway's request id to a node.
+/// The header that carries the gateway's [`OutboundId`] to a node.
 pub const REQUEST_ID_HEADER: &str = "X-Request-Id";
 
 /// The longest node message a `node-error` copies into `error`, in characters.
@@ -134,12 +134,12 @@ impl NodeQuery {
 }
 
 /// The per-call options of one dispatch: the instant the node must have
-/// answered by, the gateway's request id, and the identifiers no request may
-/// carry.
+/// answered by, the gateway's [`OutboundId`], and the identifiers no request
+/// may carry.
 #[derive(Debug, Clone)]
 pub struct DispatchOptions {
     deadline: Instant,
-    request_id: Option<String>,
+    request_id: Option<OutboundId>,
     withheld: Arc<Withheld>,
 }
 
@@ -165,9 +165,12 @@ impl DispatchOptions {
 
     /// These options sending `request_id` to the node in
     /// [`REQUEST_ID_HEADER`].
+    ///
+    /// The id is one the gateway minted, never a client value, so no client
+    /// text reaches a node in this header (§5.4.1, N33).
     #[must_use]
-    pub fn with_request_id(mut self, request_id: impl Into<String>) -> Self {
-        self.request_id = Some(request_id.into());
+    pub fn with_request_id(mut self, request_id: OutboundId) -> Self {
+        self.request_id = Some(request_id);
         self
     }
 
@@ -180,8 +183,8 @@ impl DispatchOptions {
     /// The `openehr-its` call options for these options.
     fn call_options(&self) -> Result<CallOptions, ClientError> {
         let options = CallOptions::default().with_deadline(self.deadline);
-        match self.request_id.as_deref() {
-            Some(id) => options.with_header(REQUEST_ID_HEADER, id),
+        match self.request_id {
+            Some(id) => options.with_header(REQUEST_ID_HEADER, &id.to_string()),
             None => Ok(options),
         }
     }
@@ -200,8 +203,8 @@ impl<T: Transport> NodeClient<T> {
             .flatten()
             .map(|number| number.to_string())
             .collect();
-        let headers: Vec<(&'static str, &str)> = options
-            .request_id
+        let request_id = options.request_id.map(|id| id.to_string());
+        let headers: Vec<(&'static str, &str)> = request_id
             .as_deref()
             .map(|id| (REQUEST_ID_HEADER, id))
             .into_iter()
@@ -309,8 +312,8 @@ pub enum DispatchError {
         /// The part of the request that carried it; never the value.
         part: Part,
     },
-    /// The request could not be composed: a header that is not legal on the
-    /// wire, or a body that would not serialize.
+    /// The request could not be composed: a body that would not serialize, or
+    /// another request the client runtime refuses to build.
     #[error("the request to endpoint {endpoint} could not be composed")]
     Compose {
         /// The endpoint.
@@ -384,8 +387,7 @@ impl<T: Transport> NodeClient<T> {
     ///
     /// Returns [`DispatchError`] when the request could not leave the gateway:
     /// a withheld identifier in the request ([`DispatchError::Withheld`], with
-    /// nothing sent), no credential, or a request id or body the client
-    /// runtime refuses. Every answer, and every failure to reach the node, is a
+    /// nothing sent), no credential, or a body the client runtime refuses. Every answer, and every failure to reach the node, is a
     /// [`NodeReply`].
     pub async fn query(
         &self,
@@ -690,6 +692,13 @@ mod tests {
         };
         assert!(is_compose(ClientError::HeaderName {
             header: "not a name".to_owned(),
+            source,
+        })?);
+        let Err(source) = http::HeaderValue::from_str("line\nbreak") else {
+            return Err("a line break parsed as a header value".into());
+        };
+        assert!(is_compose(ClientError::HeaderValue {
+            header: "X-Request-Id".to_owned(),
             source,
         })?);
         assert!(is_compose(ClientError::UnsupportedMediaType {

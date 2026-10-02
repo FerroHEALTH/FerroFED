@@ -230,11 +230,14 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
 
 /// Applies the middleware stack every FerroFED surface carries to `router`.
 ///
-/// Outermost first: the request-id normalizer, the layer that mints one, the
-/// panic renderer, the layer that propagates the id onto the response, the
-/// panic catcher, the request timeout, the body-size ceiling, and the request
-/// log. The renderer sits outside the propagate layer because it reads the id
-/// from the response the propagate layer has just stamped.
+/// Outermost first: the request-id normalizer, the panic renderer, the layer
+/// that mints the gateway's outbound id, the layer that sets the exchange id,
+/// the layer that propagates the exchange id onto the response, the panic
+/// catcher, the request timeout, the body-size ceiling, and the request log.
+/// The renderer sits outside the outbound and propagate layers because it
+/// reads both ids from the response they have just stamped, and the exchange
+/// id is set inside the outbound layer so an unnamed request takes the
+/// outbound id as its exchange id ([`request_id`]).
 pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
     router
         .layer(axum::middleware::from_fn(request_log::log))
@@ -245,8 +248,9 @@ pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
         ))
         .layer(CatchPanicLayer::custom(panic::caught))
         .layer(PropagateRequestIdLayer::new(request_id::HEADER))
-        .layer(axum::middleware::map_response(panic::render))
         .layer(SetRequestIdLayer::new(request_id::HEADER, request_id::Mint))
+        .layer(axum::middleware::from_fn(request_id::mint_outbound))
+        .layer(axum::middleware::map_response(panic::render))
         .layer(axum::middleware::map_request(request_id::strip_illegal))
 }
 

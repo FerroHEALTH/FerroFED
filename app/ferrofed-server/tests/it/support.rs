@@ -73,8 +73,10 @@ pub(crate) struct LogLine {
     pub(crate) latency_ms: Option<f64>,
     /// The logged query pairs of a request line.
     pub(crate) query: Option<String>,
-    /// The request id of a request line.
+    /// The request id of a request line: the gateway's outbound id.
     pub(crate) request_id: Option<String>,
+    /// Whether the client named its request, on a request line.
+    pub(crate) client_named: Option<bool>,
 }
 
 /// Returns every JSON line in `text`, in order.

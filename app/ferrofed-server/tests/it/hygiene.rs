@@ -61,6 +61,7 @@ fn queries() -> Result<Vec<Request<Body>>, http::Error> {
         Request::post("/v1/query/aql")
             .header(header::CONTENT_TYPE, "application/json")
             .header("x-patient", SENTINEL)
+            .header("x-request-id", SENTINEL)
             .body(Body::from(format!(
                 r#"{{"q":"{}","query_parameters":{{"patient":"{SENTINEL}"}}}}"#,
                 aql()
