@@ -15,6 +15,10 @@ document = "/etc/ferrofed/registry.toml"
 [federation]
 per_node_timeout_ms = 10000
 overall_timeout_ms = 25000
+# No localizer is configured, so every member's cross-reference decides where
+# a patient query goes (the ask-all node selection of the specification's
+# reference flow, Variant B).
+node_selection = "ask-all"
 
 [credentials."node-a-query"]
 user = "ferroehr"

@@ -22,6 +22,15 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The ask-all node selection of a deployment with no localizer (#46; §4.3
+  Variant B, N4, N10). `federation.node_selection = "ask-all"` declares it,
+  and a gateway that federates refuses to boot without the declaration
+  (`NodeSelectionUndeclared`), so the choice is never a silent default. Every
+  active member's cross-reference is asked, the query reaches only the members
+  that return an `ehr_id`, and the others are `not-resolved` without failing
+  the query (N6, N8). The selection is named in the startup log; the
+  `OPTIONS` self-description follows with #73. The quickstart and the
+  configuration page declare it.
 - A PIX Manager in the test harness, seeded by ITI-104 (#47). The testkit's
   `pix::PixManager` is a test device, not a PIXm implementation: an in-process
   loopback server that takes the PIXm 3.1.0 Patient Identity Feed FHIR

@@ -141,6 +141,21 @@ pub struct Federation {
     /// step 2, decision A20): a correctness bound, past which a binding is
     /// never routed on.
     pub binding_ttl_ms: u64,
+    /// How the node set of an undirected patient query is chosen (§4.3, N4).
+    /// It has no default: a federating gateway declares it.
+    pub node_selection: Option<NodeSelection>,
+}
+
+/// How the node set of an undirected patient query is chosen (§4.3, N4,
+/// N10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum NodeSelection {
+    /// No localizer is configured: every active member is a candidate, its
+    /// cross-reference decides, and a member that does not know the patient is
+    /// `not-resolved` (§4.3 Variant B, N4 last sentence, N6).
+    AskAll,
 }
 
 impl Default for Federation {
@@ -150,6 +165,7 @@ impl Default for Federation {
             overall_timeout_ms: 25_000,
             default_namespace: None,
             binding_ttl_ms: 900_000,
+            node_selection: None,
         }
     }
 }
@@ -439,6 +455,7 @@ impl Config {
             budget,
             default_namespace: self.federation.default_namespace.clone(),
             binding_ttl,
+            node_selection: self.federation.node_selection,
         })
     }
 }

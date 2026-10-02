@@ -153,7 +153,7 @@ pub(crate) fn gateway(
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n{tables}"
+        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\n\n{tables}"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
