@@ -5,13 +5,15 @@
 
 use std::path::Path;
 
-use secrecy::SecretString;
+use http::HeaderValue;
+use secrecy::{ExposeSecret as _, SecretString};
 
 use crate::config::Credentials;
-use crate::config::error::Error;
+use crate::config::error::{BasicFault, Error};
 use crate::config::settings::Scheme;
 
-/// Returns the scheme `credentials` describes.
+/// Returns the scheme `credentials` describes, once it is known to fit the
+/// `Authorization` header it is sent in.
 pub(super) fn resolve_credentials(
     section: &str,
     credentials: &Credentials,
@@ -30,11 +32,31 @@ pub(super) fn resolve_credentials(
         (Some(_), Some(_), _) | (Some(_), None, Some(_)) => Err(Error::Scheme {
             section: section.to_owned(),
         }),
-        (Some(token), None, None) => Ok(Scheme::Bearer(token)),
-        (None, Some(user), Some(password)) => Ok(Scheme::Basic {
-            user: user.to_owned(),
-            password,
-        }),
+        (Some(token), None, None) => {
+            let key = source_key(
+                section,
+                "bearer_token",
+                credentials.bearer_token_file.is_some(),
+            );
+            bearer_header(&key, &token)?;
+            Ok(Scheme::Bearer(token))
+        }
+        (None, Some(user), Some(password)) => {
+            let user_key = format!("{section}.user");
+            basic_value(&user_key, user)?;
+            if user.contains(':') {
+                return Err(Error::Basic {
+                    key: user_key,
+                    fault: BasicFault::Colon,
+                });
+            }
+            let key = source_key(section, "password", credentials.password_file.is_some());
+            basic_value(&key, password.expose_secret())?;
+            Ok(Scheme::Basic {
+                user: user.to_owned(),
+                password,
+            })
+        }
         (None, Some(_), None) => Err(Error::Missing {
             key: format!("{section}.password"),
         }),
@@ -45,6 +67,44 @@ pub(super) fn resolve_credentials(
             section: section.to_owned(),
         }),
     }
+}
+
+/// The key the secret `name` of `section` was read from: its `_file` sibling
+/// when that is set, the inline key otherwise.
+fn source_key(section: &str, name: &str, from_file: bool) -> String {
+    if from_file {
+        format!("{section}.{name}_file")
+    } else {
+        format!("{section}.{name}")
+    }
+}
+
+/// Refuses a bearer token whose `Authorization` value is not a legal header
+/// value: `Bearer` and the token, as the node client composes it, checked by
+/// the same `http` parse the client applies (RFC 6750 §2.1).
+fn bearer_header(key: &str, token: &SecretString) -> Result<(), Error> {
+    let composed = SecretString::from(format!("Bearer {}", token.expose_secret()));
+    HeaderValue::from_str(composed.expose_secret())
+        .map(drop)
+        .map_err(|source| Error::Authorization {
+            key: key.to_owned(),
+            source,
+        })
+}
+
+/// Refuses a basic user-id or password that holds a control character.
+///
+/// The base64 of any user and password is a legal header value, so the bound
+/// here is the scheme's own: RFC 7617 §2 forbids `CTL` (RFC 5234 Appendix
+/// B.1) in both.
+fn basic_value(key: &str, value: &str) -> Result<(), Error> {
+    if value.chars().any(|c| c.is_ascii_control()) {
+        return Err(Error::Basic {
+            key: key.to_owned(),
+            fault: BasicFault::ControlCharacter,
+        });
+    }
+    Ok(())
 }
 
 /// Returns the secret `key` names, inline or from its `_file` sibling.

@@ -4,7 +4,7 @@
 //! The configuration contract: the file, the environment over it, the `_file`
 //! secrets, and every refusal.
 
-use ferrofed_server::config::error::Error;
+use ferrofed_server::config::error::{BasicFault, Error};
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrofed_server::telemetry::Format;
@@ -494,6 +494,42 @@ fn a_secret_of_the_wrong_type_is_never_echoed() -> Result<(), Box<dyn StdError>>
         error.to_string().contains("credentials.\"a\".bearer_token"),
         "the refusal names the key"
     );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
+-> Result<(), Box<dyn StdError>> {
+    let error = refusal("[credentials.\"a\"]\nbearer_token = \"Qz7left\\rQz7right\"\n")?;
+    assert!(
+        matches!(&error, Error::Authorization { key, .. } if key == "credentials.a.bearer_token"),
+        "{error:?}"
+    );
+    assert!(!everything(&error).contains("Qz7"), "{error}");
+
+    let error = refusal(
+        "[credentials.\"a\"]\nuser = \"gateway\"\npassword = \"Qz7left\\u0000Qz7right\"\n",
+    )?;
+    assert!(
+        matches!(&error, Error::Basic { key, fault: BasicFault::ControlCharacter }
+            if key == "credentials.a.password"),
+        "{error:?}"
+    );
+    assert!(!everything(&error).contains("Qz7"), "{error}");
+
+    let manager = "[[pixm.manager]]\nurl = \"http://127.0.0.1:9\"\n\
+                   [pixm.manager.credentials]\nbearer_token = \"Qz7left\\nQz7right\"\n";
+    let error = refusal(manager)?;
+    assert!(
+        matches!(&error, Error::Authorization { key, .. }
+            if key == "pixm.manager[0].credentials.bearer_token"),
+        "a PIX Manager credential is held to the same rule: {error:?}"
+    );
+    assert!(!everything(&error).contains("Qz7"), "{error}");
     Ok(())
 }
 
