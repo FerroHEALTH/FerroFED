@@ -274,7 +274,7 @@ pub enum SeedError {
 pub struct PixBaseError(#[source] url::ParseError);
 
 /// Writes `plan` to the node whose ITS-REST API root is `api_root` (the URL
-/// `/v1/ehr` lives under, for example `http://host:port/ehrbase/rest/openehr`).
+/// `/v1/ehr` lives under, for example `http://host:port/ferroehr/rest/openehr`).
 ///
 /// Every step must succeed: a node that already holds an EHR or the template
 /// answers `409`, which is a refusal here, because a seed runs against a
@@ -309,9 +309,6 @@ pub async fn seed(api_root: &str, plan: &SeedPlan) -> Result<SeedReport, SeedErr
     if plan.template {
         let path = template_path();
         let body = read(&path)?;
-        // EHRbase answers 406 to an upload whose client does not accept XML
-        // back, though the answer has no body; FerroEHR accepts either. One
-        // request that accepts XML serves both without a per-product case.
         let request = client
             .post(format!("{api_root}/v1/definition/template/adl1.4"))
             .header(CONTENT_TYPE, "application/xml")

@@ -25,7 +25,7 @@ under [`/docs/`](https://ferrofed.eu/docs/).
 
 ## Quickstart
 
-The gateway beside two member CDRs, FerroEHR and EHRbase, from the binaries of
+The gateway beside two member CDRs, two FerroEHR instances, from the binaries of
 the latest release:
 
 ```sh
@@ -41,7 +41,7 @@ send one ordinary ITS-REST query to the gateway:
 curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
   http://127.0.0.1:8081/ferroehr/rest/openehr/v1/ehr
 curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
-  http://127.0.0.1:8091/ehrbase/rest/openehr/v1/ehr
+  http://127.0.0.1:8082/ferroehr/rest/openehr/v1/ehr
 
 curl http://127.0.0.1:8080/v1/query/aql \
   -H 'Content-Type: application/json' \

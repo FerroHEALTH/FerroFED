@@ -9,12 +9,12 @@ use std::time::{Duration, Instant};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// A stub node that answers `GET /ehrbase/rest/openehr/v1/ehr/{id}` with a
+/// A stub node that answers `GET /ferroehr/rest/openehr/v1/ehr/{id}` with a
 /// body and an `ETag`, and records what reached it.
 async fn node() -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/ehrbase/rest/openehr/v1/ehr/7f4c"))
+        .and(path("/ferroehr/rest/openehr/v1/ehr/7f4c"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("ETag", "\"7f4c\"")
@@ -23,7 +23,7 @@ async fn node() -> MockServer {
         .mount(&server)
         .await;
     Mock::given(method("POST"))
-        .and(path("/ehrbase/rest/openehr/v1/query/aql"))
+        .and(path("/ferroehr/rest/openehr/v1/query/aql"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"rows\":[]}"))
         .mount(&server)
         .await;
@@ -38,7 +38,7 @@ async fn forwards_unmodified_and_journals_every_carrier() {
 
     let answer = client
         .post(format!(
-            "{}/ehrbase/rest/openehr/v1/query/aql?fetch=5",
+            "{}/ferroehr/rest/openehr/v1/query/aql?fetch=5",
             proxy.origin()
         ))
         .header("openEHR-federation-client", "audit-subject")
@@ -62,7 +62,7 @@ async fn forwards_unmodified_and_journals_every_carrier() {
     let capture = &journal[0];
     assert_eq!(capture.method, "POST", "the method is journalled");
     assert_eq!(
-        capture.path, "/ehrbase/rest/openehr/v1/query/aql",
+        capture.path, "/ferroehr/rest/openehr/v1/query/aql",
         "the path is journalled without the query"
     );
     assert_eq!(
@@ -95,7 +95,7 @@ async fn the_journal_finds_a_needle_in_any_carrier_and_only_there() {
     let node = node().await;
     let proxy = CapturingProxy::start(node.uri()).await.unwrap();
     let client = reqwest::Client::new();
-    let base = format!("{}/ehrbase/rest/openehr/v1", proxy.origin());
+    let base = format!("{}/ferroehr/rest/openehr/v1", proxy.origin());
 
     client
         .get(format!("{base}/ehr/7f4c?subject_id=ffd-test-0001"))
@@ -144,7 +144,7 @@ async fn a_status_fault_answers_without_reaching_the_node() {
     proxy.set_fault(Fault::Status(StatusCode::INTERNAL_SERVER_ERROR));
 
     let answer = reqwest::get(format!(
-        "{}/ehrbase/rest/openehr/v1/ehr/7f4c",
+        "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
     ))
     .await
@@ -166,7 +166,7 @@ async fn a_status_fault_answers_without_reaching_the_node() {
 
     proxy.clear_fault();
     let answer = reqwest::get(format!(
-        "{}/ehrbase/rest/openehr/v1/ehr/7f4c",
+        "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
     ))
     .await
@@ -187,7 +187,7 @@ async fn a_delay_fault_holds_the_request_then_forwards_it() {
 
     let started = Instant::now();
     let answer = reqwest::get(format!(
-        "{}/ehrbase/rest/openehr/v1/ehr/7f4c",
+        "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
     ))
     .await
@@ -220,7 +220,7 @@ async fn a_delay_past_the_client_budget_is_a_time_out() {
         .unwrap();
     let outcome = client
         .get(format!(
-            "{}/ehrbase/rest/openehr/v1/ehr/7f4c",
+            "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
             proxy.origin()
         ))
         .send()
@@ -238,7 +238,7 @@ async fn a_refuse_fault_closes_the_connection_without_an_answer() {
     proxy.set_fault(Fault::Refuse);
 
     let outcome = reqwest::get(format!(
-        "{}/ehrbase/rest/openehr/v1/ehr/7f4c",
+        "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
     ))
     .await;
@@ -253,7 +253,7 @@ async fn a_refuse_fault_closes_the_connection_without_an_answer() {
 
     proxy.clear_fault();
     let answer = reqwest::get(format!(
-        "{}/ehrbase/rest/openehr/v1/ehr/7f4c",
+        "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
     ))
     .await
@@ -275,7 +275,7 @@ async fn an_unreachable_node_is_a_bad_gateway() {
     let proxy = CapturingProxy::start(upstream).await.unwrap();
 
     let answer = reqwest::get(format!(
-        "{}/ehrbase/rest/openehr/v1/ehr/7f4c",
+        "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
     ))
     .await
@@ -295,10 +295,10 @@ async fn faults_are_per_proxy() {
     let b = CapturingProxy::start(second.uri()).await.unwrap();
     b.set_fault(Fault::Status(StatusCode::SERVICE_UNAVAILABLE));
 
-    let via_a = reqwest::get(format!("{}/ehrbase/rest/openehr/v1/ehr/7f4c", a.origin()))
+    let via_a = reqwest::get(format!("{}/ferroehr/rest/openehr/v1/ehr/7f4c", a.origin()))
         .await
         .unwrap();
-    let via_b = reqwest::get(format!("{}/ehrbase/rest/openehr/v1/ehr/7f4c", b.origin()))
+    let via_b = reqwest::get(format!("{}/ferroehr/rest/openehr/v1/ehr/7f4c", b.origin()))
         .await
         .unwrap();
     assert_eq!(
