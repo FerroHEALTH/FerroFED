@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_server::config::Config;
+use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use http::{HeaderMap, Request, StatusCode, header};
@@ -336,5 +336,97 @@ async fn only_the_first_wait_counts() -> TestResult {
     assert_eq!(StatusCode::OK, reply.status, "{}", reply.text);
     assert_eq!(budget(2_000, 2_000), reported(&reply.text)?);
     assert_eq!(Some("wait=2"), applied(&reply));
+    Ok(())
+}
+
+/// A development gateway over node A and node B whose middleware, request
+/// timeout included, comes from the same configuration as its budget:
+/// `server` and `federation` are the keys of those tables.
+fn configured(
+    dir: &Path,
+    a: &MockServer,
+    b: &MockServer,
+    server: &str,
+    federation: &str,
+) -> Result<Router, Box<dyn Error>> {
+    let document = dir.join("registry.toml");
+    std::fs::write(&document, registry(&a.uri(), &b.uri(), ""))?;
+    let document = toml::Value::String(document.display().to_string());
+    let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
+    let text = format!(
+        "profile = \"development\"\n\n[server]\n{server}\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\n{federation}\n\n{rows}"
+    );
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
+    Ok(ferrofed_server::router(
+        Arc::new(AppState::with_federation(federation)),
+        &settings.server,
+    ))
+}
+
+/// Asserts the §11.5 failure: a `504` carrying the envelope, node B
+/// `time-out`, and never the request timeout's `408`.
+fn assert_budget_answered(reply: &Reply) -> TestResult {
+    assert_ne!(
+        StatusCode::REQUEST_TIMEOUT,
+        reply.status,
+        "the request timeout never cuts the fan-out"
+    );
+    assert_eq!(StatusCode::GATEWAY_TIMEOUT, reply.status, "{}", reply.text);
+    schema::validate(&reply.text)?;
+    let answer: Answer = serde_json::from_str(&reply.text)?;
+    assert_eq!(
+        vec![("node-a-pub", "active"), ("node-b-pub", "time-out")],
+        statuses(&answer),
+        "§11.4: the failing response still carries meta.federation.endpoints[]"
+    );
+    assert!(
+        !answer.meta.federation.complete,
+        "a failing answer is incomplete"
+    );
+    Ok(())
+}
+
+// conformance: CP-31
+#[tokio::test]
+async fn a_slow_node_under_the_default_timeouts_answers_the_504_envelope() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_after("uid-at-b", Duration::from_secs(15)).await;
+    let dir = tempfile::tempdir()?;
+    let app = configured(dir.path(), &a, &b, "", "")?;
+
+    let reply = timed(app, post(&[], false)?).await?;
+    assert_budget_answered(&reply)?;
+    assert!(
+        reply.took < Duration::from_secs(25),
+        "the default per-node timeout abandons node B, took {:?}",
+        reply.took
+    );
+    Ok(())
+}
+
+// conformance: CP-31
+#[tokio::test]
+async fn the_overall_budget_fires_before_the_tightest_accepted_request_timeout() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_after("uid-at-b", Duration::from_secs(10)).await;
+    let dir = tempfile::tempdir()?;
+    let overall_ms = 300;
+    let request_ms = overall_ms + COMBINING_MARGIN_MS + 1;
+    let app = configured(
+        dir.path(),
+        &a,
+        &b,
+        &format!("request_timeout_ms = {request_ms}"),
+        &format!("per_node_timeout_ms = 5000\noverall_timeout_ms = {overall_ms}"),
+    )?;
+
+    let reply = timed(app, post(&[], false)?).await?;
+    assert_budget_answered(&reply)?;
+    assert!(
+        reply.took < Duration::from_millis(request_ms),
+        "§11.5: answered within the budget plus combining time, took {:?}",
+        reply.took
+    );
     Ok(())
 }

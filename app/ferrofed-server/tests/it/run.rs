@@ -121,3 +121,31 @@ fn the_binary_refuses_to_boot_on_an_unknown_key_and_on_a_doubly_set_secret()
     }
     Ok(())
 }
+
+/// §11.5: `serve` and `config check` both refuse a request timeout that does
+/// not exceed the overall fan-out budget plus the combining margin.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_binary_refuses_a_request_timeout_inside_the_fan_out_budget() -> Result<(), Box<dyn StdError>>
+{
+    let toml = "[server]\nlisten = \"127.0.0.1:1\"\nrequest_timeout_ms = 25000\n\n\
+                [registry]\ndocument = \"/nonexistent/registry.toml\"\n";
+    for job in [&["serve"][..], &["config", "check"][..]] {
+        let output = binary(job, toml)?;
+        assert_eq!(
+            Some(i32::from(EXIT_CONFIG)),
+            output.status.code(),
+            "{job:?} refuses the timeouts"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("server.request_timeout_ms")
+                && stderr.contains("federation.overall_timeout_ms"),
+            "{job:?} names both keys: {stderr}"
+        );
+    }
+    Ok(())
+}

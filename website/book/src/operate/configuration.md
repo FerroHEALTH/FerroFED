@@ -32,7 +32,7 @@ set.
 ```toml
 [server]
 listen = "127.0.0.1:8080"     # the socket address to bind
-request_timeout_ms = 30000    # a request past this answers 408
+request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 shutdown_timeout_ms = 10000   # the drain after SIGTERM is bounded by this
 body_limit_bytes = 1048576    # a body past this answers 413
 
@@ -123,6 +123,32 @@ Every secret has a `_file` sibling, read once at boot and trimmed, so a secret
 can come from a mounted file and never sit in the configuration or the
 environment. The credentials are read and checked at boot; the node dispatch
 hands them to each endpoint once it lands.
+
+## Timeouts
+
+A federated query runs under two budgets (§11.5, N38): each node's request may
+take `per_node_timeout_ms`, and the whole fan-out, resolution included, may
+take `overall_timeout_ms`. A node past either is abandoned and reported
+`time-out`, so under all-or-nothing the query fails `504` with
+`meta.federation` naming every node.
+
+```toml
+[server]
+request_timeout_ms = 30000    # must exceed overall_timeout_ms by more than 1000
+
+[federation]
+per_node_timeout_ms = 10000   # one node's request
+overall_timeout_ms = 25000    # the whole fan-out
+```
+
+The server's own `request_timeout_ms` answers `408` with an empty body, which
+would drop that envelope. A gateway that federates therefore refuses to boot,
+and `config check` refuses the file, unless `server.request_timeout_ms` is
+greater than `federation.overall_timeout_ms` plus one second, the time the
+gateway keeps for combining the answers. The refusal names both keys. The
+defaults leave four seconds to spare. The one second is FerroFED's own choice:
+§11.5 promises an answer "within its declared overall budget, plus combining
+time" and does not size the combining time.
 
 ## Paging with `OFFSET`
 

@@ -110,6 +110,13 @@ binary follows from v0.0.2.
   that case: every member is `not-localized`, and the answer stays `200`
   with `complete: true` (§14.1). A patient who is `not-resolved` at every
   member in scope still answers `200`.
+- A gateway that federates refuses to boot, and `config check` refuses the
+  file, unless `server.request_timeout_ms` exceeds
+  `federation.overall_timeout_ms` by more than one second, the margin kept
+  for combining the answers (#167; §11.5). The refusal names both keys.
+  Before, a request timeout between the two let the server's `408`, with no
+  body, cut a slow fan-out instead of the `504` that carries
+  `meta.federation`.
 
 ## [0.0.3] - 2026-10-02
 

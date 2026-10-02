@@ -44,6 +44,16 @@ pub const CONFIG_PATH_ENV: &str = "FERROFED_CONFIG";
 /// The longest endpoint id a credentials section may be keyed by.
 pub const MAX_ENDPOINT_ID_LENGTH: usize = 128;
 
+/// The milliseconds kept for combining the answers after the fan-out budget.
+///
+/// `server.request_timeout_ms` must exceed `federation.overall_timeout_ms` by
+/// more than this. A client "can rely on" an answer "within its declared overall budget, plus
+/// combining time" (§11.5), so the request timeout never cuts the `504`
+/// envelope the budget produces when it expires.
+// NOTE: no specification governs this: our own design; §11.5 names combining
+// time without bounding it, and one second covers the merge and the encoding.
+pub const COMBINING_MARGIN_MS: u64 = 1_000;
+
 /// The whole configuration tree, as a file and the environment state it.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -132,9 +142,10 @@ pub struct Registry {
 pub struct Federation {
     /// How long one node's request may take (§11.5, N38).
     pub per_node_timeout_ms: u64,
-    /// How long the whole fan-out may take (§11.5, N38). It must be shorter
-    /// than `server.request_timeout_ms`, so the gateway answers with its
-    /// envelope before the request timeout cuts the connection.
+    /// How long the whole fan-out may take (§11.5, N38). With a registry
+    /// configured, `server.request_timeout_ms` must exceed it by more than
+    /// [`COMBINING_MARGIN_MS`], so the gateway answers with its envelope
+    /// before the request timeout cuts the connection.
     pub overall_timeout_ms: u64,
     /// The issuing namespace an unqualified patient identifier resolves in
     /// (decision A5). Without it, a query that names no namespace is a `400`.
@@ -241,7 +252,9 @@ impl fmt::Debug for DevSection {
 pub struct Server {
     /// The socket address to bind.
     pub listen: String,
-    /// How long one request may take before the server answers `408`.
+    /// How long one request may take before the server answers `408`. With a
+    /// registry configured, it must exceed `federation.overall_timeout_ms`
+    /// by more than [`COMBINING_MARGIN_MS`].
     pub request_timeout_ms: u64,
     /// How long the drain may take after the stop signal.
     pub shutdown_timeout_ms: u64,
@@ -452,7 +465,8 @@ impl Config {
     }
 
     /// Resolves `[federation]`: both budgets positive (§11.5), and the overall
-    /// one ending before `request_timeout` when a registry is configured.
+    /// one plus [`COMBINING_MARGIN_MS`] ending before `request_timeout` when a
+    /// registry is configured.
     fn resolve_federation(&self, request_timeout: Duration) -> Result<FederationSettings, Error> {
         let per_node = positive_ms(
             "federation.per_node_timeout_ms",
@@ -462,11 +476,14 @@ impl Config {
             "federation.overall_timeout_ms",
             self.federation.overall_timeout_ms,
         )?;
-        // NOTE: §11.4, the budget only bounds a fan-out, so it is held to the
-        // request timeout only when the gateway federates.
-        if self.registry.document.is_some() && overall >= request_timeout {
+        // NOTE: §11.5, the budget only bounds a fan-out, so it is held below the
+        // request timeout, by the combining margin, only when the gateway federates.
+        if self.registry.document.is_some()
+            && request_timeout <= overall.saturating_add(Duration::from_millis(COMBINING_MARGIN_MS))
+        {
             return Err(Error::Budget {
                 overall_ms: self.federation.overall_timeout_ms,
+                margin_ms: COMBINING_MARGIN_MS,
                 request_ms: self.server.request_timeout_ms,
             });
         }

@@ -142,14 +142,17 @@ pub enum Error {
         "the [dev] table is not valid: every [[dev.crossref]] row names namespace, value, member and ehr_id, and nothing else"
     )]
     DevTable,
-    /// The fan-out budget does not end before the request timeout, so the
-    /// request timeout would cut the answer and its envelope (§11.4).
+    /// The request timeout does not exceed the overall fan-out budget plus
+    /// the combining margin, so it could cut the answer and the `504`
+    /// envelope the budget produces when it expires (§11.4, §11.5).
     #[error(
-        "federation.overall_timeout_ms ({overall_ms}) must be shorter than server.request_timeout_ms ({request_ms})"
+        "server.request_timeout_ms ({request_ms}) must exceed federation.overall_timeout_ms ({overall_ms}) plus {margin_ms} ms for combining the answers (§11.5)"
     )]
     Budget {
         /// The overall fan-out budget.
         overall_ms: u64,
+        /// The combining margin the request timeout must leave past it.
+        margin_ms: u64,
         /// The request timeout.
         request_ms: u64,
     },
