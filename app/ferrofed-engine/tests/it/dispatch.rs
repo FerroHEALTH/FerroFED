@@ -209,6 +209,30 @@ async fn an_undocumented_status_is_a_node_error_with_that_status() -> TestResult
     Ok(())
 }
 
+// NOTE: ITS-REST 1.1.0 declares no 3xx for the query, so a redirect is an undocumented
+// answer and is never followed to the host its Location names (§11.1).
+#[tokio::test]
+async fn a_redirect_is_a_node_error_and_is_never_followed() -> TestResult {
+    let elsewhere = node_answering("/openehr", json(200, EMPTY_RESULT_SET)).await;
+    let location = format!("{}/openehr/v1/query/aql", elsewhere.uri());
+    let server = node_answering(
+        "/openehr",
+        ResponseTemplate::new(307).insert_header("location", location.as_str()),
+    )
+    .await;
+    let reply = dispatch_to(&server).await?;
+    assert_eq!(reply.status(), EndpointStatus::NodeError);
+    assert_eq!(
+        error_text(&reply)?,
+        "the node answered 307 Temporary Redirect"
+    );
+    assert!(
+        received(&elsewhere).await?.is_empty(),
+        "the query and its credentials go to the registered endpoint only"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_200_that_is_not_a_result_set_is_a_node_error() -> TestResult {
     let server = node_answering("/openehr", json(200, r#"{"rows":"not rows"}"#)).await;

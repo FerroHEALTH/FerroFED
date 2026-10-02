@@ -208,6 +208,16 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Changed
 
+- The `openehr-*` family moves from 0.0.76 to 0.0.77 (#195). `openehr-query`
+  now classifies every AQL function call (FerroEHR #3529): a string, numeric,
+  or date and time function of AQL 1.1.0 is a built-in, and any other name is
+  not. The rewrite reads that classification where it kept a list of the 16
+  function names of its own, so an undirected query that calls a function
+  AQL does not define is refused exactly as before (`undefined-function`;
+  §11.6.3, N14), and the `CONCAT`, `CONCAT_WS` and `SUBSTRING` folding and
+  the `DISTINCT` cut check read the crate's classification too. Every
+  `openehr-its` client is built with redirects off (FerroEHR #3531), so a
+  node's `3xx` answer is never followed: the node is `node-error`.
 - Incompleteness is carried by `meta.federation.complete` alone, and the
   gateway emits no FHIR `OperationOutcome` (#58; §9.1, §11.4, N17, CP-12).
   §11.4, CP-12 and track 4 ask for the resource only for a FHIR-facing

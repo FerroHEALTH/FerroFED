@@ -388,11 +388,12 @@ fn pinned_by_paths(columns: &[SelectExpr]) -> Result<(), Refusal> {
 
 /// Whether `call` returns one value for every row whose `paths` are equal.
 fn fixed(call: &FunctionCall, paths: &[&IdentifiedPath]) -> bool {
-    let FunctionCall::Named { args, .. } = call else {
+    // NOTE: AQL master03-syntax §Functions, a built-in is single-row; TERMINOLOGY and another
+    // name are not fixed by the row.
+    let FunctionCall::Builtin { args, .. } = call else {
         return false;
     };
-    super::function::single_row(call)
-        && !args.is_empty()
+    !args.is_empty()
         && args.iter().all(|arg| match arg {
             Terminal::Primitive(_) | Terminal::Parameter(_) => true,
             Terminal::Path(path) => paths.contains(&path),

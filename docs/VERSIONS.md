@@ -84,15 +84,15 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.76 since 2026-10-02.
+pin is the latest version on crates.io, 0.0.77 since 2026-10-02.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.76 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-its` | 0.0.76 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-base` | 0.0.76 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-rm` | 0.0.76 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-sdt` | 0.0.76 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-query` | 0.0.77 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-its` | 0.0.77 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-base` | 0.0.77 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-rm` | 0.0.77 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-sdt` | 0.0.77 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -102,7 +102,10 @@ and per-call options; `docs/architecture.md` §2), published on 2026-10-01.
 0.0.75 adds the crates' `repository` field. 0.0.76, published on 2026-10-02,
 carries FerroEHR #3526: every generated ITS-REST type whose schema is open
 keeps the extra members in an `additional_properties` map, so the open `Error`
-carries the gateway's `code` and `request_id` (#57).
+carries the gateway's `code` and `request_id` (#57). 0.0.77, published on
+2026-10-02, carries FerroEHR #3529, which classifies every AQL function call
+as a built-in function of AQL or another name, and FerroEHR #3531, which
+builds every `ReqwestTransport` client with redirects switched off (#195).
 
 ## FHIR model crate (crates.io)
 

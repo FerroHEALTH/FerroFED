@@ -10,7 +10,7 @@
 //! (§5.4.1 "in any position"). The rewrite folds these calls over
 //! their literal arguments and tests the folded text as well.
 
-use openehr_query::ast::{FunctionCall, Primitive, Terminal};
+use openehr_query::ast::{BuiltinFunction, FunctionCall, Primitive, StringFunction, Terminal};
 
 /// The string a call of `CONCAT`, `CONCAT_WS` or `SUBSTRING` evaluates to when
 /// every argument is a literal or itself folds, or `None`.
@@ -19,10 +19,15 @@ use openehr_query::ast::{FunctionCall, Primitive, Terminal};
 /// coerces it would render it; AQL types the arguments as `String`, and
 /// reading the coercion keeps the value test the stricter of the two.
 pub(super) fn fold(call: &FunctionCall) -> Option<String> {
-    let FunctionCall::Named { name, args } = call else {
+    let FunctionCall::Builtin {
+        function: BuiltinFunction::String(function),
+        args,
+        ..
+    } = call
+    else {
         return None;
     };
-    match StringFunction::named(name)? {
+    match function {
         StringFunction::Concat => {
             if args.is_empty() {
                 return None;
@@ -39,13 +44,14 @@ pub(super) fn fold(call: &FunctionCall) -> Option<String> {
             Some(parts?.join(&separator))
         }
         StringFunction::Substring => substring(args),
+        StringFunction::Length | StringFunction::Contains | StringFunction::Position => None,
     }
 }
 
-/// Whether `call` is a named function with a literal anywhere among its
-/// arguments, nested calls included.
+/// Whether `call` is a named function, AQL's own or another, with a literal
+/// anywhere among its arguments, nested calls included.
 pub(super) fn over_a_literal(call: &FunctionCall) -> bool {
-    let FunctionCall::Named { args, .. } = call else {
+    let (FunctionCall::Builtin { args, .. } | FunctionCall::Other { args, .. }) = call else {
         return false;
     };
     args.iter().any(|arg| match arg {
@@ -57,28 +63,6 @@ pub(super) fn over_a_literal(call: &FunctionCall) -> bool {
         | Terminal::Parameter(_)
         | Terminal::Path(_) => false,
     })
-}
-
-/// The three string-building functions of AQL, by their case-insensitive name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StringFunction {
-    Concat,
-    ConcatWs,
-    Substring,
-}
-
-impl StringFunction {
-    fn named(name: &str) -> Option<Self> {
-        if name.eq_ignore_ascii_case("CONCAT") {
-            Some(Self::Concat)
-        } else if name.eq_ignore_ascii_case("CONCAT_WS") {
-            Some(Self::ConcatWs)
-        } else if name.eq_ignore_ascii_case("SUBSTRING") {
-            Some(Self::Substring)
-        } else {
-            None
-        }
-    }
 }
 
 /// The text of one argument: a string or integer literal, or a call that
