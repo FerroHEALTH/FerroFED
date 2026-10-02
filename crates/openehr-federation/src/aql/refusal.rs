@@ -288,6 +288,22 @@ pub enum Refusal {
         /// Where the ENDPOINT attribute was written.
         at: Option<Range<usize>>,
     },
+    /// Under `DISTINCT` with `ORDER BY` and `LIMIT`, a selected path names a
+    /// value AQL defines no order for: a whole RM object, a data value that is
+    /// not a `DV_ORDERED`, or a collection. AQL orders on data "available to
+    /// primitives and `Ordered` types" (AQL master03-syntax §ORDER BY), so the
+    /// path is not a key, and a node cut at its `LIMIT` may keep a different one
+    /// of two distinct rows tied on every other key on each repeat, where
+    /// §11.6.1 requires that "repeating a query returns rows in the same
+    /// order". Select a path to a primitive value, or drop the `LIMIT`.
+    #[error(
+        "under DISTINCT with ORDER BY and LIMIT, every selected path must name a primitive value or an ordered data value, because AQL defines no order for any other and a node could otherwise cut among distinct rows differently on each repeat (§11.6.1, AQL §ORDER BY); select a path to a primitive value, or drop the LIMIT{}",
+        At(.at)
+    )]
+    IncomparableDistinctKey {
+        /// Where the selected path was written.
+        at: Option<Range<usize>>,
+    },
 }
 
 impl Refusal {
@@ -327,6 +343,7 @@ impl Refusal {
         "endpoint-variable",
         "endpoint-attribute-unknown",
         "endpoint-name-collision",
+        "incomparable-distinct-key",
     ];
 
     /// A stable name for this refusal: the code a gateway's error body
@@ -367,6 +384,7 @@ impl Refusal {
             Self::EndpointVariable { .. } => "endpoint-variable",
             Self::EndpointAttributeUnknown { .. } => "endpoint-attribute-unknown",
             Self::EndpointNameCollision { .. } => "endpoint-name-collision",
+            Self::IncomparableDistinctKey { .. } => "incomparable-distinct-key",
         }
     }
 
@@ -393,7 +411,8 @@ impl Refusal {
             | Self::UnorderedDistinctCut { at }
             | Self::EndpointVariable { at }
             | Self::EndpointAttributeUnknown { at }
-            | Self::EndpointNameCollision { at } => at.as_ref(),
+            | Self::EndpointNameCollision { at }
+            | Self::IncomparableDistinctKey { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
             | Self::PartialAggregate
@@ -580,6 +599,7 @@ mod tests {
             Refusal::EndpointVariable { at: None },
             Refusal::EndpointAttributeUnknown { at: None },
             Refusal::EndpointNameCollision { at: None },
+            Refusal::IncomparableDistinctKey { at: None },
         ]
     }
 
@@ -616,6 +636,7 @@ mod tests {
             Refusal::EndpointVariable { .. } => 27,
             Refusal::EndpointAttributeUnknown { .. } => 28,
             Refusal::EndpointNameCollision { .. } => 29,
+            Refusal::IncomparableDistinctKey { .. } => 30,
         }
     }
 

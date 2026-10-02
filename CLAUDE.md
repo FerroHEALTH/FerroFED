@@ -38,8 +38,10 @@ Each crate gets its behaviour from its own issue, and nothing is built ahead
 of one (`.claude/memory/owner-work-style.md`). The `openehr-*` family is pinned
 in `docs/VERSIONS.md`, at a release that carries the federation gaps
 FerroFED raised, the open ITS-REST `Error` the error vocabulary writes its
-`code` into, the AQL function classification the rewrite reads, and the
-`Authorization` value configuration load checks credentials with.
+`code` into, the AQL function classification the rewrite reads, the
+`Authorization` value configuration load checks credentials with, and the RM
+model's primitives, `Ordered` marker and reference targets the rewrite orders
+keys by.
 
 The specification is a release candidate. The vendored pin is v0.9.0 at
 commit `7162d0c`, and the 1.0 release is expected the week of 2026-10-08; the

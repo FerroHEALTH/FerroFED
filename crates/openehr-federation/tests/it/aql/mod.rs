@@ -9,6 +9,7 @@
 
 mod aggregate;
 mod attribute;
+mod comparable;
 mod dedup;
 mod directive;
 mod distinct;

@@ -84,17 +84,17 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.78 since 2026-10-02. The family's
+pin is the latest version on crates.io, 0.0.79 since 2026-10-02. The family's
 `openehr-sdt` (the SMART on openEHR scope grammar) is not a dependency yet: it
 joins the group at the family pin when client authentication (#80) first
 reads scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.78 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-its` | 0.0.78 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-base` | 0.0.78 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-rm` | 0.0.78 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-query` | 0.0.79 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-its` | 0.0.79 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-base` | 0.0.79 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-rm` | 0.0.79 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -112,7 +112,11 @@ builds every `ReqwestTransport` client with redirects switched off (#195).
 `Authorization` value of a `Credentials` is public, checked against RFC 7617
 §2 for basic credentials and the `b64token` of RFC 6750 §2.1 for a bearer
 token, so configuration load checks exactly what the node client sends
-(#237).
+(#237). 0.0.79, published on 2026-10-02, carries FerroEHR #3537: the
+`openehr-rm` attribute model holds the BASE primitives, the `Ordered` marker
+and the reference targets of `OBJECT_REF` attributes, with the
+`is_primitive` and `conforms_to_ordered` lookups the rewrite uses to decide
+which paths a node can order under `DISTINCT` (#234).
 
 ## FHIR model crate (crates.io)
 

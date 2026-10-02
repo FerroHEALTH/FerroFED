@@ -161,6 +161,7 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `endpoint-variable` | 400 | The variable of the `FROM ENDPOINT` directive is bound again in `FROM`, or used anywhere but as a selected column: in `WHERE`, in `ORDER BY` or inside a function. A path through it selects an ENDPOINT attribute (§8.1, §9.3). |
 | `endpoint-attribute-unknown` | 400 | A path through the `FROM ENDPOINT` variable selects no ENDPOINT attribute: the attributes are `p/id` or `p/endpoint_id`, `p/organisation` or `p/organization_id`, `p/system_id` and `p/url`, each with no predicate and nothing after it (§9.3). |
 | `endpoint-name-collision` | 400 | An ENDPOINT attribute column has the name of an EHR-derived column, so one name would denote two columns. Alias the attribute to a name no other column carries (N18, CP-35). |
+| `incomparable-distinct-key` | 400 | Under `DISTINCT` with `ORDER BY` and `LIMIT`, a selected path names a value AQL defines no order for: a whole RM object (`SELECT DISTINCT c`), a data value that is not a `DV_ORDERED` (`c/name`, a `DV_TEXT`), the `DATA_VALUE` of an `ELEMENT`, a collection, or a path the RM does not resolve. AQL orders only primitives and `Ordered` types (AQL §ORDER BY), so a node cut at its `LIMIT` could keep different rows on each repeat (§11.6.1). Select a path to a primitive value, such as `c/name/value`, or drop the `LIMIT`. |
 
 ## Other answers
 

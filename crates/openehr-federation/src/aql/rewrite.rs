@@ -12,6 +12,7 @@ use openehr_query::ast::{
 use openehr_query::lexer::CompOp;
 use openehr_query::visit::{VisitMut, walk_terminal_mut};
 
+use super::comparable::comparable;
 use super::refusal::Refusal;
 use crate::dedup::DedupMode;
 use crate::order::{Direction, ResultOrder, SortKey};
@@ -251,8 +252,9 @@ pub(super) fn order_for(
 /// repeat, for `LIMIT n` and for the `LIMIT k + n` of a page (§11.6.2). Under
 /// `DISTINCT` no column is added, since it would change which rows are
 /// distinct: every `ORDER BY` path must be selected, the remaining selected
-/// paths are the tie-break in place of the row key, and with a `LIMIT` every
-/// other selected column must be fixed by those paths (`pinned_by_paths`).
+/// paths a node can order are the tie-break in place of the row key, and with
+/// a `LIMIT` every selected path must be one a node can order and every other
+/// selected column must be fixed by the selected paths (`pinned_by_paths`).
 ///
 /// `one_ehr` says the gateway scoped the node query to one `ehr_id`, so an
 /// `EHR`'s own id is the same on every row and is not a key.
@@ -269,8 +271,10 @@ pub(super) fn order_for(
 ///
 /// # Errors
 /// [`Refusal::OrderNotSelected`] for a `DISTINCT` query ordered on a path it
-/// does not select, [`Refusal::UnorderedDistinctCut`] for a `DISTINCT` query
-/// with a `LIMIT` whose selected paths do not fix every column, and
+/// does not select, [`Refusal::IncomparableDistinctKey`] for a `DISTINCT`
+/// query with a `LIMIT` that selects a path no node can order,
+/// [`Refusal::UnorderedDistinctCut`] for a `DISTINCT` query with a `LIMIT`
+/// whose selected paths do not fix every column, and
 /// [`Refusal::NegativePaging`] for a negative `LIMIT`.
 fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<ResultOrder, Refusal> {
     let limit = dispatched_limit(query)?;
@@ -311,7 +315,7 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
     }
     let tie_break = if distinct {
         if limit.is_some() {
-            pinned_by_paths(&query.select.columns)?;
+            pinned_by_paths(&query.select.columns, &query.from)?;
         }
         let ordered: Vec<usize> = keys.iter().map(SortKey::column).collect();
         let tie_break: Vec<(usize, IdentifiedPath)> = query
@@ -320,11 +324,16 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
             .iter()
             .enumerate()
             .filter(|(index, _)| !ordered.contains(index))
+            // NOTE: AQL master03-syntax §ORDER BY assumes comparable data and §11.6.1 a deterministic
+            // order, so only a path to a primitive or an ordered data value is pushed as a key.
             .filter_map(|(index, column)| match &column.column {
-                ColumnExpr::Path(path) => Some((index, path.clone())),
-                ColumnExpr::Primitive(_) | ColumnExpr::Aggregate(_) | ColumnExpr::Function(_) => {
-                    None
+                ColumnExpr::Path(path) if comparable(path, &query.from) => {
+                    Some((index, path.clone()))
                 }
+                ColumnExpr::Path(_)
+                | ColumnExpr::Primitive(_)
+                | ColumnExpr::Aggregate(_)
+                | ColumnExpr::Function(_) => None,
             })
             .collect();
         let mut columns = Vec::with_capacity(tie_break.len());
@@ -348,14 +357,18 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
 }
 
 /// Checks that every selected column of a `DISTINCT` query is fixed by its
-/// selected paths, the only columns a node can order on.
+/// selected paths, the only columns a node can order on, and that every
+/// selected path is one a node can order.
 ///
 /// AQL orders on identified paths alone (AQL master03-syntax §ORDER BY,
 /// `orderByExpr : identifiedPath`), so under `DISTINCT` the node is sent the
 /// selected paths as its keys and nothing else. Two distinct rows tied on all
 /// of them differ only in a column that is not a path, and a node cut at its
 /// `LIMIT` may keep either, a different one on each repeat, where §11.6.1
-/// requires that "repeating a query returns rows in the same order". A literal
+/// requires that "repeating a query returns rows in the same order". The same
+/// holds of a selected path whose value AQL defines no order for (a whole RM
+/// object or a `DV_TEXT`, see [`comparable`]): it is not a key, and two rows
+/// tied on every key may differ in it. A literal
 /// is one value on every row. A call to a single-row function AQL defines is
 /// fixed when every argument is a literal, a parameter, a selected path or
 /// such a call. A call with no argument (`NOW()` and the other clock
@@ -364,9 +377,10 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
 /// define are not fixed by the row.
 ///
 /// # Errors
-/// [`Refusal::UnorderedDistinctCut`] for the first selected column that is not
-/// fixed.
-fn pinned_by_paths(columns: &[SelectExpr]) -> Result<(), Refusal> {
+/// For the first selected column that fails, [`Refusal::IncomparableDistinctKey`]
+/// for a path that is not comparable and [`Refusal::UnorderedDistinctCut`] for
+/// a function that is not fixed.
+fn pinned_by_paths(columns: &[SelectExpr], from: &ContainsExpr) -> Result<(), Refusal> {
     let paths: Vec<&IdentifiedPath> = columns
         .iter()
         .filter_map(|column| match &column.column {
@@ -375,12 +389,21 @@ fn pinned_by_paths(columns: &[SelectExpr]) -> Result<(), Refusal> {
         })
         .collect();
     for column in columns {
-        if let ColumnExpr::Function(call) = &column.column
-            && !fixed(call, &paths)
-        {
-            return Err(Refusal::UnorderedDistinctCut {
-                at: super::scan::first_path(call),
-            });
+        match &column.column {
+            ColumnExpr::Path(path) if !comparable(path, from) => {
+                return Err(Refusal::IncomparableDistinctKey {
+                    at: path.span.bytes(),
+                });
+            }
+            ColumnExpr::Function(call) if !fixed(call, &paths) => {
+                return Err(Refusal::UnorderedDistinctCut {
+                    at: super::scan::first_path(call),
+                });
+            }
+            ColumnExpr::Path(_)
+            | ColumnExpr::Function(_)
+            | ColumnExpr::Primitive(_)
+            | ColumnExpr::Aggregate(_) => {}
         }
     }
     Ok(())
