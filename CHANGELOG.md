@@ -42,6 +42,15 @@ binary follows from v0.0.2.
   node and never quotes the value. The `not-resolved` and `consent-denied`
   carve-outs and the scope rule hold in both modes. `complete` is always
   derived from the statuses.
+- Timeouts (#51; §11.5, N38, CP-31; RFC 7240): a client shortens the budget
+  with `Prefer: wait=<seconds>`, and a longer wait leaves the configured
+  budget in force. The effective budget is the one reported in
+  `meta.federation.timeout`, and a wait that set it is echoed in
+  `Preference-Applied`. Only the first `wait` counts; a malformed one is
+  ignored and never refused. `wait=0` asks no node and reports each one
+  `time-out`. The overall budget runs from the request's arrival, so the
+  patient resolution and the fan-out share it and the gateway answers inside
+  it, and abandoning one node never aborts a request in flight to another.
 
 ## [0.0.3] - 2026-10-02
 

@@ -12,6 +12,7 @@
 
 mod all_or_nothing;
 mod best_effort;
+mod budget;
 mod decision;
 
 use std::collections::BTreeMap;

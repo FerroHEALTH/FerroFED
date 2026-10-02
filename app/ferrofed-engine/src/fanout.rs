@@ -114,6 +114,22 @@ impl Budget {
         self.overall
     }
 
+    /// Returns this budget with the overall budget cut to `wait`, the client
+    /// deadline of a `Prefer: wait` (§11.5).
+    ///
+    /// A shorter wait is honoured and a longer one changes nothing, because a
+    /// client can shorten the budget and never extend it. The per-node
+    /// timeout follows, since it never runs past the overall budget. A wait
+    /// of zero leaves no time to ask any node, so every node is reported
+    /// `time-out` and none is sent a request.
+    #[must_use]
+    pub fn shortened_to(self, wait: Duration) -> Self {
+        Self {
+            per_node: self.per_node,
+            overall: self.overall.min(wait),
+        }
+    }
+
     /// The effective budget as `meta.federation.timeout` reports it (§11.5).
     fn record(&self) -> TimeoutBudget {
         TimeoutBudget {
@@ -432,11 +448,39 @@ pub async fn fan_out<T>(
 where
     T: Transport + Clone + 'static,
 {
-    let started = Instant::now();
+    fan_out_within(clients, snapshot, plan, budget, Instant::now(), request_id).await
+}
+
+/// Sends every query of `plan` to its node at once, inside the overall budget
+/// of a request that started at `started` (§11.5).
+///
+/// The overall deadline runs from `started`, so the time the request spent
+/// before the dispatch, resolving the patient, comes out of the same budget:
+/// the gateway answers within its declared overall budget. The per-node
+/// deadline runs from the dispatch and never past the overall deadline, and a
+/// node's latency is measured from the dispatch (§9.5, N40). A node whose
+/// deadline passed before its request could be sent is `time-out` with no
+/// request sent. Everything else is as [`fan_out`].
+///
+/// # Errors
+///
+/// As [`fan_out`].
+pub async fn fan_out_within<T>(
+    clients: &NodeClients<T>,
+    snapshot: &RegistrySnapshot,
+    plan: Plan,
+    budget: Budget,
+    started: Instant,
+    request_id: Option<&str>,
+) -> Result<FederatedAnswer, FanOutError>
+where
+    T: Transport + Clone + 'static,
+{
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(FanOutError::Clock)?;
-    let node_deadline = started
+    let dispatched = Instant::now();
+    let node_deadline = dispatched
         .checked_add(budget.per_node())
         .map_or(deadline, |at| at.min(deadline));
     let Plan {
@@ -477,7 +521,7 @@ where
             }
         }
     }
-    let abandoned_ms = whole_ms(started.elapsed());
+    let abandoned_ms = whole_ms(dispatched.elapsed());
     let mut records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)> = settled
         .into_iter()
         .map(|(endpoint, outcome)| (endpoint, (outcome, None)))

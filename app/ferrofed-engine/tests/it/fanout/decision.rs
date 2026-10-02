@@ -253,3 +253,33 @@ fn a_budget_applies_both_timeouts() -> TestResult {
     );
     Ok(())
 }
+
+// conformance: CP-31
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_client_wait_shortens_the_budget_and_never_extends_it() -> TestResult {
+    let budget = Budget::new(Duration::from_secs(2), Duration::from_secs(5))?;
+    let shorter = budget.shortened_to(Duration::from_secs(3));
+    assert_eq!(shorter.overall(), Duration::from_secs(3));
+    assert_eq!(shorter.per_node(), Duration::from_secs(2));
+    let below_per_node = budget.shortened_to(Duration::from_secs(1));
+    assert_eq!(below_per_node.overall(), Duration::from_secs(1));
+    assert_eq!(
+        below_per_node.per_node(),
+        Duration::from_secs(1),
+        "the per-node timeout follows the shortened overall budget"
+    );
+    assert_eq!(
+        budget.shortened_to(Duration::from_secs(60)),
+        budget,
+        "a longer wait never extends the configured budget"
+    );
+    assert_eq!(budget.shortened_to(Duration::from_secs(5)), budget);
+    let none = budget.shortened_to(Duration::ZERO);
+    assert_eq!(none.overall(), Duration::ZERO);
+    assert_eq!(none.per_node(), Duration::ZERO);
+    Ok(())
+}
