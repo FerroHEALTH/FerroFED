@@ -11,8 +11,8 @@
 # catches it before the commit exists, which is where the fix is a one-line
 # edit rather than a follow-up commit.
 #
-# Runs scripts/checks/crate-version-guard.sh against the merge base with
-# origin/main: WORKTREE for a `git commit`, so the staged change is what is
+# Runs scripts/checks/crate-version-guard.sh against origin/main, the base CI
+# uses: WORKTREE for a `git commit`, so the staged change is what is
 # checked, and HEAD for a `git push`, where the commits already exist. Exit 2
 # blocks the tool call and returns the guard's findings; every other path is a
 # quiet exit 0.
@@ -42,12 +42,13 @@ guard="$repo_root/scripts/checks/crate-version-guard.sh"
 
 cd "$repo_root" || exit 0
 
-# No origin/main to compare against (a fresh clone with no fetch, a detached
-# checkout) means no base, and a guard with no base has nothing to say.
-base="$(git merge-base origin/main HEAD 2> /dev/null)" || exit 0
-[ -n "$base" ] || exit 0
+# The base is main's tip, as CI passes it: the guard finds the merge base for
+# the changed paths itself and judges versions against the tip, so a bump that
+# collides with one main already took fails here as it fails in CI. No
+# origin/main (a fresh clone with no fetch) means no base to judge against.
+git rev-parse --verify --quiet origin/main > /dev/null || exit 0
 
-findings="$(bash "$guard" "$base" "$head" 2>&1)" || {
+findings="$(bash "$guard" origin/main "$head" 2>&1)" || {
   printf 'BLOCKED: a crates/* member changed its packaged content without moving its version.\n\n%s\n\n' "$findings" >&2
   printf 'Bump that member in its own Cargo.toml, move any internal requirement in the root Cargo.toml with it, run cargo update -w, and commit the lock. The published version is immutable, so this cannot be repaired later.\n' >&2
   exit 2

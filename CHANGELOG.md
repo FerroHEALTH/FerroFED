@@ -362,6 +362,12 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- The local crate-bump hook judges a commit or a push against `origin/main`,
+  the base CI uses, and leaves finding the merge base to
+  `scripts/checks/crate-version-guard.sh` (#243). A branch that bumps a crate
+  to the version main already took is now blocked locally, as CI refuses it,
+  where it used to pass. The book's checks page lists the `tracker-helpers`
+  job, the self-tests of the `scripts/gh` helpers, among the tier-1 checks.
 - The outbound gate no longer reads the host and port of a registry
   endpoint URL (#232; §5.4.1, N33, CP-26). An endpoint whose host or port
   contained a withheld identifier, such as a short local identifier that
