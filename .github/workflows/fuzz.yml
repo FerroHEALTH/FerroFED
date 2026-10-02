@@ -13,9 +13,10 @@
 #
 # It runs weekly and on dispatch for five minutes per target, and for one
 # minute per target on a pull request that touches the code a target reads.
-# It is a time-boxed search, never a conclusion input (docs/ci-cd.md). It is
-# also the one place a nightly toolchain appears: cargo-fuzz builds with
-# sanitizer flags that need it (https://rust-fuzz.github.io/book/cargo-fuzz.html).
+# It is a time-boxed search, never a conclusion input (no specification governs
+# this: our own design). It is also the one place a nightly toolchain appears:
+# cargo-fuzz builds with sanitizer flags that need it
+# (https://rust-fuzz.github.io/book/cargo-fuzz.html).
 # Nothing built here ships.
 name: Fuzz
 

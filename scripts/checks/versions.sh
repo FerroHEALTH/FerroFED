@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# Version-drift guard (docs/VERSIONS.md is the single source of truth).
+# Version-drift guard: the pin matrix, docs/VERSIONS.md, is the single source
+# of truth (no specification governs this: our own design).
 #
 # Every file that repeats a pin must agree with the matrix. A check whose
 # subject file is absent SKIPS LOUDLY with a printed reason, and gains teeth

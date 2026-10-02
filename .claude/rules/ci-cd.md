@@ -66,7 +66,7 @@ Twelve workflows:
   upstream release, through `scripts/gh/fields.sh new` (its default token may
   not set the issue type and fields, and the issue then lands with its label
   alone, `issue-workflow.md` §Type, priority and labels), and fails only when a
-  release could not be read (`docs/ci-cd.md`).
+  release could not be read.
 - `.github/workflows/publish-crates.yml`: the crates.io lane behind the
   workspace `publish` switch. It runs on every `v*` tag (and on a manual
   dispatch, a dry run unless `publish` is set), reads the publishable set from
@@ -75,7 +75,7 @@ Twelve workflows:
   `ci.yml`; the rules are `crates-publishing.md`.
 - `.github/workflows/fuzz.yml`: the `cargo fuzz` targets over the untrusted
   inputs, time-boxed and advisory, weekly, on dispatch, and on a pull request
-  that touches the code a target reads (`docs/ci-cd.md` §The fuzz lane).
+  that touches the code a target reads.
 
 `.github/release.yml` is a different file from the workflow: it configures
 GitHub's auto-generated release notes, which the lane never uses, because a
@@ -134,7 +134,7 @@ of §17 the gateway is scored on, with a committed pass list, a regression or
 an unrecorded pass failing the lane). **Always `--locked`**, so CI fails on
 lockfile drift rather than on registry drift. Commit `Cargo.lock`.
 
-## Supply chain (the release lane, `docs/release.md`)
+## Supply chain (the release lane)
 
 - **A release builds in a REUSABLE workflow** (`on: workflow_call`) so the
   builder is isolated and the signing identity is unreachable from build steps.
@@ -148,8 +148,9 @@ lockfile drift rather than on registry drift. Commit `Cargo.lock`.
   half-assembled release is never visible. The fix for a bad cut is a new patch
   version, never a retag, and both halves are enforced: the immutable-releases
   setting freezes a published release's notes and assets, and the
-  `release-tags` ruleset stops the tag being moved or deleted
-  (`docs/release.md`).
+  `release-tags` ruleset stops the tag being moved or deleted (GitHub
+  documentation, immutable releases and the available rules for rulesets,
+  linked below).
 - **A version pin has a single source of truth**, and a committed check fails
   on cross-file drift.
 - **The library crates publish to crates.io through Trusted Publishing** (OIDC,
@@ -174,3 +175,7 @@ lockfile drift rather than on registry drift. Commit `Cargo.lock`.
 - OpenSSF Scorecard: <https://github.com/ossf/scorecard-action>
 - GitHub Actions security hardening:
   <https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions>
+- GitHub immutable releases:
+  <https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases>
+- GitHub available rules for rulesets:
+  <https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets>
