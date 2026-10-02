@@ -134,6 +134,28 @@ pub enum Error {
         /// The credentials section.
         section: String,
     },
+    /// A bearer token cannot be sent: `Bearer` and the token are not a legal
+    /// `Authorization` header value.
+    ///
+    /// The source is the `http` crate's refusal, which quotes nothing.
+    #[error("{key} cannot be sent: it is not a legal Authorization header value")]
+    Authorization {
+        /// The key the token was read from: the inline key or its `_file`
+        /// sibling.
+        key: String,
+        /// What `http` reported.
+        #[source]
+        source: http::header::InvalidHeaderValue,
+    },
+    /// A basic user or password holds a character RFC 7617 §2 forbids.
+    #[error("{key} cannot be sent: it holds {fault}, which RFC 7617 §2 forbids")]
+    Basic {
+        /// The key the value was read from: the inline key or its `_file`
+        /// sibling.
+        key: String,
+        /// The kind of character found, never the character's position.
+        fault: BasicFault,
+    },
     /// The `[dev]` table does not have the shape of `[[dev.crossref]]` rows.
     ///
     /// The reader's own message is not kept: it may quote a row's value, and
@@ -177,6 +199,26 @@ impl Error {
                 Self::Parse { fault }
             }
             other => other,
+        }
+    }
+}
+
+/// What RFC 7617 §2 forbids in a basic user-id or password.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BasicFault {
+    /// A control character (`CTL` of RFC 5234 Appendix B.1), forbidden in
+    /// both the user-id and the password.
+    ControlCharacter,
+    /// A colon, forbidden in the user-id.
+    Colon,
+}
+
+impl fmt::Display for BasicFault {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ControlCharacter => f.write_str("a control character"),
+            Self::Colon => f.write_str("a colon"),
         }
     }
 }

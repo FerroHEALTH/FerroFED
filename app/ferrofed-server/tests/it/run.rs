@@ -20,7 +20,7 @@ fn rendered(code: ExitCode) -> String {
 }
 
 /// Runs the real binary with `args` and a configuration file holding `toml`.
-fn binary(args: &[&str], toml: &str) -> Result<Output, Box<dyn StdError>> {
+pub(crate) fn binary(args: &[&str], toml: &str) -> Result<Output, Box<dyn StdError>> {
     let mut file = tempfile::NamedTempFile::new()?;
     file.write_all(toml.as_bytes())?;
     let output = Command::new(env!("CARGO_BIN_EXE_ferrofed"))

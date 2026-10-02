@@ -449,7 +449,9 @@ impl Config {
     /// # Errors
     /// Returns [`Error::Conflict`] when a value and its `_file` sibling are
     /// both set, [`Error::Secret`] and [`Error::EmptySecret`] when a `_file`
-    /// cannot be read or holds nothing, and the value errors
+    /// cannot be read or holds nothing, [`Error::Authorization`] and
+    /// [`Error::Basic`] for a credential the `Authorization` header cannot
+    /// carry, and the value errors
     /// ([`Error::Listen`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::Missing`], [`Error::Scheme`],
     /// [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]), each naming the

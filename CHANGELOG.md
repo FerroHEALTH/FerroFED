@@ -343,6 +343,17 @@ federated query and identity resolution shipped in 0.0.3.
   the Tier's disagrees with is refused as `node-error`, since the Tier
   cannot change how a node sorts. Outside dedup the uid orders as before, by
   code point. `openehr-federation` is 0.0.23.
+- An onward credential the `Authorization` header cannot carry is refused at
+  configuration load, by `config check` and at boot with exit code 78, in
+  place of failing every query to its endpoint with a `500` (#231). A bearer
+  token, inline or read from `bearer_token_file`, is checked as the
+  `Bearer <token>` value the node client sends, by the same `http` parse the
+  client applies, and a basic user or password holding a control character,
+  or a basic user holding a colon, is refused as RFC 7617 §2 requires. The
+  refusal names the key the value came from
+  (`credentials.<endpoint>.bearer_token`, its `_file` sibling, `.user` or
+  `.password`) and never the value. A PIX Manager's
+  `[pixm.manager.credentials]` is held to the same rule.
 - Version-identity dedup compares identifiers without regard to case (#225;
   §10.2, CP-9; BASE `master05-identification_package.adoc` §"Composite
   Identifiers and Case"). Two copies whose version ids differ only in case

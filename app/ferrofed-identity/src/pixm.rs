@@ -247,6 +247,7 @@ fn http_client(auth: &PixAuth) -> Result<reqwest::Client, PixmConfigError> {
     let mut headers = HeaderMap::new();
     let value = match auth {
         PixAuth::None => None,
+        // TODO(#237): use openehr-its's own Authorization composition (FerroHEALTH/FerroEHR#3535).
         PixAuth::Bearer(token) => Some(format!("Bearer {}", token.expose_secret())),
         PixAuth::Basic { user, password } => Some(format!(
             "Basic {}",
