@@ -22,6 +22,19 @@ binary follows from v0.0.2.
 
 ### Added
 
+- The PDQm ITI-78 patient demographics query client in `ihe-iti`, feature
+  `pdqm` (#119; PDQm 3.2.0, ITI TF-2 §2:3.78). `pdqm::PdqmClient` posts a
+  `PatientQuery` to `[base]/Patient/_search` as a form body, so no URL carries
+  a demographic value, and reads the `searchset` into the matching Patients
+  (FHIR R4 `Patient` from `fhir-types` `resources`), the `total`, each match's
+  score and `match-grade`, the `OperationOutcome` warnings and the `next` page
+  link, which it follows only on the Supplier's origin. A `404` with a
+  `not-found` issue for a query that names an identifier domain is the
+  profile's unrecognised-domain answer; every other failure is a typed error
+  that carries no value, URL or Supplier text. The ITI-78 artefacts of the PDQm
+  3.2.0 package are vendored under `docs/specs/ihe-pdqm/` by
+  `scripts/vendor/ihe-pdqm.sh`. The `OperationOutcome` issue type moves to
+  `ihe_iti::outcome::IssueType`, shared by PIXm and PDQm; `ihe-iti` is 0.0.5.
 - The identity-lifecycle hook for track 8 (#48): `ResolutionBindings::identity_changed`
   drops every resolution binding a merge or split at the identity source could
   have made stale, by `ehr_id` in every session or all of them for an

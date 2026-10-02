@@ -25,6 +25,10 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   package (CC-BY-4.0): the `$ihe-pix` OperationDefinition, the Query
   Parameters profiles, the capability statements and the IG's examples,
   pinned by package version and tarball sha256.
+- `docs/specs/ihe-pdqm/`: the ITI-78 artefacts of the IHE PDQm 3.2.0 FHIR
+  package (CC-BY-4.0): the Consumer and Supplier capability statements, the
+  Query Patient Resource Response Message and Patient profiles and the IG's
+  examples, pinned by package version and tarball sha256.
 - `website/book/vendor/mermaid/`: the mermaid browser bundle and the
   mdbook-mermaid init script the book loads, fetched by
   `scripts/vendor/mdbook-mermaid-assets.sh` (MIT and MPL 2.0).
