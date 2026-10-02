@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ff9f4a0a9c4817a21f2e8e5acd2787e7c66ef5d08b92215e3efc4dca4ea4c57d # shrinks to nodes = [Node { values: [(Some(-1), 1)], reals: false }, Node { values: [(Some(-1), 0)], reals: false }], direction = Ascending

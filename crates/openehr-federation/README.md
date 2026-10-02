@@ -12,8 +12,8 @@ specification, with a feature per layer.
 | `aql` | the §7 rewrite of a client query into one `ehr_id`-scoped query per node, with identifier hygiene (§5.4), on the `openehr-query` syntax tree |
 | `merge` | the §9 to §11 merge of node answers: `ORDER BY` with `LIMIT` and `OFFSET`, `DISTINCT`, version-identity dedup, decomposable aggregates |
 
-The `merge` feature carries `ORDER BY` with `LIMIT` and `OFFSET` and the
-decomposable aggregates today; `DISTINCT` and dedup follow in build order.
+The `merge` feature carries `ORDER BY` with `LIMIT` and `OFFSET`, `DISTINCT`
+and the decomposable aggregates today; dedup follows in build order.
 
 ## The `merge` feature
 
@@ -30,6 +30,13 @@ every node is sent `LIMIT k + n` with no `OFFSET`, and the merge keeps rows `k`
 to `k + n` of the same order (§11.6.2); `aql::OffsetStrategy` says whether a
 deployment computes that page within a bound or refuses every `OFFSET` past
 zero.
+
+Under `SELECT DISTINCT`, `order::ResultOrder::distinct` names the node columns
+the client sees, and the merge keeps one row of every set of rows equal in
+them under the same comparator (`2` and `2.0` are one value), the first in
+that order, before it cuts at the `LIMIT` and the `OFFSET` (N13, AQL 1.1.0
+§LIMIT). A node that returned `n` rows two of which are equal is refused,
+because a distinct row can lie past its cut.
 
 `merge::combine` recombines the one-row node answers of an aggregate query
 into the federation's row under the `aggregate::Recombination` the rewrite

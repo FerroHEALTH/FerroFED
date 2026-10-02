@@ -57,12 +57,19 @@ impl SortKey {
 /// the first [`ResultOrder::offset`] of those, so the answer is the rows
 /// `[k, k + n)`. With no keys, any `n` rows of the union are a correct answer
 /// to a query with no `OFFSET`.
+///
+/// For `SELECT DISTINCT`, [`ResultOrder::distinct`] names the node columns
+/// whose values make a row distinct, and the Tier removes the rows equal on
+/// them before the `OFFSET` and the `LIMIT` (N13; AQL 1.1.0 §LIMIT: "the
+/// `LIMIT` and `OFFSET` applies to remaining rows, after duplicates were
+/// filtered out").
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResultOrder {
     keys: Vec<SortKey>,
     tie_break: Vec<usize>,
     limit: Option<u64>,
     offset: u64,
+    distinct: Option<Vec<usize>>,
 }
 
 impl ResultOrder {
@@ -82,7 +89,20 @@ impl ResultOrder {
             tie_break,
             limit,
             offset: 0,
+            distinct: None,
         }
+    }
+
+    /// This answer under `SELECT DISTINCT`: the Tier keeps one row of every
+    /// set of rows equal on the node columns `columns` (N13).
+    ///
+    /// `columns` are the node columns the client sees, so a column the gateway
+    /// adds for its own use never makes two rows distinct. With no column,
+    /// every row is equal to every other, and the answer has at most one row.
+    #[must_use]
+    pub fn with_distinct(mut self, columns: Vec<usize>) -> Self {
+        self.distinct = Some(columns);
+        self
     }
 
     /// This answer starting at row `offset` of the Tier order: the merge keeps
@@ -123,5 +143,12 @@ impl ResultOrder {
     #[must_use]
     pub fn offset(&self) -> u64 {
         self.offset
+    }
+
+    /// The node columns that make a row distinct under `SELECT DISTINCT`, or
+    /// `None` for a query that keeps duplicate rows (§10.1, N15).
+    #[must_use]
+    pub fn distinct(&self) -> Option<&[usize]> {
+        self.distinct.as_deref()
     }
 }
