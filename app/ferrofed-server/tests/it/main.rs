@@ -11,6 +11,7 @@ mod endpoint_report;
 mod facade;
 mod http;
 mod hygiene;
+mod order;
 mod outbound;
 mod readiness;
 mod request_log;

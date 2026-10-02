@@ -12,7 +12,19 @@ specification, with a feature per layer.
 | `aql` | the §7 rewrite of a client query into one `ehr_id`-scoped query per node, with identifier hygiene (§5.4), on the `openehr-query` syntax tree |
 | `merge` | the §9 to §11 merge of node answers: `ORDER BY` with `LIMIT`, `DISTINCT`, version-identity dedup, decomposable aggregates |
 
-The `merge` module holds its place and lands with its FerroFED issue.
+The `merge` feature carries `ORDER BY` with `LIMIT` today; `DISTINCT`, dedup and
+the decomposable aggregates follow in build order.
+
+## The `merge` feature
+
+`merge::merge` takes the rows each node answered and the `order::ResultOrder`
+the rewrite wrote into the node queries, and returns the federated rows with
+the endpoints whose answer it could not use (§11.6.1, N39). The rows are put
+in one total order: the `ORDER BY` keys (null greatest, numbers exactly,
+complete date-times by instant, strings by code point, `DV_ORDERED` values by
+`openehr-rm`), then the endpoint id, then the uid, and cut at the `LIMIT`, which
+every node was sent unchanged. A node that returned `n` rows out of that order
+is refused, and the gateway reports it `node-error`.
 
 ## The `aql` feature
 

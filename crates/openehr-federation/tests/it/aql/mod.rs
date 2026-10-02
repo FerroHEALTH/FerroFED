@@ -12,6 +12,7 @@ mod folding;
 mod golden;
 mod guard;
 mod hygiene;
+mod order;
 mod rules;
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;

@@ -51,6 +51,20 @@ binary follows from v0.0.2.
   `time-out`. The overall budget runs from the request's arrival, so the
   patient resolution and the fan-out share it and the gateway answers inside
   it, and abandoning one node never aborts a request in flight to another.
+- `ORDER BY` with `LIMIT` re-applied at the Tier, with a deterministic
+  tie-break (#52; §11.6.1, N9, N13, N39, CP-8, CP-32). Every node is sent the
+  client's `LIMIT n` unchanged, with the row's uid appended as the last
+  `ORDER BY` key; an `ORDER BY` path the query does not select travels as a
+  hidden column the client never sees. The gateway merges the node answers
+  under one total order (null greatest, numbers exactly, complete date-times
+  by instant, strings by code point, `DV_ORDERED` values through the openEHR
+  RM's own comparison), breaks ties on the endpoint id and then the uid, and
+  cuts the result at `n`. A node that returned `n` rows out of that order, or
+  more than `n`, is reported `node-error`, so the query fails `424` under
+  all-or-nothing. `TOP n` is read as `LIMIT n`; `TOP n BACKWARD`, a `TOP` that
+  disagrees with `LIMIT`, and a `DISTINCT` query ordered on a path it does not
+  select are refused `400`. A query with `LIMIT` and no `ORDER BY` now returns
+  at most `n` rows across all nodes.
 
 ## [0.0.3] - 2026-10-02
 

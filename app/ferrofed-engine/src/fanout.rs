@@ -28,9 +28,10 @@
 //! `complete`, which the envelope derives from the statuses and never takes as
 //! an input.
 //!
-//! The rows of the `active` nodes are concatenated in endpoint id order. That
-//! is this increment's whole merge: `ORDER BY`, `LIMIT`, `DISTINCT` and the
-//! re-injected columns arrive with #52 and the issues after it.
+//! The rows of the `active` nodes are merged under the plan's Tier order and
+//! cut at its `LIMIT` (§11.6.1, N39) by `openehr_federation::merge`. A node
+//! that returned `n` rows out of the federation order is reported `node-error`,
+//! so under all-or-nothing the query fails `424` (decision A43).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -42,8 +43,10 @@ use http::StatusCode;
 use openehr_federation::envelope;
 use openehr_federation::error::WireError;
 use openehr_federation::id::EndpointId as WireEndpointId;
+use openehr_federation::merge::{Disagreement, NodeAnswer, merge};
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
 use openehr_federation::object::Uri;
+use openehr_federation::order::ResultOrder;
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::Transport;
@@ -161,6 +164,7 @@ pub struct Plan {
     settled: BTreeMap<EndpointId, Outcome>,
     withheld: Arc<Withheld>,
     completion: Completion,
+    order: ResultOrder,
 }
 
 impl Plan {
@@ -183,6 +187,14 @@ impl Plan {
     #[must_use]
     pub fn completing(mut self, completion: Completion) -> Self {
         self.completion = completion;
+        self
+    }
+
+    /// This plan merging the node answers under `order`, the Tier order and
+    /// `LIMIT` the rewrite wrote into the node queries (§11.6.1, N39).
+    #[must_use]
+    pub fn ordered(mut self, order: ResultOrder) -> Self {
+        self.order = order;
         self
     }
 
@@ -488,6 +500,7 @@ where
         settled,
         withheld,
         completion,
+        order: result_order,
     } = plan;
     let order: Vec<EndpointId> = dispatch.keys().cloned().collect();
     let mut tasks = JoinSet::new();
@@ -537,7 +550,7 @@ where
         };
         records.insert(endpoint, record);
     }
-    answer(snapshot, records, budget, completion)
+    answer(snapshot, records, &result_order, budget, completion)
 }
 
 /// The `time-out` of a node still outstanding when the overall budget ran out
@@ -553,24 +566,42 @@ fn abandoned(latency_ms: u64, overall: Duration) -> Outcome {
 }
 
 /// The envelope over `records` in endpoint id order, the decision over it
-/// under `completion`, and the rows of the `active` endpoints when the query
-/// did not fail.
+/// under `completion`, and the merged rows of the `active` endpoints when the
+/// query did not fail.
 fn answer(
     snapshot: &RegistrySnapshot,
     records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)>,
+    order: &ResultOrder,
     budget: Budget,
     completion: Completion,
 ) -> Result<FederatedAnswer, FanOutError> {
-    let mut endpoints = Vec::with_capacity(records.len());
-    let mut rows = Vec::new();
+    let mut answers = Vec::new();
+    let mut statuses = Vec::with_capacity(records.len());
     for (endpoint, (outcome, answered)) in records {
         // NOTE: §9.5, `row_count` is what the node contributed, counted before
         // any federation-level `DISTINCT`, dedup or `LIMIT` touches the rows.
         let row_count = answered.as_ref().map(Vec::len);
-        endpoints.push(endpoint_record(snapshot, &endpoint, outcome, row_count)?);
         if let Some(answered) = answered {
-            rows.extend(answered);
+            answers.push(NodeAnswer::new(endpoint.as_str(), answered));
         }
+        statuses.push((endpoint, outcome, row_count));
+    }
+    let (mut rows, refused) = merge(answers, order).into_parts();
+    let mut endpoints = Vec::with_capacity(statuses.len());
+    for (endpoint, outcome, row_count) in statuses {
+        let refusal = refused
+            .iter()
+            .find(|refusal| refusal.endpoint() == endpoint.as_str());
+        let record = match refusal {
+            Some(refusal) => endpoint_record(
+                snapshot,
+                &endpoint,
+                disagreeing(outcome, refusal.reason()),
+                None,
+            )?,
+            None => endpoint_record(snapshot, &endpoint, outcome, row_count)?,
+        };
+        endpoints.push(record);
     }
     let verdict = decide(&endpoints, completion);
     let federation = FederationMeta::new(endpoints)
@@ -584,6 +615,20 @@ fn answer(
         federation,
         rows,
     })
+}
+
+/// The `node-error` of an `active` endpoint whose answer the merge refused, a
+/// response the gateway could not use (§11.1, decision A43).
+///
+/// Only an `active` endpoint has rows to refuse, so any other outcome is kept.
+fn disagreeing(outcome: Outcome, reason: Disagreement) -> Outcome {
+    match outcome {
+        Outcome::Active { latency_ms } => Outcome::NodeError {
+            latency_ms,
+            error: ErrorDetail::Text(reason.to_string()),
+        },
+        other => other,
+    }
 }
 
 /// One `meta.federation.endpoints[]` entry, with the registry's node, system

@@ -19,8 +19,6 @@ use openehr_federation::aql::subject::Subject;
 use openehr_its::rest::generated::query::ResultSetRow;
 use serde_json::Value;
 
-// TODO(#52): decode cells into typed values for the cross-node ORDER BY.
-
 /// A node row that cannot be read against the façade's columns.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]

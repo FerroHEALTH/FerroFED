@@ -22,6 +22,8 @@ const CORPUS: &str = concat!(
 enum Verdict {
     /// The node query equals the case's expected query.
     Rewrites,
+    /// The node query differs from the case's, and equals this one.
+    RewritesTo(&'static str),
     /// The query is refused with the refusal this predicate accepts.
     Refuses(fn(&Refusal) -> bool),
 }
@@ -30,7 +32,6 @@ enum Verdict {
 fn verdict(case: &str) -> Verdict {
     match case {
         "01-basic-subject-rewrite.case"
-        | "03-subject-projection-reinjection.case"
         | "04-observation-with-archetype-predicate.case"
         | "08-dv-identifier-clinician-path-dispatched.case"
         | "11-no-subject-passthrough.case"
@@ -42,6 +43,12 @@ fn verdict(case: &str) -> Verdict {
         "13-entry-subject-carrier-rewrite.case" | "14-entry-subject-issuer-consumed.case" => {
             Verdict::Rewrites
         }
+        // §11.6.1, N9, N39, decisions A28 and A43: the node keeps LIMIT n, orders
+        // on the uid after the client's key, and carries the key as a hidden
+        // column the Tier re-applies ORDER BY on.
+        "03-subject-projection-reinjection.case" => Verdict::RewritesTo(
+            "SELECT c/uid/value, c/context/start_time/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '550e8400-e29b-41d4-a716-446655440000' ORDER BY c/context/start_time/value DESC, c/uid/value ASC LIMIT 10",
+        ),
         // §7.1, decision A7: a second value in a patient carrier, which may name
         // a relative that no path tells apart; the reading that cannot leak.
         "17-entry-subject-second-value-rejected.case" => {
@@ -140,7 +147,7 @@ fn every_golden_case_has_its_adjudicated_outcome() {
         let case = read(&path);
         let outcome = analysed(&case.facade, &ask_all());
         match verdict(&name) {
-            Verdict::Rewrites => {
+            verdict @ (Verdict::Rewrites | Verdict::RewritesTo(_)) => {
                 let analysis =
                     outcome.unwrap_or_else(|refusal| panic!("{name} was refused: {refusal}"));
                 let node = match analysis {
@@ -157,7 +164,11 @@ fn every_golden_case_has_its_adjudicated_outcome() {
                         query.node_query().aql().to_owned()
                     }
                 };
-                assert_same_aql(&node, &case.expected);
+                let expected = match verdict {
+                    Verdict::RewritesTo(adjudicated) => adjudicated,
+                    Verdict::Rewrites | Verdict::Refuses(_) => case.expected.as_str(),
+                };
+                assert_same_aql(&node, expected);
             }
             Verdict::Refuses(accepts) => {
                 let refusal = match outcome {

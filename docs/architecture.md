@@ -888,58 +888,78 @@ one `ORDER BY` column, the first rule that applies decides:
    PostgreSQL uses (FerroFED's own);
 2. **class rank** orders a cross-class pair: boolean, then number, then
    temporal, then string, then data value object, then other JSON;
-3. **within a class**: numbers exactly, as decimals parsed from the JSON text,
-   never through `f64`; temporals by `openehr-base`'s `PartialOrd` over instants
-   (an offset is honoured); strings by Unicode code point, which is
-   reproducible where a locale collation is not (FerroFED's own); data values
-   by `openehr-rm`'s `less_than` where `is_strictly_comparable_to` holds;
+3. **within a class**: numbers exactly, an integer as an integer and a fraction
+   as the `f64` the JSON reader holds, an integer never rounded through `f64`;
+   complete date-times by instant, through `openehr-base`'s `diff` from the
+   epoch (an offset is honoured), zoned before unzoned; strings by Unicode code
+   point, which is reproducible where a locale collation is not (FerroFED's
+   own); data values by `openehr-rm`'s `less_than` where
+   `is_strictly_comparable_to` holds;
 4. **fallback**: the canonical JSON of the value by code point, deterministic
    and documented.
 
 The row order is the `ORDER BY` keys in turn, then `endpoint_id`, then the
-row's uid as a full `ObjectVersionId`, then the positional row under rule 4, so
-a repeated query returns the same bytes (§11.6.1 MUST). An `ORDER BY` path that
-is not in the `SELECT` is added to the dispatched `SELECT` as a hidden column
-and stripped after the merge (decision A28); the reference implementation
-refuses such a query. The reference implementation compares every
-non-numeric value by its string form, so `2026-01-01T10:00:00+02:00` sorts
-after `2026-01-01T09:00:00Z` although it is earlier, and a `DV_QUANTITY` orders
-by its `toString()`.
+row's uid by the comparator above (the `uid/value` string a node sorts too),
+then the positional row under rule 4, so a repeated query returns the same
+bytes (§11.6.1 MUST). An `ORDER BY` path that is not in the `SELECT` is added
+to the dispatched `SELECT` as a hidden column and stripped after the merge
+(decision A28); the reference implementation refuses such a query. The
+reference implementation compares every non-numeric value by its string form,
+so `2026-01-01T10:00:00+02:00` sorts after `2026-01-01T09:00:00Z` although it
+is earlier, and a `DV_QUANTITY` orders by its `toString()`.
 
-**Making the `LIMIT` pushdown provably correct** (decision A27). §11.6.1
-justifies dispatching `LIMIT n` per node by saying that "under a total order the
-global top `n` is necessarily contained in the union of the per-node top `n`".
-That is true only if every node orders by the order the Tier uses, which AQL
-does not fix for nulls, collation, data values or ties at the cut. A node that
-sorts differently returns a top `n` that looks right and is not, the failure
-§11.6.3 calls the worst because a client cannot detect it. Distributed engines
-avoid the problem by owning the comparator end to end: Presto pushes TopN to a
-connector only where it can prove the ordering semantics match (Sethi et al.,
-ICDE 2019), and the threshold algorithm's correctness rests on each source's
-sorted access agreeing with the aggregation (Fagin, Lotem and Naor, JCSS 66(4),
-2003). The gateway cannot fetch unbounded within its budget, but it can verify
-what it receives:
+**`ORDER BY` with `LIMIT` as §11.6.1 states it** (decision A43, which
+supersedes A27). For a query with `ORDER BY` and `LIMIT n` and no `OFFSET`,
+the gateway dispatches `LIMIT n` to each node, applies the `ORDER BY` across the
+merged rows whenever more than one node contributed (N13), and applies
+`LIMIT n` to the merged, re-ordered set (§11.6.1, N39). Ties on the `ORDER BY`
+keys break on `endpoint_id`, then the uid, the order §11.6.1 recommends.
 
-1. where the `FROM` binds a versioned object whose uid path is known
-   (`c/uid/value` for `COMPOSITION c`), append `ORDER BY <uid path> ASC` after
-   the client's keys in the dispatched AQL, so within one node the node's order
-   matches the Tier's on every key it can see;
-2. dispatch `LIMIT n + 1`;
-3. check each node: a node that returned more than `n` rows was cut, and if its
-   rows are not non-decreasing under the Tier comparator, or rows `n` and
-   `n + 1` tie on every pushed-down key, its top `n` is not provably the
-   Tier's. That node becomes `node-error` with the error
-   `result order disagrees with the federation order` or
-   `ambiguous cut at LIMIT`, the specification's own meaning of `node-error`
-   ("a response the gateway could not use"). A node that returned `n` rows or
-   fewer was not cut, and the Tier sorts everything it got.
+The dispatched query is the client's, plus what the Tier needs to read it:
 
-With these steps every row of the true global top `n` is in the union of the
-per-node answers, or the node that would have broken it is reported. The cost
-is one comparison per row received, one extra row per node, and a refusal
-exactly where a vendor's order makes a correct answer impossible. The
-precondition the specification's argument omits is held on #17. The
-deprecated `TOP n` is treated as `LIMIT n`.
+1. an `ORDER BY` path that is not selected travels as a hidden column (A28);
+2. where the `FROM` binds a versioned object whose uid path is known
+   (`c/uid/value` for `COMPOSITION c`), the uid is read as a column and
+   appended as the last `ORDER BY` key, ascending. Under `DISTINCT`, the
+   remaining selected paths take the uid's place, since a hidden column would
+   change which rows are distinct;
+3. the `LIMIT` is the client's `n`, unchanged.
+
+Appending a key after the client's keys refines their order and never
+reorders it. A node's top `n` under the refined order is therefore always one
+of its top `n` under the client's `ORDER BY`: where the client's keys tie
+across the node's cut, AQL lets the node return any of the tied rows, and the
+appended uid makes it return the same ones on every repeat. Without that, the
+Tier's tie-break would order whichever tied rows a node happened to return,
+and two runs of one query could return different rows, which §11.6.1's
+determinism rule forbids.
+
+FerroFED fails loudly on what it can see (FerroFED's own, within §11.6.1):
+
+- A node that returned exactly `n` rows may have been cut. Its rows must be
+  non-decreasing under the Tier comparator on the dispatched keys and
+  tie-break, with data values compared through `openehr-rm`, never as strings.
+  If they are not, the node is `node-error` with
+  `result order disagrees with the federation order` ("a response the gateway
+  could not use", §11.1). The query then fails `424` under all-or-nothing, and
+  the node is reported under best-effort (§11.4).
+- A node that returned more than `n` rows answered past the `LIMIT` it was
+  sent, and is `node-error` too.
+- A node that returned fewer than `n` rows returned everything it matched, so
+  its order cannot hide a row, and the Tier orders what it got.
+
+**The gap the specification leaves.** §11.6.1's argument, "under a total order
+the global top `n` is necessarily contained in the union of the per-node top
+`n`", holds only if every node orders under the same total order as the Tier.
+AQL leaves null order, string collation and the order of data values
+undefined (`master03-syntax.adoc` §ORDER BY), so a node that orders
+differently can leave out a row that belongs in the global top `n`, and
+nothing in the `n` rows it returns shows it. An example: a case-insensitive
+node holding `a`, `b` and `B`, asked for `LIMIT 1`, returns `a`, which is in
+the Tier's order, while the Tier's top 1 under code point order is `B`. The
+check above catches a disagreement that is visible and cannot catch this one.
+The precondition is a specification gap, held on #17 (T167). The deprecated
+`TOP n` is treated as `LIMIT n`.
 
 **`OFFSET`** (decision A29, #53). Bounded `k + n`: dispatch `LIMIT k + n + 1`,
 run the agreement check, merge, and slice `[k, k + n)`. The window is capped by
@@ -997,7 +1017,7 @@ allows, and the request is answered synchronously. Both issues stay at P3.
 |---|---|---|---|
 | best-effort `partial` | offered, opt-in per request | #50 | `completeness.best_effort: true`, `opt_in` with the header and value |
 | timeouts | per node and overall; `Prefer: wait` shortens | #37, #51 | `timeout {per_node_ms, overall_ms, policy: "abandon-and-mark"}` |
-| `ORDER BY` with `LIMIT` | total-order pushdown and the agreement check | #52 | the agreement rule is documented on the site |
+| `ORDER BY` with `LIMIT` | `LIMIT n` per node, re-ordered and cut at the Tier, a node's visible order checked | #52 | the check is documented on the site |
 | `OFFSET` | bounded `k + n`, capped | #53 | `paging {offset_strategy: "bounded", max_window}` |
 | cursor | not built | #60 | `offset_strategy` is never `"cursor"` |
 | aggregates | `COUNT`, `SUM`, `MIN`, `MAX`, `AVG` | #54 | `aggregates.decomposable` |
@@ -1008,13 +1028,14 @@ allows, and the request is answered synchronously. Both issues stay at P3.
 
 **Invariants**, each a `proptest` property over generated node result sets:
 
-1. merge with pushdown (`LIMIT n + 1` per node) equals sort-everything then
-   `LIMIT n`, for nodes sorted by the Tier comparator;
-2. for nodes sorted by a different order, the merge equals that oracle or
-   reports `node-error` for a node that was cut, and never returns a different
-   top `n`;
-3. any permutation of node arrival and of rows within equal keys yields
-   byte-identical output;
+1. merge with `LIMIT n` per node equals sort-everything then `LIMIT n`, for
+   nodes that order by the Tier comparator;
+2. a node whose `n` returned rows are out of the Tier order is reported
+   `node-error` and contributes no row (a node that orders differently past
+   its cut is not detectable, the gap held on #17);
+3. any permutation of node arrival, and of the rows of a node that returned
+   fewer than `n`, yields byte-identical output under the `endpoint_id`-then-uid
+   tie-break;
 4. every registry member appears in `endpoints[]` exactly once, no failed node
    contributes a row, and `complete` is true exactly when every in-scope
    outcome is `active`;
@@ -1361,8 +1382,8 @@ change what some of them carry.
   folding (#45, A4), ask-all (#46), the PIX Manager fake (#47, A39), and the
   PMIR hooks (#48, track 8 deferred).
 - **v0.0.4, the federated answer** (#49 to #60). The endpoint report (#49),
-  completeness (#50), timeouts (#51), `ORDER BY` with `LIMIT` and the agreement
-  check (#52, A27, A28), bounded `OFFSET` (#53, A29), decomposable aggregates
+  completeness (#50), timeouts (#51), `ORDER BY` with `LIMIT` and the visible-order
+  check (#52, A28, A43), bounded `OFFSET` (#53, A29), decomposable aggregates
   (#54, A30), `DISTINCT` (#55), dedup on the full version id (#56, A32), the
   status mapping (#57), CP-12 (#58, held draft T154). #59 and #60 are not built
   (A31) and stay at P3.
@@ -1394,7 +1415,7 @@ change what some of them carry.
 ## 15. The decision register
 
 Every choice this pass put to the owner, all decided by the owner on
-2026-10-01. The bracket names the report and its
+2026-10-01; A43, which supersedes A27, was decided on 2026-10-02. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -1426,7 +1447,7 @@ R4 is #23, #25 and #27).
 | A24 | Purpose of use [R2 D8] | required by default, `403` without it; relaxed only by a declared setting | §13.4: a node must not be left to infer it | decided (owner, 2026-10-01) |
 | A25 | Storage [R3 D1] | membership as a reviewed document with no write API; learned state in memory; incidents as events; stored queries behind `DefinitionStore`, with the `PUT` registration API, on `redb` for one gateway, PostgreSQL 18 when several replicas run, or read-only | stored versions are immutable and must survive a restart (N44); replicas must see one version and one refusal; the clinical path holds no store handle; admission is an operator act (§12b.1) | decided (owner, 2026-10-01) |
 | A26 | Patient-derived data at rest [R3 D2] | none | GDPR Art. 4(5), Recital 26; the cost is a re-probe after a restart | decided (owner, 2026-10-01) |
-| A27 | The N39 agreement check [R3 D3] | uid tie-break pushed down, `LIMIT n + 1`, and a cut node out of order reported `node-error` | §11.6.1's containment argument assumes an order AQL does not define; a wrong top `n` is undetectable for a client | decided (owner, 2026-10-01) |
+| A27 | The N39 agreement check [R3 D3] | uid tie-break pushed down, `LIMIT n + 1`, and a cut node out of order reported `node-error` | §11.6.1's containment argument assumes an order AQL does not define; a wrong top `n` is undetectable for a client | superseded by A43 (owner, 2026-10-02: "always go to the specs and see how it should be done"; §11.6.1 and N39 require dispatching `LIMIT n`) |
 | A28 | An `ORDER BY` path not in `SELECT` [R3 D4] | a hidden column, stripped after the merge | the client's query stays answerable; hygiene re-checks the dispatched AQL | decided (owner, 2026-10-01) |
 | A29 | `OFFSET` [R3 D5] | bounded `k + n`, 1000 rows per node by default, `400` past it | §11.6.2 admits it when declared | decided (owner, 2026-10-01) |
 | A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01) |
@@ -1442,3 +1463,4 @@ R4 is #23, #25 and #27).
 | A40 | EHRbase's PostgreSQL 16.2 [R4 D6] | the PostgreSQL 18 rule governs FerroFED's own database; a member node runs its product's documented image, recorded in the memory | the node's database is part of the product under test | decided (owner, 2026-10-01) |
 | A41 | The number of nodes [R4 D7] | two products, a second FerroEHR for three-node cases | no third open CDR image was evaluated | decided (owner, 2026-10-01) |
 | A42 | The reference implementation's image [R4 D8] | build from the vendored `Dockerfile` outside CI, or wait for a public image | its image refused an anonymous pull on 2026-10-01 | decided (owner, 2026-10-01) |
+| A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |

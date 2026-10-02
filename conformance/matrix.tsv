@@ -35,7 +35,7 @@ CP-4	Gateway	N7	2	covered	#35,#38	-
 CP-5	Gateway	N4,N10	3,4	planned	#46,#85	-
 CP-6	Gateway	N11	3	planned	#70	-
 CP-7	Gateway	N5	2	covered	#35,#38	-
-CP-8	Gateway	N13	5	planned	#52,#55	-
+CP-8	Gateway	N13	5	covered	#52,#55	-
 CP-9	Gateway	N15	5	planned	#56	-
 CP-10	Gateway	N14	5	planned	#54	-
 CP-11	Gateway	N16	4	covered	#49,#85	-
@@ -59,7 +59,7 @@ CP-28	Gateway	N35	3	planned	#71	-
 CP-29	Gateway	N36	5,6	planned	#56,#66	-
 CP-30	Gateway	N37	4	covered	#37,#50	-
 CP-31	Gateway	N38,N40	4	covered	#49,#51	-
-CP-32	Gateway	N39,N14,N9	5	planned	#52,#53,#54	-
+CP-32	Gateway	N39,N14,N9	5	covered	#52,#53,#54	-
 CP-33	Gateway	N41,N42	6,11	planned	#62,#63,#91	-
 CP-33a	Operator	N42a	11	operator	#79,#91	verified at admission or in the registry, not on a request (section 16.2)
 CP-34	Gateway	N43	9	planned	#75,#76	-
