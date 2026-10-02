@@ -29,6 +29,7 @@ mod registry_fhir;
 mod request_log;
 mod resolution;
 mod routing;
+mod routing_log;
 mod run;
 mod shutdown;
 mod support;

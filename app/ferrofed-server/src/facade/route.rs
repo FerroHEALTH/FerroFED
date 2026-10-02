@@ -68,7 +68,8 @@ pub struct Arrived<'a> {
     pub body: Bytes,
     /// The request id, empty when the client sent none.
     ///
-    /// It names the request in the answer only, and never reaches the node.
+    /// It names the request in the answer only, and never reaches the node
+    /// or a log line.
     pub request_id: &'a str,
     /// The gateway's id for the request, the `X-Request-Id` the node receives
     /// (§5.4.1, N33).
@@ -120,13 +121,16 @@ fn in_ehr_area(matched: &RouteMatch) -> bool {
 async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMatch) -> Response {
     let started = Instant::now();
     let request_id = arrived.request_id;
+    // NOTE: §5.4.1, N33: the client's id is free text that may carry an
+    // identifier, so every log event names the gateway's own id instead.
+    let logged = arrived.outbound.to_string();
     let Some((segment, ehr_id)) = path_ehr_id(matched) else {
         return error::fixed(Code::EhrIdInvalid, request_id);
     };
     if let Some(query) = arrived.uri.query()
         && let Err(unlisted) = hygiene::forwarded_query(matched, query)
     {
-        security::forward_refused(unlisted.position, request_id);
+        security::forward_refused(unlisted.position, &logged);
         return error::response(
             Code::QueryParameterRefused,
             unlisted.to_string(),
@@ -149,7 +153,10 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
         }
     };
     let Some(budget) = Deadlines::from(federation, started) else {
-        tracing::error!("the routed request's deadline cannot be represented");
+        tracing::error!(
+            request_id = logged,
+            "the routed request's deadline cannot be represented"
+        );
         return error::fixed(Code::Internal, request_id);
     };
     let (endpoint, step, probed) = match located {
@@ -165,7 +172,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
                 overall: budget.overall,
                 request_id: arrived.outbound,
             };
-            match ask_all(federation, &probe, request_id).await {
+            match ask_all(federation, &probe, &logged).await {
                 Ok((endpoint, answer)) => {
                     let probed = (arrived.method == Method::GET
                         && arrived.path == probe.path()
@@ -184,7 +191,12 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     if endpoint.status() == EndpointStatus::Suspended {
         return error::fixed(Code::NoDestination, request_id);
     }
-    tracing::debug!(endpoint = %endpoint.id(), step = step.as_str(), "routed a path ehr_id");
+    tracing::debug!(
+        endpoint = %endpoint.id(),
+        step = step.as_str(),
+        request_id = logged,
+        "routed a path ehr_id"
+    );
     let system_id = snapshot
         .node(endpoint.node())
         .map(|node| node.system_id().as_str());
@@ -194,7 +206,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     };
     let forwarded = match probed {
         Some(answer) => Ok(answer),
-        None => forward(federation, endpoint, &arrived, &budget).await,
+        None => forward(federation, endpoint, &arrived, &budget, &logged).await,
     };
     match forwarded {
         Ok(forwarded) => {
@@ -204,7 +216,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
             provenance.stamp(answered(forwarded))
         }
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
-        Err(Failure::Forward(failure)) => failed(&failure, provenance, request_id),
+        Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
     }
 }
 
@@ -261,9 +273,14 @@ async fn forward(
     endpoint: &Endpoint,
     arrived: &Arrived<'_>,
     budget: &Deadlines,
+    logged: &str,
 ) -> Result<Forwarded, Failure> {
     let Some(client) = federation.clients().get(endpoint.id()) else {
-        tracing::error!(endpoint = %endpoint.id(), "a registry endpoint has no node client");
+        tracing::error!(
+            endpoint = %endpoint.id(),
+            request_id = logged,
+            "a registry endpoint has no node client"
+        );
         return Err(Failure::Internal);
     };
     let options = DispatchOptions::new(budget.per_node()).with_request_id(arrived.outbound);
@@ -286,7 +303,7 @@ async fn forward(
 async fn ask_all<'a>(
     federation: &'a Federation,
     probe: &Probe,
-    request_id: &str,
+    logged: &str,
 ) -> Result<(&'a Endpoint, Forwarded), (Code, String)> {
     let internal = || (Code::Internal, Code::Internal.message().to_owned());
     let snapshot = federation.snapshot();
@@ -294,12 +311,16 @@ async fn ask_all<'a>(
     let answers = probe::ask_all(federation.clients(), &members, probe)
         .await
         .map_err(|error| {
-            tracing::error!(error = %crate::chain(&error), "the ask-all probe could not run");
+            tracing::error!(
+                error = %crate::chain(&error),
+                request_id = logged,
+                "the ask-all probe could not run"
+            );
             internal()
         })?;
     for (endpoint, answer) in &answers {
         if let Answer::Failed(ForwardError::Withheld { part, .. }) = answer {
-            security::forward_withheld(endpoint, *part, request_id);
+            security::forward_withheld(endpoint, *part, logged);
         }
     }
     let (endpoint, answer) = match owner::settled(answers) {
@@ -310,6 +331,7 @@ async fn ask_all<'a>(
                 tracing::error!(
                     code = code.as_str(),
                     error = %unsettled,
+                    request_id = logged,
                     "the ask-all probe named no owner"
                 );
             }
@@ -317,7 +339,11 @@ async fn ask_all<'a>(
         }
     };
     let declared = snapshot.endpoint(&endpoint).ok_or_else(|| {
-        tracing::error!(endpoint = %endpoint, "a probed endpoint left the snapshot");
+        tracing::error!(
+            endpoint = %endpoint,
+            request_id = logged,
+            "a probed endpoint left the snapshot"
+        );
         internal()
     })?;
     Ok((declared, answer))
@@ -341,15 +367,20 @@ fn answered(forwarded: Forwarded) -> Response {
 ///
 /// The gateway's error body under the code the failure names; one that
 /// reached the node's wire, or was meant to, still names the acting endpoint
-/// (N31).
-fn failed(failure: &ForwardError, provenance: Provenance<'_>, request_id: &str) -> Response {
+/// (N31). The body names the client's `request_id`, and the log the
+/// gateway's own `logged` id.
+fn failed(
+    failure: &ForwardError,
+    provenance: Provenance<'_>,
+    (request_id, logged): (&str, &str),
+) -> Response {
     let code = match failure {
         ForwardError::QueryParameter(unlisted) => {
-            security::forward_refused(unlisted.position, request_id);
+            security::forward_refused(unlisted.position, logged);
             return error::response(Code::QueryParameterRefused, failure.to_string(), request_id);
         }
         ForwardError::Withheld { endpoint, part } => {
-            security::forward_withheld(endpoint, *part, request_id);
+            security::forward_withheld(endpoint, *part, logged);
             Code::Internal
         }
         ForwardError::TimeOut { .. } => Code::NodeTimeout,
@@ -361,6 +392,7 @@ fn failed(failure: &ForwardError, provenance: Provenance<'_>, request_id: &str) 
         tracing::error!(
             code = code.as_str(),
             error = %crate::chain(failure),
+            request_id = logged,
             "the routed request failed"
         );
     }

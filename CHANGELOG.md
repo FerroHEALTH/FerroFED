@@ -663,6 +663,13 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Security
 
+- A request routed to one node no longer logs the client's `X-Request-Id`
+  (#62; §5.4.1, §5.4.3, N33, CP-26). The security events of a refused query
+  parameter or a withheld request, and the failure events of the routed path
+  and the ask-all probe, named the client's own id, free text that can carry
+  a patient identifier. Every event of the routed path now names the
+  gateway's own id, the one its request line records; the client's id stays
+  in the response and its error body only.
 - A client's `X-Request-Id` no longer reaches any node (#217; §5.4.1, N33,
   CP-26). A legal client value was sent to every node of the fan-out as it
   came, so a patient identifier written into it passed the outbound gate,
