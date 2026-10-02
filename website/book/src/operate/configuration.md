@@ -99,7 +99,10 @@ answer is `504`. A failing answer returns no rows, and its `meta.federation`
 names every node with its status and `complete: false`. A member that does not
 know the patient (`not-resolved`) or that refuses on consent grounds
 (`consent-denied`) clears `complete` and never fails the query. A member that
-was never in scope (`excluded`, `not-localized`) leaves `complete` alone.
+was never in scope (`excluded`, `not-localized`) leaves `complete` alone. When
+every endpoint is `excluded`, for example because every one is suspended, no
+member is in scope and the request cannot be resolved to any destination: the
+gateway answers `404` and asks no node (§11.2, §11.3).
 
 A client can opt into best-effort for one request by sending
 `openEHR-federation-completeness: partial`. The gateway then answers `200` with

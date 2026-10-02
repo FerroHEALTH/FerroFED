@@ -283,3 +283,87 @@ fn a_client_wait_shortens_the_budget_and_never_extends_it() -> TestResult {
     assert_eq!(none.per_node(), Duration::ZERO);
     Ok(())
 }
+
+/// The plan of `settled`, each `(endpoint id, outcome)` settled with no
+/// request.
+fn settled(settled: Vec<(&str, Outcome)>) -> Result<Plan, Box<dyn std::error::Error>> {
+    let mut plan = Plan::new();
+    for (endpoint, outcome) in settled {
+        plan = plan.settle(EndpointId::new(endpoint)?, outcome)?;
+    }
+    Ok(plan)
+}
+
+fn excluded() -> Outcome {
+    Outcome::Excluded {
+        error: Some(ErrorDetail::Text("suspended by the operator".to_owned())),
+    }
+}
+
+/// §11.2, first row, and §11.3: a request no node selection put any member in
+/// scope for "cannot be resolved to a destination", the `404`.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_plan_that_excludes_every_endpoint_has_no_destination() -> TestResult {
+    let plan = settled(vec![("node-a-pub", excluded()), ("node-b-pub", excluded())])?;
+    assert!(plan.has_no_destination(), "every endpoint was ruled out");
+    assert!(
+        Plan::new().has_no_destination(),
+        "a plan that names no endpoint has none either"
+    );
+    Ok(())
+}
+
+/// §14.1: an empty candidate set from localization dispatches to no node and
+/// does not fail the query, whether the localizer named no one or did not
+/// answer, so it is not the `404` of §11.2.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_plan_that_localization_left_empty_keeps_its_destination() -> TestResult {
+    let named_no_one = Outcome::NotLocalized { error: None };
+    let unavailable = Outcome::NotLocalized {
+        error: Some(ErrorDetail::Text("the localizer did not answer".to_owned())),
+    };
+    for outcome in [named_no_one, unavailable] {
+        let plan = settled(vec![
+            ("node-a-pub", outcome.clone()),
+            ("node-b-pub", outcome),
+        ])?;
+        assert!(!plan.has_no_destination());
+    }
+    let mixed = settled(vec![
+        ("node-a-pub", excluded()),
+        ("node-b-pub", Outcome::NotLocalized { error: None }),
+    ])?;
+    assert!(
+        !mixed.has_no_destination(),
+        "localization took part in emptying the set"
+    );
+    Ok(())
+}
+
+/// §11.3: a member in scope where the patient is `not-resolved` keeps the
+/// request routed, and its answer is a `200`.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn an_in_scope_endpoint_keeps_the_destination() -> TestResult {
+    let resolved_nowhere = settled(vec![
+        ("node-a-pub", not_resolved()),
+        ("node-b-pub", excluded()),
+    ])?;
+    assert!(!resolved_nowhere.has_no_destination());
+    let asked = Plan::new()
+        .dispatch(EndpointId::new("node-a-pub")?, NodeQuery::new("SELECT 1"))?
+        .settle(EndpointId::new("node-b-pub")?, excluded())?;
+    assert!(!asked.has_no_destination());
+    Ok(())
+}
