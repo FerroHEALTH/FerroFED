@@ -22,6 +22,11 @@ pub const COMPLETENESS: &str = "openEHR-federation-completeness";
 /// The request header that selects the dedup mode (§10, N15).
 pub const DEDUP: &str = "openEHR-federation-dedup";
 
+/// The [`COMPLETENESS`] value that states the default all-or-nothing
+/// completion explicitly (§11.4); a gateway accepts it even though it is the
+/// default.
+pub const COMPLETENESS_ALL: &str = "all";
+
 /// The [`COMPLETENESS`] value that opts a request into best-effort
 /// completion (§11.4).
 pub const COMPLETENESS_PARTIAL: &str = "partial";

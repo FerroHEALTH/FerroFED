@@ -12,16 +12,19 @@
 //! `424` and `504` carry `meta.federation`, which the generated `ApiError`
 //! cannot (decision A11).
 //!
-//! One request runs the pipeline of section 3: [`intake`] types the query
+//! One request runs the pipeline of section 3: [`completeness`] reads the
+//! completion strategy the request selects (§11.4), [`intake`] types the query
 //! parameters, the rewrite analyses the query and names the patient,
 //! [`plan`] resolves the patient at every member and builds one node query
-//! per member that knows them, the engine fans out under the budget, and
-//! [`cells`] builds each façade row with the subject columns re-injected (N5).
+//! per member that knows them, the engine fans out under the budget and the
+//! strategy, and [`cells`] builds each façade row with the subject columns
+//! re-injected (N5).
 //! A refused query is a `400` whose message locates the fault by byte range
 //! and never quotes it (§5.4.3). Every strip, refusal and outbound-gate stop
 //! is a [`security`] event, by position and never by value.
 
 pub mod cells;
+pub mod completeness;
 pub mod intake;
 pub mod plan;
 pub mod security;
@@ -33,7 +36,7 @@ use axum::Json;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use ferrofed_engine::fanout::{FanOutError, fan_out};
+use ferrofed_engine::fanout::{Completion, FanOutError, fan_out};
 use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, StatusCode};
 use openehr_federation::aql::refusal::Refusal;
@@ -63,7 +66,11 @@ pub async fn query_aql(
     };
     // TODO(#80): the authenticated client session the resolution bindings belong to.
     let session: Option<SessionKey> = None;
-    match federate(federation, &body, &request_id, session.as_ref()).await {
+    let completion = match completeness::of(&headers, federation.best_effort()) {
+        Ok(completion) => completion,
+        Err(error) => return Failure::Completeness(error).into_response(),
+    };
+    match federate(federation, &body, completion, &request_id, session.as_ref()).await {
         Ok((status, result_set)) => (status, Json(result_set)).into_response(),
         Err(failure) => failure.into_response(),
     }
@@ -75,6 +82,9 @@ enum Failure {
     /// The request body is not an ITS-REST `AdhocQueryExecute`.
     #[error("the request body is not an ITS-REST ad hoc query")]
     Body,
+    /// The completeness header is refused.
+    #[error(transparent)]
+    Completeness(#[from] completeness::CompletenessError),
     /// A query parameter is not an AQL literal.
     #[error(transparent)]
     Parameter(#[from] intake::IntakeError),
@@ -99,6 +109,7 @@ impl IntoResponse for Failure {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Body
+            | Self::Completeness(_)
             | Self::Parameter(_)
             | Self::Refused(_)
             | Self::Plan(plan::TargetsError::Patient(_)) => StatusCode::BAD_REQUEST,
@@ -122,7 +133,8 @@ impl IntoResponse for Failure {
     }
 }
 
-/// Runs one federated query and returns the status and the `RESULT_SET`.
+/// Runs one federated query under `completion` and returns the status and the
+/// `RESULT_SET`.
 ///
 /// The `{node, ehr_id}` set a resolution produces is held as `session`'s
 /// resolution bindings (§12.5.1 step 2, decision A20); without a session there
@@ -130,6 +142,7 @@ impl IntoResponse for Failure {
 async fn federate(
     federation: &Federation,
     body: &[u8],
+    completion: Completion,
     request_id: &str,
     session: Option<&SessionKey>,
 ) -> Result<(StatusCode, ResultSet), Failure> {
@@ -180,7 +193,7 @@ async fn federate(
     let answer = fan_out(
         federation.clients(),
         federation.snapshot(),
-        targets.plan,
+        targets.plan.completing(completion),
         federation.budget(),
         (!request_id.is_empty()).then_some(request_id),
     )
@@ -194,8 +207,11 @@ async fn federate(
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
         .map_err(Failure::Envelope)?;
     // NOTE: decision A17, a cross-reference that could not answer fails the
-    // query 424 under all-or-nothing, and a failing query returns no rows.
-    if targets.resolution_failed && status == StatusCode::OK {
+    // query 424 under all-or-nothing; under best-effort it stays reported.
+    if targets.resolution_failed
+        && completion == Completion::AllOrNothing
+        && status == StatusCode::OK
+    {
         status = StatusCode::FAILED_DEPENDENCY;
     }
     let rows = if status == StatusCode::OK {

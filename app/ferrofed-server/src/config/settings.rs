@@ -68,6 +68,8 @@ pub struct FederationSettings {
     /// How the node set of an undirected patient query is chosen, as
     /// declared; a federation refuses to load without it.
     pub node_selection: Option<NodeSelection>,
+    /// Whether a request may opt into best-effort completion (§11.4).
+    pub best_effort: bool,
 }
 
 /// The HTTP surface, resolved.
@@ -122,6 +124,7 @@ impl Settings {
             profile = ?self.profile,
             registry = self.registry_document.is_some(),
             node_selection = ?self.federation.node_selection,
+            best_effort = self.federation.best_effort,
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             credentials = endpoints.join(","),
             "configuration resolved"

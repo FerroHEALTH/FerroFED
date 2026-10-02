@@ -31,6 +31,17 @@ binary follows from v0.0.2.
   registry does not say. `latency_ms` appears exactly for the endpoints the
   gateway dispatched to, and `row_count` counts what each node contributed
   before any federation-level `DISTINCT`, dedup or `LIMIT`.
+- Completeness (#50; §11.2 to §11.4, N6, N37, CP-30): all-or-nothing stays
+  the default, and a request opts into best-effort with
+  `openEHR-federation-completeness: partial`. Under best-effort the gateway
+  answers `200` with the rows of the nodes that answered, names every other
+  node with its status, and sets `complete: false`. A cross-reference that
+  cannot answer is reported there and is not a `424`. `all` is accepted
+  explicitly. Any other value, a repeated header, or `partial` where
+  `federation.best_effort = false` withdraws the mode is a `400` that asks no
+  node and never quotes the value. The `not-resolved` and `consent-denied`
+  carve-outs and the scope rule hold in both modes. `complete` is always
+  derived from the statuses.
 
 ## [0.0.3] - 2026-10-02
 

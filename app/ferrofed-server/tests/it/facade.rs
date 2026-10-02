@@ -130,7 +130,7 @@ managing_organisation = "org-b"
 }
 
 /// The `[dev]` rows mapping the patient to `rows`, each `(member, ehr_id)`.
-fn crossref(rows: &[(&str, &str)]) -> String {
+pub(crate) fn crossref(rows: &[(&str, &str)]) -> String {
     rows.iter().fold(String::new(), |mut text, (member, ehr_id)| {
         // NOTE: writing to a String cannot fail, so the result is dropped.
         let _written: std::fmt::Result = write!(

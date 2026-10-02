@@ -90,6 +90,32 @@ bindings the moment a PMIR subscription reports a merge or split. No
 subscription is built yet, so the lifetime is the bound in practice; the
 specification marks this lifecycle track provisional.
 
+## Completeness
+
+A federated query is all-or-nothing by default (N37). If a node that was
+asked does not answer, the query fails: `504` when the node timed out or was
+unreachable, and `424` when it answered with an error. When both happen, the
+answer is `504`. A failing answer returns no rows, and its `meta.federation`
+names every node with its status and `complete: false`. A member that does not
+know the patient (`not-resolved`) or that refuses on consent grounds
+(`consent-denied`) clears `complete` and never fails the query. A member that
+was never in scope (`excluded`, `not-localized`) leaves `complete` alone.
+
+A client can opt into best-effort for one request by sending
+`openEHR-federation-completeness: partial`. The gateway then answers `200` with
+the rows of the nodes that did answer, still names every other node with its
+status, and sets `complete: false`. Sending `all` asks for the default
+explicitly. Any other value, or the header given twice, is refused with a
+`400`. Best-effort is offered by default, and you can withdraw it:
+
+```toml
+[federation]
+best_effort = false   # a request asking for partial is then refused with a 400
+```
+
+The gateway never quietly serves an all-or-nothing answer to a request that
+asked for `partial`. The setting is named in the startup log line.
+
 Every secret has a `_file` sibling, read once at boot and trimmed, so a secret
 can come from a mounted file and never sit in the configuration or the
 environment. The credentials are read and checked at boot; the node dispatch
