@@ -44,6 +44,9 @@ copy of a composition version held at several nodes: the copy from the CDR
 that created it when that CDR answered, else the one from the lowest
 endpoint id. Version ids and system ids that differ only in case name the
 same thing (openEHR BASE), and the kept row comes back as its node sent it.
+The gateway then orders the version uid without regard to case too, in an
+`ORDER BY` on it and as the tie-break, so the page a `LIMIT` cuts does not
+depend on the case a node wrote it in (§11.6.1).
 `meta.federation.dedup` then names the endpoints whose
 copies were dropped and counts the rows (§10.2, §10.3). Two versions of one
 composition are two rows either way, and `none` states the default
