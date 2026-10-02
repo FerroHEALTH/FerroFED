@@ -12,7 +12,7 @@ use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::Profile;
 use secrecy::SecretString;
 
-use crate::config::DevSection;
+use crate::config::{DevSection, NodeSelection};
 use crate::telemetry::Format;
 
 /// The settings the run path holds, with every secret already read.
@@ -65,6 +65,9 @@ pub struct FederationSettings {
     pub default_namespace: Option<String>,
     /// How long the resolution bindings of a client session live.
     pub binding_ttl: Duration,
+    /// How the node set of an undirected patient query is chosen, as
+    /// declared; a federation refuses to load without it.
+    pub node_selection: Option<NodeSelection>,
 }
 
 /// The HTTP surface, resolved.
@@ -118,6 +121,7 @@ impl Settings {
             listen = %self.server.listen,
             profile = ?self.profile,
             registry = self.registry_document.is_some(),
+            node_selection = ?self.federation.node_selection,
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             credentials = endpoints.join(","),
             "configuration resolved"

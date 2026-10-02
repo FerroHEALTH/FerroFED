@@ -28,6 +28,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::aql::{Context, Targeting};
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
+use crate::config::NodeSelection;
 use crate::config::settings::{PixmSettings, Scheme, Settings};
 
 /// The federation a server serves the federated query over.
@@ -71,6 +72,13 @@ pub enum FederationError {
     /// (`docs/architecture.md` section 6, decision A14).
     #[error("set one resolver: [dev] and [pixm] are both configured")]
     TwoResolvers,
+    /// A registry is configured, but `federation.node_selection` is not: how
+    /// an undirected patient query finds its nodes is a deployment decision,
+    /// declared and never defaulted (§4.3, N4).
+    #[error(
+        "set federation.node_selection when registry.document is set: \"ask-all\" asks every member's cross-reference (§4.3, N4)"
+    )]
+    NodeSelectionUndeclared,
     /// A `[pixm]` member key is not a node id.
     #[error("pixm.manager[{manager}].members.{key:?} is not a node id")]
     PixmMember {
@@ -131,6 +139,9 @@ impl Federation {
             }
             return Ok(None);
         };
+        let Some(selection) = settings.federation.node_selection else {
+            return Err(FederationError::NodeSelectionUndeclared);
+        };
         let snapshot =
             RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
                 path: path.clone(),
@@ -154,7 +165,7 @@ impl Federation {
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
         let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)
             .map_err(FederationError::Clients)?;
-        let mut context = Context::new(Targeting::AskAll);
+        let mut context = Context::new(targeting(selection));
         if let Some(namespace) = &settings.federation.default_namespace {
             context = context.with_default_namespace(namespace.clone());
         }
@@ -302,4 +313,13 @@ fn onward_credentials(
         credentials.insert(endpoint, shared);
     }
     Ok(credentials)
+}
+
+/// The rewrite's targeting for an undirected query under the declared node
+/// selection (§4.3, N4).
+// TODO(#73): declare the node selection in the OPTIONS {base}/ body (§7a.2, N30).
+fn targeting(selection: NodeSelection) -> Targeting {
+    match selection {
+        NodeSelection::AskAll => Targeting::AskAll,
+    }
 }

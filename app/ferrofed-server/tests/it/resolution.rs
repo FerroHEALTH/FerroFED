@@ -326,7 +326,9 @@ fn load_refusal(dir: &Path, text: &str) -> Result<FederationError, Box<dyn Error
         registry("http://127.0.0.1:9/a/", "http://127.0.0.1:9/b/", ""),
     )?;
     let document = toml::Value::String(document.display().to_string());
-    let text = format!("{text}\n[registry]\ndocument = {document}\n");
+    let text = format!(
+        "{text}\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\n"
+    );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     match Federation::load(&settings) {
         Ok(_) => Err("the federation was built".into()),
@@ -366,6 +368,41 @@ fn a_pix_manager_that_leaves_a_member_unresolved_refuses_to_boot() -> TestResult
         "{error:?}"
     );
     Ok(())
+}
+
+#[test]
+fn a_registry_without_a_declared_node_selection_refuses_to_boot() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let document = dir.path().join("registry.toml");
+    std::fs::write(
+        &document,
+        registry("http://127.0.0.1:9/a/", "http://127.0.0.1:9/b/", ""),
+    )?;
+    let document = toml::Value::String(document.display().to_string());
+    let text = format!(
+        "{}\n[registry]\ndocument = {document}\n",
+        pixm("http://127.0.0.1:9")
+    );
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    match Federation::load(&settings) {
+        Err(FederationError::NodeSelectionUndeclared) => Ok(()),
+        other => Err(format!(
+            "the node selection is declared, never defaulted (§4.3, N4): {other:?}"
+        )
+        .into()),
+    }
+}
+
+#[test]
+fn a_node_selection_the_gateway_does_not_know_refuses_to_boot() -> TestResult {
+    let text = "[federation]\nnode_selection = \"localized\"\n";
+    match Config::from_sources(Some(text), &BTreeMap::new()) {
+        Err(error::Error::Parse { .. }) => Ok(()),
+        other => Err(format!(
+            "only ask-all is a node selection the gateway offers, refused at parse: {other:?}"
+        )
+        .into()),
+    }
 }
 
 #[test]

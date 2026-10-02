@@ -3,6 +3,7 @@
 
 //! Integration tests through the library run path the binary shares.
 
+mod ask_all;
 mod config;
 mod e2e;
 mod facade;

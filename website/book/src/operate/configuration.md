@@ -50,6 +50,26 @@ user = "ferrofed"
 password_file = "/run/secrets/clinic-b-password"
 ```
 
+## Node selection
+
+A gateway that federates (`registry.document` is set) declares how an
+undirected patient query finds its nodes, and refuses to boot without the
+declaration:
+
+```toml
+[federation]
+node_selection = "ask-all"
+```
+
+`ask-all` is the selection for a deployment with no localization service (the
+specification's reference flow, Variant B; N4). Every active member is a
+candidate: the gateway asks every member's cross-reference where the patient
+is, dispatches the query only to the members that return an `ehr_id`, and
+reports the others as `not-resolved` without failing the query. It is the only
+selection the gateway offers until a localizer binding lands; a localizer that
+does not answer then fails closed, which is a different rule. The selection is
+named in the startup log line.
+
 Every secret has a `_file` sibling, read once at boot and trimmed, so a secret
 can come from a mounted file and never sit in the configuration or the
 environment. The credentials are read and checked at boot; the node dispatch
