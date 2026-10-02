@@ -26,6 +26,9 @@
 //! and never quotes it (§5.4.3), and whose body names the refusal's stable
 //! code ([`crate::error`]). Every strip, refusal and outbound-gate stop is
 //! a [`security`] event, by position and never by value.
+//!
+//! A request to an EHR resource under a path `ehr_id` is routed to one node
+//! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3).
 
 pub mod cells;
 pub mod completeness;
@@ -33,6 +36,7 @@ pub mod dedup;
 pub mod intake;
 pub mod plan;
 pub mod prefer;
+pub mod route;
 pub mod security;
 pub mod target;
 

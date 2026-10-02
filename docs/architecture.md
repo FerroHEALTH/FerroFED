@@ -343,9 +343,18 @@ rule out for a single-node route, so those routes go through the matcher and
 `forward` instead.
 
 **Single-node answers.** Status, body, `Location` and `ETag` pass through
-unmodified (N22, N31). One tower layer adds `openEHR-federation-endpoint` and
-`openEHR-federation-system-id` to every routed answer, and hop-by-hop fields are
-stripped in both directions (RFC 9110 §7.6.1). A CDR's `Location` is usually an
+unmodified (N22, N31). The routed handler adds `openEHR-federation-endpoint`
+and `openEHR-federation-system-id` to every routed answer, the gateway's own
+`504` and `424` for a node that gave no answer included, and hop-by-hop fields
+are stripped from the answer (RFC 9110 §7.6.1). The request side is an
+allow-list: the ITS-REST request headers of the EHR API and nothing else, so
+neither a hop-by-hop field, the client's `Authorization` nor any other client
+header reaches a node, and a query string travels only when every parameter
+in it is one ITS-REST defines under `/ehr/{ehr_id}`; any other is a `400`
+before dispatch (§5.4.1, N33). The node clients follow no redirect, so a
+node's `3xx` is passed on as the node's answer and no request is re-sent to a
+host the registry does not name. Built in #61 for the EHR area, with the
+explicit target as the only routing step so far (#62). A CDR's `Location` is usually an
 absolute URL on the node, so a client that follows it bypasses the gateway,
 which works against N1 and N28. FerroFED passes it unmodified as N31 requires,
 and the conflict is a draft on #17 to revisit at the re-pin (decision A13).
@@ -1252,7 +1261,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth` | the clients each function needs | anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
-| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, the budgets, the completeness decision, follow-up routing on `creating_system_id`; reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`) | any storage implementation (#40), the server |
+| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`; reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`) | any storage implementation (#40), the server |
 | `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, authentication (`openehr-sdt` scopes, `jsonwebtoken`), telemetry, health, the storage implementations, wiring | everything | is never depended on |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
 

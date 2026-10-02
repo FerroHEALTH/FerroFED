@@ -24,6 +24,7 @@ mod outbound_id;
 mod readiness;
 mod request_log;
 mod resolution;
+mod routing;
 mod run;
 mod shutdown;
 mod support;

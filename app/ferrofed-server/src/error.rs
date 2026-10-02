@@ -68,12 +68,30 @@ pub enum Code {
     /// or the query selects ENDPOINT attributes, which the gateway does not
     /// add to rows (§9.3, N12).
     NotImplemented,
-    /// The `FROM ENDPOINT` directive names an endpoint the registry does not
-    /// know (§8.4.1, N19).
+    /// The `FROM ENDPOINT` directive, or the `openEHR-federation-endpoint`
+    /// header of a request routed to a single node, names an endpoint the
+    /// registry does not know (§8.4.1, N19).
     EndpointUnknown,
     /// The `ORGANISATION` directive names an organisation the registry does
     /// not know (§8.1, §8.4.1, N20).
     OrganisationUnknown,
+    /// A write to an EHR resource names no node, and nothing else routes it
+    /// (§12.5.1, N41).
+    TargetRequired,
+    /// The `openEHR-federation-endpoint` header of a request routed to a
+    /// single node names more than one endpoint (§7a.1, §12.4).
+    EndpointSeveral,
+    /// The query string of a request routed to a single node carries a
+    /// parameter ITS-REST does not define there (§5.4.1, N33). The body names
+    /// the parameter by position, never by name or value.
+    QueryParameterRefused,
+    /// The node a request was routed to did not answer in time (§11.2).
+    NodeTimeout,
+    /// The node a request was routed to could not be reached (§11.2).
+    NodeUnreachable,
+    /// The node a request was routed to refused the gateway's onward
+    /// credentials (§11.2).
+    NodeRefused,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -89,7 +107,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 14] = [
+    pub const GATEWAY: [Self; 20] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -104,6 +122,12 @@ impl Code {
         Self::NotImplemented,
         Self::EndpointUnknown,
         Self::OrganisationUnknown,
+        Self::TargetRequired,
+        Self::EndpointSeveral,
+        Self::QueryParameterRefused,
+        Self::NodeTimeout,
+        Self::NodeUnreachable,
+        Self::NodeRefused,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -134,6 +158,12 @@ impl Code {
             Self::NotImplemented => "not-implemented",
             Self::EndpointUnknown => "endpoint-unknown",
             Self::OrganisationUnknown => "organisation-unknown",
+            Self::TargetRequired => "target-required",
+            Self::EndpointSeveral => "endpoint-several",
+            Self::QueryParameterRefused => "query-parameter-refused",
+            Self::NodeTimeout => "node-timeout",
+            Self::NodeUnreachable => "node-unreachable",
+            Self::NodeRefused => "node-refused",
         }
     }
 
@@ -149,11 +179,16 @@ impl Code {
             | Self::PatientInvalid
             | Self::Refused(_)
             | Self::EndpointUnknown
-            | Self::OrganisationUnknown => StatusCode::BAD_REQUEST,
+            | Self::OrganisationUnknown
+            | Self::TargetRequired
+            | Self::EndpointSeveral
+            | Self::QueryParameterRefused => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound => StatusCode::NOT_FOUND,
             Self::EhrIdCollision | Self::ControllingSystemUnreachable => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
+            Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
+            Self::NodeRefused => StatusCode::FAILED_DEPENDENCY,
         }
     }
 
@@ -182,11 +217,23 @@ impl Code {
             Self::NotFound => "no resource is served at this path",
             Self::NotImplemented => "this part of the ITS-REST API is not served by the gateway",
             Self::EndpointUnknown => {
-                "the endpoint directive names an endpoint the registry does not know (§8.4.1)"
+                "the endpoint directive or header names an endpoint the registry does not know (§8.4.1)"
             }
             Self::OrganisationUnknown => {
                 "the organisation directive names an organisation the registry does not know (§8.4.1)"
             }
+            Self::TargetRequired => {
+                "a write to an EHR resource names its node in the openEHR-federation-endpoint header (§12.5.1, N41)"
+            }
+            Self::EndpointSeveral => {
+                "a request routed to one node names exactly one endpoint in the openEHR-federation-endpoint header (§7a.1)"
+            }
+            Self::QueryParameterRefused => {
+                "a query parameter ITS-REST does not define for this resource is refused, never forwarded (§5.4.1, N33)"
+            }
+            Self::NodeTimeout => "the node did not answer in time (§11.2)",
+            Self::NodeUnreachable => "the node could not be reached (§11.2)",
+            Self::NodeRefused => "the node refused the gateway's onward credentials (§11.2)",
         }
     }
 }
@@ -260,6 +307,12 @@ mod tests {
             Code::NotImplemented => Some(11),
             Code::EndpointUnknown => Some(12),
             Code::OrganisationUnknown => Some(13),
+            Code::TargetRequired => Some(14),
+            Code::EndpointSeveral => Some(15),
+            Code::QueryParameterRefused => Some(16),
+            Code::NodeTimeout => Some(17),
+            Code::NodeUnreachable => Some(18),
+            Code::NodeRefused => Some(19),
         }
     }
 
@@ -318,6 +371,12 @@ mod tests {
             (Code::NotImplemented, StatusCode::NOT_IMPLEMENTED),
             (Code::EndpointUnknown, StatusCode::BAD_REQUEST),
             (Code::OrganisationUnknown, StatusCode::BAD_REQUEST),
+            (Code::TargetRequired, StatusCode::BAD_REQUEST),
+            (Code::EndpointSeveral, StatusCode::BAD_REQUEST),
+            (Code::QueryParameterRefused, StatusCode::BAD_REQUEST),
+            (Code::NodeTimeout, StatusCode::GATEWAY_TIMEOUT),
+            (Code::NodeUnreachable, StatusCode::GATEWAY_TIMEOUT),
+            (Code::NodeRefused, StatusCode::FAILED_DEPENDENCY),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

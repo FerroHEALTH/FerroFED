@@ -4,9 +4,11 @@
 # The client contract
 
 A client of a federation gateway is an ordinary openEHR client. This page sets
-out what the specification promises that client. FerroFED serves the
-federated query at `POST {base}/v1/query/aql` once a registry is configured;
-every other ITS-REST path under `/v1/` answers `501` (N32).
+out what the specification promises that client. Once a registry is
+configured, FerroFED serves the federated query at
+`POST {base}/v1/query/aql` and routes the EHR resources under a path
+`ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it, to one node (§7a.1). Every
+other ITS-REST path under `/v1/` answers `501` (N32).
 
 ## What a client sends
 
@@ -108,6 +110,38 @@ carries the `creating_system_id` of the CDR that created it. A follow-up read
 or write sent to the gateway is routed to that CDR (§7.2, §12). A new object
 is always created on one node the client names; creation across nodes is
 refused (§2.3, N23).
+
+Today you name the node of a request to `{base}/v1/ehr/{ehr_id}/…` yourself,
+in the `openEHR-federation-endpoint` header, with the `endpoint_id` the
+result row carried (§12.5.1 step 1, §8.4). The header names exactly one
+registry endpoint; an unknown one or several are a `400`. A write that names
+none is a `400` with the code `target-required`, because the gateway never
+finds a write's destination by trial (§12.5.1, N41). A read that names none
+answers `501` until the gateway can find the node by itself.
+
+A routed request reaches the node as you sent it:
+
+- the body byte for byte, a `DV_IDENTIFIER` in a committed `COMPOSITION`
+  included, because a commit body is clinical content the gateway has no
+  right to alter (§5.4, N33);
+- the method and the path, under the node's own base URL;
+- the ITS-REST request headers (`Accept`, `Content-Type`, `If-Match`,
+  `Prefer` and the `openehr-*` commit headers), and no other header. Your
+  `Authorization` never reaches a node: the gateway authenticates to each node
+  with that node's own credentials (§13);
+- the query string, when every parameter in it is one ITS-REST defines for
+  the EHR resources (`version_at_time`, `path`, `tag_key`, `tag_value`,
+  `tag_target_path`). Any other parameter is a `400`
+  (`query-parameter-refused`) and nothing is sent, because the gateway cannot
+  tell an identifying value from any other (§5.4.1, N33).
+
+The answer is the node's: its status, its body, and its `Location` and `ETag`
+unmodified, since openEHR uids are never rewritten (N22, N31). Every routed
+answer, `POST`, `PUT` and `DELETE` included, names the acting endpoint in
+`openEHR-federation-endpoint` and its node's `system_id` in
+`openEHR-federation-system-id` (§7a.3, §9.6). A node's `Location` is the
+node's own URL or path, so following it bypasses the gateway; send the
+follow-up to the gateway with the version uid instead.
 
 ## Self-description
 

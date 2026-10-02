@@ -163,10 +163,7 @@ impl Federation {
             (None, Some(pixm)) => Some(pixm_resolver(pixm, &snapshot)?),
         };
         let credentials = onward_credentials(settings)?;
-        // NOTE: §11.5 deadlines live on each call; the client's own timeout
-        // only backstops a connection the call deadline cannot reach.
-        let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
-            .map_err(|source| FederationError::Transport(Box::new(source)))?;
+        let transport = node_transport(settings.federation.budget.overall())?;
         let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)
             .map_err(FederationError::Clients)?;
         let mut context = Context::new(targeting(selection))
@@ -321,6 +318,23 @@ impl std::fmt::Debug for Federation {
             )
             .finish_non_exhaustive()
     }
+}
+
+/// The HTTP engine every node client shares, with `timeout` as each
+/// request's backstop.
+///
+/// It follows no redirect: a node's `3xx` is the node's answer, passed
+/// through with its `Location` unmodified on a routed request (N31), and a
+/// request is never re-sent to a host the registry does not name (§5.4.1).
+fn node_transport(timeout: std::time::Duration) -> Result<ReqwestTransport, FederationError> {
+    // NOTE: §11.5 deadlines live on each call; the client's own timeout
+    // only backstops a connection the call deadline cannot reach.
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|source| FederationError::Transport(Box::new(source)))?;
+    Ok(ReqwestTransport::with_client_timeout(client, timeout))
 }
 
 /// The PIXm resolver `[pixm]` describes over the members of `snapshot`.

@@ -11,8 +11,9 @@
 //! stop. `main.rs` only hands in the arguments and returns the exit code.
 //!
 //! The ITS-REST façade serves the federated query, `POST /v1/query/aql`
-//! ([`facade`], §7); every other path under
-//! `/v1/` answers `501` until its issue lands.
+//! ([`facade`], §7), and routes every request to an EHR resource under a
+//! path `ehr_id` to one node ([`facade::route`], §7a.1); every other path
+//! under `/v1/` answers `501` until its issue lands.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod body;
@@ -34,12 +35,13 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use clap::Parser;
-use http::{HeaderMap, StatusCode, Uri};
+use http::{HeaderMap, Method, StatusCode, Uri};
 use tokio::net::TcpListener;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -276,17 +278,35 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 
 /// Every path no route serves.
 ///
-/// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface the
-/// gateway will serve, so it answers `501` (§7a.1, N32): that part of the
-/// façade is not built yet, and a `404` would claim the resource does not
-/// exist. Every other path answers `404`. Neither answer echoes the path.
-async fn unrouted(uri: Uri, headers: HeaderMap) -> Response {
+/// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface: a
+/// request to an EHR resource under a path `ehr_id` is routed to one node
+/// ([`facade::route`]; §7a.1), and every other path answers `501` (§7a.1,
+/// N32), because a `404` would claim the resource does not exist. Every other
+/// path answers `404`. No answer of the gateway's own echoes the path.
+async fn unrouted(
+    State(state): State<Arc<AppState>>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();
-    if uri.path().starts_with(ITS_REST_PREFIX) {
-        error::fixed(error::Code::NotImplemented, request_id)
-    } else {
-        error::fixed(error::Code::NotFound, request_id)
-    }
+    let Some(path) = uri
+        .path()
+        .strip_prefix(ITS_REST_PREFIX.trim_end_matches('/'))
+        .filter(|path| path.starts_with('/'))
+    else {
+        return error::fixed(error::Code::NotFound, request_id);
+    };
+    let arrived = facade::route::Arrived {
+        method: &method,
+        path,
+        uri: &uri,
+        headers: &headers,
+        body,
+        request_id,
+    };
+    facade::route::serve(state.federation(), arrived).await
 }
 
 /// Serves `app` on an already-bound listener until the process receives
