@@ -8,10 +8,10 @@ ITS-REST intermediary in front of many openEHR CDRs. A client sends it an
 ordinary AQL query and never learns it was federated. The gateway resolves the
 patient outside AQL, through an identifier cross-reference service, to a set of
 `{node, local ehr_id}`; it sends standard, non-federated AQL to each node,
-scoped to that node's own `ehr_id`; it merges what comes back with each node's
-provenance; and it routes follow-up reads and writes to the owning CDR. No
-directly identifying patient identifier travels in a dispatched query. It holds
-no clinical data of its own. It implements the openEHR Federation Working
+scoped to that node's own `ehr_id`; and it merges what comes back with each
+node's provenance. Routing follow-up reads and writes to the owning CDR is
+planned for v0.0.5 (#61 to #66). No directly identifying patient identifier
+travels in a dispatched query. It holds no clinical data of its own. It implements the openEHR Federation Working
 Group's *Proposal for Federation Tier with AQL* (the Federation Tier
 specification), and it reaches every node over the openEHR ITS-REST API.
 
@@ -24,8 +24,9 @@ v0.0.3 is released. The Cargo workspace exists (#28) with the crate map of
 `docs/architecture.md` §11 (#106). The server shape, the wire types, the
 registry with the development cross-reference, the container, the test
 harness, the AQL façade with the hygiene gate, the completeness modes, the
-request budget and the cross-node `ORDER BY` with `LIMIT` have landed; the
-rest of each crate holds its place until its issue.
+request budget and the cross-node `ORDER BY` with `LIMIT` have landed. The
+rest of each crate is built by its own issue, in milestone order; follow-up
+routing is planned for v0.0.5 (#61 to #66).
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
@@ -342,5 +343,5 @@ published crates.
   <https://profiles.ihe.net/ITI/>
 - The Netherlands Generic Functions IG (Annex B):
   <https://build.fhir.org/ig/nuts-foundation/nl-generic-functions-ig/>
-- The tracker: `gh issue list --state open`. Issue #16 carries the
-  research program that produces `docs/architecture.md`.
+- The tracker: `gh issue list --state open`. Issue #16 (closed) carries the
+  research program that produced `docs/architecture.md`.

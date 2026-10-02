@@ -304,7 +304,7 @@ jobs:
             echo "Cargo.toml present: the Rust lanes will run."
           else
             echo "cargo=false" >> "$GITHUB_OUTPUT"
-            echo "No Cargo.toml: the Rust lanes are skipped (repository in its design phase)."
+            echo "No root Cargo.toml: the Rust lanes are skipped."
           fi
 
   fmt:

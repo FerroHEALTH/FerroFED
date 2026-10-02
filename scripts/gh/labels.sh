@@ -28,13 +28,21 @@
 #   scripts/gh/labels.sh --self-test
 #       Drives this program against a stub gh on PATH: every label is created
 #       with --force, a retired name is deleted only when the repository
-#       carries it, and a refused gh call fails the run.
+#       carries it, a refused gh call fails the run, and an unknown argument
+#       touches nothing.
+#   Any other argument, --help included, prints this usage and exits 2
+#   before any gh call.
 
 set -euo pipefail
 
 die() {
   echo "gh-labels: $*" >&2
   exit 1
+}
+
+usage() {
+  sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2
+  exit 2
 }
 
 # The self-test stands before the preflight below, because it answers every
@@ -91,16 +99,19 @@ esac
 STUB
   chmod 0755 "$stub/gh"
 
-  local labels create rc out
-  # run NAME CODE: this program through the stub, landing on CODE.
+  local labels create rc out err
+  # run NAME CODE [ARG...]: this program through the stub with ARGs, landing
+  # on CODE.
   run() {
     local name=$1 code=$2
+    shift 2
     rc=0
     : > "$calls"
     PATH="$stub:$PATH" GH_STUB_CALLS="$calls" \
       GH_STUB_LABELS="$labels" GH_STUB_CREATE="$create" \
-      bash "$0" > "$work/out" 2> "$work/err" || rc=$?
+      bash "$0" "$@" > "$work/out" 2> "$work/err" || rc=$?
     out="$work/out"
+    err="$work/err"
     if [[ "$rc" -ne "$code" ]]; then
       echo "gh-labels: self-test failed: $name exited $rc, wanted $code." >&2
       cat "$work/out" "$work/err" >&2
@@ -121,6 +132,15 @@ STUB
     local name=$1 file=$2 needle=$3
     if grep -qF -- "$needle" "$file"; then
       echo "gh-labels: self-test failed: $name said '$needle'." >&2
+      cat "$work/out" "$work/err" "$calls" >&2
+      exit 1
+    fi
+  }
+
+  # untouched NAME: the case made no gh call at all.
+  untouched() {
+    if [ -s "$calls" ]; then
+      echo "gh-labels: self-test failed: $1 called gh." >&2
       cat "$work/out" "$work/err" "$calls" >&2
       exit 1
     fi
@@ -160,14 +180,30 @@ STUB
   run "a refused gh label create" 1
   never "a refused gh label create" "$out" "done."
 
+  # An argument the program does not know, --help among them, prints the
+  # usage and exits 2 before a single gh call.
+  create=ok
+  for argument in --help -h --bogus help; do
+    run "the argument $argument" 2 "$argument"
+    said "the argument $argument" "$err" "Usage:"
+    never "the argument $argument" "$out" "ok: "
+    untouched "the argument $argument"
+  done
+  run "a second argument after --self-test" 2 --self-test --bogus
+  untouched "a second argument after --self-test"
+
   rm -r "$work"
   echo "gh-labels: self-test OK."
 }
 
-if [[ "${1:-}" == "--self-test" ]]; then
-  self_test
-  exit 0
-fi
+case "$#:${1:-}" in
+  0:) ;;
+  1:--self-test)
+    self_test
+    exit 0
+    ;;
+  *) usage ;;
+esac
 
 command -v gh >/dev/null 2>&1 || die "the GitHub CLI (gh) is not installed"
 command -v jq >/dev/null 2>&1 || die "jq is not installed"
@@ -210,7 +246,7 @@ label spec:IHE        1d76db "The IHE identity and directory binding: PIXm, PDQm
 label spec:NL-GF      0e8a16 "The Dutch Generic Functions regional binding (Annex B)."
 
 echo "== workflow and meta labels =="
-label research         c5def5 "A design-phase investigation; the deliverable is cited evidence."
+label research         c5def5 "An investigation whose deliverable is cited evidence and a recommendation."
 label conformance      bfd4f2 "The conformance-point matrix, the Connectathon test tracks, and the harness."
 label dependencies     0366d6 "Dependency updates (used by Dependabot)."
 label security         ee0701 "Security fix or hardening."
