@@ -13,7 +13,8 @@
 //! cannot (decision A11).
 //!
 //! One request runs the pipeline of section 3: [`completeness`] reads the
-//! completion strategy the request selects (§11.4), [`intake`] types the query
+//! completion strategy the request selects (§11.4), [`prefer`] reads the
+//! client deadline that can shorten the budget (§11.5), [`intake`] types the query
 //! parameters, the rewrite analyses the query and names the patient,
 //! [`plan`] resolves the patient at every member and builds one node query
 //! per member that knows them, the engine fans out under the budget and the
@@ -27,18 +28,19 @@ pub mod cells;
 pub mod completeness;
 pub mod intake;
 pub mod plan;
+pub mod prefer;
 pub mod security;
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use ferrofed_engine::fanout::{Completion, FanOutError, fan_out};
+use ferrofed_engine::fanout::{Budget, Completion, FanOutError, fan_out_within};
 use ferrofed_identity::binding::SessionKey;
-use http::{HeaderMap, StatusCode};
+use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::{Analysis, Paging, analyse};
 use openehr_its::rest::generated::common::Error as ItsError;
@@ -60,6 +62,7 @@ pub async fn query_aql(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    let started = Instant::now();
     let request_id = request_id::of(&headers).unwrap_or_default().to_owned();
     let Some(federation) = state.federation() else {
         return crate::body::error(StatusCode::NOT_IMPLEMENTED, "not_implemented", &request_id);
@@ -70,10 +73,41 @@ pub async fn query_aql(
         Ok(completion) => completion,
         Err(error) => return Failure::Completeness(error).into_response(),
     };
-    match federate(federation, &body, completion, &request_id, session.as_ref()).await {
-        Ok((status, result_set)) => (status, Json(result_set)).into_response(),
+    let configured = federation.budget();
+    let wait = prefer::wait(&headers);
+    let budget = wait.map_or(configured, |wait| configured.shortened_to(wait));
+    let query = Query {
+        body: &body,
+        completion,
+        budget,
+        started,
+        request_id: &request_id,
+        session: session.as_ref(),
+    };
+    match federate(federation, query).await {
+        Ok((status, result_set)) => {
+            let mut response = (status, Json(result_set)).into_response();
+            if let Some(applied) = wait.filter(|_| budget != configured) {
+                applied_wait(&mut response, applied);
+            }
+            response
+        }
         Err(failure) => failure.into_response(),
     }
+}
+
+/// Names the `wait` that set the budget in `Preference-Applied` (RFC 7240
+/// §3).
+#[expect(
+    clippy::expect_used,
+    reason = "`wait=` followed by decimal digits is always a valid header value"
+)]
+fn applied_wait(response: &mut Response, wait: Duration) {
+    let value = HeaderValue::try_from(format!("wait={}", wait.as_secs()))
+        .expect("`wait=` and digits should be a valid header value");
+    response
+        .headers_mut()
+        .insert(prefer::PREFERENCE_APPLIED, value);
 }
 
 /// Why a federated query has no `RESULT_SET` to answer with.
@@ -133,19 +167,43 @@ impl IntoResponse for Failure {
     }
 }
 
-/// Runs one federated query under `completion` and returns the status and the
-/// `RESULT_SET`.
+/// One federated query, as the façade read it from the request.
+#[derive(Debug, Clone, Copy)]
+struct Query<'a> {
+    /// The request body.
+    body: &'a [u8],
+    /// The completion strategy the request selects (§11.4).
+    completion: Completion,
+    /// The effective budget: the configured one, shortened by the client's
+    /// `Prefer: wait` (§11.5).
+    budget: Budget,
+    /// When the request arrived, the instant the overall budget runs from.
+    started: Instant,
+    /// The request id, empty when the client sent none.
+    request_id: &'a str,
+    /// The client session the resolution bindings belong to.
+    session: Option<&'a SessionKey>,
+}
+
+/// Runs one federated query and returns the status and the `RESULT_SET`.
 ///
-/// The `{node, ehr_id}` set a resolution produces is held as `session`'s
-/// resolution bindings (§12.5.1 step 2, decision A20); without a session there
-/// is nothing to scope them to, and none is held.
+/// Resolution and the fan-out share one overall budget, which runs from the
+/// request's arrival, so the gateway answers within its declared budget
+/// (§11.5). The `{node, ehr_id}` set a resolution produces is held as the
+/// session's resolution bindings (§12.5.1 step 2, decision A20); without a
+/// session there is nothing to scope them to, and none is held.
 async fn federate(
     federation: &Federation,
-    body: &[u8],
-    completion: Completion,
-    request_id: &str,
-    session: Option<&SessionKey>,
+    query: Query<'_>,
 ) -> Result<(StatusCode, ResultSet), Failure> {
+    let Query {
+        body,
+        completion,
+        budget,
+        started,
+        request_id,
+        session,
+    } = query;
     // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
     // body is refused with a fixed message.
     let request: AdhocQueryExecute =
@@ -160,8 +218,8 @@ async fn federate(
     if let Analysis::Patient(query) = &analysis {
         security::stripped(query, request_id);
     }
-    let deadline = Instant::now()
-        .checked_add(federation.budget().overall())
+    let deadline = started
+        .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
     // TODO(#70): pass the endpoints the directive names; #71 adds the header.
     let selection = plan::Selection::Undirected;
@@ -190,11 +248,12 @@ async fn federate(
             targets.resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
         );
     }
-    let answer = fan_out(
+    let answer = fan_out_within(
         federation.clients(),
         federation.snapshot(),
         targets.plan.completing(completion),
-        federation.budget(),
+        budget,
+        started,
         (!request_id.is_empty()).then_some(request_id),
     )
     .await

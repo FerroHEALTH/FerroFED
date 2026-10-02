@@ -68,7 +68,7 @@ async fn every_node_active_is_a_200_with_the_rows_in_endpoint_order() -> TestRes
     Ok(())
 }
 
-// conformance: CP-30
+// conformance: CP-30 CP-31
 #[tokio::test]
 async fn one_node_timing_out_fails_the_query_504_with_the_envelope() -> TestResult {
     let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
@@ -242,6 +242,7 @@ async fn a_not_resolved_node_beside_an_active_one_keeps_the_rows() -> TestResult
     Ok(())
 }
 
+// conformance: CP-31
 #[tokio::test]
 async fn a_node_answering_after_the_overall_budget_contributes_nothing() -> TestResult {
     let fast = node(json(200, &result_set(&["f1::cdr-0.example.org::1"]))).await;
