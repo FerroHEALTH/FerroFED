@@ -15,6 +15,12 @@ use serde::Deserialize;
 use std::error::Error as StdError;
 use std::time::Duration;
 
+/// A synthetic `ehr_id` a request path carries.
+///
+/// A test searches a response for the whole id: a fragment of it is
+/// hexadecimal, so a minted request id in the same body could contain one.
+const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
+
 /// The root document.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -68,7 +74,7 @@ async fn the_unbuilt_its_rest_surface_answers_five_hundred_and_one_and_echoes_no
         Request::post("/v1/query/aql")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(r#"{"q":"SELECT e FROM EHR e"}"#))?,
-        Request::get("/v1/ehr/7d44b88c-4199-4bad-97dc-d78268e01398").body(Body::empty())?,
+        Request::get(format!("/v1/ehr/{EHR_ID}")).body(Body::empty())?,
         Request::get("/v1/demographic/party/1").body(Body::empty())?,
     ] {
         let path = request.uri().path().to_owned();
@@ -78,10 +84,7 @@ async fn the_unbuilt_its_rest_surface_answers_five_hundred_and_one_and_echoes_no
         assert_eq!("not-implemented", document.code, "{path}");
         assert!(!document.request_id.is_empty(), "a request id is named");
         assert!(!body.contains("SELECT"), "the body echoes no query: {body}");
-        assert!(
-            !body.contains("7d44b88c"),
-            "the body echoes no path: {body}"
-        );
+        assert!(!body.contains(EHR_ID), "the body echoes no path: {body}");
     }
     Ok(())
 }
