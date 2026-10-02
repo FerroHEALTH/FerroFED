@@ -442,19 +442,45 @@ pub fn analyse(
         Some(_) | None => None,
     };
     let ordered = findings.aggregate.is_none();
+    let distinct = query.select.distinct;
     let mut analysis = match subject(&findings, context)? {
         Some((subject, consumed)) => {
             patient(query, &findings, subject, &consumed, columns, ordered)?
         }
         None => unscoped(query, &findings, context, columns, ordered)?,
     };
-    let (order, recombined) = match &mut analysis {
-        Analysis::Patient(query) => (&mut query.order, &mut query.recombination),
-        Analysis::Unscoped(query) => (&mut query.order, &mut query.recombination),
+    let (order, recombined, sources) = match &mut analysis {
+        Analysis::Patient(query) => (
+            &mut query.order,
+            &mut query.recombination,
+            query.sources.as_slice(),
+        ),
+        Analysis::Unscoped(query) => (
+            &mut query.order,
+            &mut query.recombination,
+            query.node.columns.as_slice(),
+        ),
     };
-    *order = std::mem::take(order).with_offset(skip);
+    let mut shaped = std::mem::take(order).with_offset(skip);
+    if distinct {
+        shaped = shaped.with_distinct(visible(sources));
+    }
+    *order = shaped;
     *recombined = recombination;
     Ok(analysis)
+}
+
+/// The node columns the client sees, in façade order: the columns a row is
+/// distinct on (N13). The subject columns are one constant for the whole
+/// answer, and a column the rewrite adds is never seen, so neither is one.
+fn visible(sources: &[ColumnSource]) -> Vec<usize> {
+    sources
+        .iter()
+        .filter_map(|source| match source {
+            ColumnSource::Node(column) => Some(*column),
+            ColumnSource::Subject | ColumnSource::Namespace => None,
+        })
+        .collect()
 }
 
 fn first_fault(error: &ParseError) -> Option<Range<usize>> {

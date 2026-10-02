@@ -300,7 +300,8 @@ fn under_distinct_the_selected_paths_are_the_tie_break_and_nothing_is_added() {
             vec![SortKey::new(0, Direction::Descending)],
             vec![1],
             Some(2)
-        ),
+        )
+        .with_distinct(vec![0, 1]),
         "N13: no uid under DISTINCT, the other selected column breaks ties after endpoint_id"
     );
 }

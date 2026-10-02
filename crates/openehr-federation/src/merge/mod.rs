@@ -31,6 +31,20 @@
 //! the Tier puts first behind the `n` it returned) passes the check, and its
 //! top `n` is then not the Tier's top `n`.
 //!
+//! Under `SELECT DISTINCT` the Tier keeps one row of every set of rows equal
+//! in the columns the client selected (N13), the first in the Tier order, and
+//! only then cuts at `LIMIT` and `OFFSET` (AQL 1.1.0 §LIMIT). A node that may
+//! have been cut and returned two rows the Tier holds equal is refused like
+//! one out of order: its cut can hide a distinct row.
+//!
+//! Every node is still sent the client's `LIMIT n` (or `k + n` for a page),
+//! and the global distinct top `n` lies in the union of the nodes' answers.
+//! Take a value of it, and the node holding its kept copy, the copy first in
+//! the Tier order. Under `DISTINCT` the keys and the tie-break are the
+//! selected paths, so every value that node orders ahead of the copy is also
+//! ahead of it in the Tier order. There are fewer than `n` of those, so the
+//! value is within the node's distinct top `n`, and the node returned it.
+//!
 //! # Examples
 //!
 //! ```
@@ -51,6 +65,7 @@
 mod aggregate;
 mod cell;
 mod compare;
+mod distinct;
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -154,6 +169,9 @@ pub enum Disagreement {
     /// The nodes' `MIN` or `MAX` values are of kinds no one order compares
     /// (a number and a date-time, or a zoned and an unzoned date-time).
     AggregateKinds,
+    /// Under `SELECT DISTINCT`, a node that returned `n` rows returned two
+    /// that the Tier holds equal, so a distinct row can lie past its cut.
+    Distinct,
 }
 
 impl fmt::Display for Disagreement {
@@ -168,6 +186,9 @@ impl fmt::Display for Disagreement {
             }
             Self::AggregateKinds => {
                 "the nodes' MIN or MAX values are of kinds that cannot be compared with each other"
+            }
+            Self::Distinct => {
+                "the node returned, at its LIMIT, two rows the federation holds equal under DISTINCT"
             }
         })
     }
@@ -194,6 +215,7 @@ impl Unrepresentable {
 struct Decoded {
     keys: Vec<Cell>,
     tie: Vec<Cell>,
+    distinct: Vec<Cell>,
     cells: Vec<String>,
 }
 
@@ -209,10 +231,15 @@ type Placed = (String, Decoded, ResultSetRow);
 /// `limit` are kept. Either way, the first [`ResultOrder::offset`] of the kept
 /// rows are then dropped (§11.6.2). The result does not depend on the order of
 /// `nodes`.
+///
+/// Under [`ResultOrder::distinct`], the rows equal on the distinct columns
+/// are collapsed to the first of them in that order before the cut (N13, AQL
+/// 1.1.0 §LIMIT), and a node that returned `limit` rows two of which are
+/// equal is refused with [`Disagreement::Distinct`].
 #[must_use]
 pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     nodes.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
-    if order.keys().is_empty() {
+    if order.keys().is_empty() && order.distinct().is_none() {
         let mut rows: Vec<ResultSetRow> = nodes.into_iter().flat_map(|node| node.rows).collect();
         cut(&mut rows, order);
         return Merged {
@@ -236,6 +263,7 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
             row.keys
                 .iter_mut()
                 .chain(row.tie.iter_mut())
+                .chain(row.distinct.iter_mut())
                 .filter_map(|cell| match cell {
                     Cell::Data(data) => Some(&mut **data),
                     _ => None,
@@ -253,7 +281,16 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
         }
     }
     refused.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
-    accepted.sort_by(|a, b| tier(a, b, order));
+    // NOTE: no specification governs this: our own design; with no `ORDER BY`
+    // key the rows stay in endpoint id order, as the nodes sent them.
+    if !order.keys().is_empty() {
+        accepted.sort_by(|a, b| tier(a, b, order));
+    }
+    // NOTE: §11.6.1, AQL 1.1.0 §LIMIT: a value of the global distinct top `n` has fewer
+    // than `n` values ahead of its kept copy at that copy's node, so that node returned it.
+    if order.distinct().is_some() {
+        accepted = distinct::collapse(accepted, |(_, row, _)| row.distinct.as_slice());
+    }
     let mut rows: Vec<ResultSetRow> = accepted.into_iter().map(|(_, _, raw)| raw).collect();
     cut(&mut rows, order);
     Merged { rows, refused }
@@ -332,13 +369,29 @@ fn decode_node(
                 .map(|column| raw.get(*column).map(decode))
                 .collect::<Option<Vec<Cell>>>()
                 .ok_or(Disagreement::ShortRow)?;
+            let distinct = order
+                .distinct()
+                .unwrap_or_default()
+                .iter()
+                .map(|column| raw.get(*column).map(decode))
+                .collect::<Option<Vec<Cell>>>()
+                .ok_or(Disagreement::ShortRow)?;
             let cells = raw.iter().map(canonical).collect();
-            Ok((Decoded { keys, tie, cells }, raw))
+            Ok((
+                Decoded {
+                    keys,
+                    tie,
+                    distinct,
+                    cells,
+                },
+                raw,
+            ))
         })
         .collect()
 }
 
-/// The check of one node's visible order (FerroFED's own, within §11.6.1).
+/// The check of one node's visible order, and under `DISTINCT` of its
+/// visible duplicates (FerroFED's own, within §11.6.1 and N13).
 fn check(rows: &[(Decoded, ResultSetRow)], order: &ResultOrder) -> Result<(), Disagreement> {
     let Some(limit) = order.limit() else {
         return Ok(());
@@ -357,6 +410,12 @@ fn check(rows: &[(Decoded, ResultSetRow)], order: &ResultOrder) -> Result<(), Di
             && dispatched(a, b, order) == Ordering::Greater
         {
             return Err(Disagreement::Order);
+        }
+    }
+    if order.distinct().is_some() {
+        let tuples: Vec<&[Cell]> = rows.iter().map(|(row, _)| row.distinct.as_slice()).collect();
+        if distinct::has_duplicates(&tuples) {
+            return Err(Disagreement::Distinct);
         }
     }
     Ok(())

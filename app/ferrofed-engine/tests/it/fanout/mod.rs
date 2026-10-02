@@ -16,6 +16,7 @@ mod all_or_nothing;
 mod best_effort;
 mod budget;
 mod decision;
+mod distinct;
 mod order;
 
 use std::collections::BTreeMap;
