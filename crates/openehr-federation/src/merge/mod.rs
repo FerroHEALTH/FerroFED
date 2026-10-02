@@ -413,7 +413,10 @@ fn check(rows: &[(Decoded, ResultSetRow)], order: &ResultOrder) -> Result<(), Di
         }
     }
     if order.distinct().is_some() {
-        let tuples: Vec<&[Cell]> = rows.iter().map(|(row, _)| row.distinct.as_slice()).collect();
+        let tuples: Vec<&[Cell]> = rows
+            .iter()
+            .map(|(row, _)| row.distinct.as_slice())
+            .collect();
         if distinct::has_duplicates(&tuples) {
             return Err(Disagreement::Distinct);
         }

@@ -22,6 +22,21 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- `SELECT DISTINCT` at the Tier (#55; N13, CP-8, CP-32): a row two nodes
+  return is answered once, compared on the columns the client selected under
+  the Tier comparator (`2` and `2.0` are one value, two spellings of one
+  instant are two), and the duplicates are removed before the `LIMIT` and
+  the `OFFSET` (AQL 1.1.0 §LIMIT), so a duplicate no longer takes two slots
+  of a `LIMIT n` answer or of a bounded `OFFSET` page. The copy kept is the
+  first under `ORDER BY`, then `endpoint_id`. A re-injected subject column
+  and a column the gateway adds never make two rows distinct. Each
+  endpoint's `row_count` stays what it contributed (§9.5). A node that
+  returned its full `LIMIT` with two rows the Tier holds equal is
+  `node-error`, because a distinct row can lie past its cut, and the query
+  fails `424` under all-or-nothing. `openehr-federation` 0.0.18 adds
+  `order::ResultOrder::with_distinct` and `distinct`, and
+  `merge::Disagreement::Distinct`.
+
 - Decomposable aggregates (#54; §11.6.3, N14, N39, CP-10, CP-32): an
   undirected `COUNT`, `SUM`, `MIN`, `MAX` or `AVG` is sent to every node and
   answered with one recombined row in the client's columns, never one row

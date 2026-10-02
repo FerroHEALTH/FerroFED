@@ -15,7 +15,14 @@ use openehr_federation::order::{Direction, ResultOrder, SortKey};
 use openehr_its::rest::generated::query::ResultSetRow;
 use proptest::collection::vec;
 use proptest::prelude::*;
-use serde_json::{Value, json};
+use serde_json::json;
+
+/// One `RESULT_SET` cell as a node writes it.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the test seam: a RESULT_SET cell is a JSON value on the ITS-REST wire"
+)]
+type Cell = serde_json::Value;
 
 /// `SELECT DISTINCT a, b ORDER BY a LIMIT limit`: `b` breaks ties, and the
 /// two columns make a row distinct.
@@ -37,7 +44,7 @@ fn kept(order: &ResultOrder, nodes: Vec<(&str, Vec<ResultSetRow>)>) -> Vec<Resul
     merged.rows().to_vec()
 }
 
-fn number(text: &str) -> Value {
+fn number(text: &str) -> Cell {
     serde_json::from_str(text).expect("a JSON number")
 }
 
@@ -46,7 +53,10 @@ fn number(text: &str) -> Value {
 fn a_duplicate_from_two_nodes_collapses_under_distinct_and_stays_without_it() {
     let nodes = || {
         vec![
-            ("node-a", vec![vec![json!("x"), json!(1)], vec![json!("y"), json!(1)]]),
+            (
+                "node-a",
+                vec![vec![json!("x"), json!(1)], vec![json!("y"), json!(1)]],
+            ),
             ("node-b", vec![vec![json!("x"), json!(1)]]),
         ]
     };
@@ -113,7 +123,10 @@ fn a_number_written_two_ways_is_one_value() {
         assert_eq!(
             kept(
                 &order,
-                vec![("node-a", vec![vec![number(a)]]), ("node-b", vec![vec![number(b)]])]
+                vec![
+                    ("node-a", vec![vec![number(a)]]),
+                    ("node-b", vec![vec![number(b)]])
+                ]
             ),
             [vec![number(a)]],
             "{a} and {b} are one number"
@@ -156,9 +169,9 @@ fn date_times_are_one_value_only_as_one_instant_written_one_way() {
 #[test]
 fn a_data_value_is_one_value_whatever_the_order_of_its_members() {
     let order = ResultOrder::new(Vec::new(), Vec::new(), None).with_distinct(vec![0]);
-    let a: Value = serde_json::from_str(r#"{"_type":"DV_QUANTITY","magnitude":72.5,"units":"kg"}"#)
+    let a: Cell = serde_json::from_str(r#"{"_type":"DV_QUANTITY","magnitude":72.5,"units":"kg"}"#)
         .expect("JSON");
-    let b: Value = serde_json::from_str(r#"{"units":"kg","magnitude":72.5,"_type":"DV_QUANTITY"}"#)
+    let b: Cell = serde_json::from_str(r#"{"units":"kg","magnitude":72.5,"_type":"DV_QUANTITY"}"#)
         .expect("JSON");
     let c = json!({"_type": "DV_QUANTITY", "magnitude": 72.5, "units": "g"});
     let rows = kept(
@@ -239,8 +252,14 @@ fn distinct_runs_before_the_limit() {
     let rows = kept(
         &distinct(Direction::Ascending, Some(2)),
         vec![
-            ("node-a", vec![vec![json!(1), json!(0)], vec![json!(2), json!(0)]]),
-            ("node-b", vec![vec![json!(1), json!(0)], vec![json!(3), json!(0)]]),
+            (
+                "node-a",
+                vec![vec![json!(1), json!(0)], vec![json!(2), json!(0)]],
+            ),
+            (
+                "node-b",
+                vec![vec![json!(1), json!(0)], vec![json!(3), json!(0)]],
+            ),
         ],
     );
     assert_eq!(
@@ -293,7 +312,7 @@ fn endpoint(index: usize) -> String {
     format!("node-{index}")
 }
 
-fn cell(value: i32, reals: bool) -> Value {
+fn cell(value: i32, reals: bool) -> Cell {
     if reals {
         json!(f64::from(value))
     } else {
@@ -302,7 +321,7 @@ fn cell(value: i32, reals: bool) -> Value {
 }
 
 fn row((a, b): (Option<i32>, i32), reals: bool) -> ResultSetRow {
-    vec![a.map_or(Value::Null, |a| cell(a, reals)), cell(b, reals)]
+    vec![a.map_or(json!(null), |a| cell(a, reals)), cell(b, reals)]
 }
 
 /// The Tier order of the generated keys, null greatest.
@@ -327,7 +346,10 @@ fn answered(node: &Node, direction: Direction, window: Option<u64>) -> Vec<Resul
     if let Some(window) = window {
         values.truncate(usize::try_from(window).expect("a small window"));
     }
-    values.into_iter().map(|value| row(value, node.reals)).collect()
+    values
+        .into_iter()
+        .map(|value| row(value, node.reals))
+        .collect()
 }
 
 /// The page `[k, k + n)` of the distinct union of every value of every node,
@@ -384,9 +406,12 @@ fn direction() -> impl Strategy<Value = Direction> {
 
 /// The generated value of a merged row, whichever way the node wrote it.
 fn value_of(row: &ResultSetRow) -> (Option<i64>, i64) {
-    let integer = |cell: &Value| -> i64 {
+    let integer = |cell: &Cell| -> i64 {
         cell.as_i64()
-            .or_else(|| cell.as_f64().and_then(|real| format!("{real:.0}").parse().ok()))
+            .or_else(|| {
+                cell.as_f64()
+                    .and_then(|real| format!("{real:.0}").parse().ok())
+            })
             .expect("a generated number")
     };
     let a = row.first().expect("two columns");

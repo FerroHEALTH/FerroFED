@@ -514,6 +514,8 @@ fn under_distinct_an_ehr_only_query_gets_no_ehr_id_column() {
             vec![0],
             Some(2)
         )
+        .with_distinct(vec![0, 1]),
+        "N13: the Tier compares the client's two columns, and nothing else"
     );
     assert_eq!(columns.len(), 2, "N17, §9.2: the client's two columns");
 }

@@ -36,8 +36,12 @@ async fn distinct_node(cells: &[&str]) -> MockServer {
 /// `SELECT DISTINCT` over node column 0, ordered on it, `LIMIT 2`.
 fn distinct_plan(endpoints: &[&str]) -> Result<Plan, Box<dyn Error>> {
     let mut plan = Plan::new().ordered(
-        ResultOrder::new(vec![SortKey::new(0, Direction::Ascending)], Vec::new(), Some(2))
-            .with_distinct(vec![0]),
+        ResultOrder::new(
+            vec![SortKey::new(0, Direction::Ascending)],
+            Vec::new(),
+            Some(2),
+        )
+        .with_distinct(vec![0]),
     );
     for id in endpoints {
         plan = plan.dispatch(EndpointId::new(*id)?, NodeQuery::new(NODE_AQL))?;
