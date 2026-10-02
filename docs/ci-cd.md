@@ -59,6 +59,7 @@ under the pins below.
 | `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
 | `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, the conformance matrix against the vendored specification, the test markers against the matrix, the rendered book page against the matrix, and the README conformance badges under `conformance/badges/` against the matrix and the AQL golden pass list (`docs/architecture.md` section 12) |
 | `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh`, `migrate-fields.sh` and `rel.sh`, each driven against a stub `gh` on `PATH` |
+| `crate-version-guard-self-test` | `scripts/checks/crate-version-guard.sh --self-test`, the guard over a stub repository whose `main` bumped a crate after the branch forked: an untouched crate passes, and packaged content changed without a bump fails |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
 reference implementation ships its own shell scripts, Dockerfile and
@@ -106,7 +107,10 @@ all-features union only. The job runs per package, never over the workspace.
 `crate-version-guard` runs on pull requests only and fails a change that
 alters a `crates/*` member's packaged content without moving its version,
 because a published version is immutable (`.claude/rules/crates-publishing.md`).
-It exits cleanly while no `crates/*` member exists, and the `no-crate-bump`
+It reads the changed paths from the merge base of the pull request's base
+and head, so a pull request that is behind a `main` that bumped some other
+crate passes, and it still requires a changed member to move off the version
+`main` holds now. It exits cleanly while no `crates/*` member exists, and the `no-crate-bump`
 label is its escape for a diff that provably does not change packaged bytes.
 Nothing is published yet, behind the workspace `publish` switch
 (`.claude/rules/crates-publishing.md`); the guard keeps each crate's line

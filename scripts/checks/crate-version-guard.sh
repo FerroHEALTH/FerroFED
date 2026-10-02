@@ -12,36 +12,146 @@
 # sits at the 0.0.0 placeholder until its first real version, as the pin
 # matrix, docs/VERSIONS.md, records.
 #
-#   crate-version-guard.sh <base-ref> [head-ref]
+#   crate-version-guard.sh <base-ref> [head-ref|WORKTREE]
+#   crate-version-guard.sh --self-test
+#
+# The change is what the head added since it forked from the base: the paths
+# come from the diff against the merge base of the two, so a base that moved
+# on after the fork (a bump on main a pull request is behind) is never read as
+# the change's own. The version a changed member must move away from is the
+# one the base holds now, so two changes cannot both claim one version.
 #
 # The head ref may be the literal WORKTREE, which compares the base with the
 # tree as it stands rather than with a commit. That is what the pre-commit hook
 # passes: the manifests and Cargo.lock are read from disk either way, so the
-# changed set has to come from the same place to agree with them.
+# changed set has to come from the same place to agree with them. In CI the
+# disk holds the pull request merged into its base.
 #
 # Exit 0 when no packaged content changed, or every member whose packaged
 # content changed also moved its version, with the root requirement and
-# Cargo.lock following. Exit 1 otherwise, and 2 on a usage error, with the
-# usage on stderr. The `no-crate-bump` pull-request label
-# is the CI escape for a diff that provably does not alter packaged bytes; this
-# script does not read labels.
+# Cargo.lock following. Exit 1 otherwise, and 2 on a usage error or a base and
+# head with no merge base, with the reason on stderr. The `no-crate-bump`
+# pull-request label is the CI escape for a diff that provably does not alter
+# packaged bytes; this script does not read labels.
 set -euo pipefail
+
+# The self-test builds a stub repository in a temporary directory, with a copy
+# of this script in it, and runs the guard there as CI does: the base is main's
+# tip, the head is the branch, and the disk holds the branch merged into main.
+self_test() {
+  local script status
+  # Global, so the EXIT trap still sees it after the function returns.
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+  script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  mkdir -p "$work/scripts/checks"
+  cp "$script" "$work/scripts/checks/crate-version-guard.sh"
+
+  # A repository of its own, so no global hook, signing key or identity of the
+  # caller's reaches it.
+  stub_git() {
+    git -C "$work" -c user.name=self-test -c user.email=self-test@example.org \
+      -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"
+  }
+  crate() {
+    mkdir -p "$work/crates/$1/src"
+    printf '[package]\nname = "%s"\nversion = "%s"\n' "$1" "$2" > "$work/crates/$1/Cargo.toml"
+  }
+  lock() {
+    printf '[[package]]\nname = "x"\nversion = "%s"\n\n[[package]]\nname = "y"\nversion = "%s"\n' "$1" "$2" > "$work/Cargo.lock"
+  }
+  commit() {
+    stub_git add -A
+    stub_git commit -q -m "$1"
+  }
+  # expect NAME WANT BRANCH: the guard over BRANCH merged into main exits WANT.
+  expect() {
+    local name=$1 want=$2 branch=$3
+    stub_git checkout -q --detach main
+    stub_git merge -q --no-edit "$branch" > /dev/null
+    status=0
+    (cd "$work" && bash scripts/checks/crate-version-guard.sh main "$branch") > "$work/out" 2>&1 || status=$?
+    if [[ "$status" -ne "$want" ]]; then
+      echo "crate-version-guard: self-test failed: $name exited $status, wanted $want." >&2
+      cat "$work/out" >&2
+      exit 1
+    fi
+  }
+
+  stub_git init -q -b main
+  printf '[workspace]\nmembers = ["crates/x", "crates/y"]\n\n[workspace.dependencies]\nserde = "1"\n' > "$work/Cargo.toml"
+  crate x 0.0.1
+  crate y 0.0.1
+  echo 'pub fn x() {}' > "$work/crates/x/src/lib.rs"
+  echo 'pub fn y() {}' > "$work/crates/y/src/lib.rs"
+  lock 0.0.1 0.0.1
+  commit "the fork point"
+
+  stub_git checkout -q -b untouched
+  echo 'notes' > "$work/NOTES.md"
+  commit "a change outside every crate"
+  stub_git checkout -q main
+  stub_git checkout -q -b unbumped
+  echo 'pub fn x2() {}' >> "$work/crates/x/src/lib.rs"
+  commit "packaged content of x, no bump"
+  stub_git checkout -q main
+  stub_git checkout -q -b bumped
+  echo 'pub fn x2() {}' >> "$work/crates/x/src/lib.rs"
+  crate x 0.0.2
+  lock 0.0.2 0.0.1
+  commit "packaged content of x, bumped"
+
+  stub_git checkout -q main
+  echo 'pub fn y2() {}' >> "$work/crates/y/src/lib.rs"
+  crate y 0.0.2
+  lock 0.0.1 0.0.2
+  commit "main bumps y after every branch forked"
+
+  expect "a branch behind a main that bumped a crate it never touched" 0 untouched
+  expect "a branch that changed packaged content without a bump" 1 unbumped
+  if ! grep -q 'packaged content of x changed but its version is still 0.0.1' "$work/out"; then
+    echo "crate-version-guard: self-test failed: the unbumped branch failed without naming x." >&2
+    cat "$work/out" >&2
+    exit 1
+  fi
+  if grep -q 'of y changed' "$work/out"; then
+    echo "crate-version-guard: self-test failed: main's own bump of y was read as the branch's." >&2
+    exit 1
+  fi
+  expect "a branch behind main that bumped what it changed" 0 bumped
+  echo "crate-version-guard: self-test passed."
+}
+
+if [[ "${1:-}" = "--self-test" && $# -eq 1 ]]; then
+  self_test
+  exit 0
+fi
+
 cd "$(dirname "$0")/../.."
 
 if [[ $# -lt 1 || $# -gt 2 || -z "${1:-}" ]]; then
-  echo "usage: crate-version-guard.sh <base-ref> [head-ref|WORKTREE]" >&2
+  echo "usage: crate-version-guard.sh <base-ref> [head-ref|WORKTREE] | --self-test" >&2
   exit 2
 fi
 base="$1"
 head="${2:-HEAD}"
 
-# `git diff <base> -- …` with no second ref reads the working tree, which is
+# The commit the change forked from the base at; the worktree forks where its
+# HEAD does.
+tip="$head"
+[[ "$head" != "WORKTREE" ]] || tip=HEAD
+if ! fork="$(git merge-base "$base" "$tip")"; then
+  echo "crate-version-guard: $base and $head have no merge base; check out the full history (fetch-depth: 0)." >&2
+  exit 2
+fi
+
+# `git diff <fork> -- …` with no second ref reads the working tree, which is
 # the WORKTREE head; everything else names two commits.
 changed_paths() {
-  if [[ "$head" = "WORKTREE" ]]; then git diff --name-only "$base" --; else git diff --name-only "$base" "$head" --; fi
+  if [[ "$head" = "WORKTREE" ]]; then git diff --name-only "$fork" --; else git diff --name-only "$fork" "$head" --; fi
 }
 diff_text() {
-  if [[ "$head" = "WORKTREE" ]]; then git diff "$base" -- "$@"; else git diff "$base" "$head" -- "$@"; fi
+  if [[ "$head" = "WORKTREE" ]]; then git diff "$fork" -- "$@"; else git diff "$fork" "$head" -- "$@"; fi
 }
 head_file() {
   if [[ "$head" = "WORKTREE" ]]; then cat "$1"; else git show "$head:$1"; fi
