@@ -251,7 +251,10 @@ async fn federate(
     let answer = fan_out_within(
         federation.clients(),
         federation.snapshot(),
-        targets.plan.completing(completion),
+        targets
+            .plan
+            .completing(completion)
+            .ordered(analysis.order().clone()),
         budget,
         started,
         (!request_id.is_empty()).then_some(request_id),

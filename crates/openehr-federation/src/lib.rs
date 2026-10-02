@@ -25,7 +25,8 @@
 //! The wire types are always present. Two features add the rest of the
 //! specification's gateway logic: `aql`, the §7 rewrite of a client query into
 //! one `ehr_id`-scoped query per node, and `merge`, the §9 to §11 merge of the
-//! node answers.
+//! node answers. [`order::ResultOrder`] is the plain description of the Tier
+//! order the rewrite produces and the merge reads.
 //!
 //! # Examples
 //!
@@ -51,6 +52,7 @@ pub mod headers;
 pub mod id;
 pub mod meta;
 pub mod options;
+pub mod order;
 pub mod outcome;
 pub mod status;
 

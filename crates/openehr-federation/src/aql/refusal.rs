@@ -137,19 +137,37 @@ pub enum Refusal {
     #[error("offset-based paging is not supported across a fan-out (§11.6.2, N39)")]
     OffsetUnsupported,
     /// The query clause and the ITS-REST member of the same name page
-    /// differently (decision A10).
+    /// differently (decision A10), or the deprecated `TOP` and `LIMIT` name
+    /// different counts.
     #[error("the {member} member and the query's {clause} clause disagree")]
     PagingConflict {
-        /// The ITS-REST member.
+        /// The ITS-REST member, or `TOP`.
         member: &'static str,
         /// The AQL clause it pages like.
         clause: &'static str,
     },
-    /// An ITS-REST paging member is negative.
+    /// An ITS-REST paging member, or a row count of the query, is negative.
     #[error("the {member} member is negative")]
     NegativePaging {
-        /// The ITS-REST member.
+        /// The ITS-REST member, or `LIMIT` or `TOP`.
         member: &'static str,
+    },
+    /// The deprecated `TOP n BACKWARD` asks for the last rows of an order the
+    /// gateway cannot reproduce across nodes; `ORDER BY … DESC LIMIT n` says
+    /// the same thing in AQL 1.1.0 (FerroFED's own, `docs/architecture.md`
+    /// section 9: `TOP n` is treated as `LIMIT n`).
+    #[error("TOP … BACKWARD is not supported across a fan-out; write ORDER BY … DESC LIMIT n")]
+    TopBackward,
+    /// Under `DISTINCT`, an `ORDER BY` path that is not selected: the gateway
+    /// cannot add it to the node query as a hidden column without changing
+    /// which rows are distinct (decision A28; FerroFED's own).
+    #[error(
+        "under DISTINCT, an ORDER BY path must also be selected, because adding it to the node query would change which rows are distinct (N13){}",
+        At(.at)
+    )]
+    OrderNotSelected {
+        /// Where the `ORDER BY` path was written.
+        at: Option<Range<usize>>,
     },
     /// The query names no patient and no node set, and the deployment
     /// localizes on the patient (N4; decision A8). Name the endpoints with
@@ -183,6 +201,8 @@ impl Refusal {
             Self::OffsetUnsupported => "offset-unsupported",
             Self::PagingConflict { .. } => "paging-conflict",
             Self::NegativePaging { .. } => "negative-paging",
+            Self::TopBackward => "top-backward",
+            Self::OrderNotSelected { .. } => "order-not-selected",
             Self::NodeSetUndefined => "node-set-undefined",
         }
     }
@@ -203,12 +223,14 @@ impl Refusal {
             | Self::SubjectOrdering { at }
             | Self::IdentifierElsewhere { at }
             | Self::UnfoldableFunction { at }
-            | Self::UndirectedAggregate { at } => at.as_ref(),
+            | Self::UndirectedAggregate { at }
+            | Self::OrderNotSelected { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
             | Self::OffsetUnsupported
             | Self::PagingConflict { .. }
             | Self::NegativePaging { .. }
+            | Self::TopBackward
             | Self::NodeSetUndefined => None,
         }
     }

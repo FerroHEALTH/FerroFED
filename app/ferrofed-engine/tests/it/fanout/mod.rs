@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The fan-out against mock nodes: concurrent dispatch under the per-node and
-//! overall budgets, the decision under each completion strategy, and every
-//! answer validated against the result-set schema (§11.1 to §11.5, N6, N37,
-//! N38, N40). The helpers here serve both strategies.
+//! overall budgets, the decision under each completion strategy, the Tier order
+//! and `LIMIT` over the node answers, and every answer validated against the
+//! result-set schema (§11.1 to §11.6.1, N6, N37, N38, N39, N40). The helpers
+//! here serve every module below.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -14,6 +15,7 @@ mod all_or_nothing;
 mod best_effort;
 mod budget;
 mod decision;
+mod order;
 
 use std::collections::BTreeMap;
 use std::error::Error;

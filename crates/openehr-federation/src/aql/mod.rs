@@ -57,11 +57,12 @@ use std::ops::Range;
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_its::rest::generated::query::ResultSetColumn;
-use openehr_query::ast::{ColumnExpr, Limit, SelectClause, SelectQuery};
+use openehr_query::ast::{ColumnExpr, Limit, SelectClause, SelectQuery, TopDirection};
 use openehr_query::bind::{Parameters, bind};
 use openehr_query::parser::{ParseError, parse_str};
 use openehr_query::printer::to_aql;
 
+use crate::order::ResultOrder;
 use refusal::{Refusal, Unreducible};
 use scan::{Findings, Input};
 use subject::{NamespaceOrigin, Subject};
@@ -151,6 +152,17 @@ impl Analysis {
             Self::Unscoped(query) => &query.columns,
         }
     }
+
+    /// How the merge orders and cuts the node answers (§11.6.1, N13, N39):
+    /// the node columns of the `ORDER BY` keys and the tie-break, and the
+    /// façade's `LIMIT`.
+    #[must_use]
+    pub fn order(&self) -> &ResultOrder {
+        match self {
+            Self::Patient(query) => &query.order,
+            Self::Unscoped(query) => &query.order,
+        }
+    }
 }
 
 /// Where each façade column of a row comes from.
@@ -195,6 +207,7 @@ pub struct PatientQuery {
     columns: Vec<ResultSetColumn>,
     sources: Vec<ColumnSource>,
     stripped: Vec<Option<Range<usize>>>,
+    order: ResultOrder,
 }
 
 impl PatientQuery {
@@ -237,6 +250,7 @@ pub struct UnscopedQuery {
     node: NodeQuery,
     columns: Vec<ResultSetColumn>,
     ehr_scoped: bool,
+    order: ResultOrder,
 }
 
 impl UnscopedQuery {
@@ -290,9 +304,12 @@ pub fn analyse(
         });
     }
     let columns = render_columns(&query.select);
+    let ordered = findings.aggregate.is_none();
     match subject(&findings, context)? {
-        Some((subject, consumed)) => patient(query, &findings, subject, &consumed, columns),
-        None => unscoped(&query, &findings, context, columns),
+        Some((subject, consumed)) => {
+            patient(query, &findings, subject, &consumed, columns, ordered)
+        }
+        None => unscoped(query, &findings, context, columns, ordered),
     }
 }
 
@@ -312,7 +329,29 @@ fn page(query: &mut SelectQuery, paging: Paging) -> Result<(), Refusal> {
     if paging.fetch.is_some_and(i64::is_negative) {
         return Err(Refusal::NegativePaging { member: "fetch" });
     }
-    let clause_limit = query.limit.as_ref().map(|limit| limit.limit);
+    // NOTE: the deprecated `TOP n` is `LIMIT n` (docs/architecture.md section 9).
+    let top = query.select.top.take();
+    if top
+        .as_ref()
+        .is_some_and(|top| top.direction == Some(TopDirection::Backward))
+    {
+        return Err(Refusal::TopBackward);
+    }
+    let clause_limit = match (
+        query.limit.as_ref().map(|limit| limit.limit),
+        top.map(|top| top.count),
+    ) {
+        (Some(limit), Some(top)) if limit != top => {
+            return Err(Refusal::PagingConflict {
+                member: "TOP",
+                clause: "LIMIT",
+            });
+        }
+        (limit, top) => limit.or(top),
+    };
+    if clause_limit.is_some_and(i64::is_negative) {
+        return Err(Refusal::NegativePaging { member: "LIMIT" });
+    }
     let clause_offset = query.limit.as_ref().and_then(|limit| limit.offset);
     if let (Some(member), Some(clause)) = (paging.fetch, clause_limit)
         && member != clause
@@ -429,6 +468,7 @@ fn patient(
     subject: Subject,
     consumed: &[usize],
     columns: Vec<ResultSetColumn>,
+    ordered: bool,
 ) -> Result<Analysis, Refusal> {
     let inputs: Vec<usize> = findings.inputs.iter().map(|(index, _, _)| *index).collect();
     let stripped = findings
@@ -440,6 +480,7 @@ fn patient(
     let mut dispatched = query.clone();
     rewrite::strip_where(&mut dispatched, consumed, None);
     rewrite::strip_columns(&mut dispatched, &inputs);
+    order_for(&mut dispatched, ordered)?;
     if let Some(leak) = scan::reaches(&dispatched, subject.value()) {
         return Err(match leak.kind {
             scan::LeakKind::Value => Refusal::IdentifierElsewhere { at: leak.at },
@@ -451,6 +492,7 @@ fn patient(
     rewrite::strip_where(&mut template, consumed, Some(&ehr));
     rewrite::strip_columns(&mut template, &inputs);
     rewrite::keep_a_column(&mut template, &ehr);
+    let order = order_for(&mut template, ordered)?;
     let mut node = 0_usize;
     let sources = (0..columns.len())
         .map(|index| {
@@ -475,25 +517,48 @@ fn patient(
         columns,
         sources,
         stripped,
+        order,
     }))
 }
 
+/// The Tier order of a node query, written into it (§11.6.1).
+///
+/// A query with an aggregate reaches one directed endpoint only (N14), whose
+/// answer is the federated one, so its node query is dispatched as written
+/// and the merge only applies its `LIMIT`.
+fn order_for(query: &mut SelectQuery, ordered: bool) -> Result<ResultOrder, Refusal> {
+    if ordered {
+        return rewrite::push_order(query);
+    }
+    let limit = match query.limit.as_ref() {
+        Some(clause) => Some(
+            u64::try_from(clause.limit)
+                .map_err(|_negative| Refusal::NegativePaging { member: "LIMIT" })?,
+        ),
+        None => None,
+    };
+    Ok(ResultOrder::new(Vec::new(), Vec::new(), limit))
+}
+
 fn unscoped(
-    query: &SelectQuery,
+    mut query: SelectQuery,
     findings: &Findings,
     context: &Context,
     columns: Vec<ResultSetColumn>,
+    ordered: bool,
 ) -> Result<Analysis, Refusal> {
     if context.targeting == Targeting::Localized {
         return Err(Refusal::NodeSetUndefined);
     }
+    let order = order_for(&mut query, ordered)?;
     let sources = (0..columns.len()).map(ColumnSource::Node).collect();
     Ok(Analysis::Unscoped(UnscopedQuery {
         node: NodeQuery {
-            aql: to_aql(query),
+            aql: to_aql(&query),
             columns: sources,
         },
         columns,
         ehr_scoped: findings.ehr_scoped,
+        order,
     }))
 }

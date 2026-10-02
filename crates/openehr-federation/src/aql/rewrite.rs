@@ -6,10 +6,14 @@
 
 use openehr_query::ast::{
     ClassExprOperand, ColumnExpr, CompareOperand, ContainsConstraint, ContainsExpr, IdentifiedExpr,
-    IdentifiedPath, ObjectPath, PathPart, Primitive, SelectExpr, SelectQuery, Terminal, WhereExpr,
+    IdentifiedPath, ObjectPath, OrderByExpr, PathPart, Primitive, SelectExpr, SelectQuery,
+    SortOrder, Terminal, WhereExpr,
 };
 use openehr_query::lexer::CompOp;
 use openehr_query::visit::{VisitMut, walk_terminal_mut};
+
+use super::refusal::Refusal;
+use crate::order::{Direction, ResultOrder, SortKey};
 
 /// The parameter name the template holds the `ehr_id` in. A bound query has
 /// no parameter left, so the name cannot collide with one the client wrote.
@@ -171,6 +175,173 @@ fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
             variables(right, out);
         }
     }
+}
+
+/// Writes the Tier order into a node query and returns its description
+/// (§11.6.1, N13, N39; `docs/architecture.md` section 9, decisions A28 and A43).
+///
+/// The node is sent the client's `LIMIT n` unchanged (§11.6.1 MUST). With no
+/// `ORDER BY` the query is otherwise left as written. With one:
+///
+/// - an `ORDER BY` path that is not selected becomes a hidden column the merge
+///   reads and the gateway strips, never answered to the client (A28);
+/// - the uid of the query's versioned object becomes the last `ORDER BY` key,
+///   the tie-break §11.6.1 recommends after `endpoint_id`.
+///
+/// A key appended after the client's keys refines their order and never
+/// reorders it, so the node's top `n` stays a top `n` under the client's
+/// `ORDER BY`, and the node picks the same tied rows at its cut on every
+/// repeat. Under `DISTINCT` no column is added, since it would change which
+/// rows are distinct: every `ORDER BY` path must be selected, and the
+/// remaining selected paths are the tie-break in place of the uid.
+///
+/// # Errors
+/// [`Refusal::OrderNotSelected`] for a `DISTINCT` query ordered on a path it
+/// does not select, and [`Refusal::NegativePaging`] for a negative `LIMIT`.
+pub(super) fn push_order(query: &mut SelectQuery) -> Result<ResultOrder, Refusal> {
+    let limit = match query.limit.as_ref() {
+        Some(clause) => Some(
+            u64::try_from(clause.limit)
+                .map_err(|_negative| Refusal::NegativePaging { member: "LIMIT" })?,
+        ),
+        None => None,
+    };
+    if query.order_by.is_empty() {
+        return Ok(ResultOrder::new(Vec::new(), Vec::new(), limit));
+    }
+    let distinct = query.select.distinct;
+    let mut keys = Vec::with_capacity(query.order_by.len());
+    for term in &query.order_by {
+        let column = match selected(&query.select.columns, &term.path) {
+            Some(column) => column,
+            None if distinct => {
+                return Err(Refusal::OrderNotSelected {
+                    at: term.path.span.bytes(),
+                });
+            }
+            None => hide(&mut query.select.columns, &term.path),
+        };
+        keys.push(SortKey::new(column, direction(term.order)));
+    }
+    let tie_break = if distinct {
+        let ordered: Vec<usize> = keys.iter().map(SortKey::column).collect();
+        let tie_break: Vec<(usize, IdentifiedPath)> = query
+            .select
+            .columns
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !ordered.contains(index))
+            .filter_map(|(index, column)| match &column.column {
+                ColumnExpr::Path(path) => Some((index, path.clone())),
+                ColumnExpr::Primitive(_) | ColumnExpr::Aggregate(_) | ColumnExpr::Function(_) => {
+                    None
+                }
+            })
+            .collect();
+        let mut columns = Vec::with_capacity(tie_break.len());
+        for (index, path) in tie_break {
+            push_ascending(&mut query.order_by, path);
+            columns.push(index);
+        }
+        columns
+    } else {
+        versioned_variable(&query.from).map_or_else(Vec::new, |variable| {
+            let path = uid_path(&variable);
+            let column = selected(&query.select.columns, &path)
+                .unwrap_or_else(|| hide(&mut query.select.columns, &path));
+            if !query.order_by.iter().any(|term| term.path == path) {
+                push_ascending(&mut query.order_by, path);
+            }
+            vec![column]
+        })
+    };
+    Ok(ResultOrder::new(keys, tie_break, limit))
+}
+
+/// The index of the selected column that is `path`, if any.
+fn selected(columns: &[SelectExpr], path: &IdentifiedPath) -> Option<usize> {
+    columns
+        .iter()
+        .position(|column| matches!(&column.column, ColumnExpr::Path(selected) if selected == path))
+}
+
+/// Appends `path` as a hidden column and returns its index.
+fn hide(columns: &mut Vec<SelectExpr>, path: &IdentifiedPath) -> usize {
+    columns.push(SelectExpr {
+        column: ColumnExpr::Path(path.clone()),
+        alias: None,
+    });
+    columns.len().saturating_sub(1)
+}
+
+fn push_ascending(order_by: &mut Vec<OrderByExpr>, path: IdentifiedPath) {
+    order_by.push(OrderByExpr {
+        path,
+        order: Some(SortOrder::Ascending),
+    });
+}
+
+fn direction(order: Option<SortOrder>) -> Direction {
+    match order {
+        Some(SortOrder::Descending) => Direction::Descending,
+        Some(SortOrder::Ascending) | None => Direction::Ascending,
+    }
+}
+
+/// The variable whose `uid` identifies a row's versioned object: the first
+/// `COMPOSITION`, else the first `VERSION`, of the containment.
+fn versioned_variable(from: &ContainsExpr) -> Option<String> {
+    let mut composition = None;
+    let mut version = None;
+    classes(from, &mut |operand| match operand {
+        ClassExprOperand::Class {
+            rm_type,
+            variable: Some(variable),
+            ..
+        } if rm_type == "COMPOSITION" => {
+            composition.get_or_insert_with(|| variable.clone());
+        }
+        ClassExprOperand::Version {
+            variable: Some(variable),
+            ..
+        } => {
+            version.get_or_insert_with(|| variable.clone());
+        }
+        ClassExprOperand::Class { .. } | ClassExprOperand::Version { .. } => {}
+    });
+    composition.or(version)
+}
+
+fn classes(from: &ContainsExpr, visit: &mut impl FnMut(&ClassExprOperand)) {
+    match from {
+        ContainsExpr::Contained { operand, contains } => {
+            visit(operand);
+            if let Some(constraint) = contains {
+                classes(&constraint.expr, visit);
+            }
+        }
+        ContainsExpr::And(left, right) | ContainsExpr::Or(left, right) => {
+            classes(left, visit);
+            classes(right, visit);
+        }
+    }
+}
+
+/// `<variable>/uid/value`.
+fn uid_path(variable: &str) -> IdentifiedPath {
+    IdentifiedPath::new(
+        variable.to_owned(),
+        None,
+        Some(ObjectPath {
+            parts: ["uid", "value"]
+                .into_iter()
+                .map(|name| PathPart {
+                    name: name.to_owned(),
+                    predicate: None,
+                })
+                .collect(),
+        }),
+    )
 }
 
 /// Writes the node's `ehr_id` into a template built by [`strip_where`].
