@@ -269,14 +269,34 @@ define, is refused like any other unknown key.
 | any other path | `404` |
 
 Every response carries an `x-request-id`: the client's value when it is short
-printable ASCII, a fresh UUID otherwise.
+printable ASCII, the gateway's own id otherwise.
+
+## Request ids
+
+The gateway mints its own id, a fresh version 4 UUID, for every request. That
+id is the `X-Request-Id` of every request the gateway sends to a node for it,
+the same id on every node of one fan-out. The client's `x-request-id` never
+reaches a node: it is free text, and the gateway cannot tell whether it names
+a patient (§5.4.1, N33). When the client sends no id, the response carries the
+gateway's id, so the client, the log and every node name the same request.
+
+Every other header the gateway sends to a node is fixed by the gateway:
+`Accept` and `Content-Type` (`application/json`), `Authorization` (the
+endpoint's configured onward credential, when it has one), and the `Host`,
+`Content-Length` and `Accept-Encoding` the HTTP client writes. None is copied
+from the client request.
 
 ## What the log records
 
-One line per request: the method, the matched route, the status, the latency
-and the request id. A façade query carries the patient identifier, so the line
+One line per request: the method, the matched route, the status, the latency,
+the gateway's request id (`request_id`) and whether the client sent its own
+(`client_named`). A façade query carries the patient identifier, so the line
 never carries a request body, the AQL text, a header value, a path no route
 matched (it is logged as `<unmatched>`), or a query value other than the
 ITS-REST paging parameters `offset` and `fetch`, and those only when they are
-digits. A handler panic answers `500` and is logged without its message, which
-could quote a value the handler held.
+digits. The client's own `x-request-id` is a header value too, and it is never
+logged, so a request the client named is found in the log by its time, route
+and status, and in a node's log by the `request_id` of that line. A handler
+panic answers
+`500` and is logged under the gateway's id, without its message, which could
+quote a value the handler held.

@@ -407,6 +407,23 @@ federated query and identity resolution shipped in 0.0.3.
   first. Its new `--self-test`, run by the CI `tracker-helpers` job, proves
   each write's endpoint and each refusal.
 
+### Security
+
+- A client's `X-Request-Id` no longer reaches any node (#217; §5.4.1, N33,
+  CP-26). A legal client value was sent to every node of the fan-out as it
+  came, so a patient identifier written into it passed the outbound gate,
+  which checks only the identifiers the gateway resolved on. The gateway now
+  mints its own id, a version 4 UUID, for every request and sends only that,
+  the same id to every node of one request. The response header and the
+  error bodies still name the client's own id. The request log, the security
+  events and the panic line record the gateway's id and never the client's,
+  with a `client_named` flag on the request line saying whether the client
+  sent one; a client that sends none gets the gateway's id back. The book
+  lists every header a node request carries and where its value comes from.
+  `ferrofed-engine` adds `outbound_id::OutboundId`, which only
+  `OutboundId::mint` makes, and `DispatchOptions::with_request_id` and
+  `fanout::fan_out` take one in place of a string.
+
 ## [0.0.3] - 2026-10-02
 
 The first two federated milestones in one release (v0.0.2 and v0.0.3; no

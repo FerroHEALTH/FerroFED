@@ -32,12 +32,13 @@ pub fn caught(payload: Box<dyn Any + Send + 'static>) -> Response {
     response
 }
 
-/// Fills the request id into a panic response and logs that the handler
-/// panicked.
+/// Fills the exchange id into a panic response and logs that the handler
+/// panicked, under the gateway's outbound id.
 ///
-/// It runs outside the layer that propagates the request id, so the header is
-/// already on the response and the body, the log line and the client's own
-/// trace name the same request.
+/// It runs outside the layers that mint the outbound id and propagate the
+/// exchange id, so both are already on the response: the body names the
+/// client's own id and the log line the gateway's, which is the client's too
+/// when the client named none ([`crate::request_id`]).
 pub async fn render(response: Response) -> Response {
     if response.extensions().get::<Panicked>().is_none() {
         return response;
@@ -45,8 +46,11 @@ pub async fn render(response: Response) -> Response {
     let request_id = crate::request_id::of(response.headers())
         .unwrap_or_default()
         .to_owned();
+    let outbound = crate::request_id::outbound(response.extensions())
+        .map(|id| id.to_string())
+        .unwrap_or_default();
     tracing::error!(
-        request_id = request_id.as_str(),
+        request_id = outbound.as_str(),
         "the request handler panicked"
     );
     let mut rendered = crate::error::fixed(crate::error::Code::Internal, &request_id);

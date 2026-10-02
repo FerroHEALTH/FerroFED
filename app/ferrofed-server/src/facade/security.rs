@@ -5,7 +5,9 @@
 //!
 //! Every strip, every refusal and every outbound-gate stop is logged under
 //! [`TARGET`], naming what happened and where in the query it was written, by
-//! byte range, and never the text written there or any identifier value.
+//! byte range, and never the text written there or any identifier value. The
+//! `request_id` of an event is the gateway's outbound id, never the client's
+//! free-text `x-request-id` ([`crate::request_id`]).
 
 use std::ops::Range;
 

@@ -33,6 +33,7 @@ thiserror.workspace = true
 # One task per in-scope node under one deadline (§11.5, N38).
 tokio = { workspace = true, features = ["rt", "time"] }
 url.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true

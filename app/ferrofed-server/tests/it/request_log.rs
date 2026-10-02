@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The request log: one line per request with the method, the matched route,
-//! the status, the latency and the request id, and nothing a client sent
-//! beyond that.
+//! the status, the latency and the gateway's own request id, and nothing a
+//! client sent beyond that: not even the client's `x-request-id` (§5.4.3).
 
 use crate::support::{self, Logs, request_lines};
 use axum::Router;
@@ -61,8 +61,90 @@ fn a_request_line_carries_the_method_the_route_the_status_the_latency_and_the_id
     assert_eq!(Some("/health"), line.route.as_deref());
     assert_eq!(Some(StatusCode::OK.as_u16()), line.status);
     assert!(line.latency_ms.is_some_and(|ms| ms >= 0.0), "{text}");
-    assert_eq!(Some("corr-log"), line.request_id.as_deref());
+    let logged_id = line.request_id.as_deref().ok_or("an id is logged")?;
+    assert_eq!(
+        Some(uuid::Version::Random),
+        uuid::Uuid::parse_str(logged_id)?.get_version(),
+        "the logged id is the gateway's own: {text}"
+    );
+    assert_eq!(Some(true), line.client_named, "{text}");
     assert_eq!(Some(""), line.query.as_deref());
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_client_request_id_is_echoed_and_never_logged() -> Result<(), Box<dyn StdError>> {
+    let client_id = "SYNTHETIC-NATIONAL-ID-0002";
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let response = runtime.block_on(support::send(
+        support::app(),
+        Request::get("/health")
+            .header(request_id::HEADER, client_id)
+            .body(Body::empty())?,
+    ))?;
+    assert_eq!(
+        Some(client_id),
+        response
+            .headers()
+            .get(request_id::HEADER)
+            .and_then(|value| value.to_str().ok()),
+        "the client's own id names the exchange"
+    );
+    let text = logged(
+        &support::app(),
+        "trace",
+        vec![
+            Request::get("/health")
+                .header(request_id::HEADER, client_id)
+                .body(Body::empty())?,
+            Request::get("/v1/ehr")
+                .header(request_id::HEADER, client_id)
+                .body(Body::empty())?,
+        ],
+    )?;
+    assert_eq!(2, request_lines(&text)?.len(), "both were logged: {text}");
+    assert!(
+        !text.contains(client_id),
+        "the client's id reached the log: {text}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn an_unnamed_request_logs_the_id_its_response_carries() -> Result<(), Box<dyn StdError>> {
+    let logs = Logs::default();
+    let capture = subscriber(Rendering::Json, "info", false, logs.clone())?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let response = tracing::subscriber::with_default(capture, || {
+        runtime.block_on(support::send(
+            support::app(),
+            Request::get("/health").body(Body::empty())?,
+        ))
+    })?;
+    let answered = response
+        .headers()
+        .get(request_id::HEADER)
+        .and_then(|value| value.to_str().ok())
+        .ok_or("every response carries an id")?;
+    let text = logs.text();
+    let line = request_lines(&text)?
+        .into_iter()
+        .next()
+        .ok_or("one request line")?;
+    assert_eq!(Some(answered), line.request_id.as_deref(), "{text}");
+    assert_eq!(Some(false), line.client_named, "{text}");
     Ok(())
 }
 
@@ -180,6 +262,50 @@ fn a_server_error_logs_at_error_and_a_client_error_at_warn() -> Result<(), Box<d
         vec![Some(StatusCode::NOT_FOUND.as_u16())],
         lines.iter().map(|line| line.status).collect::<Vec<_>>(),
         "the 4xx line is at warn and the 2xx line below it: {warn_and_above}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_panic_is_logged_under_the_gateways_id_never_the_clients() -> Result<(), Box<dyn StdError>> {
+    let client_id = "SYNTHETIC-NATIONAL-ID-0003";
+    let router = ferrofed_server::with_middleware(
+        Router::new().route(
+            "/boom",
+            axum::routing::get(|| async {
+                panic!("the handler gave up");
+                #[expect(unreachable_code, reason = "the route panics by design")]
+                StatusCode::OK
+            }),
+        ),
+        &support::settings(),
+    );
+    let text = logged(
+        &router,
+        "info",
+        vec![
+            Request::get("/boom")
+                .header(request_id::HEADER, client_id)
+                .body(Body::empty())?,
+        ],
+    )?;
+    let panicked = support::lines(&text)?
+        .into_iter()
+        .find(|line| line.message == "the request handler panicked")
+        .ok_or("the panic is logged")?;
+    let logged_id = panicked.request_id.ok_or("under an id")?;
+    assert_eq!(
+        Some(uuid::Version::Random),
+        uuid::Uuid::parse_str(&logged_id)?.get_version(),
+        "the panic is logged under the gateway's id: {text}"
+    );
+    assert!(
+        !text.contains(client_id),
+        "the client's id reached the log: {text}"
     );
     Ok(())
 }

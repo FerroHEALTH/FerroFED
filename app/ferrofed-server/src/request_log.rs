@@ -2,16 +2,23 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! One log line per request: the method, the matched route, the status, the
-//! latency and the request id.
+//! latency, the gateway's request id and whether the client named its own.
 //!
 //! A façade query carries the patient identifier, in the AQL text, in a query
 //! parameter or in a body (§5.4.1), and §5.4.3 says the identifier value MUST
 //! NOT be logged. So the line carries none of the places it can travel: never
 //! a body, never the raw path (the matched route is the path template, and a
-//! path no route matched is logged as [`UNMATCHED`]), never a header value
-//! other than the request id this server has already normalized, and never a
-//! query value outside [`LOGGED_QUERY_PARAMETERS`]. Past §5.4.3, no
-//! specification governs this: our own design, made mechanical.
+//! path no route matched is logged as [`UNMATCHED`]), never a header value,
+//! and never a query value outside [`LOGGED_QUERY_PARAMETERS`].
+//!
+//! The logged `request_id` is the gateway's own [`OutboundId`], the one every
+//! node the request reaches receives. The client's `x-request-id` is free text
+//! that may name a patient, so it is echoed to the client and never logged
+//! ([`request_id`]); `client_named` says only whether the client sent one.
+//! Past §5.4.3, no specification governs this: our own design, made
+//! mechanical.
+//!
+//! [`OutboundId`]: ferrofed_engine::outbound_id::OutboundId
 
 use axum::extract::{MatchedPath, Request};
 use axum::middleware::Next;
@@ -44,9 +51,12 @@ pub async fn log(request: Request, next: Next) -> Response {
         |matched| matched.as_str().to_owned(),
     );
     let query = paging_parameters(request.uri().query().unwrap_or_default());
-    let id = request_id::of(request.headers())
-        .unwrap_or_default()
-        .to_owned();
+    let id = request_id::outbound(request.extensions())
+        .map(|id| id.to_string())
+        .unwrap_or_default();
+    // NOTE: no specification governs this: our own design, an exchange id
+    // other than the outbound id is one the client chose, logged as a flag.
+    let client_named = request_id::of(request.headers()).is_some_and(|echoed| echoed != id);
     let started = Instant::now();
     let response = next.run(request).await;
     let status = response.status();
@@ -62,6 +72,7 @@ pub async fn log(request: Request, next: Next) -> Response {
             latency_ms,
             query,
             request_id,
+            client_named,
             "request"
         );
     } else if status.is_client_error() {
@@ -72,6 +83,7 @@ pub async fn log(request: Request, next: Next) -> Response {
             latency_ms,
             query,
             request_id,
+            client_named,
             "request"
         );
     } else {
@@ -82,6 +94,7 @@ pub async fn log(request: Request, next: Next) -> Response {
             latency_ms,
             query,
             request_id,
+            client_named,
             "request"
         );
     }

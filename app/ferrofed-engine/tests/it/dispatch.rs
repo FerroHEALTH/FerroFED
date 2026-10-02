@@ -21,6 +21,7 @@ use ferrofed_engine::dispatch::{
     DispatchError, DispatchOptions, NodeClient, NodeClients, NodeQuery, NodeReply,
     REQUEST_ID_HEADER, SetupError, SharedCredentials,
 };
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use openehr_federation::outcome::ErrorDetail;
@@ -366,17 +367,70 @@ async fn a_missing_credential_is_a_dispatch_error_and_sends_nothing() -> TestRes
     Ok(())
 }
 
+// conformance: CP-26
 #[tokio::test]
-async fn a_request_id_that_is_no_header_value_is_a_dispatch_error() -> TestResult {
+async fn the_request_id_a_node_receives_is_the_minted_outbound_id_byte_for_byte() -> TestResult {
     let server = node_answering("/openehr", json(200, EMPTY_RESULT_SET)).await;
     let client = client_at(&format!("{}/openehr", server.uri()))?;
-    let options = within(Duration::from_secs(5))?.with_request_id("line\nbreak");
-    let failed = client.query(&NodeQuery::new(NODE_AQL), &options).await;
-    assert!(
-        matches!(failed, Err(DispatchError::Compose { .. })),
-        "{failed:?}"
-    );
-    assert!(received(&server).await?.is_empty());
+    let id = OutboundId::mint();
+    let options = within(Duration::from_secs(5))?.with_request_id(id);
+    client.query(&NodeQuery::new(NODE_AQL), &options).await?;
+    let requests = received(&server).await?;
+    let [request] = requests.as_slice() else {
+        return Err(format!("expected one request, got {}", requests.len()).into());
+    };
+    let sent: Vec<&[u8]> = request
+        .headers
+        .get_all(REQUEST_ID_HEADER)
+        .iter()
+        .map(http::HeaderValue::as_bytes)
+        .collect();
+    assert_eq!(vec![id.to_string().as_bytes()], sent, "one field line");
+    Ok(())
+}
+
+/// Every header name a node request may carry, lowercase, with where its
+/// value comes from: the inventory of `ferrofed_engine::outbound_id`.
+const INVENTORY: [&str; 7] = [
+    "accept",          // the client runtime's default
+    "accept-encoding", // the HTTP engine, from its decompression features
+    "authorization",   // the endpoint's configured onward credential
+    "content-length",  // the HTTP engine, from the composed body
+    "content-type",    // the client runtime, for the JSON body
+    "host",            // the HTTP engine, from the registry URL
+    "x-request-id",    // the minted outbound id
+];
+
+// conformance: CP-26
+#[tokio::test]
+async fn every_header_a_node_receives_is_in_the_inventory() -> TestResult {
+    let server = node_answering("/openehr", json(200, EMPTY_RESULT_SET)).await;
+    let client = client_at(&format!("{}/openehr", server.uri()))?
+        .with_credentials_provider(Arc::new(Credentials::bearer("synthetic-token")));
+    let options = within(Duration::from_secs(5))?.with_request_id(OutboundId::mint());
+    client.query(&NodeQuery::new(NODE_AQL), &options).await?;
+    let requests = received(&server).await?;
+    let [request] = requests.as_slice() else {
+        return Err(format!("expected one request, got {}", requests.len()).into());
+    };
+    let names: Vec<&str> = {
+        let mut names: Vec<&str> = request
+            .headers
+            .keys()
+            .map(http::HeaderName::as_str)
+            .collect();
+        names.sort_unstable();
+        names.dedup();
+        names
+    };
+    assert_eq!(INVENTORY.to_vec(), names, "no header outside the inventory");
+    for name in INVENTORY {
+        assert_eq!(
+            1,
+            request.headers.get_all(name).iter().count(),
+            "{name} is one field line"
+        );
+    }
     Ok(())
 }
 
@@ -420,7 +474,8 @@ async fn a_trailing_slash_on_the_base_url_adds_no_empty_segment() -> TestResult 
 async fn the_request_id_and_the_page_travel_and_nothing_else_is_added() -> TestResult {
     let server = node_answering("/openehr", json(200, EMPTY_RESULT_SET)).await;
     let client = client_at(&format!("{}/openehr", server.uri()))?;
-    let options = within(Duration::from_secs(5))?.with_request_id("3f0b2a6e-request");
+    let id = OutboundId::mint();
+    let options = within(Duration::from_secs(5))?.with_request_id(id);
     let query = NodeQuery::new(NODE_AQL).with_offset(0).with_fetch(11);
     client.query(&query, &options).await?;
     let requests = received(&server).await?;
@@ -434,7 +489,7 @@ async fn the_request_id_and_the_page_travel_and_nothing_else_is_added() -> TestR
             .headers
             .get(REQUEST_ID_HEADER)
             .and_then(|value| value.to_str().ok()),
-        Some("3f0b2a6e-request")
+        Some(id.to_string().as_str())
     );
     assert_eq!(request.headers.get("authorization"), None);
     let body = std::str::from_utf8(&request.body)?;
@@ -452,7 +507,7 @@ async fn a_sentinel_in_the_query_reaches_only_the_body() -> TestResult {
     let aql = format!(
         "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE c/name/value = '{sentinel}'"
     );
-    let options = within(Duration::from_secs(5))?.with_request_id("3f0b2a6e-request");
+    let options = within(Duration::from_secs(5))?.with_request_id(OutboundId::mint());
     client.query(&NodeQuery::new(aql), &options).await?;
     let requests = received(&server).await?;
     let [request] = requests.as_slice() else {
