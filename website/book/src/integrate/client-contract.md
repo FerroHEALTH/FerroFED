@@ -38,6 +38,15 @@ member of the open `meta` object, `meta.federation`:
 - `timeout`, the budget that applied (§11.5);
 - `dedup`, the de-duplication policy that applied (§10).
 
+By default you get every row every node returned, duplicates included
+(§10.1, N15). Send `openEHR-federation-dedup: version-identity` to get one
+copy of a composition version held at several nodes: the copy from the CDR
+that created it when that CDR answered, else the one from the lowest
+endpoint id. `meta.federation.dedup` then names the endpoints whose
+copies were dropped and counts the rows (§10.2, §10.3). Two versions of one
+composition are two rows either way, and `none` states the default
+explicitly. Any other value is refused `400` with the code `dedup-invalid`.
+
 Read whether an answer is complete from `meta.federation.complete`, never
 from the status code; the gateway emits no FHIR `OperationOutcome`, because
 its answer is an ITS-REST `RESULT_SET` (§11.4, N17).

@@ -22,6 +22,32 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- Opt-in version-identity dedup (#56; §10, N15, N36, CP-9, CP-29): a request
+  that sends `openEHR-federation-dedup: version-identity` gets one copy of a
+  version held at several endpoints, keyed on the full `OBJECT_VERSION_ID`
+  of the row's `COMPOSITION`, else `VERSION`, uid as `openehr-base` reads
+  it. The copy kept is the one from the endpoint whose registry `system_id`
+  is the version's `creating_system_id`, else the one from the lowest
+  endpoint id. Two versions of one object are two rows, and a row with no
+  version uid is never suppressed. `meta.federation.dedup` records the mode
+  on every answer, `none` and failing `424` and `504` envelopes included,
+  and beside the rows `suppressed_rows` and `suppressed_endpoints[]`, counted
+  before `DISTINCT`, `OFFSET` and `LIMIT`. Every node is asked the version
+  uid, as a hidden column when the client does not select it (under
+  `DISTINCT` only a selected uid is the key), and a query with a `LIMIT` and
+  no `ORDER BY` is ordered on it. Under the mode a tie on the `ORDER BY`
+  keys breaks on the uid before `endpoint_id`, which keeps a per-node
+  `LIMIT n` (or `k + n` for a page) exact after suppression (§11.6.1). The
+  default stays `none` (§10.1), which `none` states explicitly; any other
+  value, or a repeated header, is `400` `dedup-invalid`. A node whose version
+  uid is not an `OBJECT_VERSION_ID` is `node-error`, and the query fails
+  `424` under all-or-nothing. A recombined aggregate under the mode is `400`
+  `indecomposable-aggregate` (§11.6.3). `openehr-federation` 0.0.20 adds
+  `dedup::DedupMode`, `aql::Context::with_dedup`,
+  `order::ResultOrder::with_version_key`, `merge::NodeAnswer::with_system_id`,
+  `merge::Suppressed`, `merge::Disagreement::VersionId` and
+  `aql::refusal::Indecomposable::Dedup`.
+
 - `SELECT DISTINCT` at the Tier (#55; N13, CP-8, CP-32): a row two nodes
   return is answered once, compared on the columns the client selected under
   the Tier comparator (`2` and `2.0` are one value, two spellings of one

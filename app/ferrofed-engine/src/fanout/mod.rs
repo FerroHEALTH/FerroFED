@@ -37,6 +37,13 @@
 //! recombined into one row instead (§11.6.3); a node whose answer cannot take
 //! part in an exact value is `node-error` the same way, and such a plan is
 //! refused under best-effort, since it is exact only over every node.
+//!
+//! Under version-identity dedup (§10.2), selected per request, the merge keeps
+//! the originating copy of a version held at several endpoints, each answer
+//! carrying its node's registry `system_id`, and `meta.federation.dedup`
+//! records the mode on every answer, with what it suppressed beside the rows.
+
+mod answer;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -46,13 +53,11 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
 use openehr_federation::aggregate::Recombination;
+use openehr_federation::dedup::DedupMode;
 use openehr_federation::envelope;
 use openehr_federation::error::WireError;
-use openehr_federation::merge::{
-    Disagreement, Merged, NodeAnswer, Unrepresentable, combine, merge,
-};
+use openehr_federation::merge::Unrepresentable;
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
-use openehr_federation::object::Uri;
 use openehr_federation::order::ResultOrder;
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
@@ -174,6 +179,7 @@ pub struct Plan {
     completion: Completion,
     order: ResultOrder,
     recombination: Option<Recombination>,
+    dedup: DedupMode,
 }
 
 impl Plan {
@@ -217,6 +223,17 @@ impl Plan {
     #[must_use]
     pub fn recombining(mut self, recombination: Recombination) -> Self {
         self.recombination = Some(recombination);
+        self
+    }
+
+    /// This plan deduplicating under `mode`, the mode the request selected
+    /// (§10, N15), which `meta.federation.dedup.mode` records on the answer.
+    ///
+    /// The order says which node column holds the version uid
+    /// ([`ResultOrder::version_key`]); with none, no row is suppressed.
+    #[must_use]
+    pub fn deduplicating(mut self, mode: DedupMode) -> Self {
+        self.dedup = mode;
         self
     }
 
@@ -555,6 +572,7 @@ where
         completion,
         order: result_order,
         recombination,
+        dedup,
     } = plan;
     if recombination.is_some() && completion == Completion::BestEffort {
         return Err(FanOutError::PartialAggregate);
@@ -607,8 +625,12 @@ where
         };
         records.insert(endpoint, record);
     }
-    let shaping = (&result_order, recombination.as_ref());
-    answer(snapshot, records, shaping, budget, completion)
+    let shaping = answer::Shaping {
+        order: &result_order,
+        recombination: recombination.as_ref(),
+        dedup,
+    };
+    answer::answer(snapshot, records, shaping, budget, completion)
 }
 
 /// The `time-out` of a node still outstanding when the overall budget ran out
@@ -621,124 +643,6 @@ fn abandoned(latency_ms: u64, overall: Duration) -> Outcome {
             whole_ms(overall)
         )),
     }
-}
-
-/// The envelope over `records` in endpoint id order, the decision over it
-/// under `completion`, and the rows of the `active` endpoints, merged under
-/// the order or recombined into one aggregate row, when the query did not
-/// fail.
-fn answer(
-    snapshot: &RegistrySnapshot,
-    records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)>,
-    (order, recombination): (&ResultOrder, Option<&Recombination>),
-    budget: Budget,
-    completion: Completion,
-) -> Result<FederatedAnswer, FanOutError> {
-    let mut answers = Vec::new();
-    let mut statuses = Vec::with_capacity(records.len());
-    for (endpoint, (outcome, answered)) in records {
-        // NOTE: §9.5, `row_count` is what the node contributed, counted before
-        // any federation-level `DISTINCT`, dedup or `LIMIT` touches the rows.
-        let row_count = answered.as_ref().map(Vec::len);
-        if let Some(answered) = answered {
-            answers.push(NodeAnswer::new(endpoint.as_str(), answered));
-        }
-        statuses.push((endpoint, outcome, row_count));
-    }
-    let (merged, unrepresentable) = match recombination {
-        Some(recombination) => match combine(answers, recombination, order) {
-            Ok(merged) => (merged, None),
-            Err(error) => (Merged::default(), Some(error)),
-        },
-        None => (merge(answers, order), None),
-    };
-    let (mut rows, refused) = merged.into_parts();
-    let mut endpoints = Vec::with_capacity(statuses.len());
-    for (endpoint, outcome, row_count) in statuses {
-        let refusal = refused
-            .iter()
-            .find(|refusal| refusal.endpoint() == endpoint.as_str());
-        let record = match refusal {
-            Some(refusal) => endpoint_record(
-                snapshot,
-                &endpoint,
-                disagreeing(outcome, refusal.reason()),
-                None,
-            )?,
-            None => endpoint_record(snapshot, &endpoint, outcome, row_count)?,
-        };
-        endpoints.push(record);
-    }
-    let verdict = decide(&endpoints, completion);
-    let federation = FederationMeta::new(endpoints)
-        .map_err(FanOutError::Envelope)?
-        .with_timeout(budget.record());
-    if verdict.failed() {
-        rows.clear();
-    } else if let Some(error) = unrepresentable {
-        return Err(FanOutError::Unrepresentable(error));
-    }
-    Ok(FederatedAnswer {
-        verdict,
-        federation,
-        rows,
-    })
-}
-
-/// The `node-error` of an `active` endpoint whose answer the merge refused, a
-/// response the gateway could not use (§11.1; no specification governs the
-/// order check: our own design).
-///
-/// Only an `active` endpoint has rows to refuse, so any other outcome is kept.
-fn disagreeing(outcome: Outcome, reason: Disagreement) -> Outcome {
-    match outcome {
-        Outcome::Active { latency_ms } => Outcome::NodeError {
-            latency_ms,
-            error: ErrorDetail::Text(reason.to_string()),
-        },
-        other => other,
-    }
-}
-
-/// One `meta.federation.endpoints[]` entry, with the registry's node, system
-/// id, managing organisation, base URL, and the node's product and version
-/// when the registry records them, never otherwise (§9.5, N20, N40).
-fn endpoint_record(
-    snapshot: &RegistrySnapshot,
-    endpoint: &EndpointId,
-    outcome: Outcome,
-    row_count: Option<usize>,
-) -> Result<EndpointOutcome, FanOutError> {
-    let record_error = |source| FanOutError::Record {
-        endpoint: endpoint.clone(),
-        source,
-    };
-    let registered = snapshot
-        .endpoint(endpoint)
-        .ok_or_else(|| FanOutError::UnknownEndpoint {
-            endpoint: endpoint.clone(),
-        })?;
-    let id = openehr_federation::id::EndpointId::new(endpoint.as_str()).map_err(record_error)?;
-    let url = Uri::new(registered.url().as_str()).map_err(record_error)?;
-    let mut record = EndpointOutcome::new(id, outcome)
-        .with_node_id(registered.node().as_str())
-        .with_organisation(registered.managing_organisation().as_str())
-        .with_url(url);
-    if let Some(node) = snapshot.node(registered.node()) {
-        record = record.with_system_id(node.system_id().as_str());
-        if let Some(product) = node.product() {
-            record = record.with_product(product);
-        }
-        if let Some(version) = node.version() {
-            record = record.with_version(version);
-        }
-    }
-    if let Some(count) = row_count {
-        // NOTE: §9.5, a count past u64::MAX rows cannot arrive in one response.
-        let count = u64::try_from(count).unwrap_or(u64::MAX);
-        record = record.with_row_count(count).map_err(record_error)?;
-    }
-    Ok(record)
 }
 
 /// `duration` in whole milliseconds, saturating at `u64::MAX`.

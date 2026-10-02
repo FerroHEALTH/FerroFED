@@ -16,6 +16,7 @@ mod all_or_nothing;
 mod best_effort;
 mod budget;
 mod decision;
+mod dedup;
 mod distinct;
 mod order;
 

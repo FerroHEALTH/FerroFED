@@ -395,6 +395,10 @@ pub enum Indecomposable {
     /// which would group the rows by it, and AQL 1.1.0 has no `GROUP BY` to
     /// merge such groups by.
     PlainColumn,
+    /// The request selects a dedup mode (§10): a node's aggregate already
+    /// counts the copies the Tier would suppress, and its one row does not say
+    /// which they are.
+    Dedup,
 }
 
 impl fmt::Display for Indecomposable {
@@ -405,6 +409,9 @@ impl fmt::Display for Indecomposable {
                 "COUNT(DISTINCT …) is not the sum of the node counts, because one value can be counted at two nodes"
             }
             Self::PlainColumn => "a column that is not an aggregate is selected beside it",
+            Self::Dedup => {
+                "the request selects de-duplication (§10), and a node's aggregate includes the copies it would suppress"
+            }
         })
     }
 }

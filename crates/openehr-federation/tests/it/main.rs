@@ -15,6 +15,8 @@ mod aql;
 #[cfg(test)]
 mod combine;
 #[cfg(test)]
+mod dedup;
+#[cfg(test)]
 mod distinct;
 #[cfg(test)]
 mod drift;

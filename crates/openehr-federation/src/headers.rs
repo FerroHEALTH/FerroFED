@@ -19,7 +19,9 @@ pub const SYSTEM_ID: &str = "openEHR-federation-system-id";
 /// The request header that selects the completion strategy (§11.4, N37).
 pub const COMPLETENESS: &str = "openEHR-federation-completeness";
 
-/// The request header that selects the dedup mode (§10, N15).
+/// The request header that selects the dedup mode (§10, N15), the name
+/// `OPTIONS {base}/` declares as `dedup.request_header` (§7a.2). It carries a
+/// [`crate::dedup::DedupMode`] name.
 pub const DEDUP: &str = "openEHR-federation-dedup";
 
 /// The [`COMPLETENESS`] value that states the default all-or-nothing

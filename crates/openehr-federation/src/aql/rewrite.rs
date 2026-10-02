@@ -13,6 +13,7 @@ use openehr_query::lexer::CompOp;
 use openehr_query::visit::{VisitMut, walk_terminal_mut};
 
 use super::refusal::Refusal;
+use crate::dedup::DedupMode;
 use crate::order::{Direction, ResultOrder, SortKey};
 
 /// The parameter name the template holds the `ehr_id` in. A bound query has
@@ -182,6 +183,55 @@ fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
     }
 }
 
+/// How the rows of a node query are shaped at the Tier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Rows {
+    /// An aggregate query: one row per node, the federated one at a single
+    /// directed endpoint (N14), or the row the Tier recombines (§11.6.3).
+    Aggregate,
+    /// Rows merged under the Tier order, deduplicated on version identity
+    /// when `dedup` is set (§10.2).
+    Plain {
+        /// Whether the request selects version-identity dedup.
+        dedup: bool,
+    },
+}
+
+impl Rows {
+    /// The shape of a query that is `plain` (has no aggregate) under `mode`.
+    pub(super) fn of(plain: bool, mode: DedupMode) -> Self {
+        if plain {
+            Self::Plain {
+                dedup: mode == DedupMode::VersionIdentity,
+            }
+        } else {
+            Self::Aggregate
+        }
+    }
+}
+
+/// The Tier order of a node query, written into it (§11.6.1).
+///
+/// An aggregate query's node query keeps the client's order as written, and
+/// the merge only applies its `LIMIT`.
+///
+/// # Errors
+/// As [`push_order`].
+pub(super) fn order_for(
+    query: &mut SelectQuery,
+    rows: Rows,
+    one_ehr: bool,
+) -> Result<ResultOrder, Refusal> {
+    match rows {
+        Rows::Plain { dedup } => push_order(query, one_ehr, dedup),
+        Rows::Aggregate => Ok(ResultOrder::new(
+            Vec::new(),
+            Vec::new(),
+            dispatched_limit(query)?,
+        )),
+    }
+}
+
 /// Writes the Tier order into a node query and returns its description
 /// (§11.6.1, N13, N39).
 ///
@@ -206,15 +256,40 @@ fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
 /// `one_ehr` says the gateway scoped the node query to one `ehr_id`, so an
 /// `EHR`'s own id is the same on every row and is not a key.
 ///
+/// Under `dedup`, the version uid of [`version_uid`] is the dedup key
+/// (§10.2): a hidden column when it is not selected, except under `DISTINCT`,
+/// where a query that does not select it has no key and nothing is
+/// suppressed. A query with a `LIMIT` and no `ORDER BY` is then ordered on
+/// the uid, so the copy a node returns before its cut is the one the Tier
+/// keeps.
+///
 /// # Errors
 /// [`Refusal::OrderNotSelected`] for a `DISTINCT` query ordered on a path it
 /// does not select, and [`Refusal::NegativePaging`] for a negative `LIMIT`.
-pub(super) fn push_order(query: &mut SelectQuery, one_ehr: bool) -> Result<ResultOrder, Refusal> {
+fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<ResultOrder, Refusal> {
     let limit = dispatched_limit(query)?;
-    if query.order_by.is_empty() {
-        return Ok(ResultOrder::new(Vec::new(), Vec::new(), limit));
-    }
     let distinct = query.select.distinct;
+    let version = version_uid(&query.from)
+        .filter(|path| dedup && (!distinct || selected(&query.select.columns, path).is_some()));
+    // NOTE: AQL 1.1.0 §LIMIT ties a determined answer to ORDER BY, so a query without one may
+    // be ordered on the uid, which keeps the copy the Tier keeps inside its node's cut (§11.6.1).
+    if let Some(path) = &version
+        && query.order_by.is_empty()
+        && limit.is_some()
+    {
+        push_ascending(&mut query.order_by, path.clone());
+    }
+    let keyed = |order: ResultOrder, columns: &mut Vec<SelectExpr>| match &version {
+        Some(path) => {
+            let column = selected(columns, path).unwrap_or_else(|| hide(columns, path));
+            order.with_version_key(column)
+        }
+        None => order,
+    };
+    if query.order_by.is_empty() {
+        let order = ResultOrder::new(Vec::new(), Vec::new(), limit);
+        return Ok(keyed(order, &mut query.select.columns));
+    }
     let mut keys = Vec::with_capacity(query.order_by.len());
     for term in &query.order_by {
         let column = match selected(&query.select.columns, &term.path) {
@@ -259,7 +334,8 @@ pub(super) fn push_order(query: &mut SelectQuery, one_ehr: bool) -> Result<Resul
             vec![column]
         })
     };
-    Ok(ResultOrder::new(keys, tie_break, limit))
+    let order = ResultOrder::new(keys, tie_break, limit);
+    Ok(keyed(order, &mut query.select.columns))
 }
 
 /// The `LIMIT` the node query carries.
@@ -325,40 +401,69 @@ fn direction(order: Option<SortOrder>) -> Direction {
 // NOTE: §11.6.1 recommends "`endpoint_id`, then uid"; the key of a row without a uid
 // follows it in spirit, and no specification governs it: our own design.
 fn row_key(from: &ContainsExpr, one_ehr: bool) -> Option<IdentifiedPath> {
-    let mut composition = None;
-    let mut version = None;
-    let mut ehr = None;
-    let mut per_ehr = None;
-    classes(from, &mut |operand| match operand {
-        ClassExprOperand::Class {
-            rm_type,
-            variable: Some(variable),
-            ..
-        } => {
-            let slot = match rm_type.as_str() {
-                "COMPOSITION" => &mut composition,
-                "EHR" => &mut ehr,
-                "EHR_STATUS" | "EHR_ACCESS" => &mut per_ehr,
-                _ => return,
-            };
-            slot.get_or_insert_with(|| variable.clone());
-        }
-        ClassExprOperand::Version {
-            variable: Some(variable),
-            ..
-        } => {
-            version.get_or_insert_with(|| variable.clone());
-        }
-        ClassExprOperand::Class { .. } | ClassExprOperand::Version { .. } => {}
-    });
-    if let Some(variable) = composition.or(version) {
+    let found = Variables::of(from);
+    if let Some(variable) = found.composition.or(found.version) {
         return Some(uid_path(&variable));
     }
     if one_ehr {
         return None;
     }
-    ehr.map(|variable| ehr_id_path(&variable))
-        .or_else(|| per_ehr.map(|variable| uid_path(&variable)))
+    found
+        .ehr
+        .map(|variable| ehr_id_path(&variable))
+        .or_else(|| found.per_ehr.map(|variable| uid_path(&variable)))
+}
+
+/// The path of a row's version uid, the dedup key of §10.2: the uid of the
+/// first `COMPOSITION`, else of the first `VERSION`, the first choice of
+/// [`row_key`]. A query over neither reads no version, and its rows are never
+/// suppressed.
+// NOTE: §10.2 keys the mode on the imported composition's VERSION uid; an EHR_STATUS or
+// EHR_ACCESS is one per EHR and never a copy at a second node (our own design).
+fn version_uid(from: &ContainsExpr) -> Option<IdentifiedPath> {
+    let found = Variables::of(from);
+    found
+        .composition
+        .or(found.version)
+        .map(|variable| uid_path(&variable))
+}
+
+/// The first variable of each class kind a row key reads.
+#[derive(Default)]
+struct Variables {
+    composition: Option<String>,
+    version: Option<String>,
+    ehr: Option<String>,
+    per_ehr: Option<String>,
+}
+
+impl Variables {
+    fn of(from: &ContainsExpr) -> Self {
+        let mut found = Self::default();
+        classes(from, &mut |operand| match operand {
+            ClassExprOperand::Class {
+                rm_type,
+                variable: Some(variable),
+                ..
+            } => {
+                let slot = match rm_type.as_str() {
+                    "COMPOSITION" => &mut found.composition,
+                    "EHR" => &mut found.ehr,
+                    "EHR_STATUS" | "EHR_ACCESS" => &mut found.per_ehr,
+                    _ => return,
+                };
+                slot.get_or_insert_with(|| variable.clone());
+            }
+            ClassExprOperand::Version {
+                variable: Some(variable),
+                ..
+            } => {
+                found.version.get_or_insert_with(|| variable.clone());
+            }
+            ClassExprOperand::Class { .. } | ClassExprOperand::Version { .. } => {}
+        });
+        found
+    }
 }
 
 fn classes(from: &ContainsExpr, visit: &mut impl FnMut(&ClassExprOperand)) {

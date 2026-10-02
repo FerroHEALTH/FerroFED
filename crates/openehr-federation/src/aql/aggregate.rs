@@ -5,33 +5,36 @@
 //! function is dispatched to every node and recombined at the Tier, `AVG` as
 //! the `SUM` and the `COUNT` of its path, and anything else is refused.
 
-use std::collections::BTreeSet;
 use std::ops::Range;
 
 use openehr_query::ast::{AggregateCall, ColumnExpr, SelectExpr, SelectQuery, StatFunc};
 
+use super::Context;
 use super::refusal::{Indecomposable, Refusal};
 use crate::aggregate::{AggregateFunction, Recombination, Recombine};
+use crate::dedup::DedupMode;
 
 /// Rewrites the select list of an undirected aggregate query into the one
 /// every node is sent, and returns how the Tier recombines the node rows.
 ///
-/// Every column must be an aggregate whose function `declared` holds, with no
-/// `DISTINCT` and no `COUNT(DISTINCT …)` (§11.6.3). `COUNT`, `SUM`, `MIN` and
+/// Every column must be an aggregate whose function the context declares
+/// decomposable, with no `DISTINCT`, no `COUNT(DISTINCT …)` and no dedup mode
+/// (§11.6.3). `COUNT`, `SUM`, `MIN` and
 /// `MAX` are dispatched as written. `AVG(x)` is dispatched as `SUM(x)` and
 /// `COUNT(x)`, the per-node counts §11.6.3 requires before `AVG` may be
 /// decomposed; both ignore `NULL` as `AVG` does (AQL 1.1.0 §Aggregate
 /// functions), so their quotient is the mean.
 ///
 /// # Errors
-/// [`Refusal::UndirectedAggregate`] when `declared` does not hold a function
-/// the query applies, at `at` when `declared` is empty, and
+/// [`Refusal::UndirectedAggregate`] when the context does not declare a
+/// function the query applies, at `at` when it declares none, and
 /// [`Refusal::Indecomposable`] for a query that breaks the decomposition.
 pub(super) fn decompose(
     query: &mut SelectQuery,
-    declared: &BTreeSet<AggregateFunction>,
+    context: &Context,
     at: Option<Range<usize>>,
 ) -> Result<Recombination, Refusal> {
+    let declared = &context.decomposable;
     if declared.is_empty() {
         return Err(Refusal::UndirectedAggregate { at });
     }
@@ -45,6 +48,14 @@ pub(super) fn decompose(
     if query.select.distinct {
         return Err(Refusal::Indecomposable {
             reason: Indecomposable::Distinct,
+            at,
+        });
+    }
+    // NOTE: §11.6.3, a decomposable aggregate "must not be combined with … de-duplication
+    // (§10)": a node's count includes the copies the Tier would suppress.
+    if context.dedup != DedupMode::None {
+        return Err(Refusal::Indecomposable {
+            reason: Indecomposable::Dedup,
             at,
         });
     }
