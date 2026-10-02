@@ -304,6 +304,46 @@ async fn members_out_of_scope_never_clear_complete_in_either_mode() -> TestResul
     Ok(())
 }
 
+/// §14.1 (`localizer-unavailable`): with every member `not-localized`, the
+/// gateway dispatches to no node, `complete` stays `true`, the query does not
+/// fail in either mode, and an outage shows only in `error`.
+#[tokio::test]
+async fn a_candidate_set_localization_left_empty_answers_two_hundred() -> TestResult {
+    let snapshot = federation(&[
+        ("node-a-pub", "https://cdr-a.example.org/openehr"),
+        ("node-b-pub", "https://cdr-b.example.org/openehr"),
+    ])?;
+    let outage = ErrorDetail::Text("the localizer did not answer".to_owned());
+    for error in [None, Some(outage)] {
+        for mode in MODES {
+            let plan = Plan::new()
+                .settle(
+                    EndpointId::new("node-a-pub")?,
+                    Outcome::NotLocalized {
+                        error: error.clone(),
+                    },
+                )?
+                .settle(
+                    EndpointId::new("node-b-pub")?,
+                    Outcome::NotLocalized {
+                        error: error.clone(),
+                    },
+                )?
+                .completing(mode);
+            assert!(!plan.has_no_destination(), "§14.1 is not the 404 of §11.2");
+            let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
+            assert_eq!(answer.status(), StatusCode::OK, "{mode:?}");
+            assert!(answer.rows().is_empty());
+            assert!(
+                answer.federation().complete(),
+                "no node in scope failed: {mode:?}"
+            );
+            validated_body(answer)?;
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_failure_beside_an_out_of_scope_member_still_follows_the_mode() -> TestResult {
     let broken = node(json(500, "")).await;

@@ -128,6 +128,13 @@ enum Failure {
     /// The fan-out could not be planned.
     #[error("the federated query could not be planned")]
     Plan(#[source] plan::TargetsError),
+    /// Node selection left no registry member in scope, so the request
+    /// resolves to no destination (§11.2, §11.3).
+    // TODO(#57): answer with the `no-destination` error code.
+    #[error(
+        "no registry member is in scope for this request, so it cannot be resolved to any destination (§11.2, §11.3)"
+    )]
+    NoDestination,
     /// The fan-out failed on the gateway's side.
     #[error("the federated query could not be dispatched")]
     FanOut(#[source] FanOutError),
@@ -147,6 +154,7 @@ impl IntoResponse for Failure {
             | Self::Parameter(_)
             | Self::Refused(_)
             | Self::Plan(plan::TargetsError::Patient(_)) => StatusCode::BAD_REQUEST,
+            Self::NoDestination => StatusCode::NOT_FOUND,
             Self::Cells(_) => StatusCode::BAD_GATEWAY,
             Self::Plan(_) | Self::FanOut(_) | Self::Envelope(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -241,6 +249,9 @@ async fn federate(
             None,
         ),
     };
+    if targets.plan.has_no_destination() {
+        return Err(Failure::NoDestination);
+    }
     if let Some(session) = session {
         federation.bindings().record(
             session,

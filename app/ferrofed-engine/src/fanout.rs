@@ -238,6 +238,25 @@ impl Plan {
         self.dispatch.keys()
     }
 
+    /// Whether node selection resolved the request to no destination at all,
+    /// which is a `404` (§11.2, first row; §11.3).
+    ///
+    /// That is a plan with no endpoint in scope (§11.1 "What in scope
+    /// means") in which no endpoint is `not-localized`: every endpoint was
+    /// ruled out by a decision (`excluded`), or the plan names none. A plan
+    /// that `not-localized` left empty is not one: an empty candidate set
+    /// from localization does not fail the query, and dispatches to no node
+    /// (§14.1). An in-scope endpoint that is `not-resolved` keeps the request
+    /// routed, whose answer is a `200` (§11.3).
+    #[must_use]
+    pub fn has_no_destination(&self) -> bool {
+        self.dispatch.is_empty()
+            && self.settled.values().all(|outcome| {
+                let status = outcome.status();
+                !status.is_in_scope() && status != EndpointStatus::NotLocalized
+            })
+    }
+
     fn refuse_duplicate(&self, endpoint: &EndpointId) -> Result<(), PlanError> {
         if self.dispatch.contains_key(endpoint) || self.settled.contains_key(endpoint) {
             return Err(PlanError::Duplicate {

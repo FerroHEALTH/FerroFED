@@ -118,11 +118,11 @@ pub async fn patient(
     let mut plan = exclude(Plan::new().withholding(withheld), &membership.excluded)?;
     let members: Vec<NodeId> = membership.asked.keys().cloned().collect();
     let resolutions = match resolver {
-        Some(resolver) => {
+        Some(resolver) if !members.is_empty() => {
             let patient = patient_ref(query.subject())?;
             resolver.resolve(&patient, &members, deadline).await
         }
-        None => BTreeMap::new(),
+        Some(_) | None => BTreeMap::new(),
     };
     let mut sources = None;
     let mut resolution_failed = false;

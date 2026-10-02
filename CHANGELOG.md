@@ -103,6 +103,13 @@ binary follows from v0.0.2.
   ITS-REST `fetch` member is refused `400` (`top-with-fetch`), because
   ITS-REST says `fetch` "cannot be combined with AQL-top". `TOP n` alone is
   still read as `LIMIT n`.
+- A federated query that leaves no registry member in scope, because every
+  endpoint is `excluded` (suspended by the operator, for example), answers
+  `404` and asks no node, where it answered `200` with empty `rows` (#166;
+  §11.1, §11.2, §11.3). A candidate set that localization left empty is not
+  that case: every member is `not-localized`, and the answer stays `200`
+  with `complete: true` (§14.1). A patient who is `not-resolved` at every
+  member in scope still answers `200`.
 
 ## [0.0.3] - 2026-10-02
 
