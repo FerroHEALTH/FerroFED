@@ -148,10 +148,11 @@ pub struct Federation {
     /// before the request timeout cuts the connection.
     pub overall_timeout_ms: u64,
     /// The issuing namespace an unqualified patient identifier resolves in
-    /// (decision A5). Without it, a query that names no namespace is a `400`.
+    /// (§5.2 requires the namespace; no specification governs the default: our
+    /// own design). Without it, a query that names no namespace is a `400`.
     pub default_namespace: Option<String>,
     /// How long the resolution bindings of a client session live (§12.5.1
-    /// step 2, decision A20): a correctness bound, past which a binding is
+    /// step 2): a correctness bound, past which a binding is
     /// never routed on.
     pub binding_ttl_ms: u64,
     /// How the node set of an undirected patient query is chosen (§4.3, N4).

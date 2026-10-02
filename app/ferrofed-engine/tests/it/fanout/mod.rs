@@ -153,7 +153,7 @@ fn validated_body(answer: FederatedAnswer) -> Result<String, Box<dyn Error>> {
 mod schema {
     #![expect(
         clippy::disallowed_types,
-        reason = "seam 4 of rust-style.md: schema validation reads JSON as values, in tests only"
+        reason = "the test seam: schema validation reads JSON as values, in tests only"
     )]
 
     use std::error::Error;

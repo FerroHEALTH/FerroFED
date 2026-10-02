@@ -92,7 +92,7 @@ fn an_order_by_path_that_is_not_selected_becomes_a_hidden_column() {
     assert_eq!(
         query.for_node(&ehr_id()).columns(),
         [ColumnSource::Node(0)],
-        "A28: the façade answers only the column it selected"
+        "the hidden column is stripped: the façade answers only the column it selected"
     );
     assert_eq!(
         query.columns().len(),
@@ -314,7 +314,7 @@ fn under_distinct_an_order_by_path_that_is_not_selected_is_refused() {
     let refusal = refused(&aql);
     assert!(
         matches!(refusal, Refusal::OrderNotSelected { at: Some(_) }),
-        "A28: a hidden column would change which rows are distinct, got {refusal:?}"
+        "N13: a hidden column would change which rows are distinct, got {refusal:?}"
     );
     assert_eq!(refusal.kind(), "order-not-selected");
 }

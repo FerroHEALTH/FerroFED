@@ -14,7 +14,7 @@
 //! - [`resolver`]: the [`Resolver`](resolver::Resolver) seam (N3, §5.2);
 //! - [`pixm`]: the [`Resolver`](resolver::Resolver) over PIXm ITI-83 (#43);
 //! - [`binding`]: the resolution bindings of §12.5.1 step 2, in memory and
-//!   scoped to the client session (decision A20);
+//!   scoped to the client session (§12.5.1 step 2);
 //! - [`dev`]: the static development cross-reference, FerroFED's own testing
 //!   device, enabled only under the development profile.
 //!

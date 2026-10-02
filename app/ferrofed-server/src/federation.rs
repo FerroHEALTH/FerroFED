@@ -123,7 +123,8 @@ impl Federation {
     /// `[credentials]` section sends them on every request, and the static
     /// cross-reference is enabled when `[dev]` is set under the development
     /// profile. Without a resolver, a query that names a patient fails closed
-    /// (decision A17).
+    /// (§11.3 covers only an answered lookup; no specification governs this:
+    /// our own design).
     ///
     /// # Errors
     /// Returns a [`FederationError`] for a registry document that does not

@@ -5,9 +5,10 @@
 //! (§11.6.1, N13, N39): the global top `n` from interleaved node answers, the
 //! deterministic tie-break whatever order the nodes answer in, and a node
 //! whose `n` rows disagree with the federation order reported `node-error`
-//! (§11.1; decision A43), which fails the query `424` under all-or-nothing
-//! and leaves the other nodes' rows under best-effort (§11.4, N37). A page at
-//! `OFFSET k` is sliced from the `k + n` rows each node was sent (§11.6.2).
+//! (§11.1; no specification governs the order check: our own design), which
+//! fails the query `424` under all-or-nothing and leaves the other nodes' rows
+//! under best-effort (§11.4, N37). A page at `OFFSET k` is sliced from the
+//! `k + n` rows each node was sent (§11.6.2).
 
 use std::error::Error;
 use std::time::Duration;
@@ -132,7 +133,11 @@ async fn a_cut_out_of_the_federation_order_fails_the_query_424() -> TestResult {
     assert!(!answer.federation().complete());
     assert!(answer.rows().is_empty(), "a failing query returns no rows");
     let refused = record(&answer, "node-a-pub")?;
-    assert_eq!(refused.status(), EndpointStatus::NodeError, "§11.1, A43");
+    assert_eq!(
+        refused.status(),
+        EndpointStatus::NodeError,
+        "§11.1: a node out of the Tier order"
+    );
     assert!(
         refused.outcome().latency_ms().is_some(),
         "N40: it was dispatched"
@@ -165,7 +170,7 @@ async fn a_node_answering_past_its_limit_fails_the_query_424() -> TestResult {
     assert_eq!(
         error_text(record(&answer, "node-a-pub")?)?,
         "the node returned more rows than the LIMIT it was sent",
-        "A43: the node was sent LIMIT 1"
+        "N39: the node was sent LIMIT 1"
     );
     Ok(())
 }
@@ -249,7 +254,11 @@ async fn a_bounded_window_out_of_the_federation_order_fails_the_query_424() -> T
     assert_eq!(answer.status(), StatusCode::FAILED_DEPENDENCY, "N37");
     assert!(answer.rows().is_empty());
     let refused = record(&answer, "node-a-pub")?;
-    assert_eq!(refused.status(), EndpointStatus::NodeError, "§11.1, A43");
+    assert_eq!(
+        refused.status(),
+        EndpointStatus::NodeError,
+        "§11.1: a node out of the Tier order"
+    );
     assert_eq!(
         error_text(refused)?,
         "result order disagrees with the federation order"

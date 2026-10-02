@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/vendor/its-rest.sh
 #
-# Vendors the openEHR ITS-REST OpenAPI documents into docs/specs/its-rest/
-# (.claude/rules/vendored-inputs.md): the code-generation document of every one
-# of the seven API modules, plus the repository's licence file.
+# Vendors the openEHR ITS-REST OpenAPI documents into docs/specs/its-rest/:
+# the code-generation document of every one of the seven API modules, plus the
+# repository's licence file.
 #
 # The gateway is transparent over the whole ITS-REST surface, read and write,
 # and names the parts it does not federate (Federation Tier with AQL §7a), so

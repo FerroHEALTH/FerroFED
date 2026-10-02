@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# Comment-style guard (.claude/rules/comments.md, RFC 505 and RFC 1574).
+# Comment-style guard (RFC 505 and RFC 1574, plus the citation rule of 9-10).
 #
 # Checks HAND-WRITTEN .rs files (a file carrying the `@generated` marker is
 # skipped: its comments are fixed in the generator that emitted it):
@@ -24,6 +24,36 @@
 #   8. empty sections      a bare `/// # Errors` / `# Panics` heading with no
 #                          body satisfies the doc lints and tells a caller
 #                          nothing.
+#   9. internal citations  a comment, a doc comment, a trailing `//` comment
+#                          or a lint `reason = "…"` string names an internal
+#                          markdown file: the architecture document under
+#                          docs, any path into the `.claude` tree, the root
+#                          agent instructions file, or the bare file name of a
+#                          rule or memory file (read from that tree, so a new
+#                          rule is covered).
+#  10. decision markers    the same text names a decision-register entry:
+#                          the word `decision` (or `decisions`) followed by an
+#                          `A` and a digit, or an `A` with one or two digits
+#                          standing as its own token. The bare form is judged
+#                          outside backtick code spans and outside fenced doc
+#                          code blocks, and a letter, digit, `_`, `-`, `.` or
+#                          `#` on its left, or a letter, digit, `_` or `-` on
+#                          its right, makes it part of another token, so hex
+#                          (`0xA1`), `HbA1c`, Annex section numbers such as
+#                          `A.1` and an AQL alias quoted in backticks pass.
+#
+# Checks 9 and 10 also read the full-line `#` comments of every shell script
+# under scripts/ and of every Cargo.toml (HASH files). Heredoc bodies are
+# skipped there, since they are document text a script writes. One difference
+# is deliberate: a hash comment may NAME the architecture document as a file a
+# script reads (the versions guard compares its pin table), so only the
+# citation form fails there, the document followed by `section` or `§`, or
+# opening a parenthetical. Workflow files are left out: their comments are
+# not in this guard's scope yet.
+#
+# Citation rule: no specification governs this: our own design. A comment
+# cites the specification it rests on (section, N, CP) or official external
+# documentation, or says that no specification governs the decision.
 #
 # NOT machine-checked, deliberately: module-doc (`//!`) block LENGTH. The
 # longest module docs are governing-section maps and matching-rule contracts,
@@ -32,9 +62,10 @@
 # reference docs. Essay-vs-reference is judgment; review carries it.
 #
 # Usage:
-#   scripts/checks/comment-style.sh --all               # whole tree
+#   scripts/checks/comment-style.sh --all                 # whole tree
 #   scripts/checks/comment-style.sh --diff <base> [head]  # changed files only
-#   scripts/checks/comment-style.sh --files <f.rs>...   # named files (hook)
+#   scripts/checks/comment-style.sh --files <file>...     # named files (hook)
+#   scripts/checks/comment-style.sh --self-test           # prove checks 9-10
 #
 # Exit 0 = clean, 1 = violations (listed as file:line: message), 2 = usage.
 
@@ -45,50 +76,52 @@ RUN_MAX=8
 
 cd "$(dirname "$0")/../.."
 
-mode="${1:---all}"
-files=()
-case "$mode" in
---all)
-  # `git ls-files` reads the index, so a file deleted from the worktree but
-  # not yet staged would still be listed: skip it rather than letting awk
-  # fail on a missing path.
-  while IFS= read -r f; do [[ -f "$f" ]] && files+=("$f"); done \
-    < <(git ls-files '*.rs')
-  ;;
---diff)
-  base="${2:?usage: --diff <base> [head]}"
-  head="${3:-HEAD}"
-  while IFS= read -r f; do
-    [[ -f "$f" ]] && files+=("$f")
-  done < <(git diff --name-only "$base" "$head" -- '*.rs')
-  ;;
---files)
-  shift
-  for f in "$@"; do
-    case "$f" in
-    *.rs) [[ -f "$f" ]] && files+=("$f") ;;
-    *) ;;
-    esac
+# The bare names (without `.md`) of the rule and memory files, joined by `|`,
+# plus CLAUDE: the alternation check 9 matches a bare file name against.
+internal_names() {
+  local f names=(CLAUDE)
+  for f in .claude/rules/*.md .claude/memory/*.md; do
+    [[ -f "$f" ]] || continue
+    f="${f##*/}"
+    names+=("${f%.md}")
   done
-  ;;
-*)
-  echo "usage: $0 [--all | --diff <base> [head] | --files <f.rs>...]" >&2
-  exit 2
-  ;;
-esac
-
-[[ "${#files[@]}" -eq 0 ]] && {
-  echo "comment-style: no files to check: OK."
-  exit 0
+  local IFS='|'
+  printf '%s' "${names[*]}"
 }
+CITE_NAMES="$(internal_names)"
+export CITE_NAMES
 
-fail=0
-for f in "${files[@]}"; do
-  # The emitter writes its banner as the FIRST line of every generated file, so
-  # the skip anchors there. Matching the marker anywhere would let a
-  # hand-written file exempt itself by merely mentioning it in prose.
-  head -n 1 "$f" 2>/dev/null | grep -q '^// @generated' && continue
-  out="$(awk -v NOTE_MAX="$NOTE_MAX" -v RUN_MAX="$RUN_MAX" '
+# The awk functions checks 9 and 10 share between the Rust and the HASH pass.
+# The regexes are built from strings in BEGIN (portable across BWK awk, mawk
+# and gawk: no interval expressions, no gawk extensions). `strict` selects the
+# Rust reading of the architecture document (any mention) over the HASH one
+# (the citation form only).
+# shellcheck disable=SC2016 # awk source: the `$` and backticks are awk's, never expanded by the shell
+CITE_AWK='
+  BEGIN {
+    arch_any_re = "docs/architecture\\.md"
+    arch_cite_re = "(docs/architecture\\.md`?[[:space:]]*(section|§)|\\(`?docs/architecture\\.md)"
+    claude_re = "(\\.claude/|CLAUDE\\.md)"
+    names_re = ""
+    if (ENVIRON["CITE_NAMES"] != "")
+      names_re = "(^|[^A-Za-z0-9_./-])(" ENVIRON["CITE_NAMES"] ")\\.md"
+    dec_re = "(^|[^A-Za-z0-9_])[Dd]ecisions?[[:space:]]+A[0-9]"
+    bare_re = "(^|[^A-Za-z0-9_.#-])A[0-9][0-9]?([^A-Za-z0-9_-]|$)"
+  }
+  function cite_check(text, what, strict, fenced,   t) {
+    if ((strict ? text ~ arch_any_re : text ~ arch_cite_re) \
+        || text ~ claude_re || (names_re != "" && text ~ names_re))
+      printf ":%d: %s cites an internal markdown file: cite the specification section it rests on, or write \"no specification governs this: our own design\"\n", NR, what
+    t = text
+    gsub(/`[^`]*`/, "", t)
+    if (text ~ dec_re || (!fenced && t ~ bare_re))
+      printf ":%d: %s names a decision-register marker: cite the specification section the decision rests on, or write \"no specification governs this: our own design\"\n", NR, what
+  }
+'
+
+# Prints the violations of one .rs file, one `:LINE: message` per line.
+check_rs() {
+  awk -v NOTE_MAX="$NOTE_MAX" -v RUN_MAX="$RUN_MAX" "$CITE_AWK"'
     function flush_note() {
       if (note_len > NOTE_MAX)
         printf ":%d: NOTE block is %d lines (max %d): a NOTE is a citation + one sentence; move the essay to the PR/issue\n", note_start, note_len, NOTE_MAX
@@ -114,6 +147,25 @@ for f in "${files[@]}"; do
       sub(/^[[:space:]]+/, "", line)
       is_doc  = (line ~ /^\/\/[\/!]/)
       is_line = (!is_doc && line ~ /^\/\//)
+
+      # 9 + 10. internal citations and decision markers. A fenced doc code
+      # block toggles on its fence line; any non-doc line closes it.
+      if (!is_doc) in_fence = 0
+      if (is_doc && line ~ /^\/\/[\/!][[:space:]]*```/) in_fence = !in_fence
+      if (is_doc || is_line) {
+        cite_check(line, "comment", 1, in_fence)
+      } else {
+        # A trailing comment: the first `//` after whitespace, outside a
+        # string literal (an even count of quotes before it).
+        tc = match($0, /[[:space:]]\/\//)
+        if (tc > 0) {
+          pre = substr($0, 1, tc)
+          if (gsub(/"/, "", pre) % 2 == 0)
+            cite_check(substr($0, tc + 1), "comment", 1, 0)
+        }
+      }
+      if (match($0, /reason[[:space:]]*=[[:space:]]*"([^"\\]|\\.)*"/))
+        cite_check(substr($0, RSTART, RLENGTH), "lint reason", 1, 0)
 
       # 1. block comments on code lines: a `/*` at line start or after
       # whitespace, before any string literal on the line. The position
@@ -199,11 +251,206 @@ for f in "${files[@]}"; do
       flush_note(); flush_run(); flush_doc_note(); flush_sec()
     }
     END { flush_note(); flush_run(); flush_doc_note(); flush_sec() }
-  ' "$f")"
-  if [[ -n "$out" ]]; then
-    printf '%s\n' "$out" | sed "s|^|$f|"
-    fail=1
+  ' "$1"
+}
+
+# Prints the check 9 and 10 violations of one HASH file (a shell script or a
+# Cargo.toml), one `:LINE: message` per line. `is_sh` turns heredoc skipping
+# on: a TOML file has no heredocs.
+check_hash() {
+  local is_sh=0
+  [[ "$1" == *.sh ]] && is_sh=1
+  awk -v is_sh="$is_sh" -v sq="'" "$CITE_AWK"'
+    BEGIN {
+      hd_re = "<<-?[[:space:]]*[" sq "\"]?[A-Za-z_][A-Za-z0-9_]*[" sq "\"]?"
+      heredoc = ""
+    }
+    NR == 1 && /^#!/ { next }
+    heredoc != "" {
+      t = $0
+      if (heredoc_tabs) sub(/^\t+/, "", t)
+      if (t == heredoc) heredoc = ""
+      next
+    }
+    {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      if (line ~ /^#/) {
+        cite_check(line, "comment", 0, 0)
+        next
+      }
+      if (is_sh && match($0, hd_re)) {
+        tok = substr($0, RSTART, RLENGTH)
+        heredoc_tabs = (tok ~ /^<<-/)
+        sub(/^<<-?[[:space:]]*/, "", tok)
+        gsub(/[^A-Za-z0-9_]/, "", tok)
+        heredoc = tok
+      }
+    }
+  ' "$1"
+}
+
+# Runs the right pass over one file and prints its violations prefixed with
+# the path. Returns 1 when the file has any.
+check_file() {
+  local f="$1" out
+  case "$f" in
+  *.rs)
+    # The emitter writes its banner as the FIRST line of every generated
+    # file, so the skip anchors there. Matching the marker anywhere would let
+    # a hand-written file exempt itself by merely mentioning it in prose.
+    head -n 1 "$f" 2>/dev/null | grep -q '^// @generated' && return 0
+    out="$(check_rs "$f")"
+    ;;
+  *) out="$(check_hash "$f")" ;;
+  esac
+  [[ -z "$out" ]] && return 0
+  printf '%s\n' "$out" | sed "s|^|$f|"
+  return 1
+}
+
+# The HASH files of the tree: shell scripts under scripts/ and every
+# Cargo.toml outside the vendored corpora.
+is_hash_file() {
+  case "$1" in
+  docs/specs/*) return 1 ;;
+  scripts/*.sh | Cargo.toml | */Cargo.toml) return 0 ;;
+  *) return 1 ;;
+  esac
+}
+
+# Proves checks 9 and 10: every refused form fails with its message, and
+# every near miss passes. Fixtures are written to a temporary tree.
+self_test() {
+  local dir fails=0
+  dir="$(mktemp -d)"
+  # shellcheck disable=SC2064 # expand now: the path is fixed at this point
+  trap "rm -rf '$dir'" EXIT
+
+  [[ "$CITE_NAMES" == *rust-style* ]] || {
+    echo "self-test: no rule file names were read from the rules tree" >&2
+    return 1
+  }
+
+  # expect <file> <refused|accepted> <message fragment> <line>...
+  expect() {
+    local file="$dir/$1" verdict="$2" want="$3" out
+    shift 3
+    printf '%s\n' "$@" >"$file"
+    out="$(check_file "$file" || true)"
+    case "$verdict" in
+    refused)
+      if [[ "$out" != *"$want"* ]]; then
+        echo "self-test: not refused ($want): $*" >&2
+        fails=$((fails + 1))
+      fi
+      ;;
+    accepted)
+      if [[ -n "$out" ]]; then
+        echo "self-test: refused a near miss: $* => $out" >&2
+        fails=$((fails + 1))
+      fi
+      ;;
+    esac
+  }
+  local internal="cites an internal markdown file"
+  local marker="names a decision-register marker"
+
+  expect a.rs refused "$internal" '//! The rewrite (docs/architecture.md §4).'
+  # shellcheck disable=SC2016 # a literal Rust fixture: the backticks are Rust doc text
+  expect b.rs refused "$internal" '/// The seam (`.claude/rules/rust-style.md`, typed carriers).'
+  expect c.rs refused "$internal" '// Rule: reliability.md, the error chain.'
+  expect d.rs refused "$internal" 'let x = 1; // see docs/architecture.md'
+  expect e.rs refused "$internal" '#[expect(clippy::disallowed_types, reason = "seam 4 of rust-style.md: JSON in tests")]'
+  expect f.rs refused "$internal" '/// The crate CLAUDE.md records it.'
+  expect g.rs refused "$marker" '// NOTE: decision A17, a resolver outage fails the query.'
+  expect h.rs refused "$marker" '/// The column travels hidden (A28).'
+  expect i.rs refused "$marker" '//! Decisions A3 to A10 are covered here.'
+  expect j.rs refused "$marker" '    reason = "decision A5: the default namespace"'
+  expect k.rs refused "$marker" '/// §11.1, A43: the node was sent LIMIT 1.'
+
+  expect l.rs accepted "" '// The frame opens with the byte 0xA1.'
+  # shellcheck disable=SC2016 # a literal Rust fixture: the backticks are Rust doc text
+  expect m.rs accepted "" '/// `SELECT x AS A1 FROM EHR e` names the alias.'
+  expect n.rs accepted "" '/// ```text' '/// SELECT x AS A1 FROM EHR e' '/// ```'
+  expect o.rs accepted "" '// Annex A §A.1 binds PIXm (§5.4.1, N33, CP-26).'
+  expect p.rs accepted "" '// The pin matrix is docs/VERSIONS.md; HbA1c is a lab value.'
+  expect q.rs accepted "" 'let url = "https://example.org/.claude/x";'
+  expect r.rs accepted "" '#[expect(clippy::expect_used, reason = "the test seam: a fixture is valid JSON")]'
+
+  expect a.sh refused "$internal" '# Policy: .claude/rules/issue-workflow.md.'
+  expect b.sh refused "$internal" '# THE switch (docs/architecture.md section 11).'
+  expect c.sh refused "$internal" '# The harness (#39, docs/architecture.md §13).'
+  expect d.sh refused "$marker" '# Nothing is published (decision A35).'
+  expect Cargo.toml refused "$internal" '# The reliability bar (reliability.md).'
+
+  expect e.sh accepted "" '#   1. the docs/architecture.md pin table against the matrix.'
+  expect f.sh accepted "" "cat <""<'EOF'" '# Provenance (.claude/rules/vendored-inputs.md)' 'EOF'
+  expect g.sh accepted "" 'echo "rules: .claude/rules/comments.md" >&2'
+  expect h.sh accepted "" '# The byte 0xA1 opens the frame; Annex A §A.1.'
+  expect i.sh accepted "" '#!/usr/bin/env bash' '# A plain comment.'
+
+  if [[ "$fails" -ne 0 ]]; then
+    echo "comment-style self-test: $fails case(s) failed." >&2
+    return 1
   fi
+  echo "ok: comment-style self-test (internal citations and decision markers refused in .rs, .sh and Cargo.toml; near misses accepted)"
+}
+
+mode="${1:---all}"
+files=()
+case "$mode" in
+--self-test)
+  self_test
+  exit $?
+  ;;
+--all)
+  # `git ls-files` reads the index, so a file deleted from the worktree but
+  # not yet staged would still be listed: skip it rather than letting awk
+  # fail on a missing path.
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    case "$f" in
+    *.rs) files+=("$f") ;;
+    *) is_hash_file "$f" && files+=("$f") ;;
+    esac
+  done < <(git ls-files '*.rs' 'scripts/*.sh' 'Cargo.toml' '*/Cargo.toml')
+  ;;
+--diff)
+  base="${2:?usage: --diff <base> [head]}"
+  head="${3:-HEAD}"
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    case "$f" in
+    *.rs) files+=("$f") ;;
+    *) is_hash_file "$f" && files+=("$f") ;;
+    esac
+  done < <(git diff --name-only "$base" "$head" -- '*.rs' 'scripts/*.sh' 'Cargo.toml' '*/Cargo.toml')
+  ;;
+--files)
+  shift
+  for f in "$@"; do
+    [[ -f "$f" ]] || continue
+    case "$f" in
+    *.rs) files+=("$f") ;;
+    *) is_hash_file "$f" && files+=("$f") ;;
+    esac
+  done
+  ;;
+*)
+  echo "usage: $0 [--all | --diff <base> [head] | --files <file>... | --self-test]" >&2
+  exit 2
+  ;;
+esac
+
+[[ "${#files[@]}" -eq 0 ]] && {
+  echo "comment-style: no files to check: OK."
+  exit 0
+}
+
+fail=0
+for f in "${files[@]}"; do
+  check_file "$f" || fail=1
 done
 
 if [[ "$fail" -ne 0 ]]; then

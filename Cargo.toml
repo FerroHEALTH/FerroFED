@@ -16,20 +16,22 @@ license = "BUSL-1.1"
 repository = "https://github.com/FerroHEALTH/FerroFED"
 homepage = "https://ferrofed.eu"
 authors = ["Ruben Talstra"]
-# THE publishing switch (docs/architecture.md section 11, decision A35). Every
-# crates/* member inherits it with publish.workspace = true, so flipping this
-# one value to true makes the library crates publishable; app/* and tools/*
-# carry a hard publish = false of their own and are never published.
+# THE publishing switch (the Cargo reference, the `publish` field; no
+# specification governs the policy: our own design). Every crates/* member
+# inherits it with publish.workspace = true, so flipping this one value to true
+# makes the library crates publishable; app/* and tools/* carry a hard
+# publish = false of their own and are never published.
 publish = false
 
 # The authoritative third-party set. A crate takes a dependency with
 # dep.workspace = true, and every version is checked against crates.io on the
-# day it is added (.claude/rules/reliability.md).
+# day it is added (no specification governs this: our own design).
 [workspace.dependencies]
-# The openEHR surface (docs/architecture.md section 2): one lockstep family at
-# the latest published release, moved together by the dependency sweep and
-# checked against docs/VERSIONS.md by scripts/checks/versions.sh. The pin is
-# 0.0.74, the release carrying FerroEHR #3505 to #3514.
+# The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
+# one lockstep family at the latest published release, moved together by the
+# dependency sweep and checked against docs/VERSIONS.md by
+# scripts/checks/versions.sh. The pin is 0.0.74, the release carrying FerroEHR
+# #3505 to #3514.
 openehr-base = "0.0.74"
 openehr-rm = "0.0.74"
 openehr-query = "0.0.74"
@@ -37,9 +39,9 @@ openehr-its = { version = "0.0.74", default-features = false }
 openehr-sdt = { version = "0.0.74", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
-# (.claude/rules/crates-publishing.md); an app/* member is never packaged, so
-# it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.10" }
+# (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
+# member is never packaged, so it takes the path alone.
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.11" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.6" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
@@ -48,7 +50,8 @@ ferrofed-engine = { path = "app/ferrofed-engine" }
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }
 # The server binary (#29). anyhow is a binary-only error type
-# (.claude/rules/rust-style.md); every library crate speaks thiserror.
+# (the anyhow docs.rs page, comparison to thiserror); every library crate
+# speaks thiserror.
 anyhow = "1.0.104"
 thiserror = "2.0.21"
 clap = { version = "4.6.7", features = ["derive"] }
@@ -80,16 +83,16 @@ async-trait = "0.1.92"
 url = "2.5.8"
 # The basic scheme of the PIX Manager credentials (#43), RFC 7617.
 base64 = "0.23.1"
-# The FHIR R4 model of the IHE bindings (docs/architecture.md section 6,
-# decision A16), compiled only in crates/ihe-iti and, for its PIX Manager
+# The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
+# ImplementationGuide), compiled only in crates/ihe-iti and, for its PIX Manager
 # test device, in tools/ferrofed-testkit; checked against docs/VERSIONS.md by
 # scripts/checks/versions.sh. Each binding names the root set it reads:
 # `terminology` for PIXm (#42), `resources` for the PDQm Patient (#119); the
 # testkit's Manager adds `resources` for the ITI-104 Patient (#47).
 fhir-types = { version = "0.1.107", default-features = false }
-# The test harness (#39, docs/architecture.md section 13): the container
-# runner behind the FERROFED_E2E gate, the in-process stub nodes, and the
-# HTTP server half the capturing and fault proxy is built on.
+# The test harness (#39; no specification governs it: our own design): the
+# container runner behind the FERROFED_E2E gate, the in-process stub nodes,
+# and the HTTP server half the capturing and fault proxy is built on.
 testcontainers = "0.28.0"
 wiremock = "0.6.5"
 hyper = { version = "1.11.1", default-features = false }
@@ -101,8 +104,8 @@ bytes = "1.12.1"
 jsonschema = { version = "0.58.3", default-features = false }
 proptest = "1.11.0"
 
-# The reliability bar (.claude/rules/reliability.md). Groups sit at priority -1
-# so every named lint below overrides its group.
+# The reliability bar (no specification governs it: our own design). Groups sit
+# at priority -1 so every named lint below overrides its group.
 [workspace.lints.rust]
 unsafe_code = "forbid"
 non_ascii_idents = "forbid"

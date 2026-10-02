@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The result-cell seam: each node row read against the façade's own columns,
-//! with the subject columns re-injected (`.claude/rules/rust-style.md`, seam
-//! 2; N5, §7.1).
+//! with the subject columns re-injected (N5, §7.1).
 //!
 //! A node answers the rewritten query, whose `SELECT` lacks the subject
 //! columns, so a façade row is built column by column from where each one

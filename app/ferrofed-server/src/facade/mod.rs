@@ -9,9 +9,9 @@
 //! `meta.federation` naming every endpoint (N1, N16, N17). The `query` group
 //! is FerroFED's own handler over the generated DTOs, because the federated
 //! `424` and `504` carry `meta.federation`, which the generated `ApiError`
-//! cannot (decision A11).
+//! cannot (N37, §11.4).
 //!
-//! One request runs the pipeline of section 3: [`completeness`] reads the
+//! One request runs the reference flow of §4: [`completeness`] reads the
 //! completion strategy the request selects (§11.4), [`prefer`] reads the
 //! client deadline that can shorten the budget (§11.5), [`intake`] types the query
 //! parameters, the rewrite analyses the query and names the patient,
@@ -197,7 +197,7 @@ struct Query<'a> {
 /// Resolution and the fan-out share one overall budget, which runs from the
 /// request's arrival, so the gateway answers within its declared budget
 /// (§11.5). The `{node, ehr_id}` set a resolution produces is held as the
-/// session's resolution bindings (§12.5.1 step 2, decision A20); without a
+/// session's resolution bindings (§12.5.1 step 2); without a
 /// session there is nothing to scope them to, and none is held.
 async fn federate(
     federation: &Federation,
@@ -278,8 +278,9 @@ async fn federate(
     let mut result_set = answer
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
         .map_err(Failure::Envelope)?;
-    // NOTE: decision A17, a cross-reference that could not answer fails the
-    // query 424 under all-or-nothing; under best-effort it stays reported.
+    // NOTE: no specification governs this (§11.3 covers only an answered lookup):
+    // our own design, a cross-reference that could not answer fails the query
+    // 424 under all-or-nothing; under best-effort it stays reported.
     if targets.resolution_failed
         && completion == Completion::AllOrNothing
         && status == StatusCode::OK

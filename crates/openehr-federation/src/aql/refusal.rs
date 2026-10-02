@@ -47,15 +47,15 @@ pub enum Refusal {
     /// The patient identifier, or its namespace, is compared with something
     /// other than a string literal: `OBJECT_ID.value`, `PARTY_REF.namespace`
     /// and the `id`, `issuer` and `type` of a `DV_IDENTIFIER` are `String`, and
-    /// an AQL parameter is typed as the literal it stands for (decision A6;
-    /// AQL §Parameters).
+    /// an AQL parameter is typed as the literal it stands for (AQL
+    /// §Parameters).
     #[error("the patient identifier and its namespace are strings, and this operand is not one{}", At(.at))]
     IdentifierNotString {
         /// Where the comparison was written.
         at: Option<Range<usize>>,
     },
-    /// The query names the patient twice with different values (decision A7,
-    /// §7.1).
+    /// The query names the patient twice with different values (§7.1, the
+    /// reduction constraint).
     #[error("the query names two different patient identifiers (§7.1){}", At(.at))]
     SecondSubject {
         /// Where the second value was written.
@@ -74,7 +74,8 @@ pub enum Refusal {
         at: Option<Range<usize>>,
     },
     /// The query names no issuing namespace and the deployment declares no
-    /// default (§5.2; decision A5).
+    /// default (§5.2 requires the namespace; no specification governs the
+    /// default: our own design).
     #[error(
         "the patient identifier carries no issuing namespace, and no default namespace is configured (§5.2)"
     )]
@@ -112,8 +113,8 @@ pub enum Refusal {
     },
     /// A string function over a literal is compared with an
     /// identifier-bearing path and cannot be folded at the gateway, so the
-    /// node could compute the identifier from it (§5.4.1, §5.4.2; decision
-    /// A4).
+    /// node could compute the identifier from it (§5.4.1 "in any position",
+    /// §5.4.2).
     #[error(
         "a string function over a literal is compared with an identifier path and cannot be folded at the gateway, so the identifier could be rebuilt at the node (§5.4.1){}",
         At(.at)
@@ -144,7 +145,7 @@ pub enum Refusal {
         reason: OffsetPage,
     },
     /// The query clause and the ITS-REST member of the same name page
-    /// differently (decision A10).
+    /// differently (ITS-REST Query API `Offset` and `Fetch`, §11.6).
     #[error("the {member} member and the query's {clause} clause disagree")]
     PagingConflict {
         /// The ITS-REST member.
@@ -180,7 +181,8 @@ pub enum Refusal {
     TopWithFetch,
     /// Under `DISTINCT`, an `ORDER BY` path that is not selected: the gateway
     /// cannot add it to the node query as a hidden column without changing
-    /// which rows are distinct (decision A28; FerroFED's own).
+    /// which rows are distinct (N13; no specification governs the hidden
+    /// column: our own design).
     #[error(
         "under DISTINCT, an ORDER BY path must also be selected, because adding it to the node query would change which rows are distinct (N13){}",
         At(.at)
@@ -190,7 +192,7 @@ pub enum Refusal {
         at: Option<Range<usize>>,
     },
     /// The query names no patient and no node set, and the deployment
-    /// localizes on the patient (N4; decision A8). Name the endpoints with
+    /// localizes on the patient (N4). Name the endpoints with
     /// the directive or the `openEHR-federation-endpoint` header.
     #[error(
         "the query names no patient and no endpoints, so no node set is defined; name the endpoints the query is for (N4, §8)"

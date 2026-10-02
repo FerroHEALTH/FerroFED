@@ -5,15 +5,14 @@
 #
 # Vendors the IHE PIXm 3.1.0 FHIR package artefacts the ITI-83 client of
 # crates/ihe-iti (feature `pixm`, #42) and the harness PIX Manager of
-# tools/ferrofed-testkit (#47) read into docs/specs/ihe-pixm/
-# (.claude/rules/vendored-inputs.md): the `$ihe-pix` OperationDefinition, the
-# Query Parameters In and Out profiles, the Consumer, Manager and Source
-# capability statements, the ImplementationGuide, the IG's own ITI-83 request,
-# response and error examples, which the client's tests decode, and the ITI-104
-# Patient Identity Feed's Patient profiles and example Patients, which the
-# harness Manager's feed is held to. The package
-# manifest is read for its name, version and licence and left out of the tree
-# (the dependency-manifest rule of scripts/vendor/lib/corpus.sh).
+# tools/ferrofed-testkit (#47) read into docs/specs/ihe-pixm/: the `$ihe-pix`
+# OperationDefinition, the Query Parameters In and Out profiles, the Consumer,
+# Manager and Source capability statements, the ImplementationGuide, the IG's
+# own ITI-83 request, response and error examples, which the client's tests
+# decode, and the ITI-104 Patient Identity Feed's Patient profiles and example
+# Patients, which the harness Manager's feed is held to. The package manifest is
+# read for its name, version and licence and left out of the tree (the
+# dependency-manifest rule of scripts/vendor/lib/corpus.sh).
 #
 # The "IHE PIXm FHIR package" row of docs/VERSIONS.md pins the package by
 # version and by the sha256 of the registry tarball, so a republished package

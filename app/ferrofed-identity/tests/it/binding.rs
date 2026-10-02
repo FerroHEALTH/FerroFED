@@ -3,7 +3,8 @@
 
 //! The resolution bindings of §12.5.1 step 2: per session, keyed by
 //! `ehr_id`, expiring with the session's time-to-live, and holding no patient
-//! identifier (decision A20).
+//! identifier (no specification governs what a binding holds: our own
+//! design).
 #![allow(
     clippy::expect_used,
     reason = "fixture builders fail the test they serve on an impossible value"
@@ -55,7 +56,7 @@ fn another_session_sees_nothing() {
     assert_eq!(
         Bound::None,
         bindings.lookup(&SessionKey::new("session-2"), now, &ehr(EHR_A)),
-        "bindings belong to the client session (decision A20)"
+        "bindings belong to the client session (§12.5.1 step 2)"
     );
 }
 

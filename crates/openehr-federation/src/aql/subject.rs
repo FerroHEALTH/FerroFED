@@ -37,8 +37,9 @@ pub enum NamespaceOrigin {
     /// the `issuer` or `type` of an `ENTRY`-level `DV_IDENTIFIER` (§5.4.3).
     Query,
     /// The query named none, and the deployment declares a default issuing
-    /// namespace (decision A5; FerroFED's own reading of §5.2, which requires
-    /// the namespace and does not say where an unqualified one comes from).
+    /// namespace (§5.2 requires the namespace and does not say where an
+    /// unqualified one comes from; no specification governs this: our own
+    /// design).
     Default,
 }
 

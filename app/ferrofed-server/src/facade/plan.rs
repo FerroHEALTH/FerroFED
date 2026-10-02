@@ -40,7 +40,8 @@ pub struct Targets {
     /// same for every node.
     pub sources: Vec<ColumnSource>,
     /// Whether the resolver could not answer for some member, which fails the
-    /// query under all-or-nothing (decision A17).
+    /// query under all-or-nothing (§11.3 covers only an answered lookup; no
+    /// specification governs this: our own design).
     pub resolution_failed: bool,
     /// The `{node, ehr_id}` set the resolution produced, for the session's
     /// resolution bindings (§12.5.1 step 2).
@@ -98,8 +99,9 @@ struct Membership {
 /// `deadline`. A member that knows the patient is asked its node query; one
 /// that does not is `not-resolved`, which fails nothing (N6); one the
 /// resolver could not answer for is `not-resolved` with the resolver's error,
-/// which fails the query (decision A17). Without a resolver, every such member
-/// is the last case: the gateway fails closed.
+/// which fails the query (§11.3 covers only an answered lookup; no
+/// specification governs this: our own design). Without a resolver, every
+/// such member is the last case: the gateway fails closed.
 ///
 /// # Errors
 /// Returns a [`TargetsError`] when the subject is not a patient reference or
@@ -174,7 +176,7 @@ pub async fn patient(
 /// The plan of a query that names no patient, dispatched as written.
 ///
 /// It goes to every member `selection` admits: every member in a deployment
-/// with no localizer (N4, last sentence; decision A8), or the endpoints a
+/// with no localizer (N4, last sentence), or the endpoints a
 /// directed request names (§8).
 ///
 /// # Errors

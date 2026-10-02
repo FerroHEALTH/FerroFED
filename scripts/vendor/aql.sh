@@ -3,12 +3,11 @@
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/vendor/aql.sh
 #
-# Vendors the openEHR AQL specification source into docs/specs/aql/
-# (.claude/rules/vendored-inputs.md): the AsciiDoc sources of the AQL and AQL
-# examples documents, their figures, the ANTLR grammar the AQL document
-# publishes (AqlLexer.g4, AqlParser.g4), the component index and manifest, and
-# the repository's licence file, from the release the "openEHR AQL
-# specification source" row of docs/VERSIONS.md pins.
+# Vendors the openEHR AQL specification source into docs/specs/aql/: the
+# AsciiDoc sources of the AQL and AQL examples documents, their figures, the
+# ANTLR grammar the AQL document publishes (AqlLexer.g4, AqlParser.g4), the
+# component index and manifest, and the repository's licence file, from the
+# release the "openEHR AQL specification source" row of docs/VERSIONS.md pins.
 #
 # The rendered `.html` pages of the same release are left out: they are built
 # from the sources here and carry no content of their own.

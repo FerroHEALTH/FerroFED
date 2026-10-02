@@ -32,7 +32,8 @@
 //! at its `LIMIT` (§11.6.1, N39) and, for a page at `OFFSET k`, sliced from
 //! row `k` (§11.6.2) by `openehr_federation::merge`. A node
 //! that returned `n` rows out of the federation order is reported `node-error`,
-//! so under all-or-nothing the query fails `424` (decision A43).
+//! so under all-or-nothing the query fails `424` (§11.4; no specification
+//! governs the order check: our own design).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -43,7 +44,6 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
 use openehr_federation::envelope;
 use openehr_federation::error::WireError;
-use openehr_federation::id::EndpointId as WireEndpointId;
 use openehr_federation::merge::{Disagreement, NodeAnswer, merge};
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
 use openehr_federation::object::Uri;
@@ -640,7 +640,8 @@ fn answer(
 }
 
 /// The `node-error` of an `active` endpoint whose answer the merge refused, a
-/// response the gateway could not use (§11.1, decision A43).
+/// response the gateway could not use (§11.1; no specification governs the
+/// order check: our own design).
 ///
 /// Only an `active` endpoint has rows to refuse, so any other outcome is kept.
 fn disagreeing(outcome: Outcome, reason: Disagreement) -> Outcome {
@@ -671,7 +672,7 @@ fn endpoint_record(
         .ok_or_else(|| FanOutError::UnknownEndpoint {
             endpoint: endpoint.clone(),
         })?;
-    let id = WireEndpointId::new(endpoint.as_str()).map_err(record_error)?;
+    let id = openehr_federation::id::EndpointId::new(endpoint.as_str()).map_err(record_error)?;
     let url = Uri::new(registered.url().as_str()).map_err(record_error)?;
     let mut record = EndpointOutcome::new(id, outcome)
         .with_node_id(registered.node().as_str())

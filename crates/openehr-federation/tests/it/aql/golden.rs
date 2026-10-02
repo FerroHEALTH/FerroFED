@@ -45,13 +45,13 @@ fn verdict(case: &str) -> Verdict {
         "13-entry-subject-carrier-rewrite.case" | "14-entry-subject-issuer-consumed.case" => {
             Verdict::Rewrites
         }
-        // §11.6.1, N9, N39, decisions A28 and A43: the node keeps LIMIT n, orders
+        // §11.6.1, N9, N39: the node keeps LIMIT n, orders
         // on the uid after the client's key, and carries the key as a hidden
         // column the Tier re-applies ORDER BY on.
         "03-subject-projection-reinjection.case" => Verdict::RewritesTo(
             "SELECT c/uid/value, c/context/start_time/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '550e8400-e29b-41d4-a716-446655440000' ORDER BY c/context/start_time/value DESC, c/uid/value ASC LIMIT 10",
         ),
-        // §7.1, decision A7: a second value in a patient carrier, which may name
+        // §7.1: a second value in a patient carrier, which may name
         // a relative that no path tells apart; the reading that cannot leak.
         "17-entry-subject-second-value-rejected.case" => {
             Verdict::Refuses(|r| matches!(r, Refusal::SecondSubject { .. }))
@@ -80,7 +80,7 @@ fn verdict(case: &str) -> Verdict {
                 }
             )
         }),
-        // Decision A7: two different values cannot reduce to one scope.
+        // §7.1: two different values cannot reduce to one scope.
         "10-multiple-subjects-rejected.case" => {
             Verdict::Refuses(|r| matches!(r, Refusal::SecondSubject { .. }))
         }

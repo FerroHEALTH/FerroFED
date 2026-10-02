@@ -3,8 +3,8 @@
 
 //! FerroFED's own strict corpus for the rewrite (where no specification
 //! governs a case, it is our own design): the reduction constraint of §7.1, the
-//! re-injection of N5 and the `columns[]` of N17. Decision A3 is asserted
-//! beside the rewrite it governs.
+//! re-injection of N5 and the `columns[]` of N17. The wrapping of a query with
+//! no `EHR` containment (N7) is asserted beside the rewrite it governs.
 
 use std::num::NonZeroUsize;
 
@@ -31,7 +31,7 @@ fn unreducible(refusal: &Refusal) -> Unreducible {
     }
 }
 
-// ── decision A5: the issuing namespace ──────────────────────────────────────
+// ── §5.2: the issuing namespace ─────────────────────────────────────────────
 
 #[test]
 fn an_unqualified_identifier_is_refused_when_no_default_namespace_is_configured() {
@@ -84,7 +84,7 @@ fn the_namespace_predicate_is_consumed_as_resolution_input() {
     );
 }
 
-// ── decision A6: the identifier is a string ─────────────────────────────────
+// ── AQL §Parameters: the identifier is a string ─────────────────────────────
 
 #[test]
 fn an_integer_written_on_the_identifier_path_is_refused_never_coerced() {
@@ -145,7 +145,7 @@ fn a_non_string_namespace_is_refused() {
     );
 }
 
-// ── decision A7: one patient ────────────────────────────────────────────────
+// ── §7.1: one patient ───────────────────────────────────────────────────────
 
 #[test]
 fn the_same_identifier_twice_is_consumed_once() {
@@ -184,7 +184,7 @@ fn two_different_namespaces_are_refused() {
     );
 }
 
-// ── decision A8: a query with no patient ────────────────────────────────────
+// ── N4: a query with no patient ─────────────────────────────────────────────
 
 const NO_PATIENT: &str =
     "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE c/name/value = 'Visit'";
@@ -242,7 +242,7 @@ fn a_namespace_predicate_without_an_identifier_is_ordinary_query_material() {
     assert_same_aql(query.node_query().aql(), &aql);
 }
 
-// ── decision A10: the ITS-REST paging members ───────────────────────────────
+// ── §11.6: the ITS-REST paging members ──────────────────────────────────────
 
 fn with_paging(aql: &str, offset: Option<i64>, fetch: Option<i64>) -> Result<Analysis, Refusal> {
     analyse(
@@ -291,7 +291,7 @@ fn a_fetch_member_that_disagrees_with_limit_is_refused() {
             member: "fetch",
             clause: "LIMIT"
         },
-        "decision A10"
+        "the member and the clause page alike (§11.6)"
     );
 }
 
@@ -318,7 +318,7 @@ fn an_offset_member_that_disagrees_with_offset_is_refused() {
             member: "offset",
             clause: "OFFSET"
         },
-        "decision A10"
+        "the member and the clause page alike (§11.6)"
     );
 }
 

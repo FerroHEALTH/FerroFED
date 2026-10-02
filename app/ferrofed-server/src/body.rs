@@ -3,9 +3,8 @@
 
 //! The JSON documents this server answers with on its own routes.
 //!
-//! Each is a typed struct serialized by `serde`, never a free-form JSON value
-//! (`.claude/rules/rust-style.md`, typed carriers). The ITS-REST surface
-//! answers with the ITS-REST shapes when it lands; these cover the gateway's
+//! Each is a typed struct serialized by `serde`, never a free-form JSON value.
+//! The ITS-REST surface answers with the ITS-REST shapes when it lands; these cover the gateway's
 //! own routes and its refusals. No specification governs them: our own
 //! design.
 

@@ -4,7 +4,8 @@
 //! The PIXm resolver against a stub PIX Manager: one ITI-83 call per Manager
 //! with a `targetSystem` per member, the member's `ehr_id` read from its
 //! domain, the unknown patient as `Unknown` (N6), every failure as
-//! `Unavailable` so the query fails closed (decision A17), and the patient
+//! `Unavailable` so the query fails closed (§11.3 covers only an answered
+//! lookup; no specification governs this: our own design), and the patient
 //! identifier carried to the Manager only (§5.2, §5.4.1, N3, N33, Annex A.1).
 #![allow(
     clippy::expect_used,
@@ -229,7 +230,7 @@ async fn an_outage_is_unavailable_and_says_nothing_of_the_patient() {
     let resolutions = resolve(&resolver(&server)).await;
     assert!(
         is_unavailable(&resolutions, "node-a") && is_unavailable(&resolutions, "node-b"),
-        "a failed exchange fails closed, never reads as unknown (decision A17): {resolutions:?}"
+        "a failed exchange fails closed, never reads as unknown (§11.3, N6): {resolutions:?}"
     );
     assert!(
         !rendered(&resolutions).contains(SENTINEL),

@@ -2,8 +2,9 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/checks/conformance-matrix.sh: the conformance-matrix guard, tier 1
-# (docs/architecture.md section 12, #41). Offline and static: the CI test run
-# already fails on a failing marked test, so this only checks the record.
+# (the §17 conformance points and the §16.3 tracks, #41). Offline and static:
+# the CI test run already fails on a failing marked test, so this only checks
+# the record.
 #
 # It fails when:
 #   1. a derived column of conformance/matrix.tsv, conformance/tracks.tsv or
@@ -72,7 +73,7 @@ for pair in "matrix.derived:cps.tsv:$MATRIX" "tracks.derived:tracks.tsv:$TRACKS"
 done
 
 # 2. The direct points per requirement against the vendored traceability.tsv.
-# Its tracks column is never filled (section 12), so only the points compare.
+# Its tracks column is never filled, so only the points compare.
 if [ -f "$SPEC_TOOLS/traceability.tsv" ]; then
   # One "requirement <TAB> point" pair per line, so the two sides compare as
   # sorted sets whatever order each file lists its points in.

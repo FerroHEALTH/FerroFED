@@ -13,7 +13,8 @@ authors.workspace = true
 # The application is never published, whatever the workspace switch says.
 publish = false
 
-# A thin main.rs over a testable lib.rs (.claude/rules/testing.md).
+# A thin main.rs over a testable lib.rs (the Rust book, ch. 12.3, "Separation
+# of Concerns for Binary Projects").
 [lib]
 path = "src/lib.rs"
 

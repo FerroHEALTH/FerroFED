@@ -5,7 +5,7 @@
 //! its pages carry, and schema validation of what the crate emits.
 #![expect(
     clippy::disallowed_types,
-    reason = "seam 4 of rust-style.md: schema validation and semantic JSON comparison read JSON as values, in tests only"
+    reason = "the test seam: schema validation and semantic JSON comparison read JSON as values, in tests only"
 )]
 
 use std::error::Error;
