@@ -5,8 +5,8 @@
 
 use std::path::Path;
 
-use http::HeaderValue;
-use secrecy::{ExposeSecret as _, SecretString};
+use openehr_its::rest::client::{BasicPart, InvalidCredentials};
+use secrecy::SecretString;
 
 use crate::config::Credentials;
 use crate::config::error::{BasicFault, Error};
@@ -38,20 +38,17 @@ pub(super) fn resolve_credentials(
                 "bearer_token",
                 credentials.bearer_token_file.is_some(),
             );
-            bearer_header(&key, &token)?;
+            openehr_its::rest::client::Credentials::bearer(token.clone())
+                .header_value()
+                .map_err(|source| Error::Authorization { key, source })?;
             Ok(Scheme::Bearer(token))
         }
         (None, Some(user), Some(password)) => {
-            let user_key = format!("{section}.user");
-            basic_value(&user_key, user)?;
-            if user.contains(':') {
-                return Err(Error::Basic {
-                    key: user_key,
-                    fault: BasicFault::Colon,
-                });
-            }
-            let key = source_key(section, "password", credentials.password_file.is_some());
-            basic_value(&key, password.expose_secret())?;
+            openehr_its::rest::client::Credentials::basic(user, password.clone())
+                .header_value()
+                .map_err(|source| {
+                    basic_refusal(section, credentials.password_file.is_some(), source)
+                })?;
             Ok(Scheme::Basic {
                 user: user.to_owned(),
                 password,
@@ -79,33 +76,34 @@ fn source_key(section: &str, name: &str, from_file: bool) -> String {
     }
 }
 
-/// Refuses a bearer token whose `Authorization` value is not a legal header
-/// value: `Bearer` and the token, as the node client composes it, checked by
-/// the same `http` parse the client applies (RFC 6750 §2.1).
-fn bearer_header(key: &str, token: &SecretString) -> Result<(), Error> {
-    // TODO(#237): validate with openehr-its's own Authorization composition (FerroHEALTH/FerroEHR#3535).
-    let composed = SecretString::from(format!("Bearer {}", token.expose_secret()));
-    HeaderValue::from_str(composed.expose_secret())
-        .map(drop)
-        .map_err(|source| Error::Authorization {
-            key: key.to_owned(),
+/// The refusal of a basic user and password the node client cannot send,
+/// naming the key the offending part was read from (RFC 7617 §2).
+fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials) -> Error {
+    let user = || format!("{section}.user");
+    let password = || source_key(section, "password", password_file);
+    match source {
+        InvalidCredentials::ColonInUserId => Error::Basic {
+            key: user(),
+            fault: BasicFault::Colon,
             source,
-        })
-}
-
-/// Refuses a basic user-id or password that holds a control character.
-///
-/// The base64 of any user and password is a legal header value, so the bound
-/// here is the scheme's own: RFC 7617 §2 forbids `CTL` (RFC 5234 Appendix
-/// B.1) in both.
-fn basic_value(key: &str, value: &str) -> Result<(), Error> {
-    if value.chars().any(|c| c.is_ascii_control()) {
-        return Err(Error::Basic {
-            key: key.to_owned(),
+        },
+        InvalidCredentials::ControlCharacter(BasicPart::UserId) => Error::Basic {
+            key: user(),
             fault: BasicFault::ControlCharacter,
-        });
+            source,
+        },
+        InvalidCredentials::ControlCharacter(BasicPart::Password) => Error::Basic {
+            key: password(),
+            fault: BasicFault::ControlCharacter,
+            source,
+        },
+        InvalidCredentials::NotB64Token | InvalidCredentials::NotAHeaderValue(_) => {
+            Error::Authorization {
+                key: password(),
+                source,
+            }
+        }
     }
-    Ok(())
 }
 
 /// Returns the secret `key` names, inline or from its `_file` sibling.

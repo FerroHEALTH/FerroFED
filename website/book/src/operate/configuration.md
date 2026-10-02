@@ -26,9 +26,10 @@ line naming the key at fault. It refuses an unknown key, a value of the wrong
 type, a zero timeout or body limit, a log filter that does not parse, a secret
 set both inline and through its `_file` sibling, a credentials section
 that names no scheme or two, and a credential the `Authorization` header
-cannot carry: a bearer token holding a control character such as a newline,
-or a basic user or password holding one (RFC 7617 §2), or a basic user
-holding a colon. That refusal names the key the value came from, and never
+cannot carry: a bearer token that is not a `b64token` (RFC 6750 §2.1: letters,
+digits, `-`, `.`, `_`, `~`, `+` and `/`, then any `=` padding), or a basic
+user or password holding a control character such as a newline (RFC 7617
+§2), or a basic user holding a colon. That refusal names the key the value came from, and never
 the value. The gateway never falls back to a default for a value you set.
 
 ## The file

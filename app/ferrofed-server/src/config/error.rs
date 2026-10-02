@@ -6,6 +6,8 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use openehr_its::rest::client::InvalidCredentials;
+
 use crate::config::{ENV_PREFIX, MAX_ENDPOINT_ID_LENGTH};
 
 /// A configuration the server refuses to start on.
@@ -134,18 +136,19 @@ pub enum Error {
         /// The credentials section.
         section: String,
     },
-    /// A bearer token cannot be sent: `Bearer` and the token are not a legal
-    /// `Authorization` header value.
+    /// A credential does not form the `Authorization` value the node client
+    /// sends, as a bearer token that is not the `b64token` of RFC 6750 §2.1
+    /// does not.
     ///
-    /// The source is the `http` crate's refusal, which quotes nothing.
-    #[error("{key} cannot be sent: it is not a legal Authorization header value")]
+    /// The source is the node client's refusal, which quotes nothing.
+    #[error("{key} cannot be sent in the Authorization header")]
     Authorization {
-        /// The key the token was read from: the inline key or its `_file`
-        /// sibling.
+        /// The key the credential was read from: the inline key or its
+        /// `_file` sibling.
         key: String,
-        /// What `http` reported.
+        /// What the node client reported.
         #[source]
-        source: http::header::InvalidHeaderValue,
+        source: InvalidCredentials,
     },
     /// A basic user or password holds a character RFC 7617 §2 forbids.
     #[error("{key} cannot be sent: it holds {fault}, which RFC 7617 §2 forbids")]
@@ -155,6 +158,9 @@ pub enum Error {
         key: String,
         /// The kind of character found, never the character's position.
         fault: BasicFault,
+        /// What the node client reported, which quotes nothing.
+        #[source]
+        source: InvalidCredentials,
     },
     /// The `[dev]` table does not have the shape of `[[dev.crossref]]` rows.
     ///

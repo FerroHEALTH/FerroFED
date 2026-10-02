@@ -17,11 +17,13 @@ publish = false
 
 [dependencies]
 async-trait.workspace = true
-base64.workspace = true
 ferrofed-registry.workspace = true
 http.workspace = true
 # The PIXm resolver (#43) over the ITI-83 client of the binding crate.
 ihe-iti = { workspace = true, features = ["pixm"] }
+# The Authorization value of the PIX Manager credentials, composed as the
+# node client composes it (RFC 7617 §2, RFC 6750 §2.1).
+openehr-its = { workspace = true, features = ["rest-client"] }
 reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true

@@ -232,6 +232,16 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Changed
 
+- The `openehr-*` family moves from 0.0.77 to 0.0.78 (#237), and an onward
+  credential is checked at configuration load by the node client's own
+  `Authorization` composition (FerroEHR #3535), for each endpoint and each
+  PIX Manager alike. A bearer token must now be the `b64token` of RFC 6750
+  §2.1 (letters, digits, `-`, `.`, `_`, `~`, `+` and `/`, then any `=`
+  padding), so a token holding a space, a quote or any other character
+  outside that set is refused by `config check` and at boot with exit code
+  78, naming its key and never its value; it used to pass and then fail at
+  the node. The basic rules of RFC 7617 §2 are unchanged.
+  `openehr-federation` is 0.0.26.
 - The `openehr-*` family moves from 0.0.76 to 0.0.77 (#195). `openehr-query`
   now classifies every AQL function call (FerroEHR #3529): a string, numeric,
   or date and time function of AQL 1.1.0 is a built-in, and any other name is

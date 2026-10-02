@@ -21,14 +21,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD;
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use http::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use http::header::{AUTHORIZATION, HeaderMap};
 use ihe_iti::pixm::PixmClient;
 use ihe_iti::pixm::error::{InvalidInput, PixmError};
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
+use openehr_its::rest::client::{Credentials, InvalidCredentials};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use tokio::task::JoinSet;
@@ -103,9 +102,10 @@ pub enum PixmConfigError {
     /// A namespace mapping does not name an absolute URI.
     #[error("the PIX domain mapped from namespace {0} is not an absolute URI")]
     Namespace(IdentifierNamespace),
-    /// A credential cannot travel in an HTTP header.
-    #[error("the credentials of a PIX Manager cannot travel in an HTTP header")]
-    Credentials,
+    /// A credential does not form an `Authorization` value (RFC 7617 §2,
+    /// RFC 6750 §2.1).
+    #[error("the credentials of a PIX Manager cannot be sent in the Authorization header")]
+    Credentials(#[source] InvalidCredentials),
     /// The HTTP client could not be built.
     #[error("the HTTP client for a PIX Manager could not be built")]
     Client(#[source] reqwest::Error),
@@ -242,22 +242,20 @@ impl fmt::Debug for PixmResolver {
 
 /// The HTTP client one Manager is asked through: no redirects, because the
 /// request URL holds the source identifier, and the credentials sent as a
-/// sensitive default header.
+/// sensitive default header, composed as the node client composes them.
 fn http_client(auth: &PixAuth) -> Result<reqwest::Client, PixmConfigError> {
     let mut headers = HeaderMap::new();
-    let value = match auth {
+    let credentials = match auth {
         PixAuth::None => None,
-        // TODO(#237): use openehr-its's own Authorization composition (FerroHEALTH/FerroEHR#3535).
-        PixAuth::Bearer(token) => Some(format!("Bearer {}", token.expose_secret())),
-        PixAuth::Basic { user, password } => Some(format!(
-            "Basic {}",
-            STANDARD.encode(format!("{user}:{}", password.expose_secret()))
-        )),
+        PixAuth::Bearer(token) => Some(Credentials::bearer(token.clone())),
+        PixAuth::Basic { user, password } => {
+            Some(Credentials::basic(user.as_str(), password.clone()))
+        }
     };
-    if let Some(value) = value {
-        let mut header =
-            HeaderValue::from_str(&value).map_err(|_invalid| PixmConfigError::Credentials)?;
-        header.set_sensitive(true);
+    if let Some(credentials) = credentials {
+        let header = credentials
+            .header_value()
+            .map_err(PixmConfigError::Credentials)?;
         headers.insert(AUTHORIZATION, header);
     }
     reqwest::Client::builder()
