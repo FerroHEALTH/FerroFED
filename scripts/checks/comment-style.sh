@@ -31,8 +31,9 @@
 #                          agent instructions file, or the bare file name of a
 #                          rule or memory file (read from that tree, so a new
 #                          rule is covered). Any other markdown file under
-#                          docs, outside the vendored docs/specs tree, fails
-#                          in the citation form only: the path opening a
+#                          docs, and any README.md of the tree, outside the
+#                          vendored docs/specs and vendor trees, fails in the
+#                          citation form only: the path opening a
 #                          parenthetical, or followed by `section` or `§`.
 #  10. decision markers    the same text names a decision-register entry:
 #                          the word `decision` (or `decisions`) followed by an
@@ -121,25 +122,27 @@ CITE_AWK='
     dec_re = "(^|[^A-Za-z0-9_])[Dd]ecisions?[[:space:]]+A[0-9]"
     bare_re = "(^|[^A-Za-z0-9_.#-])A[0-9][0-9]?([^A-Za-z0-9_-]|$)"
     doc_re = "docs/[A-Za-z0-9_./-]*\\.md"
-    doc_specs_re = "^docs/specs/"
+    readme_re = "[A-Za-z0-9_./-]*README\\.md"
+    vendored_re = "(^docs/specs/|^vendor/|/vendor/|^//)"
     doc_left_re = "[A-Za-z0-9_./-]$"
     doc_open_re = "\\(`?$"
     doc_sec_re = "^`?[[:space:]]*(section|§)"
   }
-  # Whether text cites a markdown file under docs/ outside the vendored
-  # docs/specs/ tree: the path opens a parenthetical or is followed by
-  # `section` or `§`. A path that is the tail of a longer one (a URL) is not.
-  # RSTART and RLENGTH are restored, because a caller loops on its own match.
-  function docs_cited(text,   t, pre, m, start, len, found) {
+  # Whether text cites a file whose path matches re, outside the vendored
+  # docs/specs/ and vendor/ trees: the path opens a parenthetical or is
+  # followed by `section` or `§`. A path that is the tail of a longer one (a
+  # URL) is not. RSTART and RLENGTH are restored, because a caller loops on
+  # its own match.
+  function path_cited(text, re,   t, pre, m, start, len, found) {
     start = RSTART
     len = RLENGTH
     found = 0
     t = text
-    while (!found && match(t, doc_re)) {
+    while (!found && match(t, re)) {
       pre = substr(t, 1, RSTART - 1)
       m = substr(t, RSTART, RLENGTH)
       t = substr(t, RSTART + RLENGTH)
-      if (m !~ doc_specs_re && pre !~ doc_left_re && (pre ~ doc_open_re || t ~ doc_sec_re))
+      if (m !~ vendored_re && pre !~ doc_left_re && (pre ~ doc_open_re || t ~ doc_sec_re))
         found = 1
     }
     RSTART = start
@@ -147,7 +150,8 @@ CITE_AWK='
     return found
   }
   function cite_check(text, what, strict, fenced,   t) {
-    if ((strict ? text ~ arch_any_re : text ~ arch_cite_re) || docs_cited(text) \
+    if ((strict ? text ~ arch_any_re : text ~ arch_cite_re) \
+        || path_cited(text, doc_re) || path_cited(text, readme_re) \
         || text ~ claude_re || (names_re != "" && text ~ names_re))
       printf ":%d: %s cites an internal markdown file: cite the specification section it rests on, or write \"no specification governs this: our own design\"\n", NR, what
     t = text
@@ -592,6 +596,23 @@ self_test() {
   expect u.rs accepted "" '// The test reads docs/VERSIONS.md (docs/specs/its-rest/README.md).'
   expect l.sh accepted "" '# Reads each pin from docs/VERSIONS.md, the matrix.'
   expect m.sh accepted "" '# Config (https://github.com/rhysd/actionlint/blob/main/docs/config.md).'
+
+  # A README.md of the tree, at the root or in a member, cited by a
+  # parenthetical or a section; naming one as a file a script reads or writes,
+  # a vendored README and a URL tail pass.
+  expect v.rs refused "$internal" '// The seeds (fuzz/README.md).'
+  expect w.rs refused "$internal" '/// The features are crates/ihe-iti/README.md section 2.'
+  # shellcheck disable=SC2016 # a literal shell fixture: the backticks are comment text
+  expect n.sh refused "$internal" '# The favicons (`assets/brand/README.md`).'
+  expect o.sh refused "$internal" '# The quickstart (README.md).'
+  expect u.yml refused "$internal" '# on every query the rewrite accepts (fuzz/README.md).'
+  expect Cargo.toml refused "$internal" '# The binary (app/ferrofed-server/README.md § Running).'
+  expect x.rs accepted "" '// The generator writes the target table of fuzz/README.md.'
+  expect p.sh accepted "" '# Reads README.md and crates/ihe-iti/README.md, then the badges.'
+  expect q.sh accepted "" '# The mermaid assets (website/book/vendor/mermaid/README.md).'
+  expect r.sh accepted "" '# Upstream (https://github.com/rust-fuzz/cargo-fuzz/blob/main/README.md).'
+  expect v.yml accepted "" '# Upstream https://example.org/README.md section 2 of the guide.'
+  expect y.rs accepted "" '// The vendored overview (docs/specs/federation-ref/README.md).'
 
   # A YAML description scalar: inline, folded, and plain over several lines.
   expect m.yml refused "$internal" 'inputs:' '  x:' '    description: The pin (docs/VERSIONS.md).'

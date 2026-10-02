@@ -33,7 +33,10 @@
 #       stderr, so a scheduled lane reports its finding either way.
 #   scripts/gh/fields.sh --self-test
 #       Drives `new` against a stub gh, with the organisation answering and
-#       with the empty answer a workflow token gets.
+#       with the empty answer a workflow token gets, and proves that every
+#       usage error touches nothing.
+#   No argument, an unknown command or a wrong operand count, --help
+#   included, prints this usage and exits 2 before any gh call.
 
 # shellcheck disable=SC2016 # every $o/$n/$i/$t/$f in a query is a GraphQL variable, and $w/$f/$fl in a jq filter is a jq binding
 set -euo pipefail
@@ -43,22 +46,30 @@ die() {
   exit 1
 }
 
+usage() {
+  sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
 # The self-test stands before the preflight below, because it answers every
 # gh call from a stub on PATH and the real `gh repo view` refuses a runner
 # that holds no token for this repository.
 self_test() {
   command -v jq >/dev/null 2>&1 || die "jq is not installed"
-  local work stub created types fields create
+  local work stub created calls types fields create
   work="$(mktemp -d)"
   stub="$work/bin"
   created="$work/created"
+  calls="$work/calls"
   mkdir -p "$stub"
   cat > "$stub/gh" <<'STUB'
 #!/usr/bin/env bash
-# The gh a self-test run of scripts/gh/fields.sh speaks to. It reads the
-# answer to give from the environment, applies a --jq filter when one is
-# passed, and writes what `issue create` received where the test reads it.
+# The gh a self-test run of scripts/gh/fields.sh speaks to. It writes every
+# call where the test reads it, reads the answer to give from the environment,
+# applies a --jq filter when one is passed, and writes what `issue create`
+# received where the test reads it.
 set -euo pipefail
+printf '%s\n' "$*" >> "$GH_STUB_CALLS"
 filter=""
 previous=""
 for argument in "$@"; do
@@ -121,12 +132,21 @@ STUB
   run() {
     local name=$1 code=$2 rc=0
     shift 2
-    PATH="$stub:$PATH" GH_STUB_CREATED="$created" \
+    : > "$calls"
+    PATH="$stub:$PATH" GH_STUB_CREATED="$created" GH_STUB_CALLS="$calls" \
       GH_STUB_TYPES="$types" GH_STUB_FIELDS="$fields" GH_STUB_CREATE="$create" \
       bash "$0" "$@" > "$work/out" 2> "$work/err" || rc=$?
     if [[ "$rc" -ne "$code" ]]; then
       echo "gh-fields: self-test failed: $name exited $rc, wanted $code." >&2
-      cat "$work/out" "$work/err" >&2
+      cat "$work/out" "$work/err" "$calls" >&2
+      exit 1
+    fi
+  }
+  # untouched NAME: the case made no gh call at all.
+  untouched() {
+    if [ -s "$calls" ]; then
+      echo "gh-fields: self-test failed: $1 called gh." >&2
+      cat "$work/out" "$work/err" "$calls" >&2
       exit 1
     fi
   }
@@ -168,14 +188,49 @@ STUB
   run "a refused gh issue create" 1 new bug high low --title t --body b
   said "a refused gh issue create" "$work/err" "gh issue create failed"
 
+  # A usage error prints the usage and exits 2 before a single gh call.
+  local argument
+  for argument in --help -h help --bogus bogus; do
+    run "the argument $argument" 2 "$argument"
+    said "the argument $argument" "$work/err" "Usage:"
+    untouched "the argument $argument"
+  done
+  run "no argument" 2
+  said "no argument" "$work/err" "Usage:"
+  untouched "no argument"
+  run "type with one operand" 2 type 3
+  untouched "type with one operand"
+  run "priority with three operands" 2 priority 3 high low
+  untouched "priority with three operands"
+  run "effort with no operand" 2 effort
+  untouched "effort with no operand"
+  run "show with two operands" 2 show 3 4
+  untouched "show with two operands"
+  run "new with no gh issue create arguments" 2 new bug high low
+  untouched "new with no gh issue create arguments"
+  run "a second argument after --self-test" 2 --self-test --bogus
+  untouched "a second argument after --self-test"
+
   rm -r "$work"
   echo "gh-fields: self-test OK."
 }
 
-if [[ "${1:-}" == "--self-test" ]]; then
-  self_test
-  exit 0
-fi
+case "$#:${1:-}" in
+  1:--self-test)
+    self_test
+    exit 0
+    ;;
+  *) ;;
+esac
+
+# Every usage error is answered here, before the preflight below makes its
+# first gh call.
+case "${1:-}" in
+  type | priority | effort) [[ $# -eq 3 ]] || usage ;;
+  show) [[ $# -eq 2 ]] || usage ;;
+  new) [[ $# -ge 5 ]] || usage ;;
+  *) usage ;;
+esac
 
 command -v gh >/dev/null 2>&1 || die "the GitHub CLI (gh) is not installed"
 command -v jq >/dev/null 2>&1 || die "jq is not installed"
@@ -184,11 +239,6 @@ REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" ||
   die "could not resolve the current repository (run inside a gh-authenticated clone)"
 OWNER="${REPO%%/*}"
 NAME="${REPO##*/}"
-
-usage() {
-  sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
-  exit 2
-}
 
 # Title-case the lower-case word the command line takes: bug -> Bug.
 titled() {
@@ -290,12 +340,10 @@ new() {
   echo "$url"
 }
 
-cmd="${1:-}"
-case "$cmd" in
-  type)     [[ $# -eq 3 ]] || usage; set_type "$2" "$3" ;;
-  priority) [[ $# -eq 3 ]] || usage; set_field "$2" Priority "$3" ;;
-  effort)   [[ $# -eq 3 ]] || usage; set_field "$2" Effort "$3" ;;
-  show)     [[ $# -eq 2 ]] || usage; show "$2" ;;
-  new)      [[ $# -ge 5 ]] || usage; shift; new "$@" ;;
-  *)        usage ;;
+case "$1" in
+  type)     set_type "$2" "$3" ;;
+  priority) set_field "$2" Priority "$3" ;;
+  effort)   set_field "$2" Effort "$3" ;;
+  show)     show "$2" ;;
+  new)      shift; new "$@" ;;
 esac
