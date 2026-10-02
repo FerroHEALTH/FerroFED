@@ -61,7 +61,9 @@ pub enum IdentityChange {
 /// One session's bindings and when they expire.
 struct Session {
     expires: Instant,
-    by_ehr: BTreeMap<String, BTreeSet<NodeId>>,
+    // NOTE: BASE master05 §"Composite Identifiers and Case": `EhrId` orders by the
+    // openehr-base case-folded key, so an `ehr_id` in another case finds its binding.
+    by_ehr: BTreeMap<EhrId, BTreeSet<NodeId>>,
 }
 
 /// The resolution bindings of every live session.
@@ -103,7 +105,7 @@ impl ResolutionBindings {
         held.expires = expires;
         for (node, ehr_id) in pairs {
             held.by_ehr
-                .entry(ehr_key(ehr_id))
+                .entry(ehr_id.clone())
                 .or_default()
                 .insert(node.clone());
         }
@@ -116,7 +118,7 @@ impl ResolutionBindings {
         let Some(held) = sessions.get(session).filter(|held| held.expires > now) else {
             return Bound::None;
         };
-        match held.by_ehr.get(&ehr_key(ehr_id)) {
+        match held.by_ehr.get(ehr_id) {
             None => Bound::None,
             Some(nodes) => {
                 let mut nodes = nodes.iter().cloned();
@@ -156,7 +158,7 @@ impl ResolutionBindings {
                 dropped
             }
             IdentityChange::Ehrs(ehr_ids) => {
-                let keys: BTreeSet<String> = ehr_ids.iter().map(ehr_key).collect();
+                let keys: BTreeSet<&EhrId> = ehr_ids.iter().collect();
                 let mut dropped = 0_usize;
                 for held in sessions.values_mut() {
                     let before = held.by_ehr.len();
@@ -187,10 +189,4 @@ impl fmt::Debug for ResolutionBindings {
             .field("sessions", &self.lock().len())
             .finish()
     }
-}
-
-/// The key an `ehr_id` is held under: its case-folded form, because two
-/// values that differ only in ASCII case are the same identifier.
-fn ehr_key(ehr_id: &EhrId) -> String {
-    ehr_id.as_str().to_ascii_lowercase()
 }

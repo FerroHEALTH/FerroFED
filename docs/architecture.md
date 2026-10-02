@@ -1089,7 +1089,12 @@ own scenario has both copies hold `8849…::cdr-a::1`, because an import retains
 the original uid; the second matches the RM's copy semantics. So the duplicate
 is the whole version id seen at two endpoints, and the keeper is the copy from
 the endpoint whose `system_id` equals the uid's `creating_system_id`, else the
-lowest `endpoint_id`. Two versions of one object both survive, which §10.2
+lowest `endpoint_id`. Both comparisons follow BASE
+`master05-identification_package.adoc` §"Composite Identifiers and Case"
+through `openehr-base`'s `composite_ids_equal` and `composite_id_key`: two
+version ids, or a `system_id` and a `creating_system_id`, that differ only in
+case are one identifier, and a kept row keeps its text as the node sent it
+(#225). Two versions of one object both survive, which §10.2
 requires for version-history queries. The unit is the copy: every row of the
 keeper's copy stays, and every row of a dropped copy is suppressed and
 counted. Rows with no uid (a `null` cell) pass through, and every

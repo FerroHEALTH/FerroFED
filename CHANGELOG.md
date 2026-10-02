@@ -318,6 +318,16 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- Version-identity dedup compares identifiers without regard to case (#225;
+  §10.2, CP-9; BASE `master05-identification_package.adoc` §"Composite
+  Identifiers and Case"). Two copies whose version ids differ only in case
+  are one version, and the node whose `system_id` differs from the version's
+  `creating_system_id` only in case keeps the originating copy. Before, both
+  were compared byte for byte. A kept row still comes back as its node sent
+  it. The comparison is `openehr-base`'s `composite_ids_equal` and
+  `composite_id_key`, which the registry identifiers already use, and the
+  session-scoped resolution bindings now key on `EhrId` in place of their
+  own case fold. `openehr-federation` is 0.0.21.
 - CP-29 is `planned` again in the conformance matrix and the gateway badge
   (#221): only its visibility half, the dedup record of §10.2 and §10.3, is
   built, and its write-routing and `409` half is #66. The dedup tests carry

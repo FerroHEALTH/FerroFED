@@ -336,7 +336,9 @@ type Placed = (String, Decoded, ResultSetRow);
 /// deduplicated first (§10.2): of the endpoints holding one
 /// `OBJECT_VERSION_ID`, only one keeps its rows, the one whose
 /// [`NodeAnswer::with_system_id`] is the version's `creating_system_id`, else
-/// the lowest endpoint id. A tie on the keys is then broken by the tie-break
+/// the lowest endpoint id, with identifiers that differ only in case taken as
+/// one (BASE `master05-identification_package.adoc` §"Composite Identifiers
+/// and Case"). A tie on the keys is then broken by the tie-break
 /// columns before the endpoint id. A node with a version uid that is not an
 /// `OBJECT_VERSION_ID` is refused with [`Disagreement::VersionId`].
 #[must_use]
