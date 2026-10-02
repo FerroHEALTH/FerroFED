@@ -4,9 +4,9 @@
 //! The configuration contract: the file, the environment over it, the `_file`
 //! secrets, and every refusal.
 
-use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::settings::Scheme;
+use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrofed_server::telemetry::Format;
 use openehr_federation::aql::OffsetStrategy;
 use secrecy::ExposeSecret;
@@ -515,6 +515,75 @@ fn a_parse_fault_names_the_file_it_is_in() -> Result<(), Box<dyn StdError>> {
     assert!(
         message.contains(&file.path().display().to_string()),
         "the refusal names the file: {message}"
+    );
+    Ok(())
+}
+
+/// A federating configuration with `request_ms` and `overall_ms`; the
+/// registry document is only named, since resolving never reads it.
+fn federating(request_ms: u64, overall_ms: u64) -> String {
+    format!(
+        "[server]\nrequest_timeout_ms = {request_ms}\n\n[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n[federation]\nper_node_timeout_ms = 1000\noverall_timeout_ms = {overall_ms}\n"
+    )
+}
+
+/// §11.5: a client can rely on an answer "within its declared overall budget,
+/// plus combining time", so a request timeout at or under the budget plus
+/// the combining margin is refused, naming both keys.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_request_timeout_not_past_the_budget_and_the_margin_refuses_to_boot()
+-> Result<(), Box<dyn StdError>> {
+    for request_ms in [20_000, 25_000, 25_000 + COMBINING_MARGIN_MS] {
+        let error = refusal(&federating(request_ms, 25_000))?;
+        assert!(
+            matches!(
+                error,
+                Error::Budget {
+                    overall_ms: 25_000,
+                    margin_ms: COMBINING_MARGIN_MS,
+                    request_ms: refused,
+                } if refused == request_ms
+            ),
+            "{error:?}"
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains("server.request_timeout_ms")
+                && message.contains("federation.overall_timeout_ms"),
+            "the refusal names both keys: {message}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_request_timeout_past_the_budget_and_the_margin_is_accepted() -> Result<(), Box<dyn StdError>> {
+    let settings = Config::from_sources(
+        Some(&federating(25_000 + COMBINING_MARGIN_MS + 1, 25_000)),
+        &BTreeMap::new(),
+    )?
+    .resolve()?;
+    assert_eq!(
+        settings.federation.budget.overall(),
+        Duration::from_secs(25)
+    );
+    let defaults = Config::from_sources(
+        Some("[registry]\ndocument = \"/nonexistent/registry.toml\"\n"),
+        &BTreeMap::new(),
+    )?
+    .resolve()?;
+    assert!(
+        defaults.server.request_timeout
+            > defaults.federation.budget.overall() + Duration::from_millis(COMBINING_MARGIN_MS),
+        "the defaults keep the relation"
     );
     Ok(())
 }
