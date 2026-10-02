@@ -14,9 +14,9 @@ an entry under **[Unreleased]** in the same PR. Cutting a release renames
 [Unreleased] to the version and date, and adds a fresh link reference.
 
 The architecture is `docs/architecture.md`, the output of the research
-program on the v0.0.1 milestone. Releases on the 0.0.x line
-start with the repository, its gates and its documentation; the gateway
-binary follows from v0.0.2.
+program on the v0.0.1 milestone. Releases on the 0.0.x line started with the
+repository, its gates, its documentation and the server shape in 0.0.1; the
+federated query and identity resolution shipped in 0.0.3.
 
 ## [Unreleased]
 
@@ -113,7 +113,16 @@ binary follows from v0.0.2.
   (FerroEHR #3526), so every error body is the generated ITS-REST `Error`
   with `code` and `request_id` in that map, and no FerroFED-side error type
   remains. The generated request and result-set types carry the same map.
-
+- The site, the README and the book describe the released gateway (#176).
+  The landing page opens with the FerroFED mark and the current release, and
+  shows the quickstart, the release binaries and the image
+  `ghcr.io/ferrohealth/ferrofed`, with what each specification property has
+  in v0.0.3 and what is planned. The README's install section names the
+  release assets and their verification, and its quickstart runs the
+  published image with `docker compose up --wait`. The book's introduction,
+  claims, deployment, container and contribution pages, the governance and
+  contribution guides, and the working rules no longer describe a design
+  phase or a project with nothing to install.
 - The quickstart and the end-to-end harness run two FerroEHR nodes (#155,
   decision A44). EHRbase left both, because it refuses a `.` in
   `PARTY_REF.namespace`, which openEHR BASE admits (#118). In `compose.yaml`

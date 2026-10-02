@@ -200,9 +200,9 @@ as localization bundled with a consent check (§2.4, N27, N27a).
 
 ## Make no claim beyond the specification
 
-While the project is in its design phase, the strongest temptation is to state
-a technical fact about the federation model, a binding, or openEHR from
-memory. Do not. Every claim that appears in this repository is one the product
-statement in `CLAUDE.md` already makes, or one the research has established
-with a citation. Anything else is a question for the research program, not a
-sentence in a file.
+The strongest temptation is to state a technical fact about the federation
+model, a binding, or openEHR from memory. Do not. Every claim that appears in
+this repository is one the product statement in `CLAUDE.md` already makes, one
+`docs/architecture.md` or the research behind it has established with a
+citation, or one the code and its tests demonstrate. Anything else is a
+question for an issue, not a sentence in a file.

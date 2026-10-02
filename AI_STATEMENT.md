@@ -39,9 +39,10 @@ gateway rewrites, routes and merges openEHR queries by rules a human wrote
 against a published specification. AI is used to *build* the software, in the same sense
 compilers and linters are used to build it.
 
-The project is in its **design phase**, so most of the work disclosed here is
-research and the repository's own working configuration rather than product
-code. That does not change any rule below.
+The work disclosed here covers the research program that wrote the
+architecture of record, the repository's own working configuration, and the
+product code built against that architecture since. The same rules below apply
+to all three.
 
 ## 2. Which frameworks apply here, and which do not
 
@@ -134,9 +135,9 @@ the full enforcement register.
   against its conformance point
   ([`.claude/rules/testing.md`](.claude/rules/testing.md)). This is the control
   that catches a plausible-but-wrong implementation regardless of who wrote it.
-  The acceptance instrument is an output of the research program, and this
-  bullet gains its name when that closes; claiming one now would be a claim
-  with nothing behind it.
+  The acceptance instrument is the conformance matrix: one row per
+  conformance point, a marker on each test that scores one, and a CI check
+  that holds the two together.
 - **Failure attribution.** A failing test is adjudicated against the
   specification first, and the implementation is never presumed correct because
   it was written carefully. The reference implementation is prior art, so a bug
@@ -219,9 +220,9 @@ This section exists because a disclosure without one is marketing.
 - **The gates prove what they test, not correctness.** The tests demonstrate
   the behaviours their cases cover; coverage is meant to ratchet upward and is
   itself reviewed, and it is still a boundary.
-- **There is no acceptance instrument yet.** The project is in its design
-  phase; the conformance harness is an output of the research program, so
-  today's controls are the rule set, the workflow gates, and review.
+- **The conformance matrix is not yet complete.** A point counts as covered
+  only when a test carries its marker; the points still marked planned are
+  held by the rule set, the workflow gates, and review until their tests land.
 - **End-to-end verification needs other servers.** A gateway is only fully
   exercised against several real openEHR CDRs and a real identity service, so those
   runs are heavier than a unit test and will be a periodic gate rather than a

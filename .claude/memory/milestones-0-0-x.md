@@ -19,6 +19,8 @@ owner wants small, frequent cuts.
 v0.0.1 to v0.0.9, as FerroBRIDGE has it. v0.0.1 is the repository setup and
 the research program; v0.0.2 the Cargo workspace and the first federated
 query; the later milestones are thinner and gain detail as each one nears.
+v0.0.1 was released on 2026-10-01; v0.0.2 and v0.0.3 shipped together as
+release 0.0.3 on 2026-10-02, with no final v0.0.2 tag.
 A plan laid out deliberately places each issue in the milestone its build
 order implies; work found while implementing goes in the current milestone
 (`.claude/rules/issue-workflow.md`). Milestones have no due dates until the

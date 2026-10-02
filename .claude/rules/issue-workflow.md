@@ -40,12 +40,14 @@ loop, the label taxonomy, and the cadence. Relationships between issues live in
    (`scripts/gh/project.sh status <n> in-progress`). First read the governing
    spec text (`/spec-lookup`; the federation specification, openEHR ITS-REST,
    AQL and the RM, and the IHE and Dutch bindings are the oracles, see
-   `spec-adherence.md`), and name the N and CP numbers the issue answers. While the project is in
-   its design phase, most issues are research: the deliverable is cited
-   evidence and a recommendation rather than code (`CLAUDE.md` §Status). Once
-   the architecture is fixed, a generated layer changes through its generator
-   (never a hand-edit of `// @generated`) and the engine is idiomatic Rust of
-   our own design, built as compiling, tested increments.
+   `spec-adherence.md`), and name the N and CP numbers the issue answers. The
+   architecture of record is decided (`docs/architecture.md`, 2026-10-01), so
+   most issues are implementation: the engine is idiomatic Rust of our own
+   design, built as compiling, tested increments, and a generated layer
+   changes through its generator (never a hand-edit of `// @generated`). A
+   research issue, which a foundational question still gets, delivers cited
+   evidence and a recommendation on its thread, and the owner's decision
+   lands in `docs/architecture.md`.
 4. **Record progress on the issue.** Tick verified acceptance-criteria
    checkboxes (`gh issue edit <n>`), and post substantive status or decisions
    as comments (`gh issue comment <n>`); the issue thread is the durable
@@ -121,7 +123,9 @@ Labels carry what the platform has no field for. Bootstrap them once with
   specification and its two JSON schemas), `spec:openEHR` (ITS-REST on either
   face, AQL, and the RM identifiers), `spec:IHE` (the IHE binding: PIXm, PDQm,
   XCPD, PMIR, mCSD), `spec:NL-GF` (the Dutch Generic Functions binding of
-  Annex B), `research` (a design-phase investigation). Add more as the
+  Annex B), `research` (an investigation whose deliverable is cited evidence
+  and a recommendation, as the program that wrote the architecture of record
+  was). Add more as the
   project grows; keep the set small and meaningful.
 - **Workflow:** `conformance` (the conformance-point matrix, the Connectathon
   tracks and the harness), `security`, `dependencies` (Dependabot),

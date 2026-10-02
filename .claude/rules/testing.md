@@ -48,9 +48,11 @@ applies to every crate, generated and hand-written alike.
 
 ## Oracles
 
-The acceptance instrument is not yet chosen; the research program decides it,
-and this section records what the oracles are regardless of the harness that
-runs them.
+The acceptance instrument is the conformance matrix of `docs/architecture.md`
+§12: one row per conformance point in `conformance/matrix.tsv`, a
+`// conformance:` marker above each test that scores a point, and
+`scripts/checks/conformance-matrix.sh` holding the two together in CI. This
+section records what the oracles are, whatever harness runs them.
 
 - **The federation specification** is the authority for the gateway's
   behaviour, and its consolidated conformance points (§17) and test approach

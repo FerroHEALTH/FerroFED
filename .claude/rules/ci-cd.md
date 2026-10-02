@@ -11,33 +11,34 @@ paths:
 # CI/CD and supply-chain discipline
 
 No specification governs this: our own design, grounded in the OWASP GitHub
-Actions Security Cheat Sheet, SLSA v1.0, OpenSSF Scorecard, and Sigstore. The
-repository is in its design phase, so this file carries only what applies now,
-plus the shape the build and release lanes take when there is something to
-build.
+Actions Security Cheat Sheet, SLSA v1.0, OpenSSF Scorecard, and Sigstore.
+This file carries the workflows that run, the build and release lanes, and
+the rules every workflow keeps.
 
-## What runs today
+## What runs
 
-Ten workflows:
+Twelve workflows:
 
-- `.github/workflows/ci.yml`: the two-tier gate. Tier 1 runs now (zizmor,
-  actionlint, shellcheck, hadolint, the comment-style guard, the versions
-  guard, the favicon guard, the conformance-matrix guard, the tracker-helper
-  self-tests); tier 2 is the Rust
-  set, gated behind a `detect` job that looks for a root `Cargo.toml`. The `conclusion` job is the single required status check
-  on `main`. The design is `docs/ci-cd.md`.
+- `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
+  (zizmor, actionlint, shellcheck, hadolint, the comment-style guard, the
+  versions guard, the favicon guard, the conformance-matrix guard, the
+  tracker-helper self-tests); tier 2 is the Rust set, gated behind a `detect`
+  job that looks for the root `Cargo.toml`, so it runs on every change. The
+  `conclusion` job is the single required status check on `main`. The design
+  is `docs/ci-cd.md`.
+- `.github/workflows/contribution-licence.yml`: `contribution-licence-guard`,
+  the pull-request licence checkbox, the second required check.
 - `.github/workflows/scorecard.yml`: OpenSSF Scorecard, an independent score of
   the repository's security posture, published to the OpenSSF API and to code
   scanning.
 - `.github/workflows/codeql.yml`: CodeQL over the `actions` language, because
-  the workflows in this directory are code that holds tokens. The Rust
-  analysis is behind a detection job that looks for a root `Cargo.toml`, so it
-  is skipped cleanly until the workspace lands and then activates by itself.
+  the workflows in this directory are code that holds tokens, and over Rust,
+  behind a detection job that looks for the root `Cargo.toml`.
 - `.github/workflows/sonar.yml`: SonarQube Cloud, the multi-language sweep
   over shell, YAML, and JSON. Advisory, gating no merge
   (`ai-code-review.md`). The instrumented coverage run and the
   `sonar.projectVersion` derivation sit behind a `hashFiles('Cargo.toml')`
-  step gate and start reporting when the workspace lands.
+  step gate, which the root `Cargo.toml` opens.
 - `.github/workflows/docs.yml`: the documentation site. It builds the mdBook on
   every pull request and deploys from `main` through GitHub Pages, using the
   pinned toolchain in `.github/actions/docs-toolchain`.
@@ -72,6 +73,9 @@ Ten workflows:
   `cargo metadata`, and is a successful no-op while the switch is off. It
   shares `scripts/release/publish-crates.sh` with the `publish-dry-run` job of
   `ci.yml`; the rules are `crates-publishing.md`.
+- `.github/workflows/fuzz.yml`: the `cargo fuzz` targets over the untrusted
+  inputs, time-boxed and advisory, weekly, on dispatch, and on a pull request
+  that touches the code a target reads (`docs/ci-cd.md` §The fuzz lane).
 
 `.github/release.yml` is a different file from the workflow: it configures
 GitHub's auto-generated release notes, which the lane never uses, because a
@@ -109,7 +113,7 @@ per-line `# shellcheck disable=SCnnnn` directive with its reason on the same
 line. A blanket exclusion is refused, and no `.shellcheckrc` exists, because a
 file that can turn a code off tree-wide eventually does.
 
-## Rust CI lanes (gated in `ci.yml`, activate with the Cargo workspace)
+## Rust CI lanes (tier 2 of `ci.yml`)
 
 The lanes, with the local commands mirroring the CI
 flags verbatim: `cargo fmt --all --check`; `cargo clippy --workspace

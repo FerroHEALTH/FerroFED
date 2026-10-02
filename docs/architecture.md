@@ -1377,12 +1377,14 @@ specification wins.
 ## 14. The milestone map
 
 Each milestone is a release; the issues are the plan, and the decisions above
-change what some of them carry.
+change what some of them carry. v0.0.1 was released on 2026-10-01, and
+v0.0.2 and v0.0.3 shipped together as release 0.0.3 on 2026-10-02; v0.0.4 is
+the milestone in progress.
 
 - **v0.0.1, setup and the architecture of record.** The setup issues (#5 to
-  #15) and this research program (#16 to #27). It closes when the owner has
-  decided the register, the re-pin to 1.0 has landed (#17), and the release
-  lane has been rehearsed (#14).
+  #15) and this research program (#16 to #27). It closed with the register
+  decided and the release lane rehearsed (#14); the re-pin to 1.0 (#17) moved
+  to v0.0.4.
 - **v0.0.2, the workspace and the first federated query** (#28 to #41).
   - #28 the workspace, blocked on the `openehr-*` 0.0.74 release, with the
     `serde_json::Value` ban (A2);

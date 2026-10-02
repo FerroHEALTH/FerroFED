@@ -9,8 +9,8 @@ paths: ["**/*.rs"]
 
 Applies to every hand-written `.rs` file in the repository. **The gateway engine
 is modern idiomatic Rust of our own design**, built on the published
-`openehr-*` crates and whatever specification layer the research program
-settles (`codegen.md`). The federation specification, openEHR ITS-REST, AQL,
+`openehr-*` crates and the hand-written federation wire types of
+`openehr-federation` (`codegen.md`). The federation specification, openEHR ITS-REST, AQL,
 the RM, and the IHE and Dutch bindings are the authority
 (`spec-adherence.md`); the reference implementation `openehr-federation-ref`
 is prior art only.
@@ -152,8 +152,7 @@ response (§11).
 | 0201 / 0344 | an error carries its cause (`Error::source`) | `#[source]`/`#[from]` on every wrapping variant; review-enforced |
 
 The lints named above are configured in the root `Cargo.toml
-[workspace.lints]` when the workspace is stood up; until then they are the
-standing bar for hand-written code.
+[workspace.lints]`, which every member inherits.
 
 ## Type and error conventions
 

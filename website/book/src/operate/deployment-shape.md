@@ -3,20 +3,20 @@
 
 # What FerroFED runs beside
 
-The binary runs its process shape today ([Configuration](configuration.md)),
-and the federation surface follows. This page describes what a running
-gateway will need around it, taken from the roles the specification names, so
-an operator can see the shape before the federation surface exists.
+The binary serves the federated query over a registry of member CDRs
+([Configuration](configuration.md)). This page describes what a running
+gateway needs around it, taken from the roles the specification names, and
+says which binding FerroFED ships for each role and which is planned.
 
 ## The services a gateway consumes
 
-| Role | What it does | Proposed binding |
+| Role | What it does | Binding |
 |---|---|---|
-| Member CDRs | answer standard AQL scoped to one `ehr_id`, and the follow-up reads and writes routed to them | openEHR ITS-REST 1.1.0 |
-| Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm |
-| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every known node | IHE XCPD |
-| Addressing | resolves each community to its cross-reference service and CDR base URLs | IHE mCSD |
-| Authentication and authorization | authenticates the client, and the gateway to each node | the security profiles of §13 |
+| Member CDRs | answer standard AQL scoped to one `ehr_id`, and the follow-up reads and writes routed to them | openEHR ITS-REST 1.1.0, in v0.0.3 for the query; follow-up routing planned ([#61](https://github.com/FerroHEALTH/FerroFED/issues/61), [#64](https://github.com/FerroHEALTH/FerroFED/issues/64)) |
+| Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm ITI-83, in v0.0.3 |
+| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every known node | ask-all in v0.0.3; IHE XCPD planned ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) |
+| Addressing | resolves each community to its cross-reference service and CDR base URLs | the registry document in v0.0.3; IHE mCSD planned ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)) |
+| Authentication and authorization | authenticates the client, and the gateway to each node | per-endpoint credentials to each node in v0.0.3; the §13 profiles planned ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80), [#81](https://github.com/FerroHEALTH/FerroFED/issues/81)) |
 
 The specification references the internals of each service out (§2.2): how
 an MPI matches identities, how a locator decides where data is, and the
@@ -29,8 +29,12 @@ one.
 The gateway holds no clinical data. It keeps the registry of organisations,
 endpoints and the `system_id` mapping that routing depends on (§3.1, N21), and,
 if the deployment offers it, the federated stored-query definitions it is
-authoritative for (§12.7). Where that state lives and how it is stored is open
-on the research program.
+authoritative for (§12.7). The specification is silent on storage, so this is
+FerroFED's own design: the registry is a reviewed TOML document, loaded at boot
+into an immutable snapshot, and the resolution bindings of each client session
+are held in memory with a bounded lifetime. The stored-query registry, the one
+durable store, is planned
+([#77](https://github.com/FerroHEALTH/FerroFED/issues/77)).
 
 ## Failure behaviour you should know before you run it
 

@@ -35,9 +35,12 @@ The first tier runs on every change, because it needs no Rust:
 | favicon-sync | the book's favicons match the brand mark |
 | conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point |
 
-The second tier is the Rust lane: formatting, clippy, tests, rustdoc,
-`cargo deny`, the MSRV build and dependency review. It turns itself on when a
-root `Cargo.toml` exists; until then each job reports skipped.
+The second tier is the Rust lane: formatting, clippy, the tests, the
+end-to-end suite against two containerised nodes, rustdoc, `cargo deny`, the
+MSRV build, every feature of each published crate on its own, the packaging
+dry run, the crate-version guard and dependency review. A `detect` job gates
+it on the root `Cargo.toml`, which exists, so the tier runs on every change;
+the crate-version guard and dependency review run on pull requests only.
 
 ## Running them locally
 

@@ -41,10 +41,10 @@ records, and it does not decide the work is done on your behalf.
    `.claude/rules/spec-adherence.md`) and that the decisions carry citations.
    If that never happened, stop and say so; it is an unmet exit criterion in
    spirit.
-5. **Research-issue check:** for a design-phase research issue, confirm the
-   deliverable is on the issue thread as cited evidence and a recommendation,
-   not as an undocumented conclusion. If the issue was supposed to produce or
-   update `docs/architecture.md`, confirm it did.
+5. **Research-issue check:** for a research issue, confirm the deliverable is
+   on the issue thread as cited evidence and a recommendation, not as an
+   undocumented conclusion. If the issue was supposed to produce or update
+   `docs/architecture.md`, confirm it did.
 6. **Gate check:** confirm the gates that apply actually ran and passed: the
    shell and workflow set (`shellcheck --severity=style`, `actionlint`,
    `zizmor --min-severity=low .github/`), every guard under `scripts/checks/`

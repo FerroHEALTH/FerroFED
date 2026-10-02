@@ -12,13 +12,14 @@ is shaped the way it is.
 
 ## The problem
 
-The repository is in its design phase. There is no Cargo workspace, so a
-conventional CI workflow would have nothing to run, and a workflow added later
-would arrive after the files it is meant to guard. The workflows hold tokens,
+The repository started with no Cargo workspace, so a conventional CI workflow
+would have had nothing to run, and a workflow added with the workspace would
+have arrived after the files it is meant to guard. The workflows hold tokens,
 the shell scripts under `scripts/` are the tracker helpers, the vendor scripts
-and the committed guards, and `docs/specs/` holds four vendored corpora whose
-pins must agree with `docs/VERSIONS.md`. All of that is live from day one and
-needs a gate.
+and the committed guards, and `docs/specs/` holds the vendored corpora whose
+pins must agree with `docs/VERSIONS.md`. All of that was live from the first
+commit and needed a gate, so the CI was built in two tiers, and the Rust tier
+has run on every change since the workspace landed.
 
 ## The workflows
 
@@ -44,14 +45,14 @@ under the pins below.
 
 `ci.yml` splits on whether a check needs Rust.
 
-**Tier 1 runs today, on a tree with no code.**
+**Tier 1 needs no Rust toolchain.**
 
 | Job | Runs |
 |---|---|
 | `zizmor` | `zizmor --min-severity=low .github/`, with `GH_TOKEN` so the online audits work |
 | `actionlint` | the official image, pinned by tag and digest |
 | `shellcheck` | `--severity=style` over every tracked `*.sh` and every tracked extensionless file with a shell shebang, outside `docs/specs/**` and `**/vendor/**` |
-| `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees; none exists yet, so the job has nothing to lint |
+| `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` |
 | `comment-style` | `scripts/checks/comment-style.sh --all` |
 | `file-length` | `scripts/checks/file-length.sh`, the 1000-line cap on hand-written Rust with its ratchet allow-list |
 | `versions` | `scripts/checks/versions.sh`, the pin matrix against every file that repeats a pin, the vendored provenance stamps and the SPDX licence claims |
@@ -68,18 +69,20 @@ digest. zizmor and actionlint read only the root `.github/`, so the nested
 workflows under `docs/specs/` are never audited as if they ran here.
 
 `versions` skips each comparison whose subject file is absent and reports the
-skip with its reason, so it gains teeth as files appear: the architecture pin
-rows once `docs/architecture.md` exists, the workspace rows once the root
-`Cargo.toml` exists, and the release tool pins, which `release-build.yml` and `release-image.yml` carry.
+skip with its reason. Every subject file it reads exists today, the
+architecture pin rows in `docs/architecture.md`, the workspace rows in the root
+`Cargo.toml` and the release tool pins in `release-build.yml` and
+`release-image.yml`, so every comparison runs.
 
-**Tier 2 is written now and gated off.** A `detect` job checks out and looks
+**Tier 2 is gated on the workspace.** A `detect` job checks out and looks
 for a root `Cargo.toml`, publishing a boolean output. Every Rust job carries
 `needs: detect` and `if: needs.detect.outputs.cargo == 'true'`: rustfmt,
 clippy at `-D warnings`, nextest plus doctests, rustdoc, `cargo deny check`,
 MSRV through `cargo hack check --rust-version`, and `dependency-review` on
 pull requests. Each lane mirrors the local command in `.claude/rules/ci-cd.md`.
-The workspace pull request therefore changes nothing in CI; the lanes activate
-by themselves.
+The lanes were written before the workspace, so the workspace pull request
+changed nothing in CI and the lanes activated by themselves; they have run on
+every change since.
 
 `e2e (containers)` is the Rust lane that needs Docker. A container-backed test
 checks the `FERROFED_E2E` gate first and returns early without it, so the
@@ -164,8 +167,8 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | Pin | Watched by |
 |---|---|
 | `uses:` references in `.github/workflows/**` and `.github/actions/**`, pinned by full commit SHA | Dependabot, `github-actions` ecosystem |
-| the workspace dependency table in the root `Cargo.toml`, with the `openehr-*` family as one lockstep group | Dependabot, `cargo` ecosystem (inert until the workspace lands) |
-| a digest-pinned `FROM` in a first-party Dockerfile | Dependabot, `docker` ecosystem at `/` and `/docker` (inert until the container lands) |
+| the workspace dependency table in the root `Cargo.toml`, with the `openehr-*` family as one lockstep group | Dependabot, `cargo` ecosystem |
+| a digest-pinned `FROM` in a first-party Dockerfile | Dependabot, `docker` ecosystem at `/` and `/docker` |
 | the zizmor, actionlint, shellcheck and hadolint versions in `ci.yml` | `pin-freshness.yml`, weekly |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows; a bump is a deliberate change to both |

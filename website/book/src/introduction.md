@@ -5,7 +5,7 @@
 
 FerroFED is a pure-Rust openEHR federation gateway, one of the
 [FerroHEALTH](https://ferrohealth.eu/) family. A record held by another
-organisation is out of reach today. FerroFED is meant to close that gap as a
+organisation is out of reach today. FerroFED closes that gap as a
 transparent ITS-REST intermediary: a client sends it an ordinary AQL query and
 never learns it was federated. The gateway resolves the patient first, outside
 the query, so no directly identifying identifier travels to a node. It then
@@ -19,23 +19,31 @@ specification, a release candidate at v0.9.0 with a 1.0 release expected.
 
 ## Where the project is
 
-FerroFED is in its design phase. The repository, its gates and its vendored
-specifications exist; the design does not yet. It is the output of a research
-program on the tracker
-([#16](https://github.com/FerroHEALTH/FerroFED/issues/16)), which writes the
-architecture of record before any code is scaffolded. There is no Cargo
-workspace, no release and no binary to run. Nothing in this book describes
-software you can download today, and every page says which parts are settled
-and which are still open.
+The architecture of record was decided on 2026-10-01
+([`docs/architecture.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/architecture.md)),
+and the gateway is built against it one milestone at a time. The
+[latest release](https://github.com/FerroHEALTH/FerroFED/releases/latest)
+ships the `ferrofed` binary for Linux and the image
+`ghcr.io/ferrohealth/ferrofed`, both signed, and
+[the container page](operate/container.md) runs it beside two member CDRs.
+
+v0.0.3 serves the federated query, `POST /v1/query/aql`, over the members of a
+registry. It resolves the patient outside AQL through an IHE PIXm PIX Manager,
+sends each member standard AQL scoped to its own `ehr_id`, refuses a query that
+would carry the patient identifier to a node, and fails the query when a node
+that was asked does not answer. Every other ITS-REST path answers `501` until
+its milestone. Each page says what is built, and names the issue of what is
+planned.
 
 ## How this book is organised
 
 The four parts follow what you came to do.
 
 - **Evaluate** answers whether FerroFED fits your problem: what the Federation
-  Tier is, what FerroFED will and will not claim, the version pins, and the
-  licence.
-- **Operate** covers what a running gateway will need around it.
+  Tier is, what FerroFED claims and what is planned, the conformance matrix,
+  the version pins, and the licence.
+- **Operate** covers installing and configuring the gateway, and what it needs
+  around it.
 - **Integrate** covers what a client sends and what it gets back.
 - **Contribute** covers how the work is tracked and which checks a change has
   to pass.
