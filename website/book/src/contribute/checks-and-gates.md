@@ -33,7 +33,7 @@ The first tier runs on every change, because it needs no Rust:
 | file-length | no hand-written Rust file over 1000 lines |
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |
 | favicon-sync | the book's favicons match the brand mark |
-| conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point |
+| conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
 
 The second tier is the Rust lane: formatting, clippy, the tests, the
 end-to-end suite against two containerised nodes, rustdoc, `cargo deny`, the

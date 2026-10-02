@@ -5,8 +5,15 @@
 //! by AST equality and each adjudicated against the specification text (the
 //! research on #18). A case is evidence, never the oracle: where FerroFED's
 //! outcome differs from the case, the row below says which section decides.
+//!
+//! The cases FerroFED passes are recorded in
+//! `conformance/aql-golden/pass-list.txt`, which the README badge is rendered
+//! from. The corpus test fails when a listed case stops passing or an unlisted
+//! case passes, and rewrites the list when `FERROFED_CONFORMANCE_UPDATE` is
+//! `1`.
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
+use std::collections::BTreeSet;
 use std::num::NonZeroU32;
 
 use openehr_federation::aggregate::{AggregateFunction, Recombination, Recombine};
@@ -29,7 +36,33 @@ enum Verdict {
     RewritesTo(&'static str),
     /// The query is refused with the refusal this predicate accepts.
     Refuses(fn(&Refusal) -> bool),
+    /// The case waits on its tracker issue: the query is refused with the
+    /// refusal this predicate accepts, and the case does not pass until it is
+    /// adjudicated.
+    Awaits(fn(&Refusal) -> bool),
 }
+
+/// The pass list the golden badge is rendered from.
+const PASS_LIST: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../conformance/aql-golden/pass-list.txt"
+);
+
+/// The variable that makes the corpus test rewrite the pass list when it is
+/// `1`.
+const UPDATE: &str = "FERROFED_CONFORMANCE_UPDATE";
+
+/// The comment block the corpus test writes above the cases.
+const PASS_LIST_HEADER: &str = "\
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The AQL golden cases of the reference implementation that FerroFED passes,
+# one file name per line, then the corpus total. The golden test writes it
+# when FERROFED_CONFORMANCE_UPDATE is 1, and fails when a listed case stops
+# passing or an unlisted case passes. scripts/conformance/matrix.sh
+# --badges-write renders the badge from it.
+";
 
 /// The adjudicated outcome of every case, by file name.
 fn verdict(case: &str) -> Verdict {
@@ -92,7 +125,7 @@ fn verdict(case: &str) -> Verdict {
         }
         // TODO(#70): the FROM ENDPOINT directive, parsed with the openehr-query federation feature.
         "02-directive-strip-projections.case" => {
-            Verdict::Refuses(|r| matches!(r, Refusal::NotAql { .. }))
+            Verdict::Awaits(|r| matches!(r, Refusal::NotAql { .. }))
         }
         other => panic!("golden case {other} has no adjudication; add one before it runs"),
     }
@@ -152,6 +185,8 @@ fn every_golden_case_has_its_adjudicated_outcome() {
         .collect();
     paths.sort();
     assert_eq!(paths.len(), 17, "the vendored corpus holds 17 cases");
+    let total = paths.len();
+    let mut passed = BTreeSet::new();
     for path in paths {
         let name = path
             .file_name()
@@ -180,22 +215,77 @@ fn every_golden_case_has_its_adjudicated_outcome() {
                 };
                 let expected = match verdict {
                     Verdict::RewritesTo(adjudicated) => adjudicated,
-                    Verdict::Rewrites | Verdict::Refuses(_) => case.expected.as_str(),
+                    Verdict::Rewrites | Verdict::Refuses(_) | Verdict::Awaits(_) => {
+                        case.expected.as_str()
+                    }
                 };
                 assert_same_aql(&node, expected);
+                passed.insert(name);
             }
-            Verdict::Refuses(accepts) => {
+            verdict @ (Verdict::Refuses(accepts) | Verdict::Awaits(accepts)) => {
                 let refusal = match outcome {
                     Err(refusal) => refusal,
-                    Ok(analysis) => panic!("{name} should be refused, got {analysis:?}"),
+                    Ok(analysis) => panic!(
+                        "{name} should be refused, got {analysis:?}; an awaited case is adjudicated before it passes"
+                    ),
                 };
                 assert!(
                     accepts(&refusal),
                     "{name} drew the wrong refusal: {refusal:?}"
                 );
+                if matches!(verdict, Verdict::Refuses(_)) {
+                    passed.insert(name);
+                }
             }
         }
     }
+    hold_the_pass_list(&passed, total);
+}
+
+/// Compares the passing cases with the pass list: a listed case that no longer
+/// passes fails in every mode, and under `FERROFED_CONFORMANCE_UPDATE=1` the
+/// list is rewritten, else an unlisted pass or a moved total fails.
+fn hold_the_pass_list(passed: &BTreeSet<String>, total: usize) {
+    let text = std::fs::read_to_string(PASS_LIST).expect("the pass list is readable");
+    let mut listed = BTreeSet::new();
+    let mut listed_total = None;
+    for line in text.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(count) = line.strip_prefix("total ") {
+            listed_total = Some(count.parse::<usize>().expect("the total is a count"));
+        } else {
+            assert!(listed.insert(line.to_owned()), "{line} is listed twice");
+        }
+    }
+    let regressed: Vec<_> = listed.difference(passed).collect();
+    assert!(
+        regressed.is_empty(),
+        "golden cases the pass list records no longer pass: {regressed:?}"
+    );
+    if std::env::var(UPDATE).is_ok_and(|value| value == "1") {
+        let mut text = PASS_LIST_HEADER.to_owned();
+        for case in passed {
+            text.push_str(case);
+            text.push('\n');
+        }
+        text.push_str("total ");
+        text.push_str(&total.to_string());
+        text.push('\n');
+        std::fs::write(PASS_LIST, text).expect("the pass list is writable");
+        return;
+    }
+    let unrecorded: Vec<_> = passed.difference(&listed).collect();
+    assert!(
+        unrecorded.is_empty(),
+        "golden cases pass that the pass list does not record; rerun with {UPDATE}=1: {unrecorded:?}"
+    );
+    assert_eq!(
+        listed_total,
+        Some(total),
+        "the pass list records another corpus total; rerun with {UPDATE}=1"
+    );
 }
 
 // conformance: CP-32

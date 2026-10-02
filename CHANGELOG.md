@@ -120,6 +120,20 @@ federated query and identity resolution shipped in 0.0.3.
   crate constant (`FEDERATION_SPEC`, `ITS_REST`, `AQL`) that carries the
   version the row pins. `versions.sh --self-test` proves both checks, and CI
   runs it before the full pass.
+- Generated conformance badges on the README (#175), as shields.io endpoint
+  files under `conformance/badges/`: the Gateway points of §17 covered out of
+  the Gateway total, the Node and Operator point counts, each labelled with the
+  pinned specification version and linked to the book's conformance page, and
+  the AQL golden cases passed out of the vendored corpus, linked to its pass
+  list. `scripts/conformance/matrix.sh --badges-write` writes the files and the
+  README block between `conformance:begin` and `conformance:end`, and the
+  `conformance-matrix` guard fails when either drifts from the matrix or the
+  pass list. The golden test fails when a case in
+  `conformance/aql-golden/pass-list.txt` stops passing or an unlisted case
+  passes, and rewrites the list when `FERROFED_CONFORMANCE_UPDATE` is `1`.
+  Case 02 (`FROM ENDPOINT`) is refused until #70 and is not counted as
+  passing. The static badge row gains the image-pulls badge for
+  `ghcr.io/ferrohealth/ferrofed`.
 
 ### Changed
 

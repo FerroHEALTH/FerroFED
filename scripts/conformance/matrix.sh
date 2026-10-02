@@ -9,6 +9,17 @@
 #   scripts/conformance/matrix.sh --derive        refresh conformance/*.tsv in place
 #   scripts/conformance/matrix.sh --render        print the book page to stdout
 #   scripts/conformance/matrix.sh --render-write  write the book page
+#   scripts/conformance/matrix.sh --badges DIR    write the badge files into DIR
+#   scripts/conformance/matrix.sh --readme-block  print the README conformance block
+#   scripts/conformance/matrix.sh --badges-write  write conformance/badges/ and the README block
+#
+# The badges (#175) are shields.io endpoint files
+# (https://shields.io/badges/endpoint-badge): the Gateway points covered out
+# of the Gateway total, the Node and Operator point counts, and the AQL golden
+# cases recorded in conformance/aql-golden/pass-list.txt, which the golden test
+# rewrites when FERROFED_CONFORMANCE_UPDATE is 1. Each label names the
+# specification version docs/VERSIONS.md pins. The README block between the
+# conformance:begin and conformance:end markers renders those files.
 #
 # The derived columns come from the vendored specification, never from a hand:
 #
@@ -38,6 +49,12 @@ readonly TRACKS=conformance/tracks.tsv
 readonly REQUIREMENTS=conformance/requirements.tsv
 readonly PAGE=website/book/src/evaluate/conformance.md
 readonly SPEC_SITE=https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9
+readonly BADGES=conformance/badges
+readonly PASS_LIST=conformance/aql-golden/pass-list.txt
+readonly README=README.md
+readonly BOOK_PAGE=https://ferrofed.eu/docs/evaluate/conformance.html
+# The shields.io endpoint prefix every badge file is read through, from main.
+readonly ENDPOINT='https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2F'
 
 die() {
   echo "conformance-matrix: $*" >&2
@@ -250,7 +267,128 @@ render_page() {
   ' "$MATRIX" "$TRACKS" "$REQUIREMENTS"
 }
 
+# The Federation Tier version docs/VERSIONS.md pins: the first word of the
+# second cell of its specification-pin row.
+spec_version() {
+  local version
+  version="$(awk -F'|' '
+    NF >= 3 {
+      k = $2; v = $3
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (k == "Federation Tier with AQL") { split(v, w, /[[:space:]]/); print w[1]; exit }
+    }
+  ' docs/VERSIONS.md)"
+  [ -n "$version" ] || die "docs/VERSIONS.md has no Federation Tier with AQL pin row"
+  printf '%s\n' "$version"
+}
+
+# The badge colour of k out of n, by the share in quarters.
+colour_of() {
+  local passed="$1" total="$2" share
+  if [ "$total" -eq 0 ]; then
+    echo lightgrey
+    return
+  fi
+  share=$((passed * 100 / total))
+  if [ "$passed" -eq "$total" ]; then echo brightgreen
+  elif [ "$share" -ge 75 ]; then echo green
+  elif [ "$share" -ge 50 ]; then echo yellow
+  elif [ "$share" -ge 25 ]; then echo orange
+  else echo red
+  fi
+}
+
+# One endpoint badge file: label, message, colour. The labels and messages
+# are written here and carry no character JSON escapes.
+badge_json() {
+  printf '{"schemaVersion":1,"label":"%s","message":"%s","color":"%s"}\n' "$1" "$2" "$3"
+}
+
+# The number of matrix rows with actor $1, and with actor $1 and status $2.
+matrix_count() {
+  awk -F'\t' -v actor="$1" -v status="${2:-}" '
+    /^#/ { next }
+    ++row == 1 { next }
+    $2 == actor && (status == "" || $5 == status) { n++ }
+    END { print n + 0 }
+  ' "$MATRIX"
+}
+
+# The badge labels, by badge name.
+label_of() {
+  local version
+  version="$(spec_version)"
+  case "$1" in
+  federation-gateway) echo "Federation Tier $version gateway points" ;;
+  federation-node) echo "Federation Tier $version node points" ;;
+  federation-operator) echo "Federation Tier $version operator points" ;;
+  aql-golden) echo "AQL golden cases" ;;
+  *) die "no badge named $1" ;;
+  esac
+}
+
+# Write every badge file into a directory.
+write_badges() {
+  local dir="$1" gateway covered node operator passed total
+  [ -f "$PASS_LIST" ] || die "$PASS_LIST is missing"
+  gateway="$(matrix_count Gateway)"
+  covered="$(matrix_count Gateway covered)"
+  node="$(matrix_count Node)"
+  operator="$(matrix_count Operator)"
+  passed="$(grep -cvE '^(#|total |$)' "$PASS_LIST" || true)"
+  total="$(sed -n 's/^total \([0-9][0-9]*\)$/\1/p' "$PASS_LIST")"
+  [ -n "$total" ] || die "$PASS_LIST has no total line"
+  mkdir -p "$dir"
+  badge_json "$(label_of federation-gateway)" "$covered / $gateway covered" "$(colour_of "$covered" "$gateway")" > "$dir/federation-gateway.json"
+  badge_json "$(label_of federation-node)" "$node, a member node's to meet" blue > "$dir/federation-node.json"
+  badge_json "$(label_of federation-operator)" "$operator, the operator's to meet" blue > "$dir/federation-operator.json"
+  badge_json "$(label_of aql-golden)" "$passed / $total" "$(colour_of "$passed" "$total")" > "$dir/aql-golden.json"
+}
+
+# The README block with its markers: the three matrix badges, linked to the
+# book's conformance page, then the golden badge, linked to its pass list.
+render_block() {
+  local name
+  echo '<!-- conformance:begin -->'
+  for name in federation-gateway federation-node federation-operator; do
+    echo "[![$(label_of "$name")](${ENDPOINT}${name}.json)]($BOOK_PAGE)"
+  done
+  echo "[![$(label_of aql-golden)](${ENDPOINT}aql-golden.json)]($PASS_LIST)"
+  echo '<!-- conformance:end -->'
+}
+
+# Replace the README block, markers included, with a fresh rendering.
+write_block() {
+  local block
+  if ! grep -qx '<!-- conformance:begin -->' "$README" || ! grep -qx '<!-- conformance:end -->' "$README"; then
+    die "$README has no conformance:begin and conformance:end markers"
+  fi
+  block="$(mktemp)"
+  render_block > "$block"
+  awk -v block="$block" '
+    $0 == "<!-- conformance:begin -->" { while ((getline line < block) > 0) print line; skipping = 1; next }
+    $0 == "<!-- conformance:end -->" { skipping = 0; next }
+    !skipping { print }
+  ' "$README" > "$block.readme"
+  cat "$block.readme" > "$README"
+  rm -f "$block" "$block.readme"
+}
+
 case "${1:-}" in
+--badges)
+  [ -n "${2:-}" ] || die "usage: $0 --badges DIR"
+  write_badges "$2"
+  ;;
+--readme-block)
+  render_block
+  ;;
+--badges-write)
+  rm -f "$BADGES"/*.json
+  write_badges "$BADGES"
+  write_block
+  echo "conformance-matrix: wrote $BADGES/ and the $README conformance block."
+  ;;
 --derived)
   [ -n "${2:-}" ] || die "usage: $0 --derived DIR"
   mkdir -p "$2"
@@ -277,6 +415,6 @@ case "${1:-}" in
   echo "conformance-matrix: wrote $PAGE."
   ;;
 *)
-  die "usage: $0 --derived DIR | --derive | --render | --render-write"
+  die "usage: $0 --derived DIR | --derive | --render | --render-write | --badges DIR | --readme-block | --badges-write"
   ;;
 esac
