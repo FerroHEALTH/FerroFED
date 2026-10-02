@@ -40,23 +40,43 @@ use secrecy::{ExposeSecret, SecretString};
 use url::Url;
 
 /// The client headers a single-node route never forwards, whatever the
-/// operation declares.
+/// operation declares, beside every header under
+/// [`WITHHELD_HEADER_PREFIX`].
 ///
 /// `Authorization` is the client's credential at the gateway, and the gateway
 /// authenticates onward with the endpoint's own credentials (§13).
 /// `X-Request-Id` is the client's free text, and a node receives the
 /// gateway's minted [`OutboundId`](crate::outbound_id::OutboundId) instead.
-/// The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
-/// headers target the request at the gateway, and mean nothing at a node
-/// (§8.4). Each name is compared without regard to case (RFC 9110 §5.1).
+/// Each name is compared without regard to case (RFC 9110 §5.1).
 // NOTE: §5.4.1, N33: no ITS-REST operation declares these headers, and a
-// client value in any of them could name a patient, so all stay withheld.
-pub const WITHHELD_HEADERS: [&str; 4] = [
-    "authorization",
-    "x-request-id",
-    openehr_federation::headers::ENDPOINT,
-    openehr_federation::headers::ORGANISATION,
-];
+// client value in either could name a patient, so both stay withheld.
+pub const WITHHELD_HEADERS: [&str; 2] = ["authorization", "x-request-id"];
+
+/// The name prefix of the federation's own headers, none of which a
+/// single-node route forwards, whatever the operation declares.
+///
+/// Every request header the specification defines carries it
+/// (`openehr_federation::headers::ALL`): the targeting headers (§8.4), the
+/// completion strategy (§11.4) and the dedup mode (§10). Each is consumed at
+/// the gateway and means nothing at a node. A name is compared without
+/// regard to case (RFC 9110 §5.1).
+// NOTE: §5.4.1, N33: the gateway copies no header without a rule naming it, so
+// the whole family is withheld by name, a header the gateway does not read too.
+pub const WITHHELD_HEADER_PREFIX: &str = "openEHR-federation-";
+
+/// Whether the client header `name` is one a single-node route never
+/// forwards: one of [`WITHHELD_HEADERS`], or any name under
+/// [`WITHHELD_HEADER_PREFIX`].
+#[must_use]
+pub fn is_withheld_header(name: &str) -> bool {
+    let federation = name
+        .get(..WITHHELD_HEADER_PREFIX.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(WITHHELD_HEADER_PREFIX));
+    federation
+        || WITHHELD_HEADERS
+            .iter()
+            .any(|withheld| name.eq_ignore_ascii_case(withheld))
+}
 
 /// The query parameters a single-node route never forwards, whatever the
 /// operation declares: the patient identifier and its namespace (§5.4.2).
@@ -65,20 +85,23 @@ pub const WITHHELD_HEADERS: [&str; 4] = [
 pub const WITHHELD_QUERY_PARAMETERS: [&str; 2] = ["subject_id", "subject_namespace"];
 
 /// The client headers of `client` a single-node route forwards for
-/// `operation`: every field line of each header the operation declares,
-/// values byte for byte, less [`WITHHELD_HEADERS`].
+/// `operation`, less every header [`is_withheld_header`] names.
 ///
-/// A field name is compared without regard to case (RFC 9110 §5.1). The
-/// federation's own request headers, which no ITS-REST operation declares,
-/// are consumed at the gateway and never forwarded.
+/// Every field line of each header the operation declares is kept, its value
+/// byte for byte. A field name is compared without regard to case (RFC 9110 §5.1). The
+/// federation's own request headers are consumed at the gateway and never
+/// forwarded, even were an operation to declare one.
 #[must_use]
 pub fn forwarded_headers(operation: &RouteMatch, client: &HeaderMap) -> HeaderMap {
+    admitted_headers(|name| operation.header_param(name).is_some(), client)
+}
+
+/// The headers of `client` whose name `declared` accepts, less every header
+/// [`is_withheld_header`] names, each field line kept byte for byte.
+fn admitted_headers(declared: impl Fn(&str) -> bool, client: &HeaderMap) -> HeaderMap {
     let mut forwarded = HeaderMap::new();
     for (name, value) in client {
-        let withheld = WITHHELD_HEADERS
-            .iter()
-            .any(|withheld| name.as_str().eq_ignore_ascii_case(withheld));
-        if !withheld && operation.header_param(name.as_str()).is_some() {
+        if !is_withheld_header(name.as_str()) && declared(name.as_str()) {
             forwarded.append(name.clone(), value.clone());
         }
     }
@@ -537,8 +560,46 @@ mod tests {
             openehr_federation::headers::ENDPOINT,
             openehr_federation::headers::ORGANISATION,
         ] {
-            assert!(super::WITHHELD_HEADERS.contains(&name), "{name}");
+            assert!(super::is_withheld_header(name), "{name}");
         }
+    }
+
+    // conformance: CP-26
+    #[test]
+    fn every_federation_header_is_withheld_even_where_an_operation_declares_it() {
+        let mut client = http::HeaderMap::new();
+        for name in openehr_federation::headers::ALL {
+            client.insert(name, SENTINEL.parse().unwrap());
+        }
+        client.insert("OPENEHR-FEDERATION-PATIENT", SENTINEL.parse().unwrap());
+        client.insert("openehr-federation-", SENTINEL.parse().unwrap());
+        client.insert("authorization", "Bearer client-token".parse().unwrap());
+        client.insert("x-request-id", SENTINEL.parse().unwrap());
+        client.insert("openehr-version", "1".parse().unwrap());
+        client.insert("openehr-federationless", "kept".parse().unwrap());
+        let declares_everything = |_: &str| true;
+        let forwarded = super::admitted_headers(declares_everything, &client);
+        let mut names: Vec<&str> = forwarded.keys().map(http::HeaderName::as_str).collect();
+        names.sort_unstable();
+        assert_eq!(
+            vec!["openehr-federationless", "openehr-version"],
+            names,
+            "§5.4.1, N33: a federation header never reaches a node"
+        );
+        for name in openehr_federation::headers::ALL {
+            assert!(
+                name.starts_with(super::WITHHELD_HEADER_PREFIX),
+                "{name} is outside the withheld family"
+            );
+        }
+    }
+
+    #[test]
+    fn a_name_shorter_than_the_prefix_is_never_read_as_it() {
+        assert!(!super::is_withheld_header("openehr-fed"));
+        assert!(!super::is_withheld_header(""));
+        assert!(super::is_withheld_header("Authorization"));
+        assert!(super::is_withheld_header("X-Request-ID"));
     }
 
     #[test]
