@@ -23,10 +23,18 @@
 #      attribute;
 #   6. a covered row has no marker, a planned or deferred row has one, or a
 #      node-profile or operator row is marked outside the harness (tools/);
-#   7. the book page differs from `scripts/conformance/matrix.sh --render`.
+#   7. the book page differs from `scripts/conformance/matrix.sh --render`;
+#   8. conformance/aql-golden/pass-list.txt is unsorted, names a case the
+#      vendored corpus does not hold, or records another total than it holds;
+#   9. a file under conformance/badges/ or the README conformance block
+#      differs from what `scripts/conformance/matrix.sh --badges-write` writes.
 #
-# Run `scripts/conformance/matrix.sh --derive` after a re-pin and
-# `scripts/conformance/matrix.sh --render-write` after a status change.
+# The golden test, in the Rust tier, fails when a listed case stops passing or
+# an unlisted case passes, so the pass list this reads is what the tests hold.
+#
+# Run `scripts/conformance/matrix.sh --derive` after a re-pin, and
+# `scripts/conformance/matrix.sh --render-write` and `--badges-write` after a
+# status change or a pass-list rewrite.
 
 set -uo pipefail
 
@@ -38,6 +46,9 @@ readonly TRACKS=conformance/tracks.tsv
 readonly REQUIREMENTS=conformance/requirements.tsv
 readonly PAGE=website/book/src/evaluate/conformance.md
 readonly SPEC_TOOLS=docs/specs/federation-spec/tools
+readonly PASS_LIST=conformance/aql-golden/pass-list.txt
+readonly GOLDEN=docs/specs/federation-ref/src/test/resources/aql-golden
+readonly BADGES=conformance/badges
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -189,6 +200,50 @@ bash scripts/conformance/matrix.sh --render > "$work/page.md" || exit 1
 if ! diff -u "$PAGE" "$work/page.md" > "$work/diff" 2>&1; then
   problem "$PAGE is stale (run scripts/conformance/matrix.sh --render-write):"
   sed 's/^/  /' "$work/diff" | head -40 >&2
+fi
+
+# 8. The golden pass list: sorted and unique, every case a vendored file, and
+# its total the size of the vendored corpus.
+if [ -f "$PASS_LIST" ]; then
+  grep -vE '^(#|total |$)' "$PASS_LIST" > "$work/listed"
+  if ! LC_ALL=C sort -u -c "$work/listed" 2> /dev/null; then
+    problem "$PASS_LIST is not sorted and unique (rerun the golden test with FERROFED_CONFORMANCE_UPDATE=1)"
+  fi
+  while IFS= read -r case; do
+    [ -f "$GOLDEN/$case" ] || problem "$PASS_LIST names $case, which is not in $GOLDEN"
+  done < "$work/listed"
+  listed_total="$(sed -n 's/^total \([0-9][0-9]*\)$/\1/p' "$PASS_LIST")"
+  corpus_total="$(find "$GOLDEN" -maxdepth 1 -name '*.case' | wc -l | tr -d '[:space:]')"
+  if [ "$listed_total" != "$corpus_total" ]; then
+    problem "$PASS_LIST records a total of ${listed_total:-none} and $GOLDEN holds $corpus_total cases (rerun the golden test with FERROFED_CONFORMANCE_UPDATE=1)"
+  fi
+else
+  problem "$PASS_LIST is missing"
+fi
+
+# 9. The badge files and the README block against a fresh rendering.
+if bash scripts/conformance/matrix.sh --badges "$work/badges" > /dev/null; then
+  (cd "$work/badges" && ls -- *.json) > "$work/badges.fresh"
+  (cd "$BADGES" 2> /dev/null && ls -- *.json 2> /dev/null) > "$work/badges.held" || true
+  if ! diff -u "$work/badges.fresh" "$work/badges.held" > "$work/diff" 2>&1; then
+    problem "the files under $BADGES differ from the badge set (run scripts/conformance/matrix.sh --badges-write):"
+    sed 's/^/  /' "$work/diff" >&2
+  fi
+  while IFS= read -r badge; do
+    [ -f "$BADGES/$badge" ] || continue
+    if ! diff -u "$BADGES/$badge" "$work/badges/$badge" > "$work/diff" 2>&1; then
+      problem "$BADGES/$badge disagrees with the matrix or the pass list (run scripts/conformance/matrix.sh --badges-write):"
+      sed 's/^/  /' "$work/diff" >&2
+    fi
+  done < "$work/badges.fresh"
+else
+  problem "the badges could not be rendered"
+fi
+bash scripts/conformance/matrix.sh --readme-block > "$work/block.md" || exit 1
+sed -n '/^<!-- conformance:begin -->$/,/^<!-- conformance:end -->$/p' README.md > "$work/block.held"
+if ! diff -u "$work/block.held" "$work/block.md" > "$work/diff" 2>&1; then
+  problem "the README.md conformance block is stale (run scripts/conformance/matrix.sh --badges-write):"
+  sed 's/^/  /' "$work/diff" >&2
 fi
 
 if [ "$fail" -ne 0 ]; then

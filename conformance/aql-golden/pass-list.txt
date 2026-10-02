@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The AQL golden cases of the reference implementation that FerroFED passes,
+# one file name per line, then the corpus total. The golden test writes it
+# when FERROFED_CONFORMANCE_UPDATE is 1, and fails when a listed case stops
+# passing or an unlisted case passes. scripts/conformance/matrix.sh
+# --badges-write renders the badge from it.
+01-basic-subject-rewrite.case
+03-subject-projection-reinjection.case
+04-observation-with-archetype-predicate.case
+05-offset-rejected.case
+06-undirected-aggregate-rejected.case
+07-subject-under-or-rejected.case
+08-dv-identifier-clinician-path-dispatched.case
+09-subject-like-rejected.case
+10-multiple-subjects-rejected.case
+11-no-subject-passthrough.case
+12-comment-hiding-identifier-stripped.case
+13-entry-subject-carrier-rewrite.case
+14-entry-subject-issuer-consumed.case
+15-external-ref-namespace-consumed.case
+16-composer-smuggling-patient-id-rejected.case
+17-entry-subject-second-value-rejected.case
+total 17

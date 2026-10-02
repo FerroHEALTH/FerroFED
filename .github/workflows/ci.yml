@@ -246,9 +246,10 @@ jobs:
   # The conformance-matrix guard (the §17 conformance points and the §16.3
   # tracks): the matrix's derived columns against the vendored specification,
   # every
-  # `// conformance:` marker against the matrix, and the rendered book page
-  # against the matrix. Static and offline; a failing marked test fails in the
-  # Rust tier's test job.
+  # `// conformance:` marker against the matrix, the rendered book page against
+  # the matrix, and the README conformance badges against the matrix and the
+  # AQL golden pass list. Static and offline; a failing marked test, and a
+  # golden case that leaves or joins the pass list, fail in the Rust tier.
   conformance-matrix:
     name: conformance-matrix
     runs-on: ubuntu-latest
