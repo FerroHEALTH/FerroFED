@@ -105,15 +105,6 @@ binary follows from v0.0.2.
   artefacts of ITI-83 are vendored under `docs/specs/ihe-pixm/` by
   `scripts/vendor/ihe-pixm.sh`, pinned by version and tarball sha256, and the
   FHIR R4 model comes from `fhir-types` 0.1.107.
-- The fuzz lane (#134): four `cargo fuzz` targets over the untrusted inputs
-  (the AQL rewrite over arbitrary text and parameters, the ITS-REST
-  `AdhocQueryExecute` body through the façade's intake, a federated
-  `RESULT_SET` with its `meta.federation`, and the `OPTIONS {base}/` body),
-  with seeds generated from the vendored golden cases and the specification's
-  JSON examples by `scripts/fuzz/seeds.sh`. The rewrite target asserts the
-  identifier-hygiene property of §5.4.1 (N33) on every query it accepts,
-  string-function reconstructions included. `fuzz.yml` runs the targets
-  weekly, on dispatch and on pull requests touching the code they read.
 - Both patient-identifier carriers resolve (#44; §5.4.3, N33, CP-38): an
   `ENTRY`-level `subject` predicate, `…/subject/identifiers/id`, is resolution
   input on equal terms with `EHR_STATUS.subject.external_ref`, with the
@@ -133,12 +124,14 @@ binary follows from v0.0.2.
   description, feature list and README. ITI-104, which it attributed to PMIR,
   is the PIXm Patient Identity Feed FHIR (#47).
 
-## [0.0.2-rc.1] - 2026-10-01
+## [0.0.2] - 2026-10-02
 
-A pre-release that rehearses the release lane at SLSA Build Level 3 (#31):
-attested binaries, the image `ghcr.io/ferrohealth/ferrofed` by digest, and
-their SBOMs. It carries the first federated query (#38) and everything merged
-since v0.0.1.
+The first federated query: `POST {base}/v1/query/aql` answers one ITS-REST
+`RESULT_SET` over two openEHR CDRs (FerroEHR and EHRbase), with the patient
+identifier consumed at the gateway and never sent to a node. Also the Cargo
+workspace and its crate map, the container and compose quickstart, the
+end-to-end harness, the fuzz lane, and the release lane at SLSA Build
+Level 3, rehearsed as `v0.0.2-rc.1` (milestone v0.0.2).
 
 ### Added
 
@@ -260,6 +253,15 @@ since v0.0.1.
   identifiers only inside the `urn:oid:2.999` example arc. CI runs the
   container suite in its own `e2e (containers)` job, and the versions guard
   holds the image pins to `docs/VERSIONS.md`.
+- The fuzz lane (#134): four `cargo fuzz` targets over the untrusted inputs
+  (the AQL rewrite over arbitrary text and parameters, the ITS-REST
+  `AdhocQueryExecute` body through the façade's intake, a federated
+  `RESULT_SET` with its `meta.federation`, and the `OPTIONS {base}/` body),
+  with seeds generated from the vendored golden cases and the specification's
+  JSON examples by `scripts/fuzz/seeds.sh`. The rewrite target asserts the
+  identifier-hygiene property of §5.4.1 (N33) on every query it accepts,
+  string-function reconstructions included. `fuzz.yml` runs the targets
+  weekly, on dispatch and on pull requests touching the code they read.
 
 ### Changed
 
@@ -409,7 +411,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.2-rc.1...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.2
 [0.0.2-rc.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.2-rc.1
 [0.0.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1-rc.1...v0.0.1
 [0.0.1-rc.1]: https://github.com/FerroHEALTH/FerroFED/releases/tag/v0.0.1-rc.1
