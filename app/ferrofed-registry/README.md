@@ -16,8 +16,14 @@ URL, connection type and one managing organisation) into an immutable
 `RegistrySnapshot`, refusing any document with a dangling reference, a
 duplicate id or `system_id`, or an endpoint without exactly one managing
 organisation. `node_id`, `endpoint_id` and `system_id` are three types with no
-conversion between them. The design is recorded in the repository's
-architecture document.
+conversion between them.
+
+The snapshot is also the follow-up routing table: every `creating_system_id`
+to the node that answers for it, from the members' own `system_id`s and the
+document's `[[creating_system]]` mappings. A `LearnedMap` adds the ids learned
+from answers, never overriding the document, and a conflicting sighting
+raises an integrity incident and routes nothing. The design is recorded in
+the repository's architecture document.
 
 An application crate under `app/`: FerroFED's own glue, never published.
 

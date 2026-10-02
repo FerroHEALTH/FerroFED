@@ -149,3 +149,36 @@ fn the_binary_refuses_a_request_timeout_inside_the_fan_out_budget() -> Result<()
     }
     Ok(())
 }
+
+/// N21, §12.2: `config check` refuses a registry document whose
+/// `[[creating_system]]` mapping names an undeclared endpoint, naming the key.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn config_check_refuses_a_creating_system_mapping_to_an_undeclared_endpoint()
+-> Result<(), Box<dyn StdError>> {
+    let mut document = tempfile::NamedTempFile::new()?;
+    document.write_all(
+        b"[[organisation]]\nid = \"org-a\"\n\n\
+          [[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr-a.example.org\"\n\n\
+          [[endpoint]]\nid = \"node-a-pub\"\nnode = \"node-a\"\nurl = \"http://127.0.0.1:9/openehr\"\n\
+          connection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n\n\
+          [[creating_system]]\ncreating_system_id = \"legacy-a.example.org\"\nendpoint = \"node-z-pub\"\n",
+    )?;
+    let path = toml::Value::String(document.path().display().to_string());
+    let toml = format!(
+        "[server]\nlisten = \"127.0.0.1:1\"\n\n[registry]\ndocument = {path}\n\n\
+         [federation]\nnode_selection = \"ask-all\"\n"
+    );
+    let output = binary(&["config", "check"], &toml)?;
+    assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("creating_system legacy-a.example.org")
+            && stderr.contains("endpoint node-z-pub"),
+        "the mapping and its endpoint are named: {stderr}"
+    );
+    Ok(())
+}

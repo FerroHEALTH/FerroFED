@@ -57,6 +57,33 @@ environment. The credentials are read and checked at boot, and the node
 client of an endpoint with a credentials section sends them on every request
 to that endpoint.
 
+## The registry document
+
+`registry.document` names a second TOML file: the federation's members as
+the operator admitted them. It declares each `[[organisation]]`, each
+`[[node]]` with its openEHR `system_id`, and each `[[endpoint]]` with its base
+URL, connection type and managing organisation. An unknown key, a dangling
+reference or a duplicate id refuses the whole document.
+
+The document is also the follow-up routing table (N21). A follow-up for a
+version is routed on the `creating_system_id` inside its uid (§12.2). A
+member's own `system_id` routes to that member without being written down.
+A CDR can hold versions another system created, because an imported
+composition keeps its original uid. Map every other `creating_system_id` you
+know of to the endpoint that answers for it with a `[[creating_system]]`
+entry:
+
+```toml
+[[creating_system]]
+creating_system_id = "legacy-a.example.org"   # the middle segment of the uid
+endpoint = "hospital-a"                       # an endpoint id this document declares
+```
+
+`config check` refuses, naming the `creating_system_id`, a mapping that names
+an endpoint the document does not declare, a `creating_system_id` mapped
+twice, and a mapping of a member's own `system_id`. Two spellings that differ
+only in ASCII case are one `creating_system_id`.
+
 ## Node selection
 
 A gateway that federates (`registry.document` is set) declares how an

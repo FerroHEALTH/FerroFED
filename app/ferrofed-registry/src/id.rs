@@ -49,7 +49,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use openehr_base::prelude::{HierObjectId, Uid};
+use openehr_base::prelude::{HierObjectId, ObjectVersionId, Uid};
 use openehr_base::v1_3::base_types::identification::lexical::composite_id_key;
 use serde::Deserialize;
 
@@ -191,6 +191,18 @@ impl SystemId {
         }
         let key = composite_id_key(&value);
         Ok(Self { value, key })
+    }
+
+    /// The `creating_system_id` of a version: the middle segment of its
+    /// `OBJECT_VERSION_ID`, read through `openehr-base` as written (BASE
+    /// `OBJECT_VERSION_ID.creating_system_id`, §12.2).
+    ///
+    /// # Errors
+    ///
+    /// [`IdError::SystemId`] when the segment is not an openEHR `uid`, which a
+    /// version id built through [`ObjectVersionId::new`] never yields.
+    pub fn creating_system_id_of(version: &ObjectVersionId) -> Result<Self, IdError> {
+        Self::new(version.creating_system_id_str())
     }
 
     /// The `system_id` as written.

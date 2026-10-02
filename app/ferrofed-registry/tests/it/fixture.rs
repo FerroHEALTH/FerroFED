@@ -71,6 +71,18 @@ connection_type = "openehr-rest-query"
 managing_organisation = "org-a"
 "#;
 
+/// The two-node document with `extra` appended.
+pub(crate) fn two_nodes_with(extra: &str) -> String {
+    format!("{TWO_NODES}\n{extra}")
+}
+
+/// A `[[creating_system]]` mapping of `creating_system_id` to `endpoint`.
+pub(crate) fn creating_system(creating_system_id: &str, endpoint: &str) -> String {
+    format!(
+        "[[creating_system]]\ncreating_system_id = \"{creating_system_id}\"\nendpoint = \"{endpoint}\"\n"
+    )
+}
+
 /// The one-node document with `extra` appended.
 pub(crate) fn one_node_with(extra: &str) -> String {
     format!("{ONE_NODE}\n{extra}")
