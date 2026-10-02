@@ -33,8 +33,7 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   draft is mutable and invisible to anyone browsing releases, which is the
   window the asset uploads need.
 - **build-binaries** calls `release-build.yml` once per target (two Linux
-  architectures, glibc and musl). It is gated on a root `Cargo.toml`, the same
-  detection `ci.yml` tier 2 uses. See § The build legs.
+  architectures, glibc and musl). See § The build legs.
 - **build-image** calls `release-image.yml`, which builds the container from
   the attested musl binaries and pushes it to `ghcr.io/ferrohealth/ferrofed`.
 - **finalize-release** checks that the draft carries every asset this version

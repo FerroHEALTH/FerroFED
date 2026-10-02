@@ -186,6 +186,13 @@ federated query and identity resolution shipped in 0.0.3.
 - The release lane fails a tag whose tree has no root `Cargo.toml` (#198),
   with a message saying the tag cannot be checked against the workspace
   version. It used to skip that check.
+- The release lane has one path (#201): the binaries and the image build for
+  every tag `plan` accepts, and `finalize-release` publishes only when every
+  build leg succeeded. The branches for a tag with no workspace, which `plan`
+  now refuses, are gone. The book's claims page links to the pinned-versions
+  page for the `openehr-*` pin instead of restating the number, and
+  `docs/ci-cd.md` names all four self-tests of the `tracker-helpers` job,
+  `rel.sh` among them.
 - `scripts/gh/fields.sh` checks its arguments before any `gh` call (#198).
   No argument, an unknown command, a wrong operand count or `--help` prints
   the usage to stderr and exits 2, with no network call and no token needed.
