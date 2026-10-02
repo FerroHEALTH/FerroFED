@@ -1,68 +1,103 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The bootstrap document as written: TOML with `deny_unknown_fields`
-//! throughout, validated into a snapshot by `snapshot`.
+//! The bootstrap document as written, before validation.
+//!
+//! The native form is TOML with `deny_unknown_fields` throughout, read by
+//! [`RegistrySnapshot::from_toml_str`](crate::snapshot::RegistrySnapshot::from_toml_str).
+//! Another form (FHIR `Organization` and `Endpoint` resources, N19) is read
+//! into the same [`Document`] by its own reader and validated by
+//! [`RegistrySnapshot::from_document`](crate::snapshot::RegistrySnapshot::from_document),
+//! so both forms meet one set of membership rules.
 
 use serde::Deserialize;
 
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use crate::snapshot::{ConnectionType, EndpointStatus};
 
-#[derive(Deserialize)]
+/// The federation's members as a document declares them.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Document {
+pub struct Document {
+    /// The `[[organisation]]` entries.
     #[serde(default, rename = "organisation")]
-    pub(crate) organisations: Vec<OrganisationDoc>,
+    pub organisations: Vec<OrganisationDoc>,
+    /// The `[[node]]` entries.
     #[serde(default, rename = "node")]
-    pub(crate) nodes: Vec<NodeDoc>,
+    pub nodes: Vec<NodeDoc>,
+    /// The `[[endpoint]]` entries.
     #[serde(default, rename = "endpoint")]
-    pub(crate) endpoints: Vec<EndpointDoc>,
+    pub endpoints: Vec<EndpointDoc>,
+    /// The `[[creating_system]]` entries.
     #[serde(default, rename = "creating_system")]
-    pub(crate) creating_systems: Vec<CreatingSystemDoc>,
+    pub creating_systems: Vec<CreatingSystemDoc>,
 }
 
-#[derive(Deserialize)]
+/// One organisation as declared.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct OrganisationDoc {
-    pub(crate) id: OrganisationId,
-    pub(crate) name: Option<String>,
+pub struct OrganisationDoc {
+    /// The organisation's id.
+    pub id: OrganisationId,
+    /// The organisation's display name.
+    pub name: Option<String>,
 }
 
-#[derive(Deserialize)]
+/// One node as declared.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct NodeDoc {
-    pub(crate) id: NodeId,
-    pub(crate) organisation: OrganisationId,
-    pub(crate) system_id: SystemId,
-    pub(crate) product: Option<String>,
-    pub(crate) version: Option<String>,
+pub struct NodeDoc {
+    /// The node's `node_id`.
+    pub id: NodeId,
+    /// The organisation that operates the node.
+    pub organisation: OrganisationId,
+    /// The node's openEHR `system_id`.
+    pub system_id: SystemId,
+    /// The node's CDR product name (§9.5, N40).
+    pub product: Option<String>,
+    /// The node's CDR product version (§9.5, N40).
+    pub version: Option<String>,
+    /// The identifiers outside services name the node by.
     #[serde(default, rename = "identifier")]
-    pub(crate) identifiers: Vec<NodeIdentifierDoc>,
+    pub identifiers: Vec<NodeIdentifierDoc>,
 }
 
-#[derive(Deserialize)]
+/// One node identifier as declared, `system|value`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct NodeIdentifierDoc {
-    pub(crate) system: String,
-    pub(crate) value: String,
+pub struct NodeIdentifierDoc {
+    /// The identifier system.
+    pub system: String,
+    /// The identifier value.
+    pub value: String,
 }
 
-#[derive(Deserialize)]
+/// One endpoint as declared.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct EndpointDoc {
-    pub(crate) id: EndpointId,
-    pub(crate) node: NodeId,
-    pub(crate) url: String,
-    pub(crate) connection_type: ConnectionType,
-    pub(crate) managing_organisation: OrganisationId,
+pub struct EndpointDoc {
+    /// The endpoint's stable `endpoint_id` (N19).
+    pub id: EndpointId,
+    /// The node the endpoint belongs to.
+    pub node: NodeId,
+    /// The endpoint's ITS-REST base URL, as written.
+    pub url: String,
+    /// The endpoint's connection type (N19, §15.2).
+    pub connection_type: ConnectionType,
+    /// The one organisation that manages the endpoint (N20).
+    pub managing_organisation: OrganisationId,
+    /// Whether the endpoint is in service.
     #[serde(default)]
-    pub(crate) status: EndpointStatus,
+    pub status: EndpointStatus,
 }
 
-#[derive(Deserialize)]
+/// One `creating_system_id` mapped to the endpoint that answers for it (N21,
+/// §12.2).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CreatingSystemDoc {
-    pub(crate) creating_system_id: SystemId,
-    pub(crate) endpoint: EndpointId,
+pub struct CreatingSystemDoc {
+    /// The mapped `creating_system_id`.
+    pub creating_system_id: SystemId,
+    /// The endpoint that answers for it.
+    pub endpoint: EndpointId,
 }

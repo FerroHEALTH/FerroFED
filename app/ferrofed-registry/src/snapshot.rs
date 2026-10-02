@@ -21,8 +21,9 @@ use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
 ///
 /// N19 requires a defined openEHR Query API code, and §15.2 forbids relying
 /// on `hl7-fhir-rest` for an openEHR endpoint, so the one accepted code is
-/// `openehr-rest-query`, which FerroFED defines in a code system of its own
-/// (N19, §15.2; the code system is our own design).
+/// `openehr-rest-query`, which FerroFED defines in the code system
+/// [`ConnectionType::SYSTEM`] (N19, §15.2; the code system is our own design,
+/// since no openEHR or HL7 code is registered).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 pub enum ConnectionType {
     /// The openEHR ITS-REST Query API (`openehr-rest-query`).
@@ -31,6 +32,19 @@ pub enum ConnectionType {
 }
 
 impl ConnectionType {
+    /// The code system the codes belong to, as a FHIR `Coding.system` names it.
+    pub const SYSTEM: &'static str = "https://ferrofed.eu/fhir/CodeSystem/connection-type";
+
+    /// The connection type `code` names in [`ConnectionType::SYSTEM`], or
+    /// `None` when the code system defines no such code.
+    #[must_use]
+    pub fn from_code(code: &str) -> Option<Self> {
+        match code {
+            "openehr-rest-query" => Some(Self::OpenehrRestQuery),
+            _ => None,
+        }
+    }
+
     /// The code as the document and the directory write it.
     #[must_use]
     pub fn code(self) -> &'static str {
@@ -247,7 +261,17 @@ impl RegistrySnapshot {
         Self::from_document(document)
     }
 
-    fn from_document(document: Document) -> Result<Self, LoadError> {
+    /// Validates a document another reader built, under the rules every form
+    /// of the document meets.
+    ///
+    /// # Errors
+    ///
+    /// The [`LoadError`] variants other than [`LoadError::Read`] and
+    /// [`LoadError::Parse`]: a duplicate id or `system_id`, a dangling
+    /// reference, an unusable base URL, a node with no endpoint, no node at
+    /// all, or a `creating_system_id` mapped twice or mapped although it is a
+    /// member's own `system_id`.
+    pub fn from_document(document: Document) -> Result<Self, LoadError> {
         if document.nodes.is_empty() {
             return Err(LoadError::NoNode);
         }

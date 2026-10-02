@@ -88,6 +88,78 @@ an endpoint the document does not declare, a `creating_system_id` mapped
 twice, and a mapping of a member's own `system_id`. Two spellings that differ
 only in ASCII case are one `creating_system_id`.
 
+## The registry document in FHIR form
+
+The specification recommends the FHIR `Endpoint` and `Organization` resources
+for the registry (N19). Set `registry.format = "fhir"` and `registry.document`
+names a FHIR R4 JSON `Bundle` of type `collection` or `searchset` instead,
+holding only `Organization` and `Endpoint` resources: the shape an mCSD
+directory delivers (§15.1). The default, `registry.format = "toml"`, is the
+native form above.
+
+```toml
+[registry]
+document = "/etc/ferrofed/registry.json"
+format = "fhir"
+```
+
+The form loads into the same members as the native form, and the gateway
+routes over it identically. FHIR has no place for a node or an openEHR
+`system_id`, and a resource's logical id belongs to the server that holds it,
+so FerroFED carries the registry's ids as identifiers in its own systems (no
+specification governs these systems; they are FerroFED's design):
+
+| FHIR element | Registry fact |
+|---|---|
+| `Organization.identifier` with system `https://ferrofed.eu/fhir/sid/organisation-id` | the organisation id, exactly one |
+| `Organization.name` | the organisation's display name |
+| `Organization.endpoint` | the endpoints whose node the organisation operates |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/endpoint-id` | the stable endpoint id used in directives (N19), exactly one |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/node-id` | the node the endpoint belongs to, exactly one |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/system-id` | that node's openEHR `system_id`, exactly one |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/creating-system-id` | each further `creating_system_id` the endpoint answers for (N21), zero or more |
+| `Endpoint.connectionType` | `openehr-rest-query` in `https://ferrofed.eu/fhir/CodeSystem/connection-type` |
+| `Endpoint.managingOrganization` | the one managing organisation (N20) |
+| `Endpoint.status` | `active`, or `suspended` for an endpoint taken out of service |
+| `Endpoint.address` | the ITS-REST base URL |
+
+An endpoint for the openEHR Query API never carries `hl7-fhir-rest` (§15.2).
+No openEHR or HL7 code for it is registered yet, so FerroFED binds the one
+code N19 names, `openehr-rest-query`, in a code system of its own. The mCSD
+4.0.0 `Endpoint` profile binds `connectionType` to the HL7 endpoint connection
+types extensibly, so a code from another system is admitted where the value
+set has none for the purpose.
+
+References resolve inside the Bundle as FHIR R4 §2.36.4.1 resolves them: a
+relative `Organization/org-a` against the root of a REST `fullUrl` such as
+`https://registry.example.org/fhir/Endpoint/node-a-pub`, and an absolute
+reference, a `urn:uuid:` included, against an entry's `fullUrl`. Give every
+entry a `fullUrl`. Other elements (`payloadType`, `period`, `header` and the
+rest) are not read. A node's `product`, `version` and node identifiers have
+no place in this form; a registry that needs them uses the native form.
+
+`config check` refuses the document with the configuration exit code, naming
+the resource, when:
+
+- an endpoint's `connectionType` is `hl7-fhir-rest`, carries no system (an
+  informal string), or is any other system and code (N19, §15.2). CP-20 is
+  an operator point, and this check is how the gateway helps the operator
+  meet it;
+- an endpoint has no `managingOrganization`, or one that names no
+  `Organization` of the Bundle (N20);
+- an endpoint is listed by no organisation, or by two;
+- an organisation or an endpoint has no id in its system or more than one, or
+  an id repeats;
+- the endpoints of one node disagree on its `system_id` or its operator;
+- an endpoint's status is neither `active` nor `suspended`, or an organisation
+  is marked inactive;
+- a resource carries a `modifierExtension`, which FerroFED does not read;
+- anything the native form refuses: a duplicate `system_id`, an unusable base
+  URL, or a `creating_system_id` that is a member's own.
+
+Reading the members from an mCSD directory itself, and keeping them in step,
+follows with its own issue (#86).
+
 ## Node selection
 
 A gateway that federates (`registry.document` is set) declares how an

@@ -43,7 +43,7 @@ openehr-sdt = { version = "0.0.78", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.26" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.7" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.8" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -89,8 +89,9 @@ url = "2.5.8"
 # ImplementationGuide), compiled only in crates/ihe-iti and, for its PIX Manager
 # test device, in tools/ferrofed-testkit; checked against docs/VERSIONS.md by
 # scripts/checks/versions.sh. Each binding names the root set it reads:
-# `terminology` for PIXm (#42), `resources` for the PDQm Patient (#119); the
-# testkit's Manager adds `resources` for the ITI-104 Patient (#47).
+# `terminology` for PIXm (#42), `resources` for the PDQm Patient (#119) and the
+# mCSD Organization and Endpoint (#74); the testkit's Manager adds `resources`
+# for the ITI-104 Patient (#47).
 fhir-types = { version = "0.1.107", default-features = false }
 # The test harness (#39; no specification governs it: our own design): the
 # container runner behind the FERROFED_E2E gate, the in-process stub nodes,
