@@ -222,7 +222,7 @@ pub(crate) async fn wire(server: &MockServer) -> Result<String, Box<dyn Error>> 
 /// The federated answer, read for the members the tests assert on.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Answer {
-    pub(crate) q: Option<String>,
+    pub(crate) q: String,
     columns: Vec<Column>,
     pub(crate) rows: Vec<Vec<String>>,
     pub(crate) meta: Meta,
@@ -280,11 +280,7 @@ async fn a_patient_query_is_one_result_set_over_both_nodes() -> TestResult {
     assert_eq!(StatusCode::OK, status, "{text}");
     schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
-    assert_eq!(
-        Some(patient_query()),
-        answer.q,
-        "q is the client's query (N17)"
-    );
+    assert_eq!(patient_query(), answer.q, "q is the client's query (N17)");
     assert_eq!(
         vec![
             Column {

@@ -21,9 +21,8 @@
 //! re-injected (N5).
 //! A refused query is a `400` whose message locates the fault by byte range
 //! and never quotes it (§5.4.3), and whose body names the refusal's stable
-//! code ([`crate::error`]). A failing fan-out echoes no `q`. Every strip,
-//! refusal and outbound-gate stop is a [`security`] event, by position and
-//! never by value.
+//! code ([`crate::error`]). Every strip, refusal and outbound-gate stop is
+//! a [`security`] event, by position and never by value.
 
 pub mod cells;
 pub mod completeness;
@@ -294,11 +293,8 @@ async fn federate(
     {
         status = StatusCode::FAILED_DEPENDENCY;
     }
-    // NOTE: §11.4 calls the failing answer an error body, and §5.4.3 keeps
-    // the query text out of one, so only a 200 echoes q (N17).
-    let echoed = (status == StatusCode::OK).then(|| request.q.clone());
     let mut result_set = answer
-        .into_result_set(echoed, Some(analysis.columns().to_vec()))
+        .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
         .map_err(Failure::Envelope)?;
     let rows = if status == StatusCode::OK {
         cells::reinject(

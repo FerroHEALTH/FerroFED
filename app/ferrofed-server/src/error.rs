@@ -9,14 +9,14 @@
 //! `request_id`, so a client and an operator name the same request. Two
 //! failures answer with another body. A fan-out that fails under
 //! all-or-nothing (`504`, `424`) answers the `RESULT_SET` of §11.4, whose
-//! `meta.federation.endpoints[]` statuses say which node failed and why
-//! (N17, N37). A node's own answer on a single-node route passes through as
-//! the node sent it (§11.2).
+//! `meta.federation.endpoints[]` statuses say which node failed and why,
+//! and which echoes the client's own `q` (N17, N37). A node's own answer on a
+//! single-node route passes through as the node sent it (§11.2).
 //!
 //! The codes are API: a code is only ever added, never renamed, removed or
-//! moved to another status. No body quotes a parameter value, the query text,
-//! a path or a header value (§5.4.3). No specification defines the `code`
-//! member or its values: our own design.
+//! moved to another status. No error body quotes a parameter value, the query
+//! text, a path or a header value (§5.4.3). No specification defines the
+//! `code` member or its values: our own design.
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
@@ -164,6 +164,7 @@ impl Code {
 /// It is the ITS-REST `Error` with the stable [`Code`] and the request id
 /// added. It never carries the request's path, query, headers or body, any of
 /// which may carry a patient identifier (§5.4.3).
+// TODO(#57): emit the generated openehr_its Error once FerroHEALTH/FerroEHR#3526 ships
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorBody {
     /// The ITS-REST `message` and `validationErrors`.

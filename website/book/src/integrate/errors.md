@@ -36,15 +36,18 @@ ITS-REST `Error` body and two more members:
 No error body quotes your request: not the AQL text, not the value of a
 query parameter, not a header value and not the path. A message about part of
 the query points at it by byte range (`bytes 52..77`), and a message about a
-query parameter names the parameter and never its value (§5.4.3).
+query parameter names the parameter and never its value (§5.4.3). This holds
+for every answer in the code tables below. A failed fan-out answers a result
+set instead, which echoes your own query as `q`, as every result set does
+(N17).
 
 ## A failed fan-out
 
 Under the default all-or-nothing strategy, a query fails when a node it asked
 did not answer or answered with an error (§11.4, N37). That answer is not an
-error body. It is the federated `RESULT_SET` with no rows and no `q`, and its
-`meta.federation` carries `complete: false` and every node with its status
-(§11.1):
+error body. It is the federated `RESULT_SET` with your `q`, your `columns`
+and no rows (N17), and its `meta.federation` carries `complete: false` and
+every node with its status (§11.1, §11.4):
 
 | Status | When | The cause, in `meta.federation.endpoints[]` |
 |---|---|---|
@@ -116,6 +119,7 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `unfoldable-function` | 400 | A string function over a literal is compared with an identifier path and cannot be folded at the gateway (§5.4.1). |
 | `undirected-aggregate` | 400 | An aggregate cannot be computed correctly across nodes; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). |
 | `offset-unsupported` | 400 | Offset-based paging is not supported across a fan-out (§11.6.2, N39). |
+| `offset-page` | 400 | The gateway computes an `OFFSET` page from `k + n` rows per node, and this page cannot be computed that way: `k + n` is past the configured bound, or the query has no `LIMIT` or no `ORDER BY` (§11.6.2, N39). |
 | `paging-conflict` | 400 | The ITS-REST `offset` or `fetch` member and the query's `OFFSET` or `LIMIT` disagree, or `TOP` and `LIMIT` name different counts. |
 | `negative-paging` | 400 | An ITS-REST paging member, or a row count of the query, is negative. |
 | `top-backward` | 400 | `TOP … BACKWARD` is not supported across a fan-out; write `ORDER BY … DESC LIMIT n`. |

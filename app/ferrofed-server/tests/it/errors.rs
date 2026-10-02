@@ -3,8 +3,9 @@
 
 //! The status mapping of §11.2 and the error vocabulary, through the real
 //! configuration path: one case per row the gateway can reach today, each
-//! failure's stable code, no error body that quotes the query, a parameter
-//! value or a header value (§5.4.3), and the book page held to the code
+//! failure's stable code, no openEHR `Error` body that quotes the query, a
+//! parameter value or a header value (§5.4.3), the failing §11.4 envelope
+//! echoing the client's own `q` (N17), and the book page held to the code
 //! table.
 //!
 //! The rows of follow-up routing (§12: a path with no destination, an
@@ -135,21 +136,38 @@ fn error_body(status: StatusCode, text: &str) -> Result<ErrorBody, Box<dyn Error
     Ok(error)
 }
 
-/// The failing envelope of `text`: no rows and no `q` (§11.4, §5.4.3).
-fn failing_envelope(text: &str) -> Result<Answer, Box<dyn Error>> {
+/// The failing envelope of `text` for the client query `aql`: the §11.4
+/// result set, with no rows and the client's own `q` (N17, CP-30).
+fn failing_envelope(text: &str, aql: &str) -> Result<Answer, Box<dyn Error>> {
     schema::validate(text)?;
     let answer: Answer = serde_json::from_str(text)?;
     assert!(answer.rows.is_empty(), "a failing query returns no rows");
-    assert_eq!(None, answer.q, "a failing answer echoes no q: {text}");
+    assert_eq!(
+        aql, answer.q,
+        "a failing answer echoes the client's q (N17)"
+    );
     assert!(!answer.meta.federation.complete, "{text}");
-    quotes_nothing(text);
+    assert!(
+        !text.contains(PARAMETER_VALUE),
+        "the envelope quotes no parameter value: {text}"
+    );
     Ok(answer)
 }
 
-/// The patient query with its identifier bound from a parameter.
+/// The patient query that takes its identifier from the `$patient` parameter.
+fn bound_aql() -> String {
+    format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = $patient \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    )
+}
+
+/// The ad hoc query body of [`bound_aql`] with the JSON object `parameters`.
 fn bound_query(parameters: &str) -> String {
     format!(
-        r#"{{"q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = $patient AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'","query_parameters":{parameters}}}"#
+        r#"{{"q":"{}","query_parameters":{parameters}}}"#,
+        bound_aql()
     )
 }
 
@@ -269,7 +287,7 @@ async fn a_node_error_under_all_or_nothing_is_a_424_carrying_the_envelope() -> T
     let request = bound_query(&format!(r#"{{"patient":"{PATIENT}"}}"#));
     let (status, text) = call(app, post(request, None)?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.2, N37: {text}");
-    let answer = failing_envelope(&text)?;
+    let answer = failing_envelope(&text, &bound_aql())?;
     assert_eq!(
         vec![("node-a-pub", "active"), ("node-b-pub", "node-error")],
         statuses(&answer),
@@ -291,7 +309,7 @@ async fn a_node_not_found_inside_a_fan_out_is_a_node_error_and_a_424() -> TestRe
         status,
         "a fan-out does not pass a node's 404 through (§11.2, §11.4): {text}"
     );
-    let answer = failing_envelope(&text)?;
+    let answer = failing_envelope(&text, &patient_query())?;
     assert_eq!(
         vec![("node-a-pub", "active"), ("node-b-pub", "node-error")],
         statuses(&answer)
@@ -308,7 +326,7 @@ async fn an_unreachable_node_under_all_or_nothing_is_a_504_carrying_the_envelope
     let app = gateway(dir.path(), &a.uri(), &closed, 2000, true)?;
     let (status, text) = call(app, post(body(&patient_query())?, None)?).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, status, "§11.2, N37: {text}");
-    let answer = failing_envelope(&text)?;
+    let answer = failing_envelope(&text, &patient_query())?;
     assert_eq!(
         vec![("node-a-pub", "active"), ("node-b-pub", "offline")],
         statuses(&answer)
@@ -325,11 +343,35 @@ async fn a_node_timing_out_under_all_or_nothing_is_a_504_carrying_the_envelope()
     let app = gateway(dir.path(), &a.uri(), &b.uri(), 200, true)?;
     let (status, text) = call(app, post(body(&patient_query())?, None)?).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, status, "§11.2, N37: {text}");
-    let answer = failing_envelope(&text)?;
+    let answer = failing_envelope(&text, &patient_query())?;
     assert_eq!(
         vec![("node-a-pub", "active"), ("node-b-pub", "time-out")],
         statuses(&answer)
     );
+    Ok(())
+}
+
+// conformance: CP-30
+#[tokio::test]
+async fn a_424_and_a_504_echo_the_clients_q() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let failing = node_failing(500).await;
+    let closed = closed_port()?;
+    let dir = tempfile::tempdir()?;
+    for (b, expected) in [
+        (failing.uri(), StatusCode::FAILED_DEPENDENCY),
+        (closed, StatusCode::GATEWAY_TIMEOUT),
+    ] {
+        let app = gateway(dir.path(), &a.uri(), &b, 2000, true)?;
+        let (status, text) = call(app, post(body(&patient_query())?, None)?).await?;
+        assert_eq!(expected, status, "{text}");
+        let answer: Answer = serde_json::from_str(&text)?;
+        assert_eq!(
+            patient_query(),
+            answer.q,
+            "the §11.4 envelope is the result set, and N17 populates q: {text}"
+        );
+    }
     Ok(())
 }
 

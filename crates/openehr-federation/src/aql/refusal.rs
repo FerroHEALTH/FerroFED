@@ -222,6 +222,7 @@ impl Refusal {
         "unfoldable-function",
         "undirected-aggregate",
         "offset-unsupported",
+        "offset-page",
         "paging-conflict",
         "negative-paging",
         "top-backward",
@@ -377,7 +378,7 @@ impl fmt::Display for At<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Refusal, Unreducible};
+    use super::{OffsetPage, Refusal, Unreducible};
     use openehr_query::bind::BindError;
 
     /// One refusal of every variant, in declaration order.
@@ -405,6 +406,9 @@ mod tests {
             Refusal::UnfoldableFunction { at: None },
             Refusal::UndirectedAggregate { at: None },
             Refusal::OffsetUnsupported,
+            Refusal::OffsetPage {
+                reason: OffsetPage::NoLimit,
+            },
             Refusal::PagingConflict {
                 member: "fetch",
                 clause: "LIMIT",
@@ -434,11 +438,12 @@ mod tests {
             Refusal::UnfoldableFunction { .. } => 12,
             Refusal::UndirectedAggregate { .. } => 13,
             Refusal::OffsetUnsupported => 14,
-            Refusal::PagingConflict { .. } => 15,
-            Refusal::NegativePaging { .. } => 16,
-            Refusal::TopBackward => 17,
-            Refusal::OrderNotSelected { .. } => 18,
-            Refusal::NodeSetUndefined => 19,
+            Refusal::OffsetPage { .. } => 15,
+            Refusal::PagingConflict { .. } => 16,
+            Refusal::NegativePaging { .. } => 17,
+            Refusal::TopBackward => 18,
+            Refusal::OrderNotSelected { .. } => 19,
+            Refusal::NodeSetUndefined => 20,
         }
     }
 
