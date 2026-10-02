@@ -5,13 +5,14 @@
 //!
 //! `ORDER BY` with `LIMIT` is re-applied at the Tier with a deterministic
 //! tie-break (§11.6.1, N13, N39), and `LIMIT n OFFSET k` is sliced from the
-//! merged order (§11.6.2). Per-node `ORDER BY` and `LIMIT` alone are not a federated answer (N9).
-//! Every node is sent the client's `LIMIT n`; [`merge`] orders the rows of
-//! every node under one Tier comparator and keeps the first `n` (§11.6.1
-//! MUST). The row order is the `ORDER BY` keys in turn, then the endpoint id,
-//! then the tie-break columns (the row's uid, §11.6.1 RECOMMENDED, or the
-//! `ehr_id` of a row with no uid), then the row's cells by canonical JSON, so
-//! a repeated query returns the same rows in the same order. For a page at `OFFSET k`, every node is sent `LIMIT k + n`
+//! merged order (§11.6.2). Per-node `ORDER BY` and `LIMIT` alone are not a
+//! federated answer (N9). Every node is sent the client's `LIMIT n`; [`merge`]
+//! orders the rows of every node under one Tier comparator and keeps the first
+//! `n` (§11.6.1 MUST). The row order is the `ORDER BY` keys in turn, then the
+//! endpoint id, then the tie-break columns (the row's uid, §11.6.1
+//! RECOMMENDED, or the `ehr_id` of a row with no uid), then the row's cells by
+//! canonical JSON, so a repeated query returns the same rows in the same
+//! order. For a page at `OFFSET k`, every node is sent `LIMIT k + n`
 //! with no `OFFSET`, and the merge keeps the rows `[k, k + n)` of the Tier
 //! order: the global first `k + n` rows lie in the union of every node's first
 //! `k + n`, so the slice is the global page (§11.6.2, "retrieving `k + n` rows
