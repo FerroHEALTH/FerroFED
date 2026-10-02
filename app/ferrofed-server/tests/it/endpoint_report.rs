@@ -222,8 +222,8 @@ async fn product_and_version_come_from_the_registry_and_are_absent_when_unknown(
 
 #[tokio::test]
 async fn row_count_is_what_each_node_contributed_before_the_tier_touches_the_rows() -> TestResult {
-    // The same uid at both nodes: a Tier-level DISTINCT or dedup (#55, #56)
-    // would drop one, and `row_count` must still count what each node sent.
+    // The same uid at both nodes, with no DISTINCT and the default dedup mode,
+    // so both rows come back; `row_count` counts what each node sent.
     let a = node(&["shared::1", "a::2", "a::3"]).await;
     let b = node(&["shared::1"]).await;
     let c = node(&[]).await;

@@ -21,13 +21,18 @@
 #
 # Exit 0 when no packaged content changed, or every member whose packaged
 # content changed also moved its version, with the root requirement and
-# Cargo.lock following. Exit 1 otherwise. The `no-crate-bump` pull-request label
+# Cargo.lock following. Exit 1 otherwise, and 2 on a usage error, with the
+# usage on stderr. The `no-crate-bump` pull-request label
 # is the CI escape for a diff that provably does not alter packaged bytes; this
 # script does not read labels.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-base="${1:?usage: crate-version-guard.sh <base-ref> [head-ref|WORKTREE]}"
+if [[ $# -lt 1 || $# -gt 2 || -z "${1:-}" ]]; then
+  echo "usage: crate-version-guard.sh <base-ref> [head-ref|WORKTREE]" >&2
+  exit 2
+fi
+base="$1"
 head="${2:-HEAD}"
 
 # `git diff <base> -- …` with no second ref reads the working tree, which is
