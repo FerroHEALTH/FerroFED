@@ -129,9 +129,13 @@ crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 `dependency-review-action` on pull requests; the `e2e (containers)` job,
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the
 digest-pinned node images (`.claude/memory/e2e-gate.md`); the `comment-style.sh` guard
-at `--all`; and the `conformance` job once the suite exists (the conformance points
-of §17 the gateway is scored on, with a committed pass list, a regression or
-an unrecorded pass failing the lane). **Always `--locked`**, so CI fails on
+at `--all`; and the golden pass list, `conformance/aql-golden/pass-list.txt`,
+held by the golden AQL test in the nextest run (a listed case that stops
+passing, or an unlisted pass, fails it) and by the tier-1 `conformance-matrix`
+guard with the §17 matrix and the badges rendered from both. A later
+conformance job that scores more of §17 records its results in that matrix
+and a committed pass list held the same way, never in a record of its own.
+**Always `--locked`**, so CI fails on
 lockfile drift rather than on registry drift. Commit `Cargo.lock`.
 
 ## Supply chain (the release lane)

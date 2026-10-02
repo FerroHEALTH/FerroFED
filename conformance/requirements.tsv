@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # Every requirement of the Federation Tier with AQL specification, with the
-# points and tracks that reach it (docs/architecture.md section 12, #41).
+# points and tracks that reach it (section 17 and section 16.3, #41).
 # Entirely derived by `scripts/conformance/matrix.sh --derive`; never edit it.
 # reachability: direct (a point names it), track-only (only a track does),
 # orphan (neither; allowed only when tools/traceability-exceptions.txt lists
