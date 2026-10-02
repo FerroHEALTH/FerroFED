@@ -718,6 +718,9 @@ silent on storage, so this section is FerroFED's own).
 `Endpoint` resources, the form N19 recommends, with a registered connection
 type on every `Endpoint` and exactly one managing organisation (N20). It is
 validated strictly and published as an immutable snapshot through `arc-swap`.
+A `[[node]]` may record its CDR `product` and `version`; they reach
+`meta.federation.endpoints[]` only from there, and are absent when the registry
+does not say, never invented (§9.5, N40).
 A query takes the snapshot once at entry and uses it to the end, so a reload
 never changes membership under a running query. Admission is a reviewed act,
 so there is no registry write API; the document's own change process (review,

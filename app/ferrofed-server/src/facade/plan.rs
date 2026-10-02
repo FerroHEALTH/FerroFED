@@ -5,13 +5,16 @@
 //! asked, and the status of every endpoint that is not (§11.1, N16, N40).
 //!
 //! Every registry member appears in the plan, so `meta.federation` reports the
-//! whole federation (§11.1). A member is asked through one endpoint: the
-//! first active one in endpoint id order. Its other active endpoints are
-//! `excluded`, because asking one node twice returns its rows twice; a
-//! suspended endpoint is `excluded` by operator policy (`docs/architecture.md`
-//! section 8). No specification governs the one-endpoint rule: our own design.
+//! whole federation (§11.1, N16, CP-11). A member is asked through one
+//! endpoint: the first active one in endpoint id order. Its other active
+//! endpoints are `excluded`, because asking one node twice returns its rows
+//! twice; a suspended endpoint is `excluded` by operator policy
+//! (`docs/architecture.md` section 8); and under a [`Selection::Directed`]
+//! request, every endpoint the request did not name is `excluded` by that
+//! decision (§8, §11.1). No specification governs the one-endpoint rule: our
+//! own design.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use ferrofed_engine::dispatch::NodeQuery;
@@ -59,6 +62,28 @@ pub enum TargetsError {
     Plan(#[source] PlanError),
 }
 
+/// Which endpoints the request lets the plan ask (§8, §11.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Selection<'a> {
+    /// The request names no endpoint: every member is a candidate.
+    Undirected,
+    /// The request names these endpoints, through the `FROM ENDPOINT`
+    /// directive or the `openEHR-federation-endpoint` header (§8). Every other
+    /// endpoint is `excluded`, because a decision ruled it out, and stays out
+    /// of scope: it neither clears `complete` nor fails the query (§11.1).
+    Directed(&'a BTreeSet<EndpointId>),
+}
+
+impl Selection<'_> {
+    /// Whether the request lets the plan ask `endpoint`.
+    fn admits(self, endpoint: &EndpointId) -> bool {
+        match self {
+            Self::Undirected => true,
+            Self::Directed(named) => named.contains(endpoint),
+        }
+    }
+}
+
 /// How each member's endpoints take part in the query.
 struct Membership {
     /// The endpoint each member is asked through, when it has an active one.
@@ -81,11 +106,12 @@ struct Membership {
 /// a status cannot be described.
 pub async fn patient(
     snapshot: &RegistrySnapshot,
+    selection: Selection<'_>,
     resolver: Option<&dyn Resolver>,
     query: &PatientQuery,
     deadline: Instant,
 ) -> Result<Targets, TargetsError> {
-    let membership = membership(snapshot);
+    let membership = membership(snapshot, selection);
     // NOTE: §5.4.1, the identifier resolution consumes is withheld from every
     // request the plan sends, the outbound gate's second layer.
     let withheld = Withheld::new([SecretString::from(query.subject().value())]);
@@ -145,16 +171,20 @@ pub async fn patient(
     })
 }
 
-/// The plan of a query that names no patient, dispatched as written to every
-/// member in a deployment with no localizer (N4, last sentence; decision A8).
+/// The plan of a query that names no patient, dispatched as written.
+///
+/// It goes to every member `selection` admits: every member in a deployment
+/// with no localizer (N4, last sentence; decision A8), or the endpoints a
+/// directed request names (§8).
 ///
 /// # Errors
 /// Returns a [`TargetsError`] when a status cannot be described.
 pub fn unscoped(
     snapshot: &RegistrySnapshot,
+    selection: Selection<'_>,
     query: &UnscopedQuery,
 ) -> Result<Targets, TargetsError> {
-    let membership = membership(snapshot);
+    let membership = membership(snapshot, selection);
     let mut plan = exclude(Plan::new(), &membership.excluded)?;
     for endpoint in membership.asked.into_values() {
         plan = plan
@@ -170,7 +200,7 @@ pub fn unscoped(
 }
 
 /// The endpoint each member is asked through, and the endpoints never asked.
-fn membership(snapshot: &RegistrySnapshot) -> Membership {
+fn membership(snapshot: &RegistrySnapshot, selection: Selection<'_>) -> Membership {
     let mut asked = BTreeMap::new();
     let mut excluded = Vec::new();
     for node in snapshot.nodes() {
@@ -178,6 +208,13 @@ fn membership(snapshot: &RegistrySnapshot) -> Membership {
         endpoints.sort_by(|left, right| left.id().cmp(right.id()));
         let mut chosen: Option<EndpointId> = None;
         for endpoint in endpoints {
+            if !selection.admits(endpoint.id()) {
+                excluded.push((
+                    endpoint.id().clone(),
+                    String::from("not named by the request's endpoint directive"),
+                ));
+                continue;
+            }
             match (endpoint.status(), &chosen) {
                 (EndpointStatus::Suspended, _) => excluded.push((
                     endpoint.id().clone(),

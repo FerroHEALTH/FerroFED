@@ -166,6 +166,47 @@ fn a_document_on_disk_loads() -> TestResult {
     Ok(())
 }
 
+/// One node recording its CDR product and version.
+const DESCRIBED: &str = r#"
+[[organisation]]
+id = "org-a"
+
+[[node]]
+id = "node-a"
+organisation = "org-a"
+system_id = "cdr-a.example.org"
+product = "FerroEHR"
+version = "4.3.1"
+
+[[endpoint]]
+id = "node-a-pub"
+node = "node-a"
+url = "https://cdr-a.example.org/openehr"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-a"
+"#;
+
+#[test]
+fn a_node_carries_the_product_and_version_the_registry_records() -> TestResult {
+    let registry = RegistrySnapshot::from_toml_str(DESCRIBED)?;
+    let node = registry
+        .node(&NodeId::new("node-a")?)
+        .ok_or("node-a is declared")?;
+    assert_eq!(Some("FerroEHR"), node.product());
+    assert_eq!(Some("4.3.1"), node.version());
+    Ok(())
+}
+
+#[test]
+fn a_node_that_records_neither_has_no_product_or_version() -> TestResult {
+    let registry = RegistrySnapshot::from_toml_str(TWO_NODES)?;
+    for node in registry.nodes() {
+        assert_eq!(None, node.product(), "{} records no product", node.id());
+        assert_eq!(None, node.version(), "{} records no version", node.id());
+    }
+    Ok(())
+}
+
 #[test]
 fn a_missing_document_is_a_read_error() {
     let missing = Path::new("/nonexistent/ferrofed/registry.toml");

@@ -209,6 +209,26 @@ fn an_empty_node_identifier_is_refused() {
 }
 
 #[test]
+fn an_empty_product_or_version_is_refused() {
+    // §9.5: product and version are reported as the gateway knows them, and an
+    // empty value describes nothing.
+    for member in ["product", "version"] {
+        let document = ONE_NODE.replacen(
+            "system_id = \"cdr-a.example.org\"\n",
+            &format!("system_id = \"cdr-a.example.org\"\n{member} = \"\"\n"),
+            1,
+        );
+        assert!(
+            matches!(
+                refusal(&document),
+                LoadError::EmptyNodeDescription { member: found, .. } if found == member
+            ),
+            "an empty {member} is refused"
+        );
+    }
+}
+
+#[test]
 fn a_fhir_rest_connection_type_is_refused() {
     // §15.2: an openEHR endpoint MUST NOT rely on hl7-fhir-rest.
     let document = ONE_NODE.replace("openehr-rest-query", "hl7-fhir-rest");

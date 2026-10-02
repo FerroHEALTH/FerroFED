@@ -20,6 +20,18 @@ binary follows from v0.0.2.
 
 ## [Unreleased]
 
+### Added
+
+- The full per-endpoint report (#49; §9.5, §11.1, N16, N40, CP-11, CP-31):
+  every registry member appears in `meta.federation.endpoints[]`, an endpoint
+  a directed request did not name as `excluded` with the reason, which stays
+  out of scope, so it neither clears `complete` nor fails the query. A
+  `[[node]]` of the registry document may record its CDR `product` and
+  `version`, which the report carries only from there and omits when the
+  registry does not say. `latency_ms` appears exactly for the endpoints the
+  gateway dispatched to, and `row_count` counts what each node contributed
+  before any federation-level `DISTINCT`, dedup or `LIMIT`.
+
 ## [0.0.3] - 2026-10-02
 
 The first two federated milestones in one release (v0.0.2 and v0.0.3; no

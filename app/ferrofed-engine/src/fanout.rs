@@ -477,6 +477,8 @@ fn answer(
     let mut endpoints = Vec::with_capacity(records.len());
     let mut rows = Vec::new();
     for (endpoint, (outcome, answered)) in records {
+        // NOTE: §9.5, `row_count` is what the node contributed, counted before
+        // any federation-level `DISTINCT`, dedup or `LIMIT` touches the rows.
         let row_count = answered.as_ref().map(Vec::len);
         endpoints.push(endpoint_record(snapshot, &endpoint, outcome, row_count)?);
         if let Some(answered) = answered {
@@ -498,7 +500,8 @@ fn answer(
 }
 
 /// One `meta.federation.endpoints[]` entry, with the registry's node, system
-/// id, managing organisation and base URL (§9.5, N20, N40).
+/// id, managing organisation, base URL, and the node's product and version
+/// when the registry records them, never otherwise (§9.5, N20, N40).
 fn endpoint_record(
     snapshot: &RegistrySnapshot,
     endpoint: &EndpointId,
@@ -522,6 +525,12 @@ fn endpoint_record(
         .with_url(url);
     if let Some(node) = snapshot.node(registered.node()) {
         record = record.with_system_id(node.system_id().as_str());
+        if let Some(product) = node.product() {
+            record = record.with_product(product);
+        }
+        if let Some(version) = node.version() {
+            record = record.with_version(version);
+        }
     }
     if let Some(count) = row_count {
         // NOTE: §9.5, a count past u64::MAX rows cannot arrive in one response.

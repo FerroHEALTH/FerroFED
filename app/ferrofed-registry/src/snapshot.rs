@@ -105,6 +105,8 @@ pub struct Node {
     id: NodeId,
     organisation: OrganisationId,
     system_id: SystemId,
+    product: Option<String>,
+    version: Option<String>,
     identifiers: Vec<NodeIdentifier>,
 }
 
@@ -125,6 +127,20 @@ impl Node {
     #[must_use]
     pub fn system_id(&self) -> &SystemId {
         &self.system_id
+    }
+
+    /// The node's CDR product name, as the federation operator recorded it,
+    /// or `None` when the registry does not say (§9.5, N40).
+    #[must_use]
+    pub fn product(&self) -> Option<&str> {
+        self.product.as_deref()
+    }
+
+    /// The node's CDR product version, as the federation operator recorded
+    /// it, or `None` when the registry does not say (§9.5, N40).
+    #[must_use]
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
     }
 
     /// The identifiers outside services name the node by, in document order.
@@ -375,10 +391,20 @@ fn nodes(
             }
             identifiers.push(identifier);
         }
+        for (member, value) in [("product", &doc.product), ("version", &doc.version)] {
+            if value.as_deref().is_some_and(str::is_empty) {
+                return Err(LoadError::EmptyNodeDescription {
+                    node: doc.id,
+                    member,
+                });
+            }
+        }
         let node = Node {
             id: doc.id.clone(),
             organisation: doc.organisation,
             system_id: doc.system_id,
+            product: doc.product,
+            version: doc.version,
             identifiers,
         };
         nodes.insert(doc.id, node);

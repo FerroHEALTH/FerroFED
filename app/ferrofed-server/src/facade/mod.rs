@@ -150,10 +150,13 @@ async fn federate(
     let deadline = Instant::now()
         .checked_add(federation.budget().overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
+    // TODO(#70): pass the endpoints the directive names; #71 adds the header.
+    let selection = plan::Selection::Undirected;
     let (targets, subject) = match &analysis {
         Analysis::Patient(query) => (
             plan::patient(
                 federation.snapshot(),
+                selection,
                 federation.resolver(),
                 query,
                 deadline,
@@ -163,7 +166,7 @@ async fn federate(
             Some(query.subject()),
         ),
         Analysis::Unscoped(query) => (
-            plan::unscoped(federation.snapshot(), query).map_err(Failure::Plan)?,
+            plan::unscoped(federation.snapshot(), selection, query).map_err(Failure::Plan)?,
             None,
         ),
     };
