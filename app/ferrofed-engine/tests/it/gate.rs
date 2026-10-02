@@ -208,6 +208,45 @@ async fn the_same_short_identifier_elsewhere_is_never_sent() -> TestResult {
     Ok(())
 }
 
+/// A withheld value every minted id holds: the hyphen and the version digit
+/// before the third group of a version 4 UUID (RFC 9562 §5.4).
+const IN_EVERY_MINTED_ID: &str = "-4";
+
+// conformance: CP-26
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+async fn a_withheld_value_inside_the_minted_id_is_sent_with_that_id() -> TestResult {
+    let server = node().await;
+    let snapshot = registry(&server.uri())?;
+    let id = OutboundId::mint();
+    assert!(id.to_string().contains(IN_EVERY_MINTED_ID), "{id}");
+    let deadline = Instant::now()
+        .checked_add(Duration::from_secs(5))
+        .ok_or("the deadline is past the platform clock")?;
+    let withheld = Withheld::new([SecretString::from(IN_EVERY_MINTED_ID)]);
+    let options = DispatchOptions::new(deadline)
+        .with_withheld(Arc::new(withheld))
+        .with_request_id(id);
+    let scoped = NodeQuery::new(CLEAN).with_scope(&HierObjectId::new(SCOPE)?);
+    client(&snapshot)?.query(&scoped, &options).await?;
+    let requests = server.received_requests().await.ok_or("recording is on")?;
+    let [request] = requests.as_slice() else {
+        return Err(format!("expected one request, got {}", requests.len()).into());
+    };
+    assert_eq!(
+        Some(id.to_string().as_bytes()),
+        request
+            .headers
+            .get(REQUEST_ID_HEADER)
+            .map(http::HeaderValue::as_bytes),
+        "the gate let the minted id through unchanged"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 #[expect(
     clippy::panic_in_result_fn,

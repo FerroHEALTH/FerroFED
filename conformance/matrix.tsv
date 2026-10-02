@@ -54,7 +54,7 @@ CP-22	Gateway	N29	9	planned	#69	-
 CP-23	Gateway	N30	9	planned	#73	-
 CP-24	Gateway	N31	9	planned	#61	-
 CP-25	Gateway	N32	9	planned	#68	-
-CP-26	Gateway	N33	10	covered	#45,#90	-
+CP-26	Gateway	N33	10	covered	#45,#90,#217	-
 CP-27	Node	N34	10	node-profile	#93	a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design
 CP-28	Gateway	N35	3	planned	#71	-
 CP-29	Gateway	N36	5,6	planned	#56,#66	-

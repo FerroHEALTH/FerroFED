@@ -210,19 +210,54 @@ pub(crate) async fn received(server: &MockServer) -> Result<Vec<String>, Box<dyn
     Ok(bodies)
 }
 
-/// Every byte `server` received, request line and headers included.
-pub(crate) async fn wire(server: &MockServer) -> Result<String, Box<dyn Error>> {
-    let requests = server.received_requests().await.ok_or("recording is on")?;
-    let mut text = String::new();
-    for request in requests {
-        text.push_str(request.url.as_str());
-        for (name, value) in &request.headers {
-            text.push_str(name.as_str());
-            text.push_str(value.to_str().unwrap_or_default());
-        }
-        text.push_str(&String::from_utf8_lossy(&request.body));
+/// Every byte a mock server received, kept as bytes so a search sees a header
+/// value or a body that is not UTF-8 too.
+#[derive(Debug)]
+pub(crate) struct Wire(Vec<u8>);
+
+impl Wire {
+    /// Whether the received bytes hold `needle`'s bytes anywhere.
+    pub(crate) fn contains(&self, needle: &str) -> bool {
+        let needle = needle.as_bytes();
+        needle.is_empty() || self.0.windows(needle.len()).any(|window| window == needle)
     }
-    Ok(text)
+
+    /// Whether `needle` occurs in the received bytes, ASCII case ignored.
+    pub(crate) fn contains_ignoring_ascii_case(&self, needle: &str) -> bool {
+        let needle = needle.as_bytes();
+        needle.is_empty()
+            || self
+                .0
+                .windows(needle.len())
+                .any(|window| window.eq_ignore_ascii_case(needle))
+    }
+
+    /// Whether nothing was received.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl std::fmt::Display for Wire {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&String::from_utf8_lossy(&self.0))
+    }
+}
+
+/// Every byte `server` received: the request target, each header name and
+/// raw value, and the raw body.
+pub(crate) async fn wire(server: &MockServer) -> Result<Wire, Box<dyn Error>> {
+    let requests = server.received_requests().await.ok_or("recording is on")?;
+    let mut bytes = Vec::new();
+    for request in requests {
+        bytes.extend_from_slice(request.url.as_str().as_bytes());
+        for (name, value) in &request.headers {
+            bytes.extend_from_slice(name.as_str().as_bytes());
+            bytes.extend_from_slice(value.as_bytes());
+        }
+        bytes.extend_from_slice(&request.body);
+    }
+    Ok(Wire(bytes))
 }
 
 /// The federated answer, read for the members the tests assert on.

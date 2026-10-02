@@ -203,12 +203,10 @@ impl<T: Transport> NodeClient<T> {
             .flatten()
             .map(|number| number.to_string())
             .collect();
-        let request_id = options.request_id.map(|id| id.to_string());
-        let headers: Vec<(&'static str, &str)> = request_id
-            .as_deref()
-            .map(|id| (REQUEST_ID_HEADER, id))
-            .into_iter()
-            .collect();
+        // NOTE: §5.4.1, N33; exempting REQUEST_ID_HEADER is our own design: its
+        // value is an OutboundId, minted with no client input, in which a short
+        // all-hex identifier can occur by chance.
+        let headers: [(&'static str, &str); 0] = [];
         let outbound = Outbound {
             aql: query.aql(),
             scope: query.scope.as_deref(),

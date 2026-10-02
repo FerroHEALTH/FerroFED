@@ -27,6 +27,10 @@
 //! No other header is set, and none is copied from the client request. No
 //! specification governs the correlation header itself: our own design, under
 //! the name every proxy already uses.
+//!
+//! The outbound gate does not search the minted id for a withheld identifier
+//! ([`crate::hygiene`]): it carries no client input, and a short all-hex
+//! identifier can occur in a random UUID by chance.
 
 use std::fmt;
 
@@ -46,6 +50,13 @@ impl OutboundId {
     pub fn mint() -> Self {
         Self(Uuid::new_v4())
     }
+
+    /// The id `uuid`, so a unit test can pin a value; production code only
+    /// mints.
+    #[cfg(test)]
+    pub(crate) fn fixed(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
 }
 
 impl fmt::Display for OutboundId {
@@ -57,7 +68,103 @@ impl fmt::Display for OutboundId {
 #[cfg(test)]
 mod tests {
     use super::OutboundId;
+    use crate::dispatch::{
+        DispatchError, DispatchOptions, NodeClient, NodeQuery, NodeReply, REQUEST_ID_HEADER,
+    };
+    use crate::hygiene::{Part, Withheld};
+    use ferrofed_registry::snapshot::RegistrySnapshot;
     use http::HeaderValue;
+    use openehr_its::rest::client::ReqwestTransport;
+    use secrecy::SecretString;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// A fixed version 4 UUID, and a short all-hex value that occurs in it.
+    const FIXED_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
+    const IN_FIXED_ID: &str = "4199";
+
+    /// What a node answering every query with an empty result set made of
+    /// `aql`, sent under [`FIXED_ID`] with [`IN_FIXED_ID`] withheld, and the
+    /// raw `X-Request-Id` values it received.
+    async fn sent(
+        aql: &str,
+    ) -> Result<(Result<NodeReply, DispatchError>, Vec<Vec<u8>>), Box<dyn std::error::Error>> {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/query/aql"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                br##"{"q":"node","columns":[{"name":"#0"}],"rows":[]}"##.to_vec(),
+                "application/json",
+            ))
+            .mount(&server)
+            .await;
+        let snapshot = RegistrySnapshot::from_toml_str(&format!(
+            "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr-a.example.org\"\n\n[[endpoint]]\nid = \"node-a-pub\"\nnode = \"node-a\"\nurl = \"{}\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n",
+            server.uri()
+        ))?;
+        let endpoint = snapshot.endpoints().next().ok_or("one endpoint")?;
+        let client = NodeClient::new(
+            endpoint,
+            ReqwestTransport::with_timeout(Duration::from_secs(5))?,
+        )?;
+        let deadline = Instant::now()
+            .checked_add(Duration::from_secs(5))
+            .ok_or("the deadline is past the platform clock")?;
+        let options = DispatchOptions::new(deadline)
+            .with_withheld(Arc::new(Withheld::new([SecretString::from(IN_FIXED_ID)])))
+            .with_request_id(OutboundId::fixed(uuid::Uuid::parse_str(FIXED_ID)?));
+        let reply = client.query(&NodeQuery::new(aql), &options).await;
+        let requests = server.received_requests().await.ok_or("recording is on")?;
+        let ids = requests
+            .iter()
+            .flat_map(|request| request.headers.get_all(REQUEST_ID_HEADER))
+            .map(|value| value.as_bytes().to_vec())
+            .collect();
+        Ok((reply, ids))
+    }
+
+    // conformance: CP-26
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn a_withheld_value_inside_the_minted_id_is_sent_with_that_id() -> TestResult {
+        assert!(FIXED_ID.contains(IN_FIXED_ID), "the value is in the id");
+        let (reply, ids) = sent("SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c").await?;
+        assert!(reply.is_ok(), "the gate refused a clean request: {reply:?}");
+        assert_eq!(vec![FIXED_ID.as_bytes().to_vec()], ids);
+        Ok(())
+    }
+
+    // conformance: CP-26
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn the_same_value_in_the_aql_is_still_never_sent() -> TestResult {
+        let aql = format!(
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE c/name/value = '{IN_FIXED_ID}'"
+        );
+        let (reply, ids) = sent(&aql).await?;
+        assert!(
+            matches!(
+                reply,
+                Err(DispatchError::Withheld {
+                    part: Part::Aql,
+                    ..
+                })
+            ),
+            "{reply:?}"
+        );
+        assert!(ids.is_empty(), "nothing reached the node");
+        Ok(())
+    }
 
     #[test]
     fn a_minted_id_is_a_fresh_hyphenated_v4_uuid_and_a_legal_header_value() {

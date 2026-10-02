@@ -13,6 +13,12 @@
 //! the part of the request, never the value, and nothing is sent. A write
 //! body is never inspected or altered (§5.4 scope note); this gate covers the
 //! query requests the gateway composes.
+//!
+//! The dispatcher passes every header it adds except the minted
+//! `X-Request-Id`: that value is an
+//! [`OutboundId`](crate::outbound_id::OutboundId), made from no client input,
+//! so it cannot carry an identifier, and a short all-hex identifier can occur
+//! inside it by chance, which would refuse a valid request.
 
 use std::fmt;
 
@@ -110,7 +116,8 @@ pub struct Outbound<'a> {
     pub paging: &'a [String],
     /// The URL the request is sent to.
     pub url: &'a str,
-    /// The headers the gateway adds, by name.
+    /// The headers the gateway adds, by name, other than the minted
+    /// `X-Request-Id`.
     pub headers: &'a [(&'static str, &'a str)],
 }
 
