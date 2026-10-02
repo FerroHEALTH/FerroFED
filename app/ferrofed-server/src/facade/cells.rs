@@ -33,6 +33,9 @@ pub enum CellError {
     /// A column re-injects the subject, and the query names none.
     #[error("a column re-injects the patient, and the query names none")]
     NoSubject,
+    /// A column is an ENDPOINT attribute, which no node row carries (§9.3).
+    #[error("a column is an ENDPOINT attribute, which no node row carries")]
+    EndpointAttribute,
 }
 
 /// The cells every node row must carry for `sources` to read it: one past the
@@ -43,7 +46,7 @@ pub fn width(sources: &[ColumnSource]) -> usize {
         .iter()
         .filter_map(|source| match source {
             ColumnSource::Node(index) => index.checked_add(1),
-            ColumnSource::Subject | ColumnSource::Namespace => None,
+            ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint => None,
         })
         .max()
         .unwrap_or(0)
@@ -94,6 +97,8 @@ fn cell(
         ColumnSource::Namespace => subject
             .map(|subject| Value::String(subject.namespace().to_owned()))
             .ok_or(CellError::NoSubject),
+        // TODO(#72): the attribute's value from the registry and the node that answered the row.
+        ColumnSource::Endpoint => Err(CellError::EndpointAttribute),
     }
 }
 

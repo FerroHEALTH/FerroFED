@@ -91,12 +91,14 @@ the node is reported and the query succeeds.
 | `dedup-invalid` | 400 | The `openEHR-federation-dedup` header is repeated, or names neither `none` nor `version-identity` (§10, §7a.2). |
 | `parameter-invalid` | 400 | A query parameter is `null`, an array, an object, or an integer outside 64 bits. |
 | `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). |
-| `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope (§11.2, §11.3). |
+| `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope, or the `ORGANISATION` directive names only organisations that manage no endpoint (§11.2, §11.3). |
 | `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node; the gateway never chooses between them (§12.5.2, N42). |
 | `controlling-system-unreachable` | 409 | A versioned write's controlling system is not reachable, and the gateway never writes to a copy (§10.3, N36). |
 | `internal` | 500 | The gateway failed on its own side. The operator's log records the failure under the gateway's request id. |
 | `not-found` | 404 | The path is outside every surface the gateway serves. |
-| `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32). |
+| `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32), or the query selects ENDPOINT attributes through the `FROM ENDPOINT` variable (`p/id`, `p/system_id`), which the gateway does not add to rows; that is planned build order (§9.3, N12). |
+| `endpoint-unknown` | 400 | The `FROM ENDPOINT` directive names an identifier that is not an endpoint of the registry (§8.4.1, N19). The message points at the identifier by its place in the list and never quotes it. |
+| `organisation-unknown` | 400 | The `ORGANISATION` directive names an identifier that is not an organisation of the registry (§8.1, §8.4.1, N20). The message points at the identifier by its place in the list and never quotes it. |
 
 The two `409` codes belong to follow-up routing (§12), which is planned build
 order; the codes are fixed now, so a client can handle them before they
@@ -136,6 +138,7 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `order-not-selected` | 400 | Under `DISTINCT`, an `ORDER BY` path is not also selected (N13). |
 | `unordered-distinct-cut` | 400 | Under `DISTINCT` with `ORDER BY` and `LIMIT`, a selected function column reads a path that is not selected, or a value from outside the row (`NOW()` and the other clock functions, `TERMINOLOGY`). AQL orders a node only on paths, so a node cut at its `LIMIT` could keep different rows on each repeat (§11.6.1, AQL §ORDER BY). Select the paths the function reads, or drop the `LIMIT`. |
 | `node-set-undefined` | 400 | The query names no patient and no endpoints, so no node set is defined (N4, §8). |
+| `endpoint-variable` | 400 | The variable of the `FROM ENDPOINT` directive is bound again in `FROM`, or used anywhere but as a selected column: in `WHERE`, in `ORDER BY` or inside a function. A path through it selects an ENDPOINT attribute (§8.1, §9.3). |
 
 ## Other answers
 

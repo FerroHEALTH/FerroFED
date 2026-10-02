@@ -1,0 +1,1 @@
+SELECT COUNT(c/uid/value) FROM endpoint ["node_1"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '4711'

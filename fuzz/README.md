@@ -10,7 +10,7 @@ flags; nothing built here ships.
 
 | Target | Entry point | Seeds |
 |---|---|---|
-| `aql_rewrite` | `openehr_federation::aql::analyse` over AQL text and parameters, then `for_node` | the façade query of every reference golden case, and `OFFSET` pages under both strategies |
+| `aql_rewrite` | `openehr_federation::aql::analyse` over AQL text and parameters, then `for_node` | the façade query of every reference golden case, `OFFSET` pages under both strategies, and the `FROM ENDPOINT` and `ORGANISATION` directive |
 | `adhoc_query` | the ITS-REST `AdhocQueryExecute` decode, the façade's `query_parameters` intake, then `analyse` | the same queries as request bodies, bare, with paging and a parameter, and with an `offset` member past zero |
 | `result_set_meta` | the ITS-REST `RESULT_SET` decode, then `envelope::read` of `meta.federation` | the specification's section 9.4 example |
 | `options_root` | the `OPTIONS {base}/` body decode | the specification's section 7a.2 example |
@@ -43,8 +43,9 @@ vendored corpora, and `scripts/fuzz/seeds.sh --check` fails when they are out
 of date. Never hand-edit a `gen-*` file. A regression seed committed after a
 finding carries any other name, so the generator leaves it alone, and so does a
 hand-written seed for a path the corpora do not reach: the `entry-*` carrier
-seeds and the `offset-*` pages, which end in `\0\x01` where they select
-`reject`.
+seeds, the `offset-*` pages, which end in `\0\x01` where they select
+`reject`, and the `directive-*` queries, which carry the `ORGANISATION`
+selector and a directive with no variable.
 
 ## Running a target
 

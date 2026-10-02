@@ -15,7 +15,9 @@
 //! completion strategy the request selects (§11.4), [`dedup`] the dedup mode
 //! (§10), [`prefer`] reads the
 //! client deadline that can shorten the budget (§11.5), [`intake`] types the query
-//! parameters, the rewrite analyses the query and names the patient,
+//! parameters, [`target`] selects the node set a `FROM ENDPOINT` or
+//! `ORGANISATION` directive names (§8.1), the rewrite analyses the query and
+//! names the patient,
 //! [`plan`] resolves the patient at every member and builds one node query
 //! per member that knows them, the engine fans out under the budget and the
 //! strategy, and [`cells`] builds each façade row with the subject columns
@@ -32,7 +34,10 @@ pub mod intake;
 pub mod plan;
 pub mod prefer;
 pub mod security;
+pub mod target;
 
+use std::collections::BTreeSet;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -43,9 +48,11 @@ use axum::{Extension, Json};
 use ferrofed_engine::fanout::{Budget, Completion, FanOutError, fan_out_within};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_registry::id::EndpointId;
 use http::{HeaderMap, HeaderValue, StatusCode};
+use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::Refusal;
-use openehr_federation::aql::{Analysis, Paging, analyse};
+use openehr_federation::aql::{Analysis, ColumnSource, Paging, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
 
@@ -141,6 +148,14 @@ enum Failure {
     /// The query is refused before anything is dispatched.
     #[error(transparent)]
     Refused(#[from] Refusal),
+    /// The directive names what the registry does not know (§8.4.1).
+    #[error(transparent)]
+    Target(#[from] target::TargetError),
+    /// The query selects ENDPOINT attributes (§9.3, N12).
+    #[error(
+        "the query selects ENDPOINT attributes, which this gateway does not add to rows (§9.3, N12)"
+    )]
+    EndpointAttributes,
     /// The fan-out could not be planned.
     #[error("the federated query could not be planned")]
     Plan(#[source] plan::TargetsError),
@@ -175,6 +190,11 @@ impl Failure {
             Self::Dedup(_) => Code::DedupInvalid,
             Self::Parameter(_) => Code::ParameterInvalid,
             Self::Refused(refusal) => Code::Refused(refusal.into()),
+            Self::Target(target::TargetError::UnknownEndpoint { .. }) => Code::EndpointUnknown,
+            Self::Target(target::TargetError::UnknownOrganisation { .. }) => {
+                Code::OrganisationUnknown
+            }
+            Self::EndpointAttributes => Code::NotImplemented,
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
             Self::NoDestination => Code::NoDestination,
             // NOTE: §11.1, a node row the gateway cannot use is a node-error
@@ -225,8 +245,8 @@ struct Query<'a> {
 }
 
 /// Analyses the façade query of `request` under the request's `completion`
-/// and `dedup` mode, recording a refusal or a strip as a security event
-/// (§5.4.3).
+/// and `dedup` mode, directed at the `named` endpoints when the query names
+/// them, recording a refusal or a strip as a security event (§5.4.3).
 ///
 /// An aggregate recombined across nodes is refused under best-effort: it is
 /// exactly correct only over every node in scope (§11.6.3), and the gateway
@@ -234,6 +254,7 @@ struct Query<'a> {
 /// `partial` (§11.4).
 fn analysed(
     federation: &Federation,
+    (facade, named): (FacadeQuery, Option<&BTreeSet<EndpointId>>),
     request: &AdhocQueryExecute,
     (completion, dedup): (Completion, DedupMode),
     request_id: &str,
@@ -243,8 +264,12 @@ fn analysed(
         offset: request.offset,
         fetch: request.fetch,
     };
-    let context = federation.context().clone().with_dedup(dedup);
-    let analysis = analyse(&request.q, &parameters, paging, &context)
+    let mut context = federation.context().clone().with_dedup(dedup);
+    if let Some(endpoints) = named.and_then(|named| NonZeroUsize::new(named.len())) {
+        context = context.with_targeting(Targeting::Directed { endpoints });
+    }
+    let analysis = facade
+        .analyse(&parameters, paging, &context)
         .and_then(|analysis| {
             if completion == Completion::BestEffort {
                 analysis.admit_best_effort()?;
@@ -255,7 +280,58 @@ fn analysed(
     if let Analysis::Patient(query) = &analysis {
         security::stripped(query, request_id);
     }
+    // TODO(#72): add the ENDPOINT attributes to the rows from the registry and the resolving node.
+    if analysis.sources().contains(&ColumnSource::Endpoint) {
+        return Err(Failure::EndpointAttributes);
+    }
     Ok(analysis)
+}
+
+/// The request in `body`, the endpoints its directive selects, and the
+/// analysis of its query under the request's modes.
+fn read(
+    federation: &Federation,
+    body: &[u8],
+    modes: (Completion, DedupMode),
+    request_id: &str,
+) -> Result<(AdhocQueryExecute, Option<BTreeSet<EndpointId>>, Analysis), Failure> {
+    // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
+    // body is refused with a fixed message.
+    let request: AdhocQueryExecute =
+        serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?;
+    let (facade, named) = directed(federation, &request.q, request_id)?;
+    let analysis = analysed(
+        federation,
+        (facade, named.as_ref()),
+        &request,
+        modes,
+        request_id,
+    )?;
+    Ok((request, named, analysis))
+}
+
+/// The façade query `q`, parsed, and the endpoints its directive selects, or
+/// `None` for an undirected query (§8.1).
+///
+/// A directive that selects no endpoint leaves the request no destination
+/// (§11.2).
+fn directed(
+    federation: &Federation,
+    q: &str,
+    request_id: &str,
+) -> Result<(FacadeQuery, Option<BTreeSet<EndpointId>>), Failure> {
+    let facade =
+        FacadeQuery::parse(q).inspect_err(|refusal| security::refused(refusal, request_id))?;
+    // TODO(#71): the endpoint and organisation headers join the directive here, and a set that
+    // differs from it is a 400 naming both (§8.4.1).
+    let named = facade
+        .directive()
+        .map(|directive| target::selected(federation.snapshot(), directive))
+        .transpose()?;
+    if named.as_ref().is_some_and(BTreeSet::is_empty) {
+        return Err(Failure::NoDestination);
+    }
+    Ok((facade, named))
 }
 
 /// Runs one federated query and returns the status and the `RESULT_SET`.
@@ -280,16 +356,13 @@ async fn federate(
     } = query;
     let logged = outbound.to_string();
     let request_id = logged.as_str();
-    // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
-    // body is refused with a fixed message.
-    let request: AdhocQueryExecute =
-        serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?;
-    let analysis = analysed(federation, &request, (completion, dedup), request_id)?;
+    let (request, named, analysis) = read(federation, body, (completion, dedup), request_id)?;
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
-    // TODO(#70): pass the endpoints the directive names; #71 adds the header.
-    let selection = plan::Selection::Undirected;
+    let selection = named
+        .as_ref()
+        .map_or(plan::Selection::Undirected, plan::Selection::Directed);
     let (targets, subject) = match &analysis {
         Analysis::Patient(query) => (
             plan::patient(
@@ -368,7 +441,7 @@ async fn federate(
 
 #[cfg(test)]
 mod tests {
-    use super::{Failure, cells, completeness, dedup, plan};
+    use super::{Failure, cells, completeness, dedup, plan, target};
     use crate::error::Code;
     use ferrofed_engine::fanout::FanOutError;
     use ferrofed_identity::patient::PatientRefError;
@@ -408,6 +481,27 @@ mod tests {
                 Failure::Refused(Refusal::OffsetUnsupported),
                 "offset-unsupported",
                 StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Target(target::TargetError::UnknownEndpoint {
+                    position: 1,
+                    at: None,
+                }),
+                "endpoint-unknown",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Target(target::TargetError::UnknownOrganisation {
+                    position: 1,
+                    at: None,
+                }),
+                "organisation-unknown",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::EndpointAttributes,
+                "not-implemented",
+                StatusCode::NOT_IMPLEMENTED,
             ),
             (
                 Failure::Plan(plan::TargetsError::Patient(PatientRefError::EmptyNamespace)),

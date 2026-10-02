@@ -1,0 +1,1 @@
+SELECT p/id AS endpoint_id, c/uid/value FROM ORGANISATION p ["org-a"] CONTAINS COMPOSITION c WHERE c/content[openEHR-EHR-OBSERVATION.blood_pressure.v2]/subject/identifiers/id = '4711'

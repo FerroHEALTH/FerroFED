@@ -342,6 +342,17 @@ impl RegistrySnapshot {
         self.endpoints.values()
     }
 
+    /// The endpoints an organisation manages, ordered by `endpoint_id`: the
+    /// endpoints an `ORGANISATION` selector stands for (§8.1, N20).
+    pub fn endpoints_managed_by<'a>(
+        &'a self,
+        organisation: &'a OrganisationId,
+    ) -> impl Iterator<Item = &'a Endpoint> {
+        self.endpoints
+            .values()
+            .filter(move |endpoint| endpoint.managing_organisation == *organisation)
+    }
+
     /// The endpoints of one node, ordered by `endpoint_id`.
     pub fn endpoints_of<'a>(&'a self, node: &'a NodeId) -> impl Iterator<Item = &'a Endpoint> {
         self.endpoints
