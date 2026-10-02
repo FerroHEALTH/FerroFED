@@ -878,13 +878,16 @@ none):
 
 1. decode each `active` node's rows positionally against the façade's own
    `SELECT`, never against node-reported column names;
-2. version-identity dedup, if requested (below);
-3. `DISTINCT` over the positional value tuple under the Tier equality (N13),
-   after dedup, because dedup decides which copy's provenance survives;
+2. check each node's visible order (below) on the rows it returned, before
+   anything is removed, so a node at its `LIMIT` is still seen as cut;
+3. version-identity dedup, if requested (below);
 4. `ORDER BY` under the Tier comparator and the tie-break;
-5. `OFFSET` and `LIMIT`;
-6. re-inject the subject and ENDPOINT projections (N5, §9.3);
-7. render `columns[]` from the façade AQL (N17, CP-35).
+5. `DISTINCT` over the positional value tuple under the Tier equality (N13),
+   after dedup, because dedup decides which copy's provenance survives, and
+   after the order, because the copy kept is the first in it;
+6. `OFFSET` and `LIMIT`;
+7. re-inject the subject and ENDPOINT projections (N5, §9.3);
+8. render `columns[]` from the façade AQL (N17, CP-35).
 
 The k-way merge is the optimised form of step 4: each node's stream is sorted
 once its agreement check passes, so a binary heap over the node heads yields
@@ -915,7 +918,14 @@ The row order is the `ORDER BY` keys in turn, then `endpoint_id`, then the
 row key by the comparator above (the `uid/value` or `ehr_id/value` string a
 node sorts too),
 then the positional row under rule 4, so a repeated query returns the same
-bytes (§11.6.1 MUST). An `ORDER BY` path that is not in the `SELECT` is added
+bytes (§11.6.1 MUST). Under `version-identity` dedup the row key, the version
+uid, comes before `endpoint_id`. §11.6.1 MUSTs only "a stable secondary key"
+and RECOMMENDS `endpoint_id`, then uid; with the endpoint first, a suppressed
+copy tied on the client's keys can take a node's last slot ahead of a row of
+the global top `n`, and the containment argument below fails. With the uid
+first, every row a node orders ahead of a row of the top `n` is either kept
+or a copy whose kept twin carries the same keys and uid, so it ranks ahead in
+the Tier order too, and the node's top `n` still holds the row. An `ORDER BY` path that is not in the `SELECT` is added
 to the dispatched `SELECT` as a hidden column and stripped after the merge
 (decision A28); the reference implementation refuses such a query. The
 reference implementation compares every non-numeric value by its string form,
@@ -1067,8 +1077,22 @@ the original uid; the second matches the RM's copy semantics. So the duplicate
 is the whole version id seen at two endpoints, and the keeper is the copy from
 the endpoint whose `system_id` equals the uid's `creating_system_id`, else the
 lowest `endpoint_id`. Two versions of one object both survive, which §10.2
-requires for version-history queries. Rows with no uid pass through, and every
-suppression is recorded in `meta.federation.dedup` (§10.3). The reference
+requires for version-history queries. The unit is the copy: every row of the
+keeper's copy stays, and every row of a dropped copy is suppressed and
+counted. Rows with no uid (a `null` cell) pass through, and every
+suppression is recorded in `meta.federation.dedup` (§10.3): the mode on
+every answer, failing `424` and `504` envelopes included, and beside the rows
+`suppressed_rows` and `suppressed_endpoints[]`, counted before `DISTINCT`,
+`OFFSET` and `LIMIT`. The uid is dispatched as a hidden column when the
+client does not select it, except under `DISTINCT`, where only a selected uid
+is the key (N13); a query with a `LIMIT` and no `ORDER BY` is ordered on it.
+`none` is accepted when sent, and any other value, or a repeated header, is
+`400` `dedup-invalid`, never served as `none`, as §11.4 rules for an
+unoffered completeness value. A uid cell that is neither `null` nor an
+`OBJECT_VERSION_ID` is a defect of the node, which is `node-error` ("a
+response the gateway could not use", §11.1), never a row without a
+duplicate. A recombined aggregate under the mode is `400`
+`indecomposable-aggregate` (§11.6.3). The reference
 implementation groups by `object_id` alone and so collapses a version history.
 The contradiction between §10.2 and §10.3 is held on #17.
 
@@ -1117,9 +1141,11 @@ close on those tests.
    outcome is `active`;
 5. the decision table holds for every outcome vector, and the failing body
    still validates against `federated-result-set.schema.json`;
-6. dedup leaves at most one row per full `ObjectVersionId`, keeps the
-   originating copy when present, leaves rows with no uid untouched, keeps two
-   versions of one object, and records exactly the suppressed count;
+6. dedup leaves at most one copy per full `ObjectVersionId`, keeping every
+   row of the keeper, keeps the originating copy when present, leaves rows
+   with no uid untouched, keeps two versions of one object, records exactly
+   the suppressed count, and with `LIMIT n` per node equals the oracle over
+   the deduplicated union;
 7. `DISTINCT` is idempotent and leaves no two rows equal under the Tier
    equality;
 8. recombined `COUNT`, `SUM`, `MIN`, `MAX` and `AVG` equal the aggregate over

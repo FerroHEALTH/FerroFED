@@ -303,6 +303,11 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- CP-29 is `planned` again in the conformance matrix and the gateway badge
+  (#221): only its visibility half, the dedup record of §10.2 and §10.3, is
+  built, and its write-routing and `409` half is #66. The dedup tests carry
+  CP-9 alone. `scripts/checks/crate-version-guard.sh` run without its base
+  ref prints its usage on stderr and exits 2.
 - The book's "What FerroFED claims" page lists decomposable aggregates (#54)
   among what has merged since v0.0.3, and no longer as planned; de-duplication
   is what remains planned for v0.0.4 (#211). The `merge` module doc of

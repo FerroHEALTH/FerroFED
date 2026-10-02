@@ -96,7 +96,10 @@ async fn by_default_the_imported_composition_comes_back_twice() -> TestResult {
     Ok(())
 }
 
-// conformance: CP-9 CP-29
+/// Covers the visibility half of CP-29 (§10.2, §10.3): the suppressed
+/// copies stay visible in `meta.federation.dedup`; its write-routing half is
+/// #66.
+// conformance: CP-9
 #[tokio::test]
 async fn under_version_identity_the_originating_copy_is_kept_and_the_copy_named() -> TestResult {
     let (a, b) = scenario().await?;

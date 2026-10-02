@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Version-identity dedup at the Tier (§10.2, §10.3, N15, N36, CP-9, CP-29):
-//! one `OBJECT_VERSION_ID` held at two endpoints keeps the originating copy,
-//! every suppression is recorded, two versions of one object both stay, and
-//! with `ORDER BY` and `LIMIT` the answer is still the Tier's top `n` of the
-//! deduplicated union (§11.6.1, §11.6.2).
+//! Version-identity dedup at the Tier (§10.2, §10.3, N15, N36, CP-9, and the
+//! visibility half of CP-29): one `OBJECT_VERSION_ID` held at two endpoints
+//! keeps the originating copy, every suppression is recorded, two versions of
+//! one object both stay, and with `ORDER BY` and `LIMIT` the answer is still
+//! the Tier's top `n` of the deduplicated union (§11.6.1, §11.6.2).
 #![cfg(feature = "merge")]
 
 use std::cmp::Ordering;
@@ -86,7 +86,10 @@ fn by_default_both_copies_of_an_imported_composition_come_back() {
     assert_eq!(merged.suppressed().rows(), 0);
 }
 
-// conformance: CP-9 CP-29
+/// Covers the visibility half of CP-29 (§10.2, §10.3): the suppressed
+/// copies stay visible in `meta.federation.dedup`; its write-routing half is
+/// #66.
+// conformance: CP-9
 #[test]
 fn under_version_identity_the_originating_copy_is_kept_and_the_copy_recorded() {
     let merged = accepted(imported(), &unordered());
@@ -228,7 +231,10 @@ fn a_row_too_short_for_its_version_column_is_refused() {
     );
 }
 
-// conformance: CP-9 CP-29
+/// Covers the visibility half of CP-29 (§10.2, §10.3): the suppressed
+/// copies stay visible in `meta.federation.dedup`; its write-routing half is
+/// #66.
+// conformance: CP-9
 #[test]
 fn the_record_carries_the_mode_and_under_version_identity_what_was_suppressed() {
     let none = Merged::default().suppressed().record(DedupMode::None);
@@ -544,7 +550,10 @@ proptest! {
         );
     }
 
-    // conformance: CP-9 CP-29
+    /// Covers the visibility half of CP-29 (§10.2, §10.3): the suppressed
+    /// copies stay visible in `meta.federation.dedup`; its write-routing half is
+    /// #66.
+    // conformance: CP-9
     #[test]
     fn dedup_keeps_one_endpoint_per_version_and_records_exactly_what_it_dropped(
         (versions, held) in federation(),
