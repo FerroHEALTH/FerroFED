@@ -22,6 +22,7 @@ mod order;
 mod outbound;
 mod outbound_id;
 mod readiness;
+mod registry_fhir;
 mod request_log;
 mod resolution;
 mod routing;

@@ -19,6 +19,8 @@ use ferrofed_engine::dispatch::{NodeClients, SetupError, SharedCredentials};
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
 use ferrofed_identity::dev::{DevCrossRefError, StaticResolver};
+use ferrofed_identity::directory;
+use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::Resolver;
@@ -30,8 +32,8 @@ use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
-use crate::config::NodeSelection;
 use crate::config::settings::{PixmSettings, Scheme, Settings};
+use crate::config::{NodeSelection, RegistryFormat};
 
 /// The federation a server serves the federated query over.
 pub struct Federation {
@@ -56,6 +58,16 @@ pub enum FederationError {
         /// What the registry reported.
         #[source]
         source: Box<LoadError>,
+    },
+    /// The registry document in FHIR form could not be read or refused to
+    /// load (N19, N20, §15.2).
+    #[error("the registry document {} could not be loaded", path.display())]
+    FhirRegistry {
+        /// The document named by `registry.document`.
+        path: PathBuf,
+        /// What the FHIR form reported.
+        #[source]
+        source: Box<FhirFormError>,
     },
     /// The `[dev]` table is set but no registry document is, so its rows name
     /// members that do not exist.
@@ -146,11 +158,20 @@ impl Federation {
         let Some(selection) = settings.federation.node_selection else {
             return Err(FederationError::NodeSelectionUndeclared);
         };
-        let snapshot =
-            RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
-                path: path.clone(),
-                source: Box::new(source),
-            })?;
+        let snapshot = match settings.registry_format {
+            RegistryFormat::Toml => {
+                RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
+                    path: path.clone(),
+                    source: Box::new(source),
+                })?
+            }
+            RegistryFormat::Fhir => {
+                directory::read(path).map_err(|source| FederationError::FhirRegistry {
+                    path: path.clone(),
+                    source: Box::new(source),
+                })?
+            }
+        };
         let resolver = match (&settings.dev, &settings.pixm) {
             (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
             (None, None) => None,

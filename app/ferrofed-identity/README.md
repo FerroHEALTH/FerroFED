@@ -14,6 +14,10 @@ It holds `PatientRef`, the patient identifier as the gateway carries it
 (redacted in every rendering and never serialized), the `Resolver` seam that
 turns a patient into each member's local `ehr_id`, and the static development
 cross-reference, a testing device accepted only under the development profile.
+It also reads the registry document in FHIR form, a Bundle of `Organization`
+and `Endpoint` resources read through `ihe-iti`'s mCSD reader, into the
+registry's members, refusing an endpoint whose connection type is not the
+openEHR Query API code.
 The remaining seams and the resolution step land with
 [FerroFED issue #43](https://github.com/FerroHEALTH/FerroFED/issues/43); the
 design is recorded in the repository's architecture document. The adapters

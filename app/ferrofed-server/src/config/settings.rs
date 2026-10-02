@@ -15,7 +15,7 @@ use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use secrecy::SecretString;
 
-use crate::config::{DevSection, NodeSelection};
+use crate::config::{DevSection, NodeSelection, RegistryFormat};
 use crate::telemetry::Format;
 
 /// The settings the run path holds, with every secret already read.
@@ -29,6 +29,8 @@ pub struct Settings {
     pub telemetry: TelemetrySettings,
     /// The registry document, when the gateway federates.
     pub registry_document: Option<PathBuf>,
+    /// The form the registry document is written in.
+    pub registry_format: RegistryFormat,
     /// The federated query.
     pub federation: FederationSettings,
     /// The outbound credentials, by endpoint id.
@@ -139,6 +141,7 @@ impl Settings {
             listen = %self.server.listen,
             profile = ?self.profile,
             registry = self.registry_document.is_some(),
+            registry_format = ?self.registry_format,
             node_selection = ?self.federation.node_selection,
             best_effort = self.federation.best_effort,
             offset_strategy = self.federation.offset.name(),

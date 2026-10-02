@@ -12,6 +12,8 @@
 )]
 
 mod binding;
+#[cfg(test)]
+mod directory;
 mod patient;
 mod pixm;
 mod static_resolver;
