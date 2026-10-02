@@ -8,6 +8,7 @@ mod completeness;
 mod config;
 mod e2e;
 mod endpoint_report;
+mod errors;
 mod facade;
 mod http;
 mod hygiene;

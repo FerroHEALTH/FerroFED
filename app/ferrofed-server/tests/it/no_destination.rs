@@ -13,14 +13,13 @@
 use std::error::Error;
 
 use http::StatusCode;
-use openehr_its::rest::generated::common::Error as ItsError;
 use wiremock::MockServer;
 
 use crate::facade::{
     Answer, EHR_A, body, crossref, gateway, node_answering, patient_query, post, received,
     registry, schema, statuses,
 };
-use crate::support::call;
+use crate::support::{call, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -37,7 +36,11 @@ fn suspended(a: &MockServer, b: &MockServer) -> String {
 /// destination, which carries no `RESULT_SET`.
 fn assert_no_destination(status: StatusCode, text: &str) -> TestResult {
     assert_eq!(StatusCode::NOT_FOUND, status, "§11.2, first row: {text}");
-    let error: ItsError = serde_json::from_str(text)?;
+    let error = error_body(text)?;
+    assert_eq!(
+        "no-destination", error.code,
+        "the stable code of §11.2's first row"
+    );
     assert!(
         error
             .message

@@ -29,7 +29,7 @@ use crate::facade::{
     Answer, EHR_A, EHR_B, body, crossref, node_answering, node_failing, patient_query, received,
     registry, schema, settings_with_room, statuses,
 };
-use crate::support::call;
+use crate::support::{ErrorBody, call, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -73,16 +73,9 @@ fn post(values: &[&str]) -> Result<Request<Body>, Box<dyn Error>> {
     Ok(request.body(Body::from(body(&patient_query())?))?)
 }
 
-/// The ITS-REST error message of a refusal.
-fn message(text: &str) -> Result<String, Box<dyn Error>> {
-    #[derive(serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct ItsError {
-        message: String,
-        #[serde(rename = "validationErrors")]
-        _validation_errors: Vec<String>,
-    }
-    Ok(serde_json::from_str::<ItsError>(text)?.message)
+/// The error body of a refusal.
+fn refusal(text: &str) -> Result<ErrorBody, Box<dyn Error>> {
+    error_body(text)
 }
 
 /// Asserts that neither node received a request.
@@ -161,8 +154,9 @@ async fn partial_where_best_effort_is_not_offered_is_refused() -> TestResult {
         status,
         "never served all-or-nothing in its place: {text}"
     );
-    let message = message(&text)?;
-    assert!(message.contains("not offered"), "{message}");
+    let error = refusal(&text)?;
+    assert_eq!("partial-unsupported", error.code, "§11.4, N37");
+    assert!(error.message.contains("not offered"), "{}", error.message);
     nobody_asked(&a, &b).await
 }
 
@@ -192,10 +186,12 @@ async fn an_unknown_value_is_a_400_that_quotes_nothing_and_asks_nobody() -> Test
         let (status, text) = call(app, post(&[value])?).await?;
         assert_eq!(StatusCode::BAD_REQUEST, status, "{value}: {text}");
         assert!(!text.contains(value), "the value is never echoed: {text}");
-        let message = message(&text)?;
+        let error = refusal(&text)?;
+        assert_eq!("completeness-invalid", error.code);
         assert!(
-            message.contains("openEHR-federation-completeness"),
-            "{message}"
+            error.message.contains("openEHR-federation-completeness"),
+            "{}",
+            error.message
         );
     }
     nobody_asked(&a, &b).await
@@ -210,6 +206,7 @@ async fn a_repeated_header_is_a_400_that_asks_nobody() -> TestResult {
 
     let (status, text) = call(app, post(&["partial", "all"])?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert_eq!("completeness-invalid", refusal(&text)?.code);
     nobody_asked(&a, &b).await
 }
 

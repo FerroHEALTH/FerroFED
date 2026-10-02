@@ -415,6 +415,7 @@ impl FederatedAnswer {
             q,
             columns,
             rows: self.rows,
+            additional_properties: BTreeMap::new(),
         })
     }
 }

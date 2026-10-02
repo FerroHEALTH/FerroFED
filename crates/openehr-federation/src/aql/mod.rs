@@ -502,6 +502,7 @@ fn render_columns(select: &SelectClause) -> Vec<ResultSetColumn> {
                     None
                 }
             },
+            additional_properties: std::collections::BTreeMap::new(),
         })
         .collect()
 }

@@ -5,7 +5,7 @@
 //! of the unbuilt façade, the request id, the panic body, the timeout and the
 //! body ceiling.
 
-use crate::support::{self, ErrorBody, app, call, send};
+use crate::support::{self, app, call, error_body, send};
 use axum::Router;
 use axum::body::Body;
 use axum::routing::get;
@@ -74,8 +74,8 @@ async fn the_unbuilt_its_rest_surface_answers_five_hundred_and_one_and_echoes_no
         let path = request.uri().path().to_owned();
         let (status, body) = call(app(), request).await?;
         assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "{path}");
-        let document: ErrorBody = serde_json::from_str(&body)?;
-        assert_eq!("not_implemented", document.error, "{path}");
+        let document = error_body(&body)?;
+        assert_eq!("not-implemented", document.code, "{path}");
         assert!(!document.request_id.is_empty(), "a request id is named");
         assert!(!body.contains("SELECT"), "the body echoes no query: {body}");
         assert!(
@@ -95,8 +95,8 @@ async fn a_path_outside_every_surface_answers_four_hundred_and_four()
 -> Result<(), Box<dyn StdError>> {
     let (status, body) = call(app(), Request::get("/nowhere").body(Body::empty())?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status);
-    let document: ErrorBody = serde_json::from_str(&body)?;
-    assert_eq!("not_found", document.error);
+    let document = error_body(&body)?;
+    assert_eq!("not-found", document.code);
     Ok(())
 }
 
@@ -192,8 +192,8 @@ async fn a_panicking_handler_yields_a_five_hundred_with_the_request_id_and_no_me
             .and_then(|value| value.to_str().ok())
     );
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
-    let document: ErrorBody = serde_json::from_slice(&bytes)?;
-    assert_eq!("internal", document.error);
+    let document = error_body(std::str::from_utf8(&bytes)?)?;
+    assert_eq!("internal", document.code);
     assert_eq!("corr-panic", document.request_id);
     assert!(
         !String::from_utf8_lossy(&bytes).contains("SYNTHETIC-PANIC-VALUE"),

@@ -30,18 +30,18 @@ publish = false
 # The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
 # one lockstep family at the latest published release, moved together by the
 # dependency sweep and checked against docs/VERSIONS.md by
-# scripts/checks/versions.sh. The pin is 0.0.74, the release carrying FerroEHR
-# #3505 to #3514.
-openehr-base = "0.0.74"
-openehr-rm = "0.0.74"
-openehr-query = "0.0.74"
-openehr-its = { version = "0.0.74", default-features = false }
-openehr-sdt = { version = "0.0.74", default-features = false }
+# scripts/checks/versions.sh. The pin is 0.0.76, which keeps the members an
+# open ITS-REST schema admits (FerroEHR #3526).
+openehr-base = "0.0.76"
+openehr-rm = "0.0.76"
+openehr-query = "0.0.76"
+openehr-its = { version = "0.0.76", default-features = false }
+openehr-sdt = { version = "0.0.76", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.11" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.12" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.6" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }

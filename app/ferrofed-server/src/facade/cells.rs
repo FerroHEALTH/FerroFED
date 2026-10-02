@@ -35,6 +35,20 @@ pub enum CellError {
     NoSubject,
 }
 
+/// The cells every node row must carry for `sources` to read it: one past the
+/// highest node column, or none when every column is re-injected.
+#[must_use]
+pub fn width(sources: &[ColumnSource]) -> usize {
+    sources
+        .iter()
+        .filter_map(|source| match source {
+            ColumnSource::Node(index) => index.checked_add(1),
+            ColumnSource::Subject | ColumnSource::Namespace => None,
+        })
+        .max()
+        .unwrap_or(0)
+}
+
 /// The façade rows of `rows`, each built from `sources`.
 ///
 /// # Errors
@@ -46,14 +60,7 @@ pub fn reinject(
     sources: &[ColumnSource],
     subject: Option<&Subject>,
 ) -> Result<Vec<ResultSetRow>, CellError> {
-    let needed = sources
-        .iter()
-        .filter_map(|source| match source {
-            ColumnSource::Node(index) => index.checked_add(1),
-            ColumnSource::Subject | ColumnSource::Namespace => None,
-        })
-        .max()
-        .unwrap_or(0);
+    let needed = width(sources);
     rows.into_iter()
         .map(|row| {
             if row.len() < needed {

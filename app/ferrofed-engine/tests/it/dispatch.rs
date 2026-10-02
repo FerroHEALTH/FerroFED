@@ -224,6 +224,46 @@ async fn a_200_that_is_not_a_result_set_is_a_node_error() -> TestResult {
 }
 
 #[tokio::test]
+async fn a_row_shorter_than_the_query_selects_is_a_node_error() -> TestResult {
+    let answer =
+        r##"{"columns":[{"name":"#0"},{"name":"#1"}],"rows":[["a","b"],["SYNTHETIC-CELL"]]}"##;
+    let server = node_answering("/openehr", json(200, answer)).await;
+    let client = client_at(&format!("{}/openehr", server.uri()))?;
+    let reply = client
+        .query(
+            &NodeQuery::new(NODE_AQL).with_width(2),
+            &within(Duration::from_secs(5))?,
+        )
+        .await?;
+    assert_eq!(
+        reply.status(),
+        EndpointStatus::NodeError,
+        "an answer the gateway cannot use is node-error (§11.1)"
+    );
+    let error = error_text(&reply)?;
+    assert_eq!(
+        error,
+        "the node answered a row with 1 cells where the dispatched query selects 2"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn rows_as_wide_as_the_query_selects_are_active() -> TestResult {
+    let answer = r##"{"columns":[{"name":"#0"},{"name":"#1"}],"rows":[["a","b","c"],["d","e"]]}"##;
+    let server = node_answering("/openehr", json(200, answer)).await;
+    let client = client_at(&format!("{}/openehr", server.uri()))?;
+    let reply = client
+        .query(
+            &NodeQuery::new(NODE_AQL).with_width(2),
+            &within(Duration::from_secs(5))?,
+        )
+        .await?;
+    assert_eq!(reply.status(), EndpointStatus::Active);
+    Ok(())
+}
+
+#[tokio::test]
 async fn no_answer_before_the_deadline_is_a_time_out() -> TestResult {
     let server = node_answering(
         "/openehr",

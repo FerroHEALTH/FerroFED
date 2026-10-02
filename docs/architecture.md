@@ -69,8 +69,8 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
 | openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
 | openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
-| `openehr-query` | 0.0.74 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 adds the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513) |
-| `openehr-its` | 0.0.74 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 adds the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512) |
+| `openehr-query` | 0.0.76 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513) |
+| `openehr-its` | 0.0.76 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526) |
 | `openehr-base`, `openehr-rm`, `openehr-sdt` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison, and the SMART on openEHR scope grammar |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
@@ -79,8 +79,9 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `jsonschema` | 0.58.3 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
-The `openehr-*` rows are the lockstep 0.0.74, published on 2026-10-01 with the
-gaps FerroEHR #3505 to #3514 closed; v0.0.2 codes against it.
+The `openehr-*` rows are the lockstep 0.0.76, published on 2026-10-02. The
+gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
+and 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`.
 
 ## 2. The openEHR surface: the published crates
 

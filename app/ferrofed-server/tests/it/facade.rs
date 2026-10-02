@@ -27,7 +27,7 @@ use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::support::{call, settings};
+use crate::support::{call, error_body, settings};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -222,7 +222,7 @@ pub(crate) async fn wire(server: &MockServer) -> Result<String, Box<dyn Error>> 
 /// The federated answer, read for the members the tests assert on.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Answer {
-    q: String,
+    pub(crate) q: String,
     columns: Vec<Column>,
     pub(crate) rows: Vec<Vec<String>>,
     pub(crate) meta: Meta,
@@ -250,15 +250,6 @@ pub(crate) struct Endpoint {
     pub(crate) id: String,
     pub(crate) status: String,
     pub(crate) row_count: Option<u64>,
-}
-
-/// The ITS-REST error body.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ItsError {
-    message: String,
-    #[serde(rename = "validationErrors")]
-    validation_errors: Vec<String>,
 }
 
 /// Each endpoint's status, in the envelope's order.
@@ -603,7 +594,7 @@ async fn a_refused_query_is_a_400_that_quotes_nothing_and_asks_nobody() -> TestR
         )?;
         let (status, text) = call(app, post(body(&aql)?)?).await?;
         assert_eq!(StatusCode::BAD_REQUEST, status, "{aql}: {text}");
-        let error: ItsError = serde_json::from_str(&text)?;
+        let error = error_body(&text)?;
         assert!(
             !error.message.contains(PATIENT) && !error.message.contains("38a1"),
             "the refusal quotes nothing (§5.4.3): {}",
