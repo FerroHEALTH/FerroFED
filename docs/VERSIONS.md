@@ -47,13 +47,14 @@ A18): PIXm 3.1.0, mCSD 4.0.0 and PMIR 1.6.0 (CC-BY-4.0) and `fhir.nl.gf`
 table below by the issue that first reads it (#42, #74 and #86, #48, #87).
 XCPD has no FHIR package; its adapter (#85) binds the ITI Technical Framework
 revision below, which is not vendored until its terms are read. PDQm is not
-used by the gateway. The versions are what the FHIR package registry listed as
-latest on 2026-10-01.
+used by the gateway; its ITI-78 client is a capability of `crates/ihe-iti`
+for other callers (#119), vendored with it. The versions are what the FHIR
+package registry listed as latest on 2026-10-01.
 
 | Binding | Package | Latest on 2026-10-01 |
 |---|---|---|
 | PIXm (ITI-83, ITI-104) | `ihe.iti.pixm` | 3.1.0, vendored by #42 (the corpus table below) |
-| PDQm (ITI-78, ITI-119) | `ihe.iti.pdqm` | 3.2.0 |
+| PDQm (ITI-78, ITI-119) | `ihe.iti.pdqm` | 3.2.0, vendored by #119 (the corpus table below) |
 | PMIR (ITI-93, ITI-94) | `ihe.iti.pmir` | 1.6.0 |
 | mCSD | `ihe.iti.mcsd` | 4.0.0 |
 | XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | Vol 2 Rev 20.1 (2024-12-12, Final Text) |
@@ -75,6 +76,7 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
 | openEHR AQL specification source | `openEHR/specifications-QUERY` tag `Release-1.1.0`, the AQL and AQL examples documents and the grammar | `scripts/vendor/aql.sh`, `docs/specs/aql/PROVENANCE.md` |
 | IHE PIXm FHIR package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`, the ITI-83 artefacts | `scripts/vendor/ihe-pixm.sh`, `docs/specs/ihe-pixm/PROVENANCE.md` |
+| IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 artefacts | `scripts/vendor/ihe-pdqm.sh`, `docs/specs/ihe-pdqm/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 
@@ -103,18 +105,20 @@ and per-call options; `docs/architecture.md` §2), published on 2026-10-01.
 
 The FHIR model of the IHE bindings comes from the published `fhir-types`
 crate (`docs/architecture.md` §6, decision A16), compiled only in
-`crates/ihe-iti` with its `pixm` feature, so the gateway core never builds
-it. `scripts/checks/versions.sh` fails when this row and the root
+`crates/ihe-iti` with its `pixm` and `pdqm` features, so the gateway core
+never builds it. `scripts/checks/versions.sh` fails when this row and the root
 `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
 | `fhir-types` | 0.1.107 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 
-The features are `r4` and `terminology`: that root set holds every type
-ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
-`Bundle`). `resources`, every R4 resource, joins with the mCSD directory
-(#86), the first binding that reads `Organization` and `Endpoint`.
+The `pixm` feature takes `r4` and `terminology`: that root set holds every
+type ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
+`Bundle`). The `pdqm` feature takes `r4` and `resources`, every R4 resource,
+because ITI-78 answers with `Patient` resources, which only `resources`
+carries (#119); the mCSD directory (#86) reads `Organization` and `Endpoint`
+from the same set.
 
 ## Language and runtime
 
