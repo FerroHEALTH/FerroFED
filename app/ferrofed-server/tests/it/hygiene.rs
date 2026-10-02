@@ -4,8 +4,7 @@
 //! Identifier hygiene on the log (§5.4.3): a façade query carrying a sentinel
 //! patient identifier in every place a client can put one leaves the sentinel
 //! in no log line at any level, through the router and through a real socket
-//! with the whole HTTP stack logging at `trace`
-//! (`.claude/rules/identifier-hygiene.md`, the log and telemetry test).
+//! with the whole HTTP stack logging at `trace`.
 
 use crate::request_log::logged;
 use crate::support::{self, Logs, request_lines};

@@ -17,7 +17,8 @@ use crate::patient::PatientRef;
 ///
 /// A resolver that could not answer is not a patient who is unknown: the
 /// member is reported `not-resolved` with the error, `complete` is cleared,
-/// and under the all-or-nothing default the query fails (decision A17, §11.1).
+/// and under the all-or-nothing default the query fails (§11.1; §11.3 covers
+/// only an answered lookup, so no specification governs this: our own design).
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ResolverError {

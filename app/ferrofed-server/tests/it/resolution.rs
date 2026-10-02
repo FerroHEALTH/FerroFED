@@ -5,7 +5,9 @@
 //! ITI-83 call resolves the patient at every member, only a member that knows
 //! the patient is asked, an unknown patient is `not-resolved` and fails
 //! nothing, and a Manager that cannot answer fails the query `424` (§5.2,
-//! §5.3, §11.1, §11.3; N3, N6, N8, N33; decision A17; Annex A.1).
+//! §5.3, §11.1, §11.3; N3, N6, N8, N33; Annex A.1). §11.3 covers only an
+//! answered lookup, so the outage case has no governing specification: our own
+//! design.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -250,7 +252,7 @@ async fn a_pix_manager_that_fails_fails_the_query_424_and_no_node_is_asked() -> 
     assert_eq!(
         StatusCode::FAILED_DEPENDENCY,
         status,
-        "a resolver that cannot answer fails the query (decision A17): {text}"
+        "a resolver that cannot answer fails the query (§11.1): {text}"
     );
     schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
@@ -348,7 +350,7 @@ fn a_pix_manager_and_the_dev_cross_reference_together_refuse_to_boot() -> TestRe
     )?;
     assert!(
         matches!(error, FederationError::TwoResolvers),
-        "exactly one resolver is active (decision A14): {error:?}"
+        "exactly one resolver is active (no specification governs this: our own design): {error:?}"
     );
     Ok(())
 }

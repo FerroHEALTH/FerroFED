@@ -19,7 +19,8 @@
 #   Sub-issues (concept)  https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues
 #   Dependencies (concept) https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-issue-dependencies
 #
-# Policy, WHEN to use each relationship: .claude/rules/issue-relationships.md
+# Policy, WHEN to use each relationship: no specification governs it: our own
+# design.
 #
 # Limits (from the docs above): <=100 sub-issues per parent, <=8 nesting
 # levels, one parent per issue (use --replace to move it); <=50 issues per

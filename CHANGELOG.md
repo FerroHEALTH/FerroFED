@@ -75,6 +75,15 @@ binary follows from v0.0.2.
   refused `400`, the first naming the bound. `offset_strategy = "reject"`
   refuses every `OFFSET` past zero `400`. The ITS-REST `offset` and `fetch`
   members follow the same strategy.
+- The `comment-style` guard checks citations (#173). It fails on a Rust
+  comment, doc comment or lint `reason` that cites `docs/architecture.md`, a
+  path under `.claude/` or a rule file by name, or that names a
+  decision-register entry such as `decision A17`. It applies the same check to
+  the full-line `#` comments of the shell scripts under `scripts/` and of every
+  `Cargo.toml`. `comment-style.sh --self-test` proves each refused form and
+  its near misses, and CI runs it before the full-tree pass. Every comment that
+  cited one of these now cites the specification section it rests on, or says
+  that no specification governs it.
 
 ### Changed
 

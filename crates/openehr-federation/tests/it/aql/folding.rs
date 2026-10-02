@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Decision A4: a string function that rebuilds the identifier at the node is
-//! refused. `CONCAT`, `CONCAT_WS` and `SUBSTRING` are folded over their literal
+//! A string function that rebuilds the identifier at the node is refused
+//! (§5.4.1, §5.4.2). `CONCAT`, `CONCAT_WS` and `SUBSTRING` are folded over their literal
 //! arguments and the folded text is value-tested (§5.4.1 "in any position");
 //! a string function over a literal that cannot be folded is refused on an
 //! identifier-bearing path.

@@ -41,10 +41,10 @@ a window of 1000 rows, so both paths through the paging are fuzzed.
 `scripts/fuzz/seeds.sh` writes every `fuzz/seeds/<target>/gen-*` file from the
 vendored corpora, and `scripts/fuzz/seeds.sh --check` fails when they are out
 of date. Never hand-edit a `gen-*` file. A regression seed committed after a
-finding (`.claude/rules/testing.md`) carries any other name, so the generator
-leaves it alone, and so does a hand-written seed for a path the corpora do not
-reach: the `entry-*` carrier seeds and the `offset-*` pages, which end in
-`\0\x01` where they select `reject`.
+finding carries any other name, so the generator leaves it alone, and so does a
+hand-written seed for a path the corpora do not reach: the `entry-*` carrier
+seeds and the `offset-*` pages, which end in `\0\x01` where they select
+`reject`.
 
 ## Running a target
 

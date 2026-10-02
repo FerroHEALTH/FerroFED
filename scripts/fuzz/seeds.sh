@@ -15,10 +15,9 @@
 #                    (rest-facade.adoc, section 7a.2)
 #
 # The script owns only the files named gen-*. A regression seed committed after
-# a finding (.claude/rules/testing.md) carries any other name and is never
-# touched. With --check it regenerates into a scratch directory and fails when
-# the committed gen-* files differ, so a re-vendored corpus cannot leave stale
-# seeds behind.
+# a finding carries any other name and is never touched. With --check it
+# regenerates into a scratch directory and fails when the committed gen-* files
+# differ, so a re-vendored corpus cannot leave stale seeds behind.
 #
 # Usage:
 #   scripts/fuzz/seeds.sh           # rewrite fuzz/seeds/*/gen-*

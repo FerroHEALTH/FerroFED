@@ -4,7 +4,7 @@
 # scripts/vendor/federation-spec.sh
 #
 # Vendors the source of the Federation Tier with AQL specification into
-# docs/specs/federation-spec/ (.claude/rules/vendored-inputs.md): the whole
+# docs/specs/federation-spec/: the whole
 # repository tree at the commit the "Federation Tier with AQL specification"
 # row of docs/VERSIONS.md pins, minus the upstream's npm manifests for its
 # Antora build, which provenance lists with their sha256.

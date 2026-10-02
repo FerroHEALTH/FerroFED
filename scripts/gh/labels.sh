@@ -20,7 +20,7 @@
 # `gh label create --force` updates an existing label in place, so re-running
 # this is safe and converges the colours and descriptions to the values below.
 #
-# Taxonomy policy: .claude/rules/issue-workflow.md
+# Taxonomy policy: no specification governs it: our own design.
 # Official docs: https://cli.github.com/manual/gh_label_create
 #
 # Usage:

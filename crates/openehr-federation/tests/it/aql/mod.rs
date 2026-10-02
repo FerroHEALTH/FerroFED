@@ -3,7 +3,7 @@
 
 //! The AQL rewrite of §7.1 (feature `aql`): the reference implementation's
 //! golden cases adjudicated against the specification, FerroFED's own strict
-//! corpus of decisions A3 to A10, and the identifier-hygiene property of
+//! corpus where no specification governs a case, and the identifier-hygiene property of
 //! §5.4.1 and N33.
 #![cfg(feature = "aql")]
 

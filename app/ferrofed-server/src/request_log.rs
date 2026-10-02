@@ -10,8 +10,8 @@
 //! a body, never the raw path (the matched route is the path template, and a
 //! path no route matched is logged as [`UNMATCHED`]), never a header value
 //! other than the request id this server has already normalized, and never a
-//! query value outside [`LOGGED_QUERY_PARAMETERS`]. FerroFED's own rule on top
-//! of the specification, made mechanical (`.claude/rules/identifier-hygiene.md`).
+//! query value outside [`LOGGED_QUERY_PARAMETERS`]. Past §5.4.3, no
+//! specification governs this: our own design, made mechanical.
 
 use axum::extract::{MatchedPath, Request};
 use axum::middleware::Next;

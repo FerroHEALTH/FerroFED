@@ -8,7 +8,7 @@
 # leaves the rendering to the mermaid library in the browser, so the book needs
 # both files on disk. `mdbook-mermaid install` writes the same two bytes; this
 # script pins the commit instead of the local tool version, so the vendored tree
-# is reproducible from the repository alone (.claude/rules/vendored-inputs.md).
+# is reproducible from the repository alone.
 #
 # Usage:
 #   scripts/vendor/mdbook-mermaid-assets.sh

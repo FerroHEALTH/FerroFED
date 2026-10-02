@@ -4,7 +4,7 @@
 //! The crate boundaries, read from the crate graph (no specification governs
 //! them: our own design).
 //!
-//! The clinical path does no synchronous storage work (#40, section 8): the
+//! The clinical path does no synchronous storage work (#40): the
 //! storage implementations live in `app/ferrofed-server`, so no published
 //! `crates/*` library and no other `app/*` crate (the engine included) may
 //! reach one, or the server, through its normal or build dependencies. The

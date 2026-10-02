@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# The crates.io lane behind the workspace `publish` switch (docs/architecture.md
-# section 11, decision A35; .claude/rules/crates-publishing.md), one
-# implementation shared by publish-crates.yml and the pull-request
+# The crates.io lane behind the workspace `publish` switch (the Cargo reference,
+# Publishing on crates.io; no specification governs the policy: our own design),
+# one implementation shared by publish-crates.yml and the pull-request
 # `publish-dry-run` job of ci.yml.
 #
 # The publishable set is read from `cargo metadata`, never listed by hand: a

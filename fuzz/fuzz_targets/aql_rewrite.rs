@@ -15,7 +15,8 @@
 //!   independent check that does not rely on the rewrite's own search; and
 //! - rebuilt by a string function, found by giving the node query back its
 //!   subject predicate and analysing it again, so the crate's own folding
-//!   (`CONCAT`, `CONCAT_WS`, `SUBSTRING`, decision A4) judges its own output.
+//!   (`CONCAT`, `CONCAT_WS`, `SUBSTRING`, §5.4.1 "in any position") judges
+//!   its own output.
 
 #![no_main]
 

@@ -40,7 +40,7 @@ fn condition(identifier: &str) -> impl Strategy<Value = (String, bool)> + use<> 
 }
 
 /// The identifier rebuilt by a string function from split literals, so no
-/// single literal holds it (decision A4): `CONCAT`, `CONCAT_WS` with an empty
+/// single literal holds it (§5.4.1 "in any position"): `CONCAT`, `CONCAT_WS` with an empty
 /// separator, or a nested `CONCAT` around a `SUBSTRING`, on a plain or an
 /// identifier path.
 fn reconstruction(identifier: &str) -> impl Strategy<Value = String> + use<> {

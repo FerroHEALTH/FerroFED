@@ -20,7 +20,8 @@
 //! a selected subject column is re-injected after the merge instead of being
 //! asked of the node (N5), and a query in which the value appears anywhere
 //! else is refused, including as the folded value of `CONCAT`, `CONCAT_WS` or
-//! `SUBSTRING` over literals (decision A4). The AQL release the module rewrites is [`crate::AQL`].
+//! `SUBSTRING` over literals (§5.4.1 "in any position"). The AQL release the
+//! module rewrites is [`crate::AQL`].
 //!
 //! # Examples
 //!
@@ -71,7 +72,8 @@ use subject::{NamespaceOrigin, Subject};
 /// `offset` and `fetch`, or the GET parameters of the same names).
 ///
 /// They page like the AQL `OFFSET` and `LIMIT` clauses and follow the same
-/// rules (decision A10; §11.6 and N39 name only the clauses).
+/// rules (§11.6 and N39 name only the clauses; no specification governs the
+/// members: our own design).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Paging {
     /// The `offset` member.
@@ -184,7 +186,8 @@ impl Context {
     }
 
     /// Declares the issuing namespace an unqualified patient identifier
-    /// resolves in (decision A5).
+    /// resolves in (§5.2 requires the namespace; no specification governs the
+    /// default: our own design).
     #[must_use]
     pub fn with_default_namespace(mut self, namespace: impl Into<String>) -> Self {
         self.default_namespace = Some(namespace.into());
@@ -200,7 +203,7 @@ pub enum Analysis {
     Patient(PatientQuery),
     /// The query names no patient: it is dispatched as written to the node set
     /// the request names, or to every member where no localizer is
-    /// configured (decision A8).
+    /// configured (N4).
     Unscoped(UnscopedQuery),
 }
 
@@ -389,7 +392,8 @@ fn first_fault(error: &ParseError) -> Option<Range<usize>> {
 }
 
 /// Applies the ITS-REST paging members to the query's `LIMIT` and `OFFSET`
-/// (decision A10), and returns the rows the Tier skips.
+/// (ITS-REST Query API `Offset` and `Fetch`, §11.6), and returns the rows the
+/// Tier skips.
 ///
 /// `OFFSET` never reaches a node (§11.6.2). Under
 /// [`OffsetStrategy::Bounded`], a page at `OFFSET k` is dispatched as

@@ -123,8 +123,8 @@ pub(super) fn keep_a_column(query: &mut SelectQuery, ehr: &str) {
 
 /// The variable the node scope is written on: the query's `EHR` variable, or
 /// a fresh one with `FROM` wrapped in `EHR <var> CONTAINS …` when the query
-/// has no `EHR` containment (decision A3: AQL admits such a query, and N7
-/// requires the scope).
+/// has no `EHR` containment (AQL admits such a query, §5.4.3 accepts its
+/// `ENTRY` carrier, and N7 requires the scope).
 pub(super) fn ehr_variable(query: &mut SelectQuery, bound: &[String]) -> String {
     if let Some(variable) = bound.first() {
         return variable.clone();
@@ -184,7 +184,8 @@ fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
 /// `ORDER BY` the query is otherwise left as written. With one:
 ///
 /// - an `ORDER BY` path that is not selected becomes a hidden column the merge
-///   reads and the gateway strips, never answered to the client (A28);
+///   reads and the gateway strips, never answered to the client (no
+///   specification governs this: our own design);
 /// - the uid of the query's versioned object becomes the last `ORDER BY` key,
 ///   the tie-break §11.6.1 recommends after `endpoint_id`.
 ///
@@ -374,7 +375,7 @@ mod tests {
 
     #[test]
     fn a_query_with_no_ehr_containment_is_wrapped_never_refused() {
-        // Decision A3: AQL admits the query, and N7 requires the node scope.
+        // AQL admits the query, and N7 requires the node scope.
         let mut query =
             parse_str("SELECT c/uid/value FROM COMPOSITION c CONTAINS OBSERVATION e").unwrap();
         let variable = ehr_variable(&mut query, &[]);

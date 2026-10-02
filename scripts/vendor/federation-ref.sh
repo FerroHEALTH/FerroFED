@@ -4,7 +4,7 @@
 # scripts/vendor/federation-ref.sh
 #
 # Vendors the Federation Tier reference implementation into
-# docs/specs/federation-ref/ (.claude/rules/vendored-inputs.md): the whole
+# docs/specs/federation-ref/: the whole
 # repository tree at the commit the "Federation Tier reference implementation"
 # row of docs/VERSIONS.md pins, minus its Maven manifest, which provenance
 # lists with its sha256.

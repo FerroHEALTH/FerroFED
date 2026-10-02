@@ -120,7 +120,11 @@ fn the_offset_and_fetch_members_page_like_the_clauses_under_the_bounded_strategy
         ),
     );
     assert_eq!(analysis.order().limit(), Some(7));
-    assert_eq!(analysis.order().offset(), 4, "decision A10");
+    assert_eq!(
+        analysis.order().offset(),
+        4,
+        "the offset member pages like OFFSET (§11.6.2)"
+    );
 }
 
 // conformance: CP-32

@@ -15,7 +15,7 @@
 )]
 #![expect(
     clippy::disallowed_types,
-    reason = "seam 4 of rust-style.md: the tests read the emitted envelope as JSON values"
+    reason = "the test seam: the tests read the emitted envelope as JSON values"
 )]
 
 use std::collections::{BTreeMap, BTreeSet};

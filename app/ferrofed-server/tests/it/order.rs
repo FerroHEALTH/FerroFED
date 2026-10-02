@@ -4,9 +4,10 @@
 //! `ORDER BY` with `LIMIT` through the façade (§11.6.1, N13, N39): each node
 //! is asked for the key as a hidden column, the uid as the last key and the
 //! client's `LIMIT n`, and the client receives the global top `n` with only
-//! the columns it selected (decisions A28 and A43). A page at `OFFSET k` asks
-//! each node for `k + n` rows within the configured bound, or is refused under
-//! the reject strategy (§11.6.2).
+//! the columns it selected (no specification governs the hidden column or the
+//! order check: our own design). A page at `OFFSET k` asks each node for
+//! `k + n` rows within the configured bound, or is refused under the reject
+//! strategy (§11.6.2).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -67,7 +68,7 @@ async fn the_client_gets_the_global_top_n_without_the_hidden_column() -> TestRes
     assert_eq!(
         vec![vec!["a1".to_owned()], vec!["b1".to_owned()]],
         answer.rows,
-        "N39: the latest two across both nodes, and only the selected column (A28)"
+        "N39: the latest two across both nodes, and only the selected column"
     );
     for server in [&a, &b] {
         let bodies = received(server).await?;
@@ -98,7 +99,11 @@ async fn a_node_out_of_the_federation_order_fails_the_query_424() -> TestResult 
     let app = gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), "", "")?;
 
     let (status, text) = call(app, post(body(QUERY)?)?).await?;
-    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "N37, A43: {text}");
+    assert_eq!(
+        StatusCode::FAILED_DEPENDENCY,
+        status,
+        "N37, a node out of the Tier order: {text}"
+    );
     schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
     assert!(answer.rows.is_empty(), "a failing query returns no rows");

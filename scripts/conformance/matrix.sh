@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/conformance/matrix.sh: the conformance matrix's derivation and its
-# rendering into the book (docs/architecture.md section 12, #41).
+# rendering into the book (the §17 conformance points and the §16.3 tracks,
+# #41).
 #
 #   scripts/conformance/matrix.sh --derived DIR   write the derived tables into DIR
 #   scripts/conformance/matrix.sh --derive        refresh conformance/*.tsv in place

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # shellcheck shell=bash
-# Shared helpers for the corpus vendor scripts (.claude/rules/vendored-inputs.md).
+# Shared helpers for the corpus vendor scripts.
 #
 # Every corpus script sources this file, reads its pin from the corpus table in
 # docs/VERSIONS.md, downloads that exact commit as a tarball from

@@ -178,9 +178,10 @@ jobs:
             hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d \
             hadolint --config .hadolint.yaml "${files[@]}"
 
-  # The comment-style guard (.claude/rules/comments.md, RFC 505 and RFC 1574)
-  # over the whole tree. It reads .rs files only, so it reports "no files to
-  # check" today and gates from the first hand-written source file.
+  # The comment-style guard (RFC 505 and RFC 1574) over the whole tree: every
+  # hand-written .rs file, plus the citation checks over the shell scripts and
+  # every Cargo.toml. Its self-test proves the citation checks refuse what they
+  # must and pass their near misses.
   comment-style:
     name: comment-style
     runs-on: ubuntu-latest
@@ -191,7 +192,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: bash scripts/checks/comment-style.sh --all
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/comment-style.sh --self-test
+          bash scripts/checks/comment-style.sh --all
 
   # The file-length guard: a hand-written Rust file stays under 1000 lines and
   # a listed breach may not grow (.claude/rules/rust-style.md). It passes on a

@@ -4,16 +4,15 @@
 # scripts/vendor/ihe-pdqm.sh
 #
 # Vendors the IHE PDQm 3.2.0 FHIR package artefacts the ITI-78 client of
-# crates/ihe-iti (feature `pdqm`, #119) reads into docs/specs/ihe-pdqm/
-# (.claude/rules/vendored-inputs.md): the Patient Demographics Consumer
-# (Query) and Supplier capability statements, whose Patient search parameters
-# the client's query is held to, the Query Patient Resource Response Message
-# Bundle profile and the PDQm Patient profile, the ImplementationGuide, and the
-# IG's own response Bundle and Patient examples, which the client's tests
-# decode. The `$match` (ITI-119) artefacts serve no reader here and are not
-# taken. The package manifest is read for its name, version and licence and
-# left out of the tree (the dependency-manifest rule of
-# scripts/vendor/lib/corpus.sh).
+# crates/ihe-iti (feature `pdqm`, #119) reads into docs/specs/ihe-pdqm/: the
+# Patient Demographics Consumer (Query) and Supplier capability statements,
+# whose Patient search parameters the client's query is held to, the Query
+# Patient Resource Response Message Bundle profile and the PDQm Patient profile,
+# the ImplementationGuide, and the IG's own response Bundle and Patient
+# examples, which the client's tests decode. The `$match` (ITI-119) artefacts
+# serve no reader here and are not taken. The package manifest is read for its
+# name, version and licence and left out of the tree (the dependency-manifest
+# rule of scripts/vendor/lib/corpus.sh).
 #
 # The "IHE PDQm FHIR package" row of docs/VERSIONS.md pins the package by
 # version and by the sha256 of the registry tarball, so a republished package

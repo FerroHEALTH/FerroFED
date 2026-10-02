@@ -74,7 +74,7 @@ fn golden_case_13_rewrites_in_the_declared_default_namespace() {
     assert_eq!(
         analysed.subject().namespace_origin(),
         NamespaceOrigin::Default,
-        "golden case 13 names no namespace, so the declared default applies (§5.2, decision A5)"
+        "golden case 13 names no namespace, so the declared default applies (§5.2)"
     );
     assert_same_aql(
         &node_aql(&aql),
@@ -192,7 +192,7 @@ fn the_two_carriers_naming_different_namespaces_are_refused() {
     );
 }
 
-// ── decision A7 across both carriers ────────────────────────────────────────
+// ── §7.1, one patient across both carriers ──────────────────────────────────
 
 #[test]
 fn the_same_value_in_both_carriers_is_consumed_once() {
@@ -217,7 +217,7 @@ fn golden_case_17_a_second_value_in_the_entry_carrier_is_refused() {
     );
     assert!(
         matches!(refused(&aql), Refusal::SecondSubject { .. }),
-        "§7.1 reduction constraint, decision A7"
+        "§7.1 reduction constraint"
     );
 }
 
@@ -231,7 +231,7 @@ fn two_different_entry_values_are_refused() {
     );
     assert!(
         matches!(refused(&aql), Refusal::SecondSubject { .. }),
-        "decision A7"
+        "§7.1 reduction constraint"
     );
 }
 
@@ -266,7 +266,7 @@ fn a_bound_parameter_on_the_carrier_is_consumed_as_its_literal() {
 
 #[test]
 fn a_query_with_no_ehr_containment_is_wrapped_for_the_entry_carrier() {
-    // Decision A3, which §5.4.3 makes reachable through this carrier.
+    // N7 requires the scope, and §5.4.3 makes this carrier resolution input.
     let aql = format!(
         "SELECT c/uid/value FROM COMPOSITION c CONTAINS OBSERVATION o WHERE {ENTRY_ID} = '4711'"
     );
@@ -335,7 +335,7 @@ fn an_integer_on_the_carrier_is_refused() {
     let aql = query("c/uid/value", &format!("{ENTRY_ID} = 4711"));
     assert!(
         matches!(refused(&aql), Refusal::IdentifierNotString { .. }),
-        "DV_IDENTIFIER.id is a String (decision A6)"
+        "DV_IDENTIFIER.id is a String (AQL §Parameters)"
     );
 }
 

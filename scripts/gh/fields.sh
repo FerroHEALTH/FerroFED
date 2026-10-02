@@ -18,7 +18,7 @@
 #   GraphQL mutations ... https://docs.github.com/en/graphql/reference/mutations
 #                         (updateIssueIssueType, setIssueFieldValue)
 #
-# Policy: .claude/rules/issue-workflow.md §Type, priority and labels.
+# Policy: no specification governs it: our own design.
 #
 # Usage:
 #   scripts/gh/fields.sh type     <n> <bug|feature|task>
@@ -273,7 +273,7 @@ new() {
   if ! fields_readable; then
     # A lane that cannot set the three still has to file its finding, so the
     # issue lands with the labels it was given and the orchestrator sets type,
-    # priority and effort at pickup (.claude/rules/issue-workflow.md).
+    # priority and effort at pickup.
     echo "gh-fields: this token cannot read the issue types of $OWNER, so the issue is filed without type, priority and effort; set them at pickup" >&2
     url="$(gh issue create "$@")" || die "gh issue create failed"
     echo "$url"

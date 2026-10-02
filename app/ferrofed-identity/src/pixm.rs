@@ -149,7 +149,8 @@ struct Manager {
 /// one identifier that reads as an `ehr_id`, [`Resolution::Unknown`] when the
 /// Manager does not know the patient or the member's domain holds nothing,
 /// and [`Resolution::Unavailable`] for every failure, a namespace it cannot
-/// map included, so the query fails closed (decision A17).
+/// map included, so the query fails closed (§11.3 covers only an answered
+/// lookup; no specification governs this: our own design).
 pub struct PixmResolver {
     managers: Vec<Arc<Manager>>,
     namespaces: BTreeMap<IdentifierNamespace, String>,

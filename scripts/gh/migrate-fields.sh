@@ -5,8 +5,8 @@
 # type and priority labels onto GitHub's native issue type and the
 # organisation's Priority and Effort issue fields.
 #
-# The mapping (owner decision 2026-10-02, .claude/rules/issue-workflow.md
-# §Type, priority and labels):
+# The mapping (owner decision 2026-10-02; no specification governs it: our own
+# design):
 #   * type: `bug` -> Bug, `enhancement` -> Feature, anything else -> Task; an
 #     issue with neither label keeps a type it already has;
 #   * priority: P0 -> Urgent, P1 -> High, P2 -> Medium, P3 -> Low; an issue

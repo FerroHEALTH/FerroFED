@@ -190,7 +190,7 @@ proptest! {
         let merged = merge(vec![NodeAnswer::new("node-0", answered.iter().map(Row::cells).collect())], &order(direction, Some(limit)));
         prop_assert!(merged.rows().is_empty(), "none of a refused node's rows is merged");
         prop_assert_eq!(merged.refused().len(), 1);
-        prop_assert_eq!(merged.refused()[0].reason(), Disagreement::Order, "A43");
+        prop_assert_eq!(merged.refused()[0].reason(), Disagreement::Order, "§11.6.1, N39");
     }
 }
 
@@ -329,7 +329,7 @@ fn a_node_whose_k_plus_n_rows_disagree_with_the_federation_order_is_refused() {
     assert_eq!(
         merged.refused()[0].reason(),
         Disagreement::Order,
-        "the A43 check runs on the k + n rows the node was sent"
+        "the order check runs on the k + n rows the node was sent (§11.6.2)"
     );
     assert!(merged.rows().is_empty(), "OFFSET 1 skips node-b's one row");
 }

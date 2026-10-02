@@ -12,7 +12,7 @@
 #
 # The board is a VIEW, not a tracker: Status (Todo / In Progress / Done) is
 # the ONLY board-managed datum, and this script deliberately exposes nothing
-# else. Policy: .claude/rules/project-board.md.
+# else. Policy: no specification governs it: our own design.
 #
 # The board is not created by this script. It exists as the GitHub Project (v2)
 # "FerroFED Roadmap" (number 1) under the `FerroHEALTH` organization, with a

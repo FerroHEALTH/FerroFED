@@ -325,11 +325,11 @@ impl<'ast> Visit<'ast> for Scan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum LeakKind {
     /// A text of the query contains it, or a string function over literals
-    /// folds to a text that does (§5.4.1; decision A4).
+    /// folds to a text that does (§5.4.1 "in any position").
     Value,
     /// A string function over a literal that the gateway cannot fold is
     /// compared with an identifier-bearing path, so the node could compute
-    /// the identifier (decision A4).
+    /// the identifier (§5.4.1 "in any position", §5.4.2).
     Unfoldable,
 }
 
@@ -345,7 +345,7 @@ pub(super) struct Leak {
 /// Every written text of `query` that could carry the identifier to a node:
 /// the literals, the codes, names and patterns, the identifiers of the query
 /// itself, and the folded value of every string function over literals
-/// (§5.4.1 "in any position"; decision A4).
+/// (§5.4.1 "in any position").
 pub(super) fn reaches(query: &SelectQuery, value: &str) -> Option<Leak> {
     let mut search = Search {
         value,

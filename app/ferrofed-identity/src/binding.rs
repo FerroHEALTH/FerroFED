@@ -132,7 +132,7 @@ impl ResolutionBindings {
     }
 
     /// Drops every binding of `session`, when it ends or when a consent
-    /// denial voids what it resolved (decision A20).
+    /// denial voids what it resolved (§12.5.1 step 2).
     pub fn forget(&self, session: &SessionKey) {
         self.lock().remove(session);
     }

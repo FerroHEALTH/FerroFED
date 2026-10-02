@@ -430,7 +430,7 @@ async fn without_a_resolver_a_patient_query_fails_closed() -> TestResult {
     assert_eq!(
         StatusCode::FAILED_DEPENDENCY,
         status,
-        "no cross-reference answers, so the query fails (decision A17): {text}"
+        "no cross-reference answers, so the query fails (§11.1): {text}"
     );
     schema::validate(&text)?;
     let answer: Answer = serde_json::from_str(&text)?;
@@ -656,7 +656,7 @@ async fn without_a_registry_the_query_route_is_unserved() -> TestResult {
 pub(crate) mod schema {
     #![expect(
         clippy::disallowed_types,
-        reason = "seam 4 of rust-style.md: schema validation reads JSON as values, in tests only"
+        reason = "the test seam: schema validation reads JSON as values, in tests only"
     )]
 
     use std::error::Error;

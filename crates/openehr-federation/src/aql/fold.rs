@@ -7,7 +7,7 @@
 //!
 //! A node evaluates `CONCAT('47', '11')` to `'4711'`, so a value test that
 //! reads each literal on its own lets the identifier through in pieces
-//! (§5.4.1 "in any position"; decision A4). The rewrite folds these calls over
+//! (§5.4.1 "in any position"). The rewrite folds these calls over
 //! their literal arguments and tests the folded text as well.
 
 use openehr_query::ast::{FunctionCall, Primitive, Terminal};
