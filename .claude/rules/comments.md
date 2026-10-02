@@ -96,13 +96,17 @@ A comment describes the code as it IS.
   runs at most 8 lines, punctuation-only comment lines (sweep residue),
   backtick-quoted markers used AS markers on doc lines, and empty
   `# Errors`/`# Panics` doc sections. Check 9 refuses a citation of an internal
-  file (`docs/architecture.md`, a path into `.claude/`, `CLAUDE.md`, or the
-  name of a rule or memory file) and check 10 a decision-register marker
-  (`decision A17`, a bare `A30`), in Rust comments, doc comments and lint
-  `reason` strings, in the full-line comments of `scripts/**/*.sh`, every
-  `Cargo.toml`, `clippy.toml`, the YAML under `.github/` and the TOML under
-  `docker/`, in the `echo` and `printf` text of a workflow `run:` block, and
-  in the `reason` strings of those TOML files; `--self-test` proves each refused
+  file (`docs/architecture.md`, a path into `.claude/`, `CLAUDE.md`, the
+  name of a rule or memory file, or any other markdown file under `docs/`
+  outside `docs/specs/` cited in a parenthetical or by section, so naming
+  `docs/VERSIONS.md` as the file a script reads passes) and check 10 a
+  decision-register marker (`decision A17`, a bare `A30`), in Rust comments,
+  doc comments and lint `reason` strings, in the full-line comments of
+  `scripts/**/*.sh`, every `Cargo.toml`, `clippy.toml`, the YAML under
+  `.github/` and the TOML under `docker/`, in the trailing `#` comment after a
+  YAML or TOML value, in a YAML `description:` scalar, in the `echo` and
+  `printf` text of a workflow `run:` block, and in the `reason` strings of
+  those TOML files; `--self-test` proves each refused
   form and its near misses. Runs per-edit on every one of those file kinds
   (the `rust_fmt_clippy.sh` PostToolUse hook) and in the CI `comment-style`
   job, which runs `--self-test` and `--all`.

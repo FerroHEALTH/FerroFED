@@ -133,6 +133,19 @@ federated query and identity resolution shipped in 0.0.3.
   official documentation it rests on, or says that no specification governs
   it. The six vendor scripts no longer write an internal path into their
   `PROVENANCE.md`.
+- The `comment-style` citation checks refuse a citation of any markdown file
+  under `docs/` outside the vendored `docs/specs/` tree (#184): a path that
+  opens a parenthetical or is followed by `section` or `§`. Naming
+  `docs/VERSIONS.md` as the file a script or test reads still passes. The
+  checks also read every YAML `description:` scalar and the trailing `#`
+  comment after a YAML or TOML value, outside quoted strings and block
+  scalars, and the guard runs the same under mawk. The citations this
+  catches cite the GitHub documentation or say that no specification
+  governs them, among them `fuzz.yml`, the `setup-rust` action
+  description, the version and corpus scripts and the CI rule. The crate
+  manifests' comment on the 0.0.0 name reservation changes with them, so
+  `openehr-federation` moves to 0.0.15, `ihe-iti` to 0.0.7 and
+  `nl-generic-functions` to 0.0.4 with no change to their code.
 - Error bodies (#57): the gateway's own refusals (`404`, `501`, a caught
   panic's `500`) answer the ITS-REST `Error` shape with `code` and
   `request_id`, where they named the code in an `error` member, and the codes

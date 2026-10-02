@@ -30,7 +30,10 @@
 #                          docs, any path into the `.claude` tree, the root
 #                          agent instructions file, or the bare file name of a
 #                          rule or memory file (read from that tree, so a new
-#                          rule is covered).
+#                          rule is covered). Any other markdown file under
+#                          docs, outside the vendored docs/specs tree, fails
+#                          in the citation form only: the path opening a
+#                          parenthetical, or followed by `section` or `§`.
 #  10. decision markers    the same text names a decision-register entry:
 #                          the word `decision` (or `decisions`) followed by an
 #                          `A` and a digit, or an `A` with one or two digits
@@ -47,12 +50,14 @@
 # under .github (workflows, composite actions and the repository
 # configuration) and the TOML under docker/. In the YAML they also read the
 # text of every `echo` or `printf` in a `run:` block, shell escapes removed,
-# and in the TOML every `reason = "…"` string. Heredoc bodies are skipped,
-# since they are document text a script writes. One difference is
-# deliberate: a HASH file may NAME the architecture document as a file a
-# script reads (the versions guard compares its pin table), so only the
-# citation form fails there, the document followed by `section` or `§`, or
-# opening a parenthetical.
+# every `description:` scalar, and in the TOML every `reason = "…"` string.
+# In the YAML and the TOML they read the trailing `#` comment after a value
+# too, outside quoted strings, run blocks and other block scalars. Heredoc
+# bodies are skipped, since they are document text a script writes. One
+# difference is deliberate: a HASH file may NAME the architecture document as
+# a file a script reads (the versions guard compares its pin table), so only
+# the citation form fails there, the document followed by `section` or `§`,
+# or opening a parenthetical.
 #
 # Citation rule: no specification governs this: our own design. A comment
 # cites the specification it rests on (section, N, CP) or official external
@@ -110,9 +115,34 @@ CITE_AWK='
       names_re = "(^|[^A-Za-z0-9_./-])(" ENVIRON["CITE_NAMES"] ")\\.md"
     dec_re = "(^|[^A-Za-z0-9_])[Dd]ecisions?[[:space:]]+A[0-9]"
     bare_re = "(^|[^A-Za-z0-9_.#-])A[0-9][0-9]?([^A-Za-z0-9_-]|$)"
+    doc_re = "docs/[A-Za-z0-9_./-]*\\.md"
+    doc_specs_re = "^docs/specs/"
+    doc_left_re = "[A-Za-z0-9_./-]$"
+    doc_open_re = "\\(`?$"
+    doc_sec_re = "^`?[[:space:]]*(section|§)"
+  }
+  # Whether text cites a markdown file under docs/ outside the vendored
+  # docs/specs/ tree: the path opens a parenthetical or is followed by
+  # `section` or `§`. A path that is the tail of a longer one (a URL) is not.
+  # RSTART and RLENGTH are restored, because a caller loops on its own match.
+  function docs_cited(text,   t, pre, m, start, len, found) {
+    start = RSTART
+    len = RLENGTH
+    found = 0
+    t = text
+    while (!found && match(t, doc_re)) {
+      pre = substr(t, 1, RSTART - 1)
+      m = substr(t, RSTART, RLENGTH)
+      t = substr(t, RSTART + RLENGTH)
+      if (m !~ doc_specs_re && pre !~ doc_left_re && (pre ~ doc_open_re || t ~ doc_sec_re))
+        found = 1
+    }
+    RSTART = start
+    RLENGTH = len
+    return found
   }
   function cite_check(text, what, strict, fenced,   t) {
-    if ((strict ? text ~ arch_any_re : text ~ arch_cite_re) \
+    if ((strict ? text ~ arch_any_re : text ~ arch_cite_re) || docs_cited(text) \
         || text ~ claude_re || (names_re != "" && text ~ names_re))
       printf ":%d: %s cites an internal markdown file: cite the specification section it rests on, or write \"no specification governs this: our own design\"\n", NR, what
     t = text
@@ -259,9 +289,10 @@ check_rs() {
 
 # Prints the check 9 and 10 violations of one HASH file, one `:LINE: message`
 # per line. The kind comes from the extension: `sh` (heredoc bodies skipped),
-# `yml` (workflow and action YAML: heredocs inside a `run:` block skipped, and
-# the text of every `echo` or `printf` in a `run:` block read, with its shell
-# escapes removed) or `toml` (every `reason = "…"` string read as well).
+# `yml` (workflow and action YAML: heredocs inside a `run:` block skipped, the
+# text of every `echo` or `printf` in a `run:` block read, with its shell
+# escapes removed, and every `description:` scalar and trailing comment read)
+# or `toml` (every `reason = "…"` string and trailing comment read as well).
 check_hash() {
   local kind="toml"
   case "$1" in
@@ -273,21 +304,57 @@ check_hash() {
       hd_re = "<<-?[[:space:]]*[" sq "\"]?[A-Za-z_][A-Za-z0-9_]*[" sq "\"]?"
       reason_re = "reason[[:space:]]*=[[:space:]]*\"([^\"\\\\]|\\\\.)*\""
       echo_re = "(^|[;&|({[:space:]])(echo|printf)[[:space:]]"
+      block_re = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
       heredoc = ""
       run_ind = -1
+      desc_ind = -1
+      block_ind = -1
+    }
+    # The trailing comment of a TOML or YAML line: the first `#` after a space
+    # or a tab outside a quoted string, to the end of the line. A quote opens
+    # a string only where a value starts, so the apostrophe of a word does not.
+    function trailing_comment(s,   i, n, c, prev, dq, sqs) {
+      n = length(s)
+      prev = " "
+      dq = 0
+      sqs = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (dq) {
+          if (c == "\\") i++
+          else if (c == "\"") dq = 0
+        } else if (sqs) {
+          # Two quotes are the escaped quote of a YAML single-quoted scalar.
+          if (c == sq && substr(s, i + 1, 1) == sq) i++
+          else if (c == sq) sqs = 0
+        } else if (c == "#" && (prev == " " || prev == "\t")) {
+          return substr(s, i)
+        } else if (index(" \t[{,:=", prev) > 0) {
+          if (c == "\"") dq = 1
+          else if (c == sq) sqs = 1
+        }
+        prev = c
+      }
+      return ""
     }
     NR == 1 && /^#!/ { next }
     {
       line = $0
       sub(/^[[:space:]]+/, "", line)
       ind = length($0) - length(line)
+      # The column of a key: a sequence entry `- key:` puts it past the dash.
+      key_ind = ind
+      if (match(line, /^-[[:space:]]+/)) key_ind = ind + RLENGTH
     }
     # A block scalar holds the lines indented deeper than its key (the YAML
     # 1.2.2 specification, block scalars), so the first line that is not ends it.
+    # A multi-line plain or quoted `description:` scalar ends the same way.
     kind == "yml" && run_ind >= 0 && line != "" && ind <= run_ind {
       run_ind = -1
       heredoc = ""
     }
+    kind == "yml" && desc_ind >= 0 && line != "" && ind <= desc_ind { desc_ind = -1 }
+    kind == "yml" && block_ind >= 0 && line != "" && ind <= block_ind { block_ind = -1 }
     heredoc != "" {
       t = $0
       if (heredoc_tabs) sub(/^\t+/, "", t)
@@ -300,16 +367,31 @@ check_hash() {
         cite_check(line, "comment", 0, 0)
         next
       }
+      if (desc_ind >= 0) {
+        cite_check(line, "description", 0, 0)
+        next
+      }
+      if (block_ind >= 0) next
       in_run = (kind == "sh")
       if (kind == "yml") {
         if (line ~ /^(-[[:space:]]+)?run:[[:space:]]*[|>]/) {
-          run_ind = ind
+          cite_check(trailing_comment(line), "comment", 0, 0)
+          run_ind = key_ind
           next
         }
         in_run = (run_ind >= 0)
         if (match(line, /^(-[[:space:]]+)?run:[[:space:]]*/)) {
           in_run = 1
           line = substr(line, RLENGTH + 1)
+        }
+        if (!in_run && match(line, /^(-[[:space:]]+)?description:[[:space:]]*/)) {
+          cite_check(substr(line, RLENGTH + 1), "description", 0, 0)
+          desc_ind = key_ind
+          next
+        }
+        if (!in_run) {
+          cite_check(trailing_comment(line), "comment", 0, 0)
+          if (line ~ block_re) block_ind = key_ind
         }
         if (in_run && match(line, echo_re)) {
           t = substr(line, RSTART)
@@ -318,6 +400,7 @@ check_hash() {
         }
       }
       if (kind == "toml") {
+        cite_check(trailing_comment(line), "comment", 0, 0)
         t = $0
         while (match(t, reason_re)) {
           cite_check(substr(t, RSTART, RLENGTH), "lint reason", 0, 0)
@@ -476,6 +559,38 @@ self_test() {
   expect ferrofed.toml refused "$marker" '# a patient query fails closed with 424 (decision A17).'
   expect ferrofed.toml accepted "" '# a patient query fails closed with 424 (§11.4, N37).' \
     'document = "/etc/ferrofed/registry.toml"'
+
+  # Any markdown file under docs/ outside docs/specs/, cited by a parenthetical
+  # or a section; a file a script reads, a vendored page and a URL tail pass.
+  expect s.rs refused "$internal" '// The lane (docs/ci-cd.md §The fuzz lane).'
+  expect t.rs refused "$internal" '/// The checklist is docs/release.md section 2.'
+  expect j.sh refused "$internal" '# The fuzz lane (docs/ci-cd.md).'
+  # shellcheck disable=SC2016 # a literal shell fixture: the backticks are comment text
+  expect k.sh refused "$internal" '# The images: `docs/VERSIONS.md` § Container images.'
+  expect u.rs accepted "" '// The test reads docs/VERSIONS.md (docs/specs/its-rest/README.md).'
+  expect l.sh accepted "" '# Reads each pin from docs/VERSIONS.md, the matrix.'
+  expect m.sh accepted "" '# Config (https://github.com/rhysd/actionlint/blob/main/docs/config.md).'
+
+  # A YAML description scalar: inline, folded, and plain over several lines.
+  expect m.yml refused "$internal" 'inputs:' '  x:' '    description: The pin (docs/VERSIONS.md).'
+  expect n.yml refused "$internal" 'name: x' 'description: >-' '  Install the toolchain, so the pin' \
+    '  lives in one file (docs/VERSIONS.md).' 'inputs: {}'
+  expect o.yml refused "$marker" 'inputs:' '  - description: the resolver' '      fails closed (decision A17).'
+  expect p.yml accepted "" 'inputs:' '  x:' '    description: mdBook version, pinned in docs/VERSIONS.md.' \
+    '    default: "(docs/ci-cd.md)"'
+
+  # A trailing comment after a YAML or TOML value, outside any quoted string.
+  expect q.yml refused "$internal" "${steps[@]}" '      - uses: actions/checkout@0123 # pinned (docs/ci-cd.md)'
+  expect r.yml refused "$marker" 'permissions: {} # least privilege (decision A35)'
+  expect s.yml refused "$internal" "${steps[@]}" '      - run: | # see .claude/rules/ci-cd.md' '          echo ok'
+  expect t.yml accepted "" "${steps[@]}" '      - uses: actions/checkout@0123 # v7.0.1' \
+    "        name: 'it''s # (docs/ci-cd.md)'" '        url: https://example.org/x#(docs/ci-cd.md)' \
+    '      - uses: actions/github-script@0123 # v8.0.0' '        with:' '          script: |' \
+    '            const x = 1 # (docs/ci-cd.md)' '      - run: echo done'
+  expect Cargo.toml refused "$internal" 'serde = "1" # see (docs/VERSIONS.md)'
+  expect ferrofed.toml refused "$marker" 'timeout_ms = 30000 # fails closed (decision A17)'
+  expect Cargo.toml accepted "" 'url = "https://x.org/#(docs/ci-cd.md)"' "name = 'it # (docs/release.md)'" \
+    'level = "deny" # the Clippy book, Configuration'
 
   if [[ "$fails" -ne 0 ]]; then
     echo "comment-style self-test: $fails case(s) failed." >&2
