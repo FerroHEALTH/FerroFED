@@ -15,7 +15,7 @@ audit there found model knowledge restated by hand and one live drift.
 On 2026-10-01 the owner ruled the same for FerroFED from the start, in two
 messages: the ITS-REST surface and AQL come from the published crates and
 are never re-implemented, and then that the whole `openehr-*` family is the
-model, nothing redone. FerroEHR publishes the family (0.0.74 on 2026-10-01, the lockstep release that closed FerroEHR #3505 to #3514, the gaps FerroFED raised):
+model, nothing redone. FerroEHR publishes the family as one lockstep line at the pin in `docs/VERSIONS.md`; the gaps FerroFED raised, FerroEHR #3505 to #3514, closed in its 0.0.74 release of 2026-10-01:
 
 - `openehr-its`: the client face is the generated axum server traits
   (`rest-server` feature), dispatch to each node is the generated client
@@ -26,7 +26,8 @@ model, nothing redone. FerroEHR publishes the family (0.0.74 on 2026-10-01, the 
   hygiene gate (§5.4, N33).
 - `openehr-sdt`: the SMART on openEHR scope grammar (`smart_scopes`) for the
   §13 authentication and authorization handoff; the simplified formats and
-  their validation if FerroFED ever needs them.
+  their validation if FerroFED ever needs them. It is not a dependency until
+  client authentication (#80) first uses it.
 - `openehr-base` and `openehr-rm`: the typed identifiers (`HIER_OBJECT_ID`,
   `OBJECT_VERSION_ID`, the `ehr_id`, `system_id` and `creating_system_id`
   forms) behind §12 and §12a follow-up routing, and every RM fact

@@ -16,7 +16,7 @@ so the guard can hold every row here to its source.
 | Federation Tier with AQL specification | commit `7162d0c` | the vendored source of that release candidate |
 | openEHR ITS-REST | 1.1.0 | the façade a client sees and the API each node exposes |
 | openEHR AQL | 1.1.0 | the query language on both sides of the gateway |
-| `openehr-query`, `openehr-its`, `openehr-base`, `openehr-rm`, `openehr-sdt` | 0.0.79 | the published crates the gateway builds on, moved together as one family |
+| `openehr-query`, `openehr-its`, `openehr-base`, `openehr-rm` | 0.0.79 | the published crates the gateway builds on, moved together as one family |
 | IHE PIXm FHIR package | `ihe.iti.pixm`, version 3.1.0 | the identifier cross-reference binding (ITI-83) |
 | IHE PDQm FHIR package | `ihe.iti.pdqm`, version 3.2.0 | the demographics query capability of `ihe-iti` (ITI-78) |
 | Rust toolchain | 1.98.1, edition 2024 | the toolchain the workspace builds with |

@@ -515,7 +515,7 @@ echo "== model crate pins (docs/architecture.md <-> $matrix <-> Cargo.toml)"
 # The openehr-* family is released in lockstep, so its rows are one group: a
 # member that moves alone is drift even when its own file pair agrees.
 family_pin=""
-for crate in openehr-query openehr-its openehr-base openehr-rm openehr-sdt; do
+for crate in openehr-query openehr-its openehr-base openehr-rm; do
   want="$(pin_of "$crate" "$matrix")"
   if [ -z "$want" ]; then
     bad "$matrix has no $crate row"

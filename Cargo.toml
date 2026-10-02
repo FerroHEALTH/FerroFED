@@ -37,7 +37,8 @@ openehr-base = "0.0.79"
 openehr-rm = "0.0.79"
 openehr-query = { version = "0.0.79", features = ["federation"] }
 openehr-its = { version = "0.0.79", default-features = false }
-openehr-sdt = { version = "0.0.79", default-features = false }
+# TODO(#80): add openehr-sdt to the family when client authentication reads
+# the SMART on openEHR scopes with it.
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
