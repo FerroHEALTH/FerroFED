@@ -17,8 +17,12 @@ use axum::body::Body;
 use http::{Request, StatusCode, header};
 use wiremock::MockServer;
 
-use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, body, dev_gateway, node_answering};
-use crate::support::{error_body, send};
+use crate::facade::{
+    EHR_A, EHR_B, NAMESPACE, PATIENT, body, crossref, dev_gateway, gateway, node_answering,
+    registry,
+};
+use crate::request_log::logged;
+use crate::support::{self, error_body, request_lines, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -197,5 +201,64 @@ async fn a_refused_query_names_the_clients_own_id_in_its_error_body() -> TestRes
         let asked = server.received_requests().await.ok_or("recording is on")?;
         assert!(asked.is_empty(), "no node is asked");
     }
+    Ok(())
+}
+
+// conformance: CP-26
+#[test]
+fn a_failed_query_is_logged_under_the_id_its_request_line_records() -> TestResult {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let (a, b) = runtime.block_on(async {
+        (
+            node_answering("uid-at-a").await,
+            node_answering("uid-at-b").await,
+        )
+    });
+    // NOTE: §5.4.1, N33, a registry URL that carries the patient identifier
+    // is stopped by the outbound gate, which fails the query on the gateway.
+    let leaking = format!("{}/{PATIENT}", a.uri());
+    let dir = tempfile::tempdir()?;
+    let app = gateway(
+        dir.path(),
+        &registry(&leaking, &b.uri(), ""),
+        "profile = \"development\"",
+        &crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]),
+    )?;
+    let client_id = "SYNTHETIC-NATIONAL-ID-0004";
+    let text = logged(
+        &app,
+        "info",
+        vec![query(&patient_query(), Some(client_id))?],
+    )?;
+    let lines = support::lines(&text)?;
+    let request = request_lines(&text)?
+        .into_iter()
+        .next()
+        .ok_or("the request is logged")?;
+    assert_eq!(
+        Some(StatusCode::INTERNAL_SERVER_ERROR.as_u16()),
+        request.status,
+        "the gate failed the query: {text}"
+    );
+    let gateway_id = request.request_id.as_deref().ok_or("under an id")?;
+    let failed = lines
+        .iter()
+        .find(|line| line.message == "the federated query failed")
+        .ok_or("the failure is logged")?;
+    assert_eq!(
+        Some(gateway_id),
+        failed.request_id.as_deref(),
+        "the failure line names the request its request line records: {text}"
+    );
+    assert!(
+        !text.contains(client_id),
+        "the client's id reached the log: {text}"
+    );
+    let asked = runtime
+        .block_on(a.received_requests())
+        .ok_or("recording is on")?;
+    assert!(asked.is_empty(), "the gate sent nothing to node A");
     Ok(())
 }

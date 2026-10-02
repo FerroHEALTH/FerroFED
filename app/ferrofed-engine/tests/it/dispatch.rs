@@ -515,9 +515,12 @@ async fn a_sentinel_in_the_query_reaches_only_the_body() -> TestResult {
     };
     assert!(!request.url.as_str().contains(sentinel), "{}", request.url);
     for (name, value) in &request.headers {
-        let value = String::from_utf8_lossy(value.as_bytes());
+        let carries = value
+            .as_bytes()
+            .windows(sentinel.len())
+            .any(|window| window == sentinel.as_bytes());
         assert!(
-            !name.as_str().contains(sentinel) && !value.contains(sentinel),
+            !name.as_str().contains(sentinel) && !carries,
             "the header {name} carries the sentinel"
         );
     }

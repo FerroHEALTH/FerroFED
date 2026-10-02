@@ -309,3 +309,121 @@ fn a_panic_is_logged_under_the_gateways_id_never_the_clients() -> Result<(), Box
     );
     Ok(())
 }
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_panicking_request_has_its_line_with_five_hundred_under_the_gateways_id()
+-> Result<(), Box<dyn StdError>> {
+    let router = ferrofed_server::with_middleware(
+        Router::new().route(
+            "/boom",
+            axum::routing::get(|| async {
+                panic!("the handler gave up");
+                #[expect(unreachable_code, reason = "the route panics by design")]
+                StatusCode::OK
+            }),
+        ),
+        &support::settings(),
+    );
+    let text = logged(
+        &router,
+        "info",
+        vec![
+            Request::get("/boom")
+                .header(request_id::HEADER, "corr-panic-line")
+                .body(Body::empty())?,
+        ],
+    )?;
+    let lines = request_lines(&text)?;
+    assert_eq!(1, lines.len(), "the panicking request has its line: {text}");
+    let line = lines.first().ok_or("one line")?;
+    assert_eq!(Some("/boom"), line.route.as_deref(), "{text}");
+    assert_eq!(
+        Some(StatusCode::INTERNAL_SERVER_ERROR.as_u16()),
+        line.status,
+        "{text}"
+    );
+    assert_eq!(Some(true), line.client_named, "{text}");
+    let logged_id = line.request_id.as_deref().ok_or("an id is logged")?;
+    assert_eq!(
+        Some(uuid::Version::Random),
+        uuid::Uuid::parse_str(logged_id)?.get_version(),
+        "the line names the gateway's own id: {text}"
+    );
+    let panicked = support::lines(&text)?
+        .into_iter()
+        .find(|logged| logged.message == "the request handler panicked")
+        .ok_or("the panic is logged")?;
+    assert_eq!(
+        Some(logged_id),
+        panicked.request_id.as_deref(),
+        "the request line and the panic line name one request: {text}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_request_past_the_timeout_has_its_line_with_four_hundred_and_eight()
+-> Result<(), Box<dyn StdError>> {
+    let mut settings = support::settings();
+    settings.request_timeout = std::time::Duration::from_millis(20);
+    let router = ferrofed_server::with_middleware(
+        Router::new().route(
+            "/slow",
+            axum::routing::get(|| async {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                StatusCode::OK
+            }),
+        ),
+        &settings,
+    );
+    let text = logged(
+        &router,
+        "info",
+        vec![Request::get("/slow").body(Body::empty())?],
+    )?;
+    assert_eq!(
+        vec![Some(StatusCode::REQUEST_TIMEOUT.as_u16())],
+        request_lines(&text)?
+            .iter()
+            .map(|line| line.status)
+            .collect::<Vec<_>>(),
+        "the timed-out request has its line: {text}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_body_over_the_ceiling_has_its_line_with_four_hundred_and_thirteen()
+-> Result<(), Box<dyn StdError>> {
+    let oversized = "x".repeat(support::settings().body_limit + 1);
+    let text = logged(
+        &support::app(),
+        "info",
+        vec![
+            Request::post("/v1/query/aql")
+                .header(http::header::CONTENT_LENGTH, oversized.len())
+                .body(Body::from(oversized))?,
+        ],
+    )?;
+    assert_eq!(
+        vec![Some(StatusCode::PAYLOAD_TOO_LARGE.as_u16())],
+        request_lines(&text)?
+            .iter()
+            .map(|line| line.status)
+            .collect::<Vec<_>>(),
+        "the refused request has its line: {text}"
+    );
+    Ok(())
+}

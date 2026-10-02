@@ -79,11 +79,11 @@ pub async fn query_aql(
     let session: Option<SessionKey> = None;
     let completion = match completeness::of(&headers, federation.best_effort()) {
         Ok(completion) => completion,
-        Err(error) => return Failure::Completeness(error).respond(&request_id),
+        Err(error) => return Failure::Completeness(error).respond(&request_id, outbound),
     };
     let dedup = match dedup::of(&headers) {
         Ok(mode) => mode,
-        Err(error) => return Failure::Dedup(error).respond(&request_id),
+        Err(error) => return Failure::Dedup(error).respond(&request_id, outbound),
     };
     let configured = federation.budget();
     let wait = prefer::wait(&headers);
@@ -105,7 +105,7 @@ pub async fn query_aql(
             }
             response
         }
-        Err(failure) => failure.respond(&request_id),
+        Err(failure) => failure.respond(&request_id, outbound),
     }
 }
 
@@ -183,16 +183,19 @@ impl Failure {
         }
     }
 
-    /// The error answer of this failure, naming `request_id`.
+    /// The error answer of this failure, naming the exchange id `request_id`.
     ///
     /// The message is the failure's display text, which locates a fault and
     /// never quotes the query, a parameter value or a header value (§5.4.3).
-    fn respond(self, request_id: &str) -> Response {
+    /// A server error is logged under `outbound`, the id the request line
+    /// records, and never under the client's free-text `request_id`.
+    fn respond(self, request_id: &str, outbound: OutboundId) -> Response {
         let code = self.code();
         if code.status().is_server_error() {
             tracing::error!(
                 code = code.as_str(),
                 error = %crate::chain(&self),
+                request_id = %outbound,
                 "the federated query failed"
             );
         }

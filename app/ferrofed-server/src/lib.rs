@@ -232,21 +232,23 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
 ///
 /// Outermost first: the request-id normalizer, the panic renderer, the layer
 /// that mints the gateway's outbound id, the layer that sets the exchange id,
-/// the layer that propagates the exchange id onto the response, the panic
-/// catcher, the request timeout, the body-size ceiling, and the request log.
+/// the layer that propagates the exchange id onto the response, the request
+/// log, the panic catcher, the request timeout, and the body-size ceiling.
 /// The renderer sits outside the outbound and propagate layers because it
 /// reads both ids from the response they have just stamped, and the exchange
 /// id is set inside the outbound layer so an unnamed request takes the
-/// outbound id as its exchange id ([`request_id`]).
+/// outbound id as its exchange id ([`request_id`]). The log sits outside the
+/// catcher, the timeout and the ceiling, so a request one of them answers,
+/// a panicking one included, still gets its line with the status it answered.
 pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
     router
-        .layer(axum::middleware::from_fn(request_log::log))
         .layer(RequestBodyLimitLayer::new(server.body_limit))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             server.request_timeout,
         ))
         .layer(CatchPanicLayer::custom(panic::caught))
+        .layer(axum::middleware::from_fn(request_log::log))
         .layer(PropagateRequestIdLayer::new(request_id::HEADER))
         .layer(SetRequestIdLayer::new(request_id::HEADER, request_id::Mint))
         .layer(axum::middleware::from_fn(request_id::mint_outbound))

@@ -129,7 +129,7 @@ async fn an_identifier_in_the_clients_query_string_and_headers_is_never_forwarde
         asked_by_ehr_id_alone(server, own, "client query string and headers").await?;
         let all = wire(server).await?;
         assert!(
-            !all.to_ascii_lowercase().contains("x-patient"),
+            !all.contains_ignoring_ascii_case("x-patient"),
             "a client header is never forwarded to a node: {all}"
         );
     }

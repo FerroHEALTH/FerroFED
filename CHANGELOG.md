@@ -328,6 +328,18 @@ federated query and identity resolution shipped in 0.0.3.
   `composite_id_key`, which the registry identifiers already use, and the
   session-scoped resolution bindings now key on `EhrId` in place of their
   own case fold. `openehr-federation` is 0.0.21.
+- A patient query is no longer refused at random when its withheld
+  identifier is a short hexadecimal value that occurs inside the minted
+  `X-Request-Id` (#227; §5.4.1, N33, CP-26). The outbound gate reads the AQL
+  text, the paging, the URL and every other header the gateway adds, and
+  skips the minted id, which `OutboundId::mint` makes from no client input.
+  A request a panic, the request timeout or the body ceiling answers now has
+  its request-log line, with the status it answered (`500`, `408`, `413`)
+  under the gateway's id. The "the federated query failed" line carries the
+  same `request_id` as the request line. The hygiene assertions of the tests
+  compare the raw bytes a mock node received, so a header value or a body
+  that is not UTF-8 is searched too, and the CP-26 row of the conformance
+  matrix names #217.
 - CP-29 is `planned` again in the conformance matrix and the gateway badge
   (#221): only its visibility half, the dedup record of §10.2 and §10.3, is
   built, and its write-routing and `409` half is #66. The dedup tests carry

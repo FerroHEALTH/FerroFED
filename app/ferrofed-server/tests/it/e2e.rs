@@ -26,6 +26,7 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::containers::{self, API_PATH, ProxiedNode};
 use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{
     self, CompositionSeed, CrossReferenceSeed, DemoComposition, EhrDomain, EhrSeed, PatientId,
     SeedPlan,
@@ -150,6 +151,16 @@ managing_organisation = "org-b"
     ))
 }
 
+/// Whether the raw body of `capture` holds `needle`'s bytes.
+fn body_holds(capture: &Capture, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    needle.is_empty()
+        || capture
+            .body
+            .windows(needle.len())
+            .any(|window| window == needle)
+}
+
 /// `POST /v1/query/aql` with `aql`.
 fn query(aql: &str) -> Result<Request<Body>, Box<dyn Error>> {
     #[derive(serde::Serialize)]
@@ -248,11 +259,11 @@ async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> Te
         let sent = journal.first().ok_or("one capture")?;
         let body = String::from_utf8_lossy(&sent.body);
         assert!(
-            body.contains(&own.to_string()),
+            body_holds(sent, &own.to_string()),
             "the node query is keyed on the node's own ehr_id (N7): {body}"
         );
         assert!(
-            !body.contains(&other.to_string()),
+            !body_holds(sent, &other.to_string()),
             "a node never learns another node's ehr_id: {body}"
         );
     }
@@ -339,9 +350,9 @@ async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_nodes() -> 
 
     for node in [&nodes.a, &nodes.b] {
         let journal = node.proxy.journal();
-        let bodies: Vec<String> = journal
+        let bodies: Vec<&[u8]> = journal
             .iter()
-            .map(|capture| String::from_utf8_lossy(&capture.body).into_owned())
+            .map(|capture| capture.body.as_slice())
             .collect();
         assert_eq!(
             2,
@@ -489,7 +500,7 @@ async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> T
     let journal = nodes.a.proxy.journal();
     let sent = journal.first().ok_or("node A was asked")?;
     assert!(
-        String::from_utf8_lossy(&sent.body).contains(&EHR_A.to_string()),
+        body_holds(sent, &EHR_A.to_string()),
         "node A is asked by its own ehr_id (N7)"
     );
     assert!(
@@ -538,9 +549,8 @@ async fn a_patient_fed_at_both_members_resolves_through_pix_at_both() -> TestRes
     for (node, own, other) in [(&nodes.a, EHR_A, EHR_B), (&nodes.b, EHR_B, EHR_A)] {
         let journal = node.proxy.journal();
         let sent = journal.first().ok_or("each node was asked")?;
-        let body = String::from_utf8_lossy(&sent.body);
         assert!(
-            body.contains(&own.to_string()) && !body.contains(&other.to_string()),
+            body_holds(sent, &own.to_string()) && !body_holds(sent, &other.to_string()),
             "{} is asked by its own ehr_id alone (N7)",
             node.node.system_id()
         );

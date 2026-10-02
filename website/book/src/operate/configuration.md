@@ -279,6 +279,9 @@ the same id on every node of one fan-out. The client's `x-request-id` never
 reaches a node: it is free text, and the gateway cannot tell whether it names
 a patient (§5.4.1, N33). When the client sends no id, the response carries the
 gateway's id, so the client, the log and every node name the same request.
+The outbound gate searches every other part of a node request for the
+identifiers resolution consumed, and skips the minted id: it holds no client
+input, and a short hexadecimal identifier can occur inside a random UUID.
 
 Every other header the gateway sends to a node is fixed by the gateway:
 `Accept` and `Content-Type` (`application/json`), `Authorization` (the
@@ -296,7 +299,11 @@ matched (it is logged as `<unmatched>`), or a query value other than the
 ITS-REST paging parameters `offset` and `fetch`, and those only when they are
 digits. The client's own `x-request-id` is a header value too, and it is never
 logged, so a request the client named is found in the log by its time, route
-and status, and in a node's log by the `request_id` of that line. A handler
-panic answers
-`500` and is logged under the gateway's id, without its message, which could
-quote a value the handler held.
+and status, and in a node's log by the `request_id` of that line. A request
+the gateway answers before its handler finishes has its line too, with the
+status it answered: `500` for a handler panic, `408` past the request
+timeout, `413` over the body ceiling. A handler panic is also logged under
+the gateway's id, without its message, which could quote a value the handler
+held. A federated query the gateway fails with a `500` also logs "the
+federated query failed" with its error code and the same `request_id` as its
+request line.
