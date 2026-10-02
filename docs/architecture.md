@@ -1063,8 +1063,17 @@ The contradiction between §10.2 and §10.3 is held on #17.
 **Not built.** The materialised cursor (§11.6.4, #60) and asynchronous queries
 (§11.7, #59) both need gateway-held state with an expiry and, with more than
 one instance, request affinity, which cuts against keeping state off the
-clinical path (decision A31). `Prefer: respond-async` is ignored, which RFC 7240
-allows, and the request is answered synchronously. Both issues stay at Low priority.
+clinical path (decision A31). `Prefer: respond-async` is ignored, as RFC 7240
+§2 requires of a preference a server does not comply with, and the request is
+answered synchronously under the §11.5 budget, which §11.7 says async never
+exempts an ordinary request from: never a `202` or a `Content-Location`, and
+`Preference-Applied` names a `wait` it applied and never `respond-async` (RFC
+7240 §3). The `timeouts` tests `respond_async_*` hold this, alone and beside a
+`wait`. No cursor handle or expiry appears in `meta.federation` (§11.6.4): a
+bounded `OFFSET` page carries only the modelled members and re-runs the fan-out
+each time (`order` test
+`a_bounded_offset_page_is_computed_afresh_and_carries_no_cursor`). Both issues
+close on those tests.
 
 **What `OPTIONS {base}/` declares.**
 
@@ -1074,11 +1083,11 @@ allows, and the request is answered synchronously. Both issues stay at Low prior
 | timeouts | per node and overall; `Prefer: wait` shortens | #37, #51 | `timeout {per_node_ms, overall_ms, policy: "abandon-and-mark"}` |
 | `ORDER BY` with `LIMIT` | `LIMIT n` per node, re-ordered and cut at the Tier, a node's visible order checked | #52 | the check is documented on the site |
 | `OFFSET` | bounded `k + n`, capped | #53 | `paging {offset_strategy: "bounded", max_window}` |
-| cursor | not built | #60 | `offset_strategy` is never `"cursor"` |
+| cursor | not built; no handle in `meta.federation`, tested | #60 | `offset_strategy` is never `"cursor"` |
 | aggregates | `COUNT`, `SUM`, `MIN`, `MAX`, `AVG` | #54 | `aggregates.decomposable` |
 | `DISTINCT` | at the Tier, after dedup | #55 | none |
 | dedup | `none` by default, `version-identity` on request | #56 | `dedup {default, modes, request_header}` |
-| async | not built | #59 | absent |
+| async | not built; `respond-async` ignored, tested | #59 | absent |
 | stored-query registry | offered, `redb` by default | #77 | `definition.stored_query_registry: true` |
 
 **Invariants**, each a `proptest` property over generated node result sets:
@@ -1447,7 +1456,8 @@ the milestone in progress.
   check (#52, A28, A43), bounded `OFFSET` (#53, A29), decomposable aggregates
   (#54, A30), `DISTINCT` (#55), dedup on the full version id (#56, A32), the
   status mapping (#57), CP-12 (#58, held draft T154). #59 and #60 are not built
-  (A31) and stay at Low priority.
+  (A31); tests pin the synchronous answer to `respond-async` and the absent
+  cursor.
 - **v0.0.5, the ITS-REST surface and follow-up routing** (#61 to #69). The
   single-node proxy with `Location` unmodified and `subject_id` resolved (#61,
   A12, A13), `ehr_id` routing (#62), collisions as events (#63), follow-up reads
@@ -1513,7 +1523,7 @@ R4 is #23, #25 and #27).
 | A28 | An `ORDER BY` path not in `SELECT` [R3 D4] | a hidden column, stripped after the merge | the client's query stays answerable; hygiene re-checks the dispatched AQL | decided (owner, 2026-10-01) |
 | A29 | `OFFSET` [R3 D5] | bounded `k + n`, 1000 rows per node by default, `400` past it; each node is sent `LIMIT k + n` with no `OFFSET`, checked as A43 checks `LIMIT n`, merged under the Tier order and sliced `[k, k + n)`; no `LIMIT` or no `ORDER BY` is `400` | §11.6.2 admits it when declared, "permitted only where the gateway can bound `k + n`" | decided (owner, 2026-10-01; mechanism revised 2026-10-02 per the #52 review: `LIMIT k + n` replaces the superseded `k + n + 1` check) |
 | A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01) |
-| A31 | Cursor and async [R3 D7] | not built; #59 and #60 stay at Low priority | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
+| A31 | Cursor and async [R3 D7] | not built; `Prefer: respond-async` ignored and answered synchronously, no cursor handle in `meta.federation`, both pinned by tests (#59, #60) | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
 | A32 | The dedup key [R3 D8] | the full `ObjectVersionId` | §10.3's scenario and the RM's copy semantics; §10.2 contradicts §10.3 (held on #17); grouping by `object_id` collapses a version history | decided (owner, 2026-10-01) |
 | A33 | The wire types [R4 D1] | hand-written in `openehr-federation`, held to the schemas by three test layers; no FerroFED generator | typify drops open members and supports no `if`/`then` | decided (owner, 2026-10-01) |
 | A34 | The crate map [R4 §6, with A16; renamed by #106] | section 11: the published crates named for their specification (`openehr-federation`, `ihe-iti`, `nl-generic-functions`), one crate per specification with a feature per layer or profile, FerroFED's own glue under `app/` | a published crate carries the name of the specification it implements, never the product name; Cargo edges and the architecture test enforce the boundaries; the core never compiles FHIR | decided (owner, 2026-10-01) |

@@ -8,16 +8,19 @@
 //! selected (no specification governs the hidden column or the order check:
 //! our own design). A page at `OFFSET k` asks each node for `k + n` rows
 //! within the configured bound, or is refused under the reject strategy
-//! (§11.6.2).
+//! (§11.6.2). No materialised cursor is offered (§11.6.4).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
 )]
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use http::StatusCode;
+use openehr_federation::meta::FederationMeta;
+use serde::de::IgnoredAny;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
@@ -164,6 +167,63 @@ async fn a_bounded_offset_page_asks_each_node_for_k_plus_n_rows() -> TestResult 
             !sent.contains("OFFSET"),
             "§11.6.2: OFFSET is never pushed down: {sent}"
         );
+    }
+    Ok(())
+}
+
+/// The members of `meta.federation` in the answer `text`.
+fn federation_members(text: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    #[derive(serde::Deserialize)]
+    struct Envelope {
+        meta: Meta,
+    }
+    #[derive(serde::Deserialize)]
+    #[expect(
+        clippy::zero_sized_map_values,
+        reason = "only the member names are read, never their values"
+    )]
+    struct Meta {
+        federation: BTreeMap<String, IgnoredAny>,
+    }
+    let envelope: Envelope = serde_json::from_str(text)?;
+    Ok(envelope.meta.federation.into_keys().collect())
+}
+
+// conformance: CP-32
+#[tokio::test]
+async fn a_bounded_offset_page_is_computed_afresh_and_carries_no_cursor() -> TestResult {
+    let a = node(&[
+        ("a1", "2026-01-05T00:00:00Z"),
+        ("a2", "2026-01-03T00:00:00Z"),
+        ("a3", "2026-01-01T00:00:00Z"),
+    ])
+    .await;
+    let b = node(&[
+        ("b1", "2026-01-04T00:00:00Z"),
+        ("b2", "2026-01-02T00:00:00Z"),
+    ])
+    .await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), "", "")?;
+
+    for run in 1..=2 {
+        let (status, text) = call(app.clone(), post(body(PAGE)?)?).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+        schema::validate(&text)?;
+        for member in federation_members(&text)? {
+            assert!(
+                FederationMeta::MEMBERS.contains(&member.as_str()),
+                "§11.6.4: no cursor is offered, so meta.federation carries no handle or \
+                 expiry, found {member:?} in {text}"
+            );
+        }
+        for server in [&a, &b] {
+            assert_eq!(
+                run,
+                received(server).await?.len(),
+                "§11.6.2: with no materialised result held, every page runs the fan-out"
+            );
+        }
     }
     Ok(())
 }
