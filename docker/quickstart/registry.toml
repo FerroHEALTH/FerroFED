@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # The registry document of the compose.yaml quickstart: the two member CDRs
-# the gateway federates, FerroEHR as node A and EHRbase as node B, each
-# reached on the Compose network at its product's ITS-REST API root
-# (docs/architecture.md section 8). Every name here is quickstart-local.
+# the gateway federates, two FerroEHR instances as node A and node B, each
+# reached on the Compose network at its ITS-REST API root
+# (docs/architecture.md section 8). Each system_id is the one compose.yaml
+# configures the node to stamp. Every name here is quickstart-local.
 
 [[organisation]]
 id = "org-a"
@@ -12,28 +13,28 @@ name = "Node A (FerroEHR)"
 
 [[organisation]]
 id = "org-b"
-name = "Node B (EHRbase)"
+name = "Node B (FerroEHR)"
 
 [[node]]
 id = "node-a"
 organisation = "org-a"
-system_id = "ferroehr.quickstart.local"
+system_id = "node-a.quickstart.local"
 
 [[node]]
 id = "node-b"
 organisation = "org-b"
-system_id = "ehrbase.quickstart.local"
+system_id = "node-b.quickstart.local"
 
 [[endpoint]]
 id = "node-a-query"
 node = "node-a"
-url = "http://ferroehr:8080/ferroehr/rest/openehr"
+url = "http://ferroehr-a:8080/ferroehr/rest/openehr"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-a"
 
 [[endpoint]]
 id = "node-b-query"
 node = "node-b"
-url = "http://ehrbase:8080/ehrbase/rest/openehr"
+url = "http://ferroehr-b:8080/ferroehr/rest/openehr"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-b"

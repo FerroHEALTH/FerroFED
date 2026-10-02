@@ -66,6 +66,19 @@ binary follows from v0.0.2.
   select are refused `400`. A query with `LIMIT` and no `ORDER BY` now returns
   at most `n` rows across all nodes.
 
+### Changed
+
+- The quickstart and the end-to-end harness run two FerroEHR nodes (#155,
+  decision A44). EHRbase left both, because it refuses a `.` in
+  `PARTY_REF.namespace`, which openEHR BASE admits (#118). In `compose.yaml`
+  the services are `ferroehr-a` and `ferroehr-b`, each on its own database
+  and with its own `system_id` (`node-a.quickstart.local`,
+  `node-b.quickstart.local`, which the quickstart registry declares), and
+  node B moved from port 8091 to 8082 (`FERROEHR_B_PORT`; node A's
+  `FERROEHR_PORT` is now `FERROEHR_A_PORT`). Every end-to-end case seeds the
+  patient's subject on both nodes, and the `e2e (containers)` CI job now runs
+  the server's container tests as well as the testkit's.
+
 ## [0.0.3] - 2026-10-02
 
 The first two federated milestones in one release (v0.0.2 and v0.0.3; no

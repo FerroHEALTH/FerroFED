@@ -14,7 +14,7 @@
 #   covered       at least one test carries the point's marker and CI runs it
 #   planned       no test yet; issue names the work (allowed until #89)
 #   deferred      a Gateway point not scored yet; needs an issue and a reason
-#   node-profile  a Node point, scored against the member CDRs in the harness
+#   node-profile  a Node point, scored against the member CDRs in the harness (two FerroEHR instances, decision A44)
 #   operator      an Operator point, verified at admission or in the registry
 #
 # Deferral authority: only the owner defers a Gateway point, by a decision
@@ -45,8 +45,8 @@ CP-14	Gateway	N22	6	planned	#64	-
 CP-15	Gateway	N23	6	planned	#65	-
 CP-16	Gateway	N24	7	planned	#82	-
 CP-17	Gateway	N25	7	planned	#80,#81	-
-CP-18	Node	N26	7	node-profile	#83,#93	scored against the member CDRs, not the gateway (section 16.2)
-CP-19	Node	N27,N27a	7	node-profile	#83,#93	scored against the member CDRs, not the gateway (section 16.2)
+CP-18	Node	N26	7	node-profile	#83,#93	scored against the two FerroEHR member nodes of the harness, not the gateway (section 16.2, decision A44)
+CP-19	Node	N27,N27a	7	node-profile	#83,#93	scored against the two FerroEHR member nodes of the harness, not the gateway (section 16.2, decision A44)
 CP-20	Operator	N19	6	operator	#74	verified at admission or in the registry, not on a request (section 16.2)
 CP-21	Gateway	N28	9	planned	#69	-
 CP-22	Gateway	N29	9	planned	#69	-
@@ -54,7 +54,7 @@ CP-23	Gateway	N30	9	planned	#73	-
 CP-24	Gateway	N31	9	planned	#61	-
 CP-25	Gateway	N32	9	planned	#68	-
 CP-26	Gateway	N33	10	covered	#45,#90	-
-CP-27	Node	N34	10	node-profile	#93	scored against the member CDRs, not the gateway (section 16.2)
+CP-27	Node	N34	10	node-profile	#93	scored against the two FerroEHR member nodes of the harness, not the gateway (section 16.2, decision A44)
 CP-28	Gateway	N35	3	planned	#71	-
 CP-29	Gateway	N36	5,6	planned	#56,#66	-
 CP-30	Gateway	N37	4	covered	#37,#50	-

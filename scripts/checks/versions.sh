@@ -405,9 +405,7 @@ if [ -f "$harness" ]; then
   expected=0
   for image in \
     "FerroEHR node image|FERROEHR" \
-    "FerroEHR node database image|FERROEHR_POSTGRES" \
-    "EHRbase node image|EHRBASE" \
-    "EHRbase node database image|EHRBASE_POSTGRES"; do
+    "FerroEHR node database image|FERROEHR_POSTGRES"; do
     item="${image%%|*}"
     constant="${image##*|}"
     expected=$((expected + 1))

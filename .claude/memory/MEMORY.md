@@ -74,8 +74,8 @@
 - [Dependency sweep to latest](deps-latest-sweep.md): compare pins with
   crates.io and FerroEHR's crate list every session
 - [PostgreSQL 18](postgresql-18.md): the latest release for FerroFED's own
-  optional stored-query backend; a member node runs its product's image
-  (EHRbase on 16.2)
+  optional stored-query backend; the harness nodes run FerroEHR's own
+  database image (on 18.6)
 - [Mermaid diagrams](mermaid-diagrams.md): render every fence with
   mermaid-cli before a PR
 - [Perl edit pitfalls](perl-edit-pitfalls.md): heredoc literals, re-read
@@ -84,6 +84,7 @@
   owner posts as themself stays short, plain, and linked
 - [Strict over the reference](strict-over-reference.md): the Java reference implementation is evidence, not the bar; FerroFED is as strict as FerroEHR and the specification wins where the reference is laxer; owner 2026-10-01
 - [Build in FED first](build-in-fed-first.md): every capability FerroFED needs is built here behind its trait seam, as a crate that can move to FerroPIX later; never block on an unbuilt sibling; owner 2026-10-01
-- [End-to-end gate](e2e-gate.md): container tests run only with FERROFED_E2E=1 through the testkit harness (FerroEHR and EHRbase behind capturing and fault proxies, images pinned by digest); EHRbase refuses a `.` in a namespace, so its EHRs are seeded without a subject; 2026-10-01
+- [End-to-end gate](e2e-gate.md): container tests run only with FERROFED_E2E=1 through the testkit harness (two FerroEHR nodes with distinct system_ids behind capturing and fault proxies, images pinned by digest); every case seeds the subject on both nodes; 2026-10-01
+- [Two FerroEHR nodes](two-ferroehr-nodes.md): the harness and the quickstart run two FerroEHR instances; EHRbase left because it refuses a BASE-valid namespace (#118); decision A44, owner 2026-10-02
 - [Repository in the FerroHEALTH org](repo-in-ferrohealth-org.md): FerroHEALTH/FerroFED since 2026-10-01, the board is org project 1; what the transfer changed and what stays owner-side (#123)
 - [Cut releases promptly](cut-releases-promptly.md): cut when the milestone's code is done; move owner-side or upstream-blocked stragglers to the next milestone, never hold the cut; owner 2026-10-02
