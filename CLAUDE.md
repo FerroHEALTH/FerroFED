@@ -202,8 +202,9 @@ project; never pass them to `Agent` or `Workflow`, even for a mechanical pass.
   rewrite and hygiene gate, the completeness and merge semantics, follow-up
   routing over the four identifiers).
 - **Delegate to Opus subagents:** bulk or parallelizable implementation on a
-  clear spec, file-heavy investigation, and codebase analysis. At most two
-  implementation workers at once (an owner cap). Tell workers not to spawn
+  clear spec, file-heavy investigation, and codebase analysis. At most three
+  implementation workers at once (an owner cap, raised from two on
+  2026-10-02). Tell workers not to spawn
   their own subagents, and to write any long report to a scratchpad file
   (`.claude/memory/subagent-reports-to-file.md`).
 - **Reviews:** an independent read before committing a subsystem, especially
