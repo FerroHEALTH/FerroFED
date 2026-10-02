@@ -106,11 +106,11 @@ async fn a_node_error_under_best_effort_is_a_200_naming_the_nodes_error() -> Tes
 // conformance: CP-30
 #[tokio::test]
 async fn an_offline_node_under_best_effort_is_a_200_reporting_it() -> TestResult {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    let refused = format!("http://{}", listener.local_addr()?);
-    drop(listener);
     let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
-    let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-o-pub", &refused)])?;
+    let snapshot = federation(&[
+        ("node-a-pub", &a.uri()),
+        ("node-o-pub", ferrofed_testkit::unreachable::BASE),
+    ])?;
     let answer = run(
         &snapshot,
         best_effort(&["node-a-pub", "node-o-pub"])?,

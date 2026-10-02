@@ -328,6 +328,15 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- The outbound gate no longer reads the host and port of a registry
+  endpoint URL (#232; §5.4.1, N33, CP-26). An endpoint whose host or port
+  contained a withheld identifier, such as a short local identifier that
+  matched a port number, refused every query for that patient. The
+  authority comes from the operator's registry and never from a request,
+  and §5.4.1 names the request path, the query string and the headers. The
+  gate still reads the path, the query and the fragment, raw and
+  percent-decoded, with the AQL text, the paging and the headers the
+  gateway adds.
 - A `SELECT DISTINCT` query with `ORDER BY` and `LIMIT` (or a bounded
   `OFFSET` page) whose selected function column the selected paths do not
   fix is refused `400` (`unordered-distinct-cut`), where a node could cut

@@ -7,9 +7,12 @@
 //! The rewrite already refuses a query whose patient identifier would survive
 //! into a node query. The gate is the second layer, independent of how the
 //! request was built: right before a request leaves, it re-reads the AQL text
-//! and paging of the body, the URL, and the headers the gateway adds, against
-//! the identifiers resolution consumed, and refuses to send a request that
-//! still carries one in any form a node could read it in. A refusal names
+//! and paging of the body, the path and query of the URL, and the headers the
+//! gateway adds, against the identifiers resolution consumed, and refuses to
+//! send a request that still carries one in any form a node could read it in.
+//! The authority of the URL (its host and port) is never read: it is the
+//! endpoint URL of the operator's registry, built from no request, and
+//! §5.4.1 names the path, the query string and the headers. A refusal names
 //! the part of the request, never the value, and nothing is sent. A write
 //! body is never inspected or altered (§5.4 scope note); this gate covers the
 //! query requests the gateway composes.
@@ -24,6 +27,7 @@ use std::fmt;
 
 use openehr_query::printer::escape_string;
 use secrecy::{ExposeSecret, SecretString};
+use url::Url;
 
 /// The identifiers resolution consumed for one query, which no request to a
 /// node may carry (§5.4.1).
@@ -83,7 +87,7 @@ impl Withheld {
                 Some(Part::Aql)
             } else if request.paging.iter().any(|number| number.contains(value)) {
                 Some(Part::Paging)
-            } else if request.url.contains(value) || percent_decoded(request.url).contains(value) {
+            } else if carried_in_target(request.url, value) {
                 Some(Part::Url)
             } else {
                 request
@@ -114,8 +118,9 @@ pub struct Outbound<'a> {
     pub scope: Option<&'a str>,
     /// The body's paging members, as the text they are sent as.
     pub paging: &'a [String],
-    /// The URL the request is sent to.
-    pub url: &'a str,
+    /// The URL the request is sent to, of which the gate reads the path, the
+    /// query and the fragment, and never the authority.
+    pub url: &'a Url,
     /// The headers the gateway adds, by name, other than the minted
     /// `X-Request-Id`.
     pub headers: &'a [(&'static str, &'a str)],
@@ -128,7 +133,7 @@ pub enum Part {
     Aql,
     /// A paging member of the body.
     Paging,
-    /// The URL, raw or percent-decoded.
+    /// The path, query or fragment of the URL, raw or percent-decoded.
     Url,
     /// A header the gateway adds.
     Header(&'static str),
@@ -143,6 +148,23 @@ impl fmt::Display for Part {
             Self::Header(name) => write!(f, "the {name} header"),
         }
     }
+}
+
+/// Whether the path, query or fragment of `url`, raw or percent-decoded,
+/// carries `value`.
+fn carried_in_target(url: &Url, value: &str) -> bool {
+    // NOTE: §5.4.1, N33 name the request path, the query string and the headers;
+    // the authority comes from the operator's registry, never a request, so it is unread.
+    let mut target = url.path().to_owned();
+    if let Some(query) = url.query() {
+        target.push('?');
+        target.push_str(query);
+    }
+    if let Some(fragment) = url.fragment() {
+        target.push('#');
+        target.push_str(fragment);
+    }
+    target.contains(value) || percent_decoded(&target).contains(value)
 }
 
 /// `text` with every `%XX` escape decoded, invalid UTF-8 replaced; an escape
@@ -178,10 +200,21 @@ fn hex(digit: u8) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+
     use super::{Outbound, Part, Withheld, percent_decoded};
     use secrecy::SecretString;
+    use url::Url;
 
     const SENTINEL: &str = "O'Sentinel-4711";
+
+    /// The query URL of an endpoint whose authority and path hold no
+    /// withheld value.
+    static QUERY_URL: LazyLock<Url> = LazyLock::new(|| url("https://cdr.example.org/v1/query/aql"));
+
+    fn url(text: &str) -> Url {
+        Url::parse(text).expect("a test URL")
+    }
 
     fn withheld() -> Withheld {
         Withheld::new([SecretString::from(SENTINEL)])
@@ -189,7 +222,7 @@ mod tests {
 
     fn request<'a>(
         aql: &'a str,
-        url: &'a str,
+        url: &'a Url,
         headers: &'a [(&'static str, &'a str)],
     ) -> Outbound<'a> {
         Outbound {
@@ -205,7 +238,7 @@ mod tests {
     fn a_clean_request_passes() {
         let clean = request(
             "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value='7d44'",
-            "https://cdr.example.org/v1/query/aql",
+            &QUERY_URL,
             &[("X-Request-Id", "req-1")],
         );
         assert_eq!(None, withheld().found_in(&clean));
@@ -217,16 +250,16 @@ mod tests {
             "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE c/name/value='O\\'Sentinel-4711'";
         assert_eq!(
             Some(Part::Aql),
-            withheld().found_in(&request(aql, "https://cdr.example.org/v1/query/aql", &[]))
+            withheld().found_in(&request(aql, &QUERY_URL, &[]))
         );
     }
 
     #[test]
     fn the_identifier_percent_encoded_in_the_url_is_found() {
-        let url = "https://cdr.example.org/v1/query/aql?x=O%27Sentinel-4711";
+        let target = url("https://cdr.example.org/v1/query/aql?x=O%27Sentinel-4711");
         assert_eq!(
             Some(Part::Url),
-            withheld().found_in(&request("SELECT 1", url, &[]))
+            withheld().found_in(&request("SELECT 1", &target, &[]))
         );
     }
 
@@ -235,7 +268,7 @@ mod tests {
         let headers = [("X-Request-Id", "req-O'Sentinel-4711")];
         assert_eq!(
             Some(Part::Header("X-Request-Id")),
-            withheld().found_in(&request("SELECT 1", "https://cdr.example.org/", &headers))
+            withheld().found_in(&request("SELECT 1", &QUERY_URL, &headers))
         );
     }
 
@@ -245,7 +278,7 @@ mod tests {
             "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE c/name/value='O\\'Sentinel-4711'";
         assert_eq!(
             None,
-            Withheld::none().found_in(&request(aql, "https://cdr.example.org/", &[]))
+            Withheld::none().found_in(&request(aql, &QUERY_URL, &[]))
         );
     }
 
@@ -254,7 +287,7 @@ mod tests {
     fn scoped(aql: &str) -> Outbound<'_> {
         Outbound {
             scope: Some(EHR_ID),
-            ..request(aql, "https://cdr.example.org/v1/query/aql", &[])
+            ..request(aql, &QUERY_URL, &[])
         }
     }
 
@@ -283,7 +316,7 @@ mod tests {
             format!("SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{EHR_ID}'");
         assert_eq!(
             Some(Part::Aql),
-            short().found_in(&request(&aql, "https://cdr.example.org/", &[]))
+            short().found_in(&request(&aql, &QUERY_URL, &[]))
         );
     }
 
@@ -293,6 +326,49 @@ mod tests {
             format!("SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{EHR_ID}'");
         let equal = Withheld::new([SecretString::from(EHR_ID)]);
         assert_eq!(Some(Part::Aql), equal.found_in(&scoped(&aql)));
+    }
+
+    // conformance: CP-26
+    #[test]
+    fn the_authority_of_the_url_is_never_read() {
+        let target = url("https://4199@cdr-4199.example.org:4199/v1/query/aql");
+        assert_eq!(
+            None,
+            short().found_in(&request(
+                "SELECT c FROM EHR e CONTAINS COMPOSITION c",
+                &target,
+                &[]
+            ))
+        );
+    }
+
+    // conformance: CP-26
+    #[test]
+    fn the_path_query_and_fragment_are_read_under_any_authority() {
+        for text in [
+            "https://cdr.example.org/openehr-4199/v1/query/aql",
+            "https://cdr.example.org/v1/query/aql?ehr=4199",
+            "https://cdr.example.org/v1/query/aql?ehr=%34199",
+            "https://cdr.example.org/v1/query/aql#4199",
+            "https://cdr.example.org:4199/v1/query/aql?ehr=4199",
+        ] {
+            let target = url(text);
+            assert_eq!(
+                Some(Part::Url),
+                short().found_in(&request("SELECT 1", &target, &[])),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_value_across_the_path_and_the_query_is_found() {
+        let target = url("https://cdr.example.org/v1/query/aql?x=1");
+        let across = Withheld::new([SecretString::from("aql?x")]);
+        assert_eq!(
+            Some(Part::Url),
+            across.found_in(&request("SELECT 1", &target, &[]))
+        );
     }
 
     #[test]

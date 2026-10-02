@@ -84,8 +84,11 @@ mod tests {
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     /// A fixed version 4 UUID, and a short all-hex value that occurs in it.
+    ///
+    /// The value holds letters, so no port in the mock node's URL can
+    /// contain it.
     const FIXED_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
-    const IN_FIXED_ID: &str = "4199";
+    const IN_FIXED_ID: &str = "4bad";
 
     /// What a node answering every query with an empty result set made of
     /// `aql`, sent under [`FIXED_ID`] with [`IN_FIXED_ID`] withheld, and the

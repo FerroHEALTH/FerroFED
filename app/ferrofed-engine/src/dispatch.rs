@@ -197,7 +197,9 @@ impl<T: Transport> NodeClient<T> {
         if options.withheld.is_empty() {
             return Ok(());
         }
-        let url = format!("{}/query/aql", self.client.base());
+        let base = self.client.base();
+        let mut url = base.clone();
+        url.set_path(&format!("{}/query/aql", base.path()));
         let paging: Vec<String> = [query.offset, query.fetch]
             .into_iter()
             .flatten()

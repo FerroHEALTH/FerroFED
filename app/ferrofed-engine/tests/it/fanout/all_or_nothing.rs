@@ -170,11 +170,11 @@ async fn a_time_out_and_a_node_error_together_are_a_504() -> TestResult {
 // conformance: CP-30
 #[tokio::test]
 async fn an_unreachable_node_is_offline_and_a_504() -> TestResult {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    let refused = format!("http://{}", listener.local_addr()?);
-    drop(listener);
     let a = node(json(200, &result_set(&[]))).await;
-    let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-o-pub", &refused)])?;
+    let snapshot = federation(&[
+        ("node-a-pub", &a.uri()),
+        ("node-o-pub", ferrofed_testkit::unreachable::BASE),
+    ])?;
     let answer = run(
         &snapshot,
         plan_for(&["node-a-pub", "node-o-pub"])?,

@@ -29,6 +29,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::error::Code;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
 use wiremock::matchers::{method, path};
@@ -101,14 +102,6 @@ async fn node_after(delay: Duration) -> MockServer {
         .mount(&server)
         .await;
     server
-}
-
-/// A base URL nothing listens on.
-fn closed_port() -> Result<String, Box<dyn Error>> {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    let address = listener.local_addr()?;
-    drop(listener);
-    Ok(format!("http://{address}"))
 }
 
 /// The synthetic identifiers no error body may quote.
@@ -342,9 +335,8 @@ async fn a_node_not_found_inside_a_fan_out_is_a_node_error_and_a_424() -> TestRe
 #[tokio::test]
 async fn an_unreachable_node_under_all_or_nothing_is_a_504_carrying_the_envelope() -> TestResult {
     let a = node_answering("uid-at-a").await;
-    let closed = closed_port()?;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &closed, 2000, true)?;
+    let app = gateway(dir.path(), &a.uri(), unreachable::BASE, 2000, true)?;
     let (status, text) = call(app, post(body(&patient_query())?, None)?).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, status, "§11.2, N37: {text}");
     let answer = failing_envelope(&text, &patient_query())?;
@@ -377,11 +369,10 @@ async fn a_node_timing_out_under_all_or_nothing_is_a_504_carrying_the_envelope()
 async fn a_424_and_a_504_echo_the_clients_q() -> TestResult {
     let a = node_answering("uid-at-a").await;
     let failing = node_failing(500).await;
-    let closed = closed_port()?;
     let dir = tempfile::tempdir()?;
     for (b, expected) in [
         (failing.uri(), StatusCode::FAILED_DEPENDENCY),
-        (closed, StatusCode::GATEWAY_TIMEOUT),
+        (unreachable::BASE.to_owned(), StatusCode::GATEWAY_TIMEOUT),
     ] {
         let app = gateway(dir.path(), &a.uri(), &b, 2000, true)?;
         let (status, text) = call(app, post(body(&patient_query())?, None)?).await?;

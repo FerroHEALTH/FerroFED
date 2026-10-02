@@ -22,6 +22,7 @@ use ferrofed_identity::pixm::PixmConfigError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
 use ferrofed_server::federation::{Federation, FederationError};
+use ferrofed_testkit::unreachable;
 use http::StatusCode;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -276,11 +277,8 @@ async fn a_pix_manager_that_fails_fails_the_query_424_and_no_node_is_asked() -> 
 async fn an_unreachable_pix_manager_fails_the_query_424() -> TestResult {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
-    let pix = MockServer::start().await;
-    let gone = pix.uri();
-    drop(pix);
     let dir = tempfile::tempdir()?;
-    let app = pix_gateway(dir.path(), &a.uri(), &b.uri(), &gone)?;
+    let app = pix_gateway(dir.path(), &a.uri(), &b.uri(), unreachable::BASE)?;
 
     let (status, text) = call(app, post(body(&patient_query())?)?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");

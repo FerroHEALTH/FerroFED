@@ -24,6 +24,7 @@ use ferrofed_engine::dispatch::{
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
+use ferrofed_testkit::unreachable;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{
@@ -325,10 +326,7 @@ async fn a_deadline_already_passed_is_a_time_out_and_sends_nothing() -> TestResu
 
 #[tokio::test]
 async fn a_refused_connection_is_offline_with_a_reason() -> TestResult {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    let address = listener.local_addr()?;
-    drop(listener);
-    let client = client_at(&format!("http://{address}/openehr"))?;
+    let client = client_at(&format!("{}/openehr", unreachable::BASE))?;
     let reply = client
         .query(&NodeQuery::new(NODE_AQL), &within(Duration::from_secs(5))?)
         .await?;
