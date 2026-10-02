@@ -5,10 +5,10 @@
 //! client session's resolution produced, so a follow-up on a path `ehr_id`
 //! can be routed to the node that holds it.
 //!
-//! The bindings belong to the client session (decision A20,
-//! `docs/architecture.md` sections 6 and 8): held in memory, keyed by the
-//! session and by the `ehr_id`, never by the patient identifier, and dropped
-//! when the session's time-to-live passes. Nothing is written to disk and
+//! The bindings belong to the client session (§12.5.1 step 2; their storage
+//! is our own design, since no specification governs it): held in memory,
+//! keyed by the session and by the `ehr_id`, never by the patient identifier,
+//! and dropped when the session's time-to-live passes. Nothing is written to disk and
 //! nothing derived from a patient identifier is kept.
 
 use std::collections::{BTreeMap, BTreeSet};

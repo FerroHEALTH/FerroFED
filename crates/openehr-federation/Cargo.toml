@@ -5,7 +5,7 @@ name = "openehr-federation"
 description = "The openEHR Federation Tier with AQL specification: the federation wire types held to the published schemas, the AQL rewrite with identifier hygiene (feature `aql`) and the federated result merge (feature `merge`)"
 # The crate line starts above the 0.0.0 name reservation on crates.io
 # (docs/VERSIONS.md).
-version = "0.0.9"
+version = "0.0.10"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -17,12 +17,13 @@ readme = "README.md"
 keywords = ["openehr", "federation", "aql", "health", "ehr"]
 categories = ["science", "encoding"]
 # The workspace switch decides whether this crate is publishable
-# (docs/architecture.md section 11); include is the packaged content.
+# (no specification governs this: our own design); include is the packaged
+# content.
 publish.workspace = true
 include = ["src/**", "README.md", "LICENSE"]
 
-# One crate per specification, one feature per layer (docs/architecture.md
-# section 11, decision A34). The wire types are always on.
+# One crate per specification, one feature per layer (no specification
+# governs this: our own design). The wire types are always on.
 [features]
 # The section 7 AQL rewrite and identifier hygiene on the openEHR AQL tree (#35).
 aql = ["dep:openehr-query", "dep:openehr-base"]

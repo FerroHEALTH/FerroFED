@@ -4,8 +4,8 @@
 //! The query-intake seam: `query_parameters` to typed AQL literals.
 //!
 //! It runs once, at the façade boundary and before `bind`
-//! (`.claude/rules/rust-style.md`, seam 1; `docs/architecture.md` section 2,
-//! decision A2).
+//! (ITS-REST Query API, `query_parameters`; the typed seam is our own
+//! design, since no specification governs it).
 //!
 //! A string becomes a `String` literal, a number that fits `i64` an
 //! `Integer`, any other finite number a `Real`, and a boolean a `Boolean`.

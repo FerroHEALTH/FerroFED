@@ -160,8 +160,8 @@ pub enum Refusal {
     },
     /// The deprecated `TOP n BACKWARD` asks for the last rows of an order the
     /// gateway cannot reproduce across nodes; `ORDER BY … DESC LIMIT n` says
-    /// the same thing in AQL 1.1.0 (FerroFED's own, `docs/architecture.md`
-    /// section 9: `TOP n` is treated as `LIMIT n`).
+    /// the same thing in AQL 1.1.0, which deprecates `TOP` in favour of
+    /// `LIMIT` with `ORDER BY` (AQL master03-syntax §TOP).
     #[error("TOP … BACKWARD is not supported across a fan-out; write ORDER BY … DESC LIMIT n")]
     TopBackward,
     /// The query uses the deprecated `TOP` together with a `LIMIT` clause,

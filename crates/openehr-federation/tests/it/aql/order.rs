@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The Tier order written into the node query (§11.6.1, N13, N39;
-//! `docs/architecture.md` section 9, decisions A28 and A43): the hidden
+//! The Tier order written into the node query (§11.6.1, N13, N39): the hidden
 //! `ORDER BY` column, the uid tie-break, the client's `LIMIT n` unchanged, and
 //! the refusals.
 

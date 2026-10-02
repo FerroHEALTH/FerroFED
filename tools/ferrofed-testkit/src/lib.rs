@@ -5,8 +5,8 @@
 //! dev-dependency so `cargo package` strips it.
 //!
 //! It reads the pin matrix, so a crate's version constant can be asserted
-//! against the single source of truth, and it holds the harness of
-//! `docs/architecture.md` section 13:
+//! against the single source of truth, and it holds the harness of the
+//! conformance tracks (§16):
 //!
 //! - [`containers`]: the two CDR products behind the `FERROFED_E2E` gate,
 //!   pinned by digest;

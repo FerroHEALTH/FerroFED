@@ -117,6 +117,13 @@ binary follows from v0.0.2.
   Before, a request timeout between the two let the server's `408`, with no
   body, cut a slow fan-out instead of the `504` that carries
   `meta.federation`.
+- The documentation describes the gateway that exists (#163). The
+  `openehr-federation` README names both subject carriers as resolution
+  input. The book's client contract and configuration pages name
+  `POST /v1/query/aql` as served, and the `_file` secrets paragraph sits
+  under the configuration file it describes. Code and doc comments cite the
+  specification sections a decision rests on, or say that no specification
+  governs it.
 
 ## [0.0.3] - 2026-10-02
 

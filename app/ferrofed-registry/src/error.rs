@@ -120,7 +120,7 @@ pub enum UrlFault {
     NotABase,
 }
 
-/// A bootstrap document that refuses to load (docs/architecture.md section 8).
+/// A bootstrap document that refuses to load (§12b.1).
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum LoadError {

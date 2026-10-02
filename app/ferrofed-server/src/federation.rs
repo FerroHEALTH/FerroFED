@@ -5,7 +5,7 @@
 //!
 //! The registry snapshot, one node client per endpoint with its onward
 //! credentials, the cross-reference resolver, the rewrite's context and the
-//! fan-out budget (`docs/architecture.md` sections 3, 5, 6 and 9).
+//! fan-out budget (§5.2, §7.1, §11.5).
 //!
 //! [`Federation::load`] builds it once at boot from the resolved settings.
 //! Without a registry document the gateway federates nothing, so there is no
@@ -70,7 +70,7 @@ pub enum FederationError {
     #[error("the [pixm] resolver needs registry.document, whose members it names")]
     PixmWithoutRegistry,
     /// Both `[dev]` and `[pixm]` are set, and exactly one resolver is active
-    /// (`docs/architecture.md` section 6, decision A14).
+    /// (no specification governs this: our own design).
     #[error("set one resolver: [dev] and [pixm] are both configured")]
     TwoResolvers,
     /// A registry is configured, but `federation.node_selection` is not: how
@@ -223,7 +223,7 @@ impl Federation {
 
     /// The PMIR hook (track 8, provisional): a merge or split at the identity
     /// source drops every resolution binding it could have made stale, in
-    /// every session (`docs/architecture.md` section 6).
+    /// every session (§5.2: PMIR for the identity lifecycle; §12.5.1).
     ///
     /// A PMIR subscription (ITI-94) that receives a merge or split (ITI-93)
     /// calls this; until one is configured, the bindings' time-to-live is the

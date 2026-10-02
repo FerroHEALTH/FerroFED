@@ -6,8 +6,8 @@
 //!
 //! It is FerroFED's own testing device and binds nothing: it is not an
 //! identity binding of N3, and a PIXm resolver replaces it (#42). It is
-//! accepted only in a configuration explicitly marked for development
-//! (docs/architecture.md section 6):
+//! accepted only in a configuration explicitly marked for development (no
+//! specification governs this: our own design):
 //!
 //! ```toml
 //! profile = "development"

@@ -3,7 +3,7 @@
 
 //! The registry snapshot: the federation's members as the operator admitted
 //! them (§12b.1), validated once and read unchanged by every query that took
-//! it (docs/architecture.md section 8).
+//! it.
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -21,7 +21,7 @@ use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
 /// N19 requires a defined openEHR Query API code, and §15.2 forbids relying
 /// on `hl7-fhir-rest` for an openEHR endpoint, so the one accepted code is
 /// `openehr-rest-query`, which FerroFED defines in a code system of its own
-/// (docs/architecture.md section 6).
+/// (N19, §15.2; the code system is our own design).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 pub enum ConnectionType {
     /// The openEHR ITS-REST Query API (`openehr-rest-query`).

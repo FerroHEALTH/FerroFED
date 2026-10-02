@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The crate boundaries of `docs/architecture.md` section 11, read from the
-//! crate graph.
+//! The crate boundaries, read from the crate graph (no specification governs
+//! them: our own design).
 //!
 //! The clinical path does no synchronous storage work (#40, section 8): the
 //! storage implementations live in `app/ferrofed-server`, so no published

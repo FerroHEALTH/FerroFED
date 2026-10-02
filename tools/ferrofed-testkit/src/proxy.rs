@@ -14,7 +14,7 @@
 //! point in a test: forward it unmodified, refuse the connection, delay it, or
 //! answer with a status of the test's choosing. Together with stopping the
 //! node's container these produce the endpoint statuses of §11.1 that need a
-//! misbehaving node (`docs/architecture.md` section 13).
+//! misbehaving node (§16).
 //!
 //! No specification governs the proxy itself; it is FerroFED's own design.
 

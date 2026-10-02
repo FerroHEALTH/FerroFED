@@ -8,8 +8,8 @@
 //! [`dispatch`] holds the per-endpoint node client and the mapping from a
 //! node's answer to its §11.1 endpoint status (#34). [`fanout`] sends one
 //! request per in-scope node under one deadline, builds `meta.federation` from
-//! every outcome and applies the all-or-nothing decision (#37), following
-//! `docs/architecture.md` sections 5 and 9. [`hygiene`] is the outbound gate
+//! every outcome and applies the all-or-nothing decision (#37; §11.4, §11.5,
+//! N37, N38). [`hygiene`] is the outbound gate
 //! every request to a node passes before it is sent (#45).
 #![doc(test(attr(deny(warnings))))]
 

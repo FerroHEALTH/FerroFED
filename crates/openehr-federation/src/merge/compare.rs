@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The Tier comparator: one total order over decoded cells
-//! (`docs/architecture.md` section 9).
+//! The Tier comparator: one total order over decoded cells (no specification
+//! governs it: our own design).
 //!
 //! AQL leaves the order of nulls, the collation of strings and the order of
 //! data values undefined (`master03-syntax.adoc` §ORDER BY), so the gateway

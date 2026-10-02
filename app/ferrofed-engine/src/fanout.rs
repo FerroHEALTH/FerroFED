@@ -13,8 +13,8 @@
 //! overall budget, and stops waiting when the budget runs out: a node still
 //! outstanding then is abandoned and reported `time-out`, abandoning it
 //! touches no other request, and an answer that arrives later has nowhere to
-//! go (§11.5). There is no retry and no hedging inside the budget
-//! (`docs/architecture.md` section 9).
+//! go (§11.5). There is no retry and no hedging inside the budget (no
+//! specification governs this: our own design).
 //!
 //! The envelope is built before the decision, so a failing answer still
 //! carries it (§11.4, CP-30). [`decide`] is the pure decision under the
@@ -60,7 +60,8 @@ use crate::dispatch::{DispatchError, DispatchOptions, NodeClients, NodeQuery, No
 use crate::hygiene::Withheld;
 
 /// The completion policy the budget applies under, as `OPTIONS {base}/` and
-/// `meta.federation.timeout` name it (`docs/architecture.md` section 9).
+/// `meta.federation.timeout` name it (§7a.2, §11.5; the value is our own
+/// design, since no specification governs it).
 pub const TIMEOUT_POLICY: &str = "abandon-and-mark";
 
 /// The completion strategy a request runs under (§11.4, N37).

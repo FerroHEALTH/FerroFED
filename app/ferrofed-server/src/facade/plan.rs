@@ -8,8 +8,8 @@
 //! whole federation (§11.1, N16, CP-11). A member is asked through one
 //! endpoint: the first active one in endpoint id order. Its other active
 //! endpoints are `excluded`, because asking one node twice returns its rows
-//! twice; a suspended endpoint is `excluded` by operator policy
-//! (`docs/architecture.md` section 8); and under a [`Selection::Directed`]
+//! twice; a suspended endpoint is `excluded` by operator policy (§11.1);
+//! and under a [`Selection::Directed`]
 //! request, every endpoint the request did not name is `excluded` by that
 //! decision (§8, §11.1). No specification governs the one-endpoint rule: our
 //! own design.

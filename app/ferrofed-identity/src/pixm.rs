@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The PIXm resolver: the [`Resolver`] seam over ITI-83 against one or more
-//! Patient Identifier Cross-reference Managers (N3, §5.2, Annex A.1;
-//! `docs/architecture.md` section 6, decision A17).
+//! Patient Identifier Cross-reference Managers (N3, §5.2, Annex A.1).
 //!
 //! Each member is bound to one PIX Manager and to its `ehr_id` domain there:
 //! the assigning authority whose identifier values are that member's

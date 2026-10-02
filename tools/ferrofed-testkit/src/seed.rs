@@ -9,8 +9,7 @@
 //! `urn:oid:2.999.1.<n>` that ITU-T X.660 and ISO/IEC 9834 reserve for
 //! examples, with a non-numeric value (`ffd-test-0001`) that no national
 //! identifier scheme validates. A seed never reaches into a node's database,
-//! so the harness is the same for every CDR product (`docs/architecture.md`
-//! section 13): `PUT {api}/v1/ehr/{ehr_id}`,
+//! so the harness is the same for every CDR product: `PUT {api}/v1/ehr/{ehr_id}`,
 //! `POST {api}/v1/definition/template/adl1.4` and
 //! `POST {api}/v1/ehr/{ehr_id}/composition`, as openEHR ITS-REST 1.1.0 names
 //! them.

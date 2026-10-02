@@ -4,8 +4,9 @@
 # The client contract
 
 A client of a federation gateway is an ordinary openEHR client. This page sets
-out what the specification promises that client; FerroFED has no endpoint to
-call yet.
+out what the specification promises that client. FerroFED serves the
+federated query at `POST {base}/v1/query/aql` once a registry is configured;
+every other ITS-REST path under `/v1/` answers `501` (N32).
 
 ## What a client sends
 
