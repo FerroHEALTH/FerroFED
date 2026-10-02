@@ -24,7 +24,7 @@ durable home and goes there, not into the source:
 | Content | Home |
 |---|---|
 | Adjudications, spec-conflict essays, history | the PR description or tracker issue |
-| Design decisions | `docs/architecture.md` (once it exists), the crate `CLAUDE.md` |
+| Design decisions | `docs/architecture.md` |
 | API usage, contracts, examples | doc comments (`///`) |
 | What changed and why it is correct | the PR, never the code |
 
@@ -107,7 +107,8 @@ A comment describes the code as it IS.
   (the `rust_fmt_clippy.sh` PostToolUse hook) and in the CI `comment-style`
   job, which runs `--self-test` and `--all`.
 - `clippy::too_long_first_doc_paragraph` (CI `-D warnings`): the RFC 1574
-  summary line. Configured in `[workspace.lints]` when the workspace exists.
+  summary line, configured in `[workspace.lints.clippy]` of the root
+  `Cargo.toml`.
 - Companion doc lints (`doc_markdown`, `missing_errors_doc`,
   `missing_panics_doc`, `unnecessary_safety_comment`,
   `unnecessary_safety_doc`, the `[workspace.lints.rustdoc]` table plus the CI

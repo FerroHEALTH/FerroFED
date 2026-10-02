@@ -183,6 +183,14 @@ federated query and identity resolution shipped in 0.0.3.
   380 px (#182). The audience cards and the other card grids take a column
   minimum that shrinks to the page width, so a 320 px viewport shows one
   full-width column in the light and dark themes.
+- `llms.txt` describes follow-up routing to the owning CDR as planned for
+  v0.0.5, where it described it as built (#180). The CI log, the guard
+  scripts, the analyzer configuration and the `research` label no longer
+  describe the repository as being in a design phase.
+- `scripts/gh/labels.sh` prints its usage and exits `2` on any argument it
+  does not know, `--help` included, before it calls `gh` (#180). It ignored
+  such an argument and wrote the label taxonomy to the repository. Its
+  `--self-test` proves the refusal.
 
 ## [0.0.3] - 2026-10-02
 
