@@ -65,6 +65,16 @@ binary follows from v0.0.2.
   disagrees with `LIMIT`, and a `DISTINCT` query ordered on a path it does not
   select are refused `400`. A query with `LIMIT` and no `ORDER BY` now returns
   at most `n` rows across all nodes.
+- `OFFSET` paging across a fan-out (#53; §11.6.2, N9, N39, CP-32). `OFFSET`
+  never reaches a node. Under the default `federation.offset_strategy =
+  "bounded"`, `ORDER BY … LIMIT n OFFSET k` asks each node for `LIMIT k + n`,
+  checks each node's visible order as for `LIMIT n`, merges in the federation
+  order and returns rows `k` to `k + n`. A page whose `k + n` is past
+  `federation.max_offset_window` (1000 rows per node by default; 0 refuses to
+  boot), an `OFFSET` with no `LIMIT`, and an `OFFSET` with no `ORDER BY` are
+  refused `400`, the first naming the bound. `offset_strategy = "reject"`
+  refuses every `OFFSET` past zero `400`. The ITS-REST `offset` and `fetch`
+  members follow the same strategy.
 
 ### Changed
 

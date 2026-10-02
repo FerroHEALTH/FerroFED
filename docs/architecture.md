@@ -961,14 +961,32 @@ check above catches a disagreement that is visible and cannot catch this one.
 The precondition is a specification gap, held on #17 (T167). The deprecated
 `TOP n` is treated as `LIMIT n`.
 
-**`OFFSET`** (decision A29, #53). Bounded `k + n`: dispatch `LIMIT k + n + 1`,
-run the agreement check, merge, and slice `[k, k + n)`. The window is capped by
-`max_offset_window`, 1000 rows per node by default, and a request past it is
-`400` naming the bound. `OPTIONS` declares `paging.offset_strategy: "bounded"`
-and `paging.max_window`. The spelling is FerroFED's own: §11.6.2 admits three
-strategies, but the schema description and `future.adoc` name only reject and
-cursor (held on #17). The ITS-REST `offset` member follows the same strategy
-(section 4).
+**`OFFSET`** (decision A29, #53). Bounded `k + n`, the second strategy of
+§11.6.2 ("retrieving `k + n` rows per node, merging, ordering and slicing"):
+each node is sent `LIMIT k + n` with no `OFFSET`, under the same pushed-down
+order as `LIMIT n` (the hidden key columns and the uid as the last key). The
+merge runs the visible-order check of A43 on the `k + n` the node was sent (a
+node that returned `k + n` rows out of the Tier order, or more than `k + n`,
+is `node-error`), orders under the Tier comparator with the `endpoint_id`,
+then uid, tie-break, keeps the first `k + n` rows and slices `[k, k + n)`.
+Under the Tier's total order the global first `k + n` rows lie in the union of
+every node's first `k + n`, which is the same containment argument §11.6.1
+makes for `LIMIT n`, with the same precondition gap (T167).
+
+The window `k + n` is checked arithmetic, capped by `max_offset_window`, 1000
+rows per node by default, and a request past it is `400` naming the bound and
+never the query. §11.6.2 permits the strategy "only where the gateway can
+bound `k + n`", so an `OFFSET` with no `LIMIT` (the ITS-REST `offset` member
+with no `fetch`) is `400` too. An `OFFSET` with no `ORDER BY` is `400`: the
+query fixes no order, so there is no merged order to slice and no global page
+to return. §11.6.2 is silent on this case, so the refusal is FerroFED's own,
+within its "merging, ordering and slicing". The strategy is configured,
+`bounded` by default or `reject` (§11.6.2 option 1, every `OFFSET k > 0` a
+`400`), and `OPTIONS` declares `paging.offset_strategy` (`"bounded"` or
+`"reject"`) and, when bounded, `paging.max_window` (#73). The spelling is
+FerroFED's own: §11.6.2 admits three strategies, but the schema description
+and `future.adoc` name only reject and cursor (held on #17). The ITS-REST
+`offset` member follows the same strategy (section 4).
 
 **Aggregates** (decision A30, #54). With no `DISTINCT`, no `COUNT(DISTINCT …)`,
 no dedup mode and no non-aggregate column beside them:
@@ -1454,7 +1472,7 @@ R4 is #23, #25 and #27).
 | A26 | Patient-derived data at rest [R3 D2] | none | GDPR Art. 4(5), Recital 26; the cost is a re-probe after a restart | decided (owner, 2026-10-01) |
 | A27 | The N39 agreement check [R3 D3] | uid tie-break pushed down, `LIMIT n + 1`, and a cut node out of order reported `node-error` | §11.6.1's containment argument assumes an order AQL does not define; a wrong top `n` is undetectable for a client | superseded by A43 (owner, 2026-10-02: "always go to the specs and see how it should be done"; §11.6.1 and N39 require dispatching `LIMIT n`) |
 | A28 | An `ORDER BY` path not in `SELECT` [R3 D4] | a hidden column, stripped after the merge | the client's query stays answerable; hygiene re-checks the dispatched AQL | decided (owner, 2026-10-01) |
-| A29 | `OFFSET` [R3 D5] | bounded `k + n`, 1000 rows per node by default, `400` past it | §11.6.2 admits it when declared | decided (owner, 2026-10-01) |
+| A29 | `OFFSET` [R3 D5] | bounded `k + n`, 1000 rows per node by default, `400` past it; each node is sent `LIMIT k + n` with no `OFFSET`, checked as A43 checks `LIMIT n`, merged under the Tier order and sliced `[k, k + n)`; no `LIMIT` or no `ORDER BY` is `400` | §11.6.2 admits it when declared, "permitted only where the gateway can bound `k + n`" | decided (owner, 2026-10-01; mechanism revised 2026-10-02 per the #52 review: `LIMIT k + n` replaces the superseded `k + n + 1` check) |
 | A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01) |
 | A31 | Cursor and async [R3 D7] | not built; #59 and #60 stay at Low priority | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
 | A32 | The dedup key [R3 D8] | the full `ObjectVersionId` | §10.3's scenario and the RM's copy semantics; §10.2 contradicts §10.3 (held on #17); grouping by `object_id` collapses a version history | decided (owner, 2026-10-01) |

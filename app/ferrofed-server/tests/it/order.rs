@@ -4,7 +4,9 @@
 //! `ORDER BY` with `LIMIT` through the façade (§11.6.1, N13, N39): each node
 //! is asked for the key as a hidden column, the uid as the last key and the
 //! client's `LIMIT n`, and the client receives the global top `n` with only
-//! the columns it selected (decisions A28 and A43).
+//! the columns it selected (decisions A28 and A43). A page at `OFFSET k` asks
+//! each node for `k + n` rows within the configured bound, or is refused under
+//! the reject strategy (§11.6.2).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -109,5 +111,104 @@ async fn a_node_out_of_the_federation_order_fails_the_query_424() -> TestResult 
         text.contains("result order disagrees with the federation order"),
         "{text}"
     );
+    Ok(())
+}
+
+/// The façade query of the page tests: rows 1 and 2 of the latest first.
+const PAGE: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+                    ORDER BY c/context/start_time/value DESC LIMIT 2 OFFSET 1";
+
+// conformance: CP-32
+#[tokio::test]
+async fn a_bounded_offset_page_asks_each_node_for_k_plus_n_rows() -> TestResult {
+    let a = node(&[
+        ("a1", "2026-01-05T00:00:00Z"),
+        ("a2", "2026-01-03T00:00:00Z"),
+        ("a3", "2026-01-01T00:00:00Z"),
+    ])
+    .await;
+    let b = node(&[
+        ("b1", "2026-01-04T00:00:00Z"),
+        ("b2", "2026-01-02T00:00:00Z"),
+    ])
+    .await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), "", "")?;
+
+    let (status, text) = call(app, post(body(PAGE)?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert_eq!(
+        vec![vec!["b1".to_owned()], vec!["a2".to_owned()]],
+        answer.rows,
+        "§11.6.2: rows 1 and 2 of the merged order, by default under the bounded strategy"
+    );
+    for server in [&a, &b] {
+        let bodies = received(server).await?;
+        let [sent] = bodies.as_slice() else {
+            return Err(format!("each node is asked once: {bodies:?}").into());
+        };
+        assert!(
+            sent.contains("c/uid/value ASC LIMIT 3"),
+            "k + n rows reach the node: {sent}"
+        );
+        assert!(
+            !sent.contains("OFFSET"),
+            "§11.6.2: OFFSET is never pushed down: {sent}"
+        );
+    }
+    Ok(())
+}
+
+// conformance: CP-32
+#[tokio::test]
+async fn a_page_past_the_configured_window_is_refused_400_naming_the_bound() -> TestResult {
+    let a = node(&[]).await;
+    let b = node(&[]).await;
+    let dir = tempfile::tempdir()?;
+    // The key extends the gateway's `[federation]` table.
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "",
+        "max_offset_window = 2",
+    )?;
+
+    let (status, text) = call(app, post(body(PAGE)?)?).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert!(
+        text.contains("past this gateway's bound of 2 rows per node"),
+        "§11.6.2: it MUST reject when it cannot bound k + n: {text}"
+    );
+    for server in [&a, &b] {
+        assert!(received(server).await?.is_empty(), "no node is asked");
+    }
+    Ok(())
+}
+
+// conformance: CP-32
+#[tokio::test]
+async fn the_reject_strategy_refuses_any_offset_past_zero_400() -> TestResult {
+    let a = node(&[]).await;
+    let b = node(&[]).await;
+    let dir = tempfile::tempdir()?;
+    // The key extends the gateway's `[federation]` table.
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "",
+        "offset_strategy = \"reject\"",
+    )?;
+
+    let (status, text) = call(app, post(body(PAGE)?)?).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert!(
+        text.contains("offset-based paging is not supported across a fan-out"),
+        "§11.6.2 option 1: {text}"
+    );
+    for server in [&a, &b] {
+        assert!(received(server).await?.is_empty(), "no node is asked");
+    }
     Ok(())
 }

@@ -12,6 +12,7 @@ mod folding;
 mod golden;
 mod guard;
 mod hygiene;
+mod offset;
 mod order;
 mod rules;
 

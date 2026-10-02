@@ -121,6 +121,30 @@ can come from a mounted file and never sit in the configuration or the
 environment. The credentials are read and checked at boot; the node dispatch
 hands them to each endpoint once it lands.
 
+## Paging with `OFFSET`
+
+A node's rows `k` to `k + n` are not the federation's rows `k` to `k + n`, so
+the gateway never sends `OFFSET` to a node (§11.6.2, N39). By default it
+computes the page exactly: for `ORDER BY … LIMIT n OFFSET k` it asks each node
+for its first `k + n` rows with no `OFFSET`, merges them in the federation
+order, and returns rows `k` to `k + n`. A node that returns its `k + n` rows
+out of that order is reported `node-error`, as for `LIMIT n`. The ITS-REST
+`offset` and `fetch` members page the same way.
+
+The page is computed only where `k + n` is bounded. The gateway answers `400`
+for a page whose `k + n` is past `max_offset_window` (the message names the
+bound), for an `OFFSET` with no `LIMIT`, and for an `OFFSET` with no
+`ORDER BY`, which has no order to page through. You can lower or raise the
+bound, or refuse every `OFFSET` past zero:
+
+```toml
+[federation]
+offset_strategy = "bounded"   # the default; "reject" answers every OFFSET > 0 with a 400
+max_offset_window = 1000      # rows asked of one node for a page, k + n; 0 is refused
+```
+
+The strategy and the bound are named in the startup log line.
+
 ## The environment
 
 Any key can be set or overridden with `FERROFED__<SECTION>__<KEY>`, upper or

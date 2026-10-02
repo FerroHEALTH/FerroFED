@@ -5,11 +5,13 @@
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::Profile;
+use openehr_federation::aql::OffsetStrategy;
 use secrecy::SecretString;
 
 use crate::config::{DevSection, NodeSelection};
@@ -70,6 +72,9 @@ pub struct FederationSettings {
     pub node_selection: Option<NodeSelection>,
     /// Whether a request may opt into best-effort completion (§11.4).
     pub best_effort: bool,
+    /// How `OFFSET k > 0` is answered across a fan-out, with its bound: the
+    /// `paging` an `OPTIONS {base}/` body declares (§11.6.2, §7a.2, N39).
+    pub offset: OffsetStrategy,
 }
 
 /// The HTTP surface, resolved.
@@ -125,6 +130,8 @@ impl Settings {
             registry = self.registry_document.is_some(),
             node_selection = ?self.federation.node_selection,
             best_effort = self.federation.best_effort,
+            offset_strategy = self.federation.offset.name(),
+            max_offset_window = self.federation.offset.max_window().map(NonZeroU32::get),
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             credentials = endpoints.join(","),
             "configuration resolved"
