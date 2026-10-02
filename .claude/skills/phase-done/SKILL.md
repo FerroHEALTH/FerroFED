@@ -18,12 +18,17 @@ records, and it does not decide the work is done on your behalf.
 
 1. **Identify the issue being closed** (the user names it, or it is the issue
    this branch's PR declares `Closes #N` for). Read it with
-   `gh issue view <n> --comments`.
+   `gh issue view <n> --json title,body,comments --jq '.title, .body,
+   (.comments[] | "--- comment ---", .body)'` (`--comments` prints nothing for
+   an issue without comments, `issue-workflow.md` §The loop), and
+   `scripts/gh/fields.sh show <n>` for its type, priority and effort. A Task
+   carries exactly one work-kind label; a Bug or a Feature carries none. Set
+   what is missing before closing (`issue-workflow.md` §Type, priority and
+   labels).
 2. **Verify every `## Acceptance criteria` checkbox is ticked.** If any remain
    `- [ ]`, stop and list them. Do not tick a criterion yourself to proceed; a
-   tick must reflect real, verified state (once a workspace exists, "the
-   workspace builds" means someone ran `cargo build --workspace` and it
-   succeeded). Tick verified boxes in the issue body via
+   tick must reflect real, verified state ("the workspace builds" means
+   someone ran `cargo build --workspace` and it succeeded). Tick verified boxes in the issue body via
    `gh issue edit <n> --body-file`.
 3. **Relationships check** (`scripts/gh/rel.sh tree <n>`;
    `.claude/rules/issue-relationships.md`): if the issue is a **parent** with
@@ -40,12 +45,13 @@ records, and it does not decide the work is done on your behalf.
    deliverable is on the issue thread as cited evidence and a recommendation,
    not as an undocumented conclusion. If the issue was supposed to produce or
    update `docs/architecture.md`, confirm it did.
-6. **Gate check:** confirm the gates that apply actually ran and passed. Before
-   the workspace exists that is the shell and workflow set (`shellcheck
-   --severity=style`, `actionlint`, `zizmor`) plus
-   `scripts/checks/comment-style.sh`; afterwards it is the full Rust set in
-   `.claude/rules/ci-cd.md`. Report the results you saw, never a green you
-   assumed.
+6. **Gate check:** confirm the gates that apply actually ran and passed: the
+   shell and workflow set (`shellcheck --severity=style`, `actionlint`,
+   `zizmor --min-severity=low .github/`), every guard under `scripts/checks/`
+   that tier 1 of `ci.yml` runs, the `--self-test` of every `scripts/gh/`
+   helper the change touched, and the full Rust set in
+   `.claude/rules/ci-cd.md` for every crate the change touched. Report the
+   results you saw, never a green you assumed.
 7. **Changelog check:** a change with user-visible effect has an entry under
    `[Unreleased]` in `CHANGELOG.md`. Add it if it is missing.
 8. **Write the close narrative into the PR description:** what shipped, the key
@@ -57,7 +63,9 @@ records, and it does not decide the work is done on your behalf.
    numbers), and what a follow-up session should do first.
 10. **Ensure the PR body declares `Closes #<n>`** (`gh pr view`, `gh pr edit`)
     so the merge into `main` auto-closes the issue; never close the issue by
-    hand when a PR carries the work. One `Closes` keyword per issue.
+    hand when a PR carries the work. One `Closes` keyword per issue. Confirm
+    auto-merge is armed (`gh pr view --json autoMergeRequest`); arm it if not,
+    as its own command (`.claude/memory/pr-auto-merge.md`).
 11. **Roadmap-board check** (`.claude/rules/project-board.md`): `Done` is set
     by the built-in workflow when the merge closes the issue, never by hand.
     After the merge, `scripts/gh/project.sh show <n>` should say `Done`; if the

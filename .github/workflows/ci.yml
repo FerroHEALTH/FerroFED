@@ -254,6 +254,27 @@ jobs:
           persist-credentials: false
       - run: bash scripts/checks/conformance-matrix.sh
 
+  # The tracker helpers that carry a self-test. Their real branches run only
+  # against the live tracker: the fallback of fields.sh needs a token that
+  # cannot read the organisation's issue types, and the migration and the
+  # label run write to every issue. Each drives itself against a stub gh on
+  # PATH instead (.claude/rules/issue-workflow.md).
+  tracker-helpers:
+    name: tracker-helpers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/gh/fields.sh --self-test
+          bash scripts/gh/labels.sh --self-test
+          bash scripts/gh/migrate-fields.sh --self-test
+
   # ---- Tier 2: the Rust lanes, gated on the workspace existing --------------
 
   # The one job that decides whether the cargo tier runs at all: it checks out
@@ -558,6 +579,7 @@ jobs:
       - versions
       - favicon-sync
       - conformance-matrix
+      - tracker-helpers
       - detect
       - fmt
       - fuzz-lockfile

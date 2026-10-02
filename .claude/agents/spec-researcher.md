@@ -24,7 +24,7 @@ federation gateway: a transparent ITS-REST intermediary that resolves the
 patient outside AQL, dispatches standard, `ehr_id`-scoped AQL to each node,
 and merges the answers with each node's provenance, after the openEHR
 Federation Working Group's Federation Tier with AQL specification. Read
-`CLAUDE.md`, `docs/architecture.md` (the design of record, once it exists) and
+`CLAUDE.md`, `docs/architecture.md` (the design of record) and
 `.claude/rules/spec-adherence.md` before answering. Check `docs/specs/` for
 the pinned artifacts before fetching.
 
@@ -94,6 +94,8 @@ assigned scope (a stale claim in a document, a specification contradiction, a
 broken cross-reference, a claim in this repository that the sources do not
 support, a missing test) goes in your final report under an explicit
 "En-route findings" heading, each with a location and one sentence of
-evidence, so the orchestrator files a tracker issue for it. "Not in my task
+evidence and the type (Bug, Feature or Task) and priority you would give it,
+so the orchestrator files a tracker issue for it with `scripts/gh/fields.sh
+new`. You file no issue yourself. "Not in my task
 list" is never a reason to stay silent. Do not fix an out-of-scope finding
 yourself; report it.

@@ -1009,7 +1009,7 @@ The contradiction between §10.2 and §10.3 is held on #17.
 (§11.7, #59) both need gateway-held state with an expiry and, with more than
 one instance, request affinity, which cuts against keeping state off the
 clinical path (decision A31). `Prefer: respond-async` is ignored, which RFC 7240
-allows, and the request is answered synchronously. Both issues stay at P3.
+allows, and the request is answered synchronously. Both issues stay at Low priority.
 
 **What `OPTIONS {base}/` declares.**
 
@@ -1390,7 +1390,7 @@ change what some of them carry.
   check (#52, A28, A43), bounded `OFFSET` (#53, A29), decomposable aggregates
   (#54, A30), `DISTINCT` (#55), dedup on the full version id (#56, A32), the
   status mapping (#57), CP-12 (#58, held draft T154). #59 and #60 are not built
-  (A31) and stay at P3.
+  (A31) and stay at Low priority.
 - **v0.0.5, the ITS-REST surface and follow-up routing** (#61 to #69). The
   single-node proxy with `Location` unmodified and `subject_id` resolved (#61,
   A12, A13), `ehr_id` routing (#62), collisions as events (#63), follow-up reads
@@ -1456,7 +1456,7 @@ R4 is #23, #25 and #27).
 | A28 | An `ORDER BY` path not in `SELECT` [R3 D4] | a hidden column, stripped after the merge | the client's query stays answerable; hygiene re-checks the dispatched AQL | decided (owner, 2026-10-01) |
 | A29 | `OFFSET` [R3 D5] | bounded `k + n`, 1000 rows per node by default, `400` past it | §11.6.2 admits it when declared | decided (owner, 2026-10-01) |
 | A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01) |
-| A31 | Cursor and async [R3 D7] | not built; #59 and #60 stay at P3 | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
+| A31 | Cursor and async [R3 D7] | not built; #59 and #60 stay at Low priority | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
 | A32 | The dedup key [R3 D8] | the full `ObjectVersionId` | §10.3's scenario and the RM's copy semantics; §10.2 contradicts §10.3 (held on #17); grouping by `object_id` collapses a version history | decided (owner, 2026-10-01) |
 | A33 | The wire types [R4 D1] | hand-written in `openehr-federation`, held to the schemas by three test layers; no FerroFED generator | typify drops open members and supports no `if`/`then` | decided (owner, 2026-10-01) |
 | A34 | The crate map [R4 §6, with A16; renamed by #106] | section 11: the published crates named for their specification (`openehr-federation`, `ihe-iti`, `nl-generic-functions`), one crate per specification with a feature per layer or profile, FerroFED's own glue under `app/` | a published crate carries the name of the specification it implements, never the product name; Cargo edges and the architecture test enforce the boundaries; the core never compiles FHIR | decided (owner, 2026-10-01) |

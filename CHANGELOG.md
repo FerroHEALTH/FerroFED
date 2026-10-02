@@ -78,6 +78,12 @@ binary follows from v0.0.2.
   `FERROEHR_PORT` is now `FERROEHR_A_PORT`). Every end-to-end case seeds the
   patient's subject on both nodes, and the `e2e (containers)` CI job now runs
   the server's container tests as well as the testkit's.
+- The tracker records the kind, the urgency and the size of an issue in
+  GitHub's native issue type (Bug, Feature, Task) and the organisation's
+  Priority and Effort fields (#154). The `bug`, `enhancement` and `P0` to
+  `P3` labels are retired, the bug and feature forms set the issue type, and
+  `scripts/gh/fields.sh` and `scripts/gh/migrate-fields.sh` carry the model
+  and the migration.
 
 ## [0.0.3] - 2026-10-02
 
