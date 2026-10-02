@@ -1,0 +1,1 @@
+{"q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345' AND c/composer/identifiers/id = '999'","offset":5,"fetch":10}

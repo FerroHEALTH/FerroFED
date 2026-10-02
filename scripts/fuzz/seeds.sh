@@ -7,7 +7,8 @@
 #
 #   aql_rewrite      the facade query of every reference golden case
 #   adhoc_query      the same queries as ITS-REST AdhocQueryExecute bodies,
-#                    bare and with paging and a query parameter
+#                    bare, with paging and a query parameter, and with an
+#                    offset member past zero
 #   result_set_meta  the federated RESULT_SET example of the specification
 #                    (result-set.adoc, section 9.4)
 #   options_root     the OPTIONS {base}/ example of the specification
@@ -67,6 +68,8 @@ generate() {
     jq -cn --arg q "$query" \
       '{q: $q, offset: 0, fetch: 10, query_parameters: {pid: "sentinel-4711"}}' \
       >"$out/adhoc_query/gen-$name-paged.json"
+    jq -cn --arg q "$query" '{q: $q, offset: 5, fetch: 10}' \
+      >"$out/adhoc_query/gen-$name-offset.json"
   done
   json_block_of "$pages/result-set.adoc" >"$out/result_set_meta/gen-section-9-4.json"
   json_block_of "$pages/rest-facade.adoc" >"$out/options_root/gen-section-7a-2.json"

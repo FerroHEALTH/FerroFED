@@ -5,7 +5,9 @@
 //! identifier-hygiene property of §5.4.1 (N33) checked on every accepted query.
 //!
 //! The input is the AQL text up to the first NUL byte; the bytes after it
-//! choose the parameter values, the paging members and the targeting. A
+//! choose the `OFFSET` strategy (`reject`, or `bounded` with its window), the
+//! parameter values, the paging members and the targeting. With no bytes
+//! after it, the strategy is the server default: `bounded`, 1000 rows. A
 //! refusal is the rewrite doing its job and is never a finding. A panic is a
 //! finding, and so is a node query that still carries the patient identifier:
 //!
@@ -17,13 +19,13 @@
 
 #![no_main]
 
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU32, NonZeroUsize};
 
 use libfuzzer_sys::arbitrary::Unstructured;
 use libfuzzer_sys::fuzz_target;
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::aql::refusal::Refusal;
-use openehr_federation::aql::{Analysis, Context, Paging, Targeting, analyse};
+use openehr_federation::aql::{Analysis, Context, OffsetStrategy, Paging, Targeting, analyse};
 use openehr_query::ast::{ClassExprOperand, ContainsExpr, LikeOperand, Primitive, WhereExpr};
 use openehr_query::bind::Parameters;
 use openehr_query::parser::parse_str;
@@ -36,6 +38,9 @@ const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
 const NAMESPACE: &str = "urn:oid:2.999.1";
 /// The value a parameter takes when the input supplies none.
 const SENTINEL: &str = "sentinel-4711";
+/// The rows the bounded strategy asks of one node when the input draws no
+/// window: the server's default `federation.max_offset_window`.
+const WINDOW: NonZeroU32 = NonZeroU32::MIN.saturating_add(999);
 
 fuzz_target!(|data: &[u8]| {
     let (text, tail) = match data.iter().position(|byte| *byte == 0) {
@@ -49,12 +54,13 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
     let mut choices = Unstructured::new(tail);
+    let strategy = offset_strategy(&mut choices);
     let parameters = parameters(aql, &mut choices);
     let paging = Paging {
         offset: choices.arbitrary().unwrap_or(None),
         fetch: choices.arbitrary().unwrap_or(None),
     };
-    let context = context(&mut choices);
+    let context = context(&mut choices).with_offset_strategy(strategy);
     let Ok(Analysis::Patient(query)) = analyse(aql, &parameters, paging, &context) else {
         return;
     };
@@ -161,6 +167,22 @@ fn parameter_names(aql: &str) -> Vec<String> {
         rest = after;
     }
     names
+}
+
+/// How `OFFSET k > 0` is answered (§11.6.2, N39), chosen by the input: an odd
+/// first byte refuses every such page, and anything else bounds `k + n` by a
+/// window drawn from the next bytes, or by [`WINDOW`] when they draw zero.
+fn offset_strategy(choices: &mut Unstructured<'_>) -> OffsetStrategy {
+    // NOTE: no specification governs this: our own design; an exhausted input
+    // reads `false` and a zero window, so a bare seed runs the server default.
+    let reject: bool = choices.arbitrary().unwrap_or(false);
+    if reject {
+        return OffsetStrategy::Reject;
+    }
+    let window = choices.int_in_range(0..=2 * WINDOW.get()).unwrap_or(0);
+    OffsetStrategy::Bounded {
+        max_window: NonZeroU32::new(window).unwrap_or(WINDOW),
+    }
 }
 
 /// The deployment and request context, chosen by the input.

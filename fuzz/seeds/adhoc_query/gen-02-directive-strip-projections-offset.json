@@ -1,0 +1,1 @@
+{"q":"SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition_id FROM ENDPOINT p [ \"node_1\", \"node_2\" ] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345'","offset":5,"fetch":10}

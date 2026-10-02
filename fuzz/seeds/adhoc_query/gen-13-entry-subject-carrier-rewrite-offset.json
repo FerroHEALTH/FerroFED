@@ -1,0 +1,1 @@
+{"q":"SELECT c/uid/value AS composition_id FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE o/subject/identifiers/id = '12345'","offset":5,"fetch":10}
