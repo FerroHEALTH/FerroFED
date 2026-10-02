@@ -16,8 +16,8 @@
 //! (§10), [`prefer`] reads the
 //! client deadline that can shorten the budget (§11.5), [`intake`] types the query
 //! parameters, [`target`] selects the node set a `FROM ENDPOINT` or
-//! `ORGANISATION` directive names (§8.1), the rewrite analyses the query and
-//! names the patient,
+//! `ORGANISATION` directive or a targeting header names (§8.1, §8.4), the
+//! rewrite analyses the query and names the patient,
 //! [`plan`] resolves the patient at every member and builds one node query
 //! per member that knows them, the engine fans out under the budget and the
 //! strategy, and [`cells`] builds each façade row with the subject columns
@@ -101,6 +101,7 @@ pub async fn query_aql(
     let budget = wait.map_or(configured, |wait| configured.shortened_to(wait));
     let query = Query {
         body: &body,
+        headers: &headers,
         completion,
         dedup,
         budget,
@@ -152,7 +153,8 @@ enum Failure {
     /// The query is refused before anything is dispatched.
     #[error(transparent)]
     Refused(#[from] Refusal),
-    /// The directive names what the registry does not know (§8.4.1).
+    /// The directive or a targeting header names what the registry does not
+    /// know, or two of them select different node sets (§8.4.1).
     #[error(transparent)]
     Target(#[from] target::TargetError),
     /// The query selects ENDPOINT attributes (§9.3, N12).
@@ -194,10 +196,7 @@ impl Failure {
             Self::Dedup(_) => Code::DedupInvalid,
             Self::Parameter(_) => Code::ParameterInvalid,
             Self::Refused(refusal) => Code::Refused(refusal.into()),
-            Self::Target(target::TargetError::UnknownEndpoint { .. }) => Code::EndpointUnknown,
-            Self::Target(target::TargetError::UnknownOrganisation { .. }) => {
-                Code::OrganisationUnknown
-            }
+            Self::Target(error) => error.code(),
             Self::EndpointAttributes => Code::NotImplemented,
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
             Self::NoDestination => Code::NoDestination,
@@ -232,6 +231,8 @@ impl Failure {
 struct Query<'a> {
     /// The request body.
     body: &'a [u8],
+    /// The request headers, which may name the node set (§8.4).
+    headers: &'a HeaderMap,
     /// The completion strategy the request selects (§11.4).
     completion: Completion,
     /// The dedup mode the request selects (§10).
@@ -291,11 +292,11 @@ fn analysed(
     Ok(analysis)
 }
 
-/// The request in `body`, the endpoints its directive selects, and the
-/// analysis of its query under the request's modes.
+/// The request in `body`, the endpoints its directive or its `headers`
+/// select, and the analysis of its query under the request's modes.
 fn read(
     federation: &Federation,
-    body: &[u8],
+    (body, headers): (&[u8], &HeaderMap),
     modes: (Completion, DedupMode),
     request_id: &str,
 ) -> Result<(AdhocQueryExecute, Option<BTreeSet<EndpointId>>, Analysis), Failure> {
@@ -303,7 +304,7 @@ fn read(
     // body is refused with a fixed message.
     let request: AdhocQueryExecute =
         serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?;
-    let (facade, named) = directed(federation, &request.q, request_id)?;
+    let (facade, named) = directed(federation, &request.q, headers, request_id)?;
     let analysis = analysed(
         federation,
         (facade, named.as_ref()),
@@ -314,24 +315,22 @@ fn read(
     Ok((request, named, analysis))
 }
 
-/// The façade query `q`, parsed, and the endpoints its directive selects, or
-/// `None` for an undirected query (§8.1).
+/// The façade query `q`, parsed, and the endpoints its directive or the
+/// targeting headers in `headers` select, or `None` for an undirected query
+/// (§8.1, §8.4).
 ///
-/// A directive that selects no endpoint leaves the request no destination
+/// The request URI is never read: no query parameter targets anything
+/// (§8.4, N35). A selection of no endpoint leaves the request no destination
 /// (§11.2).
 fn directed(
     federation: &Federation,
     q: &str,
+    headers: &HeaderMap,
     request_id: &str,
 ) -> Result<(FacadeQuery, Option<BTreeSet<EndpointId>>), Failure> {
     let facade =
         FacadeQuery::parse(q).inspect_err(|refusal| security::refused(refusal, request_id))?;
-    // TODO(#71): the endpoint and organisation headers join the directive here, and a set that
-    // differs from it is a 400 naming both (§8.4.1).
-    let named = facade
-        .directive()
-        .map(|directive| target::selected(federation.snapshot(), directive))
-        .transpose()?;
+    let named = target::requested(federation.snapshot(), facade.directive(), headers)?;
     if named.as_ref().is_some_and(BTreeSet::is_empty) {
         return Err(Failure::NoDestination);
     }
@@ -351,6 +350,7 @@ async fn federate(
 ) -> Result<(StatusCode, ResultSet), Failure> {
     let Query {
         body,
+        headers,
         completion,
         dedup,
         budget,
@@ -360,7 +360,8 @@ async fn federate(
     } = query;
     let logged = outbound.to_string();
     let request_id = logged.as_str();
-    let (request, named, analysis) = read(federation, body, (completion, dedup), request_id)?;
+    let (request, named, analysis) =
+        read(federation, (body, headers), (completion, dedup), request_id)?;
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
@@ -445,6 +446,8 @@ async fn federate(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::{Failure, cells, completeness, dedup, plan, target};
     use crate::error::Code;
     use ferrofed_engine::fanout::FanOutError;
@@ -488,6 +491,7 @@ mod tests {
             ),
             (
                 Failure::Target(target::TargetError::UnknownEndpoint {
+                    by: target::Mechanism::EndpointHeader,
                     position: 1,
                     at: None,
                 }),
@@ -496,10 +500,32 @@ mod tests {
             ),
             (
                 Failure::Target(target::TargetError::UnknownOrganisation {
+                    by: target::Mechanism::OrganisationDirective,
                     position: 1,
                     at: None,
                 }),
                 "organisation-unknown",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Target(target::TargetError::Empty(
+                    target::Mechanism::OrganisationHeader,
+                )),
+                "organisation-unknown",
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                Failure::Target(target::TargetError::Conflict {
+                    first: target::Selected {
+                        by: target::Mechanism::EndpointDirective,
+                        endpoints: BTreeSet::new(),
+                    },
+                    second: target::Selected {
+                        by: target::Mechanism::OrganisationHeader,
+                        endpoints: BTreeSet::new(),
+                    },
+                }),
+                "targeting-conflict",
                 StatusCode::BAD_REQUEST,
             ),
             (

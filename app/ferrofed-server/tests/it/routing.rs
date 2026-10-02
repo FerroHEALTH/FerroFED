@@ -518,6 +518,131 @@ async fn the_endpoint_header_names_exactly_one_endpoint_the_registry_holds() -> 
     Ok(())
 }
 
+// conformance: CP-28
+#[tokio::test]
+async fn the_organisation_header_routes_to_the_one_endpoint_it_manages() -> TestResult {
+    let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
+    let a = node(
+        "GET",
+        resource.clone(),
+        ResponseTemplate::new(200).set_body_raw(b"{}".to_vec(), "application/json"),
+    )
+    .await;
+    let b = silent().await;
+    for fields in [
+        vec![("openEHR-federation-organisation", "org-a")],
+        vec![
+            ("openEHR-federation-endpoint", ENDPOINT_A),
+            ("openEHR-federation-organisation", "org-a"),
+        ],
+    ] {
+        let dir = tempfile::tempdir()?;
+        let mut request = Request::get(&resource);
+        for (name, value) in &fields {
+            request = request.header(*name, *value);
+        }
+        let (status, headers, _) = parts(
+            send(
+                gateway_over(dir.path(), &a.uri(), &b.uri(), "")?,
+                request.body(Body::empty())?,
+            )
+            .await?,
+        )
+        .await?;
+        assert_eq!(StatusCode::OK, status, "§8.4: {fields:?}");
+        names_node_a(&headers, "GET by organisation");
+    }
+    let captured = wire(&a).await?;
+    for absent in [
+        "openEHR-federation-endpoint",
+        "openEHR-federation-organisation",
+        "org-a",
+        ENDPOINT_A,
+    ] {
+        assert!(
+            !captured.contains_ignoring_ascii_case(absent),
+            "§8.4: the node received {absent:?}: {captured}"
+        );
+    }
+    assert!(b.received_requests().await.ok_or("recording")?.is_empty());
+    Ok(())
+}
+
+// conformance: CP-28
+#[tokio::test]
+async fn the_routing_headers_select_one_endpoint_and_never_two_sets() -> TestResult {
+    let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
+    let more = "\n[[organisation]]\nid = \"org-c\"\n\n[[endpoint]]\nid = \"node-a-two\"\nnode = \"node-a\"\nurl = \"http://127.0.0.1:9\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n";
+    for (fields, answer) in [
+        (
+            vec![
+                ("openEHR-federation-endpoint", ENDPOINT_A),
+                ("openEHR-federation-organisation", "org-b"),
+            ],
+            (StatusCode::BAD_REQUEST, "targeting-conflict"),
+        ),
+        (
+            vec![("openEHR-federation-organisation", "org-a")],
+            (StatusCode::BAD_REQUEST, "endpoint-several"),
+        ),
+        (
+            vec![("openEHR-federation-organisation", "org-z")],
+            (StatusCode::BAD_REQUEST, "organisation-unknown"),
+        ),
+        (
+            vec![("openEHR-federation-organisation", "org-c")],
+            (StatusCode::NOT_FOUND, "no-destination"),
+        ),
+    ] {
+        let mut request = Request::get(&resource);
+        for (name, value) in &fields {
+            request = request.header(*name, *value);
+        }
+        let (status, code) = refused(request.body(Body::empty())?, more).await?;
+        assert_eq!(
+            (answer.0, answer.1.to_owned()),
+            (status, code),
+            "{fields:?}"
+        );
+    }
+    Ok(())
+}
+
+// conformance: CP-28
+#[tokio::test]
+async fn a_node_named_in_a_query_parameter_is_refused_and_never_routed() -> TestResult {
+    let at = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
+    for query in ["endpoint=node-b-pub", "organisation=org-b"] {
+        let request = Request::get(format!("{at}?{query}"))
+            .header("openEHR-federation-endpoint", ENDPOINT_A)
+            .body(Body::empty())?;
+        let a = silent().await;
+        let b = silent().await;
+        let dir = tempfile::tempdir()?;
+        let (status, _, body) =
+            parts(send(gateway_over(dir.path(), &a.uri(), &b.uri(), "")?, request).await?).await?;
+        assert_eq!(
+            (
+                StatusCode::BAD_REQUEST,
+                "query-parameter-refused".to_owned()
+            ),
+            (status, error_body(&String::from_utf8(body)?)?.code),
+            "§8.4: ?{query} is no targeting mechanism"
+        );
+        for server in [&a, &b] {
+            assert!(
+                server
+                    .received_requests()
+                    .await
+                    .ok_or("recording")?
+                    .is_empty(),
+                "nothing is sent for ?{query}"
+            );
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_suspended_endpoint_is_never_contacted() -> TestResult {
     let suspended = "\n[[endpoint]]\nid = \"node-a-old\"\nnode = \"node-a\"\nurl = \"http://127.0.0.1:9\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\nstatus = \"suspended\"\n";

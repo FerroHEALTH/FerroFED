@@ -46,9 +46,17 @@ use url::Url;
 /// authenticates onward with the endpoint's own credentials (§13).
 /// `X-Request-Id` is the client's free text, and a node receives the
 /// gateway's minted [`OutboundId`](crate::outbound_id::OutboundId) instead.
-// NOTE: §5.4.1, N33: no ITS-REST operation declares either header, and a
-// client value in either could name a patient, so both stay withheld.
-pub const WITHHELD_HEADERS: [&str; 2] = ["authorization", "x-request-id"];
+/// The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
+/// headers target the request at the gateway, and mean nothing at a node
+/// (§8.4). Each name is compared without regard to case (RFC 9110 §5.1).
+// NOTE: §5.4.1, N33: no ITS-REST operation declares these headers, and a
+// client value in any of them could name a patient, so all stay withheld.
+pub const WITHHELD_HEADERS: [&str; 4] = [
+    "authorization",
+    "x-request-id",
+    openehr_federation::headers::ENDPOINT,
+    openehr_federation::headers::ORGANISATION,
+];
 
 /// The query parameters a single-node route never forwards, whatever the
 /// operation declares: the patient identifier and its namespace (§5.4.2).
@@ -67,7 +75,9 @@ pub const WITHHELD_QUERY_PARAMETERS: [&str; 2] = ["subject_id", "subject_namespa
 pub fn forwarded_headers(operation: &RouteMatch, client: &HeaderMap) -> HeaderMap {
     let mut forwarded = HeaderMap::new();
     for (name, value) in client {
-        let withheld = WITHHELD_HEADERS.contains(&name.as_str());
+        let withheld = WITHHELD_HEADERS
+            .iter()
+            .any(|withheld| name.as_str().eq_ignore_ascii_case(withheld));
         if !withheld && operation.header_param(name.as_str()).is_some() {
             forwarded.append(name.clone(), value.clone());
         }
@@ -501,6 +511,34 @@ mod tests {
         assert!(forwarded.get("x-request-id").is_none());
         assert!(forwarded.get("x-patient").is_none());
         assert!(forwarded.get("openehr-federation-endpoint").is_none());
+    }
+
+    // conformance: CP-28
+    #[test]
+    fn the_targeting_headers_are_withheld_from_every_operation() {
+        let mut client = http::HeaderMap::new();
+        client.insert("openEHR-federation-endpoint", "node-a-pub".parse().unwrap());
+        client.insert("openEHR-Federation-Organisation", "org-a".parse().unwrap());
+        client.insert("accept", "application/json".parse().unwrap());
+        for operation in [
+            composition_update(),
+            operation(&http::Method::GET, "/ehr/7d44/composition/u::s::1"),
+            operation(&http::Method::POST, "/ehr/7d44/composition"),
+            operation(&http::Method::GET, "/ehr/7d44/ehr_status"),
+        ] {
+            let forwarded = super::forwarded_headers(&operation, &client);
+            assert!(
+                forwarded.get("openehr-federation-endpoint").is_none()
+                    && forwarded.get("openehr-federation-organisation").is_none(),
+                "§8.4: targeting means nothing at a node: {forwarded:?}"
+            );
+        }
+        for name in [
+            openehr_federation::headers::ENDPOINT,
+            openehr_federation::headers::ORGANISATION,
+        ] {
+            assert!(super::WITHHELD_HEADERS.contains(&name), "{name}");
+        }
     }
 
     #[test]

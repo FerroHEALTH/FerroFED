@@ -68,18 +68,19 @@ pub enum Code {
     /// or the query selects ENDPOINT attributes, which the gateway does not
     /// add to rows (§9.3, N12).
     NotImplemented,
-    /// The `FROM ENDPOINT` directive, or the `openEHR-federation-endpoint`
-    /// header of a request routed to a single node, names an endpoint the
-    /// registry does not know (§8.4.1, N19).
+    /// The `FROM ENDPOINT` directive or the `openEHR-federation-endpoint`
+    /// header names an endpoint the registry does not know, or the header
+    /// names none (§8.4.1, N19).
     EndpointUnknown,
-    /// The `ORGANISATION` directive names an organisation the registry does
-    /// not know (§8.1, §8.4.1, N20).
+    /// The `ORGANISATION` directive or the `openEHR-federation-organisation`
+    /// header names an organisation the registry does not know, or the
+    /// header names none (§8.1, §8.4.1, N20).
     OrganisationUnknown,
     /// A write to an EHR resource names no node, and nothing else routes it
     /// (§12.5.1, N41).
     TargetRequired,
-    /// The `openEHR-federation-endpoint` header of a request routed to a
-    /// single node names more than one endpoint (§7a.1, §12.4).
+    /// The targeting headers of a request routed to a single node select
+    /// more than one endpoint (§7a.1, §12.4).
     EndpointSeveral,
     /// The query string of a request routed to a single node carries a
     /// parameter the ITS-REST operation does not declare (§5.4.1, N33). The
@@ -92,6 +93,10 @@ pub enum Code {
     /// The node a request was routed to refused the gateway's onward
     /// credentials (§11.2).
     NodeRefused,
+    /// Two targeting mechanisms of one request, the AQL directive and a
+    /// header or the two headers, select different node sets (§8.4.1, N35).
+    /// The body names both sets.
+    TargetingConflict,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -107,7 +112,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 20] = [
+    pub const GATEWAY: [Self; 21] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -128,6 +133,7 @@ impl Code {
         Self::NodeTimeout,
         Self::NodeUnreachable,
         Self::NodeRefused,
+        Self::TargetingConflict,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -164,6 +170,7 @@ impl Code {
             Self::NodeTimeout => "node-timeout",
             Self::NodeUnreachable => "node-unreachable",
             Self::NodeRefused => "node-refused",
+            Self::TargetingConflict => "targeting-conflict",
         }
     }
 
@@ -182,7 +189,8 @@ impl Code {
             | Self::OrganisationUnknown
             | Self::TargetRequired
             | Self::EndpointSeveral
-            | Self::QueryParameterRefused => StatusCode::BAD_REQUEST,
+            | Self::QueryParameterRefused
+            | Self::TargetingConflict => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound => StatusCode::NOT_FOUND,
             Self::EhrIdCollision | Self::ControllingSystemUnreachable => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -220,13 +228,13 @@ impl Code {
                 "the endpoint directive or header names an endpoint the registry does not know (§8.4.1)"
             }
             Self::OrganisationUnknown => {
-                "the organisation directive names an organisation the registry does not know (§8.4.1)"
+                "the organisation directive or header names an organisation the registry does not know (§8.4.1)"
             }
             Self::TargetRequired => {
                 "a write to an EHR resource names its node in the openEHR-federation-endpoint header (§12.5.1, N41)"
             }
             Self::EndpointSeveral => {
-                "a request routed to one node names exactly one endpoint in the openEHR-federation-endpoint header (§7a.1)"
+                "a request routed to one node selects exactly one endpoint through its targeting headers (§7a.1)"
             }
             Self::QueryParameterRefused => {
                 "a query parameter the ITS-REST operation does not declare is refused, never forwarded (§5.4.1, N33)"
@@ -234,6 +242,9 @@ impl Code {
             Self::NodeTimeout => "the node did not answer in time (§11.2)",
             Self::NodeUnreachable => "the node could not be reached (§11.2)",
             Self::NodeRefused => "the node refused the gateway's onward credentials (§11.2)",
+            Self::TargetingConflict => {
+                "the request's targeting mechanisms select different node sets (§8.4.1, N35)"
+            }
         }
     }
 }
@@ -313,6 +324,7 @@ mod tests {
             Code::NodeTimeout => Some(17),
             Code::NodeUnreachable => Some(18),
             Code::NodeRefused => Some(19),
+            Code::TargetingConflict => Some(20),
         }
     }
 
@@ -377,6 +389,7 @@ mod tests {
             (Code::NodeTimeout, StatusCode::GATEWAY_TIMEOUT),
             (Code::NodeUnreachable, StatusCode::GATEWAY_TIMEOUT),
             (Code::NodeRefused, StatusCode::FAILED_DEPENDENCY),
+            (Code::TargetingConflict, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

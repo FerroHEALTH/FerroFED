@@ -15,8 +15,9 @@
 //! answer carries `openEHR-federation-endpoint` and
 //! `openEHR-federation-system-id` (N31, §9.6).
 //!
-//! The node is the one the `openEHR-federation-endpoint` header names, the
-//! first step of §12.5.1. A write that names none is a `400` (§12.5.1, N41).
+//! The node is the one the `openEHR-federation-endpoint` or
+//! `openEHR-federation-organisation` header selects, the first step of
+//! §12.5.1 (§8.4). A write that names none is a `400` (§12.5.1, N41).
 
 use std::time::Instant;
 
@@ -32,7 +33,7 @@ use openehr_federation::headers;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::error::{self, Code};
-use crate::facade::security;
+use crate::facade::{security, target};
 use crate::federation::Federation;
 
 /// The API group of the EHR area (§7a.1).
@@ -108,7 +109,9 @@ async fn route(federation: &Federation, arrived: Arrived<'_>) -> Response {
         }
         // TODO(#62): route a write by the held binding or the ehr_id index before refusing it (§12.5.1).
         Ok(None) => return error::fixed(Code::TargetRequired, request_id),
-        Err(code) => return error::fixed(code, request_id),
+        Err(untargeted) => {
+            return error::response(untargeted.code(), untargeted.to_string(), request_id);
+        }
     };
     // NOTE: §11.1 never contacts a suspended endpoint, so a request that names
     // one resolves to no destination (§11.2); the suspension rule is our own design.
@@ -145,39 +148,66 @@ async fn route(federation: &Federation, arrived: Arrived<'_>) -> Response {
     }
 }
 
-/// The endpoint the `openEHR-federation-endpoint` header names, `None`
-/// without one (§8.4, §12.5.1 step 1).
+/// The endpoint the targeting headers name, `None` without either header
+/// (§8.4, §12.5.1 step 1).
 ///
-/// Every field line counts, each a comma-separated list; an identifier
-/// repeated is one endpoint.
-// TODO(#71): the openEHR-federation-organisation header, and the full rules of §8.4 for both headers.
+/// The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
+/// headers both apply to a routed request, read as [`target::requested`]
+/// reads them for a query; a routed request reaches one node, so together
+/// they select exactly one endpoint (§7a.1, §12.4).
 fn target<'a>(
     snapshot: &'a RegistrySnapshot,
     headers: &HeaderMap,
-) -> Result<Option<&'a Endpoint>, Code> {
-    let mut lines = headers.get_all(headers::ENDPOINT).iter().peekable();
-    if lines.peek().is_none() {
+) -> Result<Option<&'a Endpoint>, Untargeted> {
+    let Some(selected) = target::requested(snapshot, None, headers)? else {
         return Ok(None);
-    }
-    let mut named: Vec<&str> = Vec::new();
-    for line in lines {
-        // NOTE: a registry id is ASCII (no specification governs its form: our
-        // own design), so a field value that is not text names no endpoint.
-        let text = line.to_str().map_err(|_opaque| Code::EndpointUnknown)?;
-        for id in text.split(',').map(str::trim) {
-            if !named.contains(&id) {
-                named.push(id);
-            }
+    };
+    let mut selected = selected.into_iter();
+    let id = match (selected.next(), selected.next()) {
+        (Some(id), None) => id,
+        (Some(_), Some(_)) => return Err(Untargeted::Several),
+        (None, _) => return Err(Untargeted::Nothing),
+    };
+    Ok(Some(registered(snapshot, &id)))
+}
+
+/// The endpoint `id` of `snapshot`, which selected it.
+#[expect(
+    clippy::expect_used,
+    reason = "target::requested selects only endpoints it found in this same snapshot"
+)]
+fn registered<'a>(snapshot: &'a RegistrySnapshot, id: &EndpointId) -> &'a Endpoint {
+    snapshot
+        .endpoint(id)
+        .expect("a selected endpoint should be in the snapshot that selected it")
+}
+
+/// Why the targeting headers of a routed request name no one endpoint.
+#[derive(Debug, thiserror::Error)]
+enum Untargeted {
+    /// A header names what the registry does not know, or the two headers
+    /// select different node sets (§8.4.1).
+    #[error(transparent)]
+    Target(#[from] target::TargetError),
+    /// The headers select more than one endpoint.
+    #[error(
+        "the targeting headers select more than one endpoint, and a request routed to one node selects exactly one (§7a.1, §12.4)"
+    )]
+    Several,
+    /// The headers select no endpoint: the organisation manages none.
+    #[error("the targeting headers select no endpoint, so the request has no destination (§11.2)")]
+    Nothing,
+}
+
+impl Untargeted {
+    /// The stable code the error body names.
+    fn code(&self) -> Code {
+        match self {
+            Self::Target(error) => error.code(),
+            Self::Several => Code::EndpointSeveral,
+            Self::Nothing => Code::NoDestination,
         }
     }
-    let [id] = named.as_slice() else {
-        return Err(Code::EndpointSeveral);
-    };
-    let id = EndpointId::new(*id).map_err(|_malformed| Code::EndpointUnknown)?;
-    snapshot
-        .endpoint(&id)
-        .map(Some)
-        .ok_or(Code::EndpointUnknown)
 }
 
 /// The node's answer as the client's response: its status, its headers and

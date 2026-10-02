@@ -28,5 +28,6 @@ mod routing;
 mod run;
 mod shutdown;
 mod support;
+mod targeting;
 mod telemetry;
 mod timeouts;
