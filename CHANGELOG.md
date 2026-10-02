@@ -244,6 +244,20 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- An `ORDER BY` with `LIMIT` query whose rows carry no uid, such as one that
+  selects from `EHR` alone, returns the same rows on every repeat (#157;
+  §11.6.1, §11.6.2, N39, CP-32). Each node is asked to order on a row key
+  after the client's keys: the uid of the first `COMPOSITION` or `VERSION`
+  as before, else `<ehr>/ehr_id/value`, else the uid of an `EHR_STATUS` or
+  `EHR_ACCESS`; the key travels as a hidden column and never reaches
+  `columns[]`. A node cut at `LIMIT n`, or at the `LIMIT k + n` of a bounded
+  `OFFSET` page, then keeps the same tied rows each time, so two pages agree
+  on the rows tied across their edge. A patient query, scoped to one
+  `ehr_id` per node, gets no `EHR` key; `FOLDER` is never a key; a
+  `DISTINCT` query keeps its selected columns as the tie-break and gains no
+  column. A query with no row key is still answered: the Tier orders the
+  rows it receives, and which tied rows a node returns is the node's.
+  `openehr-federation` 0.0.17 carries the change.
 - A query that calls a function AQL 1.1.0 does not define, such as a
   product-specific `MEDIAN(x)`, in `SELECT` or `WHERE` is refused `400`
   (`undefined-function`) when it would reach more than one node, where it was

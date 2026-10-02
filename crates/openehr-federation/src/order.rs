@@ -104,8 +104,8 @@ impl ResultOrder {
     }
 
     /// The node columns that break a tie after `endpoint_id`, ascending: the
-    /// row's uid, or under `DISTINCT` the selected columns the keys do not
-    /// read.
+    /// row key (the row's uid, or the `ehr_id` of a row with no uid), or under
+    /// `DISTINCT` the selected columns the keys do not read.
     #[must_use]
     pub fn tie_break(&self) -> &[usize] {
         &self.tie_break

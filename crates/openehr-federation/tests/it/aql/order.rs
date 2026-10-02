@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The Tier order written into the node query (§11.6.1, N13, N39): the hidden
-//! `ORDER BY` column, the uid tie-break, the client's `LIMIT n` unchanged, and
-//! the refusals.
+//! `ORDER BY` column, the row-key tie-break (the uid, or the `ehr_id` of a row
+//! with no uid), the client's `LIMIT n` unchanged, and the refusals.
 
 use std::num::NonZeroUsize;
 
@@ -339,5 +339,205 @@ fn a_directed_aggregate_is_dispatched_unchanged_with_its_limit() {
         analysed(&aql, &one).expect("accepted").order(),
         &ResultOrder::new(Vec::new(), Vec::new(), Some(1)),
         "N14: one node's aggregate is the answer, so the merge only applies the limit"
+    );
+}
+
+/// The node query, the Tier order and the façade columns of an unscoped
+/// `aql`.
+fn unscoped(aql: &str) -> (String, ResultOrder, Vec<Option<String>>) {
+    let analysis = analysed(aql, &ask_all()).expect("the query is accepted");
+    let columns = analysis
+        .columns()
+        .iter()
+        .map(|column| column.path.clone())
+        .collect();
+    let order = analysis.order().clone();
+    match analysis {
+        Analysis::Unscoped(query) => (query.node_query().aql().to_owned(), order, columns),
+        other @ Analysis::Patient(_) => panic!("expected an unscoped query, got {other:?}"),
+    }
+}
+
+// conformance: CP-32
+#[test]
+fn an_ehr_only_query_is_tie_broken_on_the_ehr_id() {
+    let aql = "SELECT e/ehr_status/uid/value AS status FROM EHR e \
+               ORDER BY e/time_created/value DESC LIMIT 2";
+    let (node, order, columns) = unscoped(aql);
+    assert_same_aql(
+        &node,
+        "SELECT e/ehr_status/uid/value AS status, e/time_created/value, e/ehr_id/value \
+         FROM EHR e ORDER BY e/time_created/value DESC, e/ehr_id/value ASC LIMIT 2",
+    );
+    assert_eq!(
+        order,
+        ResultOrder::new(
+            vec![SortKey::new(1, Direction::Descending)],
+            vec![2],
+            Some(2)
+        ),
+        "§11.6.1: a row with no uid breaks ties on its ehr_id after endpoint_id"
+    );
+    assert_eq!(
+        columns,
+        [Some("/ehr_status/uid/value".to_owned())],
+        "N17, §9.2: columns[] is the client's query, without the pushed key"
+    );
+    let Ok(Analysis::Unscoped(query)) = analysed(aql, &ask_all()) else {
+        panic!("an unscoped query")
+    };
+    assert_eq!(
+        query.node_query().columns(),
+        [ColumnSource::Node(0)],
+        "the hidden key and the ehr_id are stripped from the client's rows"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn a_selected_ehr_id_is_the_tie_break_where_it_is() {
+    let (node, order, _) =
+        unscoped("SELECT e/ehr_id/value FROM EHR e ORDER BY e/time_created/value LIMIT 3");
+    assert_same_aql(
+        &node,
+        "SELECT e/ehr_id/value, e/time_created/value FROM EHR e \
+         ORDER BY e/time_created/value, e/ehr_id/value ASC LIMIT 3",
+    );
+    assert_eq!(
+        order,
+        ResultOrder::new(
+            vec![SortKey::new(1, Direction::Ascending)],
+            vec![0],
+            Some(3)
+        )
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn a_containment_with_no_versioned_object_is_keyed_on_its_ehr() {
+    let magnitude = "o/data[at0001]/events[at0006]/data[at0003]/items[at0004]/value/magnitude";
+    let (node, order, _) = unscoped(&format!(
+        "SELECT {magnitude} FROM EHR e CONTAINS OBSERVATION o ORDER BY {magnitude} DESC LIMIT 4"
+    ));
+    assert_same_aql(
+        &node,
+        &format!(
+            "SELECT {magnitude}, e/ehr_id/value FROM EHR e CONTAINS OBSERVATION o \
+             ORDER BY {magnitude} DESC, e/ehr_id/value ASC LIMIT 4"
+        ),
+    );
+    assert_eq!(order.tie_break(), [1]);
+}
+
+// conformance: CP-32
+#[test]
+fn a_version_outranks_the_ehr_and_the_ehr_outranks_its_status() {
+    let (node, _, _) = unscoped(
+        "SELECT v/commit_audit/time_committed/value FROM EHR e CONTAINS VERSION v \
+         ORDER BY v/commit_audit/time_committed/value LIMIT 2",
+    );
+    assert_same_aql(
+        &node,
+        "SELECT v/commit_audit/time_committed/value, v/uid/value FROM EHR e CONTAINS VERSION v \
+         ORDER BY v/commit_audit/time_committed/value, v/uid/value ASC LIMIT 2",
+    );
+    let (node, _, _) = unscoped(
+        "SELECT s/is_queryable FROM EHR e CONTAINS EHR_STATUS s ORDER BY s/is_queryable LIMIT 2",
+    );
+    assert_same_aql(
+        &node,
+        "SELECT s/is_queryable, e/ehr_id/value FROM EHR e CONTAINS EHR_STATUS s \
+         ORDER BY s/is_queryable, e/ehr_id/value ASC LIMIT 2",
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn an_ehr_status_with_no_ehr_class_is_keyed_on_its_uid() {
+    let (node, order, _) =
+        unscoped("SELECT s/is_queryable FROM EHR_STATUS s ORDER BY s/is_queryable LIMIT 2");
+    assert_same_aql(
+        &node,
+        "SELECT s/is_queryable, s/uid/value FROM EHR_STATUS s \
+         ORDER BY s/is_queryable, s/uid/value ASC LIMIT 2",
+    );
+    assert_eq!(order.tie_break(), [1]);
+}
+
+/// The RM recommends a uid only on a tree-root `FOLDER`, and a `FOLDER` class
+/// matches sub-folders too, so a folder's uid is no key. A query with no key
+/// is dispatched as written and never refused: AQL master03-syntax §LIMIT
+/// leaves a unique order to the query's own `ORDER BY`.
+// conformance: CP-32
+#[test]
+fn a_folder_is_never_a_key_and_a_query_with_no_key_is_dispatched_as_written() {
+    let aql = "SELECT f/name/value FROM FOLDER f ORDER BY f/name/value LIMIT 2";
+    let (node, order, _) = unscoped(aql);
+    assert_same_aql(&node, aql);
+    assert_eq!(
+        order,
+        ResultOrder::new(
+            vec![SortKey::new(0, Direction::Ascending)],
+            Vec::new(),
+            Some(2)
+        ),
+        "no key to push: the Tier orders the rows it receives on their cells"
+    );
+    let (node, _, _) =
+        unscoped("SELECT f/name/value FROM EHR e CONTAINS FOLDER f ORDER BY f/name/value LIMIT 2");
+    assert_same_aql(
+        &node,
+        "SELECT f/name/value, e/ehr_id/value FROM EHR e CONTAINS FOLDER f \
+         ORDER BY f/name/value, e/ehr_id/value ASC LIMIT 2",
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn under_distinct_an_ehr_only_query_gets_no_ehr_id_column() {
+    // N13: a hidden ehr_id would make rows equal on the client's columns
+    // distinct at the node; the selected columns break ties instead.
+    let aql = "SELECT DISTINCT e/ehr_status/uid/value, e/time_created/value FROM EHR e \
+               ORDER BY e/time_created/value DESC LIMIT 2";
+    let (node, order, columns) = unscoped(aql);
+    assert_same_aql(
+        &node,
+        "SELECT DISTINCT e/ehr_status/uid/value, e/time_created/value FROM EHR e \
+         ORDER BY e/time_created/value DESC, e/ehr_status/uid/value ASC LIMIT 2",
+    );
+    assert_eq!(
+        order,
+        ResultOrder::new(
+            vec![SortKey::new(1, Direction::Descending)],
+            vec![0],
+            Some(2)
+        )
+    );
+    assert_eq!(columns.len(), 2, "N17, §9.2: the client's two columns");
+}
+
+// conformance: CP-32
+#[test]
+fn a_patient_query_scoped_to_one_ehr_pushes_no_ehr_key() {
+    // Every row of the node query has the one ehr_id the gateway scoped it to.
+    let aql = format!(
+        "SELECT e/time_created/value FROM EHR e WHERE {SUBJECT} = '4711' \
+         ORDER BY e/time_created/value LIMIT 1"
+    );
+    assert_same_aql(
+        &node_aql(&aql),
+        &format!(
+            "SELECT e/time_created/value FROM EHR e WHERE e/ehr_id/value = '{EHR_ID}' \
+             ORDER BY e/time_created/value LIMIT 1"
+        ),
+    );
+    assert_eq!(
+        order(&aql),
+        ResultOrder::new(
+            vec![SortKey::new(0, Direction::Ascending)],
+            Vec::new(),
+            Some(1)
+        )
     );
 }
