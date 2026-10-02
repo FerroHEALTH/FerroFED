@@ -123,9 +123,9 @@ pub enum Refusal {
         /// Where the comparison was written.
         at: Option<Range<usize>>,
     },
-    /// An aggregate the gateway cannot compute correctly across a fan-out
-    /// (N14, N39, §11.6.3). Pin the query to one node (§8), or select the rows
-    /// and aggregate in the application.
+    /// An undirected aggregate whose function the deployment does not declare
+    /// decomposable (N14, N39, §11.6.3). Pin the query to one node (§8), or
+    /// select the rows and aggregate in the application.
     #[error(
         "an aggregate cannot be computed correctly across nodes; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3){}",
         At(.at)
@@ -134,6 +134,27 @@ pub enum Refusal {
         /// Where the aggregate was written.
         at: Option<Range<usize>>,
     },
+    /// An undirected aggregate whose function is declared decomposable, in a
+    /// query that breaks the decomposition (§11.6.3, N39). Pin the query to
+    /// one node (§8), or select the rows and aggregate in the application.
+    #[error(
+        "this aggregate cannot be recombined exactly across nodes: {reason}; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3){}",
+        At(.at)
+    )]
+    Indecomposable {
+        /// What breaks the decomposition.
+        reason: Indecomposable,
+        /// Where the offending part was written.
+        at: Option<Range<usize>>,
+    },
+    /// Best-effort completion was requested for an aggregate recombined
+    /// across nodes: a recombined aggregate is exactly correct only over the
+    /// answer of every node in scope, so a partial one would be a wrong value
+    /// (§11.6.3, §11.4).
+    #[error(
+        "partial completeness cannot be combined with an aggregate recombined across nodes, which is exactly correct only over every node (§11.6.3, §11.4); send the query without partial, direct it to one node, or select the rows"
+    )]
+    PartialAggregate,
     /// Offset-based paging is not supported across a fan-out (§11.6.2, N39).
     #[error("offset-based paging is not supported across a fan-out (§11.6.2, N39)")]
     OffsetUnsupported,
@@ -221,6 +242,8 @@ impl Refusal {
         "identifier-elsewhere",
         "unfoldable-function",
         "undirected-aggregate",
+        "indecomposable-aggregate",
+        "partial-aggregate",
         "offset-unsupported",
         "offset-page",
         "paging-conflict",
@@ -254,6 +277,8 @@ impl Refusal {
             Self::IdentifierElsewhere { .. } => "identifier-elsewhere",
             Self::UnfoldableFunction { .. } => "unfoldable-function",
             Self::UndirectedAggregate { .. } => "undirected-aggregate",
+            Self::Indecomposable { .. } => "indecomposable-aggregate",
+            Self::PartialAggregate => "partial-aggregate",
             Self::OffsetUnsupported => "offset-unsupported",
             Self::OffsetPage { .. } => "offset-page",
             Self::PagingConflict { .. } => "paging-conflict",
@@ -283,9 +308,11 @@ impl Refusal {
             | Self::IdentifierElsewhere { at }
             | Self::UnfoldableFunction { at }
             | Self::UndirectedAggregate { at }
+            | Self::Indecomposable { at, .. }
             | Self::OrderNotSelected { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
+            | Self::PartialAggregate
             | Self::OffsetUnsupported
             | Self::OffsetPage { .. }
             | Self::PagingConflict { .. }
@@ -329,6 +356,37 @@ impl fmt::Display for Unreducible {
             }
             Self::SeveralEhrs => "the FROM clause binds more than one EHR",
             Self::InsideAnExpression => "it sits inside a function call or an aggregate",
+        })
+    }
+}
+
+/// What keeps a declared decomposable aggregate from being recombined exactly.
+///
+/// "The aggregate must not be combined with `DISTINCT`, `GROUP BY` on a
+/// dimension that spans nodes, or de-duplication (§10), any of which breaks
+/// decomposability" (§11.6.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Indecomposable {
+    /// The query selects `DISTINCT`.
+    Distinct,
+    /// `COUNT(DISTINCT …)`: a value counted at two nodes is one value, so the
+    /// distinct count is not the sum of the node counts.
+    CountDistinct,
+    /// A column that is not an aggregate is selected beside the aggregates,
+    /// which would group the rows by it, and AQL 1.1.0 has no `GROUP BY` to
+    /// merge such groups by.
+    PlainColumn,
+}
+
+impl fmt::Display for Indecomposable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Distinct => "the query selects DISTINCT",
+            Self::CountDistinct => {
+                "COUNT(DISTINCT …) is not the sum of the node counts, because one value can be counted at two nodes"
+            }
+            Self::PlainColumn => "a column that is not an aggregate is selected beside it",
         })
     }
 }
@@ -380,7 +438,7 @@ impl fmt::Display for At<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{OffsetPage, Refusal, Unreducible};
+    use super::{Indecomposable, OffsetPage, Refusal, Unreducible};
     use openehr_query::bind::BindError;
 
     /// One refusal of every variant, in declaration order.
@@ -407,6 +465,11 @@ mod tests {
             Refusal::IdentifierElsewhere { at: None },
             Refusal::UnfoldableFunction { at: None },
             Refusal::UndirectedAggregate { at: None },
+            Refusal::Indecomposable {
+                reason: Indecomposable::Distinct,
+                at: None,
+            },
+            Refusal::PartialAggregate,
             Refusal::OffsetUnsupported,
             Refusal::OffsetPage {
                 reason: OffsetPage::NoLimit,
@@ -441,15 +504,17 @@ mod tests {
             Refusal::IdentifierElsewhere { .. } => 11,
             Refusal::UnfoldableFunction { .. } => 12,
             Refusal::UndirectedAggregate { .. } => 13,
-            Refusal::OffsetUnsupported => 14,
-            Refusal::OffsetPage { .. } => 15,
-            Refusal::PagingConflict { .. } => 16,
-            Refusal::NegativePaging { .. } => 17,
-            Refusal::TopBackward => 18,
-            Refusal::TopWithLimit => 19,
-            Refusal::TopWithFetch => 20,
-            Refusal::OrderNotSelected { .. } => 21,
-            Refusal::NodeSetUndefined => 22,
+            Refusal::Indecomposable { .. } => 14,
+            Refusal::PartialAggregate => 15,
+            Refusal::OffsetUnsupported => 16,
+            Refusal::OffsetPage { .. } => 17,
+            Refusal::PagingConflict { .. } => 18,
+            Refusal::NegativePaging { .. } => 19,
+            Refusal::TopBackward => 20,
+            Refusal::TopWithLimit => 21,
+            Refusal::TopWithFetch => 22,
+            Refusal::OrderNotSelected { .. } => 23,
+            Refusal::NodeSetUndefined => 24,
         }
     }
 

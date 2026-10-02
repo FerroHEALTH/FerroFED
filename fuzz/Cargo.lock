@@ -1271,12 +1271,13 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "openehr-base",
  "openehr-its",
  "openehr-query",
  "openehr-rm",
+ "rust_decimal",
  "serde",
  "serde_json",
  "thiserror",

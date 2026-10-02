@@ -9,6 +9,7 @@
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use std::num::NonZeroU32;
 
+use openehr_federation::aggregate::{AggregateFunction, Recombination, Recombine};
 use openehr_federation::aql::refusal::{Refusal, Unreducible};
 use openehr_federation::aql::{Analysis, Context, OffsetStrategy};
 
@@ -58,7 +59,8 @@ fn verdict(case: &str) -> Verdict {
         }
         // §11.6.2 option 1: the corpus runs under the reject strategy.
         "05-offset-rejected.case" => Verdict::Refuses(|r| *r == Refusal::OffsetUnsupported),
-        // N14, §11.6.3: the corpus runs undirected.
+        // N14, §11.6.3: the corpus runs undirected, with no aggregate declared
+        // decomposable.
         "06-undirected-aggregate-rejected.case" => {
             Verdict::Refuses(|r| matches!(r, Refusal::UndirectedAggregate { .. }))
         }
@@ -96,10 +98,14 @@ fn verdict(case: &str) -> Verdict {
     }
 }
 
-/// The deployment the corpus runs in: undirected ask-all, and the reject
-/// `OFFSET` strategy, the one case 05 expects (§11.6.2 option 1).
+/// The deployment the corpus runs in: undirected ask-all, the reject `OFFSET`
+/// strategy, the one case 05 expects (§11.6.2 option 1), and no decomposable
+/// aggregate, the gateway case 06 expects (§11.6.3: "a gateway that does not
+/// support it falls under the rule above").
 fn corpus() -> Context {
-    ask_all().with_offset_strategy(OffsetStrategy::Reject)
+    ask_all()
+        .with_offset_strategy(OffsetStrategy::Reject)
+        .with_decomposable_aggregates([])
 }
 
 /// One case file: its sections by heading.
@@ -217,6 +223,45 @@ fn golden_case_05_is_refused_under_reject_and_paged_under_bounded() {
         query_offset(&case.facade, &bounded),
         5,
         "§11.6.2: the Tier skips k"
+    );
+}
+
+// conformance: CP-10 CP-32
+#[test]
+fn golden_case_06_is_refused_with_nothing_declared_and_recombined_under_the_default_set() {
+    let case = read(&std::path::Path::new(CORPUS).join("06-undirected-aggregate-rejected.case"));
+    assert_eq!(case.expected, "ERROR:FED_AGGREGATE_UNSUPPORTED");
+    let refusal = analysed(&case.facade, &corpus()).expect_err("N14");
+    assert!(
+        matches!(refusal, Refusal::UndirectedAggregate { .. }),
+        "§11.6.3: a gateway that declares none falls under the block: {refusal:?}"
+    );
+    let declared = ask_all().with_decomposable_aggregates(AggregateFunction::ALL);
+    let analysis = analysed(&case.facade, &declared).expect("§11.6.3: COUNT decomposes");
+    assert_eq!(
+        analysis.recombination().map(Recombination::columns),
+        Some(&[Recombine::Count { column: 0 }][..]),
+        "the node counts are summed at the Tier"
+    );
+    assert_eq!(
+        analysis
+            .columns()
+            .first()
+            .map(|column| column.name.as_str()),
+        Some("n"),
+        "N17: the client's column"
+    );
+    let Analysis::Patient(query) = analysis else {
+        panic!("case 06 names a patient");
+    };
+    let ehr_id = HierObjectId::new(case.ehr_id.as_str()).expect("a HIER_OBJECT_ID");
+    assert_same_aql(
+        query.for_node(&ehr_id).aql(),
+        &format!(
+            "SELECT COUNT(c/uid/value) AS n FROM EHR e CONTAINS COMPOSITION c \
+             WHERE e/ehr_id/value = '{}'",
+            case.ehr_id
+        ),
     );
 }
 

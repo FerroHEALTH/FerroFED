@@ -201,6 +201,38 @@ struct Query<'a> {
     session: Option<&'a SessionKey>,
 }
 
+/// Analyses the façade query of `request` under the request's `completion`,
+/// recording a refusal or a strip as a security event (§5.4.3).
+///
+/// An aggregate recombined across nodes is refused under best-effort: it is
+/// exactly correct only over every node in scope (§11.6.3), and the gateway
+/// never serves an all-or-nothing answer to a request that asked for
+/// `partial` (§11.4).
+fn analysed(
+    federation: &Federation,
+    request: &AdhocQueryExecute,
+    completion: Completion,
+    request_id: &str,
+) -> Result<Analysis, Failure> {
+    let parameters = intake::parameters(request.query_parameters.as_ref())?;
+    let paging = Paging {
+        offset: request.offset,
+        fetch: request.fetch,
+    };
+    let analysis = analyse(&request.q, &parameters, paging, federation.context())
+        .and_then(|analysis| {
+            if completion == Completion::BestEffort {
+                analysis.admit_best_effort()?;
+            }
+            Ok(analysis)
+        })
+        .inspect_err(|refusal| security::refused(refusal, request_id))?;
+    if let Analysis::Patient(query) = &analysis {
+        security::stripped(query, request_id);
+    }
+    Ok(analysis)
+}
+
 /// Runs one federated query and returns the status and the `RESULT_SET`.
 ///
 /// Resolution and the fan-out share one overall budget, which runs from the
@@ -224,16 +256,7 @@ async fn federate(
     // body is refused with a fixed message.
     let request: AdhocQueryExecute =
         serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?;
-    let parameters = intake::parameters(request.query_parameters.as_ref())?;
-    let paging = Paging {
-        offset: request.offset,
-        fetch: request.fetch,
-    };
-    let analysis = analyse(&request.q, &parameters, paging, federation.context())
-        .inspect_err(|refusal| security::refused(refusal, request_id))?;
-    if let Analysis::Patient(query) = &analysis {
-        security::stripped(query, request_id);
-    }
+    let analysis = analysed(federation, &request, completion, request_id)?;
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
@@ -267,13 +290,17 @@ async fn federate(
             targets.resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
         );
     }
+    let mut plan = targets
+        .plan
+        .completing(completion)
+        .ordered(analysis.order().clone());
+    if let Some(recombination) = analysis.recombination() {
+        plan = plan.recombining(recombination.clone());
+    }
     let answer = fan_out_within(
         federation.clients(),
         federation.snapshot(),
-        targets
-            .plan
-            .completing(completion)
-            .ordered(analysis.order().clone()),
+        plan,
         budget,
         started,
         (!request_id.is_empty()).then_some(request_id),

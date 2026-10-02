@@ -46,6 +46,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+mod aggregate;
 mod fold;
 mod rewrite;
 mod scan;
@@ -53,6 +54,7 @@ mod scan;
 pub mod refusal;
 pub mod subject;
 
+use std::collections::BTreeSet;
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::ops::Range;
 
@@ -63,6 +65,7 @@ use openehr_query::bind::{Parameters, bind};
 use openehr_query::parser::{ParseError, parse_str};
 use openehr_query::printer::to_aql;
 
+use crate::aggregate::{AggregateFunction, Recombination};
 use crate::order::ResultOrder;
 use refusal::{OffsetPage, Refusal, Unreducible};
 use scan::{Findings, Input};
@@ -157,18 +160,41 @@ pub struct Context {
     default_namespace: Option<String>,
     targeting: Targeting,
     offset: OffsetStrategy,
+    decomposable: BTreeSet<AggregateFunction>,
 }
 
 impl Context {
     /// A context with no default issuing namespace, which refuses every
-    /// `OFFSET k > 0` ([`OffsetStrategy::Reject`]).
+    /// `OFFSET k > 0` ([`OffsetStrategy::Reject`]) and every undirected
+    /// aggregate (no function is decomposable).
     #[must_use]
     pub fn new(targeting: Targeting) -> Self {
         Self {
             default_namespace: None,
             targeting,
             offset: OffsetStrategy::Reject,
+            decomposable: BTreeSet::new(),
         }
+    }
+
+    /// Declares the aggregate functions recombined across a fan-out instead of
+    /// refused (§11.6.3, N39). An empty set refuses every undirected aggregate,
+    /// as [`Context::new`] does.
+    #[must_use]
+    pub fn with_decomposable_aggregates(
+        mut self,
+        functions: impl IntoIterator<Item = AggregateFunction>,
+    ) -> Self {
+        self.decomposable = functions.into_iter().collect();
+        self
+    }
+
+    /// The aggregate functions recombined across a fan-out, the list
+    /// `OPTIONS {base}/` declares as `aggregates.decomposable` (§11.6.3,
+    /// §7a.2), in declaration order.
+    #[must_use]
+    pub fn decomposable_aggregates(&self) -> &BTreeSet<AggregateFunction> {
+        &self.decomposable
     }
 
     /// Declares how `OFFSET k > 0` is answered (§11.6.2, N39).
@@ -228,6 +254,31 @@ impl Analysis {
             Self::Unscoped(query) => &query.order,
         }
     }
+
+    /// How the Tier recombines the one-row node answers of an undirected
+    /// aggregate query into the federation's row (§11.6.3), or `None` for a
+    /// query whose node rows are merged as rows.
+    #[must_use]
+    pub fn recombination(&self) -> Option<&Recombination> {
+        match self {
+            Self::Patient(query) => query.recombination.as_ref(),
+            Self::Unscoped(query) => query.recombination.as_ref(),
+        }
+    }
+
+    /// Admits a best-effort answer to this query (§11.4).
+    ///
+    /// # Errors
+    /// [`Refusal::PartialAggregate`] for an aggregate recombined across
+    /// nodes: §11.6.3 permits the recombination only where it is exactly
+    /// correct, and a combination over the nodes that answered is a wrong
+    /// value for the federation, not a subset of a right one.
+    pub fn admit_best_effort(&self) -> Result<(), Refusal> {
+        match self.recombination() {
+            Some(_) => Err(Refusal::PartialAggregate),
+            None => Ok(()),
+        }
+    }
 }
 
 /// Where each façade column of a row comes from.
@@ -273,6 +324,7 @@ pub struct PatientQuery {
     sources: Vec<ColumnSource>,
     stripped: Vec<Option<Range<usize>>>,
     order: ResultOrder,
+    recombination: Option<Recombination>,
 }
 
 impl PatientQuery {
@@ -316,6 +368,7 @@ pub struct UnscopedQuery {
     columns: Vec<ResultSetColumn>,
     ehr_scoped: bool,
     order: ResultOrder,
+    recombination: Option<Recombination>,
 }
 
 impl UnscopedQuery {
@@ -344,6 +397,11 @@ impl UnscopedQuery {
 /// `parameters` are the request's `query_parameters`, already converted to
 /// AQL literals; `paging` carries its `offset` and `fetch` members.
 ///
+/// An aggregate query directed to one endpoint is dispatched unchanged (N14).
+/// An undirected one is recombined at the Tier when every function it applies
+/// is declared decomposable in `context`, with `AVG` asked of each node as its
+/// `SUM` and `COUNT` (§11.6.3), and is refused otherwise.
+///
 /// # Errors
 /// A [`Refusal`], each an HTTP `400`, when the query is not AQL, a parameter
 /// cannot be bound, the patient cannot be reduced to one `ehr_id` scope per
@@ -361,14 +419,15 @@ pub fn analyse(
     bind(&mut query, parameters).map_err(Refusal::Parameters)?;
     let findings = scan::scan(&query)?;
     let skip = page(&mut query, paging, context.offset)?;
-    if let Some(aggregate) = &findings.aggregate
-        && !context.targeting.single_endpoint()
-    {
-        return Err(Refusal::UndirectedAggregate {
-            at: aggregate.at.clone(),
-        });
-    }
     let columns = render_columns(&query.select);
+    let recombination = match &findings.aggregate {
+        Some(found) if !context.targeting.single_endpoint() => Some(aggregate::decompose(
+            &mut query,
+            &context.decomposable,
+            found.at.clone(),
+        )?),
+        Some(_) | None => None,
+    };
     let ordered = findings.aggregate.is_none();
     let mut analysis = match subject(&findings, context)? {
         Some((subject, consumed)) => {
@@ -376,11 +435,12 @@ pub fn analyse(
         }
         None => unscoped(query, &findings, context, columns, ordered)?,
     };
-    let order = match &mut analysis {
-        Analysis::Patient(query) => &mut query.order,
-        Analysis::Unscoped(query) => &mut query.order,
+    let (order, recombined) = match &mut analysis {
+        Analysis::Patient(query) => (&mut query.order, &mut query.recombination),
+        Analysis::Unscoped(query) => (&mut query.order, &mut query.recombination),
     };
     *order = std::mem::take(order).with_offset(skip);
+    *recombined = recombination;
     Ok(analysis)
 }
 
@@ -626,14 +686,16 @@ fn patient(
         sources,
         stripped,
         order,
+        recombination: None,
     }))
 }
 
 /// The Tier order of a node query, written into it (§11.6.1).
 ///
-/// A query with an aggregate reaches one directed endpoint only (N14), whose
-/// answer is the federated one, so its node query is dispatched as written
-/// and the merge only applies its `LIMIT`.
+/// A query with an aggregate answers one row per node: the federated one at a
+/// single directed endpoint (N14), or the row the Tier recombines (§11.6.3).
+/// Either way its node query keeps the client's order as written, and the
+/// merge only applies its `LIMIT`.
 fn order_for(query: &mut SelectQuery, ordered: bool) -> Result<ResultOrder, Refusal> {
     if ordered {
         return rewrite::push_order(query);
@@ -668,5 +730,6 @@ fn unscoped(
         columns,
         ehr_scoped: findings.ehr_scoped,
         order,
+        recombination: None,
     }))
 }

@@ -11,7 +11,7 @@
 //! Without a registry document the gateway federates nothing, so there is no
 //! federation and the ITS-REST surface stays unserved.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -25,6 +25,7 @@ use ferrofed_identity::resolver::Resolver;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
@@ -167,8 +168,9 @@ impl Federation {
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
         let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)
             .map_err(FederationError::Clients)?;
-        let mut context =
-            Context::new(targeting(selection)).with_offset_strategy(settings.federation.offset);
+        let mut context = Context::new(targeting(selection))
+            .with_offset_strategy(settings.federation.offset)
+            .with_decomposable_aggregates(settings.federation.decomposable.iter().copied());
         if let Some(namespace) = &settings.federation.default_namespace {
             context = context.with_default_namespace(namespace.clone());
         }
@@ -258,7 +260,8 @@ impl Federation {
     }
 
     /// What the deployment adds to the query text: the targeting, the
-    /// default issuing namespace and the `OFFSET` strategy.
+    /// default issuing namespace, the `OFFSET` strategy and the decomposable
+    /// aggregates.
     #[must_use]
     pub fn context(&self) -> &Context {
         &self.context
@@ -285,6 +288,14 @@ impl Federation {
     pub fn offset_strategy(&self) -> OffsetStrategy {
         self.context.offset_strategy()
     }
+
+    /// The aggregate functions recombined across the fan-out, in declaration
+    /// order (§11.6.3).
+    // TODO(#73): declare aggregates.decomposable in the OPTIONS {base}/ body (§7a.2, §11.6.3).
+    #[must_use]
+    pub fn decomposable_aggregates(&self) -> &BTreeSet<AggregateFunction> {
+        self.context.decomposable_aggregates()
+    }
 }
 
 impl std::fmt::Debug for Federation {
@@ -295,6 +306,10 @@ impl std::fmt::Debug for Federation {
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
             .field("offset_strategy", &self.context.offset_strategy())
+            .field(
+                "decomposable_aggregates",
+                &self.context.decomposable_aggregates(),
+            )
             .finish_non_exhaustive()
     }
 }

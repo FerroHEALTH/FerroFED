@@ -3,6 +3,7 @@
 
 //! Integration tests through the library run path the binary shares.
 
+mod aggregate;
 mod ask_all;
 mod completeness;
 mod config;

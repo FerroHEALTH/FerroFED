@@ -187,6 +187,41 @@ fn offset_paging_is_bounded_at_1000_rows_per_node_by_default() -> Result<(), Box
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
+fn every_aggregate_is_decomposable_by_default_and_the_list_can_narrow()
+-> Result<(), Box<dyn StdError>> {
+    let names = |settings: &ferrofed_server::config::settings::Settings| -> Vec<&'static str> {
+        settings
+            .federation
+            .decomposable
+            .iter()
+            .map(|function| function.name())
+            .collect()
+    };
+    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    assert_eq!(
+        names(&settings),
+        ["COUNT", "SUM", "MIN", "MAX", "AVG"],
+        "§11.6.3"
+    );
+    let narrowed =
+        format!("{FULL}\n[federation]\ndecomposable_aggregates = [\"MAX\", \"COUNT\"]\n");
+    let settings = Config::from_sources(Some(&narrowed), &BTreeMap::new())?.resolve()?;
+    assert_eq!(names(&settings), ["COUNT", "MAX"], "in declaration order");
+    let none = format!("{FULL}\n[federation]\ndecomposable_aggregates = []\n");
+    let settings = Config::from_sources(Some(&none), &BTreeMap::new())?.resolve()?;
+    assert!(names(&settings).is_empty(), "an empty list declares none");
+    let unknown = refusal(&format!(
+        "{FULL}\n[federation]\ndecomposable_aggregates = [\"MEDIAN\"]\n"
+    ))?;
+    assert!(matches!(unknown, Error::Parse { .. }), "{unknown:?}");
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
 fn a_zero_offset_window_or_an_unknown_strategy_refuses_to_boot() -> Result<(), Box<dyn StdError>> {
     let zero = refusal(&format!("{FULL}\n[federation]\nmax_offset_window = 0\n"))?;
     assert!(

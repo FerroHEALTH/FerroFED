@@ -48,6 +48,7 @@
 //! assert_eq!(merged.rows(), [vec![json!(1), json!("a1")], vec![json!(2), json!("b1")]]);
 //! ```
 
+mod aggregate;
 mod cell;
 mod compare;
 
@@ -56,6 +57,7 @@ use std::fmt;
 
 use openehr_its::rest::generated::query::ResultSetRow;
 
+use crate::aggregate::Recombination;
 use crate::order::{Direction, ResultOrder};
 use cell::{Cell, canonical, decode};
 use compare::{cmp_cell, rank_classes};
@@ -80,7 +82,7 @@ impl NodeAnswer {
 
 /// The merged answer: the rows in the Tier order, cut at the `LIMIT`, and the
 /// endpoints whose answer could not be used.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Merged {
     rows: Vec<ResultSetRow>,
     refused: Vec<Refused>,
@@ -138,8 +140,20 @@ pub enum Disagreement {
     Order,
     /// The node returned more rows than the `LIMIT` it was sent.
     PastTheLimit,
-    /// A row lacks a column the Tier order reads.
+    /// A row lacks a column the Tier order or a recombined aggregate reads.
     ShortRow,
+    /// An aggregate query answers one row (AQL 1.1.0 §Aggregate functions:
+    /// "a single result based on a group of rows"), and the node answered
+    /// another number of rows.
+    AggregateRows,
+    /// A node value cannot take part in an exactly correct aggregate
+    /// (§11.6.3): a count that is not an integer, a sum that is not a number,
+    /// a minimum or maximum that is neither a number nor a complete date-time,
+    /// or an `AVG` whose sum and count disagree.
+    AggregateValue,
+    /// The nodes' `MIN` or `MAX` values are of kinds no one order compares
+    /// (a number and a date-time, or a zoned and an unzoned date-time).
+    AggregateKinds,
 }
 
 impl fmt::Display for Disagreement {
@@ -148,7 +162,30 @@ impl fmt::Display for Disagreement {
             Self::Order => "result order disagrees with the federation order",
             Self::PastTheLimit => "the node returned more rows than the LIMIT it was sent",
             Self::ShortRow => "a row lacks a column the federation order reads",
+            Self::AggregateRows => "an aggregate query answers one row, and the node did not",
+            Self::AggregateValue => {
+                "the node's aggregate value cannot be recombined into an exactly correct answer"
+            }
+            Self::AggregateKinds => {
+                "the nodes' MIN or MAX values are of kinds that cannot be compared with each other"
+            }
         })
+    }
+}
+
+/// A recombined aggregate the gateway cannot write exactly (§11.6.3: "the
+/// result must be exactly correct").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the recombined aggregate of column {column} cannot be written exactly as a JSON number")]
+pub struct Unrepresentable {
+    column: usize,
+}
+
+impl Unrepresentable {
+    /// The façade column whose value cannot be written.
+    #[must_use]
+    pub fn column(self) -> usize {
+        self.column
     }
 }
 
@@ -220,6 +257,60 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     let mut rows: Vec<ResultSetRow> = accepted.into_iter().map(|(_, _, raw)| raw).collect();
     cut(&mut rows, order);
     Merged { rows, refused }
+}
+
+/// Recombines the one-row answers of an aggregate query into the
+/// federation's row (§11.6.3, N14, N39).
+///
+/// Each node was sent the aggregate query the rewrite wrote, and answers it
+/// with one row. `COUNT` is the sum of the node counts; `SUM` the sum of the
+/// node sums that are not `NULL`, or `NULL`; `MIN` and `MAX` the node value the
+/// Tier comparator puts first or last, as the node wrote it, over numbers or
+/// complete date-times only; and `AVG` the sum of the node sums over the sum of
+/// the node counts, or `NULL` when no node counted a value, nulls ignored
+/// throughout as AQL ignores them (AQL 1.1.0 §Aggregate functions). Integers
+/// add exactly, and reals add in decimal arithmetic. The mean is the decimal
+/// quotient to 28 significant digits, written as the nearest JSON number.
+///
+/// A node whose answer cannot take part in an exactly correct value is
+/// refused, and then no row is returned at all: a recombination over some of
+/// the answers would be a wrong value (§11.6.3). With no answer to recombine,
+/// there is no row either, as for a query in which no node answered (§11.3).
+/// The row is then cut at the order's `LIMIT` and `OFFSET`.
+///
+/// # Errors
+/// Returns [`Unrepresentable`] when the recombined value cannot be written
+/// exactly: a count or an integer sum past `u64`, or a sum of reals the
+/// decimal cannot hold or no JSON number reads back as.
+pub fn combine(
+    mut nodes: Vec<NodeAnswer>,
+    recombination: &Recombination,
+    order: &ResultOrder,
+) -> Result<Merged, Unrepresentable> {
+    nodes.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
+    // NOTE: AQL 1.1.0 §LIMIT, at most `row_count` rows: the node is sent the
+    // client's LIMIT, so LIMIT 0 asks it for none.
+    let expected = usize::from(order.limit() != Some(0));
+    let mut refused = Vec::new();
+    let mut answers = Vec::new();
+    for node in nodes {
+        match aggregate::validate(node.endpoint, node.rows, recombination, expected) {
+            Ok(Some(answer)) => answers.push(answer),
+            Ok(None) => {}
+            Err(refusal) => refused.push(refusal),
+        }
+    }
+    refused.extend(aggregate::incomparable(&answers, recombination));
+    refused.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
+    if !refused.is_empty() || answers.is_empty() {
+        return Ok(Merged {
+            rows: Vec::new(),
+            refused,
+        });
+    }
+    let mut rows = vec![aggregate::recombine(&answers, recombination)?];
+    cut(&mut rows, order);
+    Ok(Merged { rows, refused })
 }
 
 /// Decodes the cells the order reads from every row of one node.

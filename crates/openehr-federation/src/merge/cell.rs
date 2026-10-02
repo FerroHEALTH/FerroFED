@@ -8,8 +8,9 @@
 //! A cell is a boolean, a number, a temporal value, a string, an RM
 //! `DV_ORDERED` object decoded through `openehr-its` canonical JSON, any other
 //! JSON, or null. The decoded cell keeps its canonical JSON text, the
-//! fallback of rule 4 of the Tier comparator. No other module of the merge
-//! sees a `Value`.
+//! fallback of rule 4 of the Tier comparator. The cells of a recombined
+//! aggregate are encoded here too, so no other module of the merge sees a
+//! `Value`.
 #![expect(
     clippy::disallowed_types,
     reason = "the result-cell seam: ITS-REST types a RESULT_SET cell as a JSON value"
@@ -20,6 +21,7 @@ use std::collections::BTreeMap;
 use openehr_base::v1_3::foundation_types::time::iso8601_date_time::Iso8601DateTime;
 use openehr_its::json::from_canonical_value;
 use openehr_rm::v1_2::data_types::quantity::dv_ordered::DvOrdered;
+use rust_decimal::Decimal;
 use serde_json::{Number, Value};
 
 /// One decoded cell, in the class order of the Tier comparator: boolean,
@@ -202,6 +204,46 @@ fn data(value: &Value) -> Option<Data> {
         class: 0,
         measured,
     })
+}
+
+/// A JSON `null` cell, the recombined aggregate over no value (AQL 1.1.0
+/// §Aggregate functions).
+pub(super) fn null() -> Value {
+    Value::Null
+}
+
+/// An integer cell, or `None` past the integers a JSON number holds exactly
+/// here (`i64` and `u64`).
+pub(super) fn integer(value: i128) -> Option<Value> {
+    match i64::try_from(value) {
+        Ok(signed) => Some(Value::from(signed)),
+        Err(_) => u64::try_from(value).ok().map(Value::from),
+    }
+}
+
+/// A real cell holding `value` exactly, or `None` when no binary64, the
+/// number the writer keeps, reads back as `value`.
+pub(super) fn exact_real(value: Decimal) -> Option<Value> {
+    let float = nearest(value)?;
+    let back = Decimal::from_str_exact(&float.to_string()).ok()?;
+    (back == value)
+        .then(|| Number::from_f64(float).map(Value::Number))
+        .flatten()
+}
+
+/// The real cell nearest `value`.
+pub(super) fn nearest_real(value: Decimal) -> Option<Value> {
+    Number::from_f64(nearest(value)?).map(Value::Number)
+}
+
+/// The binary64 nearest `value`, read from its decimal text, which the
+/// standard library rounds correctly.
+fn nearest(value: Decimal) -> Option<f64> {
+    value
+        .to_string()
+        .parse::<f64>()
+        .ok()
+        .filter(|float| float.is_finite())
 }
 
 /// The canonical JSON text of `value`: object members in key order at every

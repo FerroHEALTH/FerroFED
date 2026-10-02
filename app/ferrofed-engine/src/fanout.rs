@@ -30,10 +30,13 @@
 //!
 //! The rows of the `active` nodes are merged under the plan's Tier order, cut
 //! at its `LIMIT` (§11.6.1, N39) and, for a page at `OFFSET k`, sliced from
-//! row `k` (§11.6.2) by `openehr_federation::merge`. A node
-//! that returned `n` rows out of the federation order is reported `node-error`,
-//! so under all-or-nothing the query fails `424` (§11.4; no specification
-//! governs the order check: our own design).
+//! row `k` (§11.6.2) by `openehr_federation::merge`. A node that returned `n`
+//! rows out of the federation order is reported `node-error`, so under
+//! all-or-nothing the query fails `424` (§11.4; no specification governs the
+//! order check: our own design). An aggregate query's one-row answers are
+//! recombined into one row instead (§11.6.3); a node whose answer cannot take
+//! part in an exact value is `node-error` the same way, and such a plan is
+//! refused under best-effort, since it is exact only over every node.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -42,9 +45,12 @@ use std::time::{Duration, Instant};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
+use openehr_federation::aggregate::Recombination;
 use openehr_federation::envelope;
 use openehr_federation::error::WireError;
-use openehr_federation::merge::{Disagreement, NodeAnswer, merge};
+use openehr_federation::merge::{
+    Disagreement, Merged, NodeAnswer, Unrepresentable, combine, merge,
+};
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
 use openehr_federation::object::Uri;
 use openehr_federation::order::ResultOrder;
@@ -167,6 +173,7 @@ pub struct Plan {
     withheld: Arc<Withheld>,
     completion: Completion,
     order: ResultOrder,
+    recombination: Option<Recombination>,
 }
 
 impl Plan {
@@ -198,6 +205,18 @@ impl Plan {
     #[must_use]
     pub fn ordered(mut self, order: ResultOrder) -> Self {
         self.order = order;
+        self
+    }
+
+    /// This plan recombining the one-row node answers of an aggregate query
+    /// into the federation's row under `recombination`, instead of merging
+    /// them as rows (§11.6.3).
+    ///
+    /// A recombined aggregate is exactly correct only over every in-scope
+    /// node, so [`fan_out`] refuses the plan under [`Completion::BestEffort`].
+    #[must_use]
+    pub fn recombining(mut self, recombination: Recombination) -> Self {
+        self.recombination = Some(recombination);
         self
     }
 
@@ -454,6 +473,14 @@ pub enum FanOutError {
     /// The envelope could not be built from the endpoint records.
     #[error("the meta.federation envelope could not be built")]
     Envelope(#[source] WireError),
+    /// The plan recombines an aggregate under best-effort completion, which
+    /// would answer a value over the nodes that answered as the federation's
+    /// (§11.6.3, §11.4). Nothing was dispatched.
+    #[error("an aggregate recombined across nodes cannot be answered best-effort")]
+    PartialAggregate,
+    /// The recombined aggregate cannot be written exactly (§11.6.3).
+    #[error("the recombined aggregate cannot be written exactly")]
+    Unrepresentable(#[source] Unrepresentable),
 }
 
 /// Sends every query of `plan` to its node at once and decides the answer
@@ -472,7 +499,10 @@ pub enum FanOutError {
 /// could not leave the gateway, [`FanOutError::Task`] when a dispatch task
 /// panicked, [`FanOutError::Clock`] when the budget overflows the clock, and
 /// [`FanOutError::Record`] or [`FanOutError::Envelope`] when the envelope
-/// cannot be written.
+/// cannot be written, [`FanOutError::PartialAggregate`] for a plan that
+/// recombines an aggregate under best-effort completion, and
+/// [`FanOutError::Unrepresentable`] when the recombined aggregate of an
+/// answered query cannot be written exactly.
 pub async fn fan_out<T>(
     clients: &NodeClients<T>,
     snapshot: &RegistrySnapshot,
@@ -524,7 +554,11 @@ where
         withheld,
         completion,
         order: result_order,
+        recombination,
     } = plan;
+    if recombination.is_some() && completion == Completion::BestEffort {
+        return Err(FanOutError::PartialAggregate);
+    }
     let order: Vec<EndpointId> = dispatch.keys().cloned().collect();
     let mut tasks = JoinSet::new();
     for (index, (endpoint, query)) in dispatch.into_iter().enumerate() {
@@ -573,7 +607,8 @@ where
         };
         records.insert(endpoint, record);
     }
-    answer(snapshot, records, &result_order, budget, completion)
+    let shaping = (&result_order, recombination.as_ref());
+    answer(snapshot, records, shaping, budget, completion)
 }
 
 /// The `time-out` of a node still outstanding when the overall budget ran out
@@ -589,12 +624,13 @@ fn abandoned(latency_ms: u64, overall: Duration) -> Outcome {
 }
 
 /// The envelope over `records` in endpoint id order, the decision over it
-/// under `completion`, and the merged rows of the `active` endpoints when the
-/// query did not fail.
+/// under `completion`, and the rows of the `active` endpoints, merged under
+/// the order or recombined into one aggregate row, when the query did not
+/// fail.
 fn answer(
     snapshot: &RegistrySnapshot,
     records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)>,
-    order: &ResultOrder,
+    (order, recombination): (&ResultOrder, Option<&Recombination>),
     budget: Budget,
     completion: Completion,
 ) -> Result<FederatedAnswer, FanOutError> {
@@ -609,7 +645,14 @@ fn answer(
         }
         statuses.push((endpoint, outcome, row_count));
     }
-    let (mut rows, refused) = merge(answers, order).into_parts();
+    let (merged, unrepresentable) = match recombination {
+        Some(recombination) => match combine(answers, recombination, order) {
+            Ok(merged) => (merged, None),
+            Err(error) => (Merged::default(), Some(error)),
+        },
+        None => (merge(answers, order), None),
+    };
+    let (mut rows, refused) = merged.into_parts();
     let mut endpoints = Vec::with_capacity(statuses.len());
     for (endpoint, outcome, row_count) in statuses {
         let refusal = refused
@@ -632,6 +675,8 @@ fn answer(
         .with_timeout(budget.record());
     if verdict.failed() {
         rows.clear();
+    } else if let Some(error) = unrepresentable {
+        return Err(FanOutError::Unrepresentable(error));
     }
     Ok(FederatedAnswer {
         verdict,

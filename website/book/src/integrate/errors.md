@@ -117,7 +117,9 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | `subject-ordering` | 400 | A subject path appears in `ORDER BY`, which would carry it to a node (§5.4.2). |
 | `identifier-elsewhere` | 400 | The patient identifier appears in another position of the query, where it would reach a node (§5.4.1, N33). |
 | `unfoldable-function` | 400 | A string function over a literal is compared with an identifier path and cannot be folded at the gateway (§5.4.1). |
-| `undirected-aggregate` | 400 | An aggregate cannot be computed correctly across nodes; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). |
+| `undirected-aggregate` | 400 | An aggregate cannot be computed correctly across nodes; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). The function is not one the gateway declares decomposable. |
+| `indecomposable-aggregate` | 400 | A declared decomposable aggregate cannot be recombined exactly in this query: it selects `DISTINCT`, uses `COUNT(DISTINCT …)`, or selects a column that is not an aggregate beside it; direct the query to one node, or select the rows and aggregate them (N14, §11.6.3). |
+| `partial-aggregate` | 400 | The request asks for `partial`, and the query is an aggregate recombined across nodes, which is exactly correct only over every node (§11.6.3, §11.4). |
 | `offset-unsupported` | 400 | Offset-based paging is not supported across a fan-out (§11.6.2, N39). |
 | `offset-page` | 400 | The gateway computes an `OFFSET` page from `k + n` rows per node, and this page cannot be computed that way: `k + n` is past the configured bound, or the query has no `LIMIT` or no `ORDER BY` (§11.6.2, N39). |
 | `paging-conflict` | 400 | The ITS-REST `offset` or `fetch` member and the query's `OFFSET` or `LIMIT` disagree. |

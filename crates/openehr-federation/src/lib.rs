@@ -26,7 +26,9 @@
 //! specification's gateway logic: `aql`, the §7 rewrite of a client query into
 //! one `ehr_id`-scoped query per node, and `merge`, the §9 to §11 merge of the
 //! node answers. [`order::ResultOrder`] is the plain description of the Tier
-//! order the rewrite produces and the merge reads.
+//! order the rewrite produces and the merge reads, and
+//! [`aggregate::Recombination`] the plain description of how the answers of an
+//! aggregate query recombine across nodes.
 //!
 //! # Examples
 //!
@@ -46,6 +48,7 @@
 #[macro_use]
 pub mod object;
 
+pub mod aggregate;
 pub mod envelope;
 pub mod error;
 pub mod headers;

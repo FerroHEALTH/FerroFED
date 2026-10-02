@@ -11,6 +11,7 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+mod aggregate;
 mod all_or_nothing;
 mod best_effort;
 mod budget;

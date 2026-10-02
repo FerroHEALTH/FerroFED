@@ -6,8 +6,10 @@
 //!
 //! The input is the AQL text up to the first NUL byte; the bytes after it
 //! choose the `OFFSET` strategy (`reject`, or `bounded` with its window), the
-//! parameter values, the paging members and the targeting. With no bytes
-//! after it, the strategy is the server default: `bounded`, 1000 rows. A
+//! parameter values, the paging members, the targeting and the decomposable
+//! aggregates. With no bytes after it, the deployment is the server default:
+//! `bounded` at 1000 rows, and every aggregate recombined, `AVG` as its `SUM`
+//! and `COUNT`. A
 //! refusal is the rewrite doing its job and is never a finding. A panic is a
 //! finding, and so is a node query that still carries the patient identifier:
 //!
@@ -25,6 +27,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use libfuzzer_sys::arbitrary::Unstructured;
 use libfuzzer_sys::fuzz_target;
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
+use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::{Analysis, Context, OffsetStrategy, Paging, Targeting, analyse};
 use openehr_query::ast::{ClassExprOperand, ContainsExpr, LikeOperand, Primitive, WhereExpr};
@@ -61,7 +64,9 @@ fuzz_target!(|data: &[u8]| {
         offset: choices.arbitrary().unwrap_or(None),
         fetch: choices.arbitrary().unwrap_or(None),
     };
-    let context = context(&mut choices).with_offset_strategy(strategy);
+    let context = context(&mut choices)
+        .with_offset_strategy(strategy)
+        .with_decomposable_aggregates(decomposable(&mut choices));
     let Ok(Analysis::Patient(query)) = analyse(aql, &parameters, paging, &context) else {
         return;
     };
@@ -183,6 +188,20 @@ fn offset_strategy(choices: &mut Unstructured<'_>) -> OffsetStrategy {
     let window = choices.int_in_range(0..=2 * WINDOW.get()).unwrap_or(0);
     OffsetStrategy::Bounded {
         max_window: NonZeroU32::new(window).unwrap_or(WINDOW),
+    }
+}
+
+/// The aggregates recombined across nodes (§11.6.3), chosen by the input:
+/// every one, the server default, unless the next byte is odd, which declares
+/// none.
+fn decomposable(choices: &mut Unstructured<'_>) -> Vec<AggregateFunction> {
+    // NOTE: no specification governs this: our own design; an exhausted input
+    // reads `false`, so a bare seed runs the server default.
+    let none: bool = choices.arbitrary().unwrap_or(false);
+    if none {
+        Vec::new()
+    } else {
+        AggregateFunction::ALL.to_vec()
     }
 }
 

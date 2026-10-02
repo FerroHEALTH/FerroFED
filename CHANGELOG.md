@@ -22,6 +22,23 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- Decomposable aggregates (#54; §11.6.3, N14, N39, CP-10, CP-32): an
+  undirected `COUNT`, `SUM`, `MIN`, `MAX` or `AVG` is sent to every node and
+  answered with one recombined row in the client's columns, never one row
+  per node. Counts and sums add exactly, reals in decimal arithmetic; `MIN`
+  and `MAX` are re-applied over numbers and complete date-times; `AVG` is
+  asked of each node as its `SUM` and `COUNT`. A node value the
+  recombination cannot use is `node-error`, so the query fails `424` with no
+  value. `DISTINCT`, `COUNT(DISTINCT …)` and a plain column beside an
+  aggregate are refused `400` (`indecomposable-aggregate`), and a `partial`
+  request for a recombined aggregate is refused `400` (`partial-aggregate`).
+  The new `[federation] decomposable_aggregates` list (all five by default,
+  `[]` for none) declares the functions, and an undeclared one is still
+  `undirected-aggregate`. A directed single-node aggregate is sent unchanged.
+  `openehr-federation` 0.0.13 adds the `aggregate` module,
+  `aql::Context::with_decomposable_aggregates` and `merge::combine`, and
+  takes `rust_decimal` 1.43.0, already in the tree through `openehr-rm`.
+
 - The full per-endpoint report (#49; §9.5, §11.1, N16, N40, CP-11, CP-31):
   every registry member appears in `meta.federation.endpoints[]`, an endpoint
   a directed request did not name as `excluded` with the reason, which stays
