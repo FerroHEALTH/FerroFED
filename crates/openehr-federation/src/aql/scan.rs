@@ -18,6 +18,7 @@ use openehr_query::visit::{
 };
 
 use super::fold;
+use super::function;
 use super::refusal::{Refusal, Unreducible};
 use super::subject::{SubjectPath, ehr_id_path, identifier_bearing, patient_path, subject_path};
 
@@ -56,6 +57,9 @@ pub(super) struct Findings {
     pub(super) ehr_scoped: bool,
     /// The first aggregate, if the query has one.
     pub(super) aggregate: Option<Hit>,
+    /// The first call of a function AQL 1.1.0 does not define, if the query
+    /// has one.
+    pub(super) undefined: Option<Hit>,
 }
 
 /// A place in the query: the byte range it was written at, when known.
@@ -284,6 +288,10 @@ impl<'ast> Visit<'ast> for Scan {
     }
 
     fn visit_function_call(&mut self, node: &'ast FunctionCall) {
+        if self.findings.undefined.is_none() && !function::single_row(node) {
+            let at = first_path(node).or_else(|| self.at.clone());
+            self.findings.undefined = Some(Hit { at });
+        }
         let outer = self.context;
         self.context = Context::Expression;
         walk_function_call(self, node);
@@ -319,6 +327,19 @@ impl<'ast> Visit<'ast> for Scan {
         }
         walk_identified_path(self, node);
     }
+}
+
+/// Where the first path among a call's arguments was written, nested calls
+/// included.
+fn first_path(call: &FunctionCall) -> Option<Range<usize>> {
+    let FunctionCall::Named { args, .. } = call else {
+        return None;
+    };
+    args.iter().find_map(|arg| match arg {
+        Terminal::Path(path) => path.span.bytes(),
+        Terminal::Function(inner) => first_path(inner),
+        Terminal::Primitive(_) | Terminal::Parameter(_) => None,
+    })
 }
 
 /// How the identifier would reach a node.

@@ -176,6 +176,17 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- A query that calls a function AQL 1.1.0 does not define, such as a
+  product-specific `MEDIAN(x)`, in `SELECT` or `WHERE` is refused `400`
+  (`undefined-function`) when it would reach more than one node, where it was
+  sent to every node and answered one row per node (#187; §11.6.3, N14, N39,
+  CP-10, CP-32). The gateway cannot tell whether such a function aggregates,
+  and per-node aggregate rows are the answer §11.6.3 forbids. Directed to one
+  endpoint, the query is sent unchanged. The single-row functions AQL defines
+  (AQL §Functions: the string, numeric, and date and time functions, and
+  `TERMINOLOGY`) are still sent to every node as written, and the five
+  aggregates keep the decomposition rules. `openehr-federation` 0.0.14 adds
+  `aql::refusal::Refusal::UndefinedFunction`.
 - A query that uses `TOP` together with a `LIMIT` clause is refused `400`
   (`top-with-limit`), whether or not the two counts agree, because AQL
   forbids the pair (#162; AQL §TOP, §LIMIT). A `TOP` query sent with the
