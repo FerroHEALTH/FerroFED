@@ -48,7 +48,7 @@ CP-16	Gateway	N24	7	planned	#82	-
 CP-17	Gateway	N25	7	planned	#80,#81	-
 CP-18	Node	N26	7	node-profile	#83,#93	a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design
 CP-19	Node	N27,N27a	7	node-profile	#83,#93	a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design
-CP-20	Operator	N19	6	operator	#74	verified at admission or in the registry, not on a request (section 16.2)
+CP-20	Operator	N19	6	operator	#74	verified at admission or in the registry, not on a request (section 16.2); the gateway assists: its registry load refuses an endpoint whose connectionType is hl7-fhir-rest or no defined code
 CP-21	Gateway	N28	9	planned	#69	-
 CP-22	Gateway	N29	9	planned	#69	-
 CP-23	Gateway	N30	9	planned	#73	-

@@ -74,7 +74,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `openehr-base`, `openehr-rm`, `openehr-sdt` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison, and the SMART on openEHR scope grammar |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
-| `fhir-types` | 0.1.107 (`r4` with `terminology`, `resources` from the PDQm client #119; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
+| `fhir-types` | 0.1.107 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
 | `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for inbound validation and outbound assertions |
 | `jsonschema` | 0.58.3 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
@@ -509,17 +509,23 @@ identifier and never demographics (§5.4.3), so the gateway does not use it.
 
 **The openEHR connection type.** mCSD 4.0.0 defines endpoint types for the IHE
 transactions and none for openEHR. FerroFED defines `openehr-rest-query` in a
-FerroFED-owned CodeSystem, carried through the `ihe-endpointspecifictype`
-extension with `connectionType` left conformant. That meets N19 and CP-20 and
-is FerroFED's own; the missing registered code is a draft on #17.
+FerroFED-owned CodeSystem, `https://ferrofed.eu/fhir/CodeSystem/connection-type`,
+carried in `connectionType` itself: the mCSD `Endpoint` profile binds it to the
+HL7 endpoint connection types extensibly, and its `ihe-endpointspecifictype`
+extension belongs to the document-sharing profile, which an openEHR endpoint
+is not (#74). That meets N19 and CP-20 and is FerroFED's own; the missing
+registered code is a draft on #17.
 
 **The FHIR model** (decision A16) comes from `fhir-types` (`r4`), compiled
 only in `crates/ihe-iti` (section 11), so the core never compiles it. Its
 `terminology` root set carries every type ITI-83 reads (`Parameters`,
 `OperationOutcome`, `Identifier`, `Reference`, `Bundle`); `resources` joins
 with the PDQm client (#119), whose ITI-78 search answers with `Patient`
-resources, and the mCSD directory (#86) reads `Organization` and `Endpoint`
-from the same set. A hand-written struct for a FHIR resource is refused by the codegen rule.
+resources, and the mCSD directory reader (#74, then the ITI-90 client of #86)
+reads `Organization` and `Endpoint` from the same set. `ferrofed-identity`
+maps that directory content onto the registry document through `ihe-iti`'s
+accessors, so it names no FHIR type itself. A hand-written struct for a FHIR
+resource is refused by the codegen rule.
 
 **The patient identifier inside the gateway.** It is a `PatientRef`: the
 issuing namespace and a `SecretString` value, with redacted `Debug` and
