@@ -18,16 +18,18 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.2
+## Status: building v0.0.4
 
-The Cargo workspace exists (#28) with the crate map of `docs/architecture.md`
-§11 (#106). The server shape, the wire types, the registry with the
-development cross-reference, the container and the test harness have landed;
-the rest of each crate holds its place until its issue.
+v0.0.3 is released. The Cargo workspace exists (#28) with the crate map of
+`docs/architecture.md` §11 (#106). The server shape, the wire types, the
+registry with the development cross-reference, the container, the test
+harness, the AQL façade with the hygiene gate, the completeness modes, the
+request budget and the cross-node `ORDER BY` with `LIMIT` have landed; the
+rest of each crate holds its place until its issue.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
-owner on 2026-10-01: how the AQL rewrite and the identifier-hygiene gate sit on
+owner (2026-10-01, and A43 and A44 on 2026-10-02): how the AQL rewrite and the identifier-hygiene gate sit on
 the published `openehr-query`, the identity seams and bindings, the registry
 and its storage, the merge across nodes, the wire types, the crate map, and
 the conformance instrument. Read it before proposing anything structural.
@@ -138,8 +140,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   (`facade::intake`, `facade::cells`); every other path under `/v1/` answers
   `501`.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
-  reader, and the harness of `docs/architecture.md` §13 (#39): the two node
-  products pinned by digest behind the `FERROFED_E2E` gate (`containers`), the
+  reader, and the harness of `docs/architecture.md` §13 (#39): two FerroEHR
+  nodes pinned by digest behind the `FERROFED_E2E` gate (`containers`, #155), the
   capturing and fault proxy in front of each node (`proxy`), and the synthetic
   seed builder that writes over ITS-REST alone inside the `urn:oid:2.999`
   example arc (`seed`) (`.claude/memory/e2e-gate.md`).
