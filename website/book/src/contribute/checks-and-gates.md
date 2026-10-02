@@ -45,6 +45,7 @@ the crate-version guard and dependency review run on pull requests only.
 ## Running them locally
 
 ```sh
+bash scripts/checks/versions.sh --self-test
 bash scripts/checks/versions.sh
 bash scripts/checks/comment-style.sh --all
 bash scripts/checks/file-length.sh

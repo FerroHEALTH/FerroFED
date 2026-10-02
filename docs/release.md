@@ -119,7 +119,11 @@ slow one.
 3. **The changelog names the release.** `[Unreleased]` becomes the version and
    the date, with a fresh empty `[Unreleased]` above it and a new link
    reference. What sits under the version heading is what the release notes
-   say, so read it as the release notes before you tag.
+   say, so read it as the release notes before you tag. The landing page's
+   release note and status panel (`website/landing/index.html`) name the same
+   version in the same pull request: `scripts/checks/versions.sh` fails while
+   they name an older one. The page is deployed from `main`, so the bump pull
+   request is where it changes; the release lane never writes to `main`.
 4. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
    style, file length, versions) and the `contribution-licence-guard` are

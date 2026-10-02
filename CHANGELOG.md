@@ -96,6 +96,13 @@ federated query and identity resolution shipped in 0.0.3.
   The codes are API and are only ever added. The book's "Errors and status
   codes" page lists them all, and a test holds the page to the gateway's
   table.
+- The `versions` guard holds two hand-typed version facts to their sources
+  (#181). The landing page's release note and status panel must name the
+  newest `## [x.y.z]` release of `CHANGELOG.md`, so a release cut that forgets
+  the page fails. Each specification row of `docs/VERSIONS.md` must name a
+  crate constant (`FEDERATION_SPEC`, `ITS_REST`, `AQL`) that carries the
+  version the row pins. `versions.sh --self-test` proves both checks, and CI
+  runs it before the full pass.
 
 ### Changed
 
