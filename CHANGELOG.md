@@ -137,6 +137,15 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Changed
 
+- The conformance record's loose ends (#196). The `comment-style` citation
+  checks read the conformance tables under `conformance/`: their `#` comment
+  lines and their `reason` column, which the book renders. The tables now
+  cite §16.2, §16.3, §16.4 and §17 where they cited an internal file or a
+  decision-register entry, or say that no specification governs the choice.
+  The CP-10 and CP-32 rows name #187. The book page links the specification
+  site at the version `docs/VERSIONS.md` pins, with no second copy of it in
+  `scripts/conformance/matrix.sh`. `openehr-federation` 0.0.16 marks its
+  local list of AQL function names for removal (#195).
 - The `comment-style` citation checks cover the rest of the tree (#178): the
   full-line comments of the workflow and composite-action YAML under
   `.github/`, the `echo` and `printf` text of a workflow `run:` block,

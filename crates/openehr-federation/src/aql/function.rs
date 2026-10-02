@@ -14,6 +14,7 @@
 
 use openehr_query::ast::FunctionCall;
 
+// TODO(#195): replace this list with openehr-query's classification of function calls (FerroHEALTH/FerroEHR#3529)
 // NOTE: AQL master03-syntax §String functions, §Numeric functions and §Date and time functions
 // list exactly these single-row functions; AqlLexer.g4 groups them as the three `*_FUNCTION_ID`s.
 const SINGLE_ROW: [&str; 16] = [

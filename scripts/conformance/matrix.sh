@@ -19,7 +19,8 @@
 # cases recorded in conformance/aql-golden/pass-list.txt, which the golden test
 # rewrites when FERROFED_CONFORMANCE_UPDATE is 1. Each label names the
 # specification version docs/VERSIONS.md pins. The README block between the
-# conformance:begin and conformance:end markers renders those files.
+# conformance:begin and conformance:end markers renders those files. The book
+# page links the specification site at that same pin, so a re-pin moves both.
 #
 # The derived columns come from the vendored specification, never from a hand:
 #
@@ -48,7 +49,7 @@ readonly MATRIX=conformance/matrix.tsv
 readonly TRACKS=conformance/tracks.tsv
 readonly REQUIREMENTS=conformance/requirements.tsv
 readonly PAGE=website/book/src/evaluate/conformance.md
-readonly SPEC_SITE=https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9
+readonly SPEC_SITE=https://syntaric.github.io/openehr-federation-spec/federation-aql
 readonly BADGES=conformance/badges
 readonly PASS_LIST=conformance/aql-golden/pass-list.txt
 readonly README=README.md
@@ -179,7 +180,9 @@ refresh() {
 
 # Markdown for one table cell list: issue references become tracker links.
 render_page() {
-  awk -F'\t' -v site="$SPEC_SITE" '
+  local site
+  site="$(spec_site)"
+  awk -F'\t' -v site="$site" '
     function issues(s,   out, n, parts, i, num) {
       if (s == "-") return "-"
       n = split(s, parts, ",")
@@ -281,6 +284,16 @@ spec_version() {
   ' docs/VERSIONS.md)"
   [ -n "$version" ] || die "docs/VERSIONS.md has no Federation Tier with AQL pin row"
   printf '%s\n' "$version"
+}
+
+# The specification site at the pinned version. The site keeps one version
+# per minor release (the `version` key of the vendored antora.yml), so the
+# path carries the major and minor of the pin.
+spec_site() {
+  local version
+  version="$(spec_version)"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "docs/VERSIONS.md pins the Federation Tier as \"$version\", not MAJOR.MINOR.PATCH"
+  printf '%s/%s\n' "$SPEC_SITE" "${version%.*}"
 }
 
 # The badge colour of k out of n, by the share in quarters.

@@ -106,10 +106,11 @@ A comment describes the code as it IS.
   `.github/` and the TOML under `docker/`, in the trailing `#` comment after a
   YAML or TOML value, in a YAML `description:` scalar, in the `echo` and
   `printf` text of a workflow `run:` block, and in the `reason` strings of
-  those TOML files; `--self-test` proves each refused
+  those TOML files, and in the `#` lines and the `reason` column of the
+  `conformance/*.tsv` tables; `--self-test` proves each refused
   form and its near misses. Runs per-edit on every one of those file kinds
-  (the `rust_fmt_clippy.sh` PostToolUse hook) and in the CI `comment-style`
-  job, which runs `--self-test` and `--all`.
+  but the tables (the `rust_fmt_clippy.sh` PostToolUse hook) and in the CI
+  `comment-style` job, which runs `--self-test` and `--all`.
 - `clippy::too_long_first_doc_paragraph` (CI `-D warnings`): the RFC 1574
   summary line, configured in `[workspace.lints.clippy]` of the root
   `Cargo.toml`.

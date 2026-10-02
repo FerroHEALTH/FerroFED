@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# The test tracks of the Federation Tier with AQL specification, section 16.3
-# (docs/architecture.md section 12, #41). Tab-separated; lines starting with #
-# are comments.
+# The test tracks of the Federation Tier with AQL specification, section 16.3,
+# in specification order (#41). Tab-separated; lines starting with # are
+# comments.
 #
 # Derived columns: track, title, requirements, cps (the points whose tracks
 # cell names the track). Hand-kept columns: status (covered, planned,

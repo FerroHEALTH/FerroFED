@@ -59,6 +59,11 @@
 # the citation form fails there, the document followed by `section` or `§`,
 # or opening a parenthetical.
 #
+# Checks 9 and 10 also read the conformance tables, conformance/*.tsv: their
+# full-line `#` comments and, on every data row, the cell of the column the
+# header row names `reason`. The book renders those cells, so any mention of
+# the architecture document fails there, as in a Rust comment.
+#
 # Citation rule: no specification governs this: our own design. A comment
 # cites the specification it rests on (section, N, CP) or official external
 # documentation, or says that no specification governs the decision.
@@ -418,6 +423,21 @@ check_hash() {
   ' "$1"
 }
 
+# Prints the check 9 and 10 violations of one conformance table, one
+# `:LINE: message` per line: its `#` comment lines, then the `reason` cell of
+# every row after the header row that names the columns.
+check_tsv() {
+  awk -F'\t' "$CITE_AWK"'
+    /^#/ { cite_check($0, "comment", 1, 0); next }
+    !seen_header {
+      seen_header = 1
+      for (i = 1; i <= NF; i++) if ($i == "reason") reason_col = i
+      next
+    }
+    reason_col && reason_col <= NF { cite_check($reason_col, "reason cell", 1, 0) }
+  ' "$1"
+}
+
 # Runs the right pass over one file and prints its violations prefixed with
 # the path. Returns 1 when the file has any.
 check_file() {
@@ -430,6 +450,7 @@ check_file() {
     head -n 1 "$f" 2>/dev/null | grep -q '^// @generated' && return 0
     out="$(check_rs "$f")"
     ;;
+  *.tsv) out="$(check_tsv "$f")" ;;
   *) out="$(check_hash "$f")" ;;
   esac
   [[ -z "$out" ]] && return 0
@@ -439,13 +460,14 @@ check_file() {
 
 # The HASH files of the tree, outside the vendored corpora: shell scripts
 # under scripts/, every Cargo.toml, clippy.toml, the YAML under .github
-# (workflows, composite actions and the repository configuration) and the TOML
-# under docker/. A `case` pattern's `*` also matches `/`.
+# (workflows, composite actions and the repository configuration), the TOML
+# under docker/ and the conformance tables. A `case` pattern's `*` also
+# matches `/`.
 is_hash_file() {
   case "$1" in
   docs/specs/*) return 1 ;;
   scripts/*.sh | Cargo.toml | */Cargo.toml | clippy.toml) return 0 ;;
-  .github/*.yml | .github/*.yaml | docker/*.toml) return 0 ;;
+  .github/*.yml | .github/*.yaml | docker/*.toml | conformance/*.tsv) return 0 ;;
   *) return 1 ;;
   esac
 }
@@ -453,7 +475,7 @@ is_hash_file() {
 # The pathspecs that list the files the guard reads. A pathspec `*` also
 # matches `/`, and is_hash_file narrows the set.
 pathspecs=('*.rs' 'scripts/*.sh' 'Cargo.toml' '*/Cargo.toml' 'clippy.toml'
-  '.github/*.yml' '.github/*.yaml' 'docker/*.toml')
+  '.github/*.yml' '.github/*.yaml' 'docker/*.toml' 'conformance/*.tsv')
 
 # Proves checks 9 and 10: every refused form fails with its message, and
 # every near miss passes. Fixtures are written to a temporary tree.
@@ -592,11 +614,24 @@ self_test() {
   expect Cargo.toml accepted "" 'url = "https://x.org/#(docs/ci-cd.md)"' "name = 'it # (docs/release.md)'" \
     'level = "deny" # the Clippy book, Configuration'
 
+  # A conformance table: its comment lines and its reason column only.
+  local cols=$'cp\tactor\tstatus\treason'
+  expect a.tsv refused "$internal" '# One row per point (docs/architecture.md section 12).' "$cols"
+  expect b.tsv refused "$marker" '# Only the owner defers a point (decision A37).' "$cols"
+  expect c.tsv refused "$marker" '# A comment' "$cols" \
+    $'CP-18\tNode\tnode-profile\tscored in the harness (section 16.2, decision A44)'
+  expect d.tsv refused "$internal" "$cols" $'CP-20\tOperator\toperator\tsee .claude/rules/testing.md'
+  expect e.tsv refused "$internal" "$cols" $'CP-27\tNode\tnode-profile\tthe harness of docs/architecture.md'
+  expect f.tsv accepted "" '# The points of section 17 (section 16.4, #41); CP-33a is a point.' "$cols" \
+    $'CP-18\tNode\tnode-profile\tscored against the nodes (section 16.2); no specification governs this: our own design' \
+    $'CP-33a\tOperator\toperator\tAnnex A §A.1; HbA1c; the byte 0xA1' $'CP-1\tGateway\tcovered\t-'
+  expect g.tsv accepted "" $'track\ttitle\tstatus' $'8\tthe A35 track\tdeferred'
+
   if [[ "$fails" -ne 0 ]]; then
     echo "comment-style self-test: $fails case(s) failed." >&2
     return 1
   fi
-  echo "ok: comment-style self-test (internal citations and decision markers refused in .rs, .sh, Cargo.toml, clippy.toml, workflow and action YAML and the docker TOML; near misses accepted)"
+  echo "ok: comment-style self-test (internal citations and decision markers refused in .rs, .sh, Cargo.toml, clippy.toml, workflow and action YAML, the docker TOML and the conformance tables; near misses accepted)"
 }
 
 mode="${1:---all}"
