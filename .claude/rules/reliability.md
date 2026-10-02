@@ -119,7 +119,7 @@ the Clippy book.
   shapes, never bodies and never a patient identifier
   (`identifier-hygiene.md`; review-enforced).
 - **Banned APIs are compile-time bans** (`clippy.toml` `disallowed-methods` and
-  `disallowed-types`), populated when the workspace lands. The standing
+  `disallowed-types`), populated since the first workspace commit. The standing
   entries: one time library across the tree and the other banned by type, and
   `Option::as_slice`/`as_mut_slice` (on an `Option<Vec<T>>` receiver they yield
   `&[Vec<T>]`, a slice of 0-or-1 vectors rather than `&[T]`, and keep compiling
@@ -171,8 +171,8 @@ the Clippy book.
 - **Workflow security is audited** (`ci-cd.md`): pinned action digests,
   `permissions: {}` at workflow level, no context interpolation in a `run:`
   block, and `persist-credentials: false` on checkout. Enforced by the
-  `actionlint`, `zizmor`, and `shellcheck` lanes, which run before any Rust
-  exists.
+  `actionlint`, `zizmor`, and `shellcheck` lanes of CI tier 1, which need no
+  Rust.
 
 ## Deviations from the API Guidelines (deliberate)
 

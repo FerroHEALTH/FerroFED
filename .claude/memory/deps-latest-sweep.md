@@ -16,9 +16,9 @@ like openehr-sdt because it's split off the ITS crate". FerroEHR had split
 **Why:** the `openehr-*` crates are one lockstep line the sibling reshapes
 without notice here, and a Dependabot bump per crate never builds alone.
 
-**How to apply:** once the workspace exists, at the start of a work session
-and before a release cut, compare every `[workspace.dependencies]` pin with
-crates.io (`max_stable_version`), list `../FerroEHR/crates/` against the
+**How to apply:** at the start of a work session and before a release cut,
+compare every `[workspace.dependencies]` pin with crates.io
+(`max_stable_version`), list `../FerroEHR/crates/` against the
 `openehr-*` set the workspace takes, and read the split or bump commit for the
 module moves. Land the family together with its pin rows, the lock and
 `deny.toml`. Check the vendored corpora against their upstream heads at the

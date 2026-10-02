@@ -19,7 +19,7 @@
 #                          Cargo.toml edition, rust-version and resolver.
 #   4. product version     CITATION.cff version against the docs/VERSIONS.md
 #                          product-version row, and against the root Cargo.toml
-#                          [workspace.package] version once that exists.
+#                          [workspace.package] version.
 #   5. CI tool pins        the zizmor, actionlint, shellcheck and hadolint
 #                          versions .github/workflows/ci.yml installs, and the
 #                          cargo-auditable, cargo-cyclonedx and syft versions

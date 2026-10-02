@@ -13,13 +13,13 @@ from it. This page summarises the pins that shape the design.
 | Federation Tier with AQL | 0.9.0, release candidate, commit `7162d0c` | the governing specification; re-pinned when 1.0 is published |
 | openEHR ITS-REST | 1.1.0 | the façade a client sees and the API each node exposes |
 | openEHR AQL | 1.1.0 | the query language on both sides of the gateway |
-| `openehr-query`, `openehr-its` | 0.0.72 | the published crates the gateway builds on, moved together as one family |
-| Rust | 1.98.1, edition 2024 | the toolchain, once the workspace exists |
+| `openehr-query`, `openehr-its` | 0.0.76 | the published crates the gateway builds on, moved together as one family |
+| Rust | 1.98.1, edition 2024 | the toolchain the workspace builds with |
 
 The identity and directory bindings (IHE PIXm, PDQm, PMIR, mCSD, XCPD and the
-Dutch Generic Functions) are listed in `docs/VERSIONS.md` with the latest
-published version, but none is pinned. Choosing them is part of the research
-program.
+Dutch Generic Functions) are listed in `docs/VERSIONS.md` with the version
+each binding uses: PIXm 3.1.0 and PDQm 3.2.0 are vendored today, and each
+other package is vendored by the issue that first reads it.
 
 ## Vendored specifications
 

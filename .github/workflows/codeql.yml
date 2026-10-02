@@ -9,9 +9,9 @@
 #     code holding tokens that can publish releases, so they get the same
 #     scrutiny as source. Build-mode "none".
 #   * rust: GUARDED behind a detection job that checks for a root Cargo.toml,
-#     the same primitive ci.yml uses. It is skipped cleanly while the repository
-#     is pre-code and activates by itself when the Cargo workspace lands, with no
-#     workflow edit. `rust` is a generally-available CodeQL language (GA
+#     the same primitive ci.yml uses. The workspace carries one, so it runs on
+#     every run of this workflow, and a tree without one would skip it
+#     cleanly. `rust` is a generally-available CodeQL language (GA
 #     2025-10-14), build-mode "none", so it never contends for cargo's build
 #     tree.
 #
@@ -77,8 +77,9 @@ jobs:
           category: "/language:actions"
 
   # Decides whether the Rust analysis runs at all: it checks out and looks for a
-  # root Cargo.toml. hashFiles() cannot gate at `if:` time on a pre-code tree, so
-  # a real detection job is the correct primitive (the ci.yml pattern).
+  # root Cargo.toml. hashFiles() cannot gate at `if:` time, before checkout has
+  # filled the runner workspace, so a real detection job is the correct
+  # primitive (the ci.yml pattern).
   detect:
     name: detect workspace
     runs-on: ubuntu-latest
@@ -99,10 +100,10 @@ jobs:
             echo "Cargo.toml present: the Rust analysis will run."
           else
             echo "cargo=false" >> "$GITHUB_OUTPUT"
-            echo "No Cargo.toml: the Rust analysis is skipped (repository in discovery)."
+            echo "No Cargo.toml: the Rust analysis is skipped."
           fi
 
-  # The Rust analysis self-activates once the workspace lands.
+  # The Rust analysis runs whenever detect finds the root Cargo.toml.
   analyze-rust:
     name: Analyze (rust)
     needs: detect

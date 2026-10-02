@@ -7,10 +7,10 @@
 # design). The quality gate is the built-in "Sonar way" default.
 #
 # The multi-language sweep over shell, YAML, JSON and the other config surfaces
-# the Rust gates never see runs on every scan, including today, on a repository
-# with no code. The Rust steps (the pinned toolchain, the instrumented coverage
-# run, the projectVersion derivation) are guarded on a root Cargo.toml, so they
-# skip until the workspace lands and then activate by themselves. hashFiles()
+# the Rust gates never see runs on every scan. The Rust steps (the pinned
+# toolchain, the instrumented coverage run, the projectVersion derivation) are
+# guarded on a root Cargo.toml, which the workspace carries, so they run on
+# every scan, and a tree without one would skip them. hashFiles()
 # is the correct primitive HERE, unlike in ci.yml: the checkout above it has
 # already populated the workspace when the step-level `if:` is evaluated.
 #

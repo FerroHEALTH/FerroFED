@@ -215,6 +215,20 @@ federated query and identity resolution shipped in 0.0.3.
   does not know, `--help` included, before it calls `gh` (#180). It ignored
   such an argument and wrote the label taxonomy to the repository. Its
   `--self-test` proves the refusal.
+- The `ferrofed-engine` crate description names what it holds (dispatch,
+  fan-out, the budgets, the completeness decision and the outbound
+  identifier-hygiene gate) and lists follow-up routing on the creating
+  system id as planned, where it described routing as built (#191). The
+  workflows, the release checklist, the version pages of the book and the
+  repository, and the working rules no longer describe the Cargo workspace
+  as not yet existing, and the book names the `openehr-*` pin as 0.0.76 and
+  the PIXm and PDQm packages as vendored.
+- `scripts/gh/rel.sh` prints its usage and exits `2` before it calls `gh` on
+  a usage error: no argument, an unknown command, a wrong operand count, a
+  flag other than `--replace`, or `--help` (#191). It exited `1` with no
+  argument, `0` on `--help`, and resolved the repository through `gh`
+  first. Its new `--self-test`, run by the CI `tracker-helpers` job, proves
+  each write's endpoint and each refusal.
 
 ## [0.0.3] - 2026-10-02
 
