@@ -157,6 +157,13 @@ federated query and identity resolution shipped in 0.0.3.
   lists all five `openehr-*` crates, the vendored PIXm and PDQm packages and
   the specification's source commit as rows of their own. `versions.sh
   --self-test` proves each drift.
+- Tests that pin the two optional facilities FerroFED does not offer (#59,
+  #60; §11.6.4, §11.7, CP-31, CP-32). A query sent with `Prefer:
+  respond-async`, alone or beside `Prefer: wait`, gets the ordinary
+  synchronous answer under the same budget: never a `202` or a
+  `Content-Location`, and `Preference-Applied` never names `respond-async`
+  (RFC 7240 §2, §3). A bounded `OFFSET` page carries no cursor handle or
+  expiry in `meta.federation` and runs the fan-out on every request.
 
 ### Changed
 
