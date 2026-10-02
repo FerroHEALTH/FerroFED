@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# Clippy configuration (.claude/rules/reliability.md). The panicking and
+# Clippy configuration (the Clippy book, Configuration). The panicking and
 # stdio lints stay hard in application code and relax inside tests only.
 
 allow-unwrap-in-tests = true
@@ -21,7 +21,7 @@ disallowed-methods = [
   { path = "core::option::Option::as_mut_slice", reason = "on an Option<Vec<T>> this yields a slice of zero or one vectors, never &mut [T]; match instead" },
 ]
 disallowed-types = [
-  { path = "serde_json::Value", reason = "typed carriers only; a Value lives at one of the four seams of .claude/rules/rust-style.md, behind a scoped #[expect] naming it" },
+  { path = "serde_json::Value", reason = "typed carriers only; a Value lives only at query intake, the result cells, the federation envelope or a test, behind a scoped #[expect] naming its seam" },
   { path = "chrono::DateTime", reason = "jiff is the one time library" },
   { path = "chrono::NaiveDate", reason = "jiff is the one time library" },
   { path = "chrono::NaiveDateTime", reason = "jiff is the one time library" },

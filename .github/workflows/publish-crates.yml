@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: BUSL-1.1
 
 # publish-crates.yml: the crates.io lane behind the workspace `publish` switch
-# (docs/architecture.md section 11, decision A35; .claude/rules/crates-publishing.md).
+# (the Cargo reference, the `publish` field and Publishing on crates.io; no
+# specification governs the policy: our own design).
 #
 # It runs on every `v*` release tag beside release.yml, and on a manual
 # dispatch as a dry run or, with `publish`, the recovery path. The publishable
@@ -45,7 +46,8 @@ jobs:
         with:
           persist-credentials: false
       # No cache in a publishing lane: the packaging below verifies the same
-      # bytes a real publish uploads (.claude/rules/ci-cd.md).
+      # bytes a real publish uploads (no specification governs this: our own
+      # design).
       - uses: ./.github/actions/setup-rust
         with:
           cache: "false"
@@ -82,7 +84,7 @@ jobs:
             {
               echo "### Nothing to publish"
               echo
-              echo "The workspace \`publish\` switch in the root \`Cargo.toml\` is \`false\`, so no member is publishable and this run is a successful no-op (\`docs/architecture.md\` section 11, decision A35)."
+              echo "The workspace \`publish\` switch in the root \`Cargo.toml\` is \`false\`, so no member is publishable and this run is a successful no-op. Setting the switch to \`true\` is the one change that turns publishing on."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Package every library crate (no upload)

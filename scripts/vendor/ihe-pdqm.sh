@@ -101,9 +101,8 @@ cat > "$dest/PROVENANCE.md" << PROV
 
 # Provenance: the IHE PDQm FHIR package
 
-Vendored verbatim by \`scripts/vendor/ihe-pdqm.sh\`
-(.claude/rules/vendored-inputs.md). Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+Vendored verbatim by \`scripts/vendor/ihe-pdqm.sh\`. Never edit a file here:
+change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <$url>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/PDQm/3.2.0/>

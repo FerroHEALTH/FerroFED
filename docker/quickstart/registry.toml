@@ -3,9 +3,10 @@
 #
 # The registry document of the compose.yaml quickstart: the two member CDRs
 # the gateway federates, two FerroEHR instances as node A and node B, each
-# reached on the Compose network at its ITS-REST API root
-# (docs/architecture.md section 8). Each system_id is the one compose.yaml
-# configures the node to stamp. Every name here is quickstart-local.
+# reached on the Compose network at its ITS-REST API root (the §12b.1
+# registry entry, N21; no specification governs the document format: our own
+# design). Each system_id is the one compose.yaml configures the node to
+# stamp. Every name here is quickstart-local.
 
 [[organisation]]
 id = "org-a"

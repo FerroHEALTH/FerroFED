@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # Configuration for GitHub's auto-generated release notes. Every category maps
-# onto a label the tracker already uses (.claude/rules/issue-workflow.md,
-# bootstrapped by scripts/gh/labels.sh); no label is invented here. A feature
+# onto a label the tracker already uses (bootstrapped by
+# scripts/gh/labels.sh); no label is invented here. A feature
 # or a fix carries no label since 2026-10-02, when the native issue type took
 # over from `enhancement` and `bug`, and release notes cannot group by an issue
 # type, so those pull requests land under "Other changes". The

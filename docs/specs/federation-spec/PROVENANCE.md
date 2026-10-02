@@ -4,15 +4,15 @@
 # Provenance: the Federation Tier with AQL specification source
 
 The whole repository tree, vendored verbatim by
-`scripts/vendor/federation-spec.sh` (.claude/rules/vendored-inputs.md),
-less the dependency manifests listed below. Never edit a file here: change the
-pin in docs/VERSIONS.md and re-run the script.
+`scripts/vendor/federation-spec.sh`, less the dependency manifests listed
+below. Never edit a file here: change the pin in docs/VERSIONS.md and re-run
+the script.
 
 - Source: <https://github.com/syntaric/openehr-federation-spec>
 - Pin: commit `7162d0c760d23105d62a743bf0ad1073c45fdb85`
 - Declared version: `spec-version: '0.9.0'`, status
   `Release candidate`, dated `2026-09-13` (`antora.yml`)
-- Fetched: 2026-10-01
+- Fetched: 2026-10-02
 - Upstream licence: Creative Commons Zero v1.0 Universal (CC0 1.0), the
   repository's `LICENSE` file, vendored beside this file
 - Layout: the upstream paths, unchanged

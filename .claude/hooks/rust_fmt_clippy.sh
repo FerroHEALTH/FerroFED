@@ -6,12 +6,15 @@
 # Claude Code PostToolUse hook (matcher: Write|Edit).
 #
 # For an edited .rs file: format it with rustfmt (never blocks, since rustfmt
-# failing to parse a draft is expected), then run the comment-style guard
-# (.claude/rules/comments.md), which CAN block (exit 2) to feed its findings
-# back as a correction.
+# failing to parse a draft is expected). For an edited .sh file: lint it
+# with `shellcheck --severity=style` when the tool is available (never
+# installs it; skips silently when absent), which CAN block.
 #
-# For an edited .sh file: run shellcheck when it is available (never installs
-# it; skips silently when absent).
+# Then, for every file kind CI checks (a .rs file, a script under scripts/,
+# a Cargo.toml, clippy.toml, the YAML under .github and the TOML under
+# docker/), run scripts/checks/comment-style.sh on the one file, which CAN
+# block (exit 2) to feed its findings back as a correction. The guard decides
+# what it reads, so a file outside those kinds passes.
 #
 # This hook does NOT run clippy per-edit, by design. A per-edit `cargo clippy`
 # check-builds the owning crate plus its dependency cone on every file save and
@@ -36,29 +39,37 @@ fi
 repo_root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 case "${file_path:-}" in
-*.rs) ;;
+*.rs | *.sh | *.toml | *.yml | *.yaml) ;;
+*) exit 0 ;;
+esac
+[ -f "$file_path" ] || exit 0
+
+# The checkout that holds the file, so an edit inside a git worktree is
+# checked by that worktree's own guard, against that worktree's root.
+file_root="$(git -C "$(dirname "$file_path")" rev-parse --show-toplevel 2>/dev/null)" ||
+  file_root="$repo_root"
+
+case "$file_path" in
+*.rs)
+  if command -v rustfmt >/dev/null 2>&1; then
+    rustfmt --edition 2024 "$file_path" >/dev/null 2>&1 || true
+  fi
+  ;;
 *.sh)
-  [ -f "$file_path" ] || exit 0
   if command -v shellcheck >/dev/null 2>&1; then
     findings="$(shellcheck --severity=style "$file_path" 2>&1)" || {
       printf '%s\n' "$findings" >&2
       exit 2
     }
   fi
-  exit 0
   ;;
-*) exit 0 ;;
 esac
-[ -f "$file_path" ] || exit 0
 
-if command -v rustfmt >/dev/null 2>&1; then
-  rustfmt --edition 2024 "$file_path" >/dev/null 2>&1 || true
-fi
-
-# Comment-style guard (.claude/rules/comments.md): block comments, TODO(#N)
-# form, NOTE and essay budgets. Exit 2 feeds the findings back as a correction.
-if [ -x "$repo_root/scripts/checks/comment-style.sh" ]; then
-  findings="$("$repo_root/scripts/checks/comment-style.sh" --files "$file_path" 2>&1)" || {
+# The comment-style guard reads the file when it is one of the kinds CI
+# checks and passes any other. Exit 2 feeds its findings back as a correction.
+guard="$file_root/scripts/checks/comment-style.sh"
+if [ -x "$guard" ]; then
+  findings="$("$guard" --files "$file_path" 2>&1)" || {
     printf '%s\n' "$findings" >&2
     exit 2
   }

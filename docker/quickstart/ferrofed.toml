@@ -6,8 +6,9 @@
 # user: development credentials, NOT for anything real.
 #
 # No identity binding is configured, so a query that names a patient fails
-# closed with 424 (decision A17); a query that names no patient is asked of
-# both members (N4).
+# closed with 424 (§11.4; §11.3 covers only an answered lookup, so no
+# specification governs this: our own design); a query that names no patient
+# is asked of both members (N4).
 
 [registry]
 document = "/etc/ferrofed/registry.toml"

@@ -86,9 +86,9 @@ cat > "$dest/PROVENANCE.md" << PROV
 # Provenance: the Federation Tier with AQL specification source
 
 The whole repository tree, vendored verbatim by
-\`scripts/vendor/federation-spec.sh\` (.claude/rules/vendored-inputs.md),
-less the dependency manifests listed below. Never edit a file here: change the
-pin in docs/VERSIONS.md and re-run the script.
+\`scripts/vendor/federation-spec.sh\`, less the dependency manifests listed
+below. Never edit a file here: change the pin in docs/VERSIONS.md and re-run
+the script.
 
 - Source: <https://github.com/$repo>
 - Pin: commit \`$commit\`

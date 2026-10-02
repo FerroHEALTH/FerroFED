@@ -114,9 +114,8 @@ cat > "$dest/PROVENANCE.md" << PROV
 
 # Provenance: the IHE PIXm FHIR package
 
-Vendored verbatim by \`scripts/vendor/ihe-pixm.sh\`
-(.claude/rules/vendored-inputs.md). Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+Vendored verbatim by \`scripts/vendor/ihe-pixm.sh\`. Never edit a file here:
+change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <$url>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/PIXm/3.1.0/>

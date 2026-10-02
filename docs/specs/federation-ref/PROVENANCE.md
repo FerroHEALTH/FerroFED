@@ -4,15 +4,15 @@
 # Provenance: the Federation Tier reference implementation
 
 The whole repository tree, vendored verbatim by
-`scripts/vendor/federation-ref.sh` (.claude/rules/vendored-inputs.md), less
-the dependency manifest listed below. Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+`scripts/vendor/federation-ref.sh`, less the dependency manifest listed
+below. Never edit a file here: change the pin in docs/VERSIONS.md and re-run
+the script.
 
 - Source: <https://github.com/syntaric/openehr-federation-ref>
 - Pin: commit `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5`
 - Declared version: `0.9.0-SNAPSHOT` (the `pom.xml` project version, which
   tracks the specification version it implements)
-- Fetched: 2026-10-01
+- Fetched: 2026-10-02
 - Upstream licence: Apache License 2.0, the repository's `LICENSE` file,
   vendored beside this file with its `NOTICE`
 - Layout: the upstream paths, unchanged

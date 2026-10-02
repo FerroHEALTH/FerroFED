@@ -3,14 +3,13 @@
 
 # Provenance: the IHE PIXm FHIR package
 
-Vendored verbatim by `scripts/vendor/ihe-pixm.sh`
-(.claude/rules/vendored-inputs.md). Never edit a file here: change the pin in
-docs/VERSIONS.md and re-run the script.
+Vendored verbatim by `scripts/vendor/ihe-pixm.sh`. Never edit a file here:
+change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <https://packages.fhir.org/ihe.iti.pixm/3.1.0>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/PIXm/3.1.0/>
 - Pin: package `ihe.iti.pixm` version `3.1.0`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`
-- Fetched: 2026-10-01
+- Fetched: 2026-10-02
 - Upstream licence: Creative Commons Attribution 4.0 International
   (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
   left out;
