@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! FerroFED's own strict corpus for the rewrite: decisions A5 to A10 of
-//! `docs/architecture.md` section 4, the reduction constraint of §7.1, the
+//! FerroFED's own strict corpus for the rewrite (where no specification
+//! governs a case, it is our own design): the reduction constraint of §7.1, the
 //! re-injection of N5 and the `columns[]` of N17. Decision A3 is asserted
 //! beside the rewrite it governs.
 

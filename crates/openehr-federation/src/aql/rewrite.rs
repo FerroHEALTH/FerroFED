@@ -178,7 +178,7 @@ fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
 }
 
 /// Writes the Tier order into a node query and returns its description
-/// (§11.6.1, N13, N39; `docs/architecture.md` section 9, decisions A28 and A43).
+/// (§11.6.1, N13, N39).
 ///
 /// The node is sent the client's `LIMIT n` unchanged (§11.6.1 MUST). With no
 /// `ORDER BY` the query is otherwise left as written. With one:

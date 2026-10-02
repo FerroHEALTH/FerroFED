@@ -17,7 +17,7 @@ publish = false
 bytes.workspace = true
 # The FHIR R4 model of the harness PIX Manager and its ITI-104 source (#47):
 # `resources` for `Patient`, which a test device may compile and the shipped
-# IHE binding does not need yet (docs/architecture.md section 6, decision A16).
+# IHE binding does not need yet (Annex A).
 fhir-types = { workspace = true, features = ["r4", "resources"] }
 http.workspace = true
 http-body-util.workspace = true

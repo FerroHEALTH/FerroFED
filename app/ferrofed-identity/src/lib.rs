@@ -7,7 +7,7 @@
 //!
 //! The gateway core depends on these traits only; each binding implements
 //! one in a crate of its own, so it can move without a change to the core
-//! (docs/architecture.md section 6). This crate holds:
+//! (§2.4, N27, N27a). This crate holds:
 //!
 //! - [`patient`]: [`PatientRef`](patient::PatientRef), the patient
 //!   identifier as the gateway carries it, redacted everywhere (§5.4, N33);

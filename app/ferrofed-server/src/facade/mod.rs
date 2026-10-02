@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The ITS-REST façade: `POST {base}/v1/query/aql` answered as one federated
-//! `RESULT_SET` over every member (§7, §9, §11; `docs/architecture.md`
-//! sections 3 and 5).
+//! `RESULT_SET` over every member (§7, §9, §11).
 //!
 //! An unmodified openEHR client sends a §7.2 façade query and receives one
 //! ITS-REST `RESULT_SET` with the rows of every member that answered and

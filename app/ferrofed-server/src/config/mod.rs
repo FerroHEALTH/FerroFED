@@ -131,7 +131,7 @@ pub struct PixManager {
 #[serde(default, deny_unknown_fields)]
 pub struct Registry {
     /// The reviewed registry document naming the organisations, nodes and
-    /// endpoints (`docs/architecture.md` section 8). Without it the gateway
+    /// endpoints (§12b.1). Without it the gateway
     /// federates nothing, and the ITS-REST surface stays unserved.
     pub document: Option<PathBuf>,
 }

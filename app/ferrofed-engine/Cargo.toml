@@ -12,7 +12,7 @@ homepage.workspace = true
 authors.workspace = true
 readme = "README.md"
 # FerroFED's own glue lives under app/ and is never published
-# (docs/architecture.md section 11, decision A34).
+# (no specification governs this: our own design).
 publish = false
 
 [dependencies]
@@ -21,7 +21,7 @@ ferrofed-registry.workspace = true
 openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["merge"] }
 # The node client: every request to a node is built by its runtime, never in
-# this crate (docs/architecture.md section 5, #34).
+# this crate (#34).
 openehr-its = { workspace = true, features = ["rest-client"] }
 # The outbound gate reads the AQL text with the printer's own string escaping
 # (#45).
@@ -30,7 +30,7 @@ openehr-query.workspace = true
 secrecy.workspace = true
 http.workspace = true
 thiserror.workspace = true
-# One task per in-scope node under one deadline (docs/architecture.md section 9).
+# One task per in-scope node under one deadline (§11.5, N38).
 tokio = { workspace = true, features = ["rt", "time"] }
 url.workspace = true
 

@@ -7,7 +7,8 @@
 //! Every request to a node is the generated `query_execute_adhoc_query_body`
 //! (`POST {base}/v1/query/aql`) of `openehr-its`'s `rest-client`, so the
 //! request line, the headers and the body are composed by that runtime and
-//! nowhere in FerroFED (`docs/architecture.md` section 5). This module adds
+//! nowhere in FerroFED (no specification governs this: our own design). This
+//! module adds
 //! the per-endpoint client, the call's deadline and request id, and the
 //! classification of the answer:
 //!
@@ -321,8 +322,8 @@ impl<T: Transport> NodeClient<T> {
     /// The base URL is used as the registry holds it, with no prefix assumed
     /// (N28): `https://cdr.example.org/openehr` addresses
     /// `https://cdr.example.org/openehr/v1/query/aql`. The client sends a
-    /// request once; there is no retry inside the client's budget
-    /// (`docs/architecture.md` section 9).
+    /// request once; there is no retry inside the client's budget (no
+    /// specification governs this: our own design).
     ///
     /// # Errors
     ///

@@ -9,9 +9,10 @@
 //! follow-up routing table (N21). Organisations, nodes with their openEHR
 //! `system_id`, and endpoints with their base URLs come from a reviewed
 //! bootstrap document, validated at load into an immutable
-//! [`RegistrySnapshot`](snapshot::RegistrySnapshot) (docs/architecture.md
-//! section 8). `node_id`, `endpoint_id` and `system_id` are three types with
-//! no conversion between them (N32, §12a.1, see [`id`]).
+//! [`RegistrySnapshot`](snapshot::RegistrySnapshot) (§12b.1; the document
+//! format is our own design, since no specification governs it). `node_id`,
+//! `endpoint_id` and `system_id` are three types with no conversion between
+//! them (N32, §12a.1, see [`id`]).
 //!
 //! ```
 //! use ferrofed_registry::id::{EndpointId, NodeId, SystemId};

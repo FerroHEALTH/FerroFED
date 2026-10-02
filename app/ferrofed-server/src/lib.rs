@@ -11,7 +11,7 @@
 //! stop. `main.rs` only hands in the arguments and returns the exit code.
 //!
 //! The ITS-REST façade serves the federated query, `POST /v1/query/aql`
-//! ([`facade`], `docs/architecture.md` section 5); every other path under
+//! ([`facade`], §7); every other path under
 //! `/v1/` answers `501` until its issue lands.
 #![doc(test(attr(deny(warnings))))]
 

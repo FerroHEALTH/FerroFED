@@ -6,7 +6,7 @@
 //! A container-backed test asks [`e2e_enabled`] first and returns without
 //! touching Docker when the gate is unset, so the ordinary suite stays
 //! offline. The harness starts the two member CDRs the end-to-end lane runs
-//! against (`docs/architecture.md` section 13): two FerroEHR instances, node A
+//! against (§16): two FerroEHR instances, node A
 //! and node B, each on its own database and each stamping its own
 //! `system_id`, and [`two_nodes`] puts a [`CapturingProxy`] in front of each.
 //! Every image is pinned by tag and digest in a [`PinnedImage`] constant,

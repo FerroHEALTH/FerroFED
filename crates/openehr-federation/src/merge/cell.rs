@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The result-cell seam (`.claude/rules/rust-style.md`, seam 2): a node's
-//! `RESULT_SET` cell decoded into the typed value the Tier comparator orders.
+//! The result-cell seam: a node's `RESULT_SET` cell decoded into the typed
+//! value the Tier comparator orders. ITS-REST types a cell as any JSON value;
+//! the typed seam is our own design, since no specification governs it.
 //!
 //! A cell is a boolean, a number, a temporal value, a string, an RM
 //! `DV_ORDERED` object decoded through `openehr-its` canonical JSON, any other
 //! JSON, or null. The decoded cell keeps its canonical JSON text, the
-//! fallback of rule 4 of the Tier comparator (`docs/architecture.md` section
-//! 9). No other module of the merge sees a `Value`.
+//! fallback of rule 4 of the Tier comparator. No other module of the merge
+//! sees a `Value`.
 #![expect(
     clippy::disallowed_types,
     reason = "the result-cell seam: ITS-REST types a RESULT_SET cell as a JSON value"

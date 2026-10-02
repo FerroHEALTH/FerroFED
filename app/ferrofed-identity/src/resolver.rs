@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The resolver seam: under which local `ehr_id` each member knows a patient
-//! (N3, §5.2, docs/architecture.md section 6).
+//! (N3, §5.2).
 
 use std::collections::BTreeMap;
 use std::time::Instant;

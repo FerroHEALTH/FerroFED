@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The outbound gate: the last check on every request the gateway composes
-//! for a node (§5.4.1, N33; `docs/architecture.md` section 4).
+//! for a node (§5.4.1, N33).
 //!
 //! The rewrite already refuses a query whose patient identifier would survive
 //! into a node query. The gate is the second layer, independent of how the

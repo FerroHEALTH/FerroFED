@@ -4,8 +4,9 @@
 # Configuration
 
 The `ferrofed` binary reads one TOML file and the environment. It serves the
-process shape today (health, readiness, the request log, graceful shutdown);
-the federation surface under `/v1/` answers `501` until the façade lands.
+process shape (health, readiness, the request log, graceful shutdown) and, once
+a registry is configured, the federated query `POST /v1/query/aql`; every other
+path under `/v1/` answers `501`.
 
 ## Running it
 
@@ -49,6 +50,12 @@ bearer_token_file = "/run/secrets/hospital-a-token"
 user = "ferrofed"
 password_file = "/run/secrets/clinic-b-password"
 ```
+
+Every secret has a `_file` sibling, read once at boot and trimmed, so a secret
+can come from a mounted file and never sit in the configuration or the
+environment. The credentials are read and checked at boot, and the node
+client of an endpoint with a credentials section sends them on every request
+to that endpoint.
 
 ## Node selection
 
@@ -118,11 +125,6 @@ best_effort = false   # a request asking for partial is then refused with a 400
 
 The gateway never quietly serves an all-or-nothing answer to a request that
 asked for `partial`. The setting is named in the startup log line.
-
-Every secret has a `_file` sibling, read once at boot and trimmed, so a secret
-can come from a mounted file and never sit in the configuration or the
-environment. The credentials are read and checked at boot; the node dispatch
-hands them to each endpoint once it lands.
 
 ## Timeouts
 
@@ -195,7 +197,8 @@ define, is refused like any other unknown key.
 | `GET /` | the product name and version |
 | `GET /health` | `200` while the process is up |
 | `GET /health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
-| any path under `/v1/` | `501` until the façade lands |
+| `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
+| any other path under `/v1/` | `501` |
 | any other path | `404` |
 
 Every response carries an `x-request-id`: the client's value when it is short

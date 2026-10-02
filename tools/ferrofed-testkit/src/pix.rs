@@ -7,7 +7,7 @@
 //! **This is a test device, not a PIXm implementation.** It plays the Patient
 //! Identifier Cross-reference Manager the e2e suites resolve through, so a
 //! test can seed real cross-references and read real ITI-83 answers without
-//! a container (`docs/architecture.md` section 13, decision A39). It holds the
+//! a container (no specification governs this: our own design). It holds the
 //! wire of both transactions to the vendored PIXm 3.1.0 artefacts under
 //! `docs/specs/ihe-pixm/`, and it decides nothing a Manager decides on
 //! demographics: it cross-references the identifiers one fed `Patient` carries
