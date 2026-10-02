@@ -5,7 +5,9 @@
 //! `openEHR-federation-completeness`, through the real configuration path:
 //! `all` and no header fail closed, `partial` returns the answering nodes'
 //! rows where best-effort is offered and is refused where it is not, and any
-//! other value is a `400` that asks no node (§11.2, §11.4, N37, CP-30).
+//! other value is a `400` that asks no node (§11.2, §11.4, N37, CP-30). An
+//! incomplete answer says so in `meta.federation.complete` and carries no
+//! `OperationOutcome` (§11.4, N17, CP-12).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -158,6 +160,46 @@ async fn partial_where_best_effort_is_not_offered_is_refused() -> TestResult {
     assert_eq!("partial-unsupported", error.code, "§11.4, N37");
     assert!(error.message.contains("not offered"), "{}", error.message);
     nobody_asked(&a, &b).await
+}
+
+/// Asserts that an incomplete answer reports its coverage in
+/// `meta.federation.complete` alone and carries no FHIR resource: §11.4
+/// conditions the `OperationOutcome` of CP-12 on a FHIR-facing consumer, and
+/// N17 makes the answer an ITS-REST `RESULT_SET` whose additions live under
+/// `meta.federation` only (§9.1).
+fn incomplete_without_an_operation_outcome(text: &str) -> TestResult {
+    schema::validate(text)?;
+    for word in ["OperationOutcome", "resourceType"] {
+        assert!(
+            !text.contains(word),
+            "no FHIR resource travels in a RESULT_SET (N17): {text}"
+        );
+    }
+    let answer: Answer = serde_json::from_str(text)?;
+    assert!(!answer.meta.federation.complete, "§11.4: {text}");
+    Ok(())
+}
+
+// conformance: CP-12
+#[tokio::test]
+async fn incompleteness_is_the_complete_flag_and_never_an_operation_outcome() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_failing(500).await;
+    let dir = tempfile::tempdir()?;
+
+    let app = gateway(dir.path(), &a, &b, true, true)?;
+    let (status, text) = call(app, post(&["partial"])?).await?;
+    assert_eq!(StatusCode::OK, status, "best-effort: {text}");
+    incomplete_without_an_operation_outcome(&text)?;
+
+    let app = gateway(dir.path(), &a, &b, true, true)?;
+    let (status, text) = call(app, post(&[])?).await?;
+    assert_eq!(
+        StatusCode::FAILED_DEPENDENCY,
+        status,
+        "all-or-nothing: {text}"
+    );
+    incomplete_without_an_operation_outcome(&text)
 }
 
 #[tokio::test]

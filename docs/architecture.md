@@ -861,6 +861,18 @@ stateDiagram-v2
   that arrived and a `200` that says what is missing. `all` is accepted when
   requested explicitly.
 
+**No `OperationOutcome`** (decision A45, #58). §11.4 [[completeness-flag]]
+says that "for FHIR-facing consumers, incompleteness also surfaces as an
+`OperationOutcome` warning", and CP-12 and track 4 repeat it "for FHIR
+consumers". The specification defines no FHIR surface for the gateway: N17
+makes the answer an ITS-REST `RESULT_SET` whose members are ITS-REST's, and
+§9.1 puts the federation additions under `meta.federation` only. FerroFED
+therefore emits no `OperationOutcome` on its ITS-REST face, since one in the
+`RESULT_SET` would break N17, and `meta.federation.complete` alone carries
+incompleteness. CP-12 is scored on its status-code half. Where the resource
+would travel for a gateway that does face FHIR consumers is a specification
+gap, recorded as an upstream report (#204).
+
 **The merge**, in order (FerroFED's own sequence where the specification gives
 none):
 
@@ -1446,8 +1458,9 @@ the milestone in progress.
   completeness (#50), timeouts (#51), `ORDER BY` with `LIMIT` and the visible-order
   check (#52, A28, A43), bounded `OFFSET` (#53, A29), decomposable aggregates
   (#54, A30), `DISTINCT` (#55), dedup on the full version id (#56, A32), the
-  status mapping (#57), CP-12 (#58, held draft T154). #59 and #60 are not built
-  (A31) and stay at Low priority.
+  status mapping (#57), CP-12 with no `OperationOutcome` on the ITS-REST face
+  (#58, A45, upstream report #204). #59 and #60 are not built (A31) and stay
+  at Low priority.
 - **v0.0.5, the ITS-REST surface and follow-up routing** (#61 to #69). The
   single-node proxy with `Location` unmodified and `subject_id` resolved (#61,
   A12, A13), `ehr_id` routing (#62), collisions as events (#63), follow-up reads
@@ -1476,8 +1489,8 @@ the milestone in progress.
 ## 15. The decision register
 
 Every choice this pass put to the owner, all decided by the owner on
-2026-10-01; A43, which supersedes A27, and A44, which supersedes A40 and A41,
-were decided on 2026-10-02. The bracket names the report and its
+2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
+and A45 were decided on 2026-10-02. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -1527,3 +1540,4 @@ R4 is #23, #25 and #27).
 | A42 | The reference implementation's image [R4 D8] | build from the vendored `Dockerfile` outside CI, or wait for a public image | its image refused an anonymous pull on 2026-10-01 | decided (owner, 2026-10-01) |
 | A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |
 | A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject (#118); a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
+| A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (#204) | decided (owner, 2026-10-02) |
