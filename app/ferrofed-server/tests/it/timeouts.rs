@@ -5,7 +5,10 @@
 //! path: a `Prefer: wait` shortens it and never extends it, the effective
 //! budget is reported in `meta.federation.timeout`, a malformed `Prefer` is
 //! ignored and never refused, and the gateway answers inside the budget
-//! (§11.5, N38, CP-31; RFC 7240 §2, §3, §4.3).
+//! (§11.5, N38, CP-31; RFC 7240 §2, §3, §4.3). The optional asynchronous
+//! pattern of §11.7 is not offered, so `Prefer: respond-async` is ignored and
+//! the request is answered synchronously under the same budget (RFC 7240
+//! §2, §4.1).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -336,6 +339,115 @@ async fn only_the_first_wait_counts() -> TestResult {
     assert_eq!(StatusCode::OK, reply.status, "{}", reply.text);
     assert_eq!(budget(2_000, 2_000), reported(&reply.text)?);
     assert_eq!(Some("wait=2"), applied(&reply));
+    Ok(())
+}
+
+/// The `Prefer` token asking for an asynchronous answer (RFC 7240 §4.1).
+const RESPOND_ASYNC: &str = "respond-async";
+
+/// Asserts the synchronous shape of a reply to a request that asked for
+/// `respond-async`: never the `202` and `Content-Location` of the §11.7
+/// pattern, never `respond-async` in `Preference-Applied` (RFC 7240 §3), and
+/// an envelope the schema accepts (§11.7 leaves the envelope unchanged).
+fn assert_answered_synchronously(reply: &Reply) -> TestResult {
+    assert_ne!(StatusCode::ACCEPTED, reply.status, "{}", reply.text);
+    assert!(
+        reply.headers.get(header::CONTENT_LOCATION).is_none(),
+        "no polling URL: {:?}",
+        reply.headers
+    );
+    assert!(
+        !applied(reply).is_some_and(|value| value.contains(RESPOND_ASYNC)),
+        "RFC 7240 §3: an ignored preference is never reported applied: {:?}",
+        applied(reply)
+    );
+    schema::validate(&reply.text)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn respond_async_is_ignored_and_answered_synchronously() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_answering("uid-at-b").await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a, &b, 2_000, 3_000)?;
+
+    let reply = timed(app, post(&[RESPOND_ASYNC], false)?).await?;
+    assert_eq!(StatusCode::OK, reply.status, "{}", reply.text);
+    assert_answered_synchronously(&reply)?;
+    let answer: Answer = serde_json::from_str(&reply.text)?;
+    assert_eq!(
+        vec![("node-a-pub", "active"), ("node-b-pub", "active")],
+        statuses(&answer),
+        "RFC 7240 §2: the request is processed as if the token were absent"
+    );
+    assert_eq!(budget(2_000, 3_000), reported(&reply.text)?);
+    assert_eq!(None, applied(&reply));
+    Ok(())
+}
+
+// conformance: CP-31
+#[tokio::test]
+async fn respond_async_never_exempts_a_request_from_the_overall_budget() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_after("uid-at-b", Duration::from_secs(3)).await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a, &b, 300, 500)?;
+
+    let reply = timed(app, post(&[RESPOND_ASYNC], false)?).await?;
+    assert_eq!(StatusCode::GATEWAY_TIMEOUT, reply.status, "{}", reply.text);
+    assert!(
+        reply.took < Duration::from_millis(1_500),
+        "§11.7: respond-async does not exempt the gateway from its budget, took {:?}",
+        reply.took
+    );
+    assert_answered_synchronously(&reply)?;
+    let answer: Answer = serde_json::from_str(&reply.text)?;
+    assert_eq!(
+        vec![("node-a-pub", "active"), ("node-b-pub", "time-out")],
+        statuses(&answer)
+    );
+    assert_eq!(budget(300, 500), reported(&reply.text)?);
+    Ok(())
+}
+
+// conformance: CP-31
+#[tokio::test]
+async fn respond_async_beside_a_shorter_wait_still_shortens_the_budget() -> TestResult {
+    let one_header: &[&str] = &["respond-async, wait=1"];
+    let two_headers: &[&str] = &[RESPOND_ASYNC, "wait=1"];
+    for prefer in [one_header, two_headers] {
+        let a = node_answering("uid-at-a").await;
+        let b = node_after("uid-at-b", Duration::from_millis(2_500)).await;
+        let dir = tempfile::tempdir()?;
+        let app = gateway(dir.path(), &a, &b, 2_800, 3_000)?;
+
+        let reply = timed(app, post(prefer, false)?).await?;
+        assert_eq!(
+            StatusCode::GATEWAY_TIMEOUT,
+            reply.status,
+            "{prefer:?}: {}",
+            reply.text
+        );
+        assert!(
+            reply.took < Duration::from_millis(2_000),
+            "{prefer:?}: the gateway took {:?} under a 1 s client wait",
+            reply.took
+        );
+        assert_answered_synchronously(&reply)?;
+        let answer: Answer = serde_json::from_str(&reply.text)?;
+        assert_eq!(
+            vec![("node-a-pub", "active"), ("node-b-pub", "time-out")],
+            statuses(&answer),
+            "{prefer:?}"
+        );
+        assert_eq!(budget(1_000, 1_000), reported(&reply.text)?, "{prefer:?}");
+        assert_eq!(
+            Some("wait=1"),
+            applied(&reply),
+            "{prefer:?}: only the wait was applied"
+        );
+    }
     Ok(())
 }
 
