@@ -53,6 +53,7 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
 use openehr_federation::aggregate::Recombination;
+use openehr_federation::attribute::EndpointAttribute;
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::envelope;
 use openehr_federation::error::WireError;
@@ -181,6 +182,7 @@ pub struct Plan {
     order: ResultOrder,
     recombination: Option<Recombination>,
     dedup: DedupMode,
+    attributes: Vec<EndpointAttribute>,
 }
 
 impl Plan {
@@ -235,6 +237,17 @@ impl Plan {
     #[must_use]
     pub fn deduplicating(mut self, mode: DedupMode) -> Self {
         self.dedup = mode;
+        self
+    }
+
+    /// This plan adding the ENDPOINT attributes `attributes` to the rows of
+    /// every endpoint that answers, in that order, from the endpoint's
+    /// registry entry (§9.3, N12): the answer carries their values beside
+    /// each row ([`FederatedAnswer::attributes`]), and under `DISTINCT` they
+    /// take part in which rows are equal (N13).
+    #[must_use]
+    pub fn annotating(mut self, attributes: Vec<EndpointAttribute>) -> Self {
+        self.attributes = attributes;
         self
     }
 
@@ -393,6 +406,7 @@ pub struct FederatedAnswer {
     verdict: Verdict,
     federation: FederationMeta,
     rows: Vec<ResultSetRow>,
+    attributes: Vec<Vec<String>>,
 }
 
 impl FederatedAnswer {
@@ -422,6 +436,16 @@ impl FederatedAnswer {
     #[must_use]
     pub fn rows(&self) -> &[ResultSetRow] {
         &self.rows
+    }
+
+    /// The values of the plan's ENDPOINT attributes beside each row, in
+    /// [`FederatedAnswer::rows`] order, from the registry entry of the
+    /// endpoint the row came from (§9.3, N12; [`Plan::annotating`]). An entry
+    /// is empty when the plan adds no attribute, and for the one row of a
+    /// recombined aggregate, which comes from no single endpoint.
+    #[must_use]
+    pub fn attributes(&self) -> &[Vec<String>] {
+        &self.attributes
     }
 
     /// The federated ITS-REST `RESULT_SET` of this answer, with the façade's
@@ -574,6 +598,7 @@ where
         order: result_order,
         recombination,
         dedup,
+        attributes,
     } = plan;
     if recombination.is_some() && completion == Completion::BestEffort {
         return Err(FanOutError::PartialAggregate);
@@ -630,6 +655,7 @@ where
         order: &result_order,
         recombination: recombination.as_ref(),
         dedup,
+        attributes: &attributes,
     };
     answer::answer(snapshot, records, shaping, budget, completion)
 }

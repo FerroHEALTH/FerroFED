@@ -13,6 +13,7 @@ use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::{Analysis, ColumnSource, Context, Paging, Targeting};
+use openehr_federation::attribute::EndpointAttribute;
 use openehr_query::bind::Parameters;
 use openehr_query::federation::DirectiveKind;
 
@@ -112,7 +113,10 @@ fn an_unscoped_query_selecting_only_endpoint_attributes_asks_each_node_one_ehr_c
     let Ok(Analysis::Unscoped(query)) = analysed(aql, &directed(1)) else {
         panic!("the query names no patient");
     };
-    assert_eq!([ColumnSource::Endpoint], query.node_query().columns());
+    assert_eq!(
+        [ColumnSource::Endpoint(EndpointAttribute::EndpointId)],
+        query.node_query().columns()
+    );
     let node = query.node_query().aql();
     assert!(
         !node.contains("p/"),

@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::aggregate::Recombination;
+use openehr_federation::attribute::EndpointAttribute;
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::merge::{Disagreement, Merged, NodeAnswer, combine, merge};
 use openehr_federation::meta::FederationMeta;
@@ -29,6 +30,8 @@ pub(super) struct Shaping<'a> {
     pub(super) recombination: Option<&'a Recombination>,
     /// The dedup mode the request selected (§10).
     pub(super) dedup: DedupMode,
+    /// The ENDPOINT attributes added beside each endpoint's rows (§9.3).
+    pub(super) attributes: &'a [EndpointAttribute],
 }
 
 /// The envelope over `records` in endpoint id order, the decision over it
@@ -58,6 +61,10 @@ pub(super) fn answer(
             if let Some(system_id) = system_id(snapshot, &endpoint) {
                 answer = answer.with_system_id(system_id);
             }
+            if !shaping.attributes.is_empty() {
+                answer =
+                    answer.with_attributes(attributes(snapshot, &endpoint, shaping.attributes)?);
+            }
             answers.push(answer);
         }
         statuses.push((endpoint, outcome, row_count));
@@ -70,6 +77,7 @@ pub(super) fn answer(
         None => (merge(answers, shaping.order), None),
     };
     let suppressed = merged.suppressed().clone();
+    let mut attributed = merged.attributes().to_vec();
     let (mut rows, refused) = merged.into_parts();
     let mut endpoints = Vec::with_capacity(statuses.len());
     for (endpoint, outcome, row_count) in statuses {
@@ -101,6 +109,7 @@ pub(super) fn answer(
         .with_dedup(dedup);
     if verdict.failed() {
         rows.clear();
+        attributed.clear();
     } else if let Some(error) = unrepresentable {
         return Err(FanOutError::Unrepresentable(error));
     }
@@ -108,7 +117,38 @@ pub(super) fn answer(
         verdict,
         federation,
         rows,
+        attributes: attributed,
     })
+}
+
+/// The values of `selected` for `endpoint`, from its registry entry (§9.3,
+/// N12): its id, its managing organisation and its URL as
+/// `meta.federation.endpoints[]` reports them (§9.5), and its node's
+/// `system_id`.
+fn attributes(
+    snapshot: &RegistrySnapshot,
+    endpoint: &EndpointId,
+    selected: &[EndpointAttribute],
+) -> Result<Vec<String>, FanOutError> {
+    let unknown = || FanOutError::UnknownEndpoint {
+        endpoint: endpoint.clone(),
+    };
+    let registered = snapshot.endpoint(endpoint).ok_or_else(unknown)?;
+    selected
+        .iter()
+        .map(|attribute| {
+            Ok(match attribute {
+                EndpointAttribute::EndpointId => endpoint.as_str().to_owned(),
+                EndpointAttribute::Organisation => {
+                    registered.managing_organisation().as_str().to_owned()
+                }
+                EndpointAttribute::SystemId => system_id(snapshot, endpoint)
+                    .ok_or_else(unknown)?
+                    .to_owned(),
+                EndpointAttribute::Url => registered.url().as_str().to_owned(),
+            })
+        })
+        .collect()
 }
 
 /// The openEHR `system_id` of the node behind `endpoint`, as the registry

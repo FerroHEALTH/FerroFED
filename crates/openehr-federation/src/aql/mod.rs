@@ -70,10 +70,11 @@ use openehr_query::parser::ParseError;
 use openehr_query::printer::to_aql;
 
 use crate::aggregate::{AggregateFunction, Recombination};
+use crate::attribute::EndpointAttribute;
 use crate::dedup::DedupMode;
 use crate::order::ResultOrder;
 use directive::FacadeQuery;
-use refusal::{Refusal, Unreducible};
+use refusal::{Indecomposable, Refusal, Unreducible};
 use scan::{Findings, Input};
 use subject::{NamespaceOrigin, Subject};
 
@@ -344,9 +345,9 @@ pub enum ColumnSource {
     /// The re-injected issuing namespace of the patient identifier.
     Namespace,
     /// An ENDPOINT attribute selected through the directive's variable, which
-    /// no node is asked for and the Tier adds to the row (§9.3, N12).
-    // TODO(#72): name the attribute and add its value from the registry and the resolving node.
-    Endpoint,
+    /// no node is asked for: the gateway adds its value to every row, from the
+    /// registry entry of the endpoint the row came from (§9.3, N12).
+    Endpoint(EndpointAttribute),
 }
 
 /// A query to dispatch to one node, and how its rows map to the façade's
@@ -511,6 +512,14 @@ fn analyse_tree(
         }
         Some(_) | None => None,
     };
+    // NOTE: §11.6.3, an ENDPOINT attribute beside an aggregate groups the rows by endpoint, a
+    // dimension that spans nodes, so the one recombined row has no endpoint to name.
+    if let (Some(_), Some(first)) = (&recombination, endpoint.first()) {
+        return Err(Refusal::Indecomposable {
+            reason: Indecomposable::PlainColumn,
+            at: first.at.clone(),
+        });
+    }
     let ordered = rewrite::Rows::of(findings.aggregate.is_none(), context.dedup);
     let distinct = query.select.distinct;
     let mut analysis = match subject(&findings, context)? {
@@ -546,13 +555,14 @@ fn analyse_tree(
 /// The node columns the client sees, in façade order: the columns a row is
 /// distinct on (N13). The subject columns are one constant for the whole
 /// answer, and a column the rewrite adds is never seen, so neither is one.
+/// An ENDPOINT attribute is no node column: the merge holds the attributes
+/// beside each endpoint's rows, and they join the tuple there.
 fn visible(sources: &[ColumnSource]) -> Vec<usize> {
     sources
         .iter()
         .filter_map(|source| match source {
             ColumnSource::Node(column) => Some(*column),
-            // TODO(#72): an ENDPOINT attribute tells rows of different nodes apart under DISTINCT.
-            ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint => None,
+            ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint(_) => None,
         })
         .collect()
 }

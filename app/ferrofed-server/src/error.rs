@@ -64,9 +64,7 @@ pub enum Code {
     Internal,
     /// The path is outside every surface the gateway serves.
     NotFound,
-    /// The path is an ITS-REST area the gateway does not expose (§7a.1, N32),
-    /// or the query selects ENDPOINT attributes, which the gateway does not
-    /// add to rows (§9.3, N12).
+    /// The path is an ITS-REST area the gateway does not expose (§7a.1, N32).
     NotImplemented,
     /// The `FROM ENDPOINT` directive or the `openEHR-federation-endpoint`
     /// header names an endpoint the registry does not know, or the header

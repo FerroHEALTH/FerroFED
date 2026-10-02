@@ -66,6 +66,6 @@ CP-33a	Operator	N42a	11	operator	#79,#91	verified at admission or in the registr
 CP-34	Gateway	N43	9	planned	#75,#76	-
 CP-35	Gateway	N17,N18	1	covered	#33,#38,#72	-
 CP-36	Gateway	N8	2,7	covered	#43,#83	-
-CP-37	Gateway	N12	3	planned	#72	-
+CP-37	Gateway	N12	3	covered	#72	-
 CP-39	Operator	N25	7	operator	#84	verified at admission or in the registry, not on a request (section 16.2)
 CP-40	Gateway	N44	9	planned	#77,#78	-

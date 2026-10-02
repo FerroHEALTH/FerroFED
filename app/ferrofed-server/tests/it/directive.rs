@@ -296,8 +296,9 @@ async fn an_organisation_that_manages_no_endpoint_leaves_no_destination() -> Tes
     Ok(())
 }
 
+// conformance: CP-6 CP-37
 #[tokio::test]
-async fn selecting_an_endpoint_attribute_answers_501_and_asks_no_node() -> TestResult {
+async fn a_selected_endpoint_attribute_is_added_to_the_rows_and_asked_of_no_node() -> TestResult {
     let nodes = Nodes::start().await;
     let dir = tempfile::tempdir()?;
     let app = nodes.gateway(dir.path(), &[("node-a", EHR_A)])?;
@@ -306,12 +307,21 @@ async fn selecting_an_endpoint_attribute_answers_501_and_asks_no_node() -> TestR
         patient()
     );
     let (status, text) = call(app, post(body(&query)?)?).await?;
-    assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "{text}");
-    assert_eq!("not-implemented", error_body(&text)?.code);
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let answer: Answer = serde_json::from_str(&text)?;
     assert_eq!(
-        [0, 0, 0],
-        nodes.asked().await?,
-        "no row is answered without its columns"
+        vec![vec![
+            "node-a-pub".to_owned(),
+            "uid-at-a::cdr-a.example.org::1".to_owned()
+        ]],
+        answer.rows,
+        "§9.3, N12: the endpoint id comes from the registry"
+    );
+    assert_eq!([1, 0, 0], nodes.asked().await?);
+    let captured = wire(&nodes.a).await?;
+    assert!(
+        !captured.contains("p/id") && !captured.contains("node-a-pub"),
+        "§8.1: the node is asked no ENDPOINT attribute: {captured}"
     );
     Ok(())
 }

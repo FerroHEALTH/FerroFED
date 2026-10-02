@@ -38,6 +38,17 @@
 //! have been cut and returned two rows the Tier holds equal is refused like
 //! one out of order: its cut can hide a distinct row.
 //!
+//! The ENDPOINT attributes a query selects (§9.3, N12) are the gateway's, one
+//! value per endpoint, and travel beside that endpoint's rows
+//! ([`NodeAnswer::with_attributes`], [`Merged::attributes`]). Under
+//! `DISTINCT` they are columns the client selected, so they join every row's
+//! tuple: two rows of two endpoints differ when their attributes do. Within
+//! one endpoint they are one value, so they change neither the order of its
+//! rows nor which of them are equal, and the argument below holds as written.
+//! A query whose distinct columns are all ENDPOINT attributes has one value
+//! per endpoint, which any row of it carries, so its cut hides none and two
+//! equal rows at its cut are no defect.
+//!
 //! Every node is still sent the client's `LIMIT n` (or `k + n` for a page),
 //! and the global distinct top `n` lies in the union of the nodes' answers.
 //! Take a value of it, and the node holding its kept copy, the copy first in
@@ -119,6 +130,7 @@ use compare::{cmp_cell, rank_classes};
 pub struct NodeAnswer {
     endpoint: String,
     system_id: Option<String>,
+    attributes: Vec<String>,
     rows: Vec<ResultSetRow>,
 }
 
@@ -129,6 +141,7 @@ impl NodeAnswer {
         Self {
             endpoint: endpoint.into(),
             system_id: None,
+            attributes: Vec::new(),
             rows,
         }
     }
@@ -141,6 +154,16 @@ impl NodeAnswer {
         self.system_id = Some(system_id.into());
         self
     }
+
+    /// This answer from an endpoint whose ENDPOINT attributes, in the order
+    /// the query selects them, are `values` (§9.3, N12): the merge carries
+    /// them beside each of its rows ([`Merged::attributes`]), and under
+    /// `DISTINCT` they join each row's tuple (N13).
+    #[must_use]
+    pub fn with_attributes(mut self, values: Vec<String>) -> Self {
+        self.attributes = values;
+        self
+    }
 }
 
 /// The merged answer: the rows in the Tier order, cut at the `LIMIT`, the
@@ -148,6 +171,7 @@ impl NodeAnswer {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Merged {
     rows: Vec<ResultSetRow>,
+    attributes: Vec<Vec<String>>,
     refused: Vec<Refused>,
     suppressed: Suppressed,
 }
@@ -207,6 +231,15 @@ impl Merged {
     #[must_use]
     pub fn rows(&self) -> &[ResultSetRow] {
         &self.rows
+    }
+
+    /// The ENDPOINT attribute values of each merged row, one entry per row in
+    /// [`Merged::rows`] order: the values of the endpoint the row came from
+    /// ([`NodeAnswer::with_attributes`]), and an empty entry for the one row
+    /// of a recombined aggregate, which comes from no single endpoint.
+    #[must_use]
+    pub fn attributes(&self) -> &[Vec<String>] {
+        &self.attributes
     }
 
     /// The endpoints whose answer the merge refused, in endpoint id order;
@@ -327,6 +360,7 @@ struct Decoded {
     distinct: Vec<Cell>,
     version: Option<ObjectVersionId>,
     cells: Vec<String>,
+    attributes: Vec<String>,
 }
 
 /// One accepted row: its endpoint, its decoded form, and the row itself.
@@ -362,10 +396,20 @@ type Placed = (String, Decoded, ResultSetRow);
 pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     nodes.sort_by(|a, b| a.endpoint.cmp(&b.endpoint));
     if order.keys().is_empty() && order.distinct().is_none() && order.version_key().is_none() {
-        let mut rows: Vec<ResultSetRow> = nodes.into_iter().flat_map(|node| node.rows).collect();
+        let mut rows: Vec<(ResultSetRow, Vec<String>)> = nodes
+            .into_iter()
+            .flat_map(|node| {
+                let attributes = node.attributes;
+                node.rows
+                    .into_iter()
+                    .map(move |row| (row, attributes.clone()))
+            })
+            .collect();
         cut(&mut rows, order);
+        let (rows, attributes) = rows.into_iter().unzip();
         return Merged {
             rows,
+            attributes,
             ..Merged::default()
         };
     }
@@ -376,7 +420,7 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     let mut refused = Vec::new();
     let mut decoded: Vec<(String, Vec<(Decoded, ResultSetRow)>)> = Vec::new();
     for node in nodes {
-        match decode_node(node.rows, order) {
+        match decode_node(node.rows, &node.attributes, order) {
             Ok(rows) => decoded.push((node.endpoint, rows)),
             Err(reason) => refused.push(Refused {
                 endpoint: node.endpoint,
@@ -421,10 +465,15 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
     if order.distinct().is_some() {
         accepted = distinct::collapse(accepted, |(_, row, _)| row.distinct.as_slice());
     }
-    let mut rows: Vec<ResultSetRow> = accepted.into_iter().map(|(_, _, raw)| raw).collect();
+    let mut rows: Vec<(ResultSetRow, Vec<String>)> = accepted
+        .into_iter()
+        .map(|(_, row, raw)| (raw, row.attributes))
+        .collect();
     cut(&mut rows, order);
+    let (rows, attributes) = rows.into_iter().unzip();
     Merged {
         rows,
+        attributes,
         refused,
         suppressed,
     }
@@ -481,16 +530,22 @@ pub fn combine(
     }
     let mut rows = vec![aggregate::recombine(&answers, recombination)?];
     cut(&mut rows, order);
+    let attributes = vec![Vec::new(); rows.len()];
     Ok(Merged {
         rows,
+        attributes,
         refused,
         ..Merged::default()
     })
 }
 
 /// Decodes the cells the order reads from every row of one node.
+///
+/// Under `DISTINCT` the endpoint's ENDPOINT attribute values `attributes`
+/// close every row's tuple, since the client selected them too.
 fn decode_node(
     rows: Vec<ResultSetRow>,
+    attributes: &[String],
     order: &ResultOrder,
 ) -> Result<Vec<(Decoded, ResultSetRow)>, Disagreement> {
     rows.into_iter()
@@ -507,13 +562,16 @@ fn decode_node(
                 .map(|column| ordered(&raw, *column, order))
                 .collect::<Option<Vec<Cell>>>()
                 .ok_or(Disagreement::ShortRow)?;
-            let distinct = order
+            let mut distinct = order
                 .distinct()
                 .unwrap_or_default()
                 .iter()
                 .map(|column| raw.get(*column).map(decode))
                 .collect::<Option<Vec<Cell>>>()
                 .ok_or(Disagreement::ShortRow)?;
+            if order.distinct().is_some() {
+                distinct.extend(attributes.iter().map(|value| cell::text(value)));
+            }
             // NOTE: our own design; the node's malformed value is not carried, since the
             // refusal names the defect and a node-error never quotes the node's data.
             let version = match order.version_key() {
@@ -529,6 +587,7 @@ fn decode_node(
                     distinct,
                     version,
                     cells,
+                    attributes: attributes.to_vec(),
                 },
                 raw,
             ))
@@ -577,7 +636,9 @@ fn check(rows: &[(Decoded, ResultSetRow)], order: &ResultOrder) -> Result<(), Di
             return Err(Disagreement::Order);
         }
     }
-    if order.distinct().is_some() {
+    // NOTE: N13, with no node column among the distinct ones every row of the node is the one
+    // value of its ENDPOINT attributes, which any row it returned carries, so its cut hides none.
+    if order.distinct().is_some_and(|columns| !columns.is_empty()) {
         let tuples: Vec<&[Cell]> = rows
             .iter()
             .map(|(row, _)| row.distinct.as_slice())
@@ -631,7 +692,7 @@ fn tie(a: &Decoded, b: &Decoded) -> Ordering {
 }
 
 /// Keeps the rows `[offset, limit)` of the ordered rows (§11.6.1, §11.6.2).
-fn cut(rows: &mut Vec<ResultSetRow>, order: &ResultOrder) {
+fn cut<T>(rows: &mut Vec<T>, order: &ResultOrder) {
     if let Some(limit) = order.limit() {
         // NOTE: no specification governs this: our own design; a limit past
         // usize::MAX keeps every row.

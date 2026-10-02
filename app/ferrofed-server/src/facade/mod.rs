@@ -21,7 +21,8 @@
 //! [`plan`] resolves the patient at every member and builds one node query
 //! per member that knows them, the engine fans out under the budget and the
 //! strategy, and [`cells`] builds each façade row with the subject columns
-//! re-injected (N5).
+//! re-injected (N5) and the ENDPOINT attributes the query selects added from
+//! the registry entry of the endpoint the row came from (§9.3, N12).
 //! A refused query is a `400` whose message locates the fault by byte range
 //! and never quotes it (§5.4.3), and whose body names the refusal's stable
 //! code ([`crate::error`]). Every strip, refusal and outbound-gate stop is
@@ -56,7 +57,7 @@ use ferrofed_registry::id::EndpointId;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::Refusal;
-use openehr_federation::aql::{Analysis, ColumnSource, Paging, Targeting};
+use openehr_federation::aql::{Analysis, Paging, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
 
@@ -157,11 +158,6 @@ enum Failure {
     /// know, or two of them select different node sets (§8.4.1).
     #[error(transparent)]
     Target(#[from] target::TargetError),
-    /// The query selects ENDPOINT attributes (§9.3, N12).
-    #[error(
-        "the query selects ENDPOINT attributes, which this gateway does not add to rows (§9.3, N12)"
-    )]
-    EndpointAttributes,
     /// The fan-out could not be planned.
     #[error("the federated query could not be planned")]
     Plan(#[source] plan::TargetsError),
@@ -197,7 +193,6 @@ impl Failure {
             Self::Parameter(_) => Code::ParameterInvalid,
             Self::Refused(refusal) => Code::Refused(refusal.into()),
             Self::Target(error) => error.code(),
-            Self::EndpointAttributes => Code::NotImplemented,
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
             Self::NoDestination => Code::NoDestination,
             // NOTE: §11.1, a node row the gateway cannot use is a node-error
@@ -284,10 +279,6 @@ fn analysed(
         .inspect_err(|refusal| security::refused(refusal, request_id))?;
     if let Analysis::Patient(query) = &analysis {
         security::stripped(query, request_id);
-    }
-    // TODO(#72): add the ENDPOINT attributes to the rows from the registry and the resolving node.
-    if analysis.sources().contains(&ColumnSource::Endpoint) {
-        return Err(Failure::EndpointAttributes);
     }
     Ok(analysis)
 }
@@ -396,11 +387,13 @@ async fn federate(
             targets.resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
         );
     }
+    let attributes = analysis.attributes();
     let mut plan = targets
         .plan
         .completing(completion)
         .ordered(analysis.order().clone())
-        .deduplicating(dedup);
+        .deduplicating(dedup)
+        .annotating(attributes.clone());
     if let Some(recombination) = analysis.recombination() {
         plan = plan.recombining(recombination.clone());
     }
@@ -427,20 +420,21 @@ async fn federate(
     {
         status = StatusCode::FAILED_DEPENDENCY;
     }
+    let provenance = answer.attributes().to_vec();
     let mut result_set = answer
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
         .map_err(Failure::Envelope)?;
-    let rows = if status == StatusCode::OK {
-        cells::reinject(
-            std::mem::take(&mut result_set.rows),
-            &targets.sources,
+    let rows = std::mem::take(&mut result_set.rows);
+    result_set.rows = if status == StatusCode::OK {
+        let added = cells::Added {
             subject,
-        )
-        .map_err(Failure::Cells)?
+            attributes: &attributes,
+            values: &provenance,
+        };
+        cells::reinject(rows, &targets.sources, &added).map_err(Failure::Cells)?
     } else {
         Vec::new()
     };
-    result_set.rows = rows;
     Ok((status, result_set))
 }
 
@@ -527,11 +521,6 @@ mod tests {
                 }),
                 "targeting-conflict",
                 StatusCode::BAD_REQUEST,
-            ),
-            (
-                Failure::EndpointAttributes,
-                "not-implemented",
-                StatusCode::NOT_IMPLEMENTED,
             ),
             (
                 Failure::Plan(plan::TargetsError::Patient(PatientRefError::EmptyNamespace)),

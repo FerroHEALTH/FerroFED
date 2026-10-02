@@ -65,11 +65,9 @@ N19), and the keywords are case-insensitive like every AQL keyword.
   aggregate, which goes to the node unchanged (N14, §11.6.3), and a function
   AQL does not define. Pinned to more than one endpoint, the same query
   follows the rules for an undirected one.
-- The variable (`p` above) may only be selected, as an ENDPOINT attribute such
-  as `p/id` (§9.3). Selecting one answers `501` with `not-implemented`:
-  adding those columns to the rows is planned build order. Using the variable in `WHERE`,
-  in `ORDER BY` or inside a function, or binding its name again in `FROM`, is
-  refused `400` with `endpoint-variable`.
+- The variable (`p` above) may only be selected, as an ENDPOINT attribute
+  (§9.3). Using it in `WHERE`, in `ORDER BY` or inside a function, or binding
+  its name again in `FROM`, is refused `400` with `endpoint-variable`.
 
 Or leave the AQL as it is and send the node set in a header (§8.4). This is
 the form for a stored query or a query a user wrote, since the query text
@@ -103,6 +101,48 @@ may be sent as several field lines; empty list elements are ignored (RFC 9110
 - The headers apply to every federated request, the routed requests of
   [follow-ups](#follow-ups) included; the directive applies to AQL only
   (§8.4).
+
+## Provenance columns: ENDPOINT attributes
+
+A directed query can ask for the endpoint each row came from. Select an
+attribute through the directive's variable, and the gateway fills it in for
+every row from the registry entry of the endpoint that answered (§9.3, N12):
+
+```sql
+SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition_id
+FROM ENDPOINT p [ "node_1", "node_2" ]
+  CONTAINS EHR e CONTAINS COMPOSITION c
+WHERE e/ehr_status/subject/external_ref/id/value = '12345'
+```
+
+| Path | Value in the row |
+|---|---|
+| `p/id`, `p/endpoint_id` | the endpoint id, as `meta.federation.endpoints[].id` reports it |
+| `p/organisation`, `p/organization_id` | the endpoint's managing organisation (N20) |
+| `p/system_id` | the openEHR `system_id` of the endpoint's node, the follow-up routing key (§12) |
+| `p/url` | the CDR base URL the registry holds |
+
+- Each value is a JSON string. No node is asked for it, and no node receives
+  the variable or the directive (§8.1).
+- A query that selects no attribute gets exactly the columns and rows a single
+  CDR would return (N17).
+- `columns[]` is the gateway's rendering of your query: an attribute column is
+  named by its alias, and its path is the ITS-REST form with the variable
+  stripped, `/id` for `p/id` (§9.2).
+- An alias keeps an attribute apart from an EHR-derived column of the same
+  name: `p/system_id AS node_system, e/system_id/value AS system_id` returns
+  both (N18). Giving the attribute and an EHR-derived column the same alias is
+  refused `400` with `endpoint-name-collision`, so no column is shadowed
+  (CP-35). Any other path through the variable, such as `p/name` or
+  `p/id/value`, is refused `400` with `endpoint-attribute-unknown`.
+- Under `SELECT DISTINCT` the attributes count as selected columns: two rows
+  of two endpoints are two rows when their attributes differ (N13).
+- An attribute beside an aggregate over more than one endpoint would count per
+  endpoint, so it is refused `400` with `indecomposable-aggregate`; pinned to
+  one endpoint, the aggregate row carries the attribute (§11.6.3).
+- Ordering on an attribute is refused `400` with `endpoint-variable`: §9.3
+  defines the attributes as selectable only. The gateway already orders tied
+  rows by endpoint id (§11.6.1).
 
 ## What a client gets back
 

@@ -12,6 +12,8 @@ mod dedup;
 mod directive;
 mod distinct;
 mod e2e;
+mod e2e_attributes;
+mod endpoint_attributes;
 mod endpoint_report;
 mod errors;
 mod facade;
