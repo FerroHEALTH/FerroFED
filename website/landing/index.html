@@ -11,7 +11,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>FerroFED: an openEHR federation gateway</title>
-  <meta name="description" content="FerroFED is a pure-Rust openEHR federation gateway after the Federation Tier with AQL specification: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out with each node's provenance. The project is in its design phase.">
+  <meta name="description" content="FerroFED is a pure-Rust openEHR federation gateway after the Federation Tier with AQL specification: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out with each node's provenance. Released as signed Linux binaries and a container image.">
   <link rel="canonical" href="https://ferrofed.eu/">
   <link rel="stylesheet" href="./style.css">
   <link rel="icon" href="./assets/brand/favicon.svg" type="image/svg+xml">
@@ -21,7 +21,7 @@
   <meta property="og:url" content="https://ferrofed.eu/">
   <meta property="og:site_name" content="FerroFED">
   <meta property="og:title" content="FerroFED: an openEHR federation gateway">
-  <meta property="og:description" content="A pure-Rust openEHR federation gateway: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out. The project is in its design phase.">
+  <meta property="og:description" content="A pure-Rust openEHR federation gateway: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out. Signed Linux binaries and a container image.">
   <meta name="twitter:card" content="summary">
 
   <!-- Structured data. Browsers never execute an application/ld+json data block
@@ -51,7 +51,8 @@
       <nav class="nav-links" aria-label="Primary">
         <a href="./docs/">Docs</a>
         <a href="./docs/evaluate/the-federation-tier.html" class="hide-sm">The specification</a>
-        <a href="./docs/evaluate/what-ferrofed-claims.html" class="hide-sm">What is decided</a>
+        <a href="./docs/operate/container.html" class="hide-sm">Install</a>
+        <a href="./docs/evaluate/what-ferrofed-claims.html" class="hide-sm">What it claims</a>
         <a href="https://github.com/FerroHEALTH/FerroFED" rel="noopener">GitHub</a>
       </nav>
     </div>
@@ -61,7 +62,8 @@
 
     <section class="hero">
       <div class="wrap">
-        <p class="status" role="note">Design phase. No release yet.</p>
+        <img class="hero-logo" src="./assets/brand/ferrofed-icon.svg" alt="FerroFED" width="88" height="88">
+        <p class="status" role="note">v0.0.3 released. Linux binaries and a container image, signed.</p>
         <h1>Where else the record is.</h1>
         <p class="sub">
           FerroFED is an openEHR federation gateway. A client sends it an
@@ -71,19 +73,62 @@
           each node's provenance. It holds no clinical data of its own.
         </p>
         <div class="hero-cta">
-          <a class="btn btn-primary" href="./docs/evaluate/the-federation-tier.html">Read about the specification</a>
-          <a class="btn btn-ghost" href="./docs/evaluate/what-ferrofed-claims.html">See what is decided</a>
+          <a class="btn btn-primary" href="./docs/operate/container.html">Install and run</a>
+          <a class="btn btn-ghost" href="./docs/evaluate/the-federation-tier.html">Read about the specification</a>
         </div>
         <p class="note">
-          The repository, its gates and the vendored specification exist. The
-          architecture is being written by a research program on the tracker,
-          and there is no binary yet. This page says so rather than describing
-          software you cannot download.
+          Each release ships the <code>ferrofed</code> binary for x86_64 and
+          aarch64 Linux, on glibc and on musl, with SLSA provenance and SBOMs,
+          and the image <code>ghcr.io/ferrohealth/ferrofed</code> for
+          <code>linux/amd64</code> and <code>linux/arm64</code>.
         </p>
       </div>
     </section>
 
-    <section id="decided" class="surface">
+    <section id="run" class="surface">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Run it</span>
+          <h2>The gateway and two member CDRs, in one command</h2>
+          <p>
+            The repository's quickstart starts the published image beside two
+            FerroEHR nodes, each with its own database and system id. Create
+            one EHR on each, then send the gateway one ordinary ITS-REST query.
+          </p>
+        </div>
+        <pre class="cmd"><code>git clone https://github.com/FerroHEALTH/FerroFED.git
+cd FerroFED
+docker compose up --wait
+
+curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
+  http://127.0.0.1:8081/ferroehr/rest/openehr/v1/ehr
+curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
+  http://127.0.0.1:8082/ferroehr/rest/openehr/v1/ehr
+
+curl http://127.0.0.1:8080/v1/query/aql \
+  -H 'Content-Type: application/json' \
+  -d '{"q":"SELECT e/ehr_id/value FROM EHR e"}'</code></pre>
+        <div class="prose">
+          <p>
+            The answer is one ITS-REST result set with the EHR of each node in
+            its rows, and <code>meta.federation</code> reports both endpoints
+            <code>active</code>. The quickstart credentials are development
+            values for a laptop.
+          </p>
+          <p>
+            To run the binary on its own, download a tarball from the
+            <a href="https://github.com/FerroHEALTH/FerroFED/releases/latest" rel="noopener">latest release</a>
+            and verify it with <code>gh attestation verify</code> before you
+            start it. <a href="./docs/operate/container.html">The container
+            page</a> covers the image, the ports and the verification, and
+            <a href="./docs/operate/configuration.html">the configuration
+            page</a> covers the registry and the identity service.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="properties">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">What the specification asks</span>
@@ -91,45 +136,54 @@
           <p>
             FerroFED follows the openEHR Federation Working Group's Federation
             Tier with AQL specification. Each of these is a normative
-            requirement there, and each will be scored by a test here.
+            requirement there. The
+            <a href="./docs/evaluate/conformance.html">conformance matrix</a>
+            shows which points a test scores today.
           </p>
         </div>
         <div class="grid">
 
           <article class="card">
+            <span class="tag">In v0.0.3</span>
             <h3>Transparent to the client</h3>
             <p>
-              The gateway is a conformant openEHR Query API. A basic patient
-              query needs no federation syntax, and the answer is an ordinary
-              ITS-REST result set with the federation's additions in one
-              metadata member.
+              <code>POST /v1/query/aql</code> takes a conformant openEHR query
+              with no federation syntax and answers one ordinary ITS-REST
+              result set, with the federation's additions in one metadata
+              member that names every endpoint.
             </p>
           </article>
 
           <article class="card">
+            <span class="tag">In v0.0.3</span>
             <h3>No identifier reaches a node</h3>
             <p>
               The patient identifier is resolved to each node's local EHR id
-              outside AQL and consumed at the gateway. Nothing the gateway
-              sends to a node carries a directly identifying identifier.
+              outside AQL, through an IHE PIXm PIX Manager, and consumed at the
+              gateway. The rewrite refuses a query that would leak it, and an
+              outbound gate checks every request again before it leaves.
             </p>
           </article>
 
           <article class="card">
+            <span class="tag">In v0.0.3</span>
             <h3>Never a silent partial answer</h3>
             <p>
               Every node in scope is reported with a status. When a node that
-              was asked does not answer, the default is to fail the query;
-              flagged partial rows go only to a client that asks for them.
+              was asked does not answer, the default is to fail the query.
+              Flagged partial rows for a client that asks for them are on
+              <code>main</code> for the next release.
             </p>
           </article>
 
           <article class="card">
+            <span class="tag">Planned</span>
             <h3>Follow-ups go to the owner</h3>
             <p>
               A read or a write after the query is routed to the CDR that
-              created the record, on its system id. Consent stays with each
-              node, enforced before it releases data.
+              created the record, on its system id. This is the work of the
+              <a href="https://github.com/FerroHEALTH/FerroFED/milestone/5" rel="noopener">v0.0.5 milestone</a>.
+              Consent stays with each node, enforced before it releases data.
             </p>
           </article>
 
@@ -137,7 +191,7 @@
       </div>
     </section>
 
-    <section id="audiences">
+    <section id="audiences" class="surface">
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">Where to start</span>
@@ -149,25 +203,29 @@
             <span class="tag">Evaluate</span>
             <h3>Does this fit my problem?</h3>
             <p>
-              What the Federation Tier is, what FerroFED will and will not
-              claim, the version pins and the licence.
+              What the Federation Tier is, what FerroFED claims and what is
+              planned, where each conformance point stands, the version pins
+              and the licence.
             </p>
             <ul>
               <li><a href="./docs/evaluate/the-federation-tier.html">The Federation Tier with AQL</a></li>
-              <li><a href="./docs/evaluate/what-ferrofed-claims.html">What FerroFED will claim</a></li>
+              <li><a href="./docs/evaluate/what-ferrofed-claims.html">What FerroFED claims</a></li>
+              <li><a href="./docs/evaluate/conformance.html">Conformance matrix</a></li>
               <li><a href="./docs/evaluate/versions.html">Pinned versions</a></li>
             </ul>
           </article>
 
           <article class="card audience">
             <span class="tag">Operate</span>
-            <h3>What will it need around it?</h3>
+            <h3>How do I run it, and what does it need?</h3>
             <p>
-              Member CDRs over ITS-REST, an identifier cross-reference service,
-              and optionally a locator and a directory, plus the failure
-              behaviour to know before you run it.
+              One binary or a distroless image, a registry of member CDRs over
+              ITS-REST, and an identifier cross-reference service, plus the
+              failure behaviour to know before you run it.
             </p>
             <ul>
+              <li><a href="./docs/operate/container.html">The container image and the quickstart</a></li>
+              <li><a href="./docs/operate/configuration.html">Configuration</a></li>
               <li><a href="./docs/operate/deployment-shape.html">What FerroFED runs beside</a></li>
             </ul>
           </article>
@@ -181,6 +239,7 @@
             </p>
             <ul>
               <li><a href="./docs/integrate/client-contract.html">The client contract</a></li>
+              <li><a href="./docs/integrate/errors.html">Errors and status codes</a></li>
             </ul>
           </article>
 
@@ -189,8 +248,8 @@
             <h3>How is the work organised?</h3>
             <p>
               The tracker is the worklist and the checks are committed scripts
-              you can run yourself. While the design is open, cited evidence
-              is worth more than speculative code.
+              you can run yourself. A change answers one issue and cites the
+              specification section it implements.
             </p>
             <ul>
               <li><a href="./docs/contribute/how-the-work-is-organised.html">How the work is organised</a></li>
@@ -206,20 +265,21 @@
     <!-- The tracker's milestones are the roadmap. The list between the markers
          is rendered from the GitHub milestones when the site is assembled
          (scripts/site/assemble.sh); the committed copy carries the link only. -->
-    <section id="status" class="surface">
+    <section id="status">
       <div class="wrap">
         <div class="status-panel">
           <h2>Where the project is</h2>
           <p>
-            The first milestone is the repository and the research program
-            that writes the architecture; the second is the first federated
-            query over two nodes. Every issue carries its acceptance criteria,
-            and a release is cut when its milestone has no open issue left.
+            v0.0.3 is the current release. It carries the first federated
+            query over two nodes and the patient resolved outside AQL. The
+            tracker's milestones are the roadmap; every issue carries its
+            acceptance criteria, and a release is cut when its milestone has
+            no open issue left.
           </p>
           <!-- roadmap:begin -->
           <!-- roadmap:end -->
           <div class="hero-cta">
-            <a class="btn btn-primary" href="./docs/">Read the documentation</a>
+            <a class="btn btn-primary" href="https://github.com/FerroHEALTH/FerroFED/releases/latest" rel="noopener">Get the latest release</a>
             <a class="btn btn-ghost" href="https://github.com/FerroHEALTH/FerroFED/milestones" rel="noopener">See the roadmap</a>
           </div>
         </div>
@@ -248,6 +308,7 @@
             <h4>Read</h4>
             <ul>
               <li><a href="./docs/">Documentation</a></li>
+              <li><a href="./docs/operate/container.html">Install and run</a></li>
               <li><a href="./docs/evaluate/the-federation-tier.html">The specification</a></li>
               <li><a href="./docs/evaluate/licensing.html">Licensing</a></li>
               <li><a href="https://syntaric.github.io/openehr-federation-spec/" rel="noopener">Federation Tier with AQL</a></li>
@@ -257,6 +318,7 @@
             <h4>Project</h4>
             <ul>
               <li><a href="https://github.com/FerroHEALTH/FerroFED" rel="noopener">GitHub</a></li>
+              <li><a href="https://github.com/FerroHEALTH/FerroFED/releases" rel="noopener">Releases</a></li>
               <li><a href="https://github.com/FerroHEALTH/FerroFED/issues" rel="noopener">Issues</a></li>
               <li><a href="https://github.com/FerroHEALTH/FerroFED/milestones" rel="noopener">Milestones</a></li>
             </ul>

@@ -29,25 +29,54 @@ binary has no probe subcommand, so probe it from outside: `GET /health`
 answers `200` while the process is up, and `GET /health/readiness` answers
 `200` when every registered indicator is up.
 
-The image lane publishes it as `ghcr.io/ferrohealth/ferrofed`. To build it
-yourself from the binaries of a published release:
+The image lane publishes it as `ghcr.io/ferrohealth/ferrofed`, tagged with the
+release version, its `major.minor` and `latest`, and attests the index and
+each platform manifest. Verify the image you pull:
 
 ```sh
-scripts/release/stage-dist.sh 0.0.1
+gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
+  --repo FerroHEALTH/FerroFED \
+  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
+```
+
+To build it yourself from the binaries of a published release, name that
+release's version:
+
+```sh
+scripts/release/stage-dist.sh X.Y.Z
 docker buildx build -f docker/Dockerfile --platform linux/arm64 \
-  -t ghcr.io/ferrohealth/ferrofed:0.0.1 --load .
+  -t ghcr.io/ferrohealth/ferrofed:X.Y.Z --load .
 ```
 
 The stage script checks every tarball against the `.sha256sum` published
 beside it before it unpacks a byte.
 
+## The release binaries
+
+Every release on the
+[releases page](https://github.com/FerroHEALTH/FerroFED/releases/latest)
+carries `ferrofed` for `x86_64` and `aarch64` Linux, on glibc and on musl. Each
+tarball holds the binary, `LICENSE`, `NOTICE` and the README, and comes with
+its `.sha256sum`, a CycloneDX and an SPDX SBOM, and the Sigstore bundles of its
+provenance and SBOM attestations. Verify a tarball before you unpack it:
+
+```sh
+gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
+  --repo FerroHEALTH/FerroFED \
+  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-build.yml
+```
+
 ## The quickstart
 
 ```sh
-scripts/release/stage-dist.sh 0.0.1
-docker compose up --build --wait
+docker compose up --wait
 curl http://127.0.0.1:8080/health
 ```
+
+The gateway service runs `ghcr.io/ferrohealth/ferrofed` at the current release,
+the tag default `compose.yaml` holds equal to the product version, and
+`FERROFED_VERSION` selects another published version. To run an image you
+built from staged binaries instead, add `--build`.
 
 | Service | What it is | On the host |
 |---|---|---|
@@ -71,8 +100,7 @@ reachable from the network even when the firewall says otherwise. Set
 `FERROFED_BIND_HOST` to the one address you mean, or put a reverse proxy in
 front.
 
-The gateway federates the two nodes from the release that carries the
-federated query (v0.0.2). `docker/quickstart/registry.toml` names the nodes and
+The gateway federates the two nodes. `docker/quickstart/registry.toml` names the nodes and
 `docker/quickstart/ferrofed.toml` configures the gateway with each node's
 quickstart credentials; Compose mounts both read-only. `POST /v1/query/aql`
 answers one ITS-REST `RESULT_SET` over both nodes, with `meta.federation`

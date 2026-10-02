@@ -7,8 +7,8 @@
 
 - [Product scope](product-scope.md): the owner's product statement is the
   ceiling on what this repository may claim; a transparent ITS-REST gateway
-  on the Federation Tier specification; everything structural is research on
-  the v0.0.1 program
+  on the Federation Tier specification; everything structural was decided by
+  the v0.0.1 research program into `docs/architecture.md`
 - [Spec pin 0.9.0 RC](spec-pin-0-9-0-rc.md): specification at `7162d0c`,
   reference implementation at `92aff3c`, both vendored; 1.0 expected the week
   of 2026-10-08 with a dedicated re-pin issue; owner 2026-10-01
@@ -38,7 +38,7 @@
 ## Family rules (carried from FerroBRIDGE and FerroTERM)
 
 - [Owner work style](owner-work-style.md): research-first, evidence-based;
-  no scaffold while the design is open; pause when asked
+  no scaffold ahead of a decided design or its issue; pause when asked
 - [Memory lives in the repo](memory-lives-in-repo.md): every learning is a
   tracked file here, never a per-user note
 - [Milestones 0.0.x](milestones-0-0-x.md): start at v0.0.1, step by a patch

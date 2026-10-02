@@ -37,14 +37,16 @@ that is a separate step the caller takes after seeing the plan.
    parent, children, and blockers.
 2. **Turn the task into a plan**, stating:
    - **What** the task requires, in one or two sentences.
-   - **Which sources or files** are involved. The project is in its design
-     phase, so most issues are research: name the specification sections, the
-     N and CP numbers, and the prior art to read (the vendored reference
-     implementation under `docs/specs/federation-ref/`), not files that do not exist. Once code
-     exists, find the files by searching rather than guessing paths.
+   - **Which sources or files** are involved. Most issues are implementation
+     against the architecture of record (`docs/architecture.md`): name the
+     specification sections, the N and CP numbers, the section of
+     `docs/architecture.md` that decides the design, and the crates and files
+     the change touches, found by searching rather than guessing paths. The
+     vendored reference implementation under `docs/specs/federation-ref/` is
+     prior art to read, never an oracle.
    - **Which mechanism** applies. A **research** issue produces cited evidence
-     and a recommendation on the issue thread, and it may produce
-     `docs/architecture.md` when the research program closes. An **implementation** issue
+     and a recommendation on the issue thread, and the owner's decision lands
+     in `docs/architecture.md`. An **implementation** issue
      on a generated layer changes the generator and regenerates, never a
      `// @generated` file (`.claude/rules/codegen.md`); an implementation issue
      on the engine is idiomatic Rust of our own design, built as compiling,

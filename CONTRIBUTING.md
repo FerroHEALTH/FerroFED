@@ -3,25 +3,24 @@
 
 # Contributing to FerroFED
 
-FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family and has no
-code yet. The design happens on the tracker of this repository, and the
-tracker is the record of it. The conventions the family shares apply from the
-first commit, and the working discipline is [`CLAUDE.md`](CLAUDE.md). Read it
-before making a change.
+FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family. The
+design of record is [`docs/architecture.md`](docs/architecture.md), the build
+is tracked on the issues of this repository, and the working discipline is
+[`CLAUDE.md`](CLAUDE.md). Read both before making a change.
 
-## What helps most right now
+## What helps most
 
-Evidence, not scaffolding. A citation from the Federation Tier specification,
-openEHR AQL or ITS-REST, or a bound IHE profile that settles an open question,
-or first-hand experience running a federated openEHR deployment, is worth more
-than a pull request that guesses at a layout. Do not open a pull request that
-scaffolds a Cargo workspace or a crate structure; that decision belongs to the
-research program in the v0.0.1 milestone.
+A change that answers an open issue, with its acceptance criteria met and the
+specification section it implements cited. A citation from the Federation Tier
+specification, openEHR AQL or ITS-REST, or a bound IHE profile that shows the
+gateway or the design is wrong, and first-hand experience running a federated
+openEHR deployment, help as much. A change to the crate layout or another
+decision of the architecture of record starts as an issue with the evidence,
+before any code.
 
 ## Build and test
 
-Today the gates are the shell, workflow and guard set, and they run on every
-change:
+The shell, workflow and guard set runs on every change:
 
 ```
 zizmor --min-severity=low .github/
@@ -35,19 +34,27 @@ scripts/checks/conformance-matrix.sh
 ```
 
 These are the tier-1 guards `ci.yml` runs, with the same flags, so a local
-pass means a CI pass. `hadolint` joins them when a first-party Dockerfile
-exists. The `conclusion` job aggregates them and is the single required check
-on `main`.
+pass means a CI pass. `hadolint` lints `docker/Dockerfile` in the same tier.
+The `conclusion` job aggregates every job and is the single required check on
+`main`.
 
-Once the Cargo workspace exists, the local gates mirror CI exactly:
+The Rust gates mirror CI:
 
 ```
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo nextest run --workspace --locked
-cargo test --doc --workspace --locked
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo nextest run --workspace --locked --all-features
+cargo test --doc --workspace --locked --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --no-deps --all-features --document-private-items
 cargo deny check
+```
+
+The container end-to-end suite needs Docker and runs behind its gate, as the
+`e2e (containers)` job runs it:
+
+```
+FERROFED_E2E=1 cargo nextest run --locked -p ferrofed-testkit -p ferrofed-server \
+  -E 'package(ferrofed-testkit) or (package(ferrofed-server) and test(/^e2e::/))'
 ```
 
 Every cargo invocation uses `--locked`, and `Cargo.lock` is committed.

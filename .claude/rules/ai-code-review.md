@@ -22,9 +22,8 @@ It is a **second opinion**. It is not authority, and it gates no merge.
    IHE and Dutch bindings
    (`spec-adherence.md`): the oracle.
 2. The hard rules: `CLAUDE.md` and the `.claude/rules/*.md` files.
-3. The local gates: `shellcheck`, `actionlint`, `zizmor`, and once code
-   exists `cargo fmt`, `clippy`, `cargo nextest`, `cargo deny`, plus the CI
-   guards.
+3. The local gates: `shellcheck`, `actionlint`, `zizmor`, `cargo fmt`,
+   `clippy`, `cargo nextest`, `cargo deny`, plus the CI guards.
 4. The analyzer.
 
 A finding that contradicts a spec citation, or asks for something the rules

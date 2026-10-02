@@ -6,24 +6,23 @@
 This file is the single source of truth for every version pin in FerroFED.
 When it and a file that repeats a pin disagree, that is drift. Fix the
 disagreement; never let either side silently win.
-`scripts/checks/versions.sh` enforces the cross-file agreement it can reach and
-skips loudly for the files that do not exist yet, so the guard is useful on a
-tree with no Cargo workspace and grows teeth as files appear.
+`scripts/checks/versions.sh` enforces the cross-file agreement it can reach,
+and skips loudly for any file it compares that is absent.
 
 No specification governs this file; it is FerroFED's own design.
 
 ## Specifications
 
-The ground for each pin will be the pin table in `docs/architecture.md`, the
-output of the v0.0.1 research program, which records why the value is what it
-is. Once that file exists, the guard compares the first token of each `Pin`
-cell below with the first token of the same row there.
+The ground for each pin is the pin table in `docs/architecture.md`, the
+architecture of record, which records why the value is what it is. The guard
+compares the first token of each `Pin` cell below with the first token of the
+same row there.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Federation Tier with AQL | 0.9.0 | `docs/architecture.md`, later the `OPTIONS {base}/` self-description (`spec_version`) |
-| openEHR ITS-REST | 1.1.0 | `docs/architecture.md`, later the node client and the facade |
-| openEHR AQL | 1.1.0 | `docs/architecture.md`, later the AQL rewrite |
+| Federation Tier with AQL | 0.9.0 | `docs/architecture.md`, the `FEDERATION_SPEC` constant of `openehr-federation`, the source of the `spec_version` an `OPTIONS {base}/` body carries |
+| openEHR ITS-REST | 1.1.0 | `docs/architecture.md`, the `ITS_REST` constant of `ferrofed-engine` |
+| openEHR AQL | 1.1.0 | `docs/architecture.md`, the `AQL` constant of `openehr-federation` |
 
 The federation specification is a release candidate circulated for comment by
 the openEHR Federation Working Group. Its 1.0 release replaces this row and the
@@ -189,9 +188,8 @@ each cut moves this row and every file that repeats it in one pull request.
 |---|---|---|
 | Product version | 0.0.3 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
 
-`CITATION.cff` tracks this row exactly, and the guard compares the two whenever
-`CITATION.cff` exists. Once the root `Cargo.toml` lands, the guard also compares
-its `[workspace.package]` `version` with both.
+`CITATION.cff` tracks this row exactly, and the guard compares the two, and
+the root `Cargo.toml` `[workspace.package]` `version` with both.
 
 ## Documentation toolchain
 

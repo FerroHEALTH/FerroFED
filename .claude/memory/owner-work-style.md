@@ -22,9 +22,11 @@ discover phase".
 - For any foundational choice, do the research and put the evidence in front
   of the owner before building. Present options with a recommendation; do not
   default to the conventional answer.
-- Do not scaffold code or a workspace while the design is open. FerroFED is
-  in exactly that phase until the v0.0.1 research program closes
-  ([[product-scope]]).
+- Do not scaffold code or a workspace while the design is open. FerroFED's
+  v0.0.1 research program closed with the architecture of record, decided on
+  2026-10-01 ([[product-scope]]), so the build follows it, and each crate gets
+  its behaviour from its own issue, never ahead of one. A new foundational
+  question goes back to research and the owner before any code.
 - Take the owner's design intuitions seriously and test them against
   evidence; reconcile rather than dismiss.
 - Pure Rust, memory-safe, lightweight, single binary are standing constraints

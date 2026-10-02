@@ -18,10 +18,10 @@
 # thrashes the cargo cache; clippy is a per-phase gate the agent runs
 # explicitly (`cargo clippy --workspace --all-targets`).
 #
-# The repository is in its DESIGN PHASE and has no Cargo.toml. Everything here
-# works without one: no cargo command is invoked, rustfmt formats a single file
-# standalone, and the comment guard reads text. With no workspace present the
-# hook is a quiet exit 0.
+# No cargo command runs here: rustfmt formats the one edited file on its own
+# (edition 2024), the comment guard and shellcheck read that one file, and a
+# missing tool is skipped. Any other file, and a path that no longer exists,
+# is a quiet exit 0.
 
 set -uo pipefail
 

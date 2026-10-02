@@ -37,20 +37,22 @@ drift out of sync with the tree
 | Direction and status, publicly     | the roadmap project board, a view over the tracker (`.claude/rules/project-board.md`)              |
 | Why a change looks the way it does | the pull request description that landed it, and the issue's closing comment                        |
 | What a release contains            | [`CHANGELOG.md`](CHANGELOG.md) and the `vX.Y.Z` milestone                                          |
-| The architecture                   | `docs/architecture.md`, once the research program in the v0.0.1 milestone produces it, and the `CLAUDE.md` files |
+| The architecture                   | [`docs/architecture.md`](docs/architecture.md), the design of record decided on 2026-10-01, and the `CLAUDE.md` files |
 | What conformance means             | the tests, against the specifications ([`.claude/rules/testing.md`](.claude/rules/testing.md)) |
 
 Owner rulings and releases are milestones on the tracker. A decision that
 exists only in a conversation is not a decision this project made.
 
-## The design phase, and why nothing is built yet
+## Evidence first, then the build
 
-FerroFED starts as a research program in the v0.0.1 milestone. The
+FerroFED started as a research program in the v0.0.1 milestone. The
 foundation of a federation gateway is how it rewrites a query, resolves a
 patient and merges answers without leaking an identifier, and getting that
-wrong is expensive to undo, so the evidence comes first and the code follows.
-Until that program closes there are no crates and no engine design, and the
-repository says so rather than describing a design it has not chosen.
+wrong is expensive to undo, so the evidence came first. The program closed
+with the architecture of record, every decision in its register decided by the
+maintainer on 2026-10-01, and the gateway is built against it one milestone at
+a time. A foundational change to that design takes the same route: cited
+evidence on an issue, then the maintainer's decision, then the code.
 
 ## How a change gets in
 
@@ -58,11 +60,12 @@ repository says so rather than describing a design it has not chosen.
    acceptance criteria that settle it.
 2. **A pull request implements it** on a conventional-type branch, declaring
    `Closes #N`.
-3. **The gates run.** They are not advisory and there is no override. Today
-   that is the workflow and shell set (`actionlint`, `zizmor`, `shellcheck`)
-   plus the comment-style, file-length and versions guards; the Rust set (format, clippy at
-   `-D warnings`, the test suite, the documentation build, `cargo deny`) joins
-   with the workspace ([`.claude/rules/ci-cd.md`](.claude/rules/ci-cd.md)).
+3. **The gates run.** They are not advisory and there is no override: the
+   workflow and shell set (`actionlint`, `zizmor`, `shellcheck`, `hadolint`),
+   the committed guards under `scripts/checks/`, and the Rust set (format,
+   clippy at `-D warnings`, the test suite with its container end-to-end
+   suite, the documentation build, `cargo deny`)
+   ([`.claude/rules/ci-cd.md`](.claude/rules/ci-cd.md)).
 4. **The maintainer merges.** A pull request from an account without write
    access additionally requires a code-owner approval before it can merge
    ([`.github/CODEOWNERS`](.github/CODEOWNERS)).
@@ -138,8 +141,8 @@ request:
 - **No weakening a test, a gate, or an expectation to make a build green.** A
   red gate is information.
 - **No claim the project cannot demonstrate.** If a claim has no evidence
-  behind it, it does not get written. During the design phase that rule bites
-  hardest: an undecided design is described as undecided.
+  behind it, it does not get written. A feature that is planned is described
+  as planned, with the issue that builds it.
 
 ## Code of conduct
 

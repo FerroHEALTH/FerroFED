@@ -8,7 +8,7 @@
 # Evaluate
 
 - [The Federation Tier with AQL](evaluate/the-federation-tier.md)
-- [What FerroFED will claim](evaluate/what-ferrofed-claims.md)
+- [What FerroFED claims](evaluate/what-ferrofed-claims.md)
 - [Conformance matrix](evaluate/conformance.md)
 - [Pinned versions](evaluate/versions.md)
 - [Licensing](evaluate/licensing.md)

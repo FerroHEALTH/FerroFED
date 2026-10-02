@@ -1,6 +1,6 @@
 ---
 name: product-scope
-description: "What FerroFED is (the owner's product statement, as the README and the repository description give it), the transparent-intermediary premise, and that everything structural is research on the v0.0.1 program issue"
+description: "What FerroFED is (the owner's product statement, as the README and the repository description give it), the transparent-intermediary premise, and that the research program on #16 decided everything structural into docs/architecture.md"
 metadata:
   type: project
 ---
@@ -27,16 +27,18 @@ Federation Tier specification
 text; ITS-REST on both faces (the client face and every node); identity
 resolved outside AQL; no clinical data stored at the gateway.
 
-**Open, research on the v0.0.1 program issue** (`#16` in
-`CLAUDE.md` until it is numbered): the crate layout, the AQL rewrite on the
-published `openehr-query` model, the identity binding to build first (IHE
-PIXm, mCSD, or the Dutch Generic Functions of Annex B), the registry storage,
-the merge and completeness engine, the stored-query registry, the outbound
-credential model, and the acceptance instrument (the specification's §16
-tracks and §17 conformance points are the obvious candidate). Do not scaffold
-ahead of it ([[owner-work-style]]), and make no technical claim beyond the
-statement above or a cited finding.
+**Decided by the research program** (#16, closed): the crate layout, the AQL
+rewrite on the published `openehr-query` model, the identity binding built
+first (IHE PIXm), the registry storage, the merge and completeness engine, the
+stored-query registry, the outbound credential model, and the acceptance
+instrument (the conformance matrix over the §17 points). The owner decided
+every entry of its register on 2026-10-01, and `docs/architecture.md` is the
+design of record. Build each piece from its own issue ([[owner-work-style]]),
+and make no technical claim beyond the statement above, the architecture of
+record, or a cited finding.
 
 **Roadmap shape (owner, 2026-10-01):** milestones v0.0.1 to v0.0.9, with
 v0.0.1 the repository setup and the research program and v0.0.2 the
-workspace and the first federated query ([[milestones-0-0-x]]).
+workspace and the first federated query ([[milestones-0-0-x]]). v0.0.1 was
+released on 2026-10-01, and v0.0.2 and v0.0.3 shipped together as release
+0.0.3 on 2026-10-02.

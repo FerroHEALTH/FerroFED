@@ -8,13 +8,14 @@ the difference between an answer and a thread nobody is paged for.
 
 ## I have a question
 
-FerroFED is in its **design phase**: there is no code and no release, so there
-is little to configure and nothing to operate. [`CLAUDE.md`](CLAUDE.md) carries
-the status and the working discipline, and the research program in the
-[v0.0.1 milestone](https://github.com/FerroHEALTH/FerroFED/milestones) is
-where the design decisions appear with their citations. The governing text is
-the [Federation Tier with AQL specification](https://syntaric.github.io/openehr-federation-spec/).
-The documentation site at <https://ferrofed.eu/> is planned.
+Start with the documentation at <https://ferrofed.eu/docs/>: installing and
+running the gateway, its configuration, the client contract, and what it
+claims. The design of record is
+[`docs/architecture.md`](docs/architecture.md), every decision with its
+citation, and the
+[releases page](https://github.com/FerroHEALTH/FerroFED/releases) carries each
+release with its notes. The governing text is the
+[Federation Tier with AQL specification](https://syntaric.github.io/openehr-federation-spec/).
 
 If those do not answer it, **open a GitHub issue** through the
 [issue chooser](https://github.com/FerroHEALTH/FerroFED/issues/new/choose):
@@ -65,8 +66,8 @@ FerroFED-specific impact.
 
 ## I want to change something
 
-[CONTRIBUTING.md](CONTRIBUTING.md) is the practical guide: what helps most in a
-design phase, the gates every pull request must pass, and the hard rules.
+[CONTRIBUTING.md](CONTRIBUTING.md) is the practical guide: what helps most,
+the gates every pull request must pass, and the hard rules.
 [GOVERNANCE.md](GOVERNANCE.md) is how the decision gets made and how someone
 becomes a maintainer.
 
