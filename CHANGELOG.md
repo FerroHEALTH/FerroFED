@@ -66,6 +66,21 @@ federated query and identity resolution shipped in 0.0.3.
   `400 query-parameter-refused` like any parameter the operation does not
   declare. Neither header reaches a node: both join `Authorization` and
   `X-Request-Id` in the set a routed request always withholds.
+- The registry document in FHIR form (#74; N19, N20, N21, §15.2, CP-13,
+  CP-20). With `registry.format = "fhir"`, `registry.document` names a FHIR R4
+  JSON `Bundle` of `Organization` and `Endpoint` resources, the shape an mCSD
+  directory delivers, which loads into the same members and routes
+  identically to the native TOML form. The registry's ids travel as
+  identifiers in FerroFED's systems under `https://ferrofed.eu/fhir/sid/`,
+  and an endpoint's `connectionType` is `openehr-rest-query` in
+  `https://ferrofed.eu/fhir/CodeSystem/connection-type`. `config check`
+  refuses, naming the resource, an endpoint whose `connectionType` is
+  `hl7-fhir-rest`, an informal string or any other code, an endpoint whose
+  managing organisation is missing or not in the Bundle, an endpoint no
+  organisation or two organisations operate, an id that is missing or
+  repeated, and a node its endpoints disagree on. `ihe-iti` 0.0.8 reads the
+  directory content under its `mcsd` feature, resolving references inside the
+  Bundle as FHIR R4 §2.36.4.1 does.
 
 - The `FROM ENDPOINT` and `ORGANISATION` directive in AQL (#70; §8.1,
   §8.4.1, N11, N19, N20, CP-6). `FROM ENDPOINT p ["node-a-pub", …]` asks

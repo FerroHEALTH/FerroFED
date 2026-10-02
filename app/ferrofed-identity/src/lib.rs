@@ -16,16 +16,19 @@
 //! - [`binding`]: the resolution bindings of §12.5.1 step 2, in memory and
 //!   scoped to the client session (§12.5.1 step 2);
 //! - [`dev`]: the static development cross-reference, FerroFED's own testing
-//!   device, enabled only under the development profile.
+//!   device, enabled only under the development profile;
+//! - [`directory`]: the registry document in FHIR form, `Organization` and
+//!   `Endpoint` resources read through `ihe_iti`'s mCSD reader (N19, N20).
 //!
-//! The localizer, directory, consent pre-filter and onward-authentication
-//! seams land with their issues.
+//! The localizer, consent pre-filter and onward-authentication seams land
+//! with their issues.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod binding;
 pub mod dev;
+pub mod directory;
 pub mod patient;
 pub mod pixm;
 pub mod resolver;
 
-// TODO(#46): the localizer trait, then the directory (#74) and consent pre-filter (#83) traits.
+// TODO(#46): the localizer trait, then the directory sync (#86) and consent pre-filter (#83).

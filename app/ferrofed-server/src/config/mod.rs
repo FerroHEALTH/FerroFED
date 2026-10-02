@@ -135,6 +135,21 @@ pub struct Registry {
     /// endpoints (§12b.1). Without it the gateway
     /// federates nothing, and the ITS-REST surface stays unserved.
     pub document: Option<PathBuf>,
+    /// The form the document is written in.
+    pub format: RegistryFormat,
+}
+
+/// The form of the registry document.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RegistryFormat {
+    /// The native TOML form: `[[organisation]]`, `[[node]]`, `[[endpoint]]`
+    /// and `[[creating_system]]` tables.
+    #[default]
+    Toml,
+    /// A FHIR R4 JSON `Bundle` of `Organization` and `Endpoint` resources, the
+    /// form N19 recommends.
+    Fhir,
 }
 
 /// The federated query.
@@ -503,6 +518,7 @@ impl Config {
                 filter: self.telemetry.filter.clone(),
             },
             registry_document: self.registry.document.clone(),
+            registry_format: self.registry.format,
             federation,
             credentials,
             dev: self.dev.clone(),
