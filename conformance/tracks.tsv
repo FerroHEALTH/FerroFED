@@ -15,7 +15,7 @@ track	title	requirements	cps	status	issue	reason
 2	subject → ehrId resolution	N3,N5,N7,N33	CP-2,CP-38,CP-3,CP-4,CP-7,CP-36	planned	#42,#44,#45,#92	-
 3	Directed / endpoint pin	N10,N11	CP-5,CP-6,CP-28,CP-37	planned	#70,#71,#72,#92	-
 4	Partial results	N6,N16	CP-5,CP-11,CP-12,CP-30,CP-31	planned	#49,#50,#51,#92	-
-5	Dedup + DISTINCT	N13,N15	CP-8,CP-9,CP-10,CP-29,CP-32	planned	#52,#53,#54,#55,#56,#92	-
+5	Dedup + DISTINCT	N13,N15	CP-8,CP-9,CP-10,CP-29,CP-32	planned	#52,#53,#54,#55,#56,#92,#187	-
 6	Follow-up read/write routing	N21,N22,N23	CP-13,CP-14,CP-15,CP-20,CP-29,CP-33	planned	#64,#65,#66,#67,#92	-
 7	Auth conveyance + consent-deny	N24,N25,N26,N27,N27a	CP-16,CP-17,CP-18,CP-19,CP-36,CP-39	planned	#80,#81,#82,#83,#92	-
 8	PMIR merge/split (ITI-93/94) _(provisional)_	N3	-	deferred	#48	provisional in section 16.3, and section 18 lets its subject matter be deferred; the invalidation hook and the binding lifetime are built (#48), propagation is not claimed

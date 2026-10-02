@@ -190,6 +190,10 @@ federated query and identity resolution shipped in 0.0.3.
   No argument, an unknown command, a wrong operand count or `--help` prints
   the usage to stderr and exits 2, with no network call and no token needed.
   `fields.sh --self-test` proves it against a stub that records every call.
+- The per-edit `comment-style` hook also reads the `conformance/*.tsv`
+  tables (#198), as CI does, and stays a quiet pass for any other file.
+  Conformance track 5 (Dedup + DISTINCT) names #187 beside its issues, as its
+  CP-10 and CP-32 rows do, and the book's conformance page is re-rendered.
 - Error bodies (#57): the gateway's own refusals (`404`, `501`, a caught
   panic's `500`) answer the ITS-REST `Error` shape with `code` and
   `request_id`, where they named the code in an `error` member, and the codes
