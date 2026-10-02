@@ -5,50 +5,26 @@
 //! `master03-syntax.adoc` §Functions), and the calls the rewrite cannot
 //! classify.
 //!
-//! `openehr-query` already tells two of the classes apart: an aggregate
-//! (`COUNT`, `MIN`, `MAX`, `SUM`, `AVG`) is an `AggregateCall`, and
-//! `TERMINOLOGY` is a `FunctionCall::Terminology`. Every other call is a
-//! `FunctionCall::Named` that carries only its name, which this module reads
-//! against the single-row functions of the specification. A named call outside
-//! that set may aggregate, and nothing in the query says whether it does.
+//! `openehr-query` classifies every call: an aggregate (`COUNT`, `MIN`,
+//! `MAX`, `SUM`, `AVG`) is an `AggregateCall`, `TERMINOLOGY` is a
+//! `FunctionCall::Terminology`, a string, numeric, or date and time function
+//! of the specification is a `FunctionCall::Builtin`, and any other name is a
+//! `FunctionCall::Other`. A call of the last kind may aggregate, and nothing
+//! in the query says whether it does.
 
 use openehr_query::ast::FunctionCall;
 
-// TODO(#195): replace this list with openehr-query's classification of function calls (FerroHEALTH/FerroEHR#3529)
-// NOTE: AQL master03-syntax §String functions, §Numeric functions and §Date and time functions
-// list exactly these single-row functions; AqlLexer.g4 groups them as the three `*_FUNCTION_ID`s.
-const SINGLE_ROW: [&str; 16] = [
-    "LENGTH",
-    "CONTAINS",
-    "POSITION",
-    "SUBSTRING",
-    "CONCAT",
-    "CONCAT_WS",
-    "ABS",
-    "MOD",
-    "CEIL",
-    "FLOOR",
-    "ROUND",
-    "CURRENT_DATE",
-    "CURRENT_TIME",
-    "CURRENT_DATE_TIME",
-    "NOW",
-    "CURRENT_TIMEZONE",
-];
-
 /// Whether `call` is a single-row function AQL 1.1.0 defines: one of the
-/// string, numeric, or date and time functions by its case-insensitive name,
-/// or `TERMINOLOGY` (AQL master03-syntax §Other functions).
+/// string, numeric, or date and time functions, or `TERMINOLOGY` (AQL
+/// master03-syntax §Other functions).
 ///
 /// A single-row function returns "a single result for every row of the result
 /// set" (AQL master03-syntax §Functions), so each node computes it over its
 /// own rows and the merge keeps those rows as rows.
 pub(super) fn single_row(call: &FunctionCall) -> bool {
     match call {
-        FunctionCall::Named { name, .. } => SINGLE_ROW
-            .iter()
-            .any(|known| name.eq_ignore_ascii_case(known)),
-        FunctionCall::Terminology(_) => true,
+        FunctionCall::Builtin { .. } | FunctionCall::Terminology(_) => true,
+        FunctionCall::Other { .. } => false,
     }
 }
 

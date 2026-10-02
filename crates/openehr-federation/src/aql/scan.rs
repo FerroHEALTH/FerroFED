@@ -332,7 +332,7 @@ impl<'ast> Visit<'ast> for Scan {
 /// Where the first path among a call's arguments was written, nested calls
 /// included.
 pub(super) fn first_path(call: &FunctionCall) -> Option<Range<usize>> {
-    let FunctionCall::Named { args, .. } = call else {
+    let (FunctionCall::Builtin { args, .. } | FunctionCall::Other { args, .. }) = call else {
         return None;
     };
     args.iter().find_map(|arg| match arg {
@@ -539,7 +539,7 @@ impl<'ast> Visit<'ast> for Search<'_> {
     }
 
     fn visit_function_call(&mut self, node: &'ast FunctionCall) {
-        if let FunctionCall::Named { name, .. } = node {
+        if let FunctionCall::Builtin { name, .. } | FunctionCall::Other { name, .. } = node {
             self.check(name);
         }
         if let Some(folded) = fold::fold(node) {
