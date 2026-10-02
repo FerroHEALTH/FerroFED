@@ -30,10 +30,10 @@ use crate::support::{call, error_body};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The patient's `ehr_id` at node C.
-const EHR_C: &str = "3333cccc-3333-4333-8333-333333333333";
+pub(crate) const EHR_C: &str = "3333cccc-3333-4333-8333-333333333333";
 
 /// The patient predicate of every fixture, with its namespace.
-fn patient() -> String {
+pub(crate) fn patient() -> String {
     format!(
         "e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
          AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
@@ -41,7 +41,7 @@ fn patient() -> String {
 }
 
 /// A query for the patient's compositions, `FROM` the directive `directive`.
-fn directed(directive: &str) -> String {
+pub(crate) fn directed(directive: &str) -> String {
     format!(
         "SELECT c/uid/value FROM {directive} CONTAINS EHR e CONTAINS COMPOSITION c WHERE {}",
         patient()
@@ -77,14 +77,14 @@ managing_organisation = "org-a"
 }
 
 /// The three mock nodes.
-struct Nodes {
-    a: MockServer,
-    b: MockServer,
-    c: MockServer,
+pub(crate) struct Nodes {
+    pub(crate) a: MockServer,
+    pub(crate) b: MockServer,
+    pub(crate) c: MockServer,
 }
 
 impl Nodes {
-    async fn start() -> Self {
+    pub(crate) async fn start() -> Self {
         Self {
             a: node_answering("uid-at-a::cdr-a.example.org::1").await,
             b: node_answering("uid-at-b::cdr-b.example.org::1").await,
@@ -94,7 +94,11 @@ impl Nodes {
 
     /// A development gateway over the three nodes, resolving the patient at
     /// the members `rows` name.
-    fn gateway(&self, dir: &Path, rows: &[(&str, &str)]) -> Result<Router, Box<dyn Error>> {
+    pub(crate) fn gateway(
+        &self,
+        dir: &Path,
+        rows: &[(&str, &str)],
+    ) -> Result<Router, Box<dyn Error>> {
         gateway(
             dir,
             &members(&self.a.uri(), &self.b.uri(), &self.c.uri()),
@@ -104,7 +108,7 @@ impl Nodes {
     }
 
     /// How many requests each node received, A, B and C.
-    async fn asked(&self) -> Result<[usize; 3], Box<dyn Error>> {
+    pub(crate) async fn asked(&self) -> Result<[usize; 3], Box<dyn Error>> {
         Ok([
             received(&self.a).await?.len(),
             received(&self.b).await?.len(),

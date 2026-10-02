@@ -24,10 +24,15 @@ WHERE e/ehr_status/subject/external_ref/id/value = '12345'
 ```
 
 No federation-specific syntax is needed for a basic patient query (§3.2, N1).
-An optional AQL extension, `FROM ENDPOINT …` and `ORGANISATION …`, pins a
-query to named systems for a client that wants it (§8).
+A client that wants to pin a query to named systems can do so in the AQL,
+with `FROM ENDPOINT …` or `ORGANISATION …`, or beside it, with a request
+header (§8).
 
 ## Pinning a query to named systems
+
+The gateway accepts both mechanisms of §8.4, and they select nodes the same
+way (N35). Use either one; there is nothing to discover first, because every
+conformant gateway accepts both (§7a.2).
 
 Put the directive at the start of `FROM`, and the gateway asks exactly the
 endpoints it lists (§8.1, N11):
@@ -65,9 +70,39 @@ N19), and the keywords are case-insensitive like every AQL keyword.
   adding those columns to the rows is planned build order. Using the variable in `WHERE`,
   in `ORDER BY` or inside a function, or binding its name again in `FROM`, is
   refused `400` with `endpoint-variable`.
-- The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
-  request headers, the other targeting mechanism of §8.4, are planned build
-  order.
+
+Or leave the AQL as it is and send the node set in a header (§8.4). This is
+the form for a stored query or a query a user wrote, since the query text
+stays the same however it is targeted:
+
+```http
+POST {base}/v1/query/aql
+openEHR-federation-endpoint: node_1, node_2
+Content-Type: application/json
+```
+
+`openEHR-federation-organisation: org-a` is the organisation form. Each
+header carries a comma-separated list of the same registry identifiers, and
+may be sent as several field lines; empty list elements are ignored (RFC 9110
+§5.6.1).
+
+- The header selects nodes exactly as the directive does: `not-resolved` for
+  a listed endpoint that does not know the patient, `excluded` for every
+  other endpoint, `400` with `endpoint-unknown` or `organisation-unknown` for
+  an identifier the registry does not know or a header with no identifier in
+  it, and `404` with `no-destination` when the selection holds no endpoint.
+  A query directed at one endpoint by the header may use an aggregate, as one
+  directed by the AQL may.
+- Send the directive and a header, or both headers, only when they select the
+  same endpoints. Then the request proceeds. When they differ, it is refused
+  `400` with `targeting-conflict`, naming both sets; the gateway never merges
+  them and never picks one (§8.4.1, N35).
+- No node receives either header, and no query parameter targets anything:
+  `?endpoint=` and `?organisation=` on the federated query have no effect
+  (§8.4).
+- The headers apply to every federated request, the routed requests of
+  [follow-ups](#follow-ups) included; the directive applies to AQL only
+  (§8.4).
 
 ## What a client gets back
 
@@ -113,8 +148,14 @@ refused (§2.3, N23).
 
 Today you name the node of a request to `{base}/v1/ehr/{ehr_id}/…` yourself,
 in the `openEHR-federation-endpoint` header, with the `endpoint_id` the
-result row carried (§12.5.1 step 1, §8.4). The header names exactly one
-registry endpoint; an unknown one or several are a `400`. A write that names
+result row carried (§12.5.1 step 1, §8.4), or in the
+`openEHR-federation-organisation` header, when the organisation manages that
+one endpoint. Together the headers select exactly one registry endpoint: an
+unknown identifier, several endpoints or two headers that disagree are a
+`400`, and an organisation that manages no endpoint is a `404`
+(`no-destination`). A query parameter such as `?endpoint=` names no node
+here either; it is one the operation does not declare, so it is a `400`
+(`query-parameter-refused`) and nothing is sent. A write that names
 none is a `400` with the code `target-required`, because the gateway never
 finds a write's destination by trial (§12.5.1, N41). A read that names none
 answers `501` until the gateway can find the node by itself.
@@ -131,7 +172,8 @@ A routed request reaches the node as you sent it:
   reaches the node on a `PUT`, for example, and never on a `GET`. Your
   `Authorization` never reaches a node: the gateway authenticates to each node
   with that node's own credentials (§13). Neither does your `X-Request-Id`:
-  the node receives the gateway's own id for the request;
+  the node receives the gateway's own id for the request. Nor do the
+  targeting headers, which mean nothing at a node (§8.4);
 - the query string, when the operation declares every parameter in it (such
   as `version_at_time` on a read, or `path` on a directory read). Any other
   parameter is a `400` (`query-parameter-refused`) and nothing is sent,

@@ -22,6 +22,27 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
+  request headers, the targeting mechanism beside the AQL (#71; §8.4,
+  §8.4.1, N35, CP-28). Each carries a comma-separated list of registry ids,
+  over one field line or several, and selects nodes exactly as the
+  `FROM ENDPOINT` and `ORGANISATION` directive does: a listed endpoint where
+  the patient is not known is `not-resolved`, every other endpoint is
+  `excluded`, an identifier the registry does not know, or a header with no
+  identifier in it, is a `400` (`endpoint-unknown`, `organisation-unknown`),
+  and a selection of no endpoint is `404 no-destination`. A query directed at
+  one endpoint by the header may be an aggregate, as one directed by the AQL
+  may. The headers apply to the federated query and to a request routed to
+  one node, where together they select exactly one endpoint. When the
+  directive and a header, or the two headers, appear in one request, the
+  same node set proceeds and different sets are refused `400` with the new
+  code `targeting-conflict`, whose message names both sets by their registry
+  endpoint ids; the gateway never merges them and never picks one. No query
+  parameter targets anything: `?endpoint=` and `?organisation=` have no
+  effect on the federated query, and on a routed request they are refused
+  `400 query-parameter-refused` like any parameter the operation does not
+  declare. Neither header reaches a node: both join `Authorization` and
+  `X-Request-Id` in the set a routed request always withholds.
 - The `FROM ENDPOINT` and `ORGANISATION` directive in AQL (#70; §8.1,
   §8.4.1, N11, N19, N20, CP-6). `FROM ENDPOINT p ["node-a-pub", …]` asks
   exactly the listed endpoints, and `FROM ORGANISATION ["org-a"]` asks every
