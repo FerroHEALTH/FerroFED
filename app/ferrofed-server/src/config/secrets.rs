@@ -83,6 +83,7 @@ fn source_key(section: &str, name: &str, from_file: bool) -> String {
 /// value: `Bearer` and the token, as the node client composes it, checked by
 /// the same `http` parse the client applies (RFC 6750 §2.1).
 fn bearer_header(key: &str, token: &SecretString) -> Result<(), Error> {
+    // TODO(#237): validate with openehr-its's own Authorization composition (FerroHEALTH/FerroEHR#3535).
     let composed = SecretString::from(format!("Bearer {}", token.expose_secret()));
     HeaderValue::from_str(composed.expose_secret())
         .map(drop)
