@@ -277,6 +277,11 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- The book's "What FerroFED claims" page lists decomposable aggregates (#54)
+  among what has merged since v0.0.3, and no longer as planned; de-duplication
+  is what remains planned for v0.0.4 (#211). The `merge` module doc of
+  `openehr-federation` is wrapped like the rest of the crate's docs, and
+  `openehr-federation` moves to 0.0.19 with no change to its code.
 - An `ORDER BY` with `LIMIT` query whose rows carry no uid, such as one that
   selects from `EHR` alone, returns the same rows on every repeat (#157;
   §11.6.1, §11.6.2, N39, CP-32). Each node is asked to order on a row key
