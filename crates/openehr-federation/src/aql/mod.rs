@@ -661,7 +661,7 @@ fn patient(
     let mut dispatched = query.clone();
     rewrite::strip_where(&mut dispatched, consumed, None);
     rewrite::strip_columns(&mut dispatched, &inputs);
-    order_for(&mut dispatched, ordered)?;
+    order_for(&mut dispatched, ordered, true)?;
     if let Some(leak) = scan::reaches(&dispatched, subject.value()) {
         return Err(match leak.kind {
             scan::LeakKind::Value => Refusal::IdentifierElsewhere { at: leak.at },
@@ -673,7 +673,7 @@ fn patient(
     rewrite::strip_where(&mut template, consumed, Some(&ehr));
     rewrite::strip_columns(&mut template, &inputs);
     rewrite::keep_a_column(&mut template, &ehr);
-    let order = order_for(&mut template, ordered)?;
+    let order = order_for(&mut template, ordered, true)?;
     let mut node = 0_usize;
     let sources = (0..columns.len())
         .map(|index| {
@@ -709,17 +709,15 @@ fn patient(
 /// single directed endpoint (N14), or the row the Tier recombines (§11.6.3).
 /// Either way its node query keeps the client's order as written, and the
 /// merge only applies its `LIMIT`.
-fn order_for(query: &mut SelectQuery, ordered: bool) -> Result<ResultOrder, Refusal> {
+fn order_for(
+    query: &mut SelectQuery,
+    ordered: bool,
+    one_ehr: bool,
+) -> Result<ResultOrder, Refusal> {
     if ordered {
-        return rewrite::push_order(query);
+        return rewrite::push_order(query, one_ehr);
     }
-    let limit = match query.limit.as_ref() {
-        Some(clause) => Some(
-            u64::try_from(clause.limit)
-                .map_err(|_negative| Refusal::NegativePaging { member: "LIMIT" })?,
-        ),
-        None => None,
-    };
+    let limit = rewrite::dispatched_limit(query)?;
     Ok(ResultOrder::new(Vec::new(), Vec::new(), limit))
 }
 
@@ -733,7 +731,7 @@ fn unscoped(
     if context.targeting == Targeting::Localized {
         return Err(Refusal::NodeSetUndefined);
     }
-    let order = order_for(&mut query, ordered)?;
+    let order = order_for(&mut query, ordered, false)?;
     let sources = (0..columns.len()).map(ColumnSource::Node).collect();
     Ok(Analysis::Unscoped(UnscopedQuery {
         node: NodeQuery {

@@ -83,14 +83,19 @@ fn ehr_id_predicate(ehr: &str) -> IdentifiedExpr {
 }
 
 fn ehr_id_path(ehr: &str) -> IdentifiedPath {
+    attribute_path(ehr, &["ehr_id", "value"])
+}
+
+/// `<variable>/<parts…>`, a path with no predicate.
+fn attribute_path(variable: &str, parts: &[&str]) -> IdentifiedPath {
     IdentifiedPath::new(
-        ehr.to_owned(),
+        variable.to_owned(),
         None,
         Some(ObjectPath {
-            parts: ["ehr_id", "value"]
-                .into_iter()
+            parts: parts
+                .iter()
                 .map(|name| PathPart {
-                    name: name.to_owned(),
+                    name: (*name).to_owned(),
                     predicate: None,
                 })
                 .collect(),
@@ -186,27 +191,26 @@ fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
 /// - an `ORDER BY` path that is not selected becomes a hidden column the merge
 ///   reads and the gateway strips, never answered to the client (no
 ///   specification governs this: our own design);
-/// - the uid of the query's versioned object becomes the last `ORDER BY` key,
-///   the tie-break §11.6.1 recommends after `endpoint_id`.
+/// - the row key of [`row_key`] becomes the last `ORDER BY` key, the
+///   tie-break after `endpoint_id`: the uid §11.6.1 recommends, or the
+///   `ehr_id` of a row that has no uid.
 ///
 /// A key appended after the client's keys refines their order and never
 /// reorders it, so the node's top `n` stays a top `n` under the client's
 /// `ORDER BY`, and the node picks the same tied rows at its cut on every
-/// repeat. Under `DISTINCT` no column is added, since it would change which
-/// rows are distinct: every `ORDER BY` path must be selected, and the
-/// remaining selected paths are the tie-break in place of the uid.
+/// repeat, for `LIMIT n` and for the `LIMIT k + n` of a page (§11.6.2). Under
+/// `DISTINCT` no column is added, since it would change which rows are
+/// distinct: every `ORDER BY` path must be selected, and the remaining
+/// selected paths are the tie-break in place of the row key.
+///
+/// `one_ehr` says the gateway scoped the node query to one `ehr_id`, so an
+/// `EHR`'s own id is the same on every row and is not a key.
 ///
 /// # Errors
 /// [`Refusal::OrderNotSelected`] for a `DISTINCT` query ordered on a path it
 /// does not select, and [`Refusal::NegativePaging`] for a negative `LIMIT`.
-pub(super) fn push_order(query: &mut SelectQuery) -> Result<ResultOrder, Refusal> {
-    let limit = match query.limit.as_ref() {
-        Some(clause) => Some(
-            u64::try_from(clause.limit)
-                .map_err(|_negative| Refusal::NegativePaging { member: "LIMIT" })?,
-        ),
-        None => None,
-    };
+pub(super) fn push_order(query: &mut SelectQuery, one_ehr: bool) -> Result<ResultOrder, Refusal> {
+    let limit = dispatched_limit(query)?;
     if query.order_by.is_empty() {
         return Ok(ResultOrder::new(Vec::new(), Vec::new(), limit));
     }
@@ -246,8 +250,7 @@ pub(super) fn push_order(query: &mut SelectQuery) -> Result<ResultOrder, Refusal
         }
         columns
     } else {
-        versioned_variable(&query.from).map_or_else(Vec::new, |variable| {
-            let path = uid_path(&variable);
+        row_key(&query.from, one_ehr).map_or_else(Vec::new, |path| {
             let column = selected(&query.select.columns, &path)
                 .unwrap_or_else(|| hide(&mut query.select.columns, &path));
             if !query.order_by.iter().any(|term| term.path == path) {
@@ -257,6 +260,21 @@ pub(super) fn push_order(query: &mut SelectQuery) -> Result<ResultOrder, Refusal
         })
     };
     Ok(ResultOrder::new(keys, tie_break, limit))
+}
+
+/// The `LIMIT` the node query carries.
+///
+/// # Errors
+/// [`Refusal::NegativePaging`] for a negative `LIMIT`.
+pub(super) fn dispatched_limit(query: &SelectQuery) -> Result<Option<u64>, Refusal> {
+    query
+        .limit
+        .as_ref()
+        .map(|clause| {
+            u64::try_from(clause.limit)
+                .map_err(|_negative| Refusal::NegativePaging { member: "LIMIT" })
+        })
+        .transpose()
 }
 
 /// The index of the selected column that is `path`, if any.
@@ -289,18 +307,41 @@ fn direction(order: Option<SortOrder>) -> Direction {
     }
 }
 
-/// The variable whose `uid` identifies a row's versioned object: the first
-/// `COMPOSITION`, else the first `VERSION`, of the containment.
-fn versioned_variable(from: &ContainsExpr) -> Option<String> {
+/// The path whose value tells a row apart from the rows tied with it, from
+/// the first class of each kind in the containment, in this order:
+///
+/// 1. `COMPOSITION`, then `VERSION`: `<var>/uid/value`, the version uid (the
+///    RM recommends a `COMPOSITION` carry its `VERSION`'s uid);
+/// 2. `EHR`: `<var>/ehr_id/value`, mandatory and unique per `EHR` (RM
+///    `EHR.ehr_id`);
+/// 3. `EHR_STATUS` or `EHR_ACCESS`: `<var>/uid/value`, one per `EHR`, whose
+///    uid the RM recommends be its `VERSION`'s.
+///
+/// Under `one_ehr` the second and third are the same on every row, so they
+/// are skipped. `FOLDER` is never a key: the RM recommends a uid only on a
+/// tree-root folder, and a `FOLDER` class matches sub-folders too. With no
+/// key, a node chooses among rows tied on every key it was sent, and the Tier
+/// orders the rows it receives on their cells.
+// NOTE: §11.6.1 recommends "`endpoint_id`, then uid"; the key of a row without a uid
+// follows it in spirit, and no specification governs it: our own design.
+fn row_key(from: &ContainsExpr, one_ehr: bool) -> Option<IdentifiedPath> {
     let mut composition = None;
     let mut version = None;
+    let mut ehr = None;
+    let mut per_ehr = None;
     classes(from, &mut |operand| match operand {
         ClassExprOperand::Class {
             rm_type,
             variable: Some(variable),
             ..
-        } if rm_type == "COMPOSITION" => {
-            composition.get_or_insert_with(|| variable.clone());
+        } => {
+            let slot = match rm_type.as_str() {
+                "COMPOSITION" => &mut composition,
+                "EHR" => &mut ehr,
+                "EHR_STATUS" | "EHR_ACCESS" => &mut per_ehr,
+                _ => return,
+            };
+            slot.get_or_insert_with(|| variable.clone());
         }
         ClassExprOperand::Version {
             variable: Some(variable),
@@ -310,7 +351,14 @@ fn versioned_variable(from: &ContainsExpr) -> Option<String> {
         }
         ClassExprOperand::Class { .. } | ClassExprOperand::Version { .. } => {}
     });
-    composition.or(version)
+    if let Some(variable) = composition.or(version) {
+        return Some(uid_path(&variable));
+    }
+    if one_ehr {
+        return None;
+    }
+    ehr.map(|variable| ehr_id_path(&variable))
+        .or_else(|| per_ehr.map(|variable| uid_path(&variable)))
 }
 
 fn classes(from: &ContainsExpr, visit: &mut impl FnMut(&ClassExprOperand)) {
@@ -330,19 +378,7 @@ fn classes(from: &ContainsExpr, visit: &mut impl FnMut(&ClassExprOperand)) {
 
 /// `<variable>/uid/value`.
 fn uid_path(variable: &str) -> IdentifiedPath {
-    IdentifiedPath::new(
-        variable.to_owned(),
-        None,
-        Some(ObjectPath {
-            parts: ["uid", "value"]
-                .into_iter()
-                .map(|name| PathPart {
-                    name: name.to_owned(),
-                    predicate: None,
-                })
-                .collect(),
-        }),
-    )
+    attribute_path(variable, &["uid", "value"])
 }
 
 /// Writes the node's `ehr_id` into a template built by [`strip_where`].

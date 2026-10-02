@@ -4,9 +4,11 @@
 //! Identifier hygiene (§5.4.1, N33): no node query the rewrite produces
 //! carries the patient identifier, and no refusal names it.
 
+use std::num::NonZeroU32;
+
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::aggregate::AggregateFunction;
-use openehr_federation::aql::{Analysis, Paging, analyse};
+use openehr_federation::aql::{Analysis, OffsetStrategy, Paging, analyse};
 use openehr_query::ast::Primitive;
 use openehr_query::bind::Parameters;
 use proptest::prelude::{Just, Strategy, prop, prop_assert, prop_oneof, proptest};
@@ -411,4 +413,106 @@ fn the_avg_rewrite_reaches_the_node_without_the_patient() {
         node.aql()
     );
     assert!(!node.aql().contains("4711"), "{}", node.aql());
+}
+
+/// The containments a patient query is ordered over, each with the carriers
+/// it admits, a selected path and the client's `ORDER BY` path: with a uid to
+/// push, with only the `EHR`, and with no key at all.
+const ORDERED: [(&str, &[Carrier], &str); 6] = [
+    (
+        "EHR e",
+        &[Carrier::ExternalRef { selected: false }],
+        "e/time_created/value",
+    ),
+    (
+        "EHR e CONTAINS EHR_STATUS s",
+        &[Carrier::ExternalRef { selected: true }],
+        "s/is_queryable",
+    ),
+    (
+        "EHR e CONTAINS FOLDER f",
+        &[Carrier::ExternalRef { selected: false }],
+        "f/name/value",
+    ),
+    (
+        "EHR e CONTAINS OBSERVATION o",
+        &[
+            Carrier::ExternalRef { selected: true },
+            Carrier::Entry { issuer: true },
+        ],
+        "o/data[at0001]/events[at0006]/time/value",
+    ),
+    (
+        "OBSERVATION o",
+        &[Carrier::Entry { issuer: false }],
+        "o/data[at0001]/events[at0006]/time/value",
+    ),
+    (
+        "EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o",
+        &[
+            Carrier::ExternalRef { selected: true },
+            Carrier::Entry { issuer: false },
+        ],
+        "c/context/start_time/value",
+    ),
+];
+
+// conformance: CP-26 CP-32
+#[test]
+fn no_pushed_row_key_carries_the_patient() {
+    let id = "460193";
+    let bounded = ask_all().with_offset_strategy(OffsetStrategy::Bounded {
+        max_window: NonZeroU32::new(20).unwrap(),
+    });
+    for (from, carriers, key) in ORDERED {
+        for carrier in carriers {
+            let (select, predicate) = match carrier {
+                Carrier::ExternalRef { selected } => (
+                    if *selected {
+                        format!("e/ehr_status/subject/external_ref/id/value AS patient, {key}")
+                    } else {
+                        key.to_owned()
+                    },
+                    format!("e/ehr_status/subject/external_ref/id/value = '{id}'"),
+                ),
+                Carrier::Entry { issuer } => (
+                    key.to_owned(),
+                    if *issuer {
+                        format!(
+                            "o/subject/identifiers/id = '{id}' \
+                             AND o/subject/identifiers/issuer = 'urn:oid:2.999.1'"
+                        )
+                    } else {
+                        format!("o/subject/identifiers/id = '{id}'")
+                    },
+                ),
+            };
+            for paging in ["LIMIT 3", "LIMIT 2 OFFSET 2"] {
+                let aql = format!(
+                    "SELECT {select} FROM {from} WHERE {predicate} ORDER BY {key} {paging}"
+                );
+                let Ok(Analysis::Patient(query)) =
+                    analyse(&aql, &Parameters::new(), Paging::default(), &bounded)
+                else {
+                    panic!("an ordered patient query is dispatched: {aql}");
+                };
+                let node = query.for_node(&HierObjectId::new(EHR_ID).unwrap());
+                let sent = node.aql();
+                assert!(!sent.contains(id), "node query {sent} carries {id}");
+                assert!(
+                    !sent.contains("subject/"),
+                    "node query {sent} keeps a subject carrier"
+                );
+                let tree = openehr_query::parser::parse_str(sent).unwrap();
+                for term in &tree.order_by {
+                    let path = term.path.column_path_text();
+                    assert!(
+                        !path.contains("ehr_id") && !path.contains("subject"),
+                        "N33: {sent} orders on {path}, and a query scoped to one ehr_id \
+                         pushes no EHR key"
+                    );
+                }
+            }
+        }
+    }
 }

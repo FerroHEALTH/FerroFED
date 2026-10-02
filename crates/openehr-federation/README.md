@@ -22,7 +22,8 @@ the rewrite wrote into the node queries, and returns the federated rows with
 the endpoints whose answer it could not use (§11.6.1, N39). The rows are put
 in one total order: the `ORDER BY` keys (null greatest, numbers exactly,
 complete date-times by instant, strings by code point, `DV_ORDERED` values by
-`openehr-rm`), then the endpoint id, then the uid, and cut at the `LIMIT`, which
+`openehr-rm`), then the endpoint id, then the row key (the uid, or the
+`ehr_id` of a row with no uid), and cut at the `LIMIT`, which
 every node was sent unchanged. A node that returned `n` rows out of that order
 is refused, and the gateway reports it `node-error`. For `LIMIT n OFFSET k`,
 every node is sent `LIMIT k + n` with no `OFFSET`, and the merge keeps rows `k`
