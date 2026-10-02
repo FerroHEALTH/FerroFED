@@ -52,7 +52,7 @@ CP-20	Operator	N19	6	operator	#74	verified at admission or in the registry, not 
 CP-21	Gateway	N28	9	planned	#69	-
 CP-22	Gateway	N29	9	planned	#69	-
 CP-23	Gateway	N30	9	planned	#73	-
-CP-24	Gateway	N31	9	planned	#61	-
+CP-24	Gateway	N31	9	covered	#61	-
 CP-25	Gateway	N32	9	planned	#68	-
 CP-26	Gateway	N33	10	covered	#45,#90,#217	-
 CP-27	Node	N34	10	node-profile	#93	a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design

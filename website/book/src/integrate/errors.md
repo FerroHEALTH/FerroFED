@@ -73,9 +73,19 @@ the patient answers `200` with no rows (§11.3).
 On a route the gateway forwards to one node, the node's status and body pass
 through as the node sent them: a node's `404` is the node's `404`, and a
 node's `500` is the node's `500` (§11.2). Those answers carry no FerroFED
-code, because the body is the node's. The single-node routes are planned
-build order; until they land, every ITS-REST path other than the federated
-query answers `501` with the code `not-implemented`.
+code, because the body is the node's. The single-node routes are the EHR
+resources under a path `ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it
+(§7a.1). Every other ITS-REST path except the federated query answers `501`
+with the code `not-implemented`.
+
+Three answers on a routed request are the gateway's, because the node gave
+none of its own to pass on: `node-timeout` and `node-unreachable` (`504`),
+and `node-refused` (`424`) when the node refused the gateway's onward
+credentials with a `401`. That `401` is about the gateway's credentials, not
+yours, so it is never passed to you as a challenge. Every answer to a routed
+request, these three included, names the acting endpoint in
+`openEHR-federation-endpoint` and its node's `system_id` in
+`openEHR-federation-system-id` (N31, §9.6).
 
 Inside a fan-out, a node's `404` or `500` is not passed through. The node is
 reported `node-error`, and the query fails with `424`, or, under `partial`,
@@ -96,9 +106,15 @@ the node is reported and the query succeeds.
 | `controlling-system-unreachable` | 409 | A versioned write's controlling system is not reachable, and the gateway never writes to a copy (§10.3, N36). |
 | `internal` | 500 | The gateway failed on its own side. The operator's log records the failure under the gateway's request id. |
 | `not-found` | 404 | The path is outside every surface the gateway serves. |
-| `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32), or the query selects ENDPOINT attributes through the `FROM ENDPOINT` variable (`p/id`, `p/system_id`), which the gateway does not add to rows; that is planned build order (§9.3, N12). |
-| `endpoint-unknown` | 400 | The `FROM ENDPOINT` directive names an identifier that is not an endpoint of the registry (§8.4.1, N19). The message points at the identifier by its place in the list and never quotes it. |
+| `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32), or the query selects ENDPOINT attributes through the `FROM ENDPOINT` variable (`p/id`, `p/system_id`), which the gateway does not add to rows; that is planned build order (§9.3, N12). A read of an EHR resource that names no node in `openEHR-federation-endpoint` answers it too, until the gateway can find the node by itself (§12.5.1). |
+| `endpoint-unknown` | 400 | The `FROM ENDPOINT` directive names an identifier that is not an endpoint of the registry (§8.4.1, N19). The message points at the identifier by its place in the list and never quotes it. The `openEHR-federation-endpoint` header of a request routed to one node answers it too when it names an endpoint the registry does not hold (§8.4.1). |
 | `organisation-unknown` | 400 | The `ORGANISATION` directive names an identifier that is not an organisation of the registry (§8.1, §8.4.1, N20). The message points at the identifier by its place in the list and never quotes it. |
+| `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and nothing else routes it; the gateway never finds a write's destination by trial (§12.5.1, N41). |
+| `endpoint-several` | 400 | A request routed to one node names more than one endpoint in `openEHR-federation-endpoint` (§7a.1, §12.4). |
+| `query-parameter-refused` | 400 | A request routed to one node carries a query parameter the ITS-REST operation it addresses does not declare, or `subject_id` or `subject_namespace`. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
+| `node-timeout` | 504 | The node a request was routed to did not answer in time (§11.2). |
+| `node-unreachable` | 504 | The node a request was routed to could not be reached (§11.2). |
+| `node-refused` | 424 | The node a request was routed to refused the gateway's onward credentials (§11.2). |
 
 The two `409` codes belong to follow-up routing (§12), which is planned build
 order; the codes are fixed now, so a client can handle them before they

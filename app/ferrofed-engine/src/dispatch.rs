@@ -180,8 +180,13 @@ impl DispatchOptions {
         self.deadline
     }
 
+    /// The identifiers no request may carry.
+    pub(crate) fn withheld(&self) -> &Withheld {
+        &self.withheld
+    }
+
     /// The `openehr-its` call options for these options.
-    fn call_options(&self) -> Result<CallOptions, ClientError> {
+    pub(crate) fn call_options(&self) -> Result<CallOptions, ClientError> {
         let options = CallOptions::default().with_deadline(self.deadline);
         match self.request_id {
             Some(id) => options.with_header(REQUEST_ID_HEADER, &id.to_string()),
@@ -379,6 +384,11 @@ impl<T: Transport> NodeClient<T> {
     #[must_use]
     pub fn base(&self) -> &Url {
         self.client.base()
+    }
+
+    /// The ITS-REST client every request to the node is sent through.
+    pub(crate) fn client(&self) -> &Client<T> {
+        &self.client
     }
 
     /// Sends `query` to the node and classifies the answer.

@@ -24,7 +24,21 @@
 //! | `Host`, `Content-Length` | the endpoint's authority, the body length | the HTTP engine, from the registry URL and the composed body |
 //! | `Accept-Encoding` | the codings the engine decodes | the HTTP engine, from its compression features |
 //!
-//! No other header is set, and none is copied from the client request. No
+//! No other header is set, and none is copied from the client request.
+//!
+//! Every header of a request routed to one node (`{base}/v1/ehr/{ehr_id}` and
+//! below, §7a.1), and where its value comes from:
+//!
+//! | Header | Value | Source |
+//! |---|---|---|
+//! | `Accept`, `Content-Type`, `If-Match`, `Prefer`, `openehr-version`, `openehr-audit-details`, `openehr-template-id`, `openehr-item-tag`, `openehr-version-item-tag` | the client's, byte for byte | the client request, each only where the matched ITS-REST operation declares it in `openehr-its`'s parameter table, and through the outbound gate ([`crate::hygiene::forwarded_headers`]) |
+//! | `Accept` | `application/json` | `openehr-its`'s client runtime, when the client sent no `Accept` the operation declares |
+//! | `Authorization` | `Basic` or `Bearer` | the endpoint's onward credential, as above; the client's own is never forwarded |
+//! | `X-Request-Id` | a version 4 UUID | [`OutboundId::mint`], one per client request; the client's own is never forwarded |
+//! | `Host`, `Content-Length` | the endpoint's authority, the body length | the HTTP engine, from the registry URL and the client's body |
+//! | `Accept-Encoding` | the codings the engine decodes | the HTTP engine, from its compression features |
+//!
+//! Every other client header is stripped, the federation's own included. No
 //! specification governs the correlation header itself: our own design, under
 //! the name every proxy already uses.
 //!

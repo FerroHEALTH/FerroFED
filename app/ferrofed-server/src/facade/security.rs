@@ -13,6 +13,8 @@ use std::ops::Range;
 
 use ferrofed_engine::dispatch::DispatchError;
 use ferrofed_engine::fanout::FanOutError;
+use ferrofed_engine::hygiene::Part;
+use ferrofed_registry::id::EndpointId;
 use openehr_federation::aql::PatientQuery;
 use openehr_federation::aql::refusal::Refusal;
 
@@ -59,6 +61,31 @@ pub(super) fn fan_out(error: &FanOutError, request_id: &str) {
             "a request to a node would have carried a patient identifier and was not sent"
         );
     }
+}
+
+/// A routed request was refused for a query parameter the route does not
+/// forward, named by its position and never by its name or value (§5.4.3).
+pub(super) fn forward_refused(position: usize, request_id: &str) {
+    tracing::warn!(
+        target: TARGET,
+        event = "query-parameter-refused",
+        position,
+        request_id,
+        "a routed request carried a query parameter that is never forwarded, and was refused"
+    );
+}
+
+/// The outbound gate stopped a routed request, naming the endpoint and the
+/// part of the request.
+pub(super) fn forward_withheld(endpoint: &EndpointId, part: Part, request_id: &str) {
+    tracing::warn!(
+        target: TARGET,
+        event = "outbound-gate-stopped",
+        endpoint = %endpoint,
+        part = %part,
+        request_id,
+        "a routed request would have carried a patient identifier and was not sent"
+    );
 }
 
 /// A byte range as `a..b`, or `unknown`.

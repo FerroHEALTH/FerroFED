@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 18 of 35 covered, 17 planned, 0 deferred.
+**Gateway points:** 19 of 35 covered, 16 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -44,7 +44,7 @@ and a gateway is never marked down for them (section 17).
 | [CP-21](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-21) | Gateway | N28 | 9 | planned | [#69](https://github.com/FerroHEALTH/FerroFED/issues/69) | - |
 | [CP-22](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-22) | Gateway | N29 | 9 | planned | [#69](https://github.com/FerroHEALTH/FerroFED/issues/69) | - |
 | [CP-23](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-23) | Gateway | N30 | 9 | planned | [#73](https://github.com/FerroHEALTH/FerroFED/issues/73) | - |
-| [CP-24](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-24) | Gateway | N31 | 9 | planned | [#61](https://github.com/FerroHEALTH/FerroFED/issues/61) | - |
+| [CP-24](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-24) | Gateway | N31 | 9 | covered | [#61](https://github.com/FerroHEALTH/FerroFED/issues/61) | - |
 | [CP-25](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-25) | Gateway | N32 | 9 | planned | [#68](https://github.com/FerroHEALTH/FerroFED/issues/68) | - |
 | [CP-26](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-26) | Gateway | N33 | 10 | covered | [#45](https://github.com/FerroHEALTH/FerroFED/issues/45), [#90](https://github.com/FerroHEALTH/FerroFED/issues/90), [#217](https://github.com/FerroHEALTH/FerroFED/issues/217) | - |
 | [CP-27](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-27) | Node | N34 | 10 | node-profile | [#93](https://github.com/FerroHEALTH/FerroFED/issues/93) | a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design |

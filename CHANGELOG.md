@@ -102,6 +102,28 @@ federated query and identity resolution shipped in 0.0.3.
   `order::ResultOrder::with_distinct` and `distinct`, and
   `merge::Disagreement::Distinct`.
 
+- Single-node routing for the EHR area (#61; §7a.1, §7a.3, §9.6, §11.2, N22,
+  N31, N33, CP-24): every ITS-REST operation under `{base}/v1/ehr/{ehr_id}`,
+  named by `openehr-its`'s `routes::lookup`, is forwarded once to the node
+  the `openEHR-federation-endpoint` header names, through `Client::forward`.
+  The body reaches the node byte for byte, a `DV_IDENTIFIER` in a committed
+  `COMPOSITION` included, and the node's status, body, `Location` and `ETag`
+  come back unmodified, a `404` or `500` included. Every routed answer names
+  the acting endpoint and its node's `system_id` in
+  `openEHR-federation-endpoint` and `openEHR-federation-system-id`. Only the
+  request headers and query parameters the matched ITS-REST operation
+  declares travel, read from `openehr-its`'s per-operation parameter table
+  (FerroEHR #3530): `If-Match` reaches the node on a `PUT` and never on a
+  `GET`. The client's `Authorization` and `X-Request-Id` never travel, and
+  the node receives the request's minted `X-Request-Id`. An undeclared query
+  parameter, and `subject_id` or `subject_namespace` anywhere, is refused
+  before dispatch. New codes: `target-required` (a write that names
+  no node, `400`), `endpoint-unknown` and `endpoint-several` (`400`),
+  `query-parameter-refused` (`400`), `node-timeout` and `node-unreachable`
+  (`504`) and `node-refused` (`424`, a node that refused the gateway's onward
+  credentials). A read that names no node still answers `501` until #62
+  routes it. A node's `3xx` is its answer, passed on with its `Location`
+  unmodified, and no request is re-sent to a host outside the registry.
 - Decomposable aggregates (#54; §11.6.3, N14, N39, CP-10, CP-32): an
   undirected `COUNT`, `SUM`, `MIN`, `MAX` or `AVG` is sent to every node and
   answered with one recombined row in the client's columns, never one row
