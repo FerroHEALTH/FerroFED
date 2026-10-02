@@ -9,6 +9,7 @@
 
 mod aggregate;
 mod dedup;
+mod directive;
 mod distinct;
 mod entry;
 mod folding;

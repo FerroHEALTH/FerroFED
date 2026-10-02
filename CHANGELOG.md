@@ -22,6 +22,30 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- The `FROM ENDPOINT` and `ORGANISATION` directive in AQL (#70; §8.1,
+  §8.4.1, N11, N19, N20, CP-6). `FROM ENDPOINT p ["node-a-pub", …]` asks
+  exactly the listed endpoints, and `FROM ORGANISATION ["org-a"]` asks every
+  endpoint the registry lists as managed by each organisation. The
+  identifiers are registry ids, never URLs. The directive does not replace
+  resolution: each listed endpoint is still asked about its own `ehr_id`, a
+  listed one where the patient is not known is `not-resolved` and fails
+  nothing, and every endpoint the directive does not list is `excluded`. The
+  directive is parsed by `openehr-query`'s `federation` feature and never
+  reaches a node: each node receives the same standard AQL as for the
+  undirected query. An identifier the registry does not know is refused `400`
+  with the new codes `endpoint-unknown` and `organisation-unknown`, which
+  locate it by its place in the list and never quote it, and an organisation
+  that manages no endpoint answers `404 no-destination`. A query directed at
+  one endpoint dispatches an aggregate or a function AQL does not define
+  unchanged (N14, §11.6.3). The directive's variable may only be selected, as
+  an ENDPOINT attribute: selecting one answers `501 not-implemented` until
+  #72 adds those columns to the rows, and any other use is refused `400`
+  with the new refusal `endpoint-variable`. `openehr-federation` adds
+  `aql::directive::FacadeQuery`, `Context::with_targeting`,
+  `Analysis::sources` and `ColumnSource::Endpoint`. Golden case 02 now
+  passes, and CP-6 is covered. The endpoint and organisation headers of §8.4
+  are #71.
+
 - The registry maps every observed `creating_system_id` (#67; §12.2, N21,
   the mapping half of CP-13): a `[[creating_system]]` entry in the registry
   document maps a `creating_system_id` that is no member's own `system_id` to

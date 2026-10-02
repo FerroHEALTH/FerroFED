@@ -7,6 +7,7 @@
 # passing or an unlisted case passes. scripts/conformance/matrix.sh
 # --badges-write renders the badge from it.
 01-basic-subject-rewrite.case
+02-directive-strip-projections.case
 03-subject-projection-reinjection.case
 04-observation-with-archetype-predicate.case
 05-offset-rejected.case

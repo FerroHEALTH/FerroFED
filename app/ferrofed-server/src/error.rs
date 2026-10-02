@@ -64,8 +64,16 @@ pub enum Code {
     Internal,
     /// The path is outside every surface the gateway serves.
     NotFound,
-    /// The path is an ITS-REST area the gateway does not expose (§7a.1, N32).
+    /// The path is an ITS-REST area the gateway does not expose (§7a.1, N32),
+    /// or the query selects ENDPOINT attributes, which the gateway does not
+    /// add to rows (§9.3, N12).
     NotImplemented,
+    /// The `FROM ENDPOINT` directive names an endpoint the registry does not
+    /// know (§8.4.1, N19).
+    EndpointUnknown,
+    /// The `ORGANISATION` directive names an organisation the registry does
+    /// not know (§8.1, §8.4.1, N20).
+    OrganisationUnknown,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -81,7 +89,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 12] = [
+    pub const GATEWAY: [Self; 14] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -94,6 +102,8 @@ impl Code {
         Self::Internal,
         Self::NotFound,
         Self::NotImplemented,
+        Self::EndpointUnknown,
+        Self::OrganisationUnknown,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -122,6 +132,8 @@ impl Code {
             Self::Internal => "internal",
             Self::NotFound => "not-found",
             Self::NotImplemented => "not-implemented",
+            Self::EndpointUnknown => "endpoint-unknown",
+            Self::OrganisationUnknown => "organisation-unknown",
         }
     }
 
@@ -135,7 +147,9 @@ impl Code {
             | Self::DedupInvalid
             | Self::ParameterInvalid
             | Self::PatientInvalid
-            | Self::Refused(_) => StatusCode::BAD_REQUEST,
+            | Self::Refused(_)
+            | Self::EndpointUnknown
+            | Self::OrganisationUnknown => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound => StatusCode::NOT_FOUND,
             Self::EhrIdCollision | Self::ControllingSystemUnreachable => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -167,6 +181,12 @@ impl Code {
             Self::Internal => "the gateway failed on its own side",
             Self::NotFound => "no resource is served at this path",
             Self::NotImplemented => "this part of the ITS-REST API is not served by the gateway",
+            Self::EndpointUnknown => {
+                "the endpoint directive names an endpoint the registry does not know (§8.4.1)"
+            }
+            Self::OrganisationUnknown => {
+                "the organisation directive names an organisation the registry does not know (§8.4.1)"
+            }
         }
     }
 }
@@ -238,6 +258,8 @@ mod tests {
             Code::Internal => Some(9),
             Code::NotFound => Some(10),
             Code::NotImplemented => Some(11),
+            Code::EndpointUnknown => Some(12),
+            Code::OrganisationUnknown => Some(13),
         }
     }
 
@@ -294,6 +316,8 @@ mod tests {
             (Code::Internal, StatusCode::INTERNAL_SERVER_ERROR),
             (Code::NotFound, StatusCode::NOT_FOUND),
             (Code::NotImplemented, StatusCode::NOT_IMPLEMENTED),
+            (Code::EndpointUnknown, StatusCode::BAD_REQUEST),
+            (Code::OrganisationUnknown, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

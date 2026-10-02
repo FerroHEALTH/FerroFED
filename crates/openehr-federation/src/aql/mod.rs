@@ -53,6 +53,7 @@ mod paging;
 mod rewrite;
 mod scan;
 
+pub mod directive;
 pub mod refusal;
 pub mod subject;
 
@@ -64,12 +65,14 @@ use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId
 use openehr_its::rest::generated::query::ResultSetColumn;
 use openehr_query::ast::{ColumnExpr, SelectClause, SelectQuery};
 use openehr_query::bind::{Parameters, bind};
-use openehr_query::parser::{ParseError, parse_str};
+use openehr_query::federation::Directive;
+use openehr_query::parser::ParseError;
 use openehr_query::printer::to_aql;
 
 use crate::aggregate::{AggregateFunction, Recombination};
 use crate::dedup::DedupMode;
 use crate::order::ResultOrder;
+use directive::FacadeQuery;
 use refusal::{Refusal, Unreducible};
 use scan::{Findings, Input};
 use subject::{NamespaceOrigin, Subject};
@@ -89,11 +92,16 @@ pub struct Paging {
 }
 
 /// How the node set of the request is chosen (§8, N4, N10, N11).
+///
+/// A query that carries the `FROM ENDPOINT` or `ORGANISATION` directive is
+/// [`Targeting::Directed`] at the endpoints the directive selects, which the
+/// caller expands through its registry ([`directive::FacadeQuery::directive`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Targeting {
     /// The request names its endpoints (the `FROM ENDPOINT` directive or the
-    /// `openEHR-federation-endpoint` header, §8), this many of them.
+    /// `openEHR-federation-endpoint` header, §8), this many of them after an
+    /// `ORGANISATION` is expanded to the endpoints it manages (N20).
     Directed {
         /// How many endpoints the request names.
         endpoints: NonZeroUsize,
@@ -181,6 +189,20 @@ impl Context {
             decomposable: BTreeSet::new(),
             dedup: DedupMode::None,
         }
+    }
+
+    /// Declares how the request's node set is chosen: [`Targeting::Directed`]
+    /// for a query that names its endpoints (§8, N11).
+    #[must_use]
+    pub fn with_targeting(mut self, targeting: Targeting) -> Self {
+        self.targeting = targeting;
+        self
+    }
+
+    /// How the request's node set is chosen.
+    #[must_use]
+    pub fn targeting(&self) -> Targeting {
+        self.targeting
     }
 
     /// Declares the dedup mode the request selects (§10, N15). Under
@@ -276,6 +298,15 @@ impl Analysis {
         }
     }
 
+    /// Where each façade column of a row comes from, in façade order.
+    #[must_use]
+    pub fn sources(&self) -> &[ColumnSource] {
+        match self {
+            Self::Patient(query) => &query.sources,
+            Self::Unscoped(query) => &query.node.columns,
+        }
+    }
+
     /// How the Tier recombines the one-row node answers of an undirected
     /// aggregate query into the federation's row (§11.6.3), or `None` for a
     /// query whose node rows are merged as rows.
@@ -312,6 +343,10 @@ pub enum ColumnSource {
     Subject,
     /// The re-injected issuing namespace of the patient identifier.
     Namespace,
+    /// An ENDPOINT attribute selected through the directive's variable, which
+    /// no node is asked for and the Tier adds to the row (§9.3, N12).
+    // TODO(#72): name the attribute and add its value from the registry and the resolving node.
+    Endpoint,
 }
 
 /// A query to dispatch to one node, and how its rows map to the façade's
@@ -416,7 +451,10 @@ impl UnscopedQuery {
 /// Analyses a façade query and prepares the node queries (§7.1).
 ///
 /// `parameters` are the request's `query_parameters`, already converted to
-/// AQL literals; `paging` carries its `offset` and `fetch` members.
+/// AQL literals; `paging` carries its `offset` and `fetch` members. A query
+/// may carry the `FROM ENDPOINT` or `ORGANISATION` directive (§8.1), which no
+/// node query carries; `context` then says which node set it selects, as
+/// [`directive::FacadeQuery`] describes.
 ///
 /// An aggregate query directed to one endpoint is dispatched unchanged (N14).
 /// An undirected one is recombined at the Tier when every function it applies
@@ -437,10 +475,24 @@ pub fn analyse(
     paging: Paging,
     context: &Context,
 ) -> Result<Analysis, Refusal> {
-    let mut query = parse_str(aql).map_err(|error| Refusal::NotAql {
-        at: first_fault(&error),
-    })?;
+    FacadeQuery::parse(aql)?.analyse(parameters, paging, context)
+}
+
+/// Analyses the parsed façade `query`, whose `directive` the federation parse
+/// lifted out (§7.1, §8.1).
+fn analyse_tree(
+    mut query: SelectQuery,
+    directive: Option<&Directive>,
+    parameters: &Parameters,
+    paging: Paging,
+    context: &Context,
+) -> Result<Analysis, Refusal> {
     bind(&mut query, parameters).map_err(Refusal::Parameters)?;
+    let facade_columns = render_columns(&query.select);
+    let endpoint = match directive {
+        Some(directive) => directive::strip_endpoint_columns(&mut query, directive)?,
+        None => Vec::new(),
+    };
     let findings = scan::scan(&query)?;
     // NOTE: §11.6.3 [[aggregate-block]] forbids per-node aggregate rows, and nothing tells the
     // gateway whether a function outside AQL aggregates, so a fan-out refuses it (N14).
@@ -467,6 +519,9 @@ pub fn analyse(
         }
         None => unscoped(query, &findings, context, columns, ordered)?,
     };
+    if !endpoint.is_empty() {
+        analysis.select_endpoint_attributes(facade_columns, &endpoint);
+    }
     let (order, recombined, sources) = match &mut analysis {
         Analysis::Patient(query) => (
             &mut query.order,
@@ -496,7 +551,8 @@ fn visible(sources: &[ColumnSource]) -> Vec<usize> {
         .iter()
         .filter_map(|source| match source {
             ColumnSource::Node(column) => Some(*column),
-            ColumnSource::Subject | ColumnSource::Namespace => None,
+            // TODO(#72): an ENDPOINT attribute tells rows of different nodes apart under DISTINCT.
+            ColumnSource::Subject | ColumnSource::Namespace | ColumnSource::Endpoint => None,
         })
         .collect()
 }
@@ -660,6 +716,12 @@ fn unscoped(
 ) -> Result<Analysis, Refusal> {
     if context.targeting == Targeting::Localized {
         return Err(Refusal::NodeSetUndefined);
+    }
+    if query.select.columns.is_empty() {
+        // NOTE: no specification governs a query that selects only ENDPOINT attributes (§9.3):
+        // our own design, each node answers one EHR column per row it holds.
+        let ehr = rewrite::ehr_variable(&mut query, &findings.ehr);
+        rewrite::keep_a_column(&mut query, &ehr);
     }
     let order = rewrite::order_for(&mut query, ordered, false)?;
     let sources = (0..columns.len()).map(ColumnSource::Node).collect();

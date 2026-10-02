@@ -19,6 +19,10 @@
 //!   subject predicate and analysing it again, so the crate's own folding
 //!   (`CONCAT`, `CONCAT_WS`, `SUBSTRING`, §5.4.1 "in any position") judges
 //!   its own output.
+//!
+//! A query may carry the `FROM ENDPOINT` or `ORGANISATION` directive of §8.1,
+//! and a node query never carries a path through its variable either, unless
+//! the rewrite bound that name afresh in the node query's own `FROM`.
 
 #![no_main]
 
@@ -29,8 +33,11 @@ use libfuzzer_sys::fuzz_target;
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::refusal::Refusal;
+use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::{Analysis, Context, OffsetStrategy, Paging, Targeting, analyse};
-use openehr_query::ast::{ClassExprOperand, ContainsExpr, LikeOperand, Primitive, WhereExpr};
+use openehr_query::ast::{
+    ClassExprOperand, ContainsExpr, IdentifiedPath, LikeOperand, Primitive, WhereExpr,
+};
 use openehr_query::bind::Parameters;
 use openehr_query::parser::parse_str;
 use openehr_query::printer::{escape_string, to_aql};
@@ -90,6 +97,21 @@ fuzz_target!(|data: &[u8]| {
         !literals.found,
         "a node query carries the identifier in a literal"
     );
+    // NOTE: §8.1, the query analysed, so it parses; with no parse there is no directive to hold.
+    let directive = FacadeQuery::parse(aql)
+        .ok()
+        .and_then(|facade| facade.directive().and_then(|d| d.variable.clone()));
+    if let Some(variable) = directive.filter(|name| !bound(&tree.from, name)) {
+        let mut through = Through {
+            variable: &variable,
+            found: false,
+        };
+        through.visit_select_query(&tree);
+        assert!(
+            !through.found,
+            "a node query carries a path through the endpoint directive's variable"
+        );
+    }
 
     let Some(variable) = ehr_variable(&tree.from) else {
         return;
@@ -248,6 +270,38 @@ fn ehr_variable(from: &ContainsExpr) -> Option<String> {
         ContainsExpr::And(left, right) | ContainsExpr::Or(left, right) => {
             ehr_variable(left).or_else(|| ehr_variable(right))
         }
+    }
+}
+
+/// Whether the containment binds `variable`.
+fn bound(from: &ContainsExpr, variable: &str) -> bool {
+    match from {
+        ContainsExpr::Contained { operand, contains } => {
+            let (ClassExprOperand::Class { variable: name, .. }
+            | ClassExprOperand::Version { variable: name, .. }) = operand;
+            name.as_deref() == Some(variable)
+                || contains
+                    .as_ref()
+                    .is_some_and(|constraint| bound(&constraint.expr, variable))
+        }
+        ContainsExpr::And(left, right) | ContainsExpr::Or(left, right) => {
+            bound(left, variable) || bound(right, variable)
+        }
+    }
+}
+
+/// Whether any path of a tree is rooted at `variable`.
+struct Through<'v> {
+    variable: &'v str,
+    found: bool,
+}
+
+impl<'ast> Visit<'ast> for Through<'_> {
+    fn visit_identified_path(&mut self, node: &'ast IdentifiedPath) {
+        if node.root == self.variable {
+            self.found = true;
+        }
+        openehr_query::visit::walk_identified_path(self, node);
     }
 }
 

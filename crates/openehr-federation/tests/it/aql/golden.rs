@@ -14,11 +14,13 @@
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use std::collections::BTreeSet;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 
 use openehr_federation::aggregate::{AggregateFunction, Recombination, Recombine};
+use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::{Refusal, Unreducible};
-use openehr_federation::aql::{Analysis, Context, OffsetStrategy};
+use openehr_federation::aql::{Analysis, ColumnSource, Context, OffsetStrategy, Paging, Targeting};
+use openehr_query::bind::Parameters;
 
 use super::{analysed, ask_all, assert_same_aql};
 
@@ -36,10 +38,6 @@ enum Verdict {
     RewritesTo(&'static str),
     /// The query is refused with the refusal this predicate accepts.
     Refuses(fn(&Refusal) -> bool),
-    /// The case waits on its tracker issue: the query is refused with the
-    /// refusal this predicate accepts, and the case does not pass until it is
-    /// adjudicated.
-    Awaits(fn(&Refusal) -> bool),
 }
 
 /// The pass list the golden badge is rendered from.
@@ -67,7 +65,10 @@ const PASS_LIST_HEADER: &str = "\
 /// The adjudicated outcome of every case, by file name.
 fn verdict(case: &str) -> Verdict {
     match case {
+        // 02, §8.1, N11, CP-6: the directive selects the node set and never reaches a node, and
+        // the ENDPOINT attributes selected through its variable are asked of no node (§9.3).
         "01-basic-subject-rewrite.case"
+        | "02-directive-strip-projections.case"
         | "04-observation-with-archetype-predicate.case"
         | "08-dv-identifier-clinician-path-dispatched.case"
         | "11-no-subject-passthrough.case"
@@ -123,10 +124,6 @@ fn verdict(case: &str) -> Verdict {
         "16-composer-smuggling-patient-id-rejected.case" => {
             Verdict::Refuses(|r| matches!(r, Refusal::IdentifierElsewhere { .. }))
         }
-        // TODO(#70): the FROM ENDPOINT directive, parsed with the openehr-query federation feature.
-        "02-directive-strip-projections.case" => {
-            Verdict::Awaits(|r| matches!(r, Refusal::NotAql { .. }))
-        }
         other => panic!("golden case {other} has no adjudication; add one before it runs"),
     }
 }
@@ -146,6 +143,8 @@ struct Case {
     facade: String,
     ehr_id: String,
     expected: String,
+    /// The node set a directed case names, comma-separated.
+    endpoints: Option<String>,
 }
 
 fn read(path: &std::path::Path) -> Case {
@@ -161,20 +160,54 @@ fn read(path: &std::path::Path) -> Case {
             body.push_str(line);
         }
     }
-    let section = |name: &str| {
+    let optional = |name: &str| {
         sections
             .iter()
             .find(|(heading, _)| heading == name)
-            .map_or_else(
-                || panic!("{} has no `{name}` section", path.display()),
-                |(_, body)| body.trim().to_owned(),
-            )
+            .map(|(_, body)| body.trim().to_owned())
+    };
+    let section = |name: &str| {
+        optional(name).unwrap_or_else(|| panic!("{} has no `{name}` section", path.display()))
     };
     Case {
         facade: section("facade"),
         ehr_id: section("ehr_id"),
         expected: section("expected"),
+        endpoints: optional("endpoints"),
     }
+}
+
+/// The deployment a case runs in: the corpus one, directed at the endpoints
+/// its directive names when it carries one (§8.1, N11).
+///
+/// A directed case's directive names exactly the node set of its `endpoints`
+/// section, which the gateway resolves through its registry.
+fn deployment(case: &Case, facade: &FacadeQuery) -> Context {
+    let Some(directive) = facade.directive() else {
+        assert!(
+            case.endpoints.is_none(),
+            "an undirected case names no endpoints"
+        );
+        return corpus();
+    };
+    let named = case
+        .endpoints
+        .as_deref()
+        .expect("a directed case names its endpoints");
+    let listed: Vec<&str> = named.split(',').map(str::trim).collect();
+    assert_eq!(
+        listed, directive.ids,
+        "the directive names the case's node set"
+    );
+    let endpoints = NonZeroUsize::new(listed.len()).expect("a directive names an endpoint");
+    corpus().with_targeting(Targeting::Directed { endpoints })
+}
+
+/// The outcome of a case in its [`deployment`].
+fn outcome(case: &Case) -> Result<Analysis, Refusal> {
+    let facade = FacadeQuery::parse(&case.facade)?;
+    let context = deployment(case, &facade);
+    facade.analyse(&Parameters::new(), Paging::default(), &context)
 }
 
 #[test]
@@ -194,7 +227,7 @@ fn every_golden_case_has_its_adjudicated_outcome() {
             .expect("a UTF-8 file name")
             .to_owned();
         let case = read(&path);
-        let outcome = analysed(&case.facade, &corpus());
+        let outcome = outcome(&case);
         match verdict(&name) {
             verdict @ (Verdict::Rewrites | Verdict::RewritesTo(_)) => {
                 let analysis =
@@ -215,27 +248,21 @@ fn every_golden_case_has_its_adjudicated_outcome() {
                 };
                 let expected = match verdict {
                     Verdict::RewritesTo(adjudicated) => adjudicated,
-                    Verdict::Rewrites | Verdict::Refuses(_) | Verdict::Awaits(_) => {
-                        case.expected.as_str()
-                    }
+                    Verdict::Rewrites | Verdict::Refuses(_) => case.expected.as_str(),
                 };
                 assert_same_aql(&node, expected);
                 passed.insert(name);
             }
-            verdict @ (Verdict::Refuses(accepts) | Verdict::Awaits(accepts)) => {
+            Verdict::Refuses(accepts) => {
                 let refusal = match outcome {
                     Err(refusal) => refusal,
-                    Ok(analysis) => panic!(
-                        "{name} should be refused, got {analysis:?}; an awaited case is adjudicated before it passes"
-                    ),
+                    Ok(analysis) => panic!("{name} should be refused, got {analysis:?}"),
                 };
                 assert!(
                     accepts(&refusal),
                     "{name} drew the wrong refusal: {refusal:?}"
                 );
-                if matches!(verdict, Verdict::Refuses(_)) {
-                    passed.insert(name);
-                }
+                passed.insert(name);
             }
         }
     }
@@ -353,6 +380,43 @@ fn golden_case_06_is_refused_with_nothing_declared_and_recombined_under_the_defa
             case.ehr_id
         ),
     );
+}
+
+// conformance: CP-6 CP-26
+#[test]
+fn golden_case_02_keeps_the_directive_and_its_projections_out_of_the_node_query() {
+    let case = read(&std::path::Path::new(CORPUS).join("02-directive-strip-projections.case"));
+    let Ok(Analysis::Patient(query)) = outcome(&case) else {
+        panic!("case 02 names a patient");
+    };
+    let columns: Vec<&str> = query
+        .columns()
+        .iter()
+        .map(|column| column.name.as_str())
+        .collect();
+    assert_eq!(
+        vec!["endpoint_id", "system_id", "composition_id"],
+        columns,
+        "N17: the façade's own columns, the ENDPOINT attributes included (§9.3)"
+    );
+    let ehr_id = HierObjectId::new(case.ehr_id.as_str()).expect("a HIER_OBJECT_ID");
+    let node = query.for_node(&ehr_id);
+    assert_eq!(
+        [
+            ColumnSource::Endpoint,
+            ColumnSource::Endpoint,
+            ColumnSource::Node(0)
+        ],
+        node.columns(),
+        "§9.3: the ENDPOINT attributes are the Tier's, never a node's"
+    );
+    let aql = node.aql();
+    for absent in ["ENDPOINT", "node_1", "node_2", "p/", "12345"] {
+        assert!(
+            !aql.contains(absent),
+            "the node query carries {absent:?}: {aql}"
+        );
+    }
 }
 
 fn query_offset(facade: &str, context: &Context) -> u64 {

@@ -249,6 +249,19 @@ pub enum Refusal {
         "the query names no patient and no endpoints, so no node set is defined; name the endpoints the query is for (N4, §8)"
     )]
     NodeSetUndefined,
+    /// The variable of the `FROM ENDPOINT` directive is bound again in
+    /// `FROM`, or used anywhere but as a selected column. A path through it
+    /// selects an ENDPOINT attribute the Tier adds to the rows (§9.3, N12);
+    /// §8.1 and §9.3 define no other use, and a node, which never sees the
+    /// directive, would receive an unbound variable.
+    #[error(
+        "the endpoint directive's variable can only be selected, as an ENDPOINT attribute, and cannot be bound again in FROM (§8.1, §9.3){}",
+        At(.at)
+    )]
+    EndpointVariable {
+        /// Where the variable was used or bound.
+        at: Option<Range<usize>>,
+    },
 }
 
 impl Refusal {
@@ -285,6 +298,7 @@ impl Refusal {
         "order-not-selected",
         "unordered-distinct-cut",
         "node-set-undefined",
+        "endpoint-variable",
     ];
 
     /// A stable name for this refusal: the code a gateway's error body
@@ -322,6 +336,7 @@ impl Refusal {
             Self::OrderNotSelected { .. } => "order-not-selected",
             Self::UnorderedDistinctCut { .. } => "unordered-distinct-cut",
             Self::NodeSetUndefined => "node-set-undefined",
+            Self::EndpointVariable { .. } => "endpoint-variable",
         }
     }
 
@@ -345,7 +360,8 @@ impl Refusal {
             | Self::Indecomposable { at, .. }
             | Self::UndefinedFunction { at }
             | Self::OrderNotSelected { at }
-            | Self::UnorderedDistinctCut { at } => at.as_ref(),
+            | Self::UnorderedDistinctCut { at }
+            | Self::EndpointVariable { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
             | Self::PartialAggregate
@@ -529,6 +545,7 @@ mod tests {
             Refusal::OrderNotSelected { at: None },
             Refusal::UnorderedDistinctCut { at: None },
             Refusal::NodeSetUndefined,
+            Refusal::EndpointVariable { at: None },
         ]
     }
 
@@ -562,6 +579,7 @@ mod tests {
             Refusal::OrderNotSelected { .. } => 24,
             Refusal::UnorderedDistinctCut { .. } => 25,
             Refusal::NodeSetUndefined => 26,
+            Refusal::EndpointVariable { .. } => 27,
         }
     }
 

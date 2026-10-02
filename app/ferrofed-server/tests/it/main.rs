@@ -9,6 +9,7 @@ mod completeness;
 mod config;
 mod credentials;
 mod dedup;
+mod directive;
 mod distinct;
 mod e2e;
 mod endpoint_report;

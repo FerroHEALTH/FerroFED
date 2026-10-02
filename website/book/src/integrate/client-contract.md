@@ -25,6 +25,48 @@ No federation-specific syntax is needed for a basic patient query (§3.2, N1).
 An optional AQL extension, `FROM ENDPOINT …` and `ORGANISATION …`, pins a
 query to named systems for a client that wants it (§8).
 
+## Pinning a query to named systems
+
+Put the directive at the start of `FROM`, and the gateway asks exactly the
+endpoints it lists (§8.1, N11):
+
+```sql
+SELECT c/uid/value AS composition_id
+FROM ENDPOINT p [ "node_1", "node_2" ]
+  CONTAINS EHR e CONTAINS COMPOSITION c
+WHERE e/ehr_status/subject/external_ref/id/value = '12345'
+```
+
+`FROM ORGANISATION [ "org-a" ] CONTAINS …` asks every endpoint the registry
+lists as managed by each organisation (N20). The identifiers are the stable
+registry identifiers of `meta.federation.endpoints[].id`, never URLs (§8.1,
+N19), and the keywords are case-insensitive like every AQL keyword.
+
+- The directive does not replace finding the patient. Each listed endpoint
+  is still asked about its own `ehr_id` for the patient (N7, N11). A listed
+  endpoint where the patient is not known is reported `not-resolved`, and the
+  query still answers `200` (§8.1, §11.3).
+- Every registry endpoint the directive does not list is reported `excluded`.
+  It is not asked and does not clear `meta.federation.complete` (§11.1).
+- No node receives the directive. The gateway sends each node standard AQL,
+  so the node query is the same as for the undirected request (N7).
+- An identifier the registry does not know is refused `400` with
+  `endpoint-unknown` or `organisation-unknown`, before any node is asked
+  (§8.4.1). A known organisation that manages no endpoint leaves the request
+  without a destination, `404` with `no-destination`.
+- A query directed at one endpoint may use what a fan-out refuses: an
+  aggregate, which goes to the node unchanged (N14, §11.6.3), and a function
+  AQL does not define. Pinned to more than one endpoint, the same query
+  follows the rules for an undirected one.
+- The variable (`p` above) may only be selected, as an ENDPOINT attribute such
+  as `p/id` (§9.3). Selecting one answers `501` with `not-implemented`:
+  adding those columns to the rows is planned build order. Using the variable in `WHERE`,
+  in `ORDER BY` or inside a function, or binding its name again in `FROM`, is
+  refused `400` with `endpoint-variable`.
+- The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
+  request headers, the other targeting mechanism of §8.4, are planned build
+  order.
+
 ## What a client gets back
 
 An openEHR `RESULT_SET` exactly as ITS-REST 1.1.0 defines it, rows as ordered
