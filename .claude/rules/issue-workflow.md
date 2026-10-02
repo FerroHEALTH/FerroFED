@@ -131,14 +131,17 @@ Labels carry what the platform has no field for. Bootstrap them once with
   tracks and the harness), `security`, `dependencies` (Dependabot),
   `blocked-upstream` (waits on an upstream specification or tool release),
   and the pull-request escape hatches `no-changelog` and `no-crate-bump`.
-- **Outbound:** `upstream-report` for a report of a defect, contradiction, or
-  silence in a published specification. The issue IS the report: it opens with
-  a plain summary, then what the specification says (with citations), what this
+- **Outbound:** `upstream-report` labels exactly one issue, the standing
+  upstream-reports issue (#212). A defect, contradiction, or silence in a
+  published specification is a comment on that issue, never an issue of its
+  own (owner, 2026-10-02). The comment opens with a one-line title in bold, then
+  a plain summary, what the specification says (with citations), what this
   implementation does, and the resolution an upstream would need. The issue is
   the record and stays here: nothing is filed on an external tracker, and no
-  owner-action issue for filing is ever created. It never carries a milestone:
-  it closes when the upstream changes, on a timeline this repository does not
-  control, and the in-repo decision it forces is its own, milestoned issue.
+  owner-action issue for filing is ever created. It never carries a milestone
+  and stays open; a report the upstream resolves gets a follow-up comment, and
+  the in-repo decision a report forces is its own, milestoned issue that links
+  to the comment.
 
 The organisation also defines `Start date` and `Target date` issue fields;
 this repository leaves both empty, because the milestone is the release spine

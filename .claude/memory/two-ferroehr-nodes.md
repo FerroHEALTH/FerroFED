@@ -1,6 +1,6 @@
 ---
 name: two-ferroehr-nodes
-description: Owner ruling 2026-10-02 (decision A44, #155) - the e2e harness and the compose quickstart run two FerroEHR nodes; EHRbase left the topology because it refuses a BASE-valid PARTY_REF.namespace (#118)
+description: Owner ruling 2026-10-02 (decision A44, #155) - the e2e harness and the compose quickstart run two FerroEHR nodes; EHRbase left the topology because it refuses a BASE-valid PARTY_REF.namespace (upstream report on #212)
 metadata:
   type: project
 ---
@@ -17,8 +17,9 @@ PostgreSQL 16.2) and A41 (two products) as decision A44 in
 `object_ref.adoc` §Attributes allows (`[a-zA-Z][a-zA-Z0-9_.:/&?=+-]*`), so an
 EHR seeded on it could not carry the `urn:oid:2.999.1.<n>` issuing namespace,
 and the harness had seeded EHRbase's EHRs with no subject. One of the two nodes
-then could not exercise the patient carriers at all. #118 stays open as the
-record of the defect; it is an `upstream-report` and is never worked around.
+then could not exercise the patient carriers at all. The upstream report on
+#212 (moved there from #118) is the record of the defect, which is never worked
+around.
 
 **How to apply:**
 

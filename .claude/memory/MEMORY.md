@@ -55,8 +55,8 @@
   merge one at a time, never `gh pr update-branch --rebase`
 - [PR body licence checkbox](pr-body-licence-checkbox.md): every PR body from
   the template with the licensing box ticked
-- [Upstream reports stay here](upstream-reports-stay-here.md): the issue is
-  the record; nothing is filed on external trackers
+- [Upstream reports stay here](upstream-reports-stay-here.md): one standing
+  issue (#212), one comment per report; nothing is filed on external trackers
 - [Upstream reports carry no milestone](upstream-reports-no-milestone.md): the
   in-repo decision is a separate, milestoned issue
 - [Subagent reports go to a file](subagent-reports-to-file.md): a long agent
@@ -85,7 +85,7 @@
 - [Strict over the reference](strict-over-reference.md): the Java reference implementation is evidence, not the bar; FerroFED is as strict as FerroEHR and the specification wins where the reference is laxer; owner 2026-10-01
 - [Build in FED first](build-in-fed-first.md): every capability FerroFED needs is built here behind its trait seam, as a crate that can move to FerroPIX later; never block on an unbuilt sibling; owner 2026-10-01
 - [End-to-end gate](e2e-gate.md): container tests run only with FERROFED_E2E=1 through the testkit harness (two FerroEHR nodes with distinct system_ids behind capturing and fault proxies, images pinned by digest); every case seeds the subject on both nodes; 2026-10-01
-- [Two FerroEHR nodes](two-ferroehr-nodes.md): the harness and the quickstart run two FerroEHR instances; EHRbase left because it refuses a BASE-valid namespace (#118); decision A44, owner 2026-10-02
+- [Two FerroEHR nodes](two-ferroehr-nodes.md): the harness and the quickstart run two FerroEHR instances; EHRbase left because it refuses a BASE-valid namespace (upstream report on #212); decision A44, owner 2026-10-02
 - [Repository in the FerroHEALTH org](repo-in-ferrohealth-org.md): FerroHEALTH/FerroFED since 2026-10-01, the board is org project 1; what the transfer changed and what stays owner-side (#123)
 - [Cut releases promptly](cut-releases-promptly.md): cut when the milestone's code is done; move owner-side or upstream-blocked stragglers to the next milestone, never hold the cut; owner 2026-10-02
 - [Native issue types and fields](native-issue-types-and-priority.md): type, priority and effort are the native issue type and the FerroHEALTH Priority and Effort fields, set with scripts/gh/fields.sh; bug, enhancement and P0 to P3 retired; owner 2026-10-02 (#154)
