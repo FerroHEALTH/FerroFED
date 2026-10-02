@@ -44,6 +44,9 @@
 #  11. landing release     every "vX.Y.Z released" and "vX.Y.Z is the current
 #                          release" on website/landing/index.html names the
 #                          newest `## [x.y.z]` release of CHANGELOG.md.
+#  12. book pins           every row of the pin table on the book page
+#                          website/book/src/evaluate/versions.md restates
+#                          the docs/VERSIONS.md rows its Item cell names.
 #
 # FerroFED's own database image gets a check of its own in the change that adds
 # its first pin row.
@@ -51,8 +54,8 @@
 # Usage:
 #   scripts/checks/versions.sh
 #   scripts/checks/versions.sh --self-test
-#       Drives the specification-constant and landing-release checks against
-#       fixtures: an agreeing input passes and each drift fails.
+#       Drives the specification-constant, landing-release and book-pin checks
+#       against fixtures: an agreeing input passes and each drift fails.
 #   Any other argument prints this usage and exits 2.
 #
 # Exit 0 = every present check agrees (skips are fine). Exit 1 = a real drift.
@@ -238,6 +241,113 @@ landing_release() {
   return 0
 }
 
+# claim_holds CELL LABEL VALUE: the pin cell CELL of a matrix row carries
+# `LABEL VALUE` as two adjacent words. A VALUE of seven or more hex digits also
+# matches as the prefix of the 40-hex commit that follows LABEL, so the book
+# may abbreviate a commit.
+claim_holds() {
+  awk -v label="$2" -v value="$3" '
+    {
+      for (i = 1; i < NF; i++) {
+        if ($i != label) continue
+        w = $(i + 1); gsub(/[,.;:]+$/, "", w)
+        if (w == value) { found = 1; exit }
+        if (length(value) >= 7 && value ~ /^[0-9a-f]+$/ && w ~ /^[0-9a-f]+$/ && length(w) == 40 \
+            && substr(w, 1, length(value)) == value) { found = 1; exit }
+      }
+    }
+    END { exit !found }
+  ' <<< "$1"
+}
+
+# book_pins PAGE MATRIX: every row of the `| Item | Pin | Why |` table on PAGE
+# restates MATRIX. The Item cell names one or more matrix rows, comma-separated;
+# the Pin cell is comma-separated claims. A claim with no digit and no backtick
+# is prose and is skipped. A one-word claim is the pin of every named row, its
+# first word. A two-word claim `LABEL VALUE` is the pin of the matrix row named
+# LABEL with its first letter capitalised (`edition 2024`), or stands as those
+# two words in the pin cell of every named row (`commit 7162d0c`). Any other
+# claim is refused, so a version the guard cannot read never passes unread.
+book_pins() {
+  local page=$1 file=$2 rows row item_cell pin_cell items item i claims raw claim label value cap
+  local -a names words
+  rows="$(awk -F'|' '
+    /^\|[[:space:]]*Item[[:space:]]*\|[[:space:]]*Pin[[:space:]]*\|/ { table = 1; next }
+    table && /^\|[-|: ]+\|[[:space:]]*$/ { next }
+    table && /^\|/ { print $2 "|" $3; next }
+    table { exit }
+  ' "$page")"
+  if [ -z "$rows" ]; then
+    bad "$page has no | Item | Pin | table to hold to $file"
+    return 0
+  fi
+  local count=0 stale=0
+  while IFS= read -r row; do
+    count=$((count + 1))
+    item_cell="${row%%|*}"
+    pin_cell="${row#*|}"
+    items="$(tr -d '`' <<< "$item_cell")"
+    IFS=',' read -r -a names <<< "$items"
+    for i in "${!names[@]}"; do
+      item="$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<< "${names[$i]}")"
+      names[i]="$item"
+      if [ -z "$(pin_cell_of "$item" "$file")" ]; then
+        bad "$page names '$item', which $file has no row for"
+        stale=1
+      fi
+    done
+    claims=0
+    while IFS= read -r raw; do
+      case "$raw" in
+      *[0-9]* | *'`'*) ;;
+      *) continue ;;
+      esac
+      claim="$(tr -d '`' <<< "$raw" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+      claims=$((claims + 1))
+      read -r -a words <<< "$claim"
+      case "${#words[@]}" in
+      1)
+        for item in "${names[@]}"; do
+          value="$(pin_of "$item" "$file")"
+          if [ -n "$value" ] && [ "$value" != "${words[0]}" ]; then
+            bad "$page pins $item at ${words[0]}, $file pins $value"
+            stale=1
+          fi
+        done
+        ;;
+      2)
+        label="${words[0]}"
+        value="${words[1]}"
+        cap="$(printf '%s' "${label:0:1}" | tr '[:lower:]' '[:upper:]')${label:1}"
+        if [ -n "$(pin_cell_of "$cap" "$file")" ]; then
+          if [ "$(pin_of "$cap" "$file")" != "$value" ]; then
+            bad "$page says $label $value, $file pins $cap at $(pin_of "$cap" "$file")"
+            stale=1
+          fi
+        else
+          for item in "${names[@]}"; do
+            if ! claim_holds "$(pin_cell_of "$item" "$file")" "$label" "$value"; then
+              bad "$page says $item is $label $value, which its $file row does not pin"
+              stale=1
+            fi
+          done
+        fi
+        ;;
+      *)
+        bad "$page pins '${names[*]}' as '$claim', a claim the guard cannot read: write a pin or a LABEL VALUE pair"
+        stale=1
+        ;;
+      esac
+    done < <(tr ',' '\n' <<< "$pin_cell")
+    if [ "$claims" -eq 0 ]; then
+      bad "$page has a row for '${names[*]}' that pins nothing"
+      stale=1
+    fi
+  done <<< "$rows"
+  [ "$stale" -eq 0 ] && note "OK: all $count rows of $page agree with $file"
+  return 0
+}
+
 # The self-test drives the two checks above against fixtures in a temporary
 # directory: an agreeing input passes, and each kind of drift fails with its
 # reason.
@@ -299,6 +409,61 @@ MATRIX
   expect "a spec row whose crate is absent" 1 spec_constant Elsewhere "$work/matrix.md" "$work/tree"
   expect "a spec row whose constant is defined twice" 1 spec_constant Twice "$work/matrix.md" "$work/tree"
   expect "a matrix with no such row" 1 spec_constant Absent "$work/matrix.md" "$work/tree"
+
+  cat > "$work/pins.md" <<'MATRIX'
+| Item | Pin | Repeated in |
+|---|---|---|
+| Spec | 0.9.0 | `docs/architecture.md` |
+| Spec source | `org/spec` commit `7162d0c760d23105d62a743bf0ad1073c45fdb85` | `scripts/vendor/spec.sh` |
+| Package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org` | `scripts/vendor/pixm.sh` |
+| `crate-a` | 0.0.76 | the root `Cargo.toml` |
+| `crate-b` | 0.0.76 | the root `Cargo.toml` |
+| Rust toolchain | 1.98.1 | `rust-toolchain.toml` |
+| Edition | 2024 | the root `Cargo.toml` |
+MATRIX
+  # Each fixture page holds the agreeing rows, then the one row its name says
+  # is wrong; `agree` adds none.
+  cat > "$work/book-rows" <<'ROWS'
+| Spec | 0.9.0, release candidate | the governing text; 1.0 replaces it |
+| Spec source | commit `7162d0c` | the vendored source |
+| Package | `ihe.iti.pixm`, version 3.1.0 | the binding |
+| `crate-a`, `crate-b` | 0.0.76 | one family |
+| Rust toolchain | 1.98.1, edition 2024 | the toolchain |
+ROWS
+  local name extra
+  while IFS='~' read -r name extra; do
+    {
+      printf '%s\n' '# Pinned versions' '' '| Item | Pin | Why |' '|---|---|---|'
+      cat "$work/book-rows"
+      [ -z "$extra" ] || printf '%s\n' "$extra"
+      printf '%s\n' '' 'Prose after the table names 9.9.9 and is not a row.'
+    } > "$work/$name.md"
+  done <<'PAGES'
+agree~
+stale-pin~| Spec | 0.8.0 | the old text |
+stale-member~| `crate-a`, `crate-b`, Spec | 0.0.76 | one family |
+stale-label~| Rust toolchain | 1.98.1, edition 2021 | the toolchain |
+stale-commit~| Spec source | commit `0123abc` | the vendored source |
+short-commit~| Spec source | commit `7162d0` | the vendored source |
+stale-version~| Package | `ihe.iti.pixm`, version 3.0.0 | the binding |
+stale-package~| Package | `ihe.iti.pdqm`, version 3.1.0 | the binding |
+unknown-item~| Rust | 1.98.1 | the toolchain |
+unreadable~| Spec | 0.9.0 as of 2026-10-01 | the governing text |
+pins-nothing~| Spec | release candidate | the governing text |
+PAGES
+  printf '%s\n' '# Pinned versions' '' 'No table here; 0.9.0 in prose.' > "$work/no-table.md"
+  expect "a book table that restates the matrix" 0 book_pins "$work/agree.md" "$work/pins.md"
+  expect "a book pin that moved" 1 book_pins "$work/stale-pin.md" "$work/pins.md"
+  expect "a book row whose shared pin one member lacks" 1 book_pins "$work/stale-member.md" "$work/pins.md"
+  expect "a labelled book pin that names another row" 1 book_pins "$work/stale-label.md" "$work/pins.md"
+  expect "a book commit that is not the pinned one" 1 book_pins "$work/stale-commit.md" "$work/pins.md"
+  expect "a book commit shorter than seven digits" 1 book_pins "$work/short-commit.md" "$work/pins.md"
+  expect "a book package version that moved" 1 book_pins "$work/stale-version.md" "$work/pins.md"
+  expect "a book package that is not the pinned one" 1 book_pins "$work/stale-package.md" "$work/pins.md"
+  expect "a book row the matrix has no row for" 1 book_pins "$work/unknown-item.md" "$work/pins.md"
+  expect "a book claim the guard cannot read" 1 book_pins "$work/unreadable.md" "$work/pins.md"
+  expect "a book row that pins nothing" 1 book_pins "$work/pins-nothing.md" "$work/pins.md"
+  expect "a book page with no pin table" 1 book_pins "$work/no-table.md" "$work/pins.md"
 
   rm -r "$work"
   echo "versions: self-test OK."
@@ -472,6 +637,14 @@ if [ -f website/landing/index.html ] && [ -f CHANGELOG.md ]; then
   landing_release website/landing/index.html CHANGELOG.md
 else
   note "no website/landing/index.html or CHANGELOG.md yet, skipped"
+fi
+
+book_page=website/book/src/evaluate/versions.md
+echo "== book pins ($book_page <-> $matrix)"
+if [ -f "$book_page" ]; then
+  book_pins "$book_page" "$matrix"
+else
+  note "no $book_page yet, skipped"
 fi
 
 echo "== CI tool pins (.github/workflows/ci.yml <-> $matrix)"

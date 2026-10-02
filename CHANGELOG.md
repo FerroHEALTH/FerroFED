@@ -134,6 +134,14 @@ federated query and identity resolution shipped in 0.0.3.
   Case 02 (`FROM ENDPOINT`) is refused until #70 and is not counted as
   passing. The static badge row gains the image-pulls badge for
   `ghcr.io/ferrohealth/ferrofed`.
+- The `versions` guard holds the book's "Pinned versions" page to
+  `docs/VERSIONS.md` (#198). Each row of its pin table names its matrix rows
+  by their exact names, and every pin it states, a version, a package, an
+  `edition 2024` or an abbreviated `commit`, must be the one those rows pin;
+  a pin the guard cannot read fails rather than passing unread. The page now
+  lists all five `openehr-*` crates, the vendored PIXm and PDQm packages and
+  the specification's source commit as rows of their own. `versions.sh
+  --self-test` proves each drift.
 
 ### Changed
 
@@ -169,6 +177,23 @@ federated query and identity resolution shipped in 0.0.3.
   manifests' comment on the 0.0.0 name reservation changes with them, so
   `openehr-federation` moves to 0.0.15, `ihe-iti` to 0.0.7 and
   `nl-generic-functions` to 0.0.4 with no change to their code.
+- The `comment-style` citation checks also refuse a citation of a
+  `README.md` of the tree, at the root or in a member, outside the vendored
+  `docs/specs/` and `vendor/` trees (#198), in the same citation form. Naming
+  a README as a file a script reads still passes. `fuzz.yml` cites the
+  libFuzzer documentation for how a crashing input is kept, and the scripts
+  that cited a README no longer do.
+- The release lane fails a tag whose tree has no root `Cargo.toml` (#198),
+  with a message saying the tag cannot be checked against the workspace
+  version. It used to skip that check.
+- `scripts/gh/fields.sh` checks its arguments before any `gh` call (#198).
+  No argument, an unknown command, a wrong operand count or `--help` prints
+  the usage to stderr and exits 2, with no network call and no token needed.
+  `fields.sh --self-test` proves it against a stub that records every call.
+- The per-edit `comment-style` hook also reads the `conformance/*.tsv`
+  tables (#198), as CI does, and stays a quiet pass for any other file.
+  Conformance track 5 (Dedup + DISTINCT) names #187 beside its issues, as its
+  CP-10 and CP-32 rows do, and the book's conformance page is re-rendered.
 - Error bodies (#57): the gateway's own refusals (`404`, `501`, a caught
   panic's `500`) answer the ITS-REST `Error` shape with `code` and
   `request_id`, where they named the code in an `error` member, and the codes

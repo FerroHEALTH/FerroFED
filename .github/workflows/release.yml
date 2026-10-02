@@ -14,12 +14,10 @@
 # once the expected asset set is complete is it PUBLISHED. Publishing last
 # means a half-assembled release is never visible.
 #
-# Two tiers, the same split ci.yml uses. `plan`, `github-release` and
-# `finalize-release` run on a repository with no code, because a pre-code
-# release is legitimate here: it carries the changelog section and nothing
-# else. `build-binaries` and `build-image` are gated behind the same
-# root-Cargo.toml detection, so the lane still cuts a pre-code release, and the
-# workspace (#28) has had them running since v0.0.1.
+# Every tag since v0.0.1 carries the workspace (#28), so `plan` fails a tag
+# whose tree has no root Cargo.toml, because the tag cannot then be checked
+# against the workspace version. `build-binaries` and `build-image` keep the
+# root-Cargo.toml detection ci.yml tier 2 uses.
 #
 # The workflow is dormant until a `v*` tag is pushed. It does not run on a push
 # to main, on a pull request, or in a merge group.
@@ -110,7 +108,8 @@ jobs:
       - name: The tag matches the declared product version
         # Every file that declares the product version has to agree with the
         # tag: CITATION.cff, the product row of docs/VERSIONS.md and the root
-        # Cargo.toml [workspace.package] version.
+        # Cargo.toml [workspace.package] version. A tag missing any of the
+        # three fails here.
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           VERSION: ${{ steps.tag.outputs.version }}
@@ -154,17 +153,17 @@ jobs:
           ' docs/VERSIONS.md)"
           check "the docs/VERSIONS.md product-version row" "$matrix"
 
-          if [ -f Cargo.toml ]; then
-            manifest="$(awk '
-              /^[[:space:]]*\[/ { h = $0; gsub(/[[:space:]]/, "", h); f = (h == "[workspace.package]"); next }
-              f && $0 ~ /^[[:space:]]*version[[:space:]]*=/ {
-                if (match($0, /"[^"]*"/)) { print substr($0, RSTART + 1, RLENGTH - 2); exit }
-              }
-            ' Cargo.toml)"
-            check "the root Cargo.toml [workspace.package] version" "$manifest"
-          else
-            echo "no root Cargo.toml at $TAG, so no manifest version is checked."
+          if [ ! -f Cargo.toml ]; then
+            echo "::error::the root Cargo.toml is missing at $TAG, so the tag cannot be checked against the workspace version." >&2
+            exit 1
           fi
+          manifest="$(awk '
+            /^[[:space:]]*\[/ { h = $0; gsub(/[[:space:]]/, "", h); f = (h == "[workspace.package]"); next }
+            f && $0 ~ /^[[:space:]]*version[[:space:]]*=/ {
+              if (match($0, /"[^"]*"/)) { print substr($0, RSTART + 1, RLENGTH - 2); exit }
+            }
+          ' Cargo.toml)"
+          check "the root Cargo.toml [workspace.package] version" "$manifest"
 
           [ "$fail" -eq 0 ] || exit 1
 
@@ -298,9 +297,7 @@ jobs:
   # reach of user-defined build steps, and a job's steps all share one runner VM
   # (https://slsa.dev/spec/v1.2/build-requirements), so the build and its
   # attestations run in release-build.yml, a reusable workflow on its own VM. A
-  # job that carries `uses:` cannot also carry `steps:`. The workspace gate
-  # stays, so a repository without a root Cargo.toml still cuts a pre-code
-  # release.
+  # job that carries `uses:` cannot also carry `steps:`.
   build-binaries:
     name: binaries (${{ matrix.target }})
     needs: [plan, github-release]

@@ -25,16 +25,16 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
 - **plan** validates the tag shape, refuses a dispatch that is not at the tag
   it names, checks the tag against every file that declares the product
   version, and extracts the `## [X.Y.Z]` section of `CHANGELOG.md` as the
-  release notes. A missing or empty section fails the release, so a cut can
-  never ship with notes generated from the commit range standing in for the
-  changelog.
+  release notes. A tag whose tree has no root `Cargo.toml` fails here, since
+  the tag cannot be checked against the workspace version. A missing or empty
+  changelog section fails the release, so a cut can never ship with notes
+  generated from the commit range standing in for the changelog.
 - **github-release** creates the release as a draft carrying those notes. A
   draft is mutable and invisible to anyone browsing releases, which is the
   window the asset uploads need.
 - **build-binaries** calls `release-build.yml` once per target (two Linux
   architectures, glibc and musl). It is gated on a root `Cargo.toml`, the same
-  detection `ci.yml` tier 2 uses, so a repository without a workspace still
-  cuts a pre-code release. See § The build legs.
+  detection `ci.yml` tier 2 uses. See § The build legs.
 - **build-image** calls `release-image.yml`, which builds the container from
   the attested musl binaries and pushes it to `ghcr.io/ferrohealth/ferrofed`.
 - **finalize-release** checks that the draft carries every asset this version

@@ -2,10 +2,10 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # The book theme favicons are copies of the brand favicon, not files of their
-# own (assets/brand/README.md). mdBook reads a theme override from
-# website/book/theme/favicon.svg and favicon.png, so the mark exists twice and
-# nothing but this check keeps the two in step: change the brand mark, forget
-# the copy, and the book serves the old favicon.
+# own (no specification governs this: our own design). mdBook reads a theme
+# override from website/book/theme/favicon.svg and favicon.png, so the mark
+# exists twice and nothing but this check keeps the two in step: change the
+# brand mark, forget the copy, and the book serves the old favicon.
 #
 #   scripts/checks/favicon-sync.sh
 #

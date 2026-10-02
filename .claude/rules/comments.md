@@ -97,9 +97,10 @@ A comment describes the code as it IS.
   backtick-quoted markers used AS markers on doc lines, and empty
   `# Errors`/`# Panics` doc sections. Check 9 refuses a citation of an internal
   file (`docs/architecture.md`, a path into `.claude/`, `CLAUDE.md`, the
-  name of a rule or memory file, or any other markdown file under `docs/`
-  outside `docs/specs/` cited in a parenthetical or by section, so naming
-  `docs/VERSIONS.md` as the file a script reads passes) and check 10 a
+  name of a rule or memory file, or any other markdown file under `docs/` or
+  `README.md` of the tree outside `docs/specs/` and `vendor/` cited in a
+  parenthetical or by section, so naming `docs/VERSIONS.md` as the file a
+  script reads passes) and check 10 a
   decision-register marker (`decision A17`, a bare `A30`), in Rust comments,
   doc comments and lint `reason` strings, in the full-line comments of
   `scripts/**/*.sh`, every `Cargo.toml`, `clippy.toml`, the YAML under
@@ -108,9 +109,9 @@ A comment describes the code as it IS.
   `printf` text of a workflow `run:` block, and in the `reason` strings of
   those TOML files, and in the `#` lines and the `reason` column of the
   `conformance/*.tsv` tables; `--self-test` proves each refused
-  form and its near misses. Runs per-edit on every one of those file kinds
-  but the tables (the `rust_fmt_clippy.sh` PostToolUse hook) and in the CI
-  `comment-style` job, which runs `--self-test` and `--all`.
+  form and its near misses. Runs per-edit on every one of those file kinds,
+  the tables included (the `rust_fmt_clippy.sh` PostToolUse hook), and in the
+  CI `comment-style` job, which runs `--self-test` and `--all`.
 - `clippy::too_long_first_doc_paragraph` (CI `-D warnings`): the RFC 1574
   summary line, configured in `[workspace.lints.clippy]` of the root
   `Cargo.toml`.

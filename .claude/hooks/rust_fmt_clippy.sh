@@ -11,10 +11,11 @@
 # installs it; skips silently when absent), which CAN block.
 #
 # Then, for every file kind CI checks (a .rs file, a script under scripts/,
-# a Cargo.toml, clippy.toml, the YAML under .github and the TOML under
-# docker/), run scripts/checks/comment-style.sh on the one file, which CAN
-# block (exit 2) to feed its findings back as a correction. The guard decides
-# what it reads, so a file outside those kinds passes.
+# a Cargo.toml, clippy.toml, the YAML under .github, the TOML under docker/
+# and the conformance/*.tsv tables), run scripts/checks/comment-style.sh on
+# the one file, which CAN block (exit 2) to feed its findings back as a
+# correction. The guard decides what it reads, so a .tsv, .toml or YAML file
+# outside those kinds passes.
 #
 # This hook does NOT run clippy per-edit, by design. A per-edit `cargo clippy`
 # check-builds the owning crate plus its dependency cone on every file save and
@@ -39,7 +40,7 @@ fi
 repo_root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 case "${file_path:-}" in
-*.rs | *.sh | *.toml | *.yml | *.yaml) ;;
+*.rs | *.sh | *.toml | *.yml | *.yaml | *.tsv) ;;
 *) exit 0 ;;
 esac
 [ -f "$file_path" ] || exit 0

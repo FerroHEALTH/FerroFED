@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # scripts/fuzz/seeds.sh: writes the generated seed corpora of the fuzz targets
-# (fuzz/README.md) from the vendored corpora, never from hand-copied text:
+# under fuzz/seeds from the vendored corpora, never from hand-copied text:
 #
 #   aql_rewrite      the facade query of every reference golden case
 #   adhoc_query      the same queries as ITS-REST AdhocQueryExecute bodies,

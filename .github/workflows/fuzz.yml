@@ -6,10 +6,12 @@
 # The gateway parses untrusted input on every request: the client's AQL and
 # its query_parameters, the ITS-REST AdhocQueryExecute body, and a node's or a
 # gateway's federated RESULT_SET and OPTIONS body. Each target is fed arbitrary
-# bytes from its seed corpus. A panic, an abort or a hang is a defect and the
-# run uploads the input that reproduces it; an Err is the parser doing its job.
-# The aql_rewrite target also asserts the identifier-hygiene property of
-# section 5.4.1 (N33) on every query the rewrite accepts (fuzz/README.md).
+# bytes from its seed corpus. A panic, an abort or a hang is a defect: libFuzzer
+# writes the input that triggered it to disk as crash-<sha1> or timeout-<sha1>
+# (https://llvm.org/docs/LibFuzzer.html) and the run uploads it; an Err is the
+# parser doing its job. The aql_rewrite target also asserts the
+# identifier-hygiene property of section 5.4.1 (N33) on every query the rewrite
+# accepts, so a breach of it is a panic and reaches the same upload.
 #
 # It runs weekly and on dispatch for five minutes per target, and for one
 # minute per target on a pull request that touches the code a target reads.

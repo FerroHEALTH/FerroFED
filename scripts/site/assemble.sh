@@ -61,8 +61,7 @@ cp -R "$LANDING"/. "$OUT/"
 cp -R "$book"/. "$OUT/docs/"
 
 # The brand directory holds the favicons and the mark the landing page links,
-# so it has to reach the site root for those URLs to resolve
-# (assets/brand/README.md).
+# so it has to reach the site root for those URLs to resolve.
 mkdir -p "$OUT/assets"
 cp -R assets/brand "$OUT/assets/"
 
