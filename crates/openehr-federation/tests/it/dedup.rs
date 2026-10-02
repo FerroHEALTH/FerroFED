@@ -109,6 +109,69 @@ fn under_version_identity_the_originating_copy_is_kept_and_the_copy_recorded() {
     );
 }
 
+/// BASE `master05-identification_package.adoc` §"Composite Identifiers and
+/// Case": a `system_id` identical to the `creating_system_id` apart from case
+/// is the same identifier, so its node holds the originating copy.
+// conformance: CP-9
+#[test]
+fn a_system_id_that_differs_from_the_creating_system_id_only_in_case_keeps_its_copy() {
+    let shared = uid(1, 1, 1);
+    let merged = accepted(
+        vec![
+            answer("node-0", 0, vec![vec![json!(shared), json!("imported")]]),
+            NodeAnswer::new("node-1", vec![vec![json!(shared), json!("original")]])
+                .with_system_id(system(1).to_ascii_uppercase()),
+        ],
+        &unordered(),
+    );
+    assert_eq!(
+        merged.rows(),
+        [vec![json!(shared), json!("original")]],
+        "§10.2: CDR1.EXAMPLE.ORG is cdr1.example.org, so node-1 created the version"
+    );
+    assert_eq!(merged.suppressed().endpoints(), ["node-0"]);
+}
+
+/// BASE `master05-identification_package.adoc` §"Composite Identifiers and
+/// Case": two version ids identical apart from case name one version, and the
+/// kept copy keeps the case its node sent (case-preserving).
+// conformance: CP-9
+#[test]
+fn copies_whose_version_ids_differ_only_in_case_are_one_version_kept_as_sent() {
+    let original = uid(10, 1, 1).replace("8849a2f0", "8849A2F0");
+    let imported = original.to_ascii_lowercase();
+    assert_ne!(original, imported, "the fixture's two spellings differ");
+    let merged = accepted(
+        vec![
+            answer("node-0", 0, vec![vec![json!(imported), json!("imported")]]),
+            NodeAnswer::new("node-1", vec![vec![json!(original), json!("original")]])
+                .with_system_id(system(1).to_ascii_uppercase()),
+        ],
+        &unordered(),
+    );
+    assert_eq!(
+        merged.rows(),
+        [vec![json!(original), json!("original")]],
+        "§10.2: one version, the originating copy, its uid text as node-1 sent it"
+    );
+    assert_eq!(merged.suppressed().rows(), 1, "§10.2: suppressed_rows");
+    assert_eq!(merged.suppressed().endpoints(), ["node-0"]);
+
+    let lowest = accepted(
+        vec![
+            NodeAnswer::new("node-0", vec![vec![json!(imported), json!("a")]]),
+            NodeAnswer::new("node-1", vec![vec![json!(original), json!("b")]]),
+        ],
+        &unordered(),
+    );
+    assert_eq!(
+        lowest.rows(),
+        [vec![json!(imported), json!("a")]],
+        "with no originating holder the lowest endpoint id keeps its copy, as it sent it"
+    );
+    assert_eq!(lowest.suppressed().endpoints(), ["node-1"]);
+}
+
 // conformance: CP-9
 #[test]
 fn with_no_originating_holder_the_lowest_endpoint_id_keeps_its_copy() {

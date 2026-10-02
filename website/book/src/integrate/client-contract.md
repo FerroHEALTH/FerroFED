@@ -42,7 +42,9 @@ By default you get every row every node returned, duplicates included
 (§10.1, N15). Send `openEHR-federation-dedup: version-identity` to get one
 copy of a composition version held at several nodes: the copy from the CDR
 that created it when that CDR answered, else the one from the lowest
-endpoint id. `meta.federation.dedup` then names the endpoints whose
+endpoint id. Version ids and system ids that differ only in case name the
+same thing (openEHR BASE), and the kept row comes back as its node sent it.
+`meta.federation.dedup` then names the endpoints whose
 copies were dropped and counts the rows (§10.2, §10.3). Two versions of one
 composition are two rows either way, and `none` states the default
 explicitly. Any other value is refused `400` with the code `dedup-invalid`.
