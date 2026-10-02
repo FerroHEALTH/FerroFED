@@ -318,6 +318,19 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Fixed
 
+- A `SELECT DISTINCT` query with `ORDER BY` and `LIMIT` (or a bounded
+  `OFFSET` page) whose selected function column the selected paths do not
+  fix is refused `400` (`unordered-distinct-cut`), where a node could cut
+  among distinct rows tied on every path differently on each repeat (#210;
+  §11.6.1, CP-8, CP-32). AQL orders only on paths (AQL master03-syntax
+  §ORDER BY), and under `DISTINCT` the gateway adds no column, so the
+  selected paths are a node's only keys. A call to a single-row function AQL
+  defines whose arguments are literals, parameters and selected paths, such
+  as `LENGTH(c/name/value)` beside `c/name/value`, is answered as before; a
+  call that reads a path the query does not select, a clock function such as
+  `NOW()`, and `TERMINOLOGY` are refused. The same query without a `LIMIT`
+  is answered. `openehr-federation` 0.0.22 adds
+  `Refusal::UnorderedDistinctCut`.
 - Version-identity dedup compares identifiers without regard to case (#225;
   §10.2, CP-9; BASE `master05-identification_package.adoc` §"Composite
   Identifiers and Case"). Two copies whose version ids differ only in case

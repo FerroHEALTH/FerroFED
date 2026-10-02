@@ -5,11 +5,13 @@
 //! `ORDER BY` column, the row-key tie-break (the uid, or the `ehr_id` of a row
 //! with no uid), the client's `LIMIT n` unchanged, and the refusals.
 
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU32, NonZeroUsize};
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::aql::refusal::Refusal;
-use openehr_federation::aql::{Analysis, ColumnSource, Context, Paging, Targeting, analyse};
+use openehr_federation::aql::{
+    Analysis, ColumnSource, Context, OffsetStrategy, Paging, Targeting, analyse,
+};
 use openehr_federation::order::{Direction, ResultOrder, SortKey};
 use openehr_query::bind::Parameters;
 
@@ -318,6 +320,123 @@ fn under_distinct_an_order_by_path_that_is_not_selected_is_refused() {
         "N13: a hidden column would change which rows are distinct, got {refusal:?}"
     );
     assert_eq!(refusal.kind(), "order-not-selected");
+}
+
+// conformance: CP-8 CP-32
+#[test]
+fn under_distinct_a_limit_with_a_function_of_an_unselected_path_is_refused() {
+    let aql = patient_query(
+        "DISTINCT LENGTH(c/uid/value), c/name/value",
+        "ORDER BY c/name/value LIMIT 10",
+    );
+    let refusal = refused(&aql);
+    assert!(
+        matches!(refusal, Refusal::UnorderedDistinctCut { at: Some(_) }),
+        "§11.6.1: two rows tied on c/name/value with different uids are distinct, and AQL \
+         orders a node on paths alone, so its cut is not pinned, got {refusal:?}"
+    );
+    assert_eq!(refusal.kind(), "unordered-distinct-cut");
+}
+
+// conformance: CP-8 CP-32
+#[test]
+fn under_distinct_a_limit_with_a_value_from_outside_the_row_is_refused() {
+    for select in [
+        "DISTINCT NOW(), c/name/value",
+        "DISTINCT CONCAT(c/name/value, CURRENT_TIME()), c/name/value",
+        "DISTINCT TERMINOLOGY('expand', 'hl7.org/fhir/4.0', 'http://snomed.info/sct?fhir_vs=isa/50697003'), c/name/value",
+    ] {
+        let refusal = refused(&patient_query(select, "ORDER BY c/name/value LIMIT 10"));
+        assert_eq!(
+            refusal.kind(),
+            "unordered-distinct-cut",
+            "AQL §Functions: a clock or a terminology server, not the row, gives {select}"
+        );
+    }
+}
+
+// conformance: CP-8 CP-32
+#[test]
+fn under_distinct_a_bounded_page_with_an_unpinned_function_is_refused() {
+    let bounded = ask_all().with_offset_strategy(OffsetStrategy::Bounded {
+        max_window: NonZeroU32::new(100).expect("non-zero"),
+    });
+    let aql = patient_query(
+        "DISTINCT LENGTH(c/uid/value), c/name/value",
+        "ORDER BY c/name/value LIMIT 10 OFFSET 10",
+    );
+    let refusal = analysed(&aql, &bounded).expect_err("the page is refused");
+    assert_eq!(
+        refusal.kind(),
+        "unordered-distinct-cut",
+        "§11.6.2: each node is cut at k + n, which the same tie decides"
+    );
+}
+
+// conformance: CP-8 CP-32
+#[test]
+fn under_distinct_a_function_of_selected_paths_is_pinned_by_them() {
+    let aql = patient_query(
+        "DISTINCT CONCAT(c/name/value, '-', c/archetype_details/template_id/value), \
+         c/name/value, c/archetype_details/template_id/value, ROUND(2.5, 0)",
+        "ORDER BY c/name/value LIMIT 10",
+    );
+    assert_same_aql(
+        &node_aql(&aql),
+        &format!(
+            "SELECT DISTINCT CONCAT(c/name/value, '-', c/archetype_details/template_id/value), \
+             c/name/value, c/archetype_details/template_id/value, ROUND(2.5, 0) \
+             {SCOPED} = '{EHR_ID}' \
+             ORDER BY c/name/value, c/archetype_details/template_id/value ASC LIMIT 10"
+        ),
+    );
+    assert_eq!(
+        order(&aql),
+        ResultOrder::new(
+            vec![SortKey::new(1, Direction::Ascending)],
+            vec![2],
+            Some(10)
+        )
+        .with_distinct(vec![0, 1, 2, 3]),
+        "§11.6.1: rows tied on both paths hold one value of the function and of the literal"
+    );
+}
+
+// conformance: CP-8 CP-32
+#[test]
+fn under_distinct_an_unpinned_function_with_no_limit_is_answered() {
+    let aql = patient_query(
+        "DISTINCT LENGTH(c/uid/value), c/name/value",
+        "ORDER BY c/name/value",
+    );
+    assert_same_aql(
+        &node_aql(&aql),
+        &format!(
+            "SELECT DISTINCT LENGTH(c/uid/value), c/name/value {SCOPED} = '{EHR_ID}' \
+             ORDER BY c/name/value"
+        ),
+    );
+    assert_eq!(
+        order(&aql).limit(),
+        None,
+        "AQL §LIMIT: with no cut every node returns all its rows, which the Tier orders"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn without_distinct_a_function_column_is_pinned_by_the_row_key() {
+    let aql = patient_query(
+        "LENGTH(c/uid/value), c/name/value",
+        "ORDER BY c/name/value LIMIT 10",
+    );
+    assert_same_aql(
+        &node_aql(&aql),
+        &format!(
+            "SELECT LENGTH(c/uid/value), c/name/value, c/uid/value {SCOPED} = '{EHR_ID}' \
+             ORDER BY c/name/value, c/uid/value ASC LIMIT 10"
+        ),
+    );
 }
 
 #[test]

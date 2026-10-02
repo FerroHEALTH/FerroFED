@@ -42,9 +42,12 @@
 //! and the global distinct top `n` lies in the union of the nodes' answers.
 //! Take a value of it, and the node holding its kept copy, the copy first in
 //! the Tier order. Under `DISTINCT` the keys and the tie-break are the
-//! selected paths, so every value that node orders ahead of the copy is also
-//! ahead of it in the Tier order. There are fewer than `n` of those, so the
-//! value is within the node's distinct top `n`, and the node returned it.
+//! selected paths, and the rewrite refuses a `LIMIT` whose other selected
+//! columns those paths do not fix (`unordered-distinct-cut`), so two distinct
+//! values differ on a key and every value that node orders ahead of the copy
+//! is also ahead of it in the Tier order. There are fewer than `n` of those,
+//! so the value is within the node's distinct top `n`, and the node returned
+//! it.
 //!
 //! Under version-identity dedup (§10.2) the rows of a version held at several
 //! endpoints are suppressed at every endpoint but the one kept, before

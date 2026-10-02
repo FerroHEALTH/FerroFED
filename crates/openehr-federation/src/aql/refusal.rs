@@ -227,6 +227,21 @@ pub enum Refusal {
         /// Where the `ORDER BY` path was written.
         at: Option<Range<usize>>,
     },
+    /// Under `DISTINCT` with `ORDER BY` and `LIMIT`, a selected function
+    /// column is not fixed by the selected paths. AQL orders on paths alone
+    /// (AQL master03-syntax §ORDER BY), so a node cut at its `LIMIT` may keep
+    /// a different one of two distinct rows tied on every path on each
+    /// repeat, and §11.6.1 requires that "repeating a query returns rows in
+    /// the same order". Select the paths the function reads, or drop the
+    /// `LIMIT`.
+    #[error(
+        "under DISTINCT with ORDER BY and LIMIT, a selected function column must be computed from selected paths only, because a node can order only on paths and could otherwise cut among distinct rows differently on each repeat (§11.6.1, AQL §ORDER BY); select the paths it reads, or drop the LIMIT{}",
+        At(.at)
+    )]
+    UnorderedDistinctCut {
+        /// Where the function column was written: its first path argument.
+        at: Option<Range<usize>>,
+    },
     /// The query names no patient and no node set, and the deployment
     /// localizes on the patient (N4). Name the endpoints with
     /// the directive or the `openEHR-federation-endpoint` header.
@@ -268,6 +283,7 @@ impl Refusal {
         "top-with-limit",
         "top-with-fetch",
         "order-not-selected",
+        "unordered-distinct-cut",
         "node-set-undefined",
     ];
 
@@ -304,6 +320,7 @@ impl Refusal {
             Self::TopWithLimit => "top-with-limit",
             Self::TopWithFetch => "top-with-fetch",
             Self::OrderNotSelected { .. } => "order-not-selected",
+            Self::UnorderedDistinctCut { .. } => "unordered-distinct-cut",
             Self::NodeSetUndefined => "node-set-undefined",
         }
     }
@@ -327,7 +344,8 @@ impl Refusal {
             | Self::UndirectedAggregate { at }
             | Self::Indecomposable { at, .. }
             | Self::UndefinedFunction { at }
-            | Self::OrderNotSelected { at } => at.as_ref(),
+            | Self::OrderNotSelected { at }
+            | Self::UnorderedDistinctCut { at } => at.as_ref(),
             Self::Parameters(_)
             | Self::NoNamespace
             | Self::PartialAggregate
@@ -509,6 +527,7 @@ mod tests {
             Refusal::TopWithLimit,
             Refusal::TopWithFetch,
             Refusal::OrderNotSelected { at: None },
+            Refusal::UnorderedDistinctCut { at: None },
             Refusal::NodeSetUndefined,
         ]
     }
@@ -541,7 +560,8 @@ mod tests {
             Refusal::TopWithLimit => 22,
             Refusal::TopWithFetch => 23,
             Refusal::OrderNotSelected { .. } => 24,
-            Refusal::NodeSetUndefined => 25,
+            Refusal::UnorderedDistinctCut { .. } => 25,
+            Refusal::NodeSetUndefined => 26,
         }
     }
 
