@@ -81,10 +81,13 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 
 The openEHR surface comes from the published `openehr-*` crates, consumed by
 version like any other dependency (`docs/architecture.md` §2). FerroEHR
-releases them as one lockstep family, so the five rows below are one group:
+releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.78 since 2026-10-02.
+pin is the latest version on crates.io, 0.0.78 since 2026-10-02. The family's
+`openehr-sdt` (the SMART on openEHR scope grammar) is not a dependency yet: it
+joins the group at the family pin when client authentication (#80) first
+reads scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -92,7 +95,6 @@ pin is the latest version on crates.io, 0.0.78 since 2026-10-02.
 | `openehr-its` | 0.0.78 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-base` | 0.0.78 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-rm` | 0.0.78 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-sdt` | 0.0.78 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,

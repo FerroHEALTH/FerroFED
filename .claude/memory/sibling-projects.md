@@ -16,7 +16,7 @@ siblings checked out beside it on the owner's machine:
   node** for FerroFED, reached over ITS-REST like any other CDR, and it
   publishes the `openehr-*` crates (`openehr-query` for the AQL model,
   `openehr-its` for the ITS-REST client, `openehr-rm`, `openehr-base` and the
-  rest, one lockstep line, 0.0.74 since 2026-10-01). The crates are
+  rest, one lockstep line at the pin in `docs/VERSIONS.md`). The crates are
   dependencies by version from crates.io, never by path.
 - **FerroBRIDGE** at `../FerroBRIDGE` and **FerroTERM** at `../FerroTERM`:
   the openEHR-to-FHIR-and-OMOP bridge and the FHIR terminology server. On
