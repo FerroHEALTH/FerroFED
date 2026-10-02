@@ -900,7 +900,8 @@ one `ORDER BY` column, the first rule that applies decides:
    and documented.
 
 The row order is the `ORDER BY` keys in turn, then `endpoint_id`, then the
-row's uid by the comparator above (the `uid/value` string a node sorts too),
+row key by the comparator above (the `uid/value` or `ehr_id/value` string a
+node sorts too),
 then the positional row under rule 4, so a repeated query returns the same
 bytes (§11.6.1 MUST). An `ORDER BY` path that is not in the `SELECT` is added
 to the dispatched `SELECT` as a hidden column and stripped after the merge
@@ -919,21 +920,36 @@ keys break on `endpoint_id`, then the uid, the order §11.6.1 recommends.
 The dispatched query is the client's, plus what the Tier needs to read it:
 
 1. an `ORDER BY` path that is not selected travels as a hidden column (A28);
-2. where the `FROM` binds a versioned object whose uid path is known
-   (`c/uid/value` for `COMPOSITION c`), the uid is read as a column and
-   appended as the last `ORDER BY` key, ascending. Under `DISTINCT`, the
-   remaining selected paths take the uid's place, since a hidden column would
-   change which rows are distinct;
+2. a row key is read as a column and appended as the last `ORDER BY` key,
+   ascending: the uid of the first `COMPOSITION`, else of the first `VERSION`
+   (`c/uid/value` for `COMPOSITION c`). A row with no uid, as in an
+   `EHR`-only query, is keyed on `<ehr>/ehr_id/value`, which the RM makes
+   mandatory and unique per `EHR`, and with no `EHR` class on the uid of an
+   `EHR_STATUS` or `EHR_ACCESS`, one per `EHR`. A patient query is scoped to
+   one `ehr_id` per node, so those two are skipped there. `FOLDER` is never a
+   key, because the RM recommends a uid only on a tree-root folder. This
+   choice follows §11.6.1's RECOMMENDED order and is FerroFED's own (#157).
+   Under `DISTINCT`, the remaining selected paths take the row key's place,
+   since a hidden column would change which rows are distinct;
 3. the `LIMIT` is the client's `n`, unchanged.
 
 Appending a key after the client's keys refines their order and never
 reorders it. A node's top `n` under the refined order is therefore always one
 of its top `n` under the client's `ORDER BY`: where the client's keys tie
 across the node's cut, AQL lets the node return any of the tied rows, and the
-appended uid makes it return the same ones on every repeat. Without that, the
-Tier's tie-break would order whichever tied rows a node happened to return,
-and two runs of one query could return different rows, which §11.6.1's
-determinism rule forbids.
+appended row key makes it return the same ones on every repeat. Without
+that, the Tier's tie-break would order whichever tied rows a node happened to
+return, and two runs of one query could return different rows, which
+§11.6.1's determinism rule forbids.
+
+A query with no row key, such as a patient query over `OBSERVATION` with no
+`COMPOSITION`, or rows that share their key, is not refused. §11.6.1 makes
+the Tier's order deterministic, and the Tier orders the rows it receives on
+their cells after the keys, `endpoint_id` and the row key. Which rows a node
+returns among those tied on every key it was sent is the node's choice: AQL
+`master03-syntax.adoc` §LIMIT says that "deterministic behavior requires that
+the `ORDER BY` clause is also used to constrain the result in a unique
+order", which the client's own `ORDER BY` can do.
 
 FerroFED fails loudly on what it can see (FerroFED's own, within §11.6.1):
 
@@ -965,11 +981,11 @@ The precondition is a specification gap, held on #17 (T167). The deprecated
 **`OFFSET`** (decision A29, #53). Bounded `k + n`, the second strategy of
 §11.6.2 ("retrieving `k + n` rows per node, merging, ordering and slicing"):
 each node is sent `LIMIT k + n` with no `OFFSET`, under the same pushed-down
-order as `LIMIT n` (the hidden key columns and the uid as the last key). The
+order as `LIMIT n` (the hidden key columns and the row key as the last key). The
 merge runs the visible-order check of A43 on the `k + n` the node was sent (a
 node that returned `k + n` rows out of the Tier order, or more than `k + n`,
 is `node-error`), orders under the Tier comparator with the `endpoint_id`,
-then uid, tie-break, keeps the first `k + n` rows and slices `[k, k + n)`.
+then row key, tie-break, keeps the first `k + n` rows and slices `[k, k + n)`.
 Under the Tier's total order the global first `k + n` rows lie in the union of
 every node's first `k + n`, which is the same containment argument §11.6.1
 makes for `LIMIT n`, with the same precondition gap (T167).

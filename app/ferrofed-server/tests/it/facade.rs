@@ -228,6 +228,16 @@ pub(crate) struct Answer {
     pub(crate) meta: Meta,
 }
 
+impl Answer {
+    /// The `path` of every column of `columns[]`, in order.
+    pub(crate) fn column_paths(&self) -> Vec<Option<&str>> {
+        self.columns
+            .iter()
+            .map(|column| column.path.as_deref())
+            .collect()
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Column {
     name: String,

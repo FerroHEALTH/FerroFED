@@ -144,6 +144,34 @@ fn an_unscoped_query_is_paged_the_same_way() {
 
 // conformance: CP-32
 #[test]
+fn an_ehr_only_page_asks_each_node_for_k_plus_n_rows_tie_broken_on_the_ehr_id() {
+    let aql = "SELECT e/ehr_status/uid/value FROM EHR e \
+               ORDER BY e/time_created/value LIMIT 2 OFFSET 3";
+    let analysis = analysed(aql, Paging::default(), &bounded()).expect("the page is bounded");
+    assert_same_aql(
+        &node_aql(&analysis),
+        "SELECT e/ehr_status/uid/value, e/time_created/value, e/ehr_id/value FROM EHR e \
+         ORDER BY e/time_created/value, e/ehr_id/value ASC LIMIT 5",
+    );
+    assert_eq!(
+        analysis.order(),
+        &ResultOrder::new(
+            vec![SortKey::new(1, Direction::Ascending)],
+            vec![2],
+            Some(5)
+        )
+        .with_offset(3),
+        "§11.6.2: every node picks the same tied rows at its k + n cut"
+    );
+    assert_eq!(
+        analysis.columns().len(),
+        1,
+        "N17, §9.2: the pushed key is not a column of the client's query"
+    );
+}
+
+// conformance: CP-32
+#[test]
 fn a_page_whose_window_is_the_bound_is_accepted() {
     let aql = patient_query("ORDER BY c/uid/value LIMIT 5 OFFSET 15");
     let analysis = analysed(&aql, Paging::default(), &bounded()).expect("k + n is the bound");
