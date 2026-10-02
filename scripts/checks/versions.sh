@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: BUSL-1.1
 # Version-drift guard (docs/VERSIONS.md is the single source of truth).
 #
-# Every file that repeats a pin must agree with the matrix. The repository is
-# in its design phase, so a check whose subject file is absent SKIPS LOUDLY
-# with a printed reason, and gains teeth the moment the file appears.
+# Every file that repeats a pin must agree with the matrix. A check whose
+# subject file is absent SKIPS LOUDLY with a printed reason, and gains teeth
+# the moment the file appears.
 #
 #   1. specification pins  the Federation Tier with AQL, openEHR ITS-REST and
 #                          openEHR AQL rows of the docs/architecture.md pin
-#                          table against docs/VERSIONS.md.
+#                          table against docs/VERSIONS.md, and each row against
+#                          the crate constant it names (`FEDERATION_SPEC`,
+#                          `ITS_REST`, `AQL`).
 #   2. model crates        openehr-query and openehr-its across
 #                          docs/architecture.md, docs/VERSIONS.md, and the root
 #                          Cargo.toml [workspace.dependencies] requirement.
@@ -38,12 +40,19 @@
 #  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
 #                          own.
+#  11. landing release     every "vX.Y.Z released" and "vX.Y.Z is the current
+#                          release" on website/landing/index.html names the
+#                          newest `## [x.y.z]` release of CHANGELOG.md.
 #
 # FerroFED's own database image gets a check of its own in the change that adds
 # its first pin row.
 #
 # Usage:
 #   scripts/checks/versions.sh
+#   scripts/checks/versions.sh --self-test
+#       Drives the specification-constant and landing-release checks against
+#       fixtures: an agreeing input passes and each drift fails.
+#   Any other argument prints this usage and exits 2.
 #
 # Exit 0 = every present check agrees (skips are fine). Exit 1 = a real drift.
 #
@@ -141,6 +150,171 @@ action_default() {
   ' "$2"
 }
 
+# The whole third cell of the row whose first cell is ITEM: where the pin is
+# repeated.
+where_of() {
+  awk -F'|' -v item="$1" '
+    NF >= 4 {
+      k = $2; v = $4
+      gsub(/`/, "", k)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (k == item) { print v; exit }
+    }
+  ' "$2"
+}
+
+# spec_constant ITEM MATRIX BASE: the specification row ITEM names "the `NAME`
+# constant of `CRATE`" in its third cell, and that constant, a `pub const NAME:
+# &str` under BASE/crates/CRATE/src or BASE/app/CRATE/src, carries the version
+# the row pins.
+spec_constant() {
+  local item=$1 file=$2 base=$3 want cell name crate dir found
+  want="$(pin_of "$item" "$file")"
+  cell="$(where_of "$item" "$file")"
+  local named="s/.*the \`([A-Z][A-Z0-9_]*)\` constant of \`([a-z0-9-]+)\`.*/"
+  name="$(sed -nE "${named}\\1/p" <<< "$cell")"
+  crate="$(sed -nE "${named}\\2/p" <<< "$cell")"
+  if [ -z "$want" ]; then
+    bad "$file has no '$item' pin row"
+    return
+  fi
+  if [ -z "$name" ] || [ -z "$crate" ]; then
+    bad "$item: the $file row names no constant (the \`NAME\` constant of \`crate\`)"
+    return
+  fi
+  dir=""
+  [ -d "$base/crates/$crate/src" ] && dir="$base/crates/$crate/src"
+  [ -d "$base/app/$crate/src" ] && dir="$base/app/$crate/src"
+  if [ -z "$dir" ]; then
+    bad "$item: $file names the $name constant of $crate, and no crate $crate exists"
+    return
+  fi
+  found="$(grep -rhE "^pub const $name: &str = \"[^\"]*\";" "$dir" |
+    sed -E 's/.*= "([^"]*)";.*/\1/' | sort -u || true)"
+  if [ -z "$found" ]; then
+    bad "$item: $crate has no pub const $name: &str"
+  elif [ "$(printf '%s\n' "$found" | wc -l | tr -d '[:space:]')" != "1" ]; then
+    bad "$item: $crate defines $name more than once ($(printf '%s' "$found" | tr '\n' ' '))"
+  elif [ "$found" != "$want" ]; then
+    bad "$item: $crate's $name is $found, $file pins $want"
+  else
+    note "OK: $item $want ($crate's $name agrees)"
+  fi
+}
+
+# The newest released version of a Keep a Changelog file: its first
+# `## [x.y.z]` heading, so `## [Unreleased]` never counts.
+newest_release() {
+  sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' "$1" | head -n1
+}
+
+# landing_release PAGE CHANGELOG: every "vX.Y.Z released" and "vX.Y.Z is the
+# current release" on PAGE names the newest release of CHANGELOG, and PAGE
+# names it at least once. An "In vX.Y.Z" tag says where a feature shipped and
+# is not a release claim.
+landing_release() {
+  local page=$1 log=$2 want found v count=0 stale=0
+  want="$(newest_release "$log")"
+  if [ -z "$want" ]; then
+    bad "$log has no ## [x.y.z] release heading"
+    return
+  fi
+  found="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+ (released|is the current release)' "$page" |
+    sed -E 's/^v([0-9.]+) .*/\1/' || true)"
+  if [ -z "$found" ]; then
+    bad "$page names no current release; it should say v$want, the newest release in $log"
+    return
+  fi
+  while IFS= read -r v; do
+    count=$((count + 1))
+    if [ "$v" != "$want" ]; then
+      bad "$page says v$v is the current release, the newest release in $log is $want"
+      stale=1
+    fi
+  done <<< "$found"
+  [ "$stale" -eq 0 ] && note "OK: $page names v$want, the newest release, $count times"
+  return 0
+}
+
+# The self-test drives the two checks above against fixtures in a temporary
+# directory: an agreeing input passes, and each kind of drift fails with its
+# reason.
+self_test() {
+  local work out
+  work="$(mktemp -d)"
+  out="$work/out"
+  # expect NAME WANT COMMAND...: COMMAND sets fail to WANT, and on a drift
+  # prints a DRIFT line.
+  expect() {
+    local name=$1 want=$2
+    shift 2
+    fail=0
+    "$@" > "$out" 2>&1
+    if [ "$fail" -ne "$want" ]; then
+      echo "versions: self-test failed: $name left fail=$fail, wanted $want." >&2
+      cat "$out" >&2
+      exit 1
+    fi
+    if [ "$want" -eq 1 ] && ! grep -q 'DRIFT:' "$out"; then
+      echo "versions: self-test failed: $name failed without a DRIFT line." >&2
+      exit 1
+    fi
+  }
+
+  printf '%s\n' '## [Unreleased]' '' '## [0.0.4] - 2026-10-09' '' '## [0.0.3] - 2026-10-02' > "$work/CHANGELOG.md"
+  printf '%s\n' '<p>v0.0.4 released. Signed.</p>' '<span>In v0.0.3</span>' '<p>v0.0.4 is the current release.</p>' > "$work/agree.html"
+  printf '%s\n' '<p>v0.0.3 released. Signed.</p>' '<p>v0.0.4 is the current release.</p>' > "$work/stale-note.html"
+  printf '%s\n' '<p>v0.0.4 released.</p>' '<p>v0.0.3 is the current release.</p>' > "$work/stale-panel.html"
+  printf '%s\n' '<p>In v0.0.4</p>' > "$work/silent.html"
+  printf '%s\n' '## [Unreleased]' > "$work/unreleased.md"
+  expect "a landing page that names the newest release" 0 landing_release "$work/agree.html" "$work/CHANGELOG.md"
+  expect "a stale release note" 1 landing_release "$work/stale-note.html" "$work/CHANGELOG.md"
+  expect "a stale status panel" 1 landing_release "$work/stale-panel.html" "$work/CHANGELOG.md"
+  expect "a landing page that names no release" 1 landing_release "$work/silent.html" "$work/CHANGELOG.md"
+  expect "a changelog with no release" 1 landing_release "$work/agree.html" "$work/unreleased.md"
+
+  mkdir -p "$work/tree/crates/spec-crate/src/inner" "$work/tree/app/app-crate/src"
+  printf '%s\n' 'pub const SPEC: &str = "0.9.0";' > "$work/tree/crates/spec-crate/src/lib.rs"
+  printf '%s\n' 'pub const WIRE: &str = "1.1.0";' 'pub const WIRE_PREFIX: &str = "/v1/";' > "$work/tree/app/app-crate/src/lib.rs"
+  printf '%s\n' 'pub const TWICE: &str = "1.0.0";' > "$work/tree/crates/spec-crate/src/inner/mod.rs"
+  printf '%s\n' 'pub const TWICE: &str = "2.0.0";' >> "$work/tree/crates/spec-crate/src/lib.rs"
+  cat > "$work/matrix.md" <<'MATRIX'
+| Item | Pin | Where it is repeated |
+|---|---|---|
+| Spec | 0.9.0 | `docs/architecture.md`, the `SPEC` constant of `spec-crate` |
+| Wire | 1.1.0 | the `WIRE` constant of `app-crate` |
+| Moved | 1.0.0 | the `SPEC` constant of `spec-crate` |
+| Unnamed | 1.0.0 | `docs/architecture.md` |
+| Missing | 1.0.0 | the `ABSENT` constant of `spec-crate` |
+| Elsewhere | 1.0.0 | the `SPEC` constant of `no-such-crate` |
+| Twice | 1.0.0 | the `TWICE` constant of `spec-crate` |
+MATRIX
+  expect "a spec row that agrees with its library constant" 0 spec_constant Spec "$work/matrix.md" "$work/tree"
+  expect "a spec row that agrees with its app constant" 0 spec_constant Wire "$work/matrix.md" "$work/tree"
+  expect "a spec row that disagrees with its constant" 1 spec_constant Moved "$work/matrix.md" "$work/tree"
+  expect "a spec row that names no constant" 1 spec_constant Unnamed "$work/matrix.md" "$work/tree"
+  expect "a spec row whose constant is absent" 1 spec_constant Missing "$work/matrix.md" "$work/tree"
+  expect "a spec row whose crate is absent" 1 spec_constant Elsewhere "$work/matrix.md" "$work/tree"
+  expect "a spec row whose constant is defined twice" 1 spec_constant Twice "$work/matrix.md" "$work/tree"
+  expect "a matrix with no such row" 1 spec_constant Absent "$work/matrix.md" "$work/tree"
+
+  rm -r "$work"
+  echo "versions: self-test OK."
+}
+
+case "$#:${1:-}" in
+0:) ;;
+1:--self-test)
+  self_test
+  exit 0
+  ;;
+*)
+  sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+  ;;
+esac
+
 echo "== specification pins (docs/architecture.md <-> $matrix)"
 specs=("Federation Tier with AQL" "openEHR ITS-REST" "openEHR AQL")
 if [ -f docs/architecture.md ]; then
@@ -163,8 +337,13 @@ else
   for item in "${specs[@]}"; do
     [ -n "$(pin_of "$item" "$matrix")" ] || bad "$matrix has no '$item' pin row"
   done
-  note "no docs/architecture.md yet, skipped the comparison (the research program writes it)"
+  note "no docs/architecture.md, skipped the comparison"
 fi
+
+echo "== specification constants ($matrix <-> the crate constant each row names)"
+for item in "${specs[@]}"; do
+  spec_constant "$item" "$matrix" .
+done
 
 echo "== model crate pins (docs/architecture.md <-> $matrix <-> Cargo.toml)"
 # The openehr-* family is released in lockstep, so its rows are one group: a
@@ -285,6 +464,13 @@ if [ -f Cargo.toml ]; then
   fi
 else
   note "no root Cargo.toml yet, skipped its version"
+fi
+
+echo "== landing-page release (website/landing/index.html <-> CHANGELOG.md)"
+if [ -f website/landing/index.html ] && [ -f CHANGELOG.md ]; then
+  landing_release website/landing/index.html CHANGELOG.md
+else
+  note "no website/landing/index.html or CHANGELOG.md yet, skipped"
 fi
 
 echo "== CI tool pins (.github/workflows/ci.yml <-> $matrix)"

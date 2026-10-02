@@ -219,7 +219,7 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
 /* Cards */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   gap: 1.1rem;
 }
 .card {
@@ -238,7 +238,7 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
 .card p { margin: 0; color: var(--fb-muted); font-size: 0.94rem; }
 .card code { font-size: 0.85em; }
 
-.audiences { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.audiences { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
 .audience ul {
   margin: 0.75rem 0 0;
   padding: 0;
