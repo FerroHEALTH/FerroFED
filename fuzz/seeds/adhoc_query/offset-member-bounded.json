@@ -1,0 +1,1 @@
+{"q":"SELECT c/uid/value, c/context/start_time/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345' ORDER BY c/context/start_time/value DESC","offset":20,"fetch":10}
