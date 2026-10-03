@@ -39,7 +39,7 @@ use ferrofed_identity::binding::{Bound, ResolutionBindings, SessionKey};
 use ferrofed_registry::ehr_index::{EhrIndex, Indexed};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::incident::{Detection, Incident};
-use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
+use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use http::{HeaderMap, StatusCode};
 
 use crate::error::Code;
@@ -304,20 +304,11 @@ fn member<'a>(snapshot: &'a RegistrySnapshot, node: &NodeId, step: Step) -> Opti
 /// The endpoint a member is named by: the one it is asked through, or its
 /// first endpoint in `endpoint_id` order when every one is suspended.
 fn endpoint_of<'a>(snapshot: &'a RegistrySnapshot, node: &NodeId) -> Option<&'a Endpoint> {
-    reached_through(snapshot, node).or_else(|| {
+    snapshot.asked_through(node).or_else(|| {
         snapshot
             .endpoints()
             .find(|endpoint| endpoint.node() == node)
     })
-}
-
-/// The endpoint a member is asked through: its first active endpoint in
-/// `endpoint_id` order, as a federated query asks it.
-#[must_use]
-pub fn reached_through<'a>(snapshot: &'a RegistrySnapshot, node: &NodeId) -> Option<&'a Endpoint> {
-    snapshot
-        .endpoints()
-        .find(|endpoint| endpoint.node() == node && endpoint.status() == EndpointStatus::Active)
 }
 
 /// The endpoint each member is probed through in step 4, in `node_id` order;
@@ -326,7 +317,7 @@ pub fn reached_through<'a>(snapshot: &'a RegistrySnapshot, node: &NodeId) -> Opt
 pub fn probed(snapshot: &RegistrySnapshot) -> Vec<EndpointId> {
     snapshot
         .nodes()
-        .filter_map(|node| reached_through(snapshot, node.id()))
+        .filter_map(|node| snapshot.asked_through(node.id()))
         .map(|endpoint| endpoint.id().clone())
         .collect()
 }

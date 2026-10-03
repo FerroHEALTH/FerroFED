@@ -401,6 +401,34 @@ impl RegistrySnapshot {
             .values()
             .filter(move |endpoint| endpoint.node == *node)
     }
+
+    /// The endpoint a member is asked through: its first active endpoint in
+    /// `endpoint_id` order, or `None` when every one is suspended.
+    ///
+    /// A member is asked through one endpoint, because asking one node twice
+    /// returns its rows twice. No specification governs the choice of that
+    /// endpoint: our own design.
+    #[must_use]
+    pub fn asked_through(&self, node: &NodeId) -> Option<&Endpoint> {
+        self.asked_through_among(node, |_| true)
+    }
+
+    /// The endpoint a member is asked through when a request lets only the
+    /// endpoints `admits` accepts be asked: the first active one of those in
+    /// `endpoint_id` order, or `None` when there is none.
+    ///
+    /// [`Self::asked_through`] is this rule over every endpoint.
+    pub fn asked_through_among(
+        &self,
+        node: &NodeId,
+        admits: impl Fn(&EndpointId) -> bool,
+    ) -> Option<&Endpoint> {
+        self.endpoints.values().find(|endpoint| {
+            endpoint.node == *node
+                && endpoint.status == EndpointStatus::Active
+                && admits(&endpoint.id)
+        })
+    }
 }
 
 fn organisations(

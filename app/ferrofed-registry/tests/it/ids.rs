@@ -112,6 +112,21 @@ fn an_ehr_id_is_a_hier_object_id_compared_without_case() -> Result<(), Box<dyn E
     Ok(())
 }
 
+/// BASE 1.3.0 `base_types` §Syntaxes: `uid_based_id = root, [ '::', extension ]`
+/// with `extension = ? any string ?`, so an empty extension is admitted and
+/// `UID_BASED_ID.has_extension` reports it absent.
+#[test]
+fn an_ehr_id_with_an_empty_extension_is_a_hier_object_id() -> Result<(), Box<dyn Error>> {
+    let ehr_id = EhrId::new("a::")?;
+    assert_eq!(ehr_id.as_str(), "a::", "stored as written");
+    assert!(
+        !ehr_id.hier_object_id().has_extension(),
+        "an empty extension is no extension"
+    );
+    assert_eq!(ehr_id.hier_object_id().extension(), "");
+    Ok(())
+}
+
 #[test]
 fn only_a_bare_uuid_ehr_id_is_a_uuid() -> Result<(), Box<dyn Error>> {
     for minted in [

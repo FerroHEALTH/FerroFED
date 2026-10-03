@@ -61,7 +61,6 @@ use openehr_its::rest::routes::{IdentifierClass, ParamLocation, RouteMatch};
 use openehr_its::rest::runtime::Payload;
 
 use crate::error::Code;
-use crate::facade::owner;
 use crate::facade::route::EHR_GROUP;
 
 /// The canonical XML media type (ITS-REST 1.1.0 overview, §XML Format).
@@ -351,7 +350,9 @@ fn preceding_of<T>(versions: Vec<UpdateVersion<T>>) -> Vec<Option<ObjectVersionI
 /// endpoint, or for a member, the endpoint it is asked through.
 fn through(snapshot: &RegistrySnapshot, route: &CreatingSystemRoute) -> Option<EndpointId> {
     route.endpoint().cloned().or_else(|| {
-        owner::reached_through(snapshot, route.node()).map(|endpoint| endpoint.id().clone())
+        snapshot
+            .asked_through(route.node())
+            .map(|endpoint| endpoint.id().clone())
     })
 }
 
