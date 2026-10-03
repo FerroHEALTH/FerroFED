@@ -281,14 +281,8 @@ async fn a_withheld_identifier_in_the_path_or_a_forwarded_header_is_never_sent()
     Ok(())
 }
 
-/// A short synthetic identifier that occurs inside [`EHR`] and inside the
-/// base path of [`composed_client`].
+/// A short synthetic identifier that occurs inside [`EHR`].
 const SHORT: &str = "4199";
-
-/// The node client of an endpoint whose registry URL holds [`SHORT`].
-fn composed_client(server: &MockServer) -> Result<NodeClient<ReqwestTransport>, Box<dyn Error>> {
-    client(&format!("{}/cdr-{SHORT}", server.uri()))
-}
 
 /// Options withholding [`SHORT`], naming [`EHR`] as the `ehr_id` the gateway
 /// composed into the path when `composed` is set.
@@ -303,21 +297,16 @@ fn short_options(composed: bool) -> Result<DispatchOptions, Box<dyn Error>> {
 
 // conformance: CP-26
 #[tokio::test]
-async fn an_identifier_inside_the_composed_ehr_id_and_base_path_is_forwarded() -> TestResult {
-    let server = node(
-        "GET",
-        &format!("/cdr-{SHORT}/v1/ehr/{EHR}"),
-        ResponseTemplate::new(200),
-    )
-    .await;
+async fn an_identifier_inside_the_composed_ehr_id_is_forwarded() -> TestResult {
+    let server = node("GET", &format!("/v1/ehr/{EHR}"), ResponseTemplate::new(200)).await;
     let read = request(Method::GET, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
-    let answer = composed_client(&server)?
+    let answer = client(&server.uri())?
         .forward(read, &short_options(true)?)
         .await?;
     assert_eq!(
         StatusCode::OK,
         answer.status(),
-        "§5.4, N33: trusted parts are masked"
+        "§5.4, N33: the composed ehr_id is masked"
     );
     assert_eq!(1, received(&server).await?.len(), "the node is asked once");
     Ok(())
@@ -325,9 +314,31 @@ async fn an_identifier_inside_the_composed_ehr_id_and_base_path_is_forwarded() -
 
 // conformance: CP-26
 #[tokio::test]
+async fn a_withheld_value_in_the_registry_path_is_never_forwarded() -> TestResult {
+    let server = MockServer::start().await;
+    let read = request(Method::GET, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
+    let refused = client(&format!("{}/cdr-{SHORT}", server.uri()))?
+        .forward(read, &short_options(true)?)
+        .await;
+    assert!(
+        matches!(
+            &refused,
+            Err(ForwardError::Withheld {
+                part: Part::Url,
+                ..
+            })
+        ),
+        "the operator's base path is never masked, as on the fan-out: {refused:?}"
+    );
+    assert!(received(&server).await?.is_empty(), "nothing is sent");
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
 async fn the_same_identifier_in_a_part_the_client_wrote_is_still_withheld() -> TestResult {
     let server = MockServer::start().await;
-    let client = composed_client(&server)?;
+    let client = client(&server.uri())?;
     let mut headers = HeaderMap::new();
     headers.insert(
         "openehr-audit-details",

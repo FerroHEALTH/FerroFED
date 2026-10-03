@@ -245,13 +245,22 @@ async fn a_subject_one_member_holds_is_that_members_ehr_read_by_its_ehr_id() -> 
     Ok(())
 }
 
-// conformance: CP-26
-#[tokio::test]
-async fn a_short_subject_inside_the_routed_ehr_id_and_the_base_path_still_forwards() -> TestResult {
-    let short = "8222";
+/// A short synthetic subject that occurs inside [`EHR_A`].
+const SHORT: &str = "8222";
+
+/// The read by subject of [`SHORT`], which node A holds under [`EHR_A`],
+/// with node A's registry URL under `base` (`""` for none), and how many
+/// requests node A received.
+async fn short_subject(
+    base: &str,
+) -> Result<(StatusCode, HeaderMap, String, usize), Box<dyn Error>> {
+    assert!(
+        EHR_A.contains(SHORT),
+        "the fixture places the value in the ehr_id"
+    );
     let a = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path(format!("/cdr-{short}/v1/ehr/{EHR_A}")))
+        .and(path(format!("{base}/v1/ehr/{EHR_A}")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_raw(ehr(SYSTEM_A, EHR_A).into_bytes(), "application/json"),
@@ -261,28 +270,46 @@ async fn a_short_subject_inside_the_routed_ehr_id_and_the_base_path_still_forwar
     let b = node(SYSTEM_B, EHR_B).await;
     let dir = tempfile::tempdir()?;
     let rows = format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{short}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{SHORT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
     let app = gateway(
         dir.path(),
-        &registry(&format!("{}/cdr-{short}", a.uri()), &b.uri(), ""),
+        &registry(&format!("{}{base}", a.uri()), &b.uri(), ""),
         "profile = \"development\"",
         &rows,
     )?;
-    assert!(
-        EHR_A.contains(short),
-        "the fixture places the value in the ehr_id"
-    );
-
-    let uri = format!("/v1/ehr?subject_id={short}&subject_namespace={NAMESPACE}");
+    let uri = format!("/v1/ehr?subject_id={SHORT}&subject_namespace={NAMESPACE}");
     let (status, headers, text) = answer(app, get(&uri, None)?).await?;
+    Ok((status, headers, text, asked(&a).await?))
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_short_subject_inside_the_routed_ehr_id_still_forwards() -> TestResult {
+    let (status, headers, text, asked) = short_subject("").await?;
     assert_eq!(
         StatusCode::OK,
         status,
-        "the gate masks the parts the gateway composed (§5.4, N33): {text}"
+        "the gate masks the ehr_id the gateway composed (§5.4, N33): {text}"
     );
     names(&headers, ENDPOINT_A, SYSTEM_A);
-    assert_eq!(1, asked(&a).await?, "the holder is asked once");
+    assert_eq!(1, asked, "the holder is asked once");
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_short_subject_inside_the_registry_base_path_is_never_forwarded() -> TestResult {
+    let (status, headers, text, asked) = short_subject(&format!("/cdr-{SHORT}")).await?;
+    assert_eq!(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        status,
+        "the operator's base path is never masked, as on the fan-out (§5.4.1, N33): {text}"
+    );
+    assert_eq!("internal", error_body(&text)?.code);
+    names(&headers, ENDPOINT_A, SYSTEM_A);
+    quotes_no_subject(&text);
+    assert_eq!(0, asked, "the outbound gate sends nothing");
     Ok(())
 }
 

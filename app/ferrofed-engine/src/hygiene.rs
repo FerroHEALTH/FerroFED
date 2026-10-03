@@ -195,11 +195,10 @@ impl Withheld {
     /// cross-reference maps a patient to an `ehr_id` the node minted, so the
     /// two are equal only through a defect, and the gate then fails closed.
     ///
-    /// The URL path is masked the same way, by position and only for what the
-    /// gateway composed from trusted input ([`Composed`]): the base path
-    /// leading it, and the `ehr_id` segment after `{base}/ehr/` when the
-    /// gateway wrote it. Every other part of the path, the query and the
-    /// headers are searched whole.
+    /// The URL path is masked the same way, by position, in one place only
+    /// ([`Composed`]): the node's own `ehr_id` segment after `{base}/ehr/`,
+    /// when the gateway wrote it. The base path, every other part of the
+    /// path, the query and the headers are searched whole.
     #[must_use]
     pub fn found_in(&self, request: &Outbound<'_>) -> Option<Part> {
         self.0.iter().find_map(|value| {
@@ -251,27 +250,27 @@ pub struct Outbound<'a> {
     /// The URL the request is sent to, of which the gate reads the path, the
     /// query and the fragment, and never the authority.
     pub url: &'a Url,
-    /// The parts of the URL path the gateway composed from trusted input.
+    /// The node's own `ehr_id` segment the gateway composed into the path.
     pub composed: Composed<'a>,
     /// The headers the gateway adds, by name, other than the minted
     /// `X-Request-Id`.
     pub headers: &'a [(&'static str, &'a str)],
 }
 
-/// The parts of a request's URL path the gateway composed from trusted
-/// input, which the gate masks by position before it searches the path.
+/// The node's own `ehr_id` segment of a request's URL path, when the
+/// gateway composed it, which the gate masks by position before it searches
+/// the path.
 ///
-/// Neither is ever client text: the base path is the endpoint's URL in the
-/// operator's registry, and the `ehr_id` is the node's own, from a
-/// resolution or the `ehr_id` index.
+/// The `ehr_id` is never client text: it comes from a resolution or the
+/// `ehr_id` index. The path before it, the endpoint's base path included,
+/// stays searched.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Composed<'a> {
-    /// The path of the endpoint's base URL, which every request path starts
-    /// with, without a trailing `/`.
-    pub base_path: &'a str,
+    /// The path the segment follows, `{base}/ehr/`, which is searched.
+    pub ehr_prefix: &'a str,
     /// The node's own `ehr_id` segment, percent-encoded as the path carries
-    /// it right after `{base}/ehr/`, when the gateway composed it; `None`
-    /// when that segment is the client's.
+    /// it right after [`Composed::ehr_prefix`]; `None` when that segment is
+    /// the client's.
     pub ehr_segment: Option<&'a str>,
 }
 
@@ -300,8 +299,8 @@ impl fmt::Display for Part {
 }
 
 /// Whether the path, query or fragment of `url`, raw or percent-decoded,
-/// carries `value`, once the `composed` parts of the path are masked.
-fn carried_in_target(url: &Url, composed: Composed<'_>, value: &str) -> bool {
+/// carries `value`, once the `composed` segment of the path is masked.
+fn carried_in_target<'a>(url: &'a Url, composed: Composed<'a>, value: &str) -> bool {
     // NOTE: §5.4.1, N33 name the request path, the query string and the headers;
     // the authority comes from the operator's registry, never a request, so it is unread.
     let (before, after) = searched_path(url.path(), composed, value);
@@ -322,28 +321,25 @@ fn carried_in_target(url: &Url, composed: Composed<'_>, value: &str) -> bool {
 /// The two stretches of `path` the gate searches for `value`: the text
 /// before a masked `ehr_id` segment, and the text after it.
 ///
-/// A leading base path and an `ehr_id` segment right after `{base}/ehr/` are
-/// masked only where `composed` names them, at that position, and never when
-/// `value` contains the masked text, so an identifier equal to either fails
-/// closed. Without a masked segment, the first stretch is empty.
-fn searched_path<'p>(path: &'p str, composed: Composed<'_>, value: &str) -> (&'p str, &'p str) {
-    // NOTE: §5.4, N33: the gateway composed these parts from the registry and the
-    // node's own ehr_id, never from the client, so a value inside them is chance, not a leak.
-    let masks = |part: &str| !part.is_empty() && !value.contains(part);
-    let rest = path
-        .strip_prefix(composed.base_path)
-        .filter(|rest| masks(composed.base_path) && (rest.is_empty() || rest.starts_with('/')))
-        .unwrap_or(path);
-    let head = "/ehr/";
-    let segment = composed.ehr_segment.filter(|segment| masks(segment));
+/// The segment is masked only where `composed` names it, right after
+/// [`Composed::ehr_prefix`] and followed by the end or a `/`, and never when
+/// `value` contains it, so an identifier equal to it fails closed. Without a
+/// masked segment, the first stretch is empty and the second is the path.
+fn searched_path<'a>(path: &'a str, composed: Composed<'a>, value: &str) -> (&'a str, &'a str) {
+    // NOTE: §5.4, N33: a node is located by the ehr_id it minted, and the gateway composed this one
+    // from a resolution, never from the client, so a value inside it is chance, not a leak.
+    let head = composed.ehr_prefix;
+    let segment = composed
+        .ehr_segment
+        .filter(|segment| !head.is_empty() && !segment.is_empty() && !value.contains(*segment));
     let tail = segment.and_then(|segment| {
-        rest.strip_prefix(head)?
+        path.strip_prefix(head)?
             .strip_prefix(segment)
             .filter(|tail| tail.is_empty() || tail.starts_with('/'))
     });
     match tail {
         Some(tail) => (head, tail),
-        None => ("", rest),
+        None => ("", path),
     }
 }
 

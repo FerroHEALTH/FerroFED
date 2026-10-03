@@ -303,6 +303,7 @@ impl<T: Transport> NodeClient<T> {
             .iter()
             .map(|(name, value)| (*name, value.as_str()))
             .collect();
+        let ehr_prefix = format!("{}/ehr/", base.path().trim_end_matches('/'));
         let segment = options
             .composed_ehr_id()
             .map(|ehr_id| path_segment(&ehr_id.as_str()));
@@ -312,7 +313,7 @@ impl<T: Transport> NodeClient<T> {
             paging: &[],
             url: &url,
             composed: Composed {
-                base_path: base.path().trim_end_matches('/'),
+                ehr_prefix: &ehr_prefix,
                 ehr_segment: segment.as_deref(),
             },
             headers: &headers,
