@@ -204,6 +204,14 @@ pub struct Federation {
     /// independently and answered per node; `OPTIONS {base}/` declares it as
     /// `definition.fan_out_template_upload` (§7a.2, N30).
     pub fan_out_template_upload: bool,
+    /// Whether a stored-query definition may be distributed to members
+    /// (§12.7, N44): off by default, and only beside the stored-query
+    /// registry. With it on, a `PUT` to the registry whose targeting headers
+    /// name `*` or members is also sent to each of them, reported per node,
+    /// and a `GET` naming them reports per node whether its copy matches;
+    /// `OPTIONS {base}/` declares it as `definition.stored_query_fan_out`
+    /// (§7a.2, N30).
+    pub fan_out_stored_queries: bool,
 }
 
 /// An aggregate function the gateway recombines across a fan-out
@@ -283,6 +291,7 @@ impl Default for Federation {
             ],
             demographic_endpoint: None,
             fan_out_template_upload: false,
+            fan_out_stored_queries: false,
         }
     }
 }

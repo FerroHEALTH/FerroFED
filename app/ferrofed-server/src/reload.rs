@@ -348,6 +348,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             "federation.fan_out_template_upload",
             was.fan_out_template_upload != now.fan_out_template_upload,
         ),
+        (
+            "federation.fan_out_stored_queries",
+            was.fan_out_stored_queries != now.fan_out_stored_queries,
+        ),
         ("federation.offset", was.offset != now.offset),
         (
             "federation.decomposable_aggregates",

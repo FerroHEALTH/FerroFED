@@ -552,12 +552,21 @@ async fn the_registry_keeps_its_stored_queries_and_templates_still_route_to_one_
         }
         let request = request.body(Body::from("SELECT c FROM EHR e CONTAINS COMPOSITION c"))?;
         let (status, _, body) = exchange(app.clone(), request).await?;
-        assert_eq!(
-            StatusCode::OK,
-            status,
-            "§12.7: stored at the gateway: {}",
-            String::from_utf8_lossy(&body)
-        );
+        let text = String::from_utf8(body)?;
+        if target.is_some() {
+            assert_eq!(
+                StatusCode::BAD_REQUEST,
+                status,
+                "§12.7: distribution is not offered, never answered as a plain store: {text}"
+            );
+            assert_eq!("stored-query-fan-out-unsupported", error_body(&text)?.code);
+        } else {
+            assert_eq!(
+                StatusCode::OK,
+                status,
+                "§12.7: stored at the gateway: {text}"
+            );
+        }
     }
     let (status, headers, _) = exchange(
         app.clone(),
