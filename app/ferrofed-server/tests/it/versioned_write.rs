@@ -30,28 +30,30 @@ use crate::support::{error_body, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const ENDPOINT_A: &str = "node-a-pub";
-const ENDPOINT_B: &str = "node-b-pub";
+pub(crate) const ENDPOINT_A: &str = "node-a-pub";
+pub(crate) const ENDPOINT_B: &str = "node-b-pub";
 
 /// A version node A created.
-const CREATED_AT_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
+pub(crate) const CREATED_AT_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 /// The version node A answers a write of [`CREATED_AT_A`] with.
 const SECOND_AT_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::2";
 /// The versioned object [`CREATED_AT_A`] is a version of.
 const OBJECT_AT_A: &str = "8849182c-82ad-4088-a07f-48ead4180515";
 /// A version of a system the registry does not map.
-const CREATED_ELSEWHERE: &str = "5c3e9b1a-7d2f-4e8a-9b6c-1f0e2d3c4b5a::external.example.org::3";
+pub(crate) const CREATED_ELSEWHERE: &str =
+    "5c3e9b1a-7d2f-4e8a-9b6c-1f0e2d3c4b5a::external.example.org::3";
 /// A version of a retired system the registry maps to node A.
-const CREATED_BY_LEGACY: &str = "7a6b5c4d-3e2f-4a1b-8c9d-0e1f2a3b4c5d::legacy-a.example.org::4";
+pub(crate) const CREATED_BY_LEGACY: &str =
+    "7a6b5c4d-3e2f-4a1b-8c9d-0e1f2a3b4c5d::legacy-a.example.org::4";
 
 /// The registry mapping of the retired system of [`CREATED_BY_LEGACY`].
-const LEGACY_MAPPING: &str = "\n[[creating_system]]\ncreating_system_id = \"legacy-a.example.org\"\nendpoint = \"node-a-pub\"\n";
+pub(crate) const LEGACY_MAPPING: &str = "\n[[creating_system]]\ncreating_system_id = \"legacy-a.example.org\"\nendpoint = \"node-a-pub\"\n";
 
 /// The client's own credential, which no node ever sees.
 const CLIENT_TOKEN: &str = "synthetic-client-token";
 
 /// The gateway over node A and node B, with the registry `extra` appended.
-fn over(
+pub(crate) fn over(
     dir: &std::path::Path,
     a: &MockServer,
     b: &MockServer,
@@ -67,7 +69,7 @@ fn quoted(version: &str) -> String {
 
 /// A versioned write of `verb` to `at`, naming `endpoint` as its target when
 /// given and `version` in `If-Match` when given.
-fn versioned(
+pub(crate) fn versioned(
     verb: &Method,
     at: &str,
     endpoint: Option<&str>,
@@ -111,7 +113,7 @@ fn composition() -> String {
 
 /// The request target and every header `server` received, without the
 /// bodies: what the gateway composes for a node (§5.4.1, N33).
-async fn outside_bodies(server: &MockServer) -> Result<String, Box<dyn Error>> {
+pub(crate) async fn outside_bodies(server: &MockServer) -> Result<String, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut text = String::new();
     for request in requests {
@@ -126,7 +128,7 @@ async fn outside_bodies(server: &MockServer) -> Result<String, Box<dyn Error>> {
 
 /// Asserts that `request` is refused with `status` and `code`, names no
 /// acting endpoint, and that neither node received anything.
-async fn refused_at_neither(
+pub(crate) async fn refused_at_neither(
     app: Router,
     request: Request<Body>,
     (status, code): (StatusCode, &str),

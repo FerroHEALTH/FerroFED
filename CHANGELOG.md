@@ -39,8 +39,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and `PUT {base}/v1/ehr/{ehr_id}` go only to the one endpoint the targeting
   headers name: without them the request is `400 target-required`, and with
   several endpoints `400 endpoint-several`; neither a binding nor the index
-  routes a new EHR. `OPTIONS {base}/v1/ehr` answers `POST, OPTIONS`. A
-  `CONTRIBUTION` is routed by its path `ehr_id` alone.
+  routes a new EHR. `OPTIONS {base}/v1/ehr` answers `POST, OPTIONS`.
+- A `CONTRIBUTION` that amends versions reaches only the CDR that controls
+  every one of them (#286; §12.4, §12a.1, §10.3, N23, CP-15).
+  `POST {base}/v1/ehr/{ehr_id}/contribution` routes by its path `ehr_id` as
+  before, and the gateway now reads the body with the ITS-REST
+  `NewContribution` type: each version's `preceding_version_uid` must be one
+  the registry maps to that node, by the rule above, or the request is
+  refused `409 controlling-system-unreachable` and no node is sent it. A
+  `CONTRIBUTION` of creations alone routes as before. A body that is no
+  canonical-JSON `CONTRIBUTION`, a `preceding_version_uid` that is no
+  `OBJECT_VERSION_ID`, an XML body, or Simplified Formats `data`, is refused
+  `400 preceding-version-invalid`. The node receives the body byte for byte.
 - Integrity incidents for an `ehr_id` two members claim (#63; §12.5.2,
   §12b.2, N42, CP-33). A request whose `ehr_id` the session's resolution
   bindings, the `ehr_id` index or the ask-all probe finds at two members or
