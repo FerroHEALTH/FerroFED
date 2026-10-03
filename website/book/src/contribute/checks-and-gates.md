@@ -34,7 +34,7 @@ The first tier runs on every change, because it needs no Rust:
 | file-length | no hand-written Rust file or book page over 1000 lines |
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |
 | favicon-sync | the book's favicons match the brand mark |
-| conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
+| conformance-matrix | the [conformance matrix](../evaluate/conformance.md#no-such-anchor) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
 | e2e-placement | every test that checks the `FERROFED_E2E` gate lives in its crate's `e2e` test module, and the CI end-to-end job still sets the gate and selects `test(/^e2e::/)` |
 | obligations | the [obligations checklist](../evaluate/obligations.md) agrees with the vendored specification, the conformance matrix and the tests it names, and a re-pin fails until every changed page is reclassified |
 | site-links | every internal link and anchor of the assembled site (the landing page and this book) and of the README, checked offline by lychee, so a page or an anchor that does not exist fails the change |
