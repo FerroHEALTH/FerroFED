@@ -91,6 +91,13 @@ pub struct EndpointDoc {
     /// Whether the endpoint is in service.
     #[serde(default)]
     pub status: EndpointStatus,
+    /// The `code` values of an ITS-REST `Error` by which this endpoint's node
+    /// marks a `403` as a consent refusal, reported `consent-denied` (§11.1,
+    /// N27). Empty by default: every refusal is then `node-error`, because
+    /// ITS-REST defines no consent signal (no specification governs the key:
+    /// our own design).
+    #[serde(default)]
+    pub consent_refusal_codes: Vec<String>,
 }
 
 /// One `creating_system_id` mapped to the endpoint that answers for it (N21,

@@ -117,10 +117,10 @@ answer by the same rules. Each outcome therefore covers these calls:
 | `outcome` | Covers |
 |---|---|
 | `active` | a member that answered with success; for a routed request or a probe, any answer below `500`, a `404` included, so a probe that finds no EHR at a member is `active` |
-| `node-error` | in a member record, any answer that is not a success, a `4xx` included, and a drift check whose copy differs from the registry's definition or is missing; for a routed request or a probe, a `5xx` answer; in every call, a node that refused the gateway's onward credentials |
+| `node-error` | in a member record, any answer that is not a success, a `4xx` included (except a consent refusal the registry names), and a drift check whose copy differs from the registry's definition or is missing; for a routed request or a probe, a `5xx` answer; in every call, a node that refused the gateway's onward credentials |
 | `time-out` | a member that gave no answer before its per-node deadline, and a member still being waited on when the overall budget ran out |
 | `offline` | a member the gateway sent a request to and could not reach |
-| `consent-denied` | a federated query member whose node refused the request on consent; no call produces it yet, because the gateway does not yet tell a node's consent refusal from another error ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)), and a refusal by a consent pre-filter would send no request and not be counted |
+| `consent-denied` | a federated query member whose node answered `403` with a consent refusal code the registry lists for it ([Consent](identity.md#consent)); a member a consent pre-filter dropped is sent no request and is not counted |
 
 ## Alerting
 

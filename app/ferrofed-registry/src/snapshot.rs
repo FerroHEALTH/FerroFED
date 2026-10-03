@@ -5,8 +5,8 @@
 //! them (§12b.1), validated once and read unchanged by every query that took
 //! it.
 
-use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::Deserialize;
@@ -175,6 +175,7 @@ pub struct Endpoint {
     connection_type: ConnectionType,
     managing_organisation: OrganisationId,
     status: EndpointStatus,
+    consent_refusal_codes: BTreeSet<String>,
 }
 
 impl Endpoint {
@@ -212,6 +213,13 @@ impl Endpoint {
     #[must_use]
     pub fn status(&self) -> EndpointStatus {
         self.status
+    }
+
+    /// The ITS-REST `Error` `code` values by which the endpoint's node marks a
+    /// `403` as a consent refusal (§11.1, N27); empty when it marks none.
+    #[must_use]
+    pub fn consent_refusal_codes(&self) -> &BTreeSet<String> {
+        &self.consent_refusal_codes
     }
 }
 
@@ -568,6 +576,9 @@ fn endpoints(
                 entry.insert(doc.id.clone());
             }
         }
+        if doc.consent_refusal_codes.iter().any(String::is_empty) {
+            return Err(LoadError::EmptyConsentRefusalCode(doc.id));
+        }
         let endpoint = Endpoint {
             id: doc.id.clone(),
             node: doc.node,
@@ -575,6 +586,7 @@ fn endpoints(
             connection_type: doc.connection_type,
             managing_organisation: doc.managing_organisation,
             status: doc.status,
+            consent_refusal_codes: doc.consent_refusal_codes.into_iter().collect(),
         };
         endpoints.insert(doc.id, endpoint);
     }

@@ -13,7 +13,9 @@ use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use serde_json::json;
 
-use super::{NATIVE, NODE_A_PUB, ORG_A, bytes, fhir, resource};
+use ferrofed_identity::directory::CONSENT_REFUSAL_CODE_EXTENSION;
+
+use super::{NATIVE, NODE_A_PUB, NODE_B_PUB, ORG_A, bytes, fhir, resource};
 
 #[test]
 fn the_fhir_form_loads_the_snapshot_the_native_form_loads() -> Result<(), Box<dyn Error>> {
@@ -113,4 +115,45 @@ fn a_document_is_read_from_a_file() -> Result<(), Box<dyn Error>> {
     std::fs::remove_file(&path)?;
     assert_eq!(RegistrySnapshot::from_toml_str(NATIVE)?, loaded?);
     Ok(())
+}
+
+#[test]
+fn consent_refusal_codes_load_as_the_native_form_loads_them() -> Result<(), Box<dyn Error>> {
+    let native = NATIVE.replace(
+        "managing_organisation = \"org-region\"\n\n[[creating_system]]",
+        "managing_organisation = \"org-region\"\nconsent_refusal_codes = [\"consent-refused\", \"opt-out\"]\n\n[[creating_system]]",
+    );
+    let native = RegistrySnapshot::from_toml_str(&native)?;
+    let mut bundle = fhir();
+    resource(&mut bundle, NODE_B_PUB)["extension"] = json!([
+        {"url": CONSENT_REFUSAL_CODE_EXTENSION, "valueCode": "consent-refused"},
+        {"url": CONSENT_REFUSAL_CODE_EXTENSION, "valueCode": "opt-out"}
+    ]);
+    let from_fhir = directory::snapshot_from_json(&bytes(&bundle))?;
+    assert_eq!(native, from_fhir, "§11.1, N27: one key in both forms");
+    let endpoint: EndpointId = "node-b-pub".parse()?;
+    let codes: Vec<&str> = from_fhir
+        .endpoint(&endpoint)
+        .ok_or("node-b-pub is a member")?
+        .consent_refusal_codes()
+        .iter()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(codes, ["consent-refused", "opt-out"]);
+    Ok(())
+}
+
+#[test]
+fn a_consent_refusal_code_extension_without_a_code_is_refused() {
+    let mut bundle = fhir();
+    resource(&mut bundle, NODE_B_PUB)["extension"] =
+        json!([{"url": CONSENT_REFUSAL_CODE_EXTENSION, "valueString": "consent-refused"}]);
+    let refused = directory::snapshot_from_json(&bytes(&bundle)).err();
+    assert!(
+        matches!(
+            refused,
+            Some(FhirFormError::ConsentRefusalCode(ref endpoint)) if endpoint.as_str() == "node-b-pub"
+        ),
+        "{refused:?}"
+    );
 }

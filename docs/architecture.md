@@ -505,6 +505,36 @@ are dispatched (N8).
   FerroFED's own, and the gap is a draft on #17. The reference implementation
   folds every PIX failure into `not-resolved`, so a PIX outage there looks like
   an empty record.
+- **The consent pre-filter** (#83). One that does not answer leaves Step 1
+  with no consent signal, which is the state of a deployment with no consent
+  service, and that deployment is fully conformant (N27a, §13.2.1). Every
+  candidate is therefore asked, and each node checks consent itself (N26,
+  N27). `OPTIONS {base}/` declares this as `federation.consent.on_unavailable
+  = "pass-to-node"` beside the pre-filter's mode. No fail-closed variant is
+  offered: no §11.1 status says "not asked because consent could not be
+  checked", and `excluded` would leave `complete` true on an answer that asked
+  nobody. No specification governs the policy: our own design.
+
+**Consent stays with the node** (#83). The pre-filter runs at Step 1 on every
+patient query, a directed one included, after localization and before
+resolution, over the candidates localization left (every member the request
+lets the plan ask, where nothing localizes); a member localization did not
+name stays `not-localized`, since nothing decided about it. A member it denies is `consent-denied` with no `latency_ms`, is never
+resolved and never sent a request, and the session's bindings that name it are
+dropped (`ResolutionBindings::forget_denied`). A member it does not deny is
+asked: absence from `Denied` asserts nothing (§14.3). A node's own refusal is
+recognised by an explicit signal only, because ITS-REST 1.1.0 defines none: a
+`403` whose ITS-REST `Error` carries a `code` member listed in the endpoint's
+`consent_refusal_codes` (native form) or its
+`https://ferrofed.eu/fhir/StructureDefinition/consent-refusal-code` extensions
+(FHIR form) is `consent-denied`, read through `openehr-its`'s open `Error`;
+every other refusal, and every `403` of an endpoint that lists no code, is
+`node-error`. The list is empty by default. A node's `consent-denied` carries
+the `latency_ms` of the request it refused, because N40 requires it for every
+endpoint the gateway dispatched to and names only the pre-filtered form as
+settled before dispatch. Either form clears `complete` and fails the query
+under neither strategy (§11.1, §11.3, §11.4, N37). The key and the extension
+are FerroFED's own design; the missing signal is report T151 on #212.
 
 **The bindings.**
 
@@ -517,7 +547,7 @@ are dispatched (N8).
 | Localizer | none (ask-all); a registry-scoped PIXm localizer, the members whose domain returned an identifier (§14.2's "demographic-registration" kind) | #46, #85 | PIXm 3.1.0 |
 | Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, in its own crate | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
 | Directory | the static registry document; then mCSD ITI-91 `_history`/`_since` synchronised into the snapshot, plus ITI-90 reads | #36, #74, #86 | mCSD 4.0.0 |
-| ConsentPrefilter | none; then the Annex B Mitz adapter | #83, #87 | `fhir.nl.gf` 0.3.0 |
+| ConsentPrefilter | none; the static development pre-filter (`[[dev.consent_denied]]`, development profile only); then the Annex B Mitz adapter | #83, #87 | none for the development table; `fhir.nl.gf` 0.3.0 for Mitz |
 
 **Built here, movable later.** The protocols live in two published crates
 that know nothing of FerroFED: `ihe-iti`, with a feature per profile (`pixm`,

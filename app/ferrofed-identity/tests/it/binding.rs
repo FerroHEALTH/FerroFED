@@ -225,6 +225,42 @@ fn a_departed_member_takes_every_binding_that_names_it() {
 }
 
 #[test]
+fn a_consent_denial_drops_the_session_bindings_of_the_denied_member_only() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let one = SessionKey::new("session-1");
+    let two = SessionKey::new("session-2");
+    let now = Instant::now();
+    bindings.record(
+        &one,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_B)),
+        ],
+    );
+    bindings.record(&two, now, [(&node("node-b"), &ehr(EHR_B))]);
+    let denied = std::collections::BTreeSet::from([node("node-b")]);
+    assert_eq!(1, bindings.forget_denied(&one, &denied), "N27a");
+    assert_eq!(Bound::None, bindings.lookup(&one, now, &ehr(EHR_B)));
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&one, now, &ehr(EHR_A)),
+        "a binding of a member the pre-filter did not deny stays"
+    );
+    assert_eq!(
+        Bound::One(node("node-b")),
+        bindings.lookup(&two, now, &ehr(EHR_B)),
+        "the denial belongs to its session's query, never another session's"
+    );
+    let none = std::collections::BTreeSet::new();
+    assert_eq!(
+        0,
+        bindings.forget_denied(&one, &none),
+        "no denial drops nothing"
+    );
+}
+
+#[test]
 fn a_binding_naming_an_absent_member_is_dropped_and_one_naming_present_members_kept() {
     let bindings = ResolutionBindings::new(Duration::from_secs(60));
     let session = SessionKey::new("session-1");

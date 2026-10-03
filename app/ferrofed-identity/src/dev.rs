@@ -17,7 +17,17 @@
 //! value = "12345"
 //! member = "node-a"
 //! ehr_id = "6f2a51a4-1b8e-4f8b-9a4c-1f6c2b1d7e30"
+//!
+//! [[dev.consent_denied]]
+//! namespace = "2.999.1"
+//! value = "12345"
+//! member = "node-b"
 //! ```
+//!
+//! The optional `[[dev.consent_denied]]` rows are the static consent
+//! pre-filter: the patient's consent denies asking each member a row names
+//! (N27a). It is no consent binding either, and the Mitz adapter replaces it
+//! (#87).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -30,6 +40,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::consent::{ConsentDecision, ConsentPrefilter};
 use crate::localizer::{Localization, Localizer};
 use crate::patient::{IdentifierNamespace, PatientRef};
 use crate::resolver::{Resolution, Resolver};
@@ -66,12 +77,25 @@ struct EntryDoc {
 #[serde(deny_unknown_fields)]
 pub struct DevTable {
     crossref: Vec<EntryDoc>,
+    #[serde(default)]
+    consent_denied: Vec<ConsentDoc>,
+}
+
+/// One row of the development consent pre-filter, as the configuration
+/// writes it: the patient whose consent denies asking `member`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConsentDoc {
+    namespace: IdentifierNamespace,
+    value: String,
+    member: NodeId,
 }
 
 impl fmt::Debug for DevTable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DevTable")
             .field("crossref_rows", &self.crossref.len())
+            .field("consent_denied_rows", &self.consent_denied.len())
             .finish()
     }
 }
@@ -241,5 +265,125 @@ impl Localizer for StaticResolver {
         } else {
             Localization::Candidates(candidates)
         }
+    }
+}
+
+/// One patient whose consent denies asking one member.
+struct Denial {
+    namespace: IdentifierNamespace,
+    value: SecretString,
+    member: NodeId,
+}
+
+/// The name `OPTIONS {base}/` declares the static consent pre-filter under.
+pub const STATIC_CONSENT_MODE: &str = "development-static";
+
+/// The warning logged when the static consent pre-filter is enabled.
+pub const STATIC_CONSENT_WARNING: &str =
+    "static consent pre-filter: development only, not a consent binding";
+
+/// The [`ConsentPrefilter`] over the `[[dev.consent_denied]]` rows of the
+/// development table (N27a).
+///
+/// It answers [`ConsentDecision::Denied`] with the candidates a row names for
+/// the patient, and [`ConsentDecision::NoSignal`] when no row names one; it
+/// never answers [`ConsentDecision::Unavailable`]. A candidate it does not
+/// deny is still asked, and its node checks consent itself (N27).
+pub struct StaticConsentPrefilter {
+    denials: Vec<Denial>,
+}
+
+impl StaticConsentPrefilter {
+    /// Builds the static pre-filter the development table asks for, if any.
+    ///
+    /// Returns `None` when the table has no `[[dev.consent_denied]]` row. The
+    /// rows are refused outside [`Profile::Development`]; each must name a
+    /// registry member, and no two rows may deny one member for one
+    /// identifier. Enabling it logs [`STATIC_CONSENT_WARNING`] at `WARN`, with
+    /// the row count and none of the rows.
+    ///
+    /// # Errors
+    ///
+    /// [`DevCrossRefError::NotDevelopment`] outside the development profile,
+    /// and the other variants for a row that breaks a rule above.
+    pub fn from_config(
+        profile: Profile,
+        table: &DevTable,
+        registry: &RegistrySnapshot,
+    ) -> Result<Option<Self>, DevCrossRefError> {
+        if table.consent_denied.is_empty() {
+            return Ok(None);
+        }
+        if profile != Profile::Development {
+            return Err(DevCrossRefError::NotDevelopment);
+        }
+        let mut denials: Vec<Denial> = Vec::with_capacity(table.consent_denied.len());
+        for row in &table.consent_denied {
+            if row.value.is_empty() {
+                return Err(DevCrossRefError::EmptyValue(row.namespace.clone()));
+            }
+            if registry.node(&row.member).is_none() {
+                return Err(DevCrossRefError::UnknownMember(row.member.clone()));
+            }
+            let duplicate = denials.iter().any(|denial| {
+                denial.namespace == row.namespace
+                    && denial.member == row.member
+                    && denial.value.expose_secret() == row.value
+            });
+            if duplicate {
+                return Err(DevCrossRefError::DuplicateRow {
+                    namespace: row.namespace.clone(),
+                    member: row.member.clone(),
+                });
+            }
+            denials.push(Denial {
+                namespace: row.namespace.clone(),
+                value: row.value.clone().into(),
+                member: row.member.clone(),
+            });
+        }
+        tracing::warn!(rows = denials.len(), "{STATIC_CONSENT_WARNING}");
+        Ok(Some(Self { denials }))
+    }
+
+    fn denies(&self, patient: &PatientRef, member: &NodeId) -> bool {
+        self.denials.iter().any(|denial| {
+            denial.member == *member
+                && denial.namespace == *patient.namespace()
+                && denial.value.expose_secret() == patient.value()
+        })
+    }
+}
+
+impl fmt::Debug for StaticConsentPrefilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StaticConsentPrefilter")
+            .field("rows", &self.denials.len())
+            .finish()
+    }
+}
+
+#[async_trait]
+impl ConsentPrefilter for StaticConsentPrefilter {
+    async fn prefilter(
+        &self,
+        patient: &PatientRef,
+        candidates: &[NodeId],
+        _deadline: Instant,
+    ) -> ConsentDecision {
+        let denied: BTreeSet<NodeId> = candidates
+            .iter()
+            .filter(|member| self.denies(patient, member))
+            .cloned()
+            .collect();
+        if denied.is_empty() {
+            ConsentDecision::NoSignal
+        } else {
+            ConsentDecision::Denied(denied)
+        }
+    }
+
+    fn mode(&self) -> &'static str {
+        STATIC_CONSENT_MODE
     }
 }

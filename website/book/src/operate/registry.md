@@ -34,6 +34,19 @@ an endpoint the document does not declare, a `creating_system_id` mapped
 twice, and a mapping of a member's own `system_id`. Two spellings that differ
 only in ASCII case are one `creating_system_id`.
 
+An endpoint may list the ITS-REST `Error` codes its node marks a consent
+refusal with. A `403` from that node whose `Error` carries one of them is
+reported `consent-denied`; every other refusal is `node-error`
+([Consent](identity.md#consent)). The list is empty by default, and an empty
+code refuses the document:
+
+```toml
+[[endpoint]]
+id = "hospital-b"
+# ... node, url, connection_type, managing_organisation
+consent_refusal_codes = ["consent-refused"]   # what this node writes in Error.code
+```
+
 ## The registry document in FHIR form
 
 The specification recommends the FHIR `Endpoint` and `Organization` resources
@@ -68,6 +81,7 @@ specification governs these systems; they are FerroFED's design):
 | `Endpoint.managingOrganization` | the one managing organisation (N20) |
 | `Endpoint.status` | `active`, or `suspended` for an endpoint taken out of service |
 | `Endpoint.address` | the ITS-REST base URL |
+| `Endpoint.extension` with url `https://ferrofed.eu/fhir/StructureDefinition/consent-refusal-code` | one `valueCode` per consent refusal code, zero or more; the `consent_refusal_codes` of the native form |
 
 An endpoint for the openEHR Query API never carries `hl7-fhir-rest` (§15.2).
 No openEHR or HL7 code for it is registered yet, so FerroFED binds the one
@@ -100,6 +114,7 @@ the resource, when:
 - an endpoint's status is neither `active` nor `suspended`, or an organisation
   is marked inactive;
 - a resource carries a `modifierExtension`, which FerroFED does not read;
+- a consent refusal code extension carries no `valueCode`;
 - anything the native form refuses: a duplicate `system_id`, an unusable base
   URL, or a `creating_system_id` that is a member's own.
 

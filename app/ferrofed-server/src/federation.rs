@@ -4,7 +4,8 @@
 //! What the federated query runs over.
 //!
 //! The registry snapshot, one node client per endpoint with its onward
-//! credentials, the cross-reference resolver, the rewrite's context and the
+//! credentials, the cross-reference resolver, the optional consent
+//! pre-filter, the rewrite's context and the
 //! fan-out budget (§5.2, §7.1, §11.5).
 //!
 //! [`Federation::load`] builds it at boot from the resolved settings, and
@@ -21,7 +22,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use ferrofed_engine::dispatch::{NodeClients, SetupError, SharedCredentials};
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
-use ferrofed_identity::dev::{DevCrossRefError, StaticResolver};
+use ferrofed_identity::consent::ConsentPrefilter;
+use ferrofed_identity::dev::{DevCrossRefError, StaticConsentPrefilter, StaticResolver};
 use ferrofed_identity::directory;
 use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
@@ -53,6 +55,7 @@ pub struct Federation {
     clients: NodeClients<ReqwestTransport>,
     resolver: Option<Arc<dyn Resolver>>,
     localization: LocalizationPolicy,
+    consent: Option<Arc<dyn ConsentPrefilter>>,
     observed: Arc<Observed>,
     context: Context,
     budget: Budget,
@@ -311,14 +314,12 @@ impl Federation {
             });
         }
         let mut development = None;
+        let mut consent = None;
         let resolver = match (&settings.dev, &settings.pixm) {
             (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
             (None, None) => None,
             (Some(section), None) => {
-                let table = section.table().map_err(FederationError::DevTable)?;
-                development = StaticResolver::from_config(settings.profile, Some(table), &snapshot)
-                    .map_err(FederationError::DevCrossRef)?
-                    .map(Arc::new);
+                (development, consent) = dev_seams(settings, section, &snapshot)?;
                 development
                     .clone()
                     .map(|resolver| -> Arc<dyn Resolver> { resolver })
@@ -349,6 +350,7 @@ impl Federation {
             clients,
             resolver,
             localization,
+            consent,
             observed: observed.unwrap_or_else(|| {
                 Arc::new(Observed::new(
                     settings.federation.binding_ttl,
@@ -392,6 +394,7 @@ impl Federation {
             clients,
             resolver,
             localization: LocalizationPolicy::none(),
+            consent: None,
             observed: Arc::new(Observed::new(
                 std::time::Duration::from_millis(
                     crate::config::Federation::default().binding_ttl_ms,
@@ -407,6 +410,14 @@ impl Federation {
             template_fan_out: crate::config::Federation::default().fan_out_template_upload,
             stored_query_fan_out: crate::config::Federation::default().fan_out_stored_queries,
         }
+    }
+
+    /// This federation, pre-filtering the candidates of every patient query
+    /// through `prefilter` at Step 1 (N27a, §13.2.1).
+    #[must_use]
+    pub fn with_consent_prefilter(mut self, prefilter: Arc<dyn ConsentPrefilter>) -> Self {
+        self.consent = Some(prefilter);
+        self
     }
 
     /// This federation, offering best-effort completion when `offered` is
@@ -534,6 +545,12 @@ impl Federation {
         self.resolver.as_deref()
     }
 
+    /// The Step-1 consent pre-filter, when one is configured (N27a).
+    #[must_use]
+    pub fn consent_prefilter(&self) -> Option<&dyn ConsentPrefilter> {
+        self.consent.as_deref()
+    }
+
     /// What the deployment adds to the query text: the targeting, the
     /// default issuing namespace, the `OFFSET` strategy and the decomposable
     /// aggregates.
@@ -612,6 +629,10 @@ impl std::fmt::Debug for Federation {
             .field("endpoints", &self.clients.len())
             .field("resolver", &self.resolver.is_some())
             .field("localization", &self.localization)
+            .field(
+                "consent",
+                &self.consent.as_ref().map(|consent| consent.mode()),
+            )
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
             .field("demographic", &self.demographic)
@@ -671,6 +692,29 @@ fn ehr_index(capacity: NonZeroU32) -> EhrIndex {
 fn default_index_capacity() -> NonZeroU32 {
     NonZeroU32::new(crate::config::Federation::default().ehr_index_capacity)
         .expect("the default ehr_id index capacity should be positive")
+}
+
+/// The resolver and the consent pre-filter of the `[dev]` table.
+type DevSeams = (
+    Option<Arc<StaticResolver>>,
+    Option<Arc<dyn ConsentPrefilter>>,
+);
+
+/// The static cross-reference and, when `[[dev.consent_denied]]` has rows,
+/// the static consent pre-filter that the `[dev]` table describes.
+fn dev_seams(
+    settings: &Settings,
+    section: &crate::config::DevSection,
+    snapshot: &RegistrySnapshot,
+) -> Result<DevSeams, FederationError> {
+    let table = section.table().map_err(FederationError::DevTable)?;
+    let consent = StaticConsentPrefilter::from_config(settings.profile, &table, snapshot)
+        .map_err(FederationError::DevCrossRef)?
+        .map(|prefilter| -> Arc<dyn ConsentPrefilter> { Arc::new(prefilter) });
+    let resolver = StaticResolver::from_config(settings.profile, Some(table), snapshot)
+        .map_err(FederationError::DevCrossRef)?
+        .map(Arc::new);
+    Ok((resolver, consent))
 }
 
 /// The PIXm resolver `[pixm]` describes over the members of `snapshot`.

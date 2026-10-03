@@ -253,3 +253,39 @@ fn a_member_whose_admitted_endpoints_are_all_suspended_is_asked_through_none() -
     );
     Ok(())
 }
+
+#[test]
+fn an_endpoint_lists_no_consent_refusal_code_unless_the_document_names_one() -> TestResult {
+    let registry = RegistrySnapshot::from_toml_str(TWO_NODES)?;
+    for endpoint in registry.endpoints() {
+        assert!(
+            endpoint.consent_refusal_codes().is_empty(),
+            "§11.1: empty by default, so every refusal is node-error"
+        );
+    }
+    let named = TWO_NODES.replacen(
+        "connection_type = \"openehr-rest-query\"",
+        "connection_type = \"openehr-rest-query\"\nconsent_refusal_codes = [\"consent-refused\"]",
+        1,
+    );
+    let registry = RegistrySnapshot::from_toml_str(&named)?;
+    let listed: usize = registry
+        .endpoints()
+        .map(|endpoint| endpoint.consent_refusal_codes().len())
+        .sum();
+    assert_eq!(1, listed, "the one endpoint that names a code lists it");
+    Ok(())
+}
+
+#[test]
+fn an_empty_consent_refusal_code_is_refused() {
+    let document = TWO_NODES.replacen(
+        "connection_type = \"openehr-rest-query\"",
+        "connection_type = \"openehr-rest-query\"\nconsent_refusal_codes = [\"\"]",
+        1,
+    );
+    assert!(matches!(
+        RegistrySnapshot::from_toml_str(&document),
+        Err(LoadError::EmptyConsentRefusalCode(_))
+    ));
+}

@@ -35,6 +35,27 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   query is never localized (§8). The development cross-reference serves as
   the localizer under `profile = "development"`; the IHE XCPD binding follows
   (#85).
+- Consent stays with the node, and a node's consent refusal can be reported
+  as one (#83; §13.2, §13.2.1, §11.1, §11.3, N26, N27, N27a, N40, CP-36).
+  ITS-REST defines no consent signal, so a node's `403` is `consent-denied`
+  only when its ITS-REST `Error` carries a `code` the registry lists for that
+  endpoint in the new `consent_refusal_codes` key (in the FHIR form, one
+  `https://ferrofed.eu/fhir/StructureDefinition/consent-refusal-code`
+  extension per code). The list is empty by default, so every refusal stays
+  `node-error` until you name your nodes' codes; the key is FerroFED's own
+  design. A consent-denied node contributes no rows, carries the latency of
+  the request it refused, clears `meta.federation.complete`, and fails the
+  query in neither completeness mode. The optional Step-1 consent
+  pre-filter runs after localization and before resolution: each member it
+  denies is reported `consent-denied` with no `latency_ms`, is never
+  resolved or contacted, and loses any `ehr_id` the session cached for it. A
+  member it does not deny is asked, and its node decides. When the pre-filter
+  cannot answer, every candidate is asked (`pass-to-node`), because the node
+  checks consent in any case. `OPTIONS {base}/` declares a configured
+  pre-filter under `federation.consent`. For development,
+  `[[dev.consent_denied]]` rows beside the cross-reference are a static
+  pre-filter, accepted only under `profile = "development"` and declared as
+  `development-static`.
 
 ## [0.0.7] - 2026-10-03
 

@@ -104,9 +104,9 @@ the same on every replica and a second `PUT` of it refused on every replica
   explicitly (§11.4).
 - Every response, a failing one included, reports each node in scope with a
   status such as `active`, `offline`, `time-out` or `not-resolved` (§11.1).
-- Consent is enforced by each node before it releases data (N27). The
-  gateway has no consent pre-filter, and it does not yet tell a node's
-  consent refusal from any other error, so the refusal is reported
-  `node-error`. The optional Step-1 pre-filter and the `consent-denied`
-  report are planned for v0.0.8
-  ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)).
+- Consent is enforced by each node before it releases data (N27). A node's
+  `403` is reported `consent-denied`, and fails nothing, only when its
+  ITS-REST `Error` carries a code the registry lists for that endpoint;
+  every other refusal is `node-error`. An optional Step-1 pre-filter drops
+  members before dispatch, and today only the development table provides
+  one ([Consent](identity.md#consent)).

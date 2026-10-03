@@ -25,6 +25,10 @@ use crate::hygiene::mask::MASK;
 /// characters.
 pub const MESSAGE_LIMIT: usize = 512;
 
+/// The member of a node's ITS-REST `Error` read as its error code, which the
+/// open `Error` schema admits beside `message` and `validationErrors`.
+pub const CODE_MEMBER: &str = "code";
+
 /// The `error` of a node that answered `status` with `body`, carrying the
 /// status and an excerpt of the node's message.
 ///

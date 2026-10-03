@@ -17,12 +17,16 @@
 //! them out on purpose. It needs no patient identifier and holds none.
 //! A facility the gateway does not offer and the schema gives no member
 //! (asynchronous queries, §11.7) is declared by its absence.
+//! A configured Step-1 consent pre-filter is declared under
+//! `federation.consent`, with what a query does when it cannot answer
+//! (N27a, §13.2.1).
 
 use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
+use ferrofed_identity::consent::ON_UNAVAILABLE;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use openehr_federation::aql::{OffsetStrategy, Targeting};
@@ -60,6 +64,9 @@ pub const LOCALIZATION_MODE: &str = "mode";
 /// The `timeout` member that carries the localizer's budget, in
 /// milliseconds.
 pub const LOCALIZATION_MS: &str = "localization_ms";
+
+/// The `federation` member that declares the Step-1 consent pre-filter.
+pub const CONSENT: &str = "consent";
 
 /// Why the self-description cannot be built from the running federation.
 #[derive(Debug, thiserror::Error)]
@@ -154,13 +161,37 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         // TODO(#81): declare auth.jwks_uri once the gateway publishes its JWKS (§13.1).
         auth: None,
         its_rest: its_rest(federation, registry)?,
-        extra: Extra::new(),
+        extra: consent(federation)?,
     };
     Ok(OptionsRoot {
         federation: gateway,
         endpoints: members(federation.snapshot())?,
         extra: Extra::new(),
     })
+}
+
+/// The `consent` member of `federation`, present only where a Step-1 consent
+/// pre-filter is configured: the pre-filter's mode, and what a query does
+/// when it cannot answer (N27a, §13.2.1).
+///
+/// A deployment with no pre-filter declares nothing, and N27 is its sole gate.
+// NOTE: §7a.2 leaves the `federation` object open and names no consent member (N30
+// requires none), so the member is our own design.
+fn consent(federation: &Federation) -> Result<Extra, DescribeError> {
+    #[derive(serde::Serialize)]
+    struct Consent {
+        prefilter: &'static str,
+        on_unavailable: &'static str,
+    }
+    let mut extra = Extra::new();
+    if let Some(prefilter) = federation.consent_prefilter() {
+        let declared = Consent {
+            prefilter: prefilter.mode(),
+            on_unavailable: ON_UNAVAILABLE,
+        };
+        extra.insert_serialized(CONSENT, &declared)?;
+    }
+    Ok(extra)
 }
 
 /// Whether an undirected query fans out under `targeting`, the node

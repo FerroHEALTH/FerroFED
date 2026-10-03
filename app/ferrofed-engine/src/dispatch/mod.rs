@@ -19,7 +19,13 @@
 //! | answered `200` with a result set | `active` |
 //! | was not reachable: a refused connection or a broken stream | `offline` |
 //! | did not answer before the deadline | `time-out` |
-//! | answered with a failure: a documented error, an undocumented status, a body that is not a result set, rows shorter than the query selects | `node-error` |
+//! | answered `403` with an ITS-REST `Error` whose `code` is one of the endpoint's consent refusal codes in the registry | `consent-denied`, with its latency |
+//! | answered with any other failure: a documented error, an undocumented status, a body that is not a result set, rows shorter than the query selects | `node-error` |
+//!
+//! ITS-REST defines no consent signal, so a refusal is `consent-denied` only
+//! where the registry names the code the node marks it with (§11.1, N27; no
+//! specification governs the code: our own design). A `consent-denied` node
+//! fails nothing under either completion strategy (§11.3).
 //!
 //! A `node-error` carries the node's own status and an excerpt of its
 //! message ([`reported`], §9.5, §11.2), never folded into `offline`; a
@@ -28,7 +34,7 @@
 //! provider could not produce, a body that would not serialize) is a
 //! [`DispatchError`], never an endpoint status: nothing was sent to report on.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -327,7 +333,8 @@ pub enum NodeReply {
         latency_ms: u64,
     },
     /// The node was asked and gave no result set; the outcome is `offline`,
-    /// `time-out` or `node-error`, always with its `error`.
+    /// `time-out` or `node-error`, always with its `error`, or the node's own
+    /// `consent-denied`, with its latency (§11.1, N27, N40).
     Failed {
         /// The endpoint outcome, carrying the error and the latency.
         outcome: Outcome,
@@ -430,6 +437,7 @@ pub enum DispatchError {
 pub struct NodeClient<T> {
     endpoint: EndpointId,
     client: Client<T>,
+    consent_refusal_codes: BTreeSet<String>,
 }
 
 impl<T: Transport> NodeClient<T> {
@@ -461,6 +469,7 @@ impl<T: Transport> NodeClient<T> {
         Ok(Self {
             endpoint: endpoint.id().clone(),
             client,
+            consent_refusal_codes: endpoint.consent_refusal_codes().clone(),
         })
     }
 
@@ -524,7 +533,12 @@ impl<T: Transport> NodeClient<T> {
                 classify::answered(outcome, latency_ms, options.withheld()),
                 query.width,
             )),
-            Err(error) => classify::failed(&self.endpoint, error, latency_ms, options.withheld()),
+            Err(error) => classify::failed(
+                (&self.endpoint, &self.consent_refusal_codes),
+                error,
+                latency_ms,
+                options.withheld(),
+            ),
         }
     }
 }
