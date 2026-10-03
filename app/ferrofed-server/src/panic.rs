@@ -2,17 +2,47 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! A handler panic becomes a `500` with a JSON body, never a dropped
-//! connection.
+//! connection, and every panic leaves one fixed line in the log.
 //!
 //! The release profile pins `panic = "unwind"`, which is what lets
 //! `std::panic::catch_unwind` turn an unwound handler into a response
 //! (<https://doc.rust-lang.org/cargo/reference/profiles.html#panic>). The
-//! panic message reaches neither the body nor the log, because a message can
-//! quote whatever value the handler held, a patient identifier included
-//! (§5.4.3). No specification governs the body shape: our own design.
+//! panic message reaches neither the body, the log nor stderr, because a
+//! message can quote whatever value the handler held, a patient identifier
+//! included (§5.4.3). Rust's default hook prints the message to stderr, so
+//! the binary replaces it with [`install_hook`] before it serves. No
+//! specification governs the body shape or the hook: our own design.
 
 use axum::response::Response;
 use std::any::Any;
+use std::panic::PanicHookInfo;
+
+/// Replaces the process panic hook with one that writes a fixed line through
+/// `tracing` and nothing to stderr.
+///
+/// The line names where the panic happened and, when the panicking task
+/// serves a request, the gateway's outbound id for it
+/// ([`crate::request_id::serving`]). The payload is never read, so its text
+/// reaches neither the log nor stderr. The `500` a panicking handler answers
+/// is unchanged: [`caught`] and [`render`] still make it.
+pub fn install_hook() {
+    std::panic::set_hook(Box::new(hook));
+}
+
+/// Logs that a thread panicked, with its location and request, never its
+/// payload.
+fn hook(info: &PanicHookInfo<'_>) {
+    let location = info.location().map_or_else(
+        || "unknown".to_owned(),
+        |at| format!("{}:{}:{}", at.file(), at.line(), at.column()),
+    );
+    let request_id = crate::request_id::serving().map(|id| id.to_string());
+    tracing::error!(
+        location = location.as_str(),
+        request_id = request_id.as_deref(),
+        "a thread panicked"
+    );
+}
 
 /// The marker a caught panic leaves on its response.
 ///

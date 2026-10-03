@@ -7,6 +7,8 @@
 //! track 10; N33, N34; CP-26).
 
 use std::error::Error;
+use std::path::Path;
+use std::process::Command;
 
 use axum::Router;
 use axum::routing::get;
@@ -20,7 +22,7 @@ use super::{
     Case, EHR_A, EHR_B, ENDPOINT_A, ENDPOINT_B, Member, PATIENT, TestResult, Topology,
     assert_logs_clean, commit_lands_byte_identical, run_all,
 };
-use crate::support::{Logs, send};
+use crate::support::{LogLine, Logs, lines, request_lines, send};
 
 /// Two mock nodes and the proxy in front of each.
 struct MockNodes {
@@ -171,9 +173,88 @@ async fn a_committed_dv_identifier_arrives_at_the_node_byte_identical() -> TestR
     commit_lands_byte_identical(&app, &topology, &composition).await
 }
 
+/// The variable that makes the panic case run as the child process its
+/// parent spawns, naming the file the child writes its log to.
+const PANIC_CHILD_LOG: &str = "FERROFED_TRACK10_PANIC_LOG";
+
+/// The name of the panic case, as the test binary filters on it.
+const PANIC_CASE: &str =
+    "a_panicking_handler_holding_the_identifier_leaves_it_on_neither_stderr_nor_the_log";
+
 // conformance: CP-26 track-10
 #[tokio::test]
-async fn a_panicking_handler_holding_the_identifier_leaves_it_in_no_log_line() -> TestResult {
+async fn a_panicking_handler_holding_the_identifier_leaves_it_on_neither_stderr_nor_the_log()
+-> TestResult {
+    if let Some(log) = std::env::var_os(PANIC_CHILD_LOG) {
+        return panicking_child(Path::new(&log)).await;
+    }
+    let dir = tempfile::tempdir()?;
+    let log = dir.path().join("log.jsonl");
+    let module = module_path!()
+        .split_once("::")
+        .map_or(module_path!(), |(_, path)| path);
+    let output = Command::new(std::env::current_exe()?)
+        .args([
+            format!("{module}::{PANIC_CASE}").as_str(),
+            "--exact",
+            "--nocapture",
+            "--test-threads",
+            "1",
+        ])
+        .env(PANIC_CHILD_LOG, &log)
+        .output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success() && stdout.contains("1 passed"),
+        "the child ran the case and it passed:\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stderr.is_empty(),
+        "the panic hook writes nothing to stderr, the payload least of all: {stderr}"
+    );
+    let needles = super::needles()?;
+    let found = needles.in_text(&stdout);
+    assert!(
+        found.is_empty(),
+        "the child's stdout holds {found:?}: {stdout}"
+    );
+    let text = std::fs::read_to_string(&log)?;
+    assert!(
+        text.contains("the request handler panicked"),
+        "the renderer's line is in the log, so the search is not vacuous: {text}"
+    );
+    let requests = request_lines(&text)?;
+    let [request] = requests.as_slice() else {
+        return Err(format!("one request line: {text}").into());
+    };
+    let hooked: Vec<LogLine> = lines(&text)?
+        .into_iter()
+        .filter(|line| line.message == "a thread panicked")
+        .collect();
+    let [hooked] = hooked.as_slice() else {
+        return Err(format!("the hook wrote one line: {text}").into());
+    };
+    assert!(
+        hooked
+            .location
+            .as_deref()
+            .is_some_and(|at| at.contains("track10/mock.rs:")),
+        "the hook's line names where the handler panicked: {text}"
+    );
+    assert!(
+        hooked.request_id.is_some() && hooked.request_id == request.request_id,
+        "the hook's line names the request by the gateway's id: {text}"
+    );
+    assert_logs_clean(&text, 1)
+}
+
+/// Serves a handler that panics holding the identifier, with the identifier
+/// in the query string and the headers, under the binary's panic hook, and
+/// writes the log to `log`.
+#[expect(clippy::panic, reason = "the route panics by design")]
+async fn panicking_child(log: &Path) -> TestResult {
+    ferrofed_server::panic::install_hook();
     let value = PATIENT.value();
     let held = value.clone();
     let router = ferrofed_server::with_middleware(
@@ -204,11 +285,11 @@ async fn a_panicking_handler_holding_the_identifier_leaves_it_in_no_log_line() -
     )
     .await?;
     drop(guard);
-    assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
-    let text = logs.text();
-    assert!(
-        text.contains("the request handler panicked"),
-        "the panic line is in the log, so the search is not vacuous: {text}"
+    std::fs::write(log, logs.text())?;
+    assert_eq!(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        response.status(),
+        "the panic is still answered 500"
     );
-    assert_logs_clean(&text, 1)
+    Ok(())
 }

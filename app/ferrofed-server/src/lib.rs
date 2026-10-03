@@ -115,6 +115,7 @@ where
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 return ExitCode::from(EXIT_CONFIG);
             }
+            panic::install_hook();
             let state = match AppState::build(&settings) {
                 Ok(state) => Arc::new(state),
                 Err(error) => {
