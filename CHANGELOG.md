@@ -23,6 +23,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Definition requests are routed to one explicitly chosen node (#75; §7a.1,
+  §12.6, §12.7, N43, N31, N33, CP-34). Every request under
+  `{base}/v1/definition/`, an ADL 1.4 or ADL 2 template upload, list, read or
+  example, and stored-query management where the stored-query registry is not
+  offered, goes only to the one endpoint the targeting headers name. The body
+  reaches that node byte-identical with only what the ITS-REST operation
+  declares, and the node's answer, its `404` or validation `400` included,
+  comes back as the node sent it with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id`. Without a header the request is
+  `400 target-required`; `*` or an unknown id is `400 endpoint-unknown` and
+  two endpoints are `400 endpoint-several`, so no node is ever picked
+  implicitly and no two nodes' templates are combined into one catalogue.
+  Where the registry is offered it keeps answering stored-query definitions
+  itself. Without the registry,
+  `PUT {base}/v1/definition/query/{name}/{version}` answers `501`, and
+  `OPTIONS` on that path lists no `PUT`, because the ITS-REST library the
+  gateway forwards through declares no `Content-Type` for it (#298).
+  `OPTIONS {base}/` declares `its_rest.definition` as `routed-single-node`,
+  and `OPTIONS` on a definition path names its ITS-REST methods.
 - Versioned writes reach only their controlling CDR, and a new EHR only an
   explicit target (#65; §12.4, §12a.1, §10.3, N23, N41, CP-15). An update of
   a composition, the `EHR_STATUS` or the directory, a directory delete (each
@@ -85,6 +104,11 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- A request routed by its target alone (`POST {base}/v1/ehr` and a definition
+  request) checks its declared header and query values before its target, as
+  the EHR route does: a malformed value is `400 parameter-value-invalid`, and
+  an `Accept` or `Content-Type` the operation does not list is `406` or `415`,
+  before `400 target-required` (§5.4.1, N33).
 - A `[credentials."<endpoint id>"]` key is held to the registry's endpoint id
   rule when the configuration resolves, with or without a registry (#272).
   Configuration used to accept 1 to 128 printable ASCII characters and left
