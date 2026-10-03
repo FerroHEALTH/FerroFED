@@ -89,4 +89,5 @@
 - [Two FerroEHR nodes](two-ferroehr-nodes.md): the harness and the quickstart run two FerroEHR instances; EHRbase left because it refuses a BASE-valid namespace (not reported to EHRbase, owner 2026-10-03); decision A44, owner 2026-10-02
 - [Repository in the FerroHEALTH org](repo-in-ferrohealth-org.md): FerroHEALTH/FerroFED since 2026-10-01, the board is org project 1; what the transfer changed and what stays owner-side (#123)
 - [Cut releases promptly](cut-releases-promptly.md): cut when the milestone's code is done; move owner-side or upstream-blocked stragglers to the next milestone, never hold the cut; owner 2026-10-02
+- [Oldest PR merges first](oldest-pr-merges-first.md): only the head of the merge order has auto-merge armed; newer PRs wait, so long-standing PRs stop falling behind; owner 2026-10-03
 - [Native issue types and fields](native-issue-types-and-priority.md): type, priority and effort are the native issue type and the FerroHEALTH Priority and Effort fields, set with scripts/gh/fields.sh; bug, enhancement and P0 to P3 retired; owner 2026-10-02 (#154)
