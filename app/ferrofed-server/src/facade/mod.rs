@@ -57,6 +57,7 @@ pub mod options;
 pub mod owner;
 pub mod plan;
 pub mod prefer;
+mod provenance;
 pub mod route;
 mod scoped;
 pub mod security;
@@ -78,7 +79,6 @@ use ferrofed_engine::fanout::{Budget, Completion, FanOutError, fan_out_within};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::Refusal;
@@ -91,6 +91,7 @@ use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 use openehr_its::rest::runtime::ApiError;
 
 use crate::error::{self, Code};
+use crate::facade::provenance::{Dispatch, Provenance};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
@@ -252,21 +253,14 @@ pub(crate) async fn answer(
         session: session.as_ref(),
     };
     match federate(federation, query).await {
-        Ok((status, mut result_set, routed)) => {
+        Ok((status, mut result_set, provenance)) => {
             // NOTE: §12.7, N44: the answer to a stored query names the gateway's definition.
             result_set.name = name;
             let mut response = (status, Json(result_set)).into_response();
             if let Some(applied) = wait.filter(|_| budget != configured) {
                 applied_wait(&mut response, applied);
             }
-            // NOTE: §7a.3, N31: a query routed to its ehr_id's one owner is dispatched
-            // to a single node, so the answer names the acting endpoint.
-            match routed {
-                Some(endpoint) => {
-                    route::Provenance::of(federation.snapshot(), endpoint).stamp(response)
-                }
-                None => response,
-            }
+            provenance.stamp(response)
         }
         Err(failure) => failure.respond(request_id, outbound),
     }
@@ -533,17 +527,17 @@ fn remember(federation: &Federation, session: Option<&SessionKey>, targets: &pla
 }
 
 /// Runs one federated query and returns the status, the `RESULT_SET`, and
-/// the endpoint a query scoped to one `ehr_id` was routed to.
+/// the endpoints the answer names as having acted for it (§7a.3, N31).
 ///
 /// Resolution and the fan-out share one overall budget, which runs from the
 /// request's arrival, so the gateway answers within its declared budget
 /// (§11.5). The `{node, ehr_id}` set a resolution produces is held as the
 /// session's resolution bindings (§12.5.1 step 2); without a
 /// session there is nothing to scope them to, and none is held.
-async fn federate<'f>(
-    federation: &'f Federation,
+async fn federate(
+    federation: &Federation,
     query: Query<'_>,
-) -> Result<(StatusCode, ResultSet, Option<&'f Endpoint>), Failure> {
+) -> Result<(StatusCode, ResultSet, Provenance), Failure> {
     let Query {
         sent,
         headers,
@@ -569,8 +563,7 @@ async fn federate<'f>(
         outbound,
     };
     let routed = scoped::routed(federation, &analysis, named.as_ref(), scope).await?;
-    let owner = routed.map(|owner| owner.endpoint.id());
-    let selection = plan::Selection::of(named.as_ref(), owner);
+    let selection = plan::Selection::of(named.as_ref(), routed.map(|owner| owner.endpoint.id()));
     let (targets, subject) = match &analysis {
         Analysis::Patient(query) => (
             plan::patient(
@@ -603,6 +596,7 @@ async fn federate<'f>(
     if let Some(recombination) = analysis.recombination() {
         plan = plan.recombining(recombination.clone());
     }
+    let dispatch = Dispatch::of(routed, named.as_ref(), &plan);
     let answer = fan_out_within(
         federation.clients(),
         federation.snapshot(),
@@ -628,6 +622,7 @@ async fn federate<'f>(
     {
         status = StatusCode::FAILED_DEPENDENCY;
     }
+    let acting = dispatch.provenance(federation.snapshot(), answer.federation(), status);
     let provenance = answer.attributes().to_vec();
     let mut result_set = answer
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
@@ -643,7 +638,7 @@ async fn federate<'f>(
     } else {
         Vec::new()
     };
-    Ok((status, result_set, routed.map(|owner| owner.endpoint)))
+    Ok((status, result_set, acting))
 }
 
 #[cfg(test)]

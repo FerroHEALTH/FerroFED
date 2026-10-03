@@ -116,6 +116,7 @@ struct Run {
     status: StatusCode,
     text: String,
     endpoint: Option<String>,
+    system_id: Option<String>,
     a: Vec<String>,
     b: Vec<(String, String)>,
 }
@@ -129,16 +130,21 @@ async fn run(aql: &str) -> Result<Run, Box<dyn Error>> {
     let app = gateway(dir.path(), &a, &b)?;
     let response = send(app, post(body(aql)?)?).await?;
     let status = response.status();
-    let endpoint = response
-        .headers()
-        .get("openEHR-federation-endpoint")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned);
+    let field = |name: &str| {
+        response
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned)
+    };
+    let endpoint = field("openEHR-federation-endpoint");
+    let system_id = field("openEHR-federation-system-id");
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
     Ok(Run {
         status,
         text: String::from_utf8(bytes.to_vec())?,
         endpoint,
+        system_id,
         a: queries(&a).await?,
         b: requests(&b).await?,
     })
@@ -168,7 +174,7 @@ async fn both_forms_send_the_owner_the_same_query_and_answer_the_same_rows() -> 
     Ok(())
 }
 
-// conformance: CP-22
+// conformance: CP-22 CP-24
 #[tokio::test]
 async fn a_scoped_query_reaches_only_the_member_that_holds_the_ehr_id() -> TestResult {
     let run = run(&from_form()).await?;
@@ -192,6 +198,11 @@ async fn a_scoped_query_reaches_only_the_member_that_holds_the_ehr_id() -> TestR
         Some("node-a-pub"),
         run.endpoint.as_deref(),
         "N31: a query dispatched to one node names the acting endpoint"
+    );
+    assert_eq!(
+        Some("cdr-a.example.org"),
+        run.system_id.as_deref(),
+        "N31, §9.6: and its node's system_id"
     );
     Ok(())
 }
