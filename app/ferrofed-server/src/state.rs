@@ -5,7 +5,7 @@
 //! stored-query registry.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError, RwLock};
 
 use ferrofed_registry::definition::store::{Definitions, StoreError};
 
@@ -24,7 +24,10 @@ pub struct AppState {
     /// The indicators readiness runs.
     health: Registry,
     /// The federation the ITS-REST façade queries, when a registry is set.
-    federation: Option<Federation>,
+    ///
+    /// A registry reload replaces it whole; a request takes the `Arc` once
+    /// and keeps it to its end.
+    federation: RwLock<Option<Arc<Federation>>>,
     /// The stored-query registry, when it is offered (§12.7). It sits beside
     /// the federation, which holds no store handle.
     definitions: Option<Arc<Definitions>>,
@@ -76,7 +79,7 @@ impl AppState {
             .transpose()?;
         Ok(Self {
             health: Registry::default(),
-            federation,
+            federation: RwLock::new(federation.map(Arc::new)),
             definitions: definitions.map(Arc::new),
         })
     }
@@ -86,7 +89,7 @@ impl AppState {
     pub const fn with_health(health: Registry) -> Self {
         Self {
             health,
-            federation: None,
+            federation: RwLock::new(None),
             definitions: None,
         }
     }
@@ -96,7 +99,7 @@ impl AppState {
     pub fn with_federation(federation: Federation) -> Self {
         Self {
             health: Registry::default(),
-            federation: Some(federation),
+            federation: RwLock::new(Some(Arc::new(federation))),
             definitions: None,
         }
     }
@@ -108,9 +111,29 @@ impl AppState {
     }
 
     /// Returns the federation, when the gateway federates.
+    ///
+    /// A request takes it once and keeps it to its end, so a registry reload
+    /// never changes the membership under a running request.
     #[must_use]
-    pub const fn federation(&self) -> Option<&Federation> {
-        self.federation.as_ref()
+    pub fn federation(&self) -> Option<Arc<Federation>> {
+        // NOTE: no specification governs this: our own design; the lock guards
+        // one `Arc` swap or clone, so a poisoned lock still holds a whole value.
+        self.federation
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Puts `federation` in place of the running one, which the requests that
+    /// already took it keep, and returns the running one.
+    pub(crate) fn replace_federation(
+        &self,
+        federation: Arc<Federation>,
+    ) -> Option<Arc<Federation>> {
+        self.federation
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .replace(federation)
     }
 
     /// Returns the stored-query registry, when it is offered (§12.7).

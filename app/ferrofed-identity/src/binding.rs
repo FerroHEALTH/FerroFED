@@ -174,6 +174,59 @@ impl ResolutionBindings {
         dropped
     }
 
+    /// Drops every binding that names a member of `departed`, in every
+    /// session, and returns how many `ehr_id` bindings it dropped.
+    ///
+    /// A registry reload calls it with the members that left the federation.
+    /// A binding naming a departed member among others is dropped whole, so
+    /// a collision is never narrowed to its remaining claimant (§12.5.2,
+    /// N42); the cost is one re-resolution.
+    pub fn forget_members(&self, departed: &BTreeSet<NodeId>) -> usize {
+        if departed.is_empty() {
+            return 0;
+        }
+        let mut sessions = self.lock();
+        let mut dropped = 0_usize;
+        for held in sessions.values_mut() {
+            let before = held.by_ehr.len();
+            held.by_ehr.retain(|_, nodes| nodes.is_disjoint(departed));
+            dropped = dropped.saturating_add(before.saturating_sub(held.by_ehr.len()));
+        }
+        sessions.retain(|_, held| !held.by_ehr.is_empty());
+        drop(sessions);
+        dropped
+    }
+
+    /// Drops `session`'s binding of `ehr_id` when it names a member `present`
+    /// says the registry no longer holds, and returns whether it did.
+    ///
+    /// A lookup that finds such a binding calls it: the binding is stale
+    /// whole, so it is never narrowed to the members that remain (§12.5.2,
+    /// N42). A binding naming only present members is kept.
+    pub fn forget_absent(
+        &self,
+        session: &SessionKey,
+        ehr_id: &EhrId,
+        present: impl Fn(&NodeId) -> bool,
+    ) -> bool {
+        let mut sessions = self.lock();
+        let Some(held) = sessions.get_mut(session) else {
+            return false;
+        };
+        let stale = held
+            .by_ehr
+            .get(ehr_id)
+            .is_some_and(|nodes| !nodes.iter().all(&present));
+        if stale {
+            held.by_ehr.remove(ehr_id);
+            if held.by_ehr.is_empty() {
+                sessions.remove(session);
+            }
+        }
+        drop(sessions);
+        stale
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<SessionKey, Session>> {
         // NOTE: a panic while the lock was held leaves bindings that may be
         // incomplete; they are still only routing hints, so they stay usable.

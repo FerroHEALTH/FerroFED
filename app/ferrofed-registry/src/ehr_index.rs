@@ -203,6 +203,50 @@ impl EhrIndex {
         learning
     }
 
+    /// Forgets every `ehr_id` held at a member of `departed`, and returns how
+    /// many it forgot.
+    ///
+    /// A registry reload calls it with the members that left the
+    /// federation. An entry naming a departed member is forgotten whole,
+    /// with the members it also names: a collision is never narrowed to its
+    /// remaining claimant (§12.5.2, N42), so a later read asks every member
+    /// again and finds a collision that still stands.
+    pub fn forget_members(&self, departed: &BTreeSet<NodeId>) -> usize {
+        if departed.is_empty() {
+            return 0;
+        }
+        let mut held = self.lock();
+        let gone: Vec<(EhrId, u64)> = held
+            .entries
+            .iter()
+            .filter(|(_, entry)| !entry.owners.is_disjoint(departed))
+            .map(|(ehr_id, entry)| (ehr_id.clone(), entry.used))
+            .collect();
+        for (ehr_id, used) in &gone {
+            held.entries.remove(ehr_id);
+            held.recency.remove(used);
+        }
+        drop(held);
+        gone.len()
+    }
+
+    /// Forgets `ehr_id` when its entry names a member `present` says the
+    /// registry no longer holds, and returns whether it did.
+    ///
+    /// A lookup that finds such an entry calls it: the entry is stale whole,
+    /// so it is never narrowed to the claimants that remain (§12.5.2, N42).
+    /// An entry naming only present members is kept, whatever it names.
+    pub fn forget_absent(&self, ehr_id: &EhrId, present: impl Fn(&NodeId) -> bool) -> bool {
+        let mut held = self.lock();
+        let used = match held.entries.get(ehr_id) {
+            Some(entry) if !entry.owners.iter().all(&present) => entry.used,
+            Some(_) | None => return false,
+        };
+        held.entries.remove(ehr_id);
+        held.recency.remove(&used);
+        true
+    }
+
     /// How many `ehr_id`s the index holds.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -323,6 +367,53 @@ mod tests {
         );
         assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_1)));
         assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_3)));
+    }
+
+    #[test]
+    fn a_departed_member_takes_its_entries_and_every_collision_it_claims() {
+        let index = EhrIndex::new(NonZeroUsize::new(3).unwrap());
+        index.learn(&ehr(EHR_1), &node("node-a"));
+        index.learn(&ehr(EHR_2), &node("node-b"));
+        index.learn(&ehr(EHR_3), &node("node-b"));
+        index.learn(&ehr(EHR_3), &node("node-a"));
+        let departed = std::collections::BTreeSet::from([node("node-b")]);
+        assert_eq!(2, index.forget_members(&departed));
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_1)));
+        assert_eq!(Indexed::None, index.lookup(&ehr(EHR_2)));
+        assert_eq!(
+            Indexed::None,
+            index.lookup(&ehr(EHR_3)),
+            "a collision is forgotten whole, never narrowed to node-a (N42)"
+        );
+        assert_eq!(0, index.forget_members(&departed), "nothing is left");
+    }
+
+    #[test]
+    fn a_forgotten_entry_leaves_the_recency_order_whole() {
+        let index = EhrIndex::new(NonZeroUsize::new(2).unwrap());
+        index.learn(&ehr(EHR_1), &node("node-b"));
+        index.learn(&ehr(EHR_2), &node("node-a"));
+        index.forget_members(&std::collections::BTreeSet::from([node("node-b")]));
+        index.learn(&ehr(EHR_3), &node("node-a"));
+        assert_eq!(2, index.len(), "the freed place is used, nothing evicted");
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_2)));
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_3)));
+    }
+
+    #[test]
+    fn an_entry_naming_an_absent_member_is_forgotten_and_one_naming_present_members_kept() {
+        let index = EhrIndex::new(NonZeroUsize::new(2).unwrap());
+        index.learn(&ehr(EHR_1), &node("node-a"));
+        index.learn(&ehr(EHR_1), &node("node-b"));
+        index.learn(&ehr(EHR_2), &node("node-a"));
+        let present = |member: &NodeId| *member == node("node-a");
+        assert!(index.forget_absent(&ehr(EHR_1), present));
+        assert!(!index.forget_absent(&ehr(EHR_2), present));
+        assert!(!index.forget_absent(&ehr(EHR_3), present));
+        assert_eq!(Indexed::None, index.lookup(&ehr(EHR_1)));
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_2)));
+        index.learn(&ehr(EHR_3), &node("node-a"));
+        assert_eq!(2, index.len(), "the forgotten place is reused");
     }
 
     #[test]

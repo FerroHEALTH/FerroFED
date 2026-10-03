@@ -8,7 +8,8 @@
 //! environment into one [`config::settings::Settings`], [`telemetry`] installs the
 //! subscriber, [`router`] builds the HTTP surface over [`state::AppState`],
 //! and [`serve`] runs it on a bound listener until the process is asked to
-//! stop. `main.rs` only hands in the arguments and returns the exit code.
+//! stop, while [`reload`] replaces the registry on `SIGHUP`. `main.rs` only
+//! hands in the arguments and returns the exit code.
 //!
 //! The ITS-REST façade serves the federated query, `POST /v1/query/aql`
 //! ([`facade`], §7), and routes every request to an EHR resource under a
@@ -33,6 +34,7 @@ pub mod facade;
 pub mod federation;
 pub mod health;
 pub mod panic;
+pub mod reload;
 pub mod request_id;
 pub mod request_log;
 pub mod state;
@@ -41,6 +43,7 @@ pub mod telemetry;
 
 use std::future::Future;
 use std::io::IsTerminal;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
@@ -137,7 +140,7 @@ where
                     return ExitCode::from(EXIT_CONFIG);
                 }
             };
-            match serve_command(&settings, state) {
+            match serve_command(settings, state, cli.config) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     tracing::error!(error = format!("{error:#}"), "cannot serve");
@@ -223,11 +226,18 @@ fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode
     }
 }
 
-/// Builds the runtime and serves `state` until the process is asked to stop.
-fn serve_command(settings: &Settings, state: Arc<AppState>) -> anyhow::Result<()> {
+/// Builds the runtime and serves `state` until the process is asked to stop,
+/// reloading the registry on `SIGHUP` from `config`, the file `settings`
+/// were read from ([`reload`]).
+fn serve_command(
+    settings: Settings,
+    state: Arc<AppState>,
+    config: Option<PathBuf>,
+) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
+    let server = settings.server.clone();
     runtime.block_on(async move {
         use anyhow::Context;
 
@@ -236,17 +246,21 @@ fn serve_command(settings: &Settings, state: Arc<AppState>) -> anyhow::Result<()
             indicators = state.health().names().join(","),
             "ferrofed starting"
         );
-        let listener = TcpListener::bind(settings.server.listen)
+        let listener = TcpListener::bind(server.listen)
             .await
-            .with_context(|| format!("binding {}", settings.server.listen))?;
-        tracing::info!(listen = %settings.server.listen, "listening");
-        serve(
-            listener,
-            router(Arc::clone(&state), &settings.server),
-            &settings.server,
-        )
-        .await
-        .context("serving HTTP")?;
+            .with_context(|| format!("binding {}", server.listen))?;
+        tracing::info!(listen = %server.listen, "listening");
+        #[cfg(unix)]
+        tokio::spawn(reload::on_hangup(Arc::new(reload::Reloader::new(
+            config,
+            settings,
+            Arc::clone(&state),
+        ))));
+        #[cfg(not(unix))]
+        drop((config, settings));
+        serve(listener, router(Arc::clone(&state), &server), &server)
+            .await
+            .context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
         Ok(())
     })
@@ -402,7 +416,8 @@ async fn unrouted(
         request_id,
         outbound,
     };
-    if let (Some(federation), Some(definitions)) = (state.federation(), state.definitions())
+    let federation = state.federation();
+    if let (Some(federation), Some(definitions)) = (federation.as_deref(), state.definitions())
         && let Lookup::Matched(matched) = routes::lookup(&method, path)
     {
         match facade::stored::serve(federation, definitions, &matched, arrived).await {
@@ -410,7 +425,7 @@ async fn unrouted(
             Err(unanswered) => arrived = unanswered,
         }
     }
-    facade::route::serve(state.federation(), arrived).await
+    facade::route::serve(federation.as_deref(), arrived).await
 }
 
 /// Serves `app` on an already-bound listener until the process receives

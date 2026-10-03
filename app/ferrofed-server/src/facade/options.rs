@@ -85,7 +85,7 @@ pub async fn options_root(State(state): State<Arc<AppState>>, headers: HeaderMap
         return error::fixed(Code::NotImplemented, request_id);
     };
     // TODO(#80): answer 401 to a caller the gateway has not authenticated (§7a.2, §13).
-    match describe(federation, state.definitions().is_some()) {
+    match describe(&federation, state.definitions().is_some()) {
         Ok(body) => (
             StatusCode::OK,
             [(header::ALLOW, HeaderValue::from_static(ROOT_ALLOW))],

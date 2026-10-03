@@ -7,9 +7,11 @@
 //! credentials, the cross-reference resolver, the rewrite's context and the
 //! fan-out budget (§5.2, §7.1, §11.5).
 //!
-//! [`Federation::load`] builds it once at boot from the resolved settings.
-//! Without a registry document the gateway federates nothing, so there is no
-//! federation and the ITS-REST surface stays unserved.
+//! [`Federation::load`] builds it at boot from the resolved settings, and
+//! [`Federation::reloaded`] builds its successor when the registry is
+//! reloaded ([`crate::reload`]). Without a registry document the gateway
+//! federates nothing, so there is no federation and the ITS-REST surface
+//! stays unserved.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU32, NonZeroUsize};
@@ -29,6 +31,7 @@ use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::{EndpointId, NodeId};
+use ferrofed_registry::incident::Incident;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
@@ -46,13 +49,43 @@ pub struct Federation {
     snapshot: Arc<RegistrySnapshot>,
     clients: NodeClients<ReqwestTransport>,
     resolver: Option<Arc<dyn Resolver>>,
-    bindings: ResolutionBindings,
-    index: EhrIndex,
-    learned: Mutex<LearnedMap>,
+    observed: Arc<Observed>,
     context: Context,
     budget: Budget,
     best_effort: bool,
     demographic: Option<EndpointId>,
+}
+
+/// What the process learns while it serves, which a registry reload carries
+/// over to the federation it builds.
+struct Observed {
+    bindings: ResolutionBindings,
+    index: EhrIndex,
+    learned: Mutex<LearnedMap>,
+}
+
+impl Observed {
+    /// Nothing learned yet: bindings that live `ttl`, and an `ehr_id` index
+    /// of `capacity` entries.
+    fn new(ttl: std::time::Duration, capacity: NonZeroU32) -> Self {
+        Self {
+            bindings: ResolutionBindings::new(ttl),
+            index: ehr_index(capacity),
+            learned: Mutex::new(LearnedMap::new()),
+        }
+    }
+}
+
+/// What a registry reload did to what the process had learned
+/// ([`Federation::reconcile`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Reconciled {
+    /// The incidents the reload raised, each emitted once when it was raised.
+    pub incidents: Vec<Incident>,
+    /// How many `ehr_id` index entries named a member that left.
+    pub index_dropped: usize,
+    /// How many resolution bindings named a member that left.
+    pub bindings_dropped: usize,
 }
 
 /// A federation that cannot be built from the settings.
@@ -170,6 +203,47 @@ impl Federation {
     /// `federation.demographic_endpoint` that names no endpoint of the
     /// registry, and an HTTP client that cannot be built.
     pub fn load(settings: &Settings) -> Result<Option<Self>, FederationError> {
+        Self::assemble(settings, None)
+    }
+
+    /// Builds the federation `settings` describe after a registry reload,
+    /// checked exactly as [`Federation::load`] checks it at boot.
+    ///
+    /// The new federation has its own snapshot, node clients and resolver,
+    /// and keeps what this one learned: the resolution bindings, the `ehr_id`
+    /// index and the learned `creating_system_id` map, which
+    /// [`Federation::reconcile`] then holds to the new snapshot. This
+    /// federation is unchanged, so a request that took it finishes on it.
+    ///
+    /// # Errors
+    /// Returns the [`FederationError`] [`Federation::load`] returns for the
+    /// same settings.
+    pub fn reloaded(&self, settings: &Settings) -> Result<Option<Self>, FederationError> {
+        Self::assemble(settings, Some(Arc::clone(&self.observed)))
+    }
+
+    /// Holds what the process learned to this federation's snapshot, after a
+    /// reload in which the members `departed` left the registry.
+    ///
+    /// Every learned `creating_system_id` route the new document contradicts
+    /// is withdrawn with its incident ([`LearnedMap::reconcile`]), and every
+    /// `ehr_id` index entry and resolution binding naming a member that left
+    /// is dropped.
+    #[must_use]
+    pub fn reconcile(&self, departed: &BTreeSet<NodeId>) -> Reconciled {
+        let incidents = self.learned().reconcile(&self.snapshot);
+        Reconciled {
+            incidents,
+            index_dropped: self.observed.index.forget_members(departed),
+            bindings_dropped: self.observed.bindings.forget_members(departed),
+        }
+    }
+
+    /// Builds the federation, over `observed` when a reload carries it over.
+    fn assemble(
+        settings: &Settings,
+        observed: Option<Arc<Observed>>,
+    ) -> Result<Option<Self>, FederationError> {
         let Some(path) = &settings.registry_document else {
             if settings.dev.is_some() {
                 return Err(FederationError::DevWithoutRegistry);
@@ -238,9 +312,12 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
-            bindings: ResolutionBindings::new(settings.federation.binding_ttl),
-            index: ehr_index(settings.federation.ehr_index_capacity),
-            learned: Mutex::new(LearnedMap::new()),
+            observed: observed.unwrap_or_else(|| {
+                Arc::new(Observed::new(
+                    settings.federation.binding_ttl,
+                    settings.federation.ehr_index_capacity,
+                ))
+            }),
             context,
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
@@ -268,11 +345,12 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
-            bindings: ResolutionBindings::new(std::time::Duration::from_millis(
-                crate::config::Federation::default().binding_ttl_ms,
+            observed: Arc::new(Observed::new(
+                std::time::Duration::from_millis(
+                    crate::config::Federation::default().binding_ttl_ms,
+                ),
+                default_index_capacity(),
             )),
-            index: ehr_index(default_index_capacity()),
-            learned: Mutex::new(LearnedMap::new()),
             context,
             budget,
             best_effort: crate::config::Federation::default().best_effort,
@@ -291,14 +369,14 @@ impl Federation {
     /// The resolution bindings of every client session (§12.5.1 step 2).
     #[must_use]
     pub fn bindings(&self) -> &ResolutionBindings {
-        &self.bindings
+        &self.observed.bindings
     }
 
     /// The `ehr_id` to node index every request of this process shares
     /// (§12.5.1 step 3).
     #[must_use]
     pub fn index(&self) -> &EhrIndex {
-        &self.index
+        &self.observed.index
     }
 
     /// The `creating_system_id` mappings learned from answers, which every
@@ -309,7 +387,10 @@ impl Federation {
     pub fn learned(&self) -> MutexGuard<'_, LearnedMap> {
         // NOTE: a panic while the lock was held leaves mappings that may be
         // incomplete; each is still only a routing hint, so they stay usable.
-        self.learned.lock().unwrap_or_else(PoisonError::into_inner)
+        self.observed
+            .learned
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The PMIR hook (track 8, provisional): a merge or split at the identity
@@ -320,7 +401,7 @@ impl Federation {
     /// calls this; until one is configured, the bindings' time-to-live is the
     /// bound. The event names how many bindings went, never an identifier.
     pub fn identity_changed(&self, change: &IdentityChange) -> usize {
-        let dropped = self.bindings.identity_changed(change);
+        let dropped = self.observed.bindings.identity_changed(change);
         tracing::info!(
             dropped,
             scoped = matches!(change, IdentityChange::Ehrs(_)),
@@ -335,7 +416,7 @@ impl Federation {
         &self.id
     }
 
-    /// The registry snapshot every query of this process runs over.
+    /// The registry snapshot every query that took this federation runs over.
     #[must_use]
     pub fn snapshot(&self) -> &RegistrySnapshot {
         &self.snapshot

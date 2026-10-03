@@ -114,10 +114,11 @@ pub struct Held<'a> {
 /// Locates the owner of `ehr_id` by the first three steps of §12.5.1, in
 /// order (N41).
 ///
-/// A binding or an index entry naming a member the snapshot no longer holds
-/// names nothing, and the next step is taken. A step naming two members the
-/// snapshot holds is a [`Located::Collision`], and no later step is taken: no
-/// step picks one of two claimants (§12.5.2, N42).
+/// A binding or an index entry naming a member the snapshot does not hold is
+/// stale whole: it is dropped, and the next step is taken, so routing
+/// re-learns the owner from the nodes. A step naming two members the snapshot
+/// holds is a [`Located::Collision`], and no later step is taken: no step
+/// picks one of two claimants (§12.5.2, N42).
 ///
 /// # Errors
 ///
@@ -137,14 +138,19 @@ pub fn located<'a>(
             step: Step::Target,
         });
     }
+    let present = |node: &NodeId| snapshot.node(node).is_some();
     if let Some(held) = held {
         let bound = match held.bindings.lookup(held.session, held.now, ehr_id) {
             Bound::One(node) => vec![node],
             Bound::Several(nodes) => nodes,
             Bound::None => Vec::new(),
         };
-        if let Some(located) = among(snapshot, &bound, Step::Binding, Detection::Binding) {
-            return Ok(located);
+        if bound.iter().all(present) {
+            if let Some(located) = among(snapshot, &bound, Step::Binding, Detection::Binding) {
+                return Ok(located);
+            }
+        } else if held.bindings.forget_absent(held.session, ehr_id, present) {
+            stale(Step::Binding);
         }
     }
     let indexed = match index.lookup(ehr_id) {
@@ -152,11 +158,28 @@ pub fn located<'a>(
         Indexed::Several(nodes) => nodes,
         Indexed::None => Vec::new(),
     };
+    if !indexed.iter().all(present) {
+        if index.forget_absent(ehr_id, present) {
+            stale(Step::Index);
+        }
+        return Ok(Located::Unknown);
+    }
     Ok(among(snapshot, &indexed, Step::Index, Detection::Index).unwrap_or(Located::Unknown))
 }
 
-/// What a step naming `nodes` says, counting only the members the snapshot
-/// holds: `None` when it holds none of them.
+/// Logs that `step` held an entry naming a member the registry does not
+/// hold, which was dropped.
+fn stale(step: Step) {
+    // NOTE: §12.5.2, N42: an entry naming a departed claimant is dropped whole
+    // and never narrowed to the claimant that remains, a pick of one N42 forbids.
+    tracing::info!(
+        step = step.as_str(),
+        "a routing entry named a member the registry does not hold, and was dropped"
+    );
+}
+
+/// What a step naming `nodes`, every one a member of the snapshot, says:
+/// `None` when it names none.
 fn among<'a>(
     snapshot: &'a RegistrySnapshot,
     nodes: &[NodeId],

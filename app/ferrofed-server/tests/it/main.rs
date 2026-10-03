@@ -35,6 +35,7 @@ mod path_ehr_id;
 mod probed_ehr_id;
 mod readiness;
 mod registry_fhir;
+mod reload;
 mod request_log;
 mod resolution;
 mod routing;
