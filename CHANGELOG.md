@@ -97,6 +97,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   load is refused, the running registry stays, and the `ERROR` line names
   the failure class and the files, never their content. `config check` is
   unchanged. There is no file watch.
+- `GET {base}/v1/ehr?subject_id=…&subject_namespace=…`, the ITS-REST read of
+  an EHR by subject, is served (#218; §5.2, §5.4.1, §12.5.2, N3, N31, N33,
+  CP-24, CP-26). The two parameters are resolution input: the gateway
+  resolves the subject through the cross-reference service and sends
+  `GET {base}/v1/ehr/{ehr_id}` to the one member that holds it, under that
+  member's own `ehr_id`, with no query string, and returns the node's answer
+  unmodified with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id`. No node request, error body or log line
+  carries the subject. A subject several members hold is refused with the new
+  code `409 subject-several` listing the endpoints, unless
+  `openEHR-federation-endpoint` names one of them; a subject no member holds
+  is the operation's own `404 no-destination`; a cross-reference that cannot
+  answer is the new `424 resolution-unavailable`. `OPTIONS {base}/v1/ehr`
+  now lists `GET`.
 - Versioned writes reach only their controlling CDR, and a new EHR only an
   explicit target (#65; §12.4, §12a.1, §10.3, N23, N41, CP-15). An update of
   a composition, the `EHR_STATUS` or the directory, a directory delete (each

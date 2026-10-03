@@ -48,6 +48,9 @@
 //! the area (`federation.demographic_endpoint`); then a request whose
 //! targeting header names that endpoint goes to it by the same path, and one
 //! naming no endpoint or another is refused (§12.4, §12.6, §8.4.1, N23).
+//!
+//! `GET {base}/v1/ehr` names its EHR by subject, which the gateway resolves
+//! and routes by the resolved `ehr_id` ([`subject`]; §5.2, N33).
 
 use std::time::{Duration, Instant};
 
@@ -71,7 +74,7 @@ use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 use crate::error::{self, Code};
 use crate::facade::route::chosen::{Chooser, named};
 use crate::facade::write::{self, Write};
-use crate::facade::{follow_up, owner, security};
+use crate::facade::{follow_up, owner, security, subject};
 use crate::federation::Federation;
 
 mod chosen;
@@ -120,7 +123,8 @@ pub struct Arrived<'a> {
 ///
 /// A request in the single-node EHR area, the creation of an EHR and a
 /// request in the definition area are each routed to one node, and so is a
-/// DEMOGRAPHIC request naming the endpoint the deployment declared; every other
+/// DEMOGRAPHIC request naming the endpoint the deployment declared, and the
+/// read of an EHR by subject once the subject is resolved; every other
 /// ITS-REST path answers `501`, because the gateway does not expose that
 /// area (§7a.1, N32), and so does every path when no federation is
 /// configured. The stored-query registry, where offered, answers its own
@@ -154,6 +158,9 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
                 }
                 None => error::fixed(Code::NotImplemented, arrived.request_id),
             }
+        }
+        Lookup::Matched(matched) if subject::serves(&matched) => {
+            subject::serve(federation, arrived, &matched).await
         }
         Lookup::Matched(_) | Lookup::MethodNotAllowed { .. } | Lookup::NotFound => {
             error::fixed(Code::NotImplemented, arrived.request_id)
@@ -373,7 +380,7 @@ fn not_controlled(
 /// Teaches what `endpoint`'s answer shows: on a success, that its node holds
 /// `ehr_id` (§12.5.1 step 3), and to the follow-up routing table, the
 /// versions the read named and the answer's `ETag` names (§12.2, N21).
-fn learn(
+pub(crate) fn learn(
     federation: &Federation,
     (ehr_id, read): (&EhrId, Option<ObjectVersionId>),
     endpoint: &Endpoint,
@@ -417,7 +424,7 @@ fn refused_carriers(matched: &RouteMatch, arrived: &Arrived<'_>, logged: &str) -
 /// for a malformed value, a security event as well, and the `406` or `415` a
 /// node answers an `Accept` or a `Content-Type` it cannot serve with (RFC
 /// 9110 §12.4.1, §15.5.16).
-fn declared_refused(refusal: &Refusal, request_id: &str, logged: &str) -> Response {
+pub(crate) fn declared_refused(refusal: &Refusal, request_id: &str, logged: &str) -> Response {
     let code = match refusal {
         Refusal::Malformed(malformed) => {
             security::value_refused(malformed.carrier(), logged);
@@ -441,7 +448,7 @@ fn path_ehr_id(matched: &RouteMatch) -> Option<EhrId> {
 /// The per-node timeout and the overall budget of one routed request, the
 /// overall budget counted from its arrival (§11.5, N38).
 #[derive(Debug, Clone, Copy)]
-struct Deadlines {
+pub(crate) struct Deadlines {
     per_node: Duration,
     overall: Instant,
 }
@@ -449,7 +456,7 @@ struct Deadlines {
 impl Deadlines {
     /// The deadlines of a request to `federation` that arrived at `started`,
     /// or `None` when the overall deadline cannot be represented.
-    fn from(federation: &Federation, started: Instant) -> Option<Self> {
+    pub(crate) fn from(federation: &Federation, started: Instant) -> Option<Self> {
         let budget = federation.budget();
         Some(Self {
             per_node: budget.per_node(),
@@ -459,16 +466,21 @@ impl Deadlines {
 
     /// The instant a node asked now must have answered by: the per-node
     /// timeout, never past the overall budget.
-    fn per_node(&self) -> Instant {
+    pub(crate) fn per_node(&self) -> Instant {
         Instant::now()
             .checked_add(self.per_node)
             .map_or(self.overall, |at| at.min(self.overall))
+    }
+
+    /// The instant the overall budget runs out.
+    pub(crate) fn overall(&self) -> Instant {
+        self.overall
     }
 }
 
 /// Why a routed request has no answer of the node's to pass on.
 #[derive(Debug)]
-enum Failure {
+pub(crate) enum Failure {
     /// The gateway failed on its own side before sending.
     Internal,
     /// The node gave no answer.
@@ -483,14 +495,6 @@ async fn forward(
     budget: &Deadlines,
     logged: &str,
 ) -> Result<Forwarded, Failure> {
-    let Some(client) = federation.clients().get(endpoint.id()) else {
-        tracing::error!(
-            endpoint = %endpoint.id(),
-            request_id = logged,
-            "a registry endpoint has no node client"
-        );
-        return Err(Failure::Internal);
-    };
     let options = DispatchOptions::new(budget.per_node()).with_request_id(arrived.outbound);
     let request = ClientRequest {
         method: arrived.method.clone(),
@@ -499,8 +503,27 @@ async fn forward(
         headers: arrived.headers.clone(),
         body: arrived.body.to_vec(),
     };
+    send(federation, endpoint, request, &options, logged).await
+}
+
+/// Sends `request` to `endpoint` once, under `options`.
+pub(crate) async fn send(
+    federation: &Federation,
+    endpoint: &Endpoint,
+    request: ClientRequest,
+    options: &DispatchOptions,
+    logged: &str,
+) -> Result<Forwarded, Failure> {
+    let Some(client) = federation.clients().get(endpoint.id()) else {
+        tracing::error!(
+            endpoint = %endpoint.id(),
+            request_id = logged,
+            "a registry endpoint has no node client"
+        );
+        return Err(Failure::Internal);
+    };
     client
-        .forward(request, &options)
+        .forward(request, options)
         .await
         .map_err(Failure::Forward)
 }
@@ -565,7 +588,7 @@ async fn ask_all<'a>(
 ///
 /// The node's own `X-Request-Id` is dropped, so the response names the
 /// gateway's request id like every other answer.
-fn answered(forwarded: Forwarded) -> Response {
+pub(crate) fn answered(forwarded: Forwarded) -> Response {
     let (status, mut headers, body) = forwarded.into_parts();
     headers.remove(REQUEST_ID_HEADER);
     let mut response = Response::new(Body::from(body));
@@ -580,7 +603,7 @@ fn answered(forwarded: Forwarded) -> Response {
 /// reached the node's wire, or was meant to, still names the acting endpoint
 /// (N31). The body names the client's `request_id`, and the log the
 /// gateway's own `logged` id.
-fn failed(
+pub(crate) fn failed(
     failure: &ForwardError,
     provenance: Provenance<'_>,
     (request_id, logged): (&str, &str),
@@ -614,14 +637,14 @@ fn failed(
 /// The acting endpoint and its node's `system_id`, which every routed answer
 /// names (§7a.3, N31).
 #[derive(Debug, Clone, Copy)]
-struct Provenance<'a> {
+pub(crate) struct Provenance<'a> {
     endpoint: &'a EndpointId,
     system_id: Option<&'a str>,
 }
 
 impl<'a> Provenance<'a> {
     /// The provenance of an answer `endpoint` of `snapshot` acted for.
-    fn of(snapshot: &'a RegistrySnapshot, endpoint: &'a Endpoint) -> Self {
+    pub(crate) fn of(snapshot: &'a RegistrySnapshot, endpoint: &'a Endpoint) -> Self {
         Self {
             endpoint: endpoint.id(),
             system_id: snapshot
@@ -638,7 +661,7 @@ impl Provenance<'_> {
         clippy::expect_used,
         reason = "registry ids are ASCII letters, digits and . - _, and a system_id is an openEHR UID, so both are valid header values"
     )]
-    fn stamp(self, mut response: Response) -> Response {
+    pub(crate) fn stamp(self, mut response: Response) -> Response {
         let fields = response.headers_mut();
         let endpoint = HeaderValue::try_from(self.endpoint.as_str())
             .expect("a registry endpoint id should be a valid header value");

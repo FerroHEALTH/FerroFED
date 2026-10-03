@@ -39,6 +39,8 @@
 //! name, never to a node picked implicitly and never merged ([`route`];
 //! §7a.1, §12.6, N43), unless the stored-query registry holds it
 //! ([`stored`]; §12.7).
+//! The read of an EHR by subject resolves the subject at the gateway and is
+//! routed by the resolved `ehr_id` alone ([`subject`]; §5.2, N33).
 //! Every version a fan-out or a routed answer shows an endpoint holding
 //! teaches the follow-up routing table ([`follow_up`]; §12.2, N21).
 //! `OPTIONS {base}/` describes the whole surface, and `OPTIONS` on a sub-path
@@ -56,6 +58,7 @@ pub mod prefer;
 pub mod route;
 pub mod security;
 pub mod stored;
+pub mod subject;
 pub mod target;
 pub mod write;
 

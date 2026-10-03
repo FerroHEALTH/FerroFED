@@ -49,6 +49,17 @@ pub(super) fn stripped(query: &PatientQuery, request_id: &str) {
     }
 }
 
+/// The `subject_id` and `subject_namespace` of `GET {base}/v1/ehr` were
+/// consumed as resolution input, and no node request carries them (§5.4.3).
+pub(super) fn subject_consumed(request_id: &str) {
+    tracing::info!(
+        target: TARGET,
+        event = "subject-parameters-consumed",
+        request_id,
+        "the subject query parameters were consumed as resolution input and are carried by no node request"
+    );
+}
+
 /// A fan-out failed; when the outbound gate stopped a request, that is a
 /// security event naming the endpoint and the part of the request.
 pub(super) fn fan_out(error: &FanOutError, request_id: &str) {

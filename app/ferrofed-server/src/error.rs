@@ -48,7 +48,8 @@ pub enum Code {
     /// and never its value.
     ParameterInvalid,
     /// The query's patient identifier or namespace cannot form a patient
-    /// reference (§5.2).
+    /// reference (§5.2), or `GET {base}/v1/ehr` does not carry
+    /// `subject_id` and `subject_namespace` once each.
     PatientInvalid,
     /// The query is refused before anything is dispatched (§5.4.1, §7.1,
     /// §11.6): the code is the refusal's kind.
@@ -150,6 +151,14 @@ pub enum Code {
     /// none of the media types the ITS-REST operation takes, or a parameter
     /// other than a `utf-8` charset (RFC 9110 §8.3).
     MediaTypeUnsupported,
+    /// The subject of `GET {base}/v1/ehr` resolves at more than one member,
+    /// and no targeting header names one of them: the gateway never chooses
+    /// by where the patient resolved (§12.5.2). The body lists the endpoints.
+    SubjectSeveral,
+    /// The cross-reference service could not answer for a member, so where
+    /// the subject of `GET {base}/v1/ehr` has its EHR is unknown (§5.2,
+    /// §11.2). The body names the members, never the subject.
+    ResolutionUnavailable,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -165,7 +174,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 35] = [
+    pub const GATEWAY: [Self; 37] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -201,6 +210,8 @@ impl Code {
         Self::ParameterValueInvalid,
         Self::MediaTypeNotAcceptable,
         Self::MediaTypeUnsupported,
+        Self::SubjectSeveral,
+        Self::ResolutionUnavailable,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -252,6 +263,8 @@ impl Code {
             Self::ParameterValueInvalid => "parameter-value-invalid",
             Self::MediaTypeNotAcceptable => "media-type-not-acceptable",
             Self::MediaTypeUnsupported => "media-type-unsupported",
+            Self::SubjectSeveral => "subject-several",
+            Self::ResolutionUnavailable => "resolution-unavailable",
         }
     }
 
@@ -284,13 +297,16 @@ impl Code {
             Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
                 StatusCode::NOT_FOUND
             }
-            Self::EhrIdCollision | Self::ControllingSystemUnreachable | Self::StoredQueryHeld => {
-                StatusCode::CONFLICT
-            }
+            Self::EhrIdCollision
+            | Self::ControllingSystemUnreachable
+            | Self::StoredQueryHeld
+            | Self::SubjectSeveral => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
-            Self::NodeRefused | Self::NodeError => StatusCode::FAILED_DEPENDENCY,
+            Self::NodeRefused | Self::NodeError | Self::ResolutionUnavailable => {
+                StatusCode::FAILED_DEPENDENCY
+            }
             Self::MediaTypeNotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         }
@@ -376,6 +392,12 @@ impl Code {
             }
             Self::MediaTypeUnsupported => {
                 "the Content-Type header is not a media type the ITS-REST operation takes"
+            }
+            Self::SubjectSeveral => {
+                "the subject resolves at more than one member, and the gateway never chooses between them: name one in the openEHR-federation-endpoint header (§8.4, §12.5.2)"
+            }
+            Self::ResolutionUnavailable => {
+                "the cross-reference service could not answer, so where the subject has an EHR is unknown (§5.2, §11.2)"
             }
         }
     }
@@ -471,6 +493,8 @@ mod tests {
             Code::ParameterValueInvalid => Some(32),
             Code::MediaTypeNotAcceptable => Some(33),
             Code::MediaTypeUnsupported => Some(34),
+            Code::SubjectSeveral => Some(35),
+            Code::ResolutionUnavailable => Some(36),
         }
     }
 
@@ -553,6 +577,8 @@ mod tests {
                 Code::MediaTypeUnsupported,
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
             ),
+            (Code::SubjectSeveral, StatusCode::CONFLICT),
+            (Code::ResolutionUnavailable, StatusCode::FAILED_DEPENDENCY),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

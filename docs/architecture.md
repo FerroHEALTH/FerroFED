@@ -419,7 +419,12 @@ the specification is silent on the operation. FerroFED treats `subject_id` and
 `subject_namespace` as resolution input (§5.2), dispatches
 `GET {base}/v1/ehr/{ehr_id}` to the one node that resolved, answers `404` when
 none did, and `409` naming the claimants when several did, the N42 shape
-(decision A12; FerroFED's own; draft on #17).
+(decision A12; FerroFED's own; draft on #17). Built in #218: the targeting
+header narrows the resolution to the one endpoint it names (§8.4), which is
+how a client reads one of several holders, and a cross-reference that cannot
+answer for a member is a `424`, never the `404`, because that member may hold
+the EHR. The `404` is the operation's own: it reads one EHR resource, so
+§11.3's `200` with no rows, which answers a query, does not apply.
 
 **Per-node clients.** Each endpoint has one `rest::client::Client` built from
 the registry snapshot: its base URL, a `CredentialsProvider` for the onward
