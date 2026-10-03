@@ -19,6 +19,7 @@ use openehr_its::json::from_canonical_json;
 use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use std::time::{Duration, Instant};
+use testcontainers::core::{CmdWaitFor, ExecCommand};
 use uuid::Uuid;
 
 /// The fixed `ehr_id` the first patient has on node A.
@@ -249,5 +250,53 @@ async fn every_fault_is_injectable_per_node() {
         read_ehr(&nodes.a, FIRST_ON_A).await.unwrap().status(),
         StatusCode::OK,
         "node A still serves while node B is down"
+    );
+}
+
+/// Returns `psql` run as `role` against `database` over TCP, so the server's
+/// password authentication and its `CONNECT` privileges apply.
+fn psql_as(role: &str, database: &str) -> ExecCommand {
+    let url = format!("postgresql://{role}:{role}@127.0.0.1:5432/{database}");
+    ExecCommand::new([
+        "psql".to_owned(),
+        url,
+        "-tAc".to_owned(),
+        "SELECT 1".to_owned(),
+    ])
+    .with_cmd_ready_condition(CmdWaitFor::exit())
+}
+
+#[tokio::test]
+async fn a_node_role_is_refused_on_another_node_database() {
+    if !containers::e2e_enabled() {
+        return;
+    }
+    let nodes = containers::two_nodes().await.unwrap();
+    let server = nodes.a.node.database();
+
+    let mut own = server
+        .exec(psql_as("ferroehr_a", "ferroehr_a"))
+        .await
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&own.stderr_to_vec().await.unwrap()).into_owned();
+    assert_eq!(
+        Some(0),
+        own.exit_code().await.unwrap(),
+        "node A's role connects to its own database: {stderr}"
+    );
+
+    let mut other = server
+        .exec(psql_as("ferroehr_a", "ferroehr_b"))
+        .await
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&other.stderr_to_vec().await.unwrap()).into_owned();
+    assert_ne!(
+        Some(0),
+        other.exit_code().await.unwrap(),
+        "node A's role is refused on node B's database"
+    );
+    assert!(
+        stderr.contains("permission denied for database"),
+        "the refusal is the missing CONNECT privilege: {stderr}"
     );
 }

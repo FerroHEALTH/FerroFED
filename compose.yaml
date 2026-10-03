@@ -40,9 +40,10 @@
 # ferroehr_a to ferroehr_d, each owned by a login role of the same name whose
 # password is that name too: development credentials, NOT for anything real.
 # A database per node, never a schema per node, because FerroEHR creates fixed
-# schema names in the database it connects to. The nodes share one server and
-# its cluster-wide group roles, so the separation is the quickstart's, never a
-# security boundary.
+# schema names in the database it connects to. Each database admits only its
+# own node's role (CONNECT is revoked from PUBLIC), so one node's role is
+# refused on another node's database. The nodes still share one server, its
+# superuser and its cluster-wide group roles: no production boundary.
 #
 # PORTS. Every published port binds the loopback interface by default. A
 # published port is DNAT'd ahead of the host firewall's own chains, so a port on
