@@ -514,6 +514,22 @@ included, reaches that node byte for byte, and the node's `Location` and
 `ETag` come back unmodified. A composition or a directory created inside an
 existing EHR is routed by its path `ehr_id` like any other request under it.
 
+`PUT {base}/v1/ehr/{ehr_id}` chooses its `ehr_id`, and the gateway checks it
+against what it already knows before sending anything. When your session's
+resolution bindings or the `ehr_id` index place that `ehr_id` at a member
+other than the one you name, the request is a `409` (`ehr-id-held`), and no
+node is sent it: the create would put one `ehr_id` at two members, the
+collision of §12.5.2. The message names the holding endpoints and the one
+you named, never the `ehr_id`. When they place it at the member you name,
+the request goes there, and that node answers its own `409` for an `ehr_id`
+it already uses (ITS-REST 1.1.0 `ehr_create_with_id`). An `ehr_id` the
+gateway does not know goes to the member you name, and once that member
+answers with a success, the `ehr_id` index holds the `ehr_id` there. Two
+creates of one `ehr_id` at two members that race past the check both reach
+their nodes, and the second to succeed raises the index-insert alarm of
+§12b.2 for the federation operator; from then on a request under that
+`ehr_id` is an `ehr-id-collision` until you name the endpoint.
+
 ### Reading an EHR by subject
 
 `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` names the patient in

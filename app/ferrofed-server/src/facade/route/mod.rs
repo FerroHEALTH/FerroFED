@@ -34,7 +34,9 @@
 //! ([`write`](mod@write); §12.4, §12a.1, N23): one that does not is refused
 //! `409`, and no node is sent the write (§10.3).
 //! A new EHR has no owner, so only the targeting headers route it,
-//! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3).
+//! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3); a
+//! path `ehr_id` a binding or the index places at another member is refused
+//! `409` and sent nowhere ([`owner::held_elsewhere`]).
 //!
 //! A request under `{base}/v1/definition/` is routed by the targeting
 //! headers alone too, to exactly one endpoint, and answered as that node
@@ -196,8 +198,9 @@ pub(crate) fn in_definition_area(matched: &RouteMatch) -> bool {
 /// A write none of the first three routes is a `400` (`target-required`),
 /// and so is a read whose `ehr_id` is no bare UUID (`probe-requires-uuid`):
 /// nothing is probed. A new EHR is routed by the targeting headers alone,
-/// and a versioned write is sent only when the node controls the version it
-/// amends ([`write::controlled`]; §12.4, N23).
+/// and refused when another member holds its `ehr_id`; a versioned write is
+/// sent only when the node controls the version it amends
+/// ([`write::controlled`]; §12.4, N23).
 async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMatch) -> Response {
     let started = Instant::now();
     let request_id = arrived.request_id;
@@ -217,8 +220,11 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     let snapshot = federation.snapshot();
     let located = match locate(federation, arrived.headers, write, &ehr_id, started) {
         Ok(located) => located,
-        Err(untargeted) => {
+        Err(Unlocated::Untargeted(untargeted)) => {
             return error::response(untargeted.code(), untargeted.to_string(), request_id);
+        }
+        Err(Unlocated::HeldElsewhere(refused)) => {
+            return held_elsewhere(&refused, (request_id, &logged));
         }
     };
     let Some(budget) = Deadlines::from(federation, started) else {
@@ -318,29 +324,21 @@ fn query_refused(matched: &RouteMatch, arrived: &Arrived<'_>, logged: &str) -> O
 /// for a request that writes `write`, read at `started` (N41).
 ///
 /// A new EHR has no owner for a binding or the index to name, so only the
-/// targeting headers route it (§12.4, §8.4, N23).
+/// targeting headers route it (§12.4, §8.4, N23), and only while neither
+/// places its `ehr_id` at another member.
 ///
 /// # Errors
 ///
-/// Returns [`owner::Untargeted`] when the targeting headers name no one
-/// endpoint the registry holds (§8.4.1).
+/// Returns [`Unlocated`] when the targeting headers name no one endpoint the
+/// registry holds (§8.4.1), or another member holds a new EHR's `ehr_id`.
 fn locate<'a>(
     federation: &'a Federation,
     headers: &HeaderMap,
     write: Write,
     ehr_id: &EhrId,
     started: Instant,
-) -> Result<owner::Located<'a>, owner::Untargeted> {
-    let snapshot = federation.snapshot();
-    if write == Write::NewEhr {
-        return Ok(match owner::targeted(snapshot, headers)? {
-            Some(endpoint) => owner::Located::At {
-                endpoint,
-                step: owner::Step::Target,
-            },
-            None => owner::Located::Unknown,
-        });
-    }
+) -> Result<owner::Located<'a>, Unlocated> {
+    let (snapshot, index) = (federation.snapshot(), federation.index());
     // TODO(#80): the authenticated client session the resolution bindings belong to.
     let session: Option<SessionKey> = None;
     let held = session.as_ref().map(|session| owner::Held {
@@ -348,7 +346,43 @@ fn locate<'a>(
         session,
         now: started,
     });
-    owner::located(snapshot, headers, held, federation.index(), ehr_id)
+    if write == Write::NewEhr {
+        let Some(endpoint) = owner::targeted(snapshot, headers)? else {
+            return Ok(owner::Located::Unknown);
+        };
+        if let Some(refused) = owner::held_elsewhere(snapshot, held, index, ehr_id, endpoint) {
+            return Err(Unlocated::HeldElsewhere(refused));
+        }
+        let step = owner::Step::Target;
+        return Ok(owner::Located::At { endpoint, step });
+    }
+    Ok(owner::located(snapshot, headers, held, index, ehr_id)?)
+}
+
+/// Why a routed request is refused before its owner is located.
+#[derive(Debug, thiserror::Error)]
+enum Unlocated {
+    /// The targeting headers name no one endpoint the registry holds.
+    #[error(transparent)]
+    Untargeted(#[from] owner::Untargeted),
+    /// A new EHR's `ehr_id` is held at another member than the targeted one.
+    #[error(transparent)]
+    HeldElsewhere(owner::HeldElsewhere),
+}
+
+/// The `409` refusing a new EHR whose `ehr_id` `refused` places at another
+/// member, logged with endpoint ids only (§12.4, §5.4.3).
+fn held_elsewhere(refused: &owner::HeldElsewhere, (request_id, logged): (&str, &str)) -> Response {
+    tracing::warn!(
+        endpoint = %refused.at,
+        holders = %owner::Listed(&refused.holders),
+        detection = refused.detection.as_str(),
+        request_id = logged,
+        "a new EHR was refused: another member holds its ehr_id"
+    );
+    // NOTE: ITS-REST 1.1.0 ehr_create_with_id answers 409 for an ehr_id an EHR already uses,
+    // and N42's ehr-id-collision with its incident is for two claimants, which a refusal never makes.
+    error::response(Code::EhrIdHeld, refused.to_string(), request_id)
 }
 
 /// The refusal of a versioned write the path `ehr_id` routes to `endpoint`,

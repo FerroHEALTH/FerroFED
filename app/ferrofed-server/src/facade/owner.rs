@@ -20,9 +20,15 @@
 //! answered: one member holding the `ehr_id` owns it, two are a `409`, none is
 //! a `404`, and a member that gave no answer leaves the owner unknown, which
 //! fails the read (§11.2, §11.5). Every collision raises the integrity
-//! incident of N42 ([`collided`]). The `ehr_id` in the path is the node-local
-//! identifier N33 locates a node by, and it is the only value of the request
-//! any step reads.
+//! incident of N42 ([`collided`]).
+//!
+//! A new EHR under a path `ehr_id` goes only where the targeting headers
+//! send it (§12.4, N23), and [`held_elsewhere`] reads steps 2 and 3 for it
+//! too: an `ehr_id` either places at another member is refused before it is
+//! sent, so the create never makes the collision of §12.5.2.
+//!
+//! The `ehr_id` in the path is the node-local identifier N33 locates a node
+//! by, and it is the only value of the request any step reads.
 
 use std::fmt;
 use std::time::Instant;
@@ -138,33 +144,111 @@ pub fn located<'a>(
             step: Step::Target,
         });
     }
-    let present = |node: &NodeId| snapshot.node(node).is_some();
     if let Some(held) = held {
-        let bound = match held.bindings.lookup(held.session, held.now, ehr_id) {
-            Bound::One(node) => vec![node],
-            Bound::Several(nodes) => nodes,
-            Bound::None => Vec::new(),
-        };
-        if bound.iter().all(present) {
-            if let Some(located) = among(snapshot, &bound, Step::Binding, Detection::Binding) {
-                return Ok(located);
-            }
-        } else if held.bindings.forget_absent(held.session, ehr_id, present) {
-            stale(Step::Binding);
+        let bound = bound(snapshot, held, ehr_id);
+        if let Some(located) = among(snapshot, &bound, Step::Binding, Detection::Binding) {
+            return Ok(located);
         }
     }
-    let indexed = match index.lookup(ehr_id) {
+    let indexed = indexed(snapshot, index, ehr_id);
+    Ok(among(snapshot, &indexed, Step::Index, Detection::Index).unwrap_or(Located::Unknown))
+}
+
+/// The members a binding of the `held` session names for `ehr_id` (§12.5.1
+/// step 2), or none when the binding names a member the snapshot does not
+/// hold, which is dropped whole.
+fn bound(snapshot: &RegistrySnapshot, held: Held<'_>, ehr_id: &EhrId) -> Vec<NodeId> {
+    let present = |node: &NodeId| snapshot.node(node).is_some();
+    let nodes = match held.bindings.lookup(held.session, held.now, ehr_id) {
+        Bound::One(node) => vec![node],
+        Bound::Several(nodes) => nodes,
+        Bound::None => Vec::new(),
+    };
+    if nodes.iter().all(present) {
+        return nodes;
+    }
+    if held.bindings.forget_absent(held.session, ehr_id, present) {
+        stale(Step::Binding);
+    }
+    Vec::new()
+}
+
+/// The members the index holds `ehr_id` at (§12.5.1 step 3), or none when
+/// its entry names a member the snapshot does not hold, which is dropped
+/// whole.
+fn indexed(snapshot: &RegistrySnapshot, index: &EhrIndex, ehr_id: &EhrId) -> Vec<NodeId> {
+    let present = |node: &NodeId| snapshot.node(node).is_some();
+    let nodes = match index.lookup(ehr_id) {
         Indexed::One(node) => vec![node],
         Indexed::Several(nodes) => nodes,
         Indexed::None => Vec::new(),
     };
-    if !indexed.iter().all(present) {
-        if index.forget_absent(ehr_id, present) {
-            stale(Step::Index);
-        }
-        return Ok(Located::Unknown);
+    if nodes.iter().all(present) {
+        return nodes;
     }
-    Ok(among(snapshot, &indexed, Step::Index, Detection::Index).unwrap_or(Located::Unknown))
+    if index.forget_absent(ehr_id, present) {
+        stale(Step::Index);
+    }
+    Vec::new()
+}
+
+/// Refuses a new EHR whose `ehr_id` a held binding or the index places at a
+/// member other than `at`'s.
+///
+/// `at` is the endpoint the targeting headers name, and `None` means neither
+/// step places the `ehr_id` elsewhere. Only the steps after the explicit
+/// target are read, never the ask-all probe, because a write is never probed
+/// for (§12.5.1, N41). A step that places the `ehr_id` at `at` alone lets the
+/// create through: that node answers its own ITS-REST `409` for an `ehr_id`
+/// it holds. An entry naming a member the snapshot does not hold is dropped
+/// whole, as [`located`] drops it, and places the `ehr_id` nowhere.
+#[must_use]
+pub fn held_elsewhere(
+    snapshot: &RegistrySnapshot,
+    held: Option<Held<'_>>,
+    index: &EhrIndex,
+    ehr_id: &EhrId,
+    at: &Endpoint,
+) -> Option<HeldElsewhere> {
+    let elsewhere = |nodes: Vec<NodeId>, detection| {
+        let others: Vec<NodeId> = nodes.into_iter().filter(|node| node != at.node()).collect();
+        (!others.is_empty()).then(|| HeldElsewhere {
+            holders: others
+                .iter()
+                .filter_map(|node| endpoint_of(snapshot, node))
+                .map(|endpoint| endpoint.id().clone())
+                .collect(),
+            detection,
+            at: at.id().clone(),
+        })
+    };
+    if let Some(held) = held
+        && let Some(refused) = elsewhere(bound(snapshot, held, ehr_id), Detection::Binding)
+    {
+        return Some(refused);
+    }
+    elsewhere(indexed(snapshot, index, ehr_id), Detection::Index)
+}
+
+/// Why a new EHR is not created under its path `ehr_id` at the endpoint the
+/// targeting headers name (§12.4, §12.5.2; ITS-REST 1.1.0
+/// `ehr_create_with_id`).
+///
+/// The message names registry endpoint ids only, never the `ehr_id` or
+/// another value of the request (§5.4.3).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "a new EHR under this ehr_id is not created at endpoint {at}: {detection} already places the ehr_id at endpoints {}, and one ehr_id at two members is the collision the gateway never lets arise (ITS-REST 1.1.0 ehr_create_with_id; §12.4, §12.5.2, N42)",
+    Listed(.holders)
+)]
+pub struct HeldElsewhere {
+    /// The endpoint each other member holding the `ehr_id` is reached
+    /// through, in `node_id` order.
+    pub holders: Vec<EndpointId>,
+    /// The step of §12.5.1 that places the `ehr_id` there.
+    pub detection: Detection,
+    /// The endpoint the targeting headers name.
+    pub at: EndpointId,
 }
 
 /// Logs that `step` held an entry naming a member the registry does not
@@ -211,14 +295,19 @@ fn among<'a>(
 /// holds no such member.
 fn member<'a>(snapshot: &'a RegistrySnapshot, node: &NodeId, step: Step) -> Option<Located<'a>> {
     snapshot.node(node)?;
-    let reached = reached_through(snapshot, node).or_else(|| {
+    Some(match endpoint_of(snapshot, node) {
+        Some(endpoint) => Located::At { endpoint, step },
+        None => Located::Unreachable { step },
+    })
+}
+
+/// The endpoint a member is named by: the one it is asked through, or its
+/// first endpoint in `endpoint_id` order when every one is suspended.
+fn endpoint_of<'a>(snapshot: &'a RegistrySnapshot, node: &NodeId) -> Option<&'a Endpoint> {
+    reached_through(snapshot, node).or_else(|| {
         snapshot
             .endpoints()
             .find(|endpoint| endpoint.node() == node)
-    });
-    Some(match reached {
-        Some(endpoint) => Located::At { endpoint, step },
-        None => Located::Unreachable { step },
     })
 }
 

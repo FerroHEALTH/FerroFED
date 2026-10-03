@@ -23,6 +23,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- `PUT {base}/v1/ehr/{ehr_id}` is checked against what the gateway already
+  knows of the `ehr_id` before anything is sent (#289; §12.4, §12.5.2, N23,
+  N42, CP-15; ITS-REST 1.1.0 `ehr_create_with_id`). When a resolution
+  binding of the session or the `ehr_id` index places the `ehr_id` at a
+  member other than the one the targeting headers name, the create is a
+  `409` with the new code `ehr-id-held`, no node is sent it, and the
+  gateway logs a warning naming endpoint ids only; the message names the
+  holding endpoints and the targeted one, never the `ehr_id`. A create at
+  the member that holds the `ehr_id` is forwarded, so that node answers its
+  own `409`, and an `ehr_id` nothing places is forwarded as before and,
+  once created, indexed at the targeted member, where a racing create at
+  another member raises the index-insert alarm of §12b.2.
 - The federated AQL answer carries the provenance headers (#288; §7a.3,
   N31, CP-24). `openEHR-federation-endpoint` lists the endpoints that
   contributed rows and `openEHR-federation-system-id` their nodes'

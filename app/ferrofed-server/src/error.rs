@@ -160,6 +160,12 @@ pub enum Code {
     /// the subject of `GET {base}/v1/ehr` has its EHR is unknown (§5.2,
     /// §11.2). The body names the members, never the subject.
     ResolutionUnavailable,
+    /// `PUT {base}/v1/ehr/{ehr_id}` targets one member while a resolution
+    /// binding or the `ehr_id` index places the `ehr_id` at another, so the
+    /// EHR is created nowhere (§12.4, §12.5.2; ITS-REST 1.1.0
+    /// `ehr_create_with_id`). The body names the endpoints, never the
+    /// `ehr_id`.
+    EhrIdHeld,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -175,7 +181,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 37] = [
+    pub const GATEWAY: [Self; 38] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -213,6 +219,7 @@ impl Code {
         Self::MediaTypeUnsupported,
         Self::SubjectSeveral,
         Self::ResolutionUnavailable,
+        Self::EhrIdHeld,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -266,6 +273,7 @@ impl Code {
             Self::MediaTypeUnsupported => "media-type-unsupported",
             Self::SubjectSeveral => "subject-several",
             Self::ResolutionUnavailable => "resolution-unavailable",
+            Self::EhrIdHeld => "ehr-id-held",
         }
     }
 
@@ -301,7 +309,8 @@ impl Code {
             Self::EhrIdCollision
             | Self::ControllingSystemUnreachable
             | Self::StoredQueryHeld
-            | Self::SubjectSeveral => StatusCode::CONFLICT,
+            | Self::SubjectSeveral
+            | Self::EhrIdHeld => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
@@ -400,6 +409,9 @@ impl Code {
             Self::ResolutionUnavailable => {
                 "the cross-reference service could not answer, so where the subject has an EHR is unknown (§5.2, §11.2)"
             }
+            Self::EhrIdHeld => {
+                "the ehr_id is already held at another member, so no EHR is created under it at the endpoint named (§12.4, §12.5.2)"
+            }
         }
     }
 }
@@ -496,6 +508,7 @@ mod tests {
             Code::MediaTypeUnsupported => Some(34),
             Code::SubjectSeveral => Some(35),
             Code::ResolutionUnavailable => Some(36),
+            Code::EhrIdHeld => Some(37),
         }
     }
 
@@ -580,6 +593,7 @@ mod tests {
             ),
             (Code::SubjectSeveral, StatusCode::CONFLICT),
             (Code::ResolutionUnavailable, StatusCode::FAILED_DEPENDENCY),
+            (Code::EhrIdHeld, StatusCode::CONFLICT),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {
