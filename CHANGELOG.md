@@ -322,6 +322,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The book's client contract and configuration pages are split along their
+  own sections (#348): the client contract continues on Follow-ups,
+  Templates, definitions and demographics, and Stored queries, and the
+  configuration on The registry, and Queries and API areas. The file-length
+  guard now holds the book's Markdown pages to the same limits as the Rust
+  sources.
 - A node's error in `meta.federation.endpoints[]` follows one rule on every
   path that reports a member: a federated query, the fan-out template upload
   and the stored-query distribution and drift check (#343; §9.5, §11.1,

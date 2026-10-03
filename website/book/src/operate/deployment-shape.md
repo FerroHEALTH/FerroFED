@@ -44,7 +44,7 @@ FerroFED's own design: the registry is a reviewed TOML document, loaded at boot
 into an immutable snapshot, and the resolution bindings of each client session
 are held in memory with a bounded lifetime. The stored-query registry is the
 one durable store: an embedded `redb` file at the path
-[`[stored_queries]`](configuration.md#stored-queries) names, opened by one
+[`[stored_queries]`](queries-and-areas.md#stored-queries) names, opened by one
 gateway process at a time, holding parameterised AQL and never a patient
 identifier.
 

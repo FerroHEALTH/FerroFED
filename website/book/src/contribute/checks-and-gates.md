@@ -30,7 +30,7 @@ The first tier runs on every change, because it needs no Rust:
 | shellcheck | every first-party shell script |
 | hadolint | every first-party Dockerfile |
 | comment-style | the comment budgets of the Rust sources |
-| file-length | no hand-written Rust file over 1000 lines |
+| file-length | no hand-written Rust file or book page over 1000 lines |
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |
 | favicon-sync | the book's favicons match the brand mark |
 | conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
@@ -52,6 +52,7 @@ the crate-version guard and dependency review run on pull requests only.
 bash scripts/checks/versions.sh --self-test
 bash scripts/checks/versions.sh
 bash scripts/checks/comment-style.sh --all
+bash scripts/checks/file-length.sh --self-test
 bash scripts/checks/file-length.sh
 bash scripts/checks/favicon-sync.sh
 bash scripts/checks/conformance-matrix.sh
