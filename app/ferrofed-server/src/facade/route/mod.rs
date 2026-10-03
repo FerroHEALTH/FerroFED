@@ -55,7 +55,7 @@ use std::time::{Duration, Instant};
 use axum::body::{Body, Bytes};
 use axum::response::Response;
 use ferrofed_engine::declared::Refusal;
-use ferrofed_engine::dispatch::{DispatchOptions, REQUEST_ID_HEADER};
+use ferrofed_engine::dispatch::{Contact, DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EhrId;
@@ -344,8 +344,9 @@ pub(crate) async fn send(
     };
     let started = Instant::now();
     let forwarded = client.forward_held(request, options).await;
-    let dependencies = federation.dependencies();
-    dependencies.forwarded(endpoint.id(), &forwarded);
+    federation
+        .dependencies()
+        .contacted(endpoint.id(), Contact::of_forwarded(&forwarded));
     federation
         .requests()
         .forwarded(endpoint.id(), &forwarded, started.elapsed());

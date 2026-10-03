@@ -16,10 +16,11 @@ use std::error::Error;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::definition::{DefinitionAt, NodeCopy};
-use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
+use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClient};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
+use http::StatusCode;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::ReqwestTransport;
@@ -92,10 +93,11 @@ fn error_text(outcome: &Outcome) -> Result<&str, Box<dyn Error>> {
 #[tokio::test]
 async fn a_stored_definition_is_active_and_the_node_receives_the_aql_as_text() -> TestResult {
     let server = node("PUT", 200, "").await;
-    let outcome = client_at(&server.uri())?
+    let stored = client_at(&server.uri())?
         .store_definition(AT, AQL, &options()?)
         .await?;
-    assert_eq!(EndpointStatus::Active, outcome.status());
+    assert_eq!(EndpointStatus::Active, stored.outcome.status());
+    assert_eq!(Contact::Answered(StatusCode::OK), stored.contact);
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let [only] = requests.as_slice() else {
         return Err("one request".into());
@@ -120,13 +122,22 @@ async fn a_refused_store_is_a_node_error_with_the_status_and_the_nodes_message()
     ] {
         let body = format!(r#"{{"message":"{NODE_BODY}"}}"#);
         let server = node("PUT", status, &body).await;
-        let outcome = client_at(&server.uri())?
+        let stored = client_at(&server.uri())?
             .store_definition(AT, AQL, &options()?)
             .await?;
-        assert_eq!(EndpointStatus::NodeError, outcome.status(), "{status}");
+        assert_eq!(
+            EndpointStatus::NodeError,
+            stored.outcome.status(),
+            "{status}"
+        );
+        assert_eq!(
+            Contact::Answered(StatusCode::from_u16(status)?),
+            stored.contact,
+            "the node's own status beside the record"
+        );
         assert_eq!(
             format!("the node answered {named}: {NODE_BODY}"),
-            error_text(&outcome)?,
+            error_text(&stored.outcome)?,
             "§9.5, §11.1: the node's status, then its own message"
         );
     }
@@ -162,18 +173,24 @@ async fn a_copy_that_is_no_stored_query_or_a_node_out_of_reach_is_failed() -> Te
     let read = client_at(&server.uri())?
         .read_definition(AT, &options()?)
         .await?;
-    let NodeCopy::Failed { outcome } = read else {
+    let NodeCopy::Failed { outcome, contact } = read else {
         return Err(format!("a failed read, not {read:?}").into());
     };
     assert_eq!(EndpointStatus::NodeError, outcome.status());
+    assert_eq!(
+        Contact::Answered(StatusCode::OK),
+        contact,
+        "the node answered"
+    );
     assert!(!error_text(&outcome)?.contains(NODE_BODY), "no node body");
 
     let read = client_at(&format!("{}/openehr", unreachable::BASE))?
         .read_definition(AT, &options()?)
         .await?;
-    let NodeCopy::Failed { outcome } = read else {
+    let NodeCopy::Failed { outcome, contact } = read else {
         return Err(format!("a failed read, not {read:?}").into());
     };
     assert_eq!(EndpointStatus::Offline, outcome.status(), "§11.1");
+    assert_eq!(Contact::Silent, contact, "no answer");
     Ok(())
 }

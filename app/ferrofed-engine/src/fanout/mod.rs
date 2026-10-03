@@ -70,7 +70,7 @@ use openehr_its::rest::generated::query::{
 };
 use tokio::task::{JoinError, JoinSet};
 
-use crate::dispatch::{DispatchError, DispatchOptions, NodeClients, NodeQuery, NodeReply};
+use crate::dispatch::{Contact, DispatchError, DispatchOptions, NodeClients, NodeQuery, NodeReply};
 use crate::hygiene::Withheld;
 use crate::outbound_id::OutboundId;
 
@@ -410,6 +410,7 @@ pub struct FederatedAnswer {
     rows: Vec<ResultSetRow>,
     attributes: Vec<Vec<String>>,
     seen: Vec<(EndpointId, ObjectVersionId)>,
+    contacts: BTreeMap<EndpointId, Contact>,
 }
 
 impl FederatedAnswer {
@@ -461,6 +462,16 @@ impl FederatedAnswer {
         self.seen
             .iter()
             .map(|(endpoint, version)| (endpoint, version))
+    }
+
+    /// What the request to each endpoint the plan dispatched to showed of
+    /// the node, in endpoint id order: its own HTTP status where it answered,
+    /// which the §11.1 record in [`FederatedAnswer::federation`] carries only
+    /// as text. An endpoint settled with no request has none.
+    pub fn contacts(&self) -> impl Iterator<Item = (&EndpointId, Contact)> {
+        self.contacts
+            .iter()
+            .map(|(endpoint, contact)| (endpoint, *contact))
     }
 
     /// The federated ITS-REST `RESULT_SET` of this answer, with the façade's
@@ -651,19 +662,22 @@ where
         }
     }
     let abandoned_ms = whole_ms(dispatched.elapsed());
+    let mut contacts = BTreeMap::new();
     let mut records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)> = settled
         .into_iter()
         .map(|(endpoint, outcome)| (endpoint, (outcome, None)))
         .collect();
     for (endpoint, reply) in order.into_iter().zip(replies) {
+        let contact = reply.as_ref().map_or(Contact::Silent, NodeReply::contact);
         let record = match reply {
             Some(NodeReply::Answered {
                 result_set,
                 latency_ms,
             }) => (Outcome::Active { latency_ms }, Some(result_set.rows)),
-            Some(NodeReply::Failed { outcome }) => (outcome, None),
+            Some(NodeReply::Failed { outcome, .. }) => (outcome, None),
             None => (abandoned(abandoned_ms, budget.overall()), None),
         };
+        contacts.insert(endpoint.clone(), contact);
         records.insert(endpoint, record);
     }
     let shaping = answer::Shaping {
@@ -672,7 +686,9 @@ where
         dedup,
         attributes: &attributes,
     };
-    answer::answer(snapshot, records, shaping, budget, completion)
+    let mut answer = answer::answer(snapshot, records, shaping, budget, completion)?;
+    answer.contacts = contacts;
+    Ok(answer)
 }
 
 /// The `time-out` of a node still outstanding when the overall budget ran out

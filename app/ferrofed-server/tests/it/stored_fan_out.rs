@@ -640,6 +640,25 @@ async fn a_distribution_records_each_members_state_on_the_dependencies() -> Test
 }
 
 #[tokio::test]
+async fn a_distribution_member_refusing_with_a_4xx_is_up() -> TestResult {
+    let (a, b, c) = (storing(400).await, storing(409).await, storing(503).await);
+    let dir = tempfile::tempdir()?;
+    let app = offered(dir.path(), [&a, &b, &c])?;
+    let (status, text) = call(app.clone(), put(&definition(), Some("*"))?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
+    assert_eq!(
+        states(&[
+            ("node-a-pub", "up"),
+            ("node-b-pub", "up"),
+            ("node-c-pub", "failing"),
+        ]),
+        observed(&app).await?,
+        "a refused store is an answer; only a server error is a failure"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_drift_check_records_a_drifted_member_as_up_and_a_failing_one_as_failing() -> TestResult {
     let differing = format!("SELECT c/name/value FROM EHR e CONTAINS COMPOSITION c -- {NODE_COPY}");
     let a = holding(&differing).await?;

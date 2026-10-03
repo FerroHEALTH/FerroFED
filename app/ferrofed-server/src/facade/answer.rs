@@ -14,14 +14,13 @@ use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use ferrofed_engine::fanout::{Budget, Completion, FanOutError, fan_out_within};
+use ferrofed_engine::fanout::{Budget, Completion, FanOutError, FederatedAnswer, fan_out_within};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::Analysis;
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::dedup::DedupMode;
-use openehr_federation::meta::FederationMeta;
 use openehr_its::rest::generated::query::ResultSet;
 use openehr_its::rest::runtime::ApiError;
 
@@ -239,12 +238,22 @@ fn remember(federation: &Federation, session: Option<&SessionKey>, targets: &pla
     }
 }
 
-/// Records what a fan-out's per-endpoint report shows of each member it
-/// asked: its last state for the health surface, and its request for the
-/// metrics surface.
-fn observed(federation: &Federation, report: &FederationMeta) {
-    federation.dependencies().fan_out(report);
-    federation.requests().report(report);
+/// Records what a fan-out showed of each member it dispatched to: its last
+/// state for the health surface, read from the node's own answer, and its
+/// request for the metrics surface, read from its §11.1 record.
+fn observed(federation: &Federation, answer: &FederatedAnswer) {
+    let records = answer.federation().endpoints();
+    for (endpoint, contact) in answer.contacts() {
+        federation.dependencies().contacted(endpoint, contact);
+        let record = records
+            .iter()
+            .find(|record| record.id().as_str() == endpoint.as_str());
+        if let Some(record) = record {
+            federation
+                .requests()
+                .settled(endpoint, record.outcome(), contact);
+        }
+    }
 }
 
 /// Runs one federated query and returns the status, the `RESULT_SET`, and
@@ -331,7 +340,7 @@ async fn federate(
         security::fan_out(&error, request_id);
         Failure::FanOut(error)
     })?;
-    observed(federation, answer.federation());
+    observed(federation, &answer);
     follow_up::observe(federation, answer.seen(), request_id);
     let mut status = answer.status();
     // NOTE: no specification governs this (§11.3 covers only an answered lookup):

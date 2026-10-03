@@ -10,20 +10,19 @@
 //! request routed to one node and an ask-all probe have no per-endpoint
 //! report, so their outcome is read the same way from the node's answer: a
 //! server error or a refusal of the gateway's onward credentials is
-//! `node-error`. Every request counted is timed. A routed request or a probe
-//! the gateway never sent is neither, and a per-endpoint report that marks a
-//! request the gateway could not send `offline` is counted as it reports it.
-//! The `endpoint` label is an endpoint id of the registry snapshot the
+//! `node-error`. Every request counted is timed, and a request that never
+//! left the gateway is neither counted nor timed, whatever its §11.1 record
+//! says of it. The `endpoint` label is an endpoint id of the registry snapshot the
 //! request ran on, never anything a request carries.
 
 use std::collections::BTreeSet;
 use std::time::Duration;
 
+use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::probe::{Answer, Probed};
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
-use openehr_federation::meta::FederationMeta;
 use openehr_federation::outcome::Outcome;
 use openehr_federation::status::EndpointStatus;
 use opentelemetry::KeyValue;
@@ -88,21 +87,17 @@ impl NodeRequests {
         self.instruments.as_ref()
     }
 
-    /// Records every request a fan-out sent, from the per-endpoint report
-    /// `meta.federation` carries (§9.5, §11.1).
-    pub fn report(&self, federation: &FederationMeta) {
-        for outcome in federation.endpoints() {
-            // NOTE: no specification governs this: our own design; an id the
-            // registry would refuse names no endpoint here, so it is not counted.
-            if let Ok(endpoint) = EndpointId::new(outcome.id().as_str()) {
-                self.settled(&endpoint, outcome.outcome());
-            }
-        }
-    }
-
     /// Records the request to `endpoint` that ended as `outcome` in a
-    /// per-member record, when a request was sent.
-    pub fn settled(&self, endpoint: &EndpointId, outcome: &Outcome) {
+    /// per-member record, when `contact` says it left the gateway.
+    ///
+    /// A member record reports a request the gateway could not send as
+    /// `offline` with a `latency_ms`, so the record alone cannot tell it
+    /// from a node that was not reached; `contact` can, and such a request
+    /// is not counted.
+    pub fn settled(&self, endpoint: &EndpointId, outcome: &Outcome, contact: Contact) {
+        if !contact.sent() {
+            return;
+        }
         if let Some(latency_ms) = outcome.latency_ms() {
             self.count(
                 endpoint,

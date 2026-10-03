@@ -296,7 +296,9 @@ pub(crate) async fn ask_all<'a>(
         if let Answer::Failed(ForwardError::Withheld { part, .. }) = &probed.answer {
             security::forward_withheld(endpoint, *part, logged);
         }
-        federation.dependencies().probed(endpoint, &probed.answer);
+        federation
+            .dependencies()
+            .contacted(endpoint, probed.contact());
         federation.requests().probed(endpoint, probed);
     }
     let answers = answers

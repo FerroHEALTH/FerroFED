@@ -38,17 +38,17 @@
 //! `meta.federation`, `active` where the copy matches (§12.7
 //! stored-query-drift). No node's text is copied into it.
 //!
-//! Each member's state is recorded on `GET /health/dependencies`: a
-//! distribution reads it from the §11.1 status, and a drift check reads a
-//! copy held or missing as an answer, whether or not it matches.
+//! Each member's state is recorded on `GET /health/dependencies` from the
+//! node's own answer, whatever the §11.1 record says: a refused store or a
+//! copy that differs or is missing is an answer, and the member is `up`.
 
 use std::collections::BTreeSet;
 use std::time::Instant;
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use ferrofed_engine::dispatch::DispatchError;
 use ferrofed_engine::dispatch::definition::{DefinitionAt, NodeCopy};
+use ferrofed_engine::dispatch::{Contact, DispatchError};
 use ferrofed_registry::definition::StoredDefinition;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::Endpoint;
@@ -68,12 +68,11 @@ use super::{Refused, its_rest};
 use crate::error::Code;
 use crate::facade::provenance::Provenance;
 use crate::facade::route::fan_out::{
-    self, answer_status, each, not_sent, observed, record_meta, settled,
+    self, answer_status, contact, each, not_sent, observed, record_meta, settled,
 };
 use crate::facade::route::{Arrived, Deadlines};
 use crate::facade::security;
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
 use ferrofed_engine::outbound_id::OutboundId;
 
 /// The `code` of a member whose copy differs from the registry's.
@@ -225,16 +224,15 @@ pub(super) async fn distribute(
     .await;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
-        // NOTE: no specification governs this: our own design; a stored
-        // definition's §11.1 status is read as a fan-out query's is.
-        observed(federation, endpoint.id(), &sent, |stored| match stored {
-            Ok(outcome) => Observed::of_status(outcome.status()),
-            Err(_unsent) => None,
+        let reached = contact(&sent, |stored| match stored {
+            Ok(stored) => stored.contact,
+            Err(_unsent) => Contact::Unsent,
         });
-        let outcome = settled(sent, latency_ms, |stored, latency_ms| {
-            stored.unwrap_or_else(|failure| unsent(endpoint, &failure, latency_ms, &logged))
+        let outcome = settled(sent, latency_ms, |stored, latency_ms| match stored {
+            Ok(stored) => stored.outcome,
+            Err(failure) => unsent(endpoint, &failure, latency_ms, &logged),
         });
-        federation.requests().settled(endpoint.id(), &outcome);
+        observed(federation, endpoint.id(), reached, &outcome);
         outcomes.push((endpoint.id(), outcome));
     }
     tracing::info!(
@@ -294,15 +292,15 @@ pub(super) async fn drift(
     .await;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
-        observed(federation, endpoint.id(), &sent, |copy| match copy {
-            Ok(copy) => Observed::of_copy(copy),
-            Err(_unsent) => None,
+        let reached = contact(&sent, |copy| match copy {
+            Ok(copy) => copy.contact(),
+            Err(_unsent) => Contact::Unsent,
         });
         let outcome = settled(sent, latency_ms, |copy, latency_ms| match copy {
             Ok(copy) => compared(definition.aql(), copy),
             Err(failure) => unsent(endpoint, &failure, latency_ms, &logged),
         });
-        federation.requests().settled(endpoint.id(), &outcome);
+        observed(federation, endpoint.id(), reached, &outcome);
         outcomes.push((endpoint.id(), outcome));
     }
     tracing::info!(
@@ -353,7 +351,7 @@ fn compared(aql: &str, copy: NodeCopy) -> Outcome {
                 "the node holds no copy of this version: it answered 404 Not Found",
             ),
         },
-        NodeCopy::Failed { outcome } => outcome,
+        NodeCopy::Failed { outcome, .. } => outcome,
     }
 }
 

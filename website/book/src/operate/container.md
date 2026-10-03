@@ -67,15 +67,27 @@ with one node would turn one CDR outage into a total outage. Their state is on
 ```
 
 Each state is the one the last request the gateway made for a client
-observed: `up` (it answered), `failing` (it answered with a failure), `down`
-(unreachable, or no answer in time), or `unknown` (no request has reached it
-since the registry was loaded or reloaded). The gateway sends no request of its
-own to find out. Every call that sends a request to a member updates it: a
-federated query, a request routed to one node, the ask-all probe, a fan-out
-template upload, and a stored-query distribution or drift check. A drift
-check that finds a member's copy different or missing records the member
-`up`, because it answered. A resolution updates `resolver`. `resolver` is absent when no resolver is configured. The body
-names endpoint ids and states only, never a URL, a credential or a body.
+observed, and it reports the member's reachability and health, never whether
+that request was valid:
+
+| State | The last request |
+|---|---|
+| `up` | got an answer below `500`, a refusal such as `400`, `401`, `404` or `409` included |
+| `failing` | got a `5xx` answer |
+| `down` | got no answer: the member could not be reached, or did not answer in time |
+| `unknown` | none has reached the member since the registry was loaded or reloaded |
+
+The state reads the node's own HTTP status, whatever the call's §11.1 record
+in `meta.federation` says: a query member that answered `400` is
+`node-error` there and `up` here. The gateway sends no request of its own to
+find out, and a request that never left the gateway changes nothing. Every
+call that sends a request to a member updates it: a federated query, a
+request routed to one node, the ask-all probe, a fan-out template upload, and
+a stored-query distribution, repair or drift check. A drift check that finds
+a member's copy different or missing records the member `up`, because it
+answered. A resolution updates `resolver`, which is absent when no resolver
+is configured. The body names endpoint ids and states only, never a URL, a
+credential or a body.
 
 ## Kubernetes
 

@@ -10,23 +10,34 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+use std::collections::BTreeMap;
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
+use ferrofed_engine::dispatch::NodeClients;
+use ferrofed_engine::fanout::Budget;
+use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_server::federation::Federation;
+use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
-use openehr_federation::headers::COMPLETENESS;
+use openehr_federation::aql::{Context, Targeting};
+use openehr_federation::headers::{COMPLETENESS, ENDPOINT};
+use openehr_federation::id::FederationId;
+use openehr_its::rest::client::ReqwestTransport;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     EHR_A, EHR_B, body, crossref, node_answering, node_failing, patient_query, registry,
+    settings_with_room,
 };
-use crate::metrics::{Metered, count, value};
+use crate::metrics::{Metered, count, parse, value};
 use crate::path_ehr_id::{holder, stranger};
-use crate::support::{SLACK, call, millis};
+use crate::support::{SLACK, call, millis, observed, states};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -252,6 +263,84 @@ async fn a_probe_past_its_deadline_is_a_time_out_timed_to_the_deadline() -> Test
     assert!(
         waited < bound.as_secs_f64(),
         "the probe is never waited on past its deadline: {waited}"
+    );
+    Ok(())
+}
+
+/// The ADL 1.4 template collection (ITS-REST Definition API).
+const ADL14: &str = "/v1/definition/template/adl1.4";
+
+/// The registry document of node A at `a` alone.
+fn only_node_a(a: &str) -> String {
+    format!(
+        "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\n\
+         system_id = \"cdr-a.example.org\"\n\n[[endpoint]]\nid = \"node-a-pub\"\nnode = \"node-a\"\n\
+         url = \"{a}\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n"
+    )
+}
+
+#[tokio::test]
+async fn a_member_request_that_never_left_the_gateway_is_neither_counted_nor_timed() -> TestResult {
+    let a = Server::start().await;
+    Mock::given(method("POST"))
+        .and(path(ADL14))
+        .respond_with(ResponseTemplate::new(201))
+        .mount(&a)
+        .await;
+    let b = Server::start().await;
+    let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
+    let only_a = RegistrySnapshot::from_toml_str(&only_node_a(&a.uri()))?;
+    let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
+    // Node B has no client, so the gateway sends it nothing.
+    let clients = NodeClients::from_snapshot(&only_a, &transport, &BTreeMap::new())?;
+    let federation = Federation::new(
+        FederationId::new("example-federation")?,
+        snapshot,
+        clients,
+        None,
+        Context::new(Targeting::AskAll),
+        Budget::new(Duration::from_secs(2), Duration::from_secs(3))?,
+    )
+    .with_template_fan_out(true);
+    let state = Arc::new(AppState::with_federation(federation));
+    let app = ferrofed_server::router(Arc::clone(&state), &settings_with_room());
+    let template = "<template><template_id><value>synthetic.t.v1</value></template_id></template>";
+    let upload = Request::post(ADL14)
+        .header(header::CONTENT_TYPE, "application/xml")
+        .header(ENDPOINT, "*")
+        .body(Body::from(template))?;
+    let (status, text) = call(app.clone(), upload).await?;
+    assert_eq!(StatusCode::MULTI_STATUS, status, "{text}");
+    assert!(
+        text.contains(r#""id":"node-b-pub""#) && text.contains(r#""status":"offline""#),
+        "§11.1: the per-member record still reports node B: {text}"
+    );
+    assert!(
+        b.received_requests()
+            .await
+            .ok_or("recording is on")?
+            .is_empty()
+    );
+
+    let samples = parse(&state.metrics().render()?)?;
+    assert_eq!(
+        Some("1".to_owned()),
+        count(
+            &samples,
+            REQUESTS,
+            &[("endpoint", "node-a-pub"), ("outcome", "active")]
+        ),
+        "{samples:?}"
+    );
+    let about_b = samples
+        .iter()
+        .filter(|sample| sample.labels.get("endpoint").map(String::as_str) == Some("node-b-pub"))
+        .count();
+    assert_eq!(0, about_b, "no request left for node B: {samples:?}");
+    assert_eq!(
+        states(&[("node-a-pub", "up"), ("node-b-pub", "unknown")]),
+        observed(&app).await?,
+        "nothing was observed of node B"
     );
     Ok(())
 }

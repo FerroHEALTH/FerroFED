@@ -30,7 +30,7 @@ use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::Transport;
 use tokio::task::{JoinError, JoinSet};
 
-use crate::dispatch::{DispatchOptions, NodeClients};
+use crate::dispatch::{Contact, DispatchOptions, NodeClients};
 use crate::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 use crate::outbound_id::OutboundId;
 
@@ -62,6 +62,22 @@ pub struct Probed {
     /// member's answer or failure, or, for an [`Answer::Abandoned`] probe,
     /// to the moment the overall budget ran out.
     pub latency: Duration,
+}
+
+impl Probed {
+    /// Returns what the probe showed of the member: its status where it
+    /// answered, [`Contact::Silent`] where it gave no answer or was
+    /// abandoned, and [`Contact::Unsent`] where the probe never left.
+    #[must_use]
+    pub fn contact(&self) -> Contact {
+        match &self.answer {
+            Answer::Holds(forwarded) => Contact::Answered(forwarded.status()),
+            Answer::Absent => Contact::Answered(StatusCode::NOT_FOUND),
+            Answer::Erred(status) => Contact::Answered(*status),
+            Answer::Failed(error) => Contact::of_forward_error(error),
+            Answer::Abandoned => Contact::Silent,
+        }
+    }
 }
 
 /// A probe that could not be run.

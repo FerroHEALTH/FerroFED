@@ -129,6 +129,7 @@ pub(super) fn answer(
             .into_iter()
             .map(|((endpoint, _), version)| (endpoint, version))
             .collect(),
+        contacts: BTreeMap::new(),
     })
 }
 

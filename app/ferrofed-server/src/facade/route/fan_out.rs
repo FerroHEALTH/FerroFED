@@ -26,9 +26,10 @@
 //! provenance headers name the members that accepted (§7a.3, N31).
 //!
 //! What each member showed of itself is recorded on `GET
-//! /health/dependencies` as a routed request records it ([`observed`]).
+//! /health/dependencies` as a routed request records it, and each request
+//! that left the gateway in the node request metrics ([`observed`]).
 //!
-//! The per-member machinery, [`each`], [`settled`], [`observed`],
+//! The per-member machinery, [`each`], [`settled`], [`contact`], [`observed`],
 //! [`record_meta`] and [`answer_status`], serves the stored-query registry's
 //! distribution and drift check too, which §12.7 holds to these same terms
 //! (N44).
@@ -39,7 +40,7 @@ use std::time::Instant;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::dispatch::reported;
-use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
+use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClient};
 use ferrofed_engine::fanout::TIMEOUT_POLICY;
 use ferrofed_engine::forward::{ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::hygiene::Withheld;
@@ -64,7 +65,6 @@ use crate::facade::provenance::Provenance;
 use crate::facade::security;
 use crate::facade::target::{self, Mechanism, Selected, TargetError};
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
 
 /// The ITS-REST operations that upload a template, ADL 1.4 and ADL 2
 /// (§12.6).
@@ -292,23 +292,29 @@ pub(crate) fn settled<R>(
     }
 }
 
-/// Records on `GET /health/dependencies` what the request to `endpoint` that
-/// ended as `asked` showed of the member: `read` reads an ended call, an
-/// abandoned one is down, and one never sent shows nothing.
-pub(crate) fn observed<R>(
+/// What the request to a member that ended as `asked` showed of it: `read`
+/// reads an ended call, an abandoned one got no answer, and one the gateway
+/// holds no client for never left.
+pub(crate) fn contact<R>(asked: &Asked<R>, read: impl FnOnce(&R) -> Contact) -> Contact {
+    match asked {
+        Asked::Ended(ended) => read(ended),
+        Asked::Unsent => Contact::Unsent,
+        Asked::Abandoned => Contact::Silent,
+    }
+}
+
+/// Records the request to `endpoint` that showed `contact` and ended as
+/// `outcome` in the per-member record: the member's state on `GET
+/// /health/dependencies`, and the request in the node request metrics,
+/// neither when the request never left the gateway.
+pub(crate) fn observed(
     federation: &Federation,
     endpoint: &EndpointId,
-    asked: &Asked<R>,
-    read: impl FnOnce(&R) -> Option<Observed>,
+    contact: Contact,
+    outcome: &Outcome,
 ) {
-    let observed = match asked {
-        Asked::Ended(ended) => read(ended),
-        Asked::Unsent => None,
-        Asked::Abandoned => Some(Observed::Down),
-    };
-    if let Some(observed) = observed {
-        federation.dependencies().endpoint(endpoint, observed);
-    }
+    federation.dependencies().contacted(endpoint, contact);
+    federation.requests().settled(endpoint, outcome, contact);
 }
 
 /// Sends the client's upload, held as `request`, to each member of
@@ -345,11 +351,11 @@ async fn fan_out(
     .await;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
-        observed(federation, endpoint.id(), &sent, Observed::of_forwarded);
+        let reached = contact(&sent, Contact::of_forwarded);
         let outcome = settled(sent, latency_ms, |answer, latency_ms| {
             outcome(endpoint, answer, latency_ms, logged)
         });
-        federation.requests().settled(endpoint.id(), &outcome);
+        observed(federation, endpoint.id(), reached, &outcome);
         outcomes.push((endpoint.id(), outcome));
     }
     tracing::info!(

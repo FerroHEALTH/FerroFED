@@ -25,7 +25,9 @@ use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode};
 use serde::Deserialize;
 
-use crate::facade::{EHR_A, EHR_B, PATIENT, body, crossref, node_answering, patient_query, post};
+use crate::facade::{
+    EHR_A, EHR_B, PATIENT, body, crossref, node_answering, node_failing, patient_query, post,
+};
 use crate::support::call;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -228,6 +230,31 @@ async fn the_dependencies_keep_each_endpoints_last_state_apart() -> TestResult {
     let (_, report, _) = dependencies(&state).await?;
     assert_eq!(Some("up"), state_of(&report, "node-a-pub"));
     assert_eq!(Some("down"), state_of(&report, "node-b-pub"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_query_member_answering_a_4xx_is_up_and_one_answering_a_5xx_is_failing() -> TestResult {
+    let refusing = node_failing(400).await;
+    let failing = node_failing(500).await;
+    let dir = tempfile::tempdir()?;
+    let state = booting(dir.path(), &refusing.uri(), &failing.uri())?;
+    state.lifecycle().booted();
+
+    let (status, text) = call(app(&state), post(body(&patient_query())?)?).await?;
+    assert_eq!(
+        StatusCode::FAILED_DEPENDENCY,
+        status,
+        "§11.4: both are node-error in the record: {text}"
+    );
+
+    let (_, report, _) = dependencies(&state).await?;
+    assert_eq!(
+        Some("up"),
+        state_of(&report, "node-a-pub"),
+        "a 400 says the request was refused, and the node answered"
+    );
+    assert_eq!(Some("failing"), state_of(&report, "node-b-pub"));
     Ok(())
 }
 

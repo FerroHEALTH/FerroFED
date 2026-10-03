@@ -14,7 +14,7 @@ use openehr_its::rest::client::{ClientError, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
 use super::reported::{self, excerpt_of};
-use super::{DispatchError, NodeReply};
+use super::{Contact, DispatchError, NodeReply};
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
 
@@ -41,6 +41,7 @@ pub(super) fn narrow(reply: NodeReply, width: usize) -> NodeReply {
                     "the node answered a row with {found} cells where the dispatched query selects {width}"
                 )),
             },
+            contact: Contact::Answered(StatusCode::OK),
         },
         None => NodeReply::Answered {
             result_set,
@@ -69,11 +70,11 @@ pub(super) fn answered(
             latency_ms,
         },
         QueryExecuteAdhocQueryBodyOutcome::BadRequest { body } => node_error(
-            latency_ms,
+            (latency_ms, StatusCode::BAD_REQUEST),
             reported::answered(StatusCode::BAD_REQUEST, &body, withheld),
         ),
         QueryExecuteAdhocQueryBodyOutcome::RequestTimeout { body } => node_error(
-            latency_ms,
+            (latency_ms, StatusCode::REQUEST_TIMEOUT),
             reported::answered(StatusCode::REQUEST_TIMEOUT, &body, withheld),
         ),
     }
@@ -87,55 +88,70 @@ pub(super) fn failed(
     latency_ms: u64,
     withheld: &Withheld,
 ) -> Result<NodeReply, DispatchError> {
-    let failure = |outcome| Ok(NodeReply::Failed { outcome });
+    let failure = |outcome, contact| Ok(NodeReply::Failed { outcome, contact });
     match error {
-        ClientError::DeadlineElapsed { .. } => failure(Outcome::TimeOut {
-            latency_ms,
-            error: text("no answer before the deadline, which passed before the request was sent"),
-        }),
+        ClientError::DeadlineElapsed { .. } => failure(
+            Outcome::TimeOut {
+                latency_ms,
+                error: text(
+                    "no answer before the deadline, which passed before the request was sent",
+                ),
+            },
+            Contact::Unsent,
+        ),
         ClientError::Transport {
             source: TransportError::Timeout { source },
             ..
-        } => failure(Outcome::TimeOut {
-            latency_ms,
-            error: reported::followed_by(
-                "no answer before the deadline".to_owned(),
-                &chain(&*source),
-                withheld,
-            ),
-        }),
+        } => failure(
+            Outcome::TimeOut {
+                latency_ms,
+                error: reported::followed_by(
+                    "no answer before the deadline".to_owned(),
+                    &chain(&*source),
+                    withheld,
+                ),
+            },
+            Contact::Silent,
+        ),
         ClientError::Transport {
             source: TransportError::Send { source },
             ..
-        } => failure(Outcome::Offline {
-            latency_ms,
-            error: reported::followed_by(
-                "the node could not be reached".to_owned(),
-                &chain(&*source),
-                withheld,
-            ),
-        }),
+        } => failure(
+            Outcome::Offline {
+                latency_ms,
+                error: reported::followed_by(
+                    "the node could not be reached".to_owned(),
+                    &chain(&*source),
+                    withheld,
+                ),
+            },
+            Contact::Silent,
+        ),
         ClientError::Unauthorized { body, .. } => Ok(node_error(
-            latency_ms,
+            (latency_ms, StatusCode::UNAUTHORIZED),
             reported::answered(StatusCode::UNAUTHORIZED, &body, withheld),
         )),
         ClientError::Forbidden { body, .. } => Ok(node_error(
-            latency_ms,
+            (latency_ms, StatusCode::FORBIDDEN),
             reported::answered(StatusCode::FORBIDDEN, &body, withheld),
         )),
         ClientError::ServiceFailure { status, body, .. }
         | ClientError::UndocumentedStatus { status, body, .. } => Ok(node_error(
-            latency_ms,
+            (latency_ms, status),
             reported::answered(status, &body, withheld),
         )),
-        ClientError::Body { status, source, .. } => failure(Outcome::NodeError {
-            latency_ms,
-            error: text(format!(
-                "the node answered {status} with a body that is not an ITS-REST RESULT_SET (at `{}`, a {:?} defect)",
-                excerpt_of(&source.path().to_string(), withheld).unwrap_or_else(|| MASK.to_owned()),
-                source.inner().classify(),
-            )),
-        }),
+        ClientError::Body { status, source, .. } => failure(
+            Outcome::NodeError {
+                latency_ms,
+                error: text(format!(
+                    "the node answered {status} with a body that is not an ITS-REST RESULT_SET (at `{}`, a {:?} defect)",
+                    excerpt_of(&source.path().to_string(), withheld)
+                        .unwrap_or_else(|| MASK.to_owned()),
+                    source.inner().classify(),
+                )),
+            },
+            Contact::Answered(status),
+        ),
         credentials @ ClientError::Credentials { .. } => Err(DispatchError::Credentials {
             endpoint: endpoint.clone(),
             source: Box::new(credentials),
@@ -147,10 +163,11 @@ pub(super) fn failed(
     }
 }
 
-/// A `node-error` reply carrying `error`.
-fn node_error(latency_ms: u64, error: ErrorDetail) -> NodeReply {
+/// A `node-error` reply carrying `error`, for a node that answered `status`.
+fn node_error((latency_ms, status): (u64, StatusCode), error: ErrorDetail) -> NodeReply {
     NodeReply::Failed {
         outcome: Outcome::NodeError { latency_ms, error },
+        contact: Contact::Answered(status),
     }
 }
 

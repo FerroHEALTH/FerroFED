@@ -32,10 +32,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::forward::{ForwardError, Forwarded};
 use crate::hygiene::{Part, Withheld};
 use crate::outbound_id::OutboundId;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
+use http::StatusCode;
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::outcome::Outcome;
 use openehr_federation::status::EndpointStatus;
@@ -218,6 +220,62 @@ impl DispatchOptions {
     }
 }
 
+/// What one request showed of the node beside the §11.1 outcome it reports:
+/// whether it left the gateway, and the node's own HTTP status where the node
+/// answered.
+///
+/// The §11.1 record carries a node's status only as text in its `error`, so
+/// this keeps it typed for the gateway's own health and metrics surfaces. No
+/// specification governs those surfaces: our own design.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Contact {
+    /// The request never left the gateway.
+    Unsent,
+    /// The node answered with this HTTP status.
+    Answered(StatusCode),
+    /// The request left and the node gave no answer: it timed out, could not
+    /// be reached, or was abandoned when the overall budget ran out.
+    Silent,
+}
+
+impl Contact {
+    /// Returns what a forwarded request's outcome showed of the node.
+    ///
+    /// A refusal of the gateway's onward credentials is the node's answer; a
+    /// deadline that passed before the request left is indistinguishable here
+    /// from one that passed while the node was silent, and reads as
+    /// [`Contact::Silent`].
+    #[must_use]
+    pub fn of_forwarded(outcome: &Result<Forwarded, ForwardError>) -> Self {
+        match outcome {
+            Ok(answer) => Self::Answered(answer.status()),
+            Err(error) => Self::of_forward_error(error),
+        }
+    }
+
+    /// Returns what a forwarded request that got no answer of its own
+    /// showed of the node, read as [`Contact::of_forwarded`] reads it.
+    #[must_use]
+    pub fn of_forward_error(error: &ForwardError) -> Self {
+        match error {
+            ForwardError::Refused { status, .. } => Self::Answered(*status),
+            ForwardError::TimeOut { .. } | ForwardError::Unreachable { .. } => Self::Silent,
+            ForwardError::QueryParameter(_)
+            | ForwardError::Value(_)
+            | ForwardError::Withheld { .. }
+            | ForwardError::Credentials { .. }
+            | ForwardError::Compose { .. }
+            | ForwardError::Unrouted => Self::Unsent,
+        }
+    }
+
+    /// Whether the request left the gateway.
+    #[must_use]
+    pub const fn sent(self) -> bool {
+        !matches!(self, Self::Unsent)
+    }
+}
+
 /// What one node made of one dispatched query.
 #[derive(Debug, Clone)]
 pub enum NodeReply {
@@ -233,6 +291,8 @@ pub enum NodeReply {
     Failed {
         /// The endpoint outcome, carrying the error and the latency.
         outcome: Outcome,
+        /// What the request showed of the node.
+        contact: Contact,
     },
 }
 
@@ -244,7 +304,7 @@ impl NodeReply {
             Self::Answered { latency_ms, .. } => Outcome::Active {
                 latency_ms: *latency_ms,
             },
-            Self::Failed { outcome } => outcome.clone(),
+            Self::Failed { outcome, .. } => outcome.clone(),
         }
     }
 
@@ -253,7 +313,16 @@ impl NodeReply {
     pub fn status(&self) -> EndpointStatus {
         match self {
             Self::Answered { .. } => EndpointStatus::Active,
-            Self::Failed { outcome } => outcome.status(),
+            Self::Failed { outcome, .. } => outcome.status(),
+        }
+    }
+
+    /// What the request showed of the node: a result set is the node's `200`.
+    #[must_use]
+    pub fn contact(&self) -> Contact {
+        match self {
+            Self::Answered { .. } => Contact::Answered(StatusCode::OK),
+            Self::Failed { contact, .. } => *contact,
         }
     }
 }
