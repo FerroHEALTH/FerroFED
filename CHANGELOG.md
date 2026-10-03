@@ -21,6 +21,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-10-03
+
+The v0.0.7 milestone, definitions and membership (§12.6, §12.7, §12b). A
+versioned write goes only to the CDR that created the version. A template goes
+to the node you name, or to several on request, with each member's outcome
+reported. Stored queries live at the gateway as immutable versions, on an
+embedded store, PostgreSQL or a read-only directory, distributed to the
+members with drift reported and repaired from the admin listener. A check you
+run before admitting a node tests the admission conditions. The gateway
+exports metrics through OpenTelemetry, as Prometheus and over OTLP, records
+each member's state from the calls it makes, holds every credential in a type
+that never renders it, and prints a startup banner. Every release now carries
+a compose file that starts the gateway alone in front of the CDRs you already
+run. The gateway still authenticates no client; that is v0.0.8 (#80).
+
 ### Added
 
 - Every release carries `compose.yaml`, `ferrofed.toml` and `registry.toml`,
@@ -1939,7 +1954,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.3...v0.0.6
 [0.0.3]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.3
 [0.0.2-rc.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.2-rc.1
