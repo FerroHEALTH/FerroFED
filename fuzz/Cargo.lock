@@ -1115,11 +1115,14 @@ version = "0.0.10"
 dependencies = [
  "fhir-types",
  "http",
+ "jiff",
+ "quick-xml",
  "reqwest",
  "secrecy",
  "serde_json",
  "thiserror",
  "url",
+ "uuid",
 ]
 
 [[package]]
