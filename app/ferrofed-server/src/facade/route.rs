@@ -20,7 +20,10 @@
 //! and for a read only, the ask-all probe of every member, all within the
 //! request's budget (§11.5). A write none of the first three routes is a
 //! `400`, and is never probed (N41); so is a read whose `ehr_id` is no bare
-//! UUID, because the probe would carry it to every member (§5.4.1, N33). A
+//! UUID, because the probe would carry it to every member (§5.4.1, N33). An
+//! `ehr_id` a binding, the index or the probe finds at several members is a
+//! `409` listing the claimants, on a write as on a read, and raises the
+//! integrity incident of N42; no claimant is sent the request (§12.5.2). A
 //! successful answer teaches the index that its node holds the `ehr_id`, and
 //! teaches the follow-up routing table the versions it names ([`follow_up`];
 //! §12.2, N21). A read of one version routes the same way: by its path
@@ -37,6 +40,7 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
+use ferrofed_registry::incident::Detection;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
 use openehr_base::prelude::ObjectVersionId;
@@ -167,6 +171,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     };
     let (endpoint, step, probed) = match located {
         owner::Located::At { endpoint, step } => (endpoint, step, None),
+        owner::Located::Collision(claimed) => return collision(&ehr_id, claimed, request_id),
         owner::Located::Unreachable { .. } => {
             return error::fixed(Code::NoDestination, request_id);
         }
@@ -245,6 +250,16 @@ fn learn(
         owner::learn(federation.index(), ehr_id, endpoint.node());
     }
     follow_up::learn_from(federation, endpoint.id(), read, forwarded, logged);
+}
+
+/// The `409` refusing a request whose `ehr_id` the members of `claimed`
+/// claim, once its integrity incident is raised (§12.5.2, N42).
+///
+/// No claimant is sent the request, a read or a write.
+fn collision(ehr_id: &EhrId, claimed: owner::Claimed, request_id: &str) -> Response {
+    owner::collided(ehr_id, claimed.detection, &claimed.claimants);
+    let refused = owner::Unsettled::Claimed(claimed.claimants);
+    error::response(refused.code(), refused.to_string(), request_id)
 }
 
 /// The `ehr_id` the path segment of `matched` decodes to, or `None` when it
@@ -352,6 +367,9 @@ async fn ask_all<'a>(
     let (endpoint, answer) = match owner::settled(answers) {
         owner::Settled::Owner { endpoint, answer } => (endpoint, answer),
         owner::Settled::Failed(unsettled) => {
+            if let owner::Unsettled::Claimed(claimants) = &unsettled {
+                owner::collided(probe.ehr_id.ehr_id(), Detection::AskAll, claimants);
+            }
             let code = unsettled.code();
             if code.status().is_server_error() {
                 tracing::error!(

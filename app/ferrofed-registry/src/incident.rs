@@ -1,20 +1,43 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Integrity incidents: a federation integrity defect the registry detects,
+//! Integrity incidents: a federation integrity defect the gateway detects,
 //! reported to the federation operator and never resolved by a choice
-//! (§12.5.2, §12b.2).
+//! (§12.5.2, §12b.2, N42).
 //!
-//! An incident is an event. The registry emits it as a structured `tracing`
-//! event at `ERROR` with a stable kind and the routing ids involved, and hands
-//! it back to its caller; it never carries a body or a patient identifier
-//! (no specification governs the event's form: our own design).
+//! An incident is an event. It is emitted once, as a structured `tracing`
+//! event at `ERROR` under [`TARGET`] with a stable kind and the routing ids
+//! involved, and handed back to its caller; it never carries a body or a
+//! patient identifier (no specification governs the event's form: our own
+//! design). An `ehr_id` is node-local and names no patient (§5.2), so an
+//! incident about one carries it; the event and the `Display` text name it
+//! only when it is a bare UUID, because any other `HIER_OBJECT_ID` form could
+//! be a patient identifier a client wrote in a path (§5.4.1, N33).
+//!
+//! ```
+//! use ferrofed_registry::incident::{Detection, Incident};
+//!
+//! let ehr_id = "7d44b88c-4199-4bad-97dc-d78268e01398".parse()?;
+//! let claimants = vec!["node-a-pub".parse()?, "node-b-pub".parse()?];
+//! let detection = Detection::AskAll;
+//! let incident = Incident::EhrIdCollision { ehr_id, detection, claimants };
+//! assert_eq!("EhrIdCollision", incident.kind());
+//! let shown = "ehr_id 7d44b88c-4199-4bad-97dc-d78268e01398 is claimed by endpoints \
+//!     [node-a-pub, node-b-pub], found by the ask-all probe";
+//! assert_eq!(shown, incident.to_string());
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 
 use std::fmt;
 
-use crate::id::{EndpointId, NodeId, SystemId};
+use crate::id::{EhrId, EndpointId, NodeId, SystemId};
 
-/// An integrity defect in the follow-up routing table (N21, §12.2).
+/// The `tracing` target every incident is emitted under, so an operator can
+/// route and count incidents apart from the request log.
+pub const TARGET: &str = "ferrofed::integrity";
+
+/// A federation integrity defect: in the follow-up routing table (N21,
+/// §12.2), or in which member holds an `ehr_id` (§12.5.2, §12b.2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Incident {
@@ -38,6 +61,58 @@ pub enum Incident {
         /// The endpoint the learned mapping named.
         learned: EndpointId,
     },
+    /// A request addressed an `ehr_id` more than one member claims, and was
+    /// refused `409` listing the claimants (§12.5.2, N42).
+    EhrIdCollision {
+        /// The `ehr_id` the request addressed.
+        ehr_id: EhrId,
+        /// The step of §12.5.1 that found the claimants.
+        detection: Detection,
+        /// The endpoint of each claiming member, in `node_id` order.
+        claimants: Vec<EndpointId>,
+    },
+    /// The `ehr_id` index learned an `ehr_id` it already held for another
+    /// member: the index-insert alarm of §12b.2.
+    IndexInsertCollision {
+        /// The `ehr_id`.
+        ehr_id: EhrId,
+        /// Every member the index now holds it at, in `node_id` order.
+        claimants: Vec<NodeId>,
+    },
+}
+
+/// The step of §12.5.1 that found an `ehr_id` at more than one member.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Detection {
+    /// Step 2: the client session's resolution bindings name several members.
+    Binding,
+    /// Step 3: the `ehr_id` index holds several members.
+    Index,
+    /// Step 4: several members answered the ask-all probe holding it.
+    AskAll,
+}
+
+impl Detection {
+    /// The step's name as the event records it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Binding => "binding",
+            Self::Index => "index",
+            Self::AskAll => "ask-all",
+        }
+    }
+}
+
+impl fmt::Display for Detection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Binding => "the session's resolution bindings",
+            Self::Index => "the ehr_id index",
+            Self::AskAll => "the ask-all probe",
+        })
+    }
 }
 
 impl Incident {
@@ -48,30 +123,50 @@ impl Incident {
         match self {
             Self::LearnedCreatingSystemConflict { .. } => "LearnedCreatingSystemConflict",
             Self::RegisteredCreatingSystemConflict { .. } => "RegisteredCreatingSystemConflict",
+            Self::EhrIdCollision { .. } => "EhrIdCollision",
+            Self::IndexInsertCollision { .. } => "IndexInsertCollision",
         }
     }
 
-    /// The `creating_system_id` the incident is about.
+    /// The `creating_system_id` the incident is about, when it is about one.
     #[must_use]
-    pub fn creating_system_id(&self) -> &SystemId {
+    pub fn creating_system_id(&self) -> Option<&SystemId> {
         match self {
             Self::LearnedCreatingSystemConflict {
                 creating_system_id, ..
             }
             | Self::RegisteredCreatingSystemConflict {
                 creating_system_id, ..
-            } => creating_system_id,
+            } => Some(creating_system_id),
+            Self::EhrIdCollision { .. } | Self::IndexInsertCollision { .. } => None,
         }
     }
 
-    /// Emits the incident as an `ERROR` event carrying routing ids only.
-    pub(crate) fn emit(&self) {
+    /// The `ehr_id` the incident is about, when it is about one.
+    #[must_use]
+    pub fn ehr_id(&self) -> Option<&EhrId> {
+        match self {
+            Self::EhrIdCollision { ehr_id, .. } | Self::IndexInsertCollision { ehr_id, .. } => {
+                Some(ehr_id)
+            }
+            Self::LearnedCreatingSystemConflict { .. }
+            | Self::RegisteredCreatingSystemConflict { .. } => None,
+        }
+    }
+
+    /// Emits the incident as an `ERROR` event under [`TARGET`] carrying its
+    /// kind and routing ids only.
+    ///
+    /// The code that detects a defect emits its incident once; a caller that
+    /// is handed one back never emits it again.
+    pub fn emit(&self) {
         match self {
             Self::LearnedCreatingSystemConflict {
                 creating_system_id,
                 first,
                 second,
             } => tracing::error!(
+                target: TARGET,
                 kind = self.kind(),
                 creating_system_id = %creating_system_id,
                 first_endpoint_id = %first,
@@ -83,13 +178,67 @@ impl Incident {
                 registered,
                 learned,
             } => tracing::error!(
+                target: TARGET,
                 kind = self.kind(),
                 creating_system_id = %creating_system_id,
                 node_id = %registered,
                 endpoint_id = %learned,
                 "integrity incident: a learned mapping contradicts the registry document"
             ),
+            Self::EhrIdCollision {
+                ehr_id,
+                detection,
+                claimants,
+            } => tracing::error!(
+                target: TARGET,
+                kind = self.kind(),
+                ehr_id = uuid_form(ehr_id),
+                detection = detection.as_str(),
+                claimants = %Listed(claimants),
+                "integrity incident: an ehr_id is claimed by more than one member, and the request was refused"
+            ),
+            Self::IndexInsertCollision { ehr_id, claimants } => tracing::error!(
+                target: TARGET,
+                kind = self.kind(),
+                ehr_id = uuid_form(ehr_id),
+                claimants = %Listed(claimants),
+                "integrity incident: the ehr_id index learned an ehr_id it holds at another member"
+            ),
         }
+    }
+}
+
+/// The `ehr_id` as an event or a message may name it: only a bare UUID, which
+/// cannot spell a patient identifier (§5.4.1, N33).
+fn uuid_form(ehr_id: &EhrId) -> Option<&str> {
+    ehr_id.is_uuid().then(|| ehr_id.as_str())
+}
+
+/// An `ehr_id` as the `Display` text names it.
+struct Shown<'a>(&'a EhrId);
+
+impl fmt::Display for Shown<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match uuid_form(self.0) {
+            Some(uuid) => write!(f, "ehr_id {uuid}"),
+            None => f.write_str("an ehr_id that is no UUID"),
+        }
+    }
+}
+
+/// Ids as a message lists them: `[a, b]`.
+struct Listed<'a, T>(&'a [T]);
+
+impl<T: fmt::Display> fmt::Display for Listed<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[")?;
+        for (index, id) in self.0.iter().enumerate() {
+            if index > 0 {
+                f.write_str(", ")?;
+            }
+            write!(f, "{id}")?;
+        }
+        f.write_str("]")
     }
 }
 
@@ -112,6 +261,46 @@ impl fmt::Display for Incident {
                 f,
                 "creating_system_id {creating_system_id} is registered to node {registered} and was learned at endpoint {learned}"
             ),
+            Self::EhrIdCollision {
+                ehr_id,
+                detection,
+                claimants,
+            } => write!(
+                f,
+                "{} is claimed by endpoints {}, found by {detection}",
+                Shown(ehr_id),
+                Listed(claimants)
+            ),
+            Self::IndexInsertCollision { ehr_id, claimants } => write!(
+                f,
+                "the ehr_id index holds {} at nodes {}",
+                Shown(ehr_id),
+                Listed(claimants)
+            ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Detection, Incident};
+
+    #[test]
+    fn an_ehr_id_that_is_no_uuid_is_never_shown() {
+        let incident = Incident::IndexInsertCollision {
+            ehr_id: "2.999.1.12345".parse().unwrap(),
+            claimants: vec!["node-a".parse().unwrap(), "node-b".parse().unwrap()],
+        };
+        assert_eq!(
+            "the ehr_id index holds an ehr_id that is no UUID at nodes [node-a, node-b]",
+            incident.to_string()
+        );
+        let collision = Incident::EhrIdCollision {
+            ehr_id: "2.999.1.12345".parse().unwrap(),
+            detection: Detection::Binding,
+            claimants: vec!["node-a-pub".parse().unwrap()],
+        };
+        let shown = collision.to_string();
+        assert!(!shown.contains("12345"), "{shown}");
     }
 }

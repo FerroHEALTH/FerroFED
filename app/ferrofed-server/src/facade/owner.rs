@@ -13,14 +13,16 @@
 //! 2. a resolution binding the client session holds (§5.2);
 //! 3. the `ehr_id` to node index.
 //!
-//! A step that names several members gives no unambiguous answer, and no
-//! later step of the three picks one of them (§12.5.2, N42). The fourth
-//! step, the ask-all probe, is for reads only and is [`settled`] from what
-//! every member answered: one member holding the `ehr_id` owns it, two are a
-//! `409`, none is a `404`, and a member that gave no answer leaves the owner
-//! unknown, which fails the read (§11.2, §11.5). The `ehr_id` in the path is
-//! the node-local identifier N33 locates a node by, and it is the only value
-//! of the request any step reads.
+//! A binding or an index entry naming several members is a collision: no
+//! later step picks one of them, and the request, a read or a write, is
+//! refused `409` listing the claimants (§12.5.2, N42). The fourth step, the
+//! ask-all probe, is for reads only and is [`settled`] from what every member
+//! answered: one member holding the `ehr_id` owns it, two are a `409`, none is
+//! a `404`, and a member that gave no answer leaves the owner unknown, which
+//! fails the read (§11.2, §11.5). Every collision raises the integrity
+//! incident of N42 ([`collided`]). The `ehr_id` in the path is the node-local
+//! identifier N33 locates a node by, and it is the only value of the request
+//! any step reads.
 
 use std::fmt;
 use std::time::Instant;
@@ -28,8 +30,9 @@ use std::time::Instant;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::probe::Answer;
 use ferrofed_identity::binding::{Bound, ResolutionBindings, SessionKey};
-use ferrofed_registry::ehr_index::{EhrIndex, Indexed, Learning};
+use ferrofed_registry::ehr_index::{EhrIndex, Indexed};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
+use ferrofed_registry::incident::{Detection, Incident};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, StatusCode};
 
@@ -63,7 +66,7 @@ impl Step {
 }
 
 /// What the first three steps of §12.5.1 say about a path `ehr_id`.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Located<'a> {
     /// A step named one endpoint.
     ///
@@ -81,8 +84,20 @@ pub enum Located<'a> {
         /// The step that named it.
         step: Step,
     },
+    /// A binding or the index named several members of the registry: they
+    /// claim one `ehr_id`, and no step picks one of them (§12.5.2, N42).
+    Collision(Claimed),
     /// No step named exactly one member.
     Unknown,
+}
+
+/// The members a step of §12.5.1 found claiming one `ehr_id`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Claimed {
+    /// The endpoint each claimant is reached through, in `node_id` order.
+    pub claimants: Vec<EndpointId>,
+    /// The step that found them.
+    pub detection: Detection,
 }
 
 /// The client session's bindings, when the request belongs to a session.
@@ -100,9 +115,9 @@ pub struct Held<'a> {
 /// order (N41).
 ///
 /// A binding or an index entry naming a member the snapshot no longer holds
-/// names nothing, and the next step is taken. Bindings naming two members
-/// are a collision, so the index is not consulted: no step picks one of two
-/// claimants (§12.5.2, N42).
+/// names nothing, and the next step is taken. A step naming two members the
+/// snapshot holds is a [`Located::Collision`], and no later step is taken: no
+/// step picks one of two claimants (§12.5.2, N42).
 ///
 /// # Errors
 ///
@@ -123,22 +138,50 @@ pub fn located<'a>(
         });
     }
     if let Some(held) = held {
-        match held.bindings.lookup(held.session, held.now, ehr_id) {
-            Bound::One(node) => {
-                if let Some(located) = member(snapshot, &node, Step::Binding) {
-                    return Ok(located);
-                }
-            }
-            // NOTE: §12.5.2, N42: two bound claimants are a collision, so no
-            // later step may pick one of them.
-            Bound::Several(_) => return Ok(Located::Unknown),
-            Bound::None => {}
+        let bound = match held.bindings.lookup(held.session, held.now, ehr_id) {
+            Bound::One(node) => vec![node],
+            Bound::Several(nodes) => nodes,
+            Bound::None => Vec::new(),
+        };
+        if let Some(located) = among(snapshot, &bound, Step::Binding, Detection::Binding) {
+            return Ok(located);
         }
     }
-    match index.lookup(ehr_id) {
-        Indexed::One(node) => Ok(member(snapshot, &node, Step::Index).unwrap_or(Located::Unknown)),
-        Indexed::Several(_) | Indexed::None => Ok(Located::Unknown),
-    }
+    let indexed = match index.lookup(ehr_id) {
+        Indexed::One(node) => vec![node],
+        Indexed::Several(nodes) => nodes,
+        Indexed::None => Vec::new(),
+    };
+    Ok(among(snapshot, &indexed, Step::Index, Detection::Index).unwrap_or(Located::Unknown))
+}
+
+/// What a step naming `nodes` says, counting only the members the snapshot
+/// holds: `None` when it holds none of them.
+fn among<'a>(
+    snapshot: &'a RegistrySnapshot,
+    nodes: &[NodeId],
+    step: Step,
+    detection: Detection,
+) -> Option<Located<'a>> {
+    let mut held = nodes.iter().filter_map(|node| member(snapshot, node, step));
+    let (first, second) = (held.next()?, held.next());
+    let Some(second) = second else {
+        return Some(first);
+    };
+    // NOTE: §12.5.2, N42: two claimants are a collision on a read as on a
+    // write, so neither a later step nor the probe settles it.
+    let claimants = [first, second]
+        .into_iter()
+        .chain(held)
+        .filter_map(|located| match located {
+            Located::At { endpoint, .. } => Some(endpoint.id().clone()),
+            Located::Unreachable { .. } | Located::Collision(_) | Located::Unknown => None,
+        })
+        .collect();
+    Some(Located::Collision(Claimed {
+        claimants,
+        detection,
+    }))
 }
 
 /// Where `node` is reached, as `step` named it, or `None` when the snapshot
@@ -178,14 +221,24 @@ pub fn probed(snapshot: &RegistrySnapshot) -> Vec<EndpointId> {
 
 /// Records that `node` holds `ehr_id`, from a resolution or a member's
 /// successful answer under it.
+///
+/// An `ehr_id` the index holds at another member raises the index-insert
+/// alarm of §12b.2, which the index emits itself, once.
 pub fn learn(index: &EhrIndex, ehr_id: &EhrId, node: &NodeId) {
-    if let Learning::Collided(owners) = index.learn(ehr_id, node) {
-        // TODO(#63): raise the IndexInsertCollision integrity incident and its alarm (§12b.2, N42).
-        tracing::warn!(
-            claimants = owners.len(),
-            "the ehr_id index holds an ehr_id at more than one member"
-        );
+    index.learn(ehr_id, node);
+}
+
+/// Raises the integrity incident of a request refused because `claimants`
+/// claim its `ehr_id`, as `detection` found them (§12.5.2, N42).
+///
+/// The incident is emitted once, here, and names routing ids only.
+pub fn collided(ehr_id: &EhrId, detection: Detection, claimants: &[EndpointId]) {
+    Incident::EhrIdCollision {
+        ehr_id: ehr_id.clone(),
+        detection,
+        claimants: claimants.to_vec(),
     }
+    .emit();
 }
 
 /// The endpoint the targeting headers name, `None` without either header
@@ -392,7 +445,6 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>) -> Settled {
         silent.push((endpoint, silence));
     }
     if holders.len() > 1 {
-        // TODO(#63): raise the EhrIdCollision integrity incident for the claimants (§12.5.2, N42).
         return Settled::Failed(Unsettled::Claimed(
             holders.into_iter().map(|(endpoint, _)| endpoint).collect(),
         ));

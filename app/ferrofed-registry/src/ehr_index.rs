@@ -13,6 +13,16 @@
 //! never a wrong route (no specification governs the index's storage: our own
 //! design).
 //!
+//! An `ehr_id` learned at a second member is the index-insert alarm of
+//! §12b.2: the index raises an [`Incident::IndexInsertCollision`] once, keeps
+//! every claimant, and from then on names none of them (§12.5.2, N42). A held
+//! collision has no expiry of its own. Only the operator can remedy it, at a
+//! node (§12b.2), and nothing the index observes shows that remedy, so it
+//! lasts until the entry is forgotten as least recently used or the process
+//! restarts; a later read then asks every member again, and a collision that
+//! still stands is found again (no specification governs this: our own
+//! design).
+//!
 //! ```
 //! use std::num::NonZeroUsize;
 //!
@@ -33,6 +43,7 @@ use std::num::NonZeroUsize;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::id::{EhrId, NodeId};
+use crate::incident::Incident;
 
 /// What the index says about one `ehr_id`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,9 +65,13 @@ pub enum Learning {
     New,
     /// The index already held this member, and only this member.
     Confirmed,
-    /// The index already held another member for the `ehr_id`, so it now
-    /// holds them all, in `node_id` order, and answers [`Indexed::Several`].
-    Collided(Vec<NodeId>),
+    /// The index held the `ehr_id` at other members only, so it now holds
+    /// this one too and answers [`Indexed::Several`]: the index-insert alarm
+    /// of §12b.2, raised and emitted as the incident carried here.
+    Collided(Incident),
+    /// The index already held this member among several, a collision whose
+    /// alarm was raised when it began.
+    Contested,
 }
 
 /// The owners of one `ehr_id`, and when the index last used them.
@@ -138,17 +153,27 @@ impl EhrIndex {
     /// Records that `node` holds `ehr_id`, forgetting the least recently used
     /// `ehr_id` when the index is full.
     ///
-    /// A member is only ever added: an `ehr_id` seen at a second member keeps
-    /// both, so the index never names one of two claimants (§12.5.2, N42).
+    /// A member is only ever added: an `ehr_id` seen at a member it is not yet
+    /// held at, while held at another, keeps every claimant, so the index never
+    /// names one of them (§12.5.2, N42), and raises the index-insert alarm of
+    /// §12b.2. The alarm's [`Incident::IndexInsertCollision`] is emitted once,
+    /// here, for each member that joins the claimants.
     pub fn learn(&self, ehr_id: &EhrId, node: &NodeId) -> Learning {
         let mut held = self.lock();
         let learning = match held.entries.get_mut(ehr_id) {
-            Some(entry) if entry.owners.contains(node) && entry.owners.len() == 1 => {
-                Learning::Confirmed
+            Some(entry) if entry.owners.contains(node) => {
+                if entry.owners.len() == 1 {
+                    Learning::Confirmed
+                } else {
+                    Learning::Contested
+                }
             }
             Some(entry) => {
                 entry.owners.insert(node.clone());
-                Learning::Collided(entry.owners.iter().cloned().collect())
+                Learning::Collided(Incident::IndexInsertCollision {
+                    ehr_id: ehr_id.clone(),
+                    claimants: entry.owners.iter().cloned().collect(),
+                })
             }
             None => {
                 if held.entries.len() >= self.capacity.get()
@@ -172,6 +197,9 @@ impl EhrIndex {
             held.touch(ehr_id);
         }
         drop(held);
+        if let Learning::Collided(incident) = &learning {
+            incident.emit();
+        }
         learning
     }
 
@@ -209,6 +237,7 @@ mod tests {
 
     use super::{EhrIndex, Indexed, Learning};
     use crate::id::{EhrId, NodeId};
+    use crate::incident::Incident;
 
     const EHR_1: &str = "11111111-1111-4111-8111-111111111111";
     const EHR_2: &str = "22222222-2222-4222-8222-222222222222";
@@ -231,8 +260,12 @@ mod tests {
             index.learn(&ehr(EHR_1), &node("node-a"))
         );
         assert_eq!(
-            Learning::Collided(vec![node("node-a"), node("node-b")]),
-            index.learn(&ehr(EHR_1), &node("node-b"))
+            Learning::Collided(Incident::IndexInsertCollision {
+                ehr_id: ehr(EHR_1),
+                claimants: vec![node("node-a"), node("node-b")],
+            }),
+            index.learn(&ehr(EHR_1), &node("node-b")),
+            "the index-insert alarm (§12b.2)"
         );
         assert_eq!(
             Indexed::Several(vec![node("node-a"), node("node-b")]),
@@ -240,9 +273,28 @@ mod tests {
             "two claimants are never narrowed to one (N42)"
         );
         assert_eq!(
-            Learning::Collided(vec![node("node-a"), node("node-b")]),
+            Learning::Contested,
             index.learn(&ehr(EHR_1), &node("node-a")),
+            "a held collision stays one, and its alarm is not raised again"
+        );
+        assert_eq!(
+            Indexed::Several(vec![node("node-a"), node("node-b")]),
+            index.lookup(&ehr(EHR_1)),
             "a held collision stays one"
+        );
+    }
+
+    #[test]
+    fn a_third_claimant_raises_the_alarm_again_naming_all_three() {
+        let index = EhrIndex::new(NonZeroUsize::MIN);
+        index.learn(&ehr(EHR_1), &node("node-a"));
+        index.learn(&ehr(EHR_1), &node("node-b"));
+        assert_eq!(
+            Learning::Collided(Incident::IndexInsertCollision {
+                ehr_id: ehr(EHR_1),
+                claimants: vec![node("node-a"), node("node-b"), node("node-c")],
+            }),
+            index.learn(&ehr(EHR_1), &node("node-c"))
         );
     }
 

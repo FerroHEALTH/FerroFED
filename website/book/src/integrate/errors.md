@@ -105,7 +105,7 @@ the node is reported and the query succeeds.
 | `parameter-invalid` | 400 | A query parameter is `null`, an array, an object, or an integer outside 64 bits. |
 | `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). |
 | `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope, or the `ORGANISATION` directive or the `openEHR-federation-organisation` header names only organisations that manage no endpoint (§11.2, §11.3). It also answers a read of an EHR resource that nothing routes when every member the ask-all probe asked answered `404` (§12.5.1). |
-| `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node: the ask-all probe of a read found it at two members or more. The message lists the claiming endpoints, and the gateway never chooses between them and reads neither (§12.5.2, N42). |
+| `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node: your session's resolution bindings or the gateway's `ehr_id` index hold it at two members or more, or the ask-all probe of a read found it at two members or more. The message lists the claiming endpoints. The gateway never chooses between them and sends the request, a read or a write, to neither; name the node in the `openEHR-federation-endpoint` header to address one of them (§12.5.1, §12.5.2, N41, N42). |
 | `controlling-system-unreachable` | 409 | A versioned write's controlling system is not reachable, and the gateway never writes to a copy (§10.3, N36). |
 | `internal` | 500 | The gateway failed on its own side. The operator's log records the failure under the gateway's request id. |
 | `not-found` | 404 | The path is outside every surface the gateway serves. |
@@ -131,9 +131,11 @@ the node is reported and the query succeeds.
 | `stored-query-unknown` | 404 | The registry holds no stored query at this name, or none at the version or version prefix the path names. |
 
 Two of the `409` codes belong to follow-up routing (§12). `ehr-id-collision`
-answers a read today; the integrity incident it also raises for the operator,
-and `controlling-system-unreachable`, are planned build order. The codes are
-fixed now, so a client can handle them before they occur.
+answers a read or a write today, and the gateway also raises an integrity
+incident for the federation operator, because two nodes holding one `ehr_id`
+is a defect in the federation.
+`controlling-system-unreachable` is planned build order. The codes are fixed
+now, so a client can handle them before they occur.
 
 ## Query refusals
 

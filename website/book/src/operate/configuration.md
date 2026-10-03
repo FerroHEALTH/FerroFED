@@ -233,7 +233,14 @@ ehr_index_capacity = 100000   # ehr_ids held, the default; 0 is refused
 A forgotten or never-learned entry costs a later request one fallback step,
 never a wrong route: a read then asks every member, and a write is refused
 until the client names its node. An `ehr_id` seen at two members is held at
-both, and the index then routes neither.
+both, the index raises the index-insert alarm of §12b.2 once (an
+`IndexInsertCollision` incident, see [Integrity incidents](#integrity-incidents)),
+and from then on it routes neither: a request for that `ehr_id` that names
+no node is refused `409` (`ehr-id-collision`). A held collision has no expiry
+of its own, because nothing the gateway observes shows that a node was
+remedied. It lasts until the entry is forgotten as least recently used or the
+gateway restarts; after that, a read probes every member again, and a
+collision that still stands is found and reported again.
 
 ## Completeness
 
@@ -469,3 +476,36 @@ the gateway replaces Rust's default panic hook, which prints it to stderr,
 so a panic writes nothing to stderr. A federated query the gateway fails with a `500` also logs "the
 federated query failed" with its error code and the same `request_id` as its
 request line.
+
+## Integrity incidents
+
+A federation integrity defect is reported to you, the federation operator, as
+an incident: one `ERROR` line under the log target `ferrofed::integrity`,
+written once when the gateway detects the defect (§12.5.2, §12b.2, N42). The
+line carries a stable `kind`, the routing ids involved and a message, and
+never a request body, a header value or a patient identifier. These kinds
+reach the log today:
+
+| `kind` | When | Fields |
+|---|---|---|
+| `EhrIdCollision` | A request addressed an `ehr_id` that two members or more claim, and was refused `409` (`ehr-id-collision`). One line per refused request. | `ehr_id`, `detection` (`binding`, `index` or `ask-all`: the routing step that found the claimants), `claimants` (their endpoint ids) |
+| `IndexInsertCollision` | The `ehr_id` index learned an `ehr_id` it already held at another member: the index-insert alarm of §12b.2. One line when the second claimant is learned, and one more for each further claimant. | `ehr_id`, `claimants` (the member node ids) |
+| `LearnedCreatingSystemConflict` | A `creating_system_id` the registry document does not map was seen at two nodes, so the route learned for it is withdrawn and neither node is routed on (§12.2, N21). One line when the route is withdrawn. | `creating_system_id`, `first_endpoint_id`, `second_endpoint_id` |
+
+The `ehr_id` is node-local and names no patient (§5.2), so the line names it
+when it is a bare UUID. Any other form could be a patient identifier a client
+wrote in a path, so the line then leaves the `ehr_id` field out.
+
+Two nodes holding one `ehr_id` breaks the identifier-integrity conditions of
+§12b.2, which admission should have checked, so the remedy is at the node.
+The `claimants` name the members that hold the `ehr_id`. Have the node that
+issued or adopted it in error fix it, then restart the gateway, which forgets
+the collision the index holds (the index also forgets it when the entry is
+the least recently used one past the index capacity). Until then, requests
+that name no node are refused, and a client can still reach one of the
+members by naming its endpoint in the `openEHR-federation-endpoint` header.
+
+The gateway has no metrics endpoint, so the log is the record: count the
+incidents by filtering the target `ferrofed::integrity` and grouping on
+`kind` in your log pipeline. The request line of a refused request carries
+its `409` and its `request_id`; the incident line does not name the request.
