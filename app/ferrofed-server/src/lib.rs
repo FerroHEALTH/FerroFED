@@ -12,8 +12,10 @@
 //!
 //! The ITS-REST façade serves the federated query, `POST /v1/query/aql`
 //! ([`facade`], §7), and routes every request to an EHR resource under a
-//! path `ehr_id`, and the creation of an EHR, to one node
-//! ([`facade::route`], §7a.1, §12.4); every other path
+//! path `ehr_id`, the creation of an EHR, and every definition request, to
+//! one node ([`facade::route`], §7a.1, §12.4, §12.6), unless the
+//! stored-query registry holds the definition ([`facade::stored`], §12.7);
+//! every other path
 //! under `/v1/` answers `501` until its issue lands.
 #![doc(test(attr(deny(warnings))))]
 
@@ -286,8 +288,9 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 /// Every path no route serves.
 ///
 /// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface: a
-/// request to an EHR resource under a path `ehr_id`, and the creation of an
-/// EHR, is routed to one node ([`facade::route`]; §7a.1, §12.4), `OPTIONS`
+/// request to an EHR resource under a path `ehr_id`, the creation of an
+/// EHR, and a definition request the stored-query registry does not hold,
+/// is routed to one node ([`facade::route`]; §7a.1, §12.4, §12.6), `OPTIONS`
 /// names the methods the gateway serves for the path
 /// ([`facade::options::allow`]; §7a.2), and every other path answers `501`
 /// (§7a.1, N32), because a `404` would claim the resource does not exist.

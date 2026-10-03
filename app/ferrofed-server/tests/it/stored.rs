@@ -619,7 +619,16 @@ async fn options_declares_the_registry_and_the_methods_it_serves() -> TestResult
         body.federation.definition,
         "§7a.2, N44: the registry is declared; no definition fan-out"
     );
+    let described = &body.federation.its_rest.definition;
+    assert!(
+        described.starts_with("routed-single-node") && described.contains("gateway registry"),
+        "§7a.2 definition-area-split: templates routed, stored queries held: {described}"
+    );
     for (uri, expected) in [
+        (
+            "/v1/definition/template/adl1.4".to_owned(),
+            "GET, POST, OPTIONS",
+        ),
         (format!("/v1/query/{NAME}"), "POST, OPTIONS"),
         (format!("/v1/query/{NAME}/1.0.0"), "POST, OPTIONS"),
         (format!("/v1/definition/query/{NAME}"), "GET, PUT, OPTIONS"),
@@ -640,18 +649,31 @@ async fn options_declares_the_registry_and_the_methods_it_serves() -> TestResult
     Ok(())
 }
 
+// conformance: CP-34
 #[tokio::test]
-async fn without_the_registry_the_definition_area_stays_unserved() -> TestResult {
+async fn without_the_registry_a_definition_is_routed_and_no_name_is_invoked() -> TestResult {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let dir = tempfile::tempdir()?;
     let app = crate::facade::dev_gateway(dir.path(), &a.uri(), &b.uri(), &[])?;
-    for request in [
-        put(NAME, "1.0.0", &parameterised())?,
-        invoke(NAME, &bound(), &[])?,
-    ] {
-        let (status, text) = call(app.clone(), request).await?;
-        assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "§12.6: {text}");
+    let unversioned = Request::put(format!("/v1/definition/query/{NAME}"))
+        .header(header::CONTENT_TYPE, "text/plain")
+        .body(Body::from(parameterised()))?;
+    let (status, text) = call(app.clone(), unversioned).await?;
+    assert_eq!(
+        StatusCode::BAD_REQUEST,
+        status,
+        "§12.7 registry-not-offered: §12.6 routes it to one explicitly chosen node: {text}"
+    );
+    assert_eq!("target-required", error_body(&text)?.code);
+    // TODO(#298): route a versioned PUT once openehr-its declares its Content-Type.
+    let (status, text) = call(app.clone(), put(NAME, "1.0.0", &parameterised())?).await?;
+    assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "{text}");
+    let (status, text) = call(app, invoke(NAME, &bound(), &[])?).await?;
+    assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "§12.6: {text}");
+    for server in [&a, &b] {
+        let requests = server.received_requests().await.ok_or("recording is on")?;
+        assert!(requests.is_empty(), "no node is asked");
     }
     Ok(())
 }

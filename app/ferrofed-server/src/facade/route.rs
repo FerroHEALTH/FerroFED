@@ -35,6 +35,13 @@
 //! `409`, and no node is sent the write (§10.3).
 //! A new EHR has no owner, so only the targeting headers route it,
 //! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3).
+//!
+//! A request under `{base}/v1/definition/` (a template upload, list, read or
+//! example, or stored-query management where the gateway holds no registry,
+//! except the versioned stored-query `PUT`, which answers `501`) is routed
+//! by the targeting headers alone too, to exactly one endpoint,
+//! and answered as that node answered: no node is picked implicitly and no
+//! two nodes' answers are combined (§7a.1, §12.6, §12.7, N43).
 
 use std::time::{Duration, Instant};
 
@@ -62,6 +69,9 @@ use crate::federation::Federation;
 
 /// The API group of the EHR area (§7a.1).
 pub(crate) const EHR_GROUP: &str = "ehr";
+
+/// The API group of the definition area (§7a.1).
+const DEFINITION_GROUP: &str = "definition";
 
 /// The path template every single-node EHR resource sits at or below
 /// (§7a.1).
@@ -96,22 +106,26 @@ pub struct Arrived<'a> {
 
 /// Answers a request under the ITS-REST prefix that no other route serves.
 ///
-/// A request in the single-node EHR area is routed to one node; every other
+/// A request in the single-node EHR area, the creation of an EHR and a
+/// request in the definition area are each routed to one node; every other
 /// ITS-REST path answers `501`, because the gateway does not expose that
 /// area (§7a.1, N32), and so does every path when no federation is
-/// configured.
+/// configured. The stored-query registry, where offered, answers its own
+/// definition requests before this is reached (§12.7).
 pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Response {
     let Some(federation) = federation else {
         return error::fixed(Code::NotImplemented, arrived.request_id);
     };
     // TODO(#68): DEMOGRAPHIC at 501 through the generated router, or routed as declared.
-    // TODO(#75): definition requests routed to one explicitly chosen node.
     match routes::lookup(arrived.method, arrived.path) {
         Lookup::Matched(matched) if in_ehr_area(&matched) => {
             route(federation, arrived, &matched).await
         }
         Lookup::Matched(matched) if write::creates_ehr(&matched) => {
-            create(federation, arrived, &matched).await
+            named(federation, arrived, &matched, EHR_GROUP).await
+        }
+        Lookup::Matched(matched) if in_definition_area(&matched) => {
+            named(federation, arrived, &matched, DEFINITION_GROUP).await
         }
         Lookup::Matched(_) | Lookup::MethodNotAllowed { .. } | Lookup::NotFound => {
             error::fixed(Code::NotImplemented, arrived.request_id)
@@ -127,6 +141,15 @@ pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
             .template
             .strip_prefix(EHR_RESOURCE)
             .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+}
+
+/// Whether `matched` is an operation of the definition area, a template or
+/// a stored query under `{base}/v1/definition/`, that the gateway routes to
+/// one node (§7a.1, §12.6).
+pub(crate) fn in_definition_area(matched: &RouteMatch) -> bool {
+    // TODO(#298): openehr-its declares no Content-Type for this PUT (FerroEHR#3543), so it is 501.
+    matched.group == DEFINITION_GROUP
+        && matched.operation_id != "definition_query_version_store.yaml"
 }
 
 /// Routes one request in the EHR area to the owner of its path `ehr_id` and
@@ -293,19 +316,31 @@ fn locate<'a>(
     owner::located(snapshot, headers, held, federation.index(), ehr_id)
 }
 
-/// Routes `POST {base}/v1/ehr` to the one endpoint the targeting headers
-/// name, and answers as that node did (§12.4, N23).
+/// Routes a request to the one endpoint the targeting headers name, and
+/// answers as that node did (§7a.1, §12.4, §12.6, N23, N43); `area` names
+/// what was routed in the debug event.
 ///
-/// A new EHR has no owner yet, so neither a binding nor the index can name
-/// its node, and a write is never probed (N41): without the headers the
-/// request is a `400` (`target-required`), and headers selecting more than
-/// one endpoint are a `400` too, because an EHR is created at one node only
-/// (§2.3, N23). The body is forwarded byte-identical (N22, N33).
-async fn create(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMatch) -> Response {
+/// A new EHR has no owner for a binding or the index to name, and a template
+/// or a stored query lives at the node it was sent to, so only the client
+/// can name the node. The query string and the declared values are checked
+/// first, as on the EHR route ([`refused_carriers`]). Without the headers the
+/// request is then a `400` (`target-required`): nothing is probed and no
+/// node is picked implicitly.
+/// Headers selecting more than one endpoint are a `400` (`endpoint-several`),
+/// so a definition never fans out and an EHR is created at one node only
+/// (§2.3, N23). The body is forwarded byte-identical, and the node's answer,
+/// an error included, comes back as the node sent it with the acting
+/// endpoint named; no two nodes' answers are combined (N22, N31, N33).
+async fn named(
+    federation: &Federation,
+    arrived: Arrived<'_>,
+    matched: &RouteMatch,
+    area: &'static str,
+) -> Response {
     let started = Instant::now();
     let request_id = arrived.request_id;
     let logged = arrived.outbound.to_string();
-    if let Some(refused) = query_refused(matched, &arrived, &logged) {
+    if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
         return refused;
     }
     let snapshot = federation.snapshot();
@@ -328,8 +363,9 @@ async fn create(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMa
     };
     tracing::debug!(
         endpoint = %endpoint.id(),
+        area,
         request_id = logged,
-        "routed the creation of an EHR"
+        "routed to the endpoint the targeting headers name"
     );
     let provenance = Provenance::of(snapshot, endpoint);
     match forward(federation, endpoint, &arrived, &budget, &logged).await {
@@ -653,7 +689,7 @@ fn header_name(name: &str) -> HeaderName {
 
 #[cfg(test)]
 mod tests {
-    use super::in_ehr_area;
+    use super::{in_definition_area, in_ehr_area};
     use http::Method;
     use openehr_its::rest::routes::{Lookup, lookup};
 
@@ -682,5 +718,28 @@ mod tests {
         assert!(!ehr_area(&Method::GET, "/definition/template/adl1.4"));
         assert!(!ehr_area(&Method::DELETE, "/admin/ehr/7d44"));
         assert!(!ehr_area(&Method::PATCH, "/ehr/7d44"));
+    }
+
+    fn area(method: &Method, path: &str) -> bool {
+        matches!(lookup(method, path), Lookup::Matched(matched) if in_definition_area(&matched))
+    }
+
+    #[test]
+    fn templates_and_stored_query_definitions_are_the_definition_area() {
+        for (method, path) in [
+            (Method::GET, "/definition/template/adl1.4/t.v1/example"),
+            (Method::POST, "/definition/template/adl2"),
+            (Method::GET, "/definition/template/adl2/t.v1/1.0.0"),
+            (Method::GET, "/definition/query/org::q/1.0.0"),
+        ] {
+            assert!(area(&method, path), "{method} {path}");
+        }
+        for (method, path) in [
+            (Method::PUT, "/definition/query/org::q/1.0.0"),
+            (Method::POST, "/query/org::q"),
+            (Method::POST, "/ehr"),
+        ] {
+            assert!(!area(&method, path), "{method} {path}");
+        }
     }
 }

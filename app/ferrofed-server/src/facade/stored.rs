@@ -348,3 +348,27 @@ async fn execute(
     };
     Ok(facade::answer(federation, query, submitted).await)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::serves;
+    use http::Method;
+    use openehr_its::rest::routes::{Lookup, lookup};
+
+    #[test]
+    fn the_registry_answers_every_stored_query_definition_operation() {
+        // NOTE: §12.7 registry-authoritative, N44: where the registry is offered,
+        // no stored-query definition request falls through to a node.
+        for (method, path) in [
+            (Method::GET, "/definition/query/org::q"),
+            (Method::PUT, "/definition/query/org::q"),
+            (Method::GET, "/definition/query/org::q/1.0.0"),
+            (Method::PUT, "/definition/query/org::q/1.0.0"),
+        ] {
+            let Lookup::Matched(matched) = lookup(&method, path) else {
+                panic!("ITS-REST declares {method} {path}");
+            };
+            assert!(serves(&matched), "{method} {path}");
+        }
+    }
+}

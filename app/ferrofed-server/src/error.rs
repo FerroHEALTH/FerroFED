@@ -75,10 +75,11 @@ pub enum Code {
     /// header names an organisation the registry does not know, or the
     /// header names none (§8.1, §8.4.1, N20).
     OrganisationUnknown,
-    /// A write names no node: a write to an EHR resource that no held
-    /// binding or `ehr_id` index entry routes to exactly one (§12.5.1, N41),
-    /// or the creation of an EHR, which only the targeting headers route
-    /// (§12.4, N23).
+    /// A request that only an explicit target can route names no node: a
+    /// write to an EHR resource that no held binding or `ehr_id` index entry
+    /// routes to exactly one (§12.5.1, N41), the creation of an EHR (§12.4,
+    /// N23), or a definition request (§12.6, N43), which only the targeting
+    /// headers route.
     TargetRequired,
     /// The targeting headers of a request routed to a single node select
     /// more than one endpoint (§7a.1, §12.4).
@@ -324,7 +325,7 @@ impl Code {
                 "the organisation directive or header names an organisation the registry does not know (§8.4.1)"
             }
             Self::TargetRequired => {
-                "a write that no binding or index routes to one node, and the creation of an EHR, names its node in the openEHR-federation-endpoint header (§12.4, §12.5.1, N23, N41)"
+                "a write that no binding or index routes to one node, the creation of an EHR, and a definition request name their node in the openEHR-federation-endpoint header (§12.4, §12.5.1, §12.6, N23, N41, N43)"
             }
             Self::EndpointSeveral => {
                 "a request routed to one node selects exactly one endpoint through its targeting headers (§7a.1)"

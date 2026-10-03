@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The vendored sources conformance/obligations.tsv was classified against
+# (#278): every page and schema of the pinned Federation Tier with AQL
+# specification, with the number of its lines that carry an RFC 2119 keyword
+# and the SHA-256 of those lines in order. Tab-separated; lines starting with
+# # are comments.
+#
+# Derived, never edited by hand: `scripts/conformance/obligations.sh --derive`
+# writes it, and `scripts/checks/obligations.sh` fails when a fresh derivation
+# differs. Run --derive only after the rows of every changed source are
+# reclassified.
+source	lines	sha256
+attachments/federated-result-set.schema.json	15	957e2ed9aa314747626f8f63317f3dd93c33b9de56c97b7fee659b706624fd52
+attachments/options-root.schema.json	18	f0f5b66c24efcd3078dfdc04b7c36936dff5417a914110b0dc3ac2552719ea8c
+pages/addressing.adoc	2	4f2a6e8647738af26850a660fd66ed07689e175922dd097835da0e3304b39f81
+pages/annex-a-ihe.adoc	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+pages/annex-b-dutch-gf.adoc	7	22c26a5edd4789814ebdaaf688d3fab74a10d788c0bd67eb2b43a756cc2446e5
+pages/aql-facade.adoc	5	af6da86a623c27e9965ed21b9c0ca1cd51271fff23af9b4150222285a231e0f0
+pages/architecture.adoc	3	55c1facc3c87457e831919476fff2a12d44bed1f1bfa945b5f317c8186029b4a
+pages/changes-from-2025-08-20.adoc	12	d4f119ce1aeef0e3b29af30e7ca543b944f57c3ae90b30214c8995210dbdf53a
+pages/conformance.adoc	1	8e273d232fa29184c16b716f877a46681f499f1fe0ea8f12845db9a75807c23f
+pages/contributors.adoc	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+pages/deduplication.adoc	9	9a42b660ede7cd59a9dca68d9996912723cc30e432c650e7ba27dc902587125b
+pages/endpoint-directive.adoc	7	81f90f726ed926910aa5974b7b73acdb613be1d0faaf1e51fbafc83900351399
+pages/follow-up-routing.adoc	27	d8b93ef603c79b251e64a2bffee799bfd09af5b7fba2021b918caad1b8f109d7
+pages/future.adoc	5	5f5b73f5faf6d2cd3de3110cee1fe351557d071a09e200e74a569bd0f2951b1d
+pages/identifiers.adoc	6	c1a76e244becee966037be396bdacacad3e87d81afddfd6949daca347b771403
+pages/identity-resolution.adoc	16	e80369e2052ba7ec851f2f68ca393882d2ebef5e7f61785984cf2271c4308564
+pages/index.adoc	5	c77f02eba56ba7c55caf62bb32f888c3a5e74367a6341d89ce03da6338baa26f
+pages/localization.adoc	9	afd35ee02ba44d2b4782f7c8205930e5df2be972316937c1557de783dcec9ba0
+pages/membership.adoc	9	00d3dd9687dabce4246a69baa97d8aaff33f55a3838cb187141f7c5604bd7939
+pages/partial-results.adoc	29	b0b47c3fd316690be97d7236f4b602e5e19cded1a424b52154ad8663dcdafcd1
+pages/reference-flow.adoc	4	d280f583d3b754cd39399662ecf8b8989636445ea5cebff5971d78a2d611fb8f
+pages/requirements.adoc	46	8df0d49c8499a7b9ac8846a48d74c2106d206c7930effcf33419eb3488f98953
+pages/rest-facade.adoc	17	ba3f6ad615abf4d46cba02b48e6ded2c80dfe46a45a9f142ab7d1f5f30ac0467
+pages/result-set.adoc	21	deb7f600697d5f357d9d10b829550899833c94549359fbbaccf28280e97bf884
+pages/scope.adoc	3	a661c1fbb7b1585fc8e9633deead7d3eb1a246bad1771f84991202b621856742
+pages/security.adoc	17	712256d984c60dfadccc50ccd82fec3d58b4fc9898752e878dc29d6632f9d57f
+pages/terminology.adoc	6	4e5407e9be4ce3ee3760a2a8d3c6d13d0f37c9ba9046719480893bd774df2ae0
+pages/testing.adoc	6	abc8cc3a798981364b68a4d6b9513371f8dc9cca5e7553aa4d76c45cfb0bc5b8

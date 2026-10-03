@@ -78,8 +78,17 @@ through as the node sent them: a node's `404` is the node's `404`, and a
 node's `500` is the node's `500` (§11.2). Those answers carry no FerroFED
 code, because the body is the node's. The single-node routes are the EHR
 resources under a path `ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it
-(§7a.1), and `POST {base}/v1/ehr`, the creation of an EHR (§12.4). Every other ITS-REST path except the federated query answers `501`
-with the code `not-implemented`.
+(§7a.1), `POST {base}/v1/ehr`, the creation of an EHR (§12.4), and every
+request under `{base}/v1/definition/` the stored-query registry does not
+answer itself (§12.6), except `PUT {base}/v1/definition/query/{name}/{version}`
+without the registry, which answers `501` until #298. A template-missing
+validation failure a node reports is that node's error and passes through
+unmasked (§12.6). Every other ITS-REST path except the federated query and,
+where the registry is offered, a stored query run by name answers `501` with
+the code `not-implemented`. On a request routed by its target alone (a new
+EHR or a definition request), a malformed declared value is refused before
+the missing target is: `parameter-value-invalid`, or the `406` or `415`, comes
+before `target-required`.
 
 Three answers on a routed request are the gateway's, because the node gave
 none of its own to pass on: `node-timeout` and `node-unreachable` (`504`),
@@ -112,8 +121,8 @@ the node is reported and the query succeeds.
 | `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32). |
 | `endpoint-unknown` | 400 | The `FROM ENDPOINT` directive or the `openEHR-federation-endpoint` header names an identifier that is not an endpoint of the registry, or the header names no identifier at all (§8.4.1, N19). This holds on every request the header applies to: a query, and a request routed to one node. The message names the directive or the header, points at the identifier by its place in the list, and never quotes it. |
 | `organisation-unknown` | 400 | The `ORGANISATION` directive or the `openEHR-federation-organisation` header names an identifier that is not an organisation of the registry, or the header names no identifier at all (§8.1, §8.4.1, N20). The message points at the identifier by its place in the list and never quotes it. |
-| `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and neither a resolution binding of the session nor the gateway's `ehr_id` index names exactly one; the gateway never finds a write's destination by trial, so nothing is probed (§12.5.1, N41). The creation of an EHR, `POST {base}/v1/ehr` or `PUT {base}/v1/ehr/{ehr_id}`, always names its node in the header, because a new EHR has no owner for a binding or the index to name (§12.4, N23). |
-| `endpoint-several` | 400 | A request routed to one node selects more than one endpoint through `openEHR-federation-endpoint` or `openEHR-federation-organisation` (§7a.1, §12.4). |
+| `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and neither a resolution binding of the session nor the gateway's `ehr_id` index names exactly one; the gateway never finds a write's destination by trial, so nothing is probed (§12.5.1, N41). The creation of an EHR, `POST {base}/v1/ehr` or `PUT {base}/v1/ehr/{ehr_id}`, always names its node in the header, because a new EHR has no owner for a binding or the index to name (§12.4, N23). So does every request under `{base}/v1/definition/` the stored-query registry does not answer: a template lives at the node it was sent to, and the gateway never picks one for you (§12.6, N43). |
+| `endpoint-several` | 400 | A request routed to one node selects more than one endpoint through `openEHR-federation-endpoint` or `openEHR-federation-organisation` (§7a.1, §12.4). A definition request is never fanned out, so a `*` there is an unknown endpoint (`endpoint-unknown`) and two named endpoints are this error (§12.6, N43). |
 | `query-parameter-refused` | 400 | A request routed to one node carries a query parameter the ITS-REST operation it addresses does not declare, or `subject_id` or `subject_namespace`. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
 | `node-timeout` | 504 | The node a request was routed to, or a member the ask-all probe asked, did not answer in time (§11.2, §11.5). A member that did not answer may hold the `ehr_id`, so the probe names no owner; the message names that member. |
 | `node-unreachable` | 504 | The node a request was routed to, or a member the ask-all probe asked, could not be reached (§11.2). |

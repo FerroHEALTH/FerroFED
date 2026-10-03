@@ -61,9 +61,9 @@
 # or opening a parenthetical.
 #
 # Checks 9 and 10 also read the conformance tables, conformance/*.tsv: their
-# full-line `#` comments and, on every data row, the cell of the column the
-# header row names `reason`. The book renders those cells, so any mention of
-# the architecture document fails there, as in a Rust comment.
+# full-line `#` comments and, on every data row, the cells of the columns the
+# header row names `reason` or `evidence`. The book renders those cells, so
+# any mention of the architecture document fails there, as in a Rust comment.
 #
 # Citation rule: no specification governs this: our own design. A comment
 # cites the specification it rests on (section, N, CP) or official external
@@ -428,17 +428,19 @@ check_hash() {
 }
 
 # Prints the check 9 and 10 violations of one conformance table, one
-# `:LINE: message` per line: its `#` comment lines, then the `reason` cell of
-# every row after the header row that names the columns.
+# `:LINE: message` per line: its `#` comment lines, then the `reason` and
+# `evidence` cells of every row after the header row that names the columns.
 check_tsv() {
   awk -F'\t' "$CITE_AWK"'
     /^#/ { cite_check($0, "comment", 1, 0); next }
     !seen_header {
       seen_header = 1
-      for (i = 1; i <= NF; i++) if ($i == "reason") reason_col = i
+      for (i = 1; i <= NF; i++) if ($i == "reason" || $i == "evidence") read_col[i] = $i
       next
     }
-    reason_col && reason_col <= NF { cite_check($reason_col, "reason cell", 1, 0) }
+    {
+      for (i = 1; i <= NF; i++) if (i in read_col) cite_check($i, read_col[i] " cell", 1, 0)
+    }
   ' "$1"
 }
 
@@ -647,6 +649,10 @@ self_test() {
     $'CP-18\tNode\tnode-profile\tscored against the nodes (section 16.2); no specification governs this: our own design' \
     $'CP-33a\tOperator\toperator\tAnnex A §A.1; HbA1c; the byte 0xA1' $'CP-1\tGateway\tcovered\t-'
   expect g.tsv accepted "" $'track\ttitle\tstatus' $'8\tthe A35 track\tdeferred'
+  local ob=$'id\tstatus\tevidence\tclause'
+  expect h.tsv refused "$marker" "$ob" $'n1.1\tdeferred\tdecision A31: no cursor\tA MUST'
+  expect i.tsv refused "$internal" "$ob" $'n1.2\tplanned\t#80 (docs/architecture.md section 13)\tA MUST'
+  expect j.tsv accepted "" "$ob" $'n1.3\tdeferred\towner decision on #16\tthe A35 clause'
 
   if [[ "$fails" -ne 0 ]]; then
     echo "comment-style self-test: $fails case(s) failed." >&2
