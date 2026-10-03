@@ -23,9 +23,9 @@
 #   4. product version     CITATION.cff version against the docs/VERSIONS.md
 #                          product-version row, and against the root Cargo.toml
 #                          [workspace.package] version.
-#   5. CI tool pins        the zizmor, actionlint, shellcheck, hadolint and
-#                          kubeconform versions .github/workflows/ci.yml
-#                          installs, the Kubernetes release and the schema
+#   5. CI tool pins        the zizmor, actionlint, shellcheck, hadolint,
+#                          kubeconform and lychee versions
+#                          .github/workflows/ci.yml installs, the Kubernetes release and the schema
 #                          commit kubeconform validates against, and the
 #                          cargo-auditable, cargo-cyclonedx and syft versions
 #                          the release workflows install.
@@ -691,6 +691,9 @@ if [ -f "$ci" ]; then
     kubeconform)
       sed -nE 's|.*yannh/kubeconform:v([^@[:space:]]+)@sha256:.*|\1|p' "$ci" | sort -u
       ;;
+    lychee)
+      sed -nE 's|^[[:space:]]*LYCHEE_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
+      ;;
     'kubeconform schema version')
       sed -nE 's|.*-kubernetes-version[[:space:]]+([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
       ;;
@@ -699,7 +702,7 @@ if [ -f "$ci" ]; then
       ;;
     esac
   }
-  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema)
+  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema lychee)
   for tool in "${ci_tools[@]}"; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(ci_tool_pin "$tool")"

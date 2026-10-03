@@ -12,6 +12,8 @@
 # tracker's open milestones through the GitHub API when `gh` is authenticated.
 # Without a token the block stays empty and the page keeps its link to the
 # milestones page, so an assembly on a laptop never fails on the network.
+# SITE_ROADMAP=off leaves the block empty without asking the API, which is how
+# the offline link guard (scripts/checks/site-links.sh) assembles the site.
 #
 # The brand assets (assets/brand) and llms.txt live outside the landing
 # directory and are copied in here, because both are addressed from the site
@@ -69,7 +71,9 @@ cp -R assets/brand "$OUT/assets/"
 # that makes it useful.
 cp llms.txt "$OUT/llms.txt"
 
-if roadmap > "$block" 2>/dev/null && [ -s "$block" ]; then
+if [[ "${SITE_ROADMAP:-on}" == off ]]; then
+  echo "assemble: SITE_ROADMAP=off, so the roadmap block stays empty."
+elif roadmap > "$block" 2>/dev/null && [[ -s "$block" ]]; then
   awk -v blockfile="$block" '
     /<!-- roadmap:begin -->/ { print; while ((getline line < blockfile) > 0) print line; skip = 1; next }
     /<!-- roadmap:end -->/ { skip = 0 }

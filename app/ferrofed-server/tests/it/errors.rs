@@ -31,7 +31,7 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
-use http::{Request, StatusCode, header};
+use http::{Method, Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -414,16 +414,40 @@ async fn an_unexposed_its_rest_area_is_a_501_not_implemented() -> TestResult {
     let dir = tempfile::tempdir()?;
     let a = node_answering("uid-at-a").await;
     let b = node_answering("uid-at-b").await;
-    for path in [
-        format!("/v1/demographic/party/{PATIENT}"),
-        format!("/v1/admin/ehr/{PATIENT}"),
+    // Each request the book's not-implemented entry names, on a gateway with a
+    // registry and no stored-query registry.
+    for (verb, path) in [
+        (Method::GET, format!("/v1/demographic/party/{PATIENT}")),
+        (Method::GET, format!("/v1/admin/ehr/{PATIENT}")),
+        (
+            Method::GET,
+            "/v1/query/org.example::compositions".to_owned(),
+        ),
+        (
+            Method::POST,
+            "/v1/query/org.example::compositions".to_owned(),
+        ),
+        (Method::GET, format!("/v1/no-such-area/{PATIENT}")),
+        (Method::DELETE, "/v1/query/aql".to_owned()),
+        (Method::PATCH, format!("/v1/ehr/{EHR_A}")),
     ] {
         let app = gateway(dir.path(), &a.uri(), &b.uri(), 2000, true)?;
-        let (status, text) = call(app, Request::get(&path).body(Body::empty())?).await?;
-        assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "§7a.1, N32: {path}");
+        let request = Request::builder()
+            .method(verb.clone())
+            .uri(&path)
+            .body(Body::empty())?;
+        let (status, text) = call(app, request).await?;
+        assert_eq!(
+            StatusCode::NOT_IMPLEMENTED,
+            status,
+            "§7a.1, N32: {verb} {path}"
+        );
         assert_eq!("not-implemented", checked(status, &text)?.code);
         quotes_nothing(&text);
     }
+    let asked = a.received_requests().await.ok_or("recording is on")?.len()
+        + b.received_requests().await.ok_or("recording is on")?.len();
+    assert_eq!(0, asked, "a 501 asks no node");
     Ok(())
 }
 

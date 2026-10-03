@@ -32,7 +32,8 @@ zizmor	zizmorcore/zizmor
 actionlint	rhysd/actionlint
 shellcheck	koalaman/shellcheck
 hadolint	hadolint/hadolint
-kubeconform	yannh/kubeconform"
+kubeconform	yannh/kubeconform
+lychee	lycheeverse/lychee"
 
 # The second cell of the matrix row whose first cell is $1, with the backticks
 # stripped and only the first token kept, the same shape versions.sh reads.
@@ -63,7 +64,10 @@ while IFS=$'\t' read -r label repo; do
     unreadable=1
     continue
   fi
-  latest="${tag#v}"
+  # A tag may lead with the repository's name: lychee tags its releases
+  # lychee-vX.Y.Z.
+  latest="${tag#"${repo##*/}"-}"
+  latest="${latest#v}"
 
   if [ "$pinned" = "$latest" ]; then
     printf 'current    %s %s (%s)\n' "$label" "$pinned" "$repo"
