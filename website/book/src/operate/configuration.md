@@ -110,7 +110,7 @@ The sections, and the page that covers each:
 | Key or section | What it sets | Page |
 |---|---|---|
 | `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
-| `[server]`, `[telemetry]`, `[credentials]` | the listener, the console, the onward credentials | this page |
+| `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form | [The registry](registry.md) |
 | `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
@@ -135,13 +135,33 @@ listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
 
 # Outbound credentials, one section per endpoint id. Each section names one
-# scheme: a bearer token, or a user and a password.
+# scheme: a bearer token, a user and a password, or an OAuth 2.0 grant.
 [credentials."hospital-a"]
 bearer_token_file = "/run/secrets/hospital-a-token"
 
 [credentials."clinic-b"]
 user = "ferrofed"
 password_file = "/run/secrets/clinic-b-password"
+
+# OAuth 2.0 client credentials with a signed JWT client assertion (§13.1).
+[credentials."cdr-c".oauth2]
+grant = "client_credentials"
+client_auth = "private_key_jwt"
+token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
+client_id = "ferrofed-gateway"
+scope = "system/aql-*.s system/composition-*.cru"
+resource = "https://cdr-c.example.org/openehr"   # optional, RFC 8707
+# audience = "cdr-c"                             # optional
+
+# The gateway's signing keys, which sign every client assertion and are
+# published as a JWK Set. Needed by any oauth2 section.
+[signing]
+key_file = "/run/secrets/ferrofed-signing-key.pem"
+# previous_key_file = "/run/secrets/ferrofed-signing-key-previous.pem"
+jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
+assertion_lifetime_s = 300    # at most 300
+node_jwks_cache_s = 3600      # how long the nodes cache the JWK Set
+rotation_overlap_s = 3900     # at least assertion_lifetime_s + node_jwks_cache_s
 ```
 
 Every secret has a `_file` sibling, read at boot and trimmed, so a secret
@@ -161,7 +181,65 @@ unchanged.
 
 A PIX Manager's `url` carries no credential: one with a user name or a
 password in it is refused naming the key, as an endpoint URL in the registry
-document is. Its credentials go in `[pixm.manager.credentials]`.
+document is. Its credentials go in `[pixm.manager.credentials]`, which takes
+a bearer token or a user and a password, never an `oauth2` grant.
+
+### OAuth 2.0 to a node
+
+An `oauth2` section makes the gateway authenticate to that node as itself
+(§13.1, N25). Before a request, it asks the node's token endpoint for an
+access token with the client-credentials grant (RFC 6749 §4.4). It
+authenticates there with a JWT client assertion (RFC 7523 §2.2), signed
+ES384 with the `[signing]` key. The assertion names `client_id` as its
+`iss` and `sub` and the token endpoint as its `aud`, lives
+`assertion_lifetime_s` seconds, and carries a fresh `jti`. The token request
+carries `scope` and, when set, `resource` and `audience`. Every key of the
+section is required except those two:
+
+- `scope` is space-separated SMART on openEHR scopes, each a resource scope
+  of the `system` compartment (`system/aql-*.s`, `system/composition-*.cru`);
+  anything else is refused at load.
+- `token_endpoint` is an `http` or `https` URL with no user name, password,
+  query or fragment.
+
+The gateway caches a token until 30 seconds before the end of the lifetime
+its `expires_in` states, with one token request per endpoint at a time. A
+token with no stated lifetime serves one request. A node that answers `401`
+drops the cached token, and the next request obtains a new one. When no
+token can be obtained, that node is reported `node-error` and is sent
+nothing: the gateway never dispatches unauthenticated. The answer says only
+`no onward credential could be obtained, so nothing was sent`, followed by
+the token endpoint's RFC 6749 §5.2 `error` code when it refused with a
+registered one. The full account, the token endpoint's description
+included, goes to the log at `warn` with the endpoint and the request id.
+The admission check authenticates the same way.
+
+The caller's own `Authorization` header never reaches a node.
+
+### Signing keys and the JWK Set
+
+`[signing]` holds the gateway's ES384 keys: P-384 private keys in PKCS#8
+PEM, each read from a file. To make one:
+
+```text
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out ferrofed-signing-key.pem
+```
+
+The gateway serves its public keys as a JWK Set (RFC 7517) at
+`GET {base}/.well-known/jwks.json`, with no client authentication, and
+declares `jwks_uri` as `federation.auth.jwks_uri` in `OPTIONS {base}/`
+(§13.1, N30). Point `jwks_uri` at that route on the gateway's public
+address, or at wherever your deployment publishes the keys. Each key's `kid`
+is its RFC 7638 thumbprint, so the same key always has the same `kid`.
+
+To rotate, make a new key, set it as `key_file`, move the old one to
+`previous_key_file`, and restart. The new key signs from then on. The JWK
+Set publishes both keys for `rotation_overlap_s` seconds from the start of
+the process, then the current key alone. The overlap must be at least the
+assertion lifetime plus the time the nodes cache the JWK Set, so a node
+still holding the old set, or an assertion the old key signed, finds its
+key. Once the window has passed, remove `previous_key_file`. A change to
+`[signing]` takes effect only on a restart; a reload reports it.
 
 ## The environment
 

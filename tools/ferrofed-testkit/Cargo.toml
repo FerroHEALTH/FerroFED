@@ -14,6 +14,9 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+# The harness token endpoint generates each synthetic signing key at run time
+# (#81).
+aws-lc-rs.workspace = true
 bytes.workspace = true
 # The FHIR R4 model of the harness PIX Manager and its ITI-104 source (#47):
 # `resources` for `Patient`, which a test device may compile and the shipped
@@ -23,6 +26,11 @@ http.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["server", "http1"] }
 hyper-util = { workspace = true, features = ["tokio"] }
+# The harness token endpoint verifies each client assertion against the
+# published JWK Set (#81).
+jsonwebtoken.workspace = true
+# A generated signing key is written as PKCS#8 PEM (#81).
+pem.workspace = true
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true
 # The canonical JSON writer the seed's EHR_STATUS is written with.

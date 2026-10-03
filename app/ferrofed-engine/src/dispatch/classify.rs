@@ -14,8 +14,8 @@ use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use openehr_its::rest::client::{ClientError, ErrorBody, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
-use super::reported::{self, excerpt_of};
-use super::{Contact, DispatchError, NodeReply};
+use super::reported::{self, chain, excerpt_of};
+use super::{Contact, DispatchError, DispatchOptions, NodeReply};
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
 
@@ -83,7 +83,7 @@ pub(super) fn answered(
 
 /// The reply, or the gateway-side error, for a call to `endpoint` that
 /// reached no documented answer, its `error` holding no identifier of
-/// `withheld`.
+/// `options` withholds.
 ///
 /// A `403` whose body carries one of `refusal_codes`, the endpoint's
 /// consent refusal codes, is `consent-denied` ([`refused_on_consent`]).
@@ -91,8 +91,9 @@ pub(super) fn failed(
     (endpoint, refusal_codes): (&EndpointId, &BTreeSet<String>),
     error: ClientError,
     latency_ms: u64,
-    withheld: &Withheld,
+    options: &DispatchOptions,
 ) -> Result<NodeReply, DispatchError> {
+    let withheld = options.withheld();
     let failure = |outcome, contact| Ok(NodeReply::Failed { outcome, contact });
     match error {
         ClientError::DeadlineElapsed { .. } => failure(
@@ -156,10 +157,13 @@ pub(super) fn failed(
             },
             Contact::Answered(status),
         ),
-        credentials @ ClientError::Credentials { .. } => Err(DispatchError::Credentials {
-            endpoint: endpoint.clone(),
-            source: Box::new(credentials),
-        }),
+        ClientError::Credentials { source, .. } => failure(
+            Outcome::NodeError {
+                latency_ms,
+                error: reported::unauthenticated(&source, endpoint, options.request_id()),
+            },
+            Contact::Unsent,
+        ),
         other => Err(DispatchError::Compose {
             endpoint: endpoint.clone(),
             source: Box::new(other),
@@ -221,26 +225,12 @@ fn text(message: impl Into<String>) -> ErrorDetail {
     ErrorDetail::Text(message.into())
 }
 
-/// `error` and its causes, joined, so the reason a node was unreachable is
-/// kept (the engine reports it, never only "offline").
-fn chain(error: &(dyn std::error::Error + 'static)) -> String {
-    let mut out = error.to_string();
-    let mut next = error.source();
-    while let Some(cause) = next {
-        out.push_str(": ");
-        out.push_str(&cause.to_string());
-        next = cause.source();
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
 
     use super::failed;
-    use crate::dispatch::DispatchError;
-    use crate::hygiene::Withheld;
+    use crate::dispatch::{DispatchError, DispatchOptions};
     use ferrofed_registry::id::EndpointId;
     use http::Method;
     use openehr_its::rest::client::ClientError;
@@ -253,7 +243,12 @@ mod tests {
     fn is_compose(error: ClientError) -> Result<bool, Box<dyn std::error::Error>> {
         let endpoint = EndpointId::new("node-a-pub")?;
         Ok(matches!(
-            failed((&endpoint, &BTreeSet::new()), error, 0, &Withheld::none()),
+            failed(
+                (&endpoint, &BTreeSet::new()),
+                error,
+                0,
+                &DispatchOptions::new(std::time::Instant::now()),
+            ),
             Err(DispatchError::Compose { .. })
         ))
     }

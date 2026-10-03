@@ -81,13 +81,13 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 
 The openEHR surface comes from the published `openehr-*` crates, consumed by
 version like any other dependency (`docs/architecture.md` §2). FerroEHR
-releases them as one lockstep family, so the four rows below are one group:
+releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.81 since 2026-10-03. The family's
-`openehr-sdt` (the SMART on openEHR scope grammar) is not a dependency yet: it
-joins the group at the family pin when client authentication (#80) first
-reads scopes with it.
+pin is the latest version on crates.io, 0.0.81 since 2026-10-03.
+`openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
+family pin with its default features off, so only the grammar is compiled:
+the onward grant (#81) writes and checks the scope it requests with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -95,6 +95,7 @@ reads scopes with it.
 | `openehr-its` | 0.0.81 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 | `openehr-base` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 | `openehr-rm` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-sdt` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,

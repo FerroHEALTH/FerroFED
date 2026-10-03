@@ -69,6 +69,43 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   you choose "Auto" too: `website/book/js/mermaid-theme-sync.js` redraws them
   when the theme crosses between light and dark, which the vendored
   mdbook-mermaid script does only on a click of a named theme.
+- The gateway authenticates to a node as itself with OAuth 2.0 client
+  credentials and a signed JWT client assertion, the default onward mechanism
+  of §13.1 (N25, CP-17 onward half, #81). A `[credentials."<endpoint
+  id>".oauth2]` section names the node's token endpoint, the `client_id` and
+  the scope, written in the SMART on openEHR grammar and held to the `system`
+  compartment, with optional `resource` and `audience`. Each assertion is
+  ES384, names the client as `iss` and `sub` and the token endpoint as `aud`,
+  lives at most 300 seconds and carries a fresh `jti` (RFC 7523 §3). A token
+  is cached until 30 seconds before it expires, with one token request per
+  endpoint at a time, and a node's `401` drops it. The admission check
+  authenticates the same way.
+- `[signing]` holds the gateway's ES384 signing key, read from a file, and
+  during a rotation the previous key, published beside it for a configurable
+  overlap window of at least the assertion lifetime plus the nodes' JWK Set
+  cache time. The gateway serves its public keys as a JWK Set (RFC 7517) at
+  `GET {base}/.well-known/jwks.json`, each with its RFC 7638 thumbprint as
+  `kid`, and declares the configured location as `federation.auth.jwks_uri` in
+  `OPTIONS {base}/` (§13.1, N30).
+
+### Changed
+
+- An onward credential that cannot be obtained fails that node as
+  `node-error` with nothing sent to it, on the federated query, the
+  definition fan-out and a routed request (`424 node-error`), where it was a
+  gateway error before (§13.1, §11.1).
+
+### Security
+
+- A node is never sent a request without its configured onward credential,
+  and never the caller's own `Authorization` header.
+- The `error` a client sees for a node no token could be obtained for is a
+  fixed sentence and, when the token endpoint refused with one, its
+  registered RFC 6749 §5.2 code. The token endpoint's description, its
+  address and the network error go to the log alone, and the assertion and
+  the token go nowhere.
+- A token endpoint URL with a user name, a password, a query or a fragment is
+  refused at load, so no secret can ride in it into a log.
 
 ## [0.0.7] - 2026-10-03
 

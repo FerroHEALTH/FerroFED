@@ -28,7 +28,7 @@ governs this: our own design.
 | Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm ITI-83 ([Identity resolution](identity.md)) |
 | Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every member's cross-reference | none: every member is a candidate (`ask-all`); IHE XCPD is planned for v0.0.8 ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) |
 | Addressing | resolves each community to its CDR base URLs | the registry document, in TOML or as FHIR `Organization` and `Endpoint` resources ([The registry](registry.md)); reading it from an mCSD directory is planned for v0.0.8 ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)) |
-| Authentication and authorization | authenticates the client, and the gateway to each node | outbound credentials per endpoint; no client authentication yet ([below](#authentication)) |
+| Authentication and authorization | authenticates the client, and the gateway to each node | outbound credentials per endpoint, a bearer token, basic credentials or OAuth 2.0 client credentials with an RFC 7523 assertion; no client authentication yet ([below](#authentication)) |
 
 The specification references the internals of each service out (§2.2): how
 an MPI matches identities, how a locator decides where data is, and the
@@ -47,19 +47,31 @@ identity, no request belongs to a session, so the per-session resolution
 bindings of §12.5.1 are never held ([The registry](registry.md#resolution-bindings)).
 
 Toward the nodes, the gateway authenticates with credentials you configure
-per endpoint: an RFC 6750 bearer token, or an RFC 7617 user and password,
-each inline or read from a file ([Configuration](configuration.md#the-file)).
-It sends them on every request to that endpoint, and to nothing else. A PIX
-Manager takes the same two kinds, or none where the transport authenticates
-the gateway ([Identity resolution](identity.md)).
+per endpoint ([Configuration](configuration.md#the-file)):
+
+- an RFC 6750 bearer token, or an RFC 7617 user and password, each inline or
+  read from a file, sent on every request to that endpoint and to nothing
+  else;
+- OAuth 2.0 client credentials with an RFC 7523 signed JWT client assertion,
+  the default mechanism of §13.1 (N25): the gateway obtains a token at the
+  node's token endpoint and sends that
+  ([OAuth 2.0 to a node](configuration.md#oauth-20-to-a-node)).
+
+For the OAuth 2.0 grant, the node's authorization server needs the gateway
+registered as a client under its `client_id`, with the gateway's JWK Set
+location. The gateway serves the set at `{base}/.well-known/jwks.json`
+without client authentication, and declares its location as
+`federation.auth.jwks_uri` in `OPTIONS {base}/`
+([Signing keys and the JWK Set](configuration.md#signing-keys-and-the-jwk-set)).
+Keep that route reachable from every node's authorization server, also once
+client authentication guards the rest of the surface. A PIX Manager takes a
+bearer token or a user and password, or none where the transport
+authenticates the gateway ([Identity resolution](identity.md)).
 
 Planned for v0.0.8 (§13): client authentication at the gateway
-([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), the client's
+([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)) and the client's
 identity conveyed on every request to a node
-([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)), and OAuth 2.0
-client credentials with an RFC 7523 signed JWT assertion to each node, with
-the gateway's JWKS published
-([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)).
+([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)).
 
 ## What the gateway keeps
 

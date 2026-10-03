@@ -19,7 +19,7 @@
 //! |---|---|---|
 //! | `Accept` | `application/json` | `openehr-its`'s client runtime, its default when the call sets none |
 //! | `Content-Type` | `application/json` | `openehr-its`'s client runtime, for the JSON body |
-//! | `Authorization` | `Basic` or `Bearer` | the endpoint's onward credential from the gateway's configuration, only when one is configured |
+//! | `Authorization` | `Basic` or `Bearer` | the endpoint's onward credential from the gateway's configuration, or the access token its OAuth 2.0 grant obtained ([`crate::onward`]), only when one is configured |
 //! | `X-Request-Id` | a version 4 UUID | [`OutboundId::mint`], only when the caller passes one |
 //! | `Host`, `Content-Length` | the endpoint's authority, the body length | the HTTP engine, from the registry URL and the composed body |
 //! | `Accept-Encoding` | the codings the engine decodes | the HTTP engine, from its compression features |

@@ -16,6 +16,9 @@ readme = "README.md"
 publish = false
 
 [dependencies]
+# The onward credentials provider the node client asks before each attempt
+# (#81).
+async-trait.workspace = true
 ferrofed-registry.workspace = true
 # The typed `ehr_id` a node query is scoped to (#45).
 openehr-base.workspace = true
@@ -29,22 +32,33 @@ openehr-query.workspace = true
 # The EHR_STATUS an admission check creates an EHR with, and the EHR it reads
 # back (§12b.1, #79).
 openehr-rm.workspace = true
+# The SMART on openEHR scope an onward token is requested with (#81).
+openehr-sdt.workspace = true
 # The identifiers the gate withholds are never printed (#45).
 secrecy.workspace = true
 http.workspace = true
+# The wall clock the claims of an onward client assertion are dated by (#81).
+jiff.workspace = true
+# The ES384 client assertion of the onward grant, and the published JWKS (#81).
+jsonwebtoken.workspace = true
 # Accept and Content-Type composed from the operation's listed media types
 # (#261).
 mime.workspace = true
+# The claims of an onward client assertion and the token endpoint answer (#81).
+serde.workspace = true
 # The result cells the versions a node holds are read from (§12.2, #64).
 serde_json.workspace = true
 thiserror.workspace = true
-# One task per in-scope node under one deadline (§11.5, N38).
-tokio = { workspace = true, features = ["rt", "time"] }
+# One task per in-scope node under one deadline (§11.5, N38), and one onward
+# token request per endpoint at a time (#81).
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+# The onward grant says when a token was obtained and why one was not, never
+# the token (#81).
+tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-async-trait.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 serde_json.workspace = true

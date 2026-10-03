@@ -5,14 +5,21 @@
 //! `_file` sibling read at boot.
 
 use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
 
+use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
+use ferrofed_engine::onward::provider::MAX_ASSERTION_LIFETIME;
+use ferrofed_engine::onward::{Grant, Scope, SystemClock};
+use ferrofed_registry::secret::Secret;
+use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use secrecy::SecretString;
 use secrecy::zeroize::Zeroizing;
 
-use crate::config::Credentials;
 use crate::config::error::{BasicFault, Error};
-use crate::config::settings::Scheme;
+use crate::config::settings::{Scheme, SigningSettings};
+use crate::config::{ClientAuth, Credentials, GrantKind, OAuth2, Signing};
 
 /// Returns the scheme `credentials` describes, once it is known to fit the
 /// `Authorization` header it is sent in.
@@ -30,6 +37,15 @@ pub(super) fn resolve_credentials(
         credentials.password.as_ref(),
         credentials.password_file.as_deref(),
     )?;
+    if let Some(oauth2) = &credentials.oauth2 {
+        if token.is_some() || credentials.user.is_some() || password.is_some() {
+            return Err(Error::Scheme {
+                section: section.to_owned(),
+            });
+        }
+        return resolve_grant(&format!("{section}.oauth2"), oauth2)
+            .map(|grant| Scheme::OAuth2(Box::new(grant)));
+    }
     match (token, credentials.user.as_deref(), password) {
         (Some(_), Some(_), _) | (Some(_), None, Some(_)) => Err(Error::Scheme {
             section: section.to_owned(),
@@ -148,4 +164,125 @@ fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
         });
     }
     Ok(SecretString::from(value))
+}
+
+/// Returns the grant the `oauth2` table at `section` describes, every key
+/// set and each value held to its rule: the scope to the SMART on openEHR
+/// grammar, the token endpoint to an `http` or `https` URL with no userinfo,
+/// the `resource` to an absolute URI (RFC 8707 §2).
+fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
+    let missing = |name: &str| Error::Missing {
+        key: format!("{section}.{name}"),
+    };
+    match oauth2.grant {
+        Some(GrantKind::ClientCredentials) => {}
+        None => return Err(missing("grant")),
+    }
+    match oauth2.client_auth {
+        Some(ClientAuth::PrivateKeyJwt) => {}
+        None => return Err(missing("client_auth")),
+    }
+    let token_endpoint = oauth2
+        .token_endpoint
+        .as_ref()
+        .ok_or_else(|| missing("token_endpoint"))?;
+    if oauth2.client_id.is_empty() {
+        return Err(missing("client_id"));
+    }
+    if oauth2.scope.trim().is_empty() {
+        return Err(missing("scope"));
+    }
+    let scope = Scope::parse(&oauth2.scope).map_err(|source| Error::Scope {
+        key: format!("{section}.scope"),
+        source,
+    })?;
+    let refused = |source| Error::Grant {
+        section: section.to_owned(),
+        source,
+    };
+    let mut grant = Grant::new(token_endpoint, oauth2.client_id.clone(), scope).map_err(refused)?;
+    if let Some(resource) = &oauth2.resource {
+        grant = grant.with_resource(resource).map_err(refused)?;
+    }
+    if let Some(audience) = &oauth2.audience {
+        grant = grant.with_audience(audience.clone()).map_err(refused)?;
+    }
+    Ok(grant)
+}
+
+/// Returns the signing keys and their publication `[signing]` describes:
+/// both keys read from their files and held to ES384, the assertion
+/// lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
+/// that lifetime plus the nodes' JWK Set cache time, and `jwks_uri` an
+/// absolute `http` or `https` URL (§13.1, N25).
+pub(super) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Error> {
+    let max = MAX_ASSERTION_LIFETIME.as_secs();
+    if signing.assertion_lifetime_s == 0 || signing.assertion_lifetime_s > max {
+        return Err(Error::AssertionLifetime {
+            seconds: signing.assertion_lifetime_s,
+            max,
+        });
+    }
+    // NOTE: no specification governs this: our own design; a node holding the
+    // previous set still meets an assertion the previous key signed.
+    if signing.rotation_overlap_s
+        < signing
+            .assertion_lifetime_s
+            .saturating_add(signing.node_jwks_cache_s)
+    {
+        return Err(Error::RotationOverlap {
+            overlap_s: signing.rotation_overlap_s,
+            lifetime_s: signing.assertion_lifetime_s,
+            cache_s: signing.node_jwks_cache_s,
+        });
+    }
+    let jwks_uri = jwks_uri(signing.jwks_uri.as_deref())?;
+    let key_file = signing.key_file.as_deref().ok_or_else(|| Error::Missing {
+        key: String::from("signing.key_file"),
+    })?;
+    let current = signing_key("signing.key", key_file)?;
+    let previous = signing
+        .previous_key_file
+        .as_deref()
+        .map(|path| signing_key("signing.previous_key", path))
+        .transpose()?;
+    let overlap = Duration::from_secs(signing.rotation_overlap_s);
+    let keys =
+        KeyRing::new(current, previous, overlap, Arc::new(SystemClock)).map_err(|source| {
+            Error::SigningKey {
+                key: String::from("signing.previous_key_file"),
+                source,
+            }
+        })?;
+    Ok(SigningSettings {
+        keys: Arc::new(keys),
+        jwks_uri,
+        assertion_lifetime: Duration::from_secs(signing.assertion_lifetime_s),
+    })
+}
+
+/// Returns `signing.jwks_uri`, required and an absolute `http` or `https`
+/// URL with no userinfo, since every node reads it (§13.1).
+fn jwks_uri(text: Option<&str>) -> Result<Uri, Error> {
+    let key = || String::from("signing.jwks_uri");
+    let text = text.ok_or_else(|| Error::Missing { key: key() })?;
+    let parsed = url::Url::parse(text).map_err(|source| Error::Url { key: key(), source })?;
+    if !matches!(parsed.scheme(), "http" | "https")
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return Err(Error::HttpUrl { key: key() });
+    }
+    Uri::new(text).map_err(|_refused| Error::HttpUrl { key: key() })
+}
+
+/// Reads the signing key the `_file` sibling of `key` names.
+fn signing_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
+    let pem = secret::<Secret>(key, None, Some(path))?.ok_or_else(|| Error::Missing {
+        key: format!("{key}_file"),
+    })?;
+    SigningKey::from_pem(&pem.to_secret_string()).map_err(|source| Error::SigningKey {
+        key: format!("{key}_file"),
+        source,
+    })
 }

@@ -29,10 +29,12 @@
 //!
 //! A `node-error` carries the node's own status and an excerpt of its
 //! message ([`reported`], §9.5, §11.2), never folded into `offline`; a
-//! refused connection still carries its reason. A
-//! failure on the gateway's side before any request left (a credential the
-//! provider could not produce, a body that would not serialize) is a
-//! [`DispatchError`], never an endpoint status: nothing was sent to report on.
+//! refused connection still carries its reason. An onward credential that
+//! could not be obtained is a `node-error` carrying the token endpoint's
+//! error, with nothing sent ([`reported::unauthenticated`]; §13.1, N25). Any
+//! other failure on the gateway's side before the request left (a body that
+//! would not serialize) is a [`DispatchError`], never an endpoint status:
+//! nothing was sent to report on.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -210,6 +212,11 @@ impl DispatchOptions {
     /// The identifiers no request may carry.
     pub(crate) fn withheld(&self) -> &Withheld {
         &self.withheld
+    }
+
+    /// The gateway's id of the request, when the caller passed one.
+    pub(crate) fn request_id(&self) -> Option<&OutboundId> {
+        self.request_id.as_ref()
     }
 
     /// The `ehr_id` the gateway composed into a forwarded request's path.
@@ -400,15 +407,6 @@ pub enum SetupError {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum DispatchError {
-    /// The credentials provider produced no credential for the onward grant.
-    #[error("no credential could be obtained for endpoint {endpoint}")]
-    Credentials {
-        /// The endpoint.
-        endpoint: EndpointId,
-        /// What the client runtime reported.
-        #[source]
-        source: Box<ClientError>,
-    },
     /// The outbound gate found a withheld patient identifier in the request
     /// the gateway composed, so the request was not sent (§5.4.1, N33).
     #[error(
@@ -537,7 +535,7 @@ impl<T: Transport> NodeClient<T> {
                 (&self.endpoint, &self.consent_refusal_codes),
                 error,
                 latency_ms,
-                options.withheld(),
+                options,
             ),
         }
     }

@@ -20,7 +20,10 @@
 //! each header and query value a routed request forwards to the kind its
 //! ITS-REST operation declares (§5.4.1, N33). [`outbound_id`] is the
 //! correlation id the gateway mints for a node request, with the inventory of
-//! every header a node request carries (§5.4.1, N33).
+//! every header a node request carries (§5.4.1, N33). [`onward`] is how the
+//! gateway authenticates to a node as itself: an OAuth 2.0 client-credentials
+//! grant with a signed JWT client assertion, and the keys it publishes
+//! (§13.1, N25).
 #![doc(test(attr(deny(warnings))))]
 
 pub mod declared;
@@ -29,6 +32,7 @@ pub mod ehr;
 pub mod fanout;
 pub mod forward;
 pub mod hygiene;
+pub mod onward;
 pub mod outbound_id;
 pub mod probe;
 

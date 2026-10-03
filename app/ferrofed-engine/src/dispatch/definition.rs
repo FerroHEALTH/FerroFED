@@ -27,7 +27,7 @@ use openehr_its::rest::generated::definition::{
 };
 
 use super::{Contact, DispatchError, DispatchOptions, NodeClient, classify, reported};
-use crate::hygiene::{Composed, Outbound, Withheld};
+use crate::hygiene::{Composed, Outbound};
 
 /// The query language a distributed definition is stored as, the ITS-REST
 /// `query_type`.
@@ -132,7 +132,7 @@ impl<T: Transport> NodeClient<T> {
                 (latency_ms, StatusCode::CONFLICT),
                 reported::answered(StatusCode::CONFLICT, &body, options.withheld()),
             )),
-            Err(error) => self.definition_failure(error, latency_ms, options.withheld()),
+            Err(error) => self.definition_failure(error, latency_ms, options),
         }
     }
 
@@ -169,7 +169,7 @@ impl<T: Transport> NodeClient<T> {
                 Ok(NodeCopy::Missing { latency_ms })
             }
             Err(error) => self
-                .definition_failure(error, latency_ms, options.withheld())
+                .definition_failure(error, latency_ms, options)
                 .map(|Stored { outcome, contact }| NodeCopy::Failed { outcome, contact }),
         }
     }
@@ -189,13 +189,14 @@ impl<T: Transport> NodeClient<T> {
 
     /// The outcome of a call that reached no documented answer, carrying the
     /// node's status and an excerpt of its message with no identifier of
-    /// `withheld`, or the gateway-side error when nothing left.
+    /// `options` withholds, or the gateway-side error when nothing left.
     fn definition_failure(
         &self,
         error: ClientError,
         latency_ms: u64,
-        withheld: &Withheld,
+        options: &DispatchOptions,
     ) -> Result<Stored, DispatchError> {
+        let withheld = options.withheld();
         let failed = |message: String| ErrorDetail::Text(message);
         let late = || Outcome::TimeOut {
             latency_ms,
@@ -249,9 +250,12 @@ impl<T: Transport> NodeClient<T> {
                     "the node answered {status} with a body that is not an ITS-REST StoredQuery"
                 )),
             )),
-            credentials @ ClientError::Credentials { .. } => Err(DispatchError::Credentials {
-                endpoint: self.endpoint.clone(),
-                source: Box::new(credentials),
+            ClientError::Credentials { source, .. } => Ok(Stored {
+                outcome: Outcome::NodeError {
+                    latency_ms,
+                    error: reported::unauthenticated(&source, &self.endpoint, options.request_id()),
+                },
+                contact: Contact::Unsent,
             }),
             other => Err(DispatchError::Compose {
                 endpoint: self.endpoint.clone(),

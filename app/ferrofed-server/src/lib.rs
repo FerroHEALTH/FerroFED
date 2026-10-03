@@ -27,7 +27,9 @@
 //! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
 //! [`healthcheck`] is the `healthcheck` job a container runtime runs beside
 //! the server, and [`health`] answers liveness, readiness and the last
-//! observed state of every dependency.
+//! observed state of every dependency. [`jwks`] serves the gateway's public
+//! signing keys, which its OAuth 2.0 client assertions to the nodes are
+//! verified against (§13.1, N25).
 //!
 //! The server builds for Unix targets only: it drains on `SIGTERM` and
 //! reloads on `SIGHUP`, and every release binary and the container image are
@@ -53,8 +55,10 @@ pub mod facade;
 pub mod federation;
 pub mod health;
 pub mod healthcheck;
+pub mod jwks;
 pub mod localization;
 pub mod metrics;
+mod onward;
 pub mod panic;
 pub mod reload;
 pub mod request_id;
@@ -455,7 +459,9 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// and every registered indicator is up and `503` with the phase and each
 /// indicator's state otherwise, and `GET {base}/health/dependencies`
 /// answers `200` with the last observed state of each member endpoint and of
-/// the resolver ([`health::dependencies`]).
+/// the resolver ([`health::dependencies`]). `GET {base}/.well-known/jwks.json`
+/// answers the gateway's public signing keys with no client authentication
+/// ([`jwks`]), and `404` when none are configured.
 /// `POST {base}/v1/query/aql` answers the federated query when a registry is
 /// configured ([`facade::query_aql`]), and so does `GET {base}/v1/query/aql`
 /// from its query string ([`facade::query_aql_get`]). Every other path under
@@ -467,6 +473,9 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         .route("/health", get(liveness))
         .route("/health/readiness", get(readiness))
         .route("/health/dependencies", get(dependencies))
+        // NOTE: RFC 7517 §5, §13.1 jwks-discovery: public keys are public material,
+        // so the JWK Set stays outside every client authentication layer.
+        .route(jwks::JWKS_PATH, get(jwks::jwks))
         .route(
             facade::QUERY_AQL,
             get(facade::query_aql_get)
