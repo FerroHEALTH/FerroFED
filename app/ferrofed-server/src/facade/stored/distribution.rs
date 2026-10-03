@@ -24,6 +24,14 @@
 //! directive is refused for distribution before anything is stored (§12.7
 //! fanout-endpoint-targeted-refused).
 //!
+//! The operator's action on the admin listener sends a version the registry
+//! holds again to the members it names and leaves the registry's copy as it
+//! is, so a member that missed a distribution or was admitted after it can be
+//! sent the version (§12.7 stored-query-drift); a second `PUT` stays refused
+//! (§12.7 stored-query-versioning). Its answer has the shape of a first
+//! distribution, and its `meta.registry` says `held` where a first
+//! distribution says `stored`.
+//!
 //! A `GET` of a version naming members reads each member's copy with ITS-REST
 //! `GET /definition/query/{name}/{version}` and compares its AQL with the
 //! registry's: the answer is the registry's `StoredQuery` with
@@ -44,6 +52,7 @@ use http::{HeaderMap, HeaderValue, StatusCode, header};
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::error::WireError;
 use openehr_federation::headers;
+use openehr_federation::meta::FederationMeta;
 use openehr_federation::object::Extra;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
@@ -54,12 +63,11 @@ use serde::Serialize;
 use super::{Refused, its_rest};
 use crate::error::Code;
 use crate::facade::provenance::Provenance;
-use crate::facade::route::fan_out::{
-    self, UploadedMeta, answer_status, each, not_sent, record_meta, settled,
-};
+use crate::facade::route::fan_out::{self, answer_status, each, not_sent, record_meta, settled};
 use crate::facade::route::{Arrived, Deadlines};
 use crate::facade::security;
 use crate::federation::Federation;
+use ferrofed_engine::outbound_id::OutboundId;
 
 /// The `code` of a member whose copy differs from the registry's.
 const DIFFERS: &str = "definition-differs";
@@ -118,6 +126,19 @@ pub(super) fn distributable(aql: &str, logged: &str) -> Result<(), Refused> {
     }
 }
 
+/// What the registry did with the version a distribution sends, which the
+/// answer states as `meta.registry`.
+// NOTE: no specification governs this: our own design; the admin action distributes
+// a held version without storing it, so the answer says which of the two it did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum Registry {
+    /// The request stored the version.
+    Stored,
+    /// The registry held the version already, and its copy is unchanged.
+    Held,
+}
+
 /// The body of a distribution's or a drift report's answer: the registry's
 /// definition, and `meta.federation` with each member's outcome (§9.5,
 /// §12.6 item 2).
@@ -125,7 +146,18 @@ pub(super) fn distributable(aql: &str, logged: &str) -> Result<(), Refused> {
 struct Reported {
     #[serde(flatten)]
     definition: StoredQuery,
-    meta: UploadedMeta,
+    meta: ReportedMeta,
+}
+
+/// The `meta` of [`Reported`].
+#[derive(Debug, Serialize)]
+struct ReportedMeta {
+    /// The per-member record.
+    federation: FederationMeta,
+    /// What the registry did with a distributed version; a drift report
+    /// carries none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    registry: Option<Registry>,
 }
 
 /// The name and version of `definition` as a node request carries them.
@@ -153,14 +185,15 @@ fn deadlines(
 
 /// Sends the registry's `definition` to each member of `selected` and
 /// answers per node, the registry's definition standing whatever they
-/// answer (§12.7 stored-query-fanout, §12.6 item 3).
+/// answer, with `registry` saying whether the request stored it (§12.7
+/// stored-query-fanout, §12.6 item 3).
 pub(super) async fn distribute(
     federation: &Federation,
     definition: &StoredDefinition,
-    selected: &BTreeSet<EndpointId>,
-    (arrived, started): (&Arrived<'_>, Instant),
+    (registry, selected): (Registry, &BTreeSet<EndpointId>),
+    (outbound, started): (OutboundId, Instant),
 ) -> Result<Response, Refused> {
-    let logged = arrived.outbound.to_string();
+    let logged = outbound.to_string();
     let targets = fan_out::targets(federation.snapshot(), selected)
         .ok_or_else(|| Refused::fixed(Code::NoDestination))?;
     let budget = deadlines(federation, started, &logged)?;
@@ -169,7 +202,7 @@ pub(super) async fn distribute(
     let sent = each(
         federation,
         &targets,
-        (&budget, arrived.outbound),
+        (&budget, outbound),
         &logged,
         |client, options| {
             let (name, version, aql) = (name.clone(), version.clone(), aql.clone());
@@ -194,6 +227,7 @@ pub(super) async fn distribute(
     tracing::info!(
         members = outcomes.len(),
         accepted = accepted(&outcomes),
+        registry = ?registry,
         request_id = logged,
         "a stored-query definition was distributed"
     );
@@ -207,7 +241,8 @@ pub(super) async fn distribute(
         tracing::error!("a version is not a valid header value");
         Refused::fixed(Code::Internal)
     })?;
-    let mut response = reported(federation, definition, &outcomes, code, &logged)?;
+    let answered = (code, Some(registry));
+    let mut response = reported(federation, definition, &outcomes, answered, &logged)?;
     response.headers_mut().insert(header::LOCATION, location);
     Ok(response)
 }
@@ -266,7 +301,7 @@ pub(super) async fn drift(
     } else {
         StatusCode::MULTI_STATUS
     };
-    reported(federation, definition, &outcomes, code, &logged)
+    reported(federation, definition, &outcomes, (code, None), &logged)
 }
 
 /// How many of `outcomes` are `active`.
@@ -349,13 +384,14 @@ fn unsent(endpoint: &Endpoint, failure: &DispatchError, latency_ms: u64, logged:
     not_sent(latency_ms)
 }
 
-/// The answer `code` carrying the registry's `definition` and the record of
-/// `outcomes`, its provenance naming the `active` members (§7a.3, N31).
+/// The answer `code` carrying the registry's `definition`, the record of
+/// `outcomes` and, for a distribution, what the `registry` did with it, its
+/// provenance naming the `active` members (§7a.3, N31).
 fn reported(
     federation: &Federation,
     definition: &StoredDefinition,
     outcomes: &[(&EndpointId, Outcome)],
-    code: StatusCode,
+    (code, registry): (StatusCode, Option<Registry>),
     logged: &str,
 ) -> Result<Response, Refused> {
     let meta = record_meta(federation, outcomes).map_err(|refused: WireError| {
@@ -369,7 +405,10 @@ fn reported(
     let provenance = Provenance::active(&meta);
     let body = Reported {
         definition: its_rest(definition),
-        meta: UploadedMeta { federation: meta },
+        meta: ReportedMeta {
+            federation: meta,
+            registry,
+        },
     };
     Ok(provenance.stamp((code, Json(body)).into_response()))
 }

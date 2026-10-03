@@ -884,6 +884,26 @@ it nowhere in the exposition. `GET {base}/health/dependencies` (#303) stays
 the last observed state; the metrics count over time beside it. No trace is
 exported: span attributes need a hygiene review of their own first.
 
+**The operator's stored-query distribution** (#342; no specification
+governs this: our own design). §12.7 names a failed distribution and a node
+admitted after it as drift sources, and gives drift repair no request, and
+`stored-query-versioning` refuses every second `PUT` of a held
+`{name}/{version}`, the same body included, so the repair is not on the
+ITS-REST surface. The admin listener serves it beside the metrics:
+`POST /admin/stored-queries/{qualified_query_name}/{version}/distribute`,
+with no body and the members in the targeting headers (`*`, ids, an
+organisation), sends the registry's held copy of that exact version to them
+through the distribution of #78, and leaves the registry unchanged; over a
+shared store it reads the store again first. Its answer has the shape and
+statuses of a first distribution, with `meta.registry: "held"` where a first
+distribution says `stored`. It is refused with `404` for a version the
+registry does not hold, `400` for a request naming no member, a body, a
+deployment without `federation.fan_out_stored_queries`, or an
+endpoint-targeted definition, and `405` with an empty `Allow` at a read-only
+registry (RFC 9110 §10.2.1), whose operator publishes the definitions. With
+`[metrics] listen` unset the action does not exist, and the listener's
+loopback rule with `allow_remote` holds it as it holds the metrics.
+
 **Stored queries** (§12.7, N44, #77) are the one state that needs a store.
 A client registers a federated stored query with
 `PUT {base}/v1/definition/query/{name}/{version}`, and N44 makes each version
@@ -1287,7 +1307,7 @@ close on those tests.
 | async | not built; `respond-async` ignored, tested | #59 | absent |
 | stored-query registry | offered, `redb` by default | #77 | `definition.stored_query_registry: true` |
 | template fan-out upload | opt-in by configuration, off by default; a partial success is `207` | #76 | `definition.fan_out_template_upload` |
-| stored-query definition fan-out | opt-in by configuration, off by default, refused without the registry; a `PUT` naming members is stored first and then distributed on the template terms; `FROM ENDPOINT` refused for it; a `GET` naming members reports drift per member as `node-error` with a code | #78 | `definition.stored_query_fan_out`, `true` only beside the registry |
+| stored-query definition fan-out | opt-in by configuration, off by default, refused without the registry; a `PUT` naming members is stored first and then distributed on the template terms; `FROM ENDPOINT` refused for it; a `GET` naming members reports drift per member as `node-error` with a code; the operator repairs drift on the admin listener, never through a second `PUT` | #78, #342 | `definition.stored_query_fan_out`, `true` only beside the registry |
 
 **Invariants**, each a `proptest` property over generated node result sets:
 

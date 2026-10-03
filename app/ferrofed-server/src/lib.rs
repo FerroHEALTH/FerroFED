@@ -41,6 +41,7 @@ compile_error!(
     "ferrofed-server builds for Unix targets only: it drains on SIGTERM and reloads on SIGHUP through tokio::signal::unix, and every release binary and the container image are Linux"
 );
 
+pub mod admin;
 pub mod admission;
 pub mod banner;
 pub mod base_path;
@@ -346,8 +347,9 @@ fn healthcheck_command(settings: &Settings) -> ExitCode {
 
 /// Serves `state` on `runtime` until the process is asked to stop,
 /// reloading the registry on `SIGHUP` from `config`, the file `settings`
-/// were read from ([`reload`]), and serving `GET /metrics` on the admin
-/// listener when `metrics.listen` is set ([`metrics`]).
+/// were read from ([`reload`]), and serving `GET /metrics` and the operator's
+/// stored-query distribution on the admin listener when `metrics.listen` is
+/// set ([`admin`]).
 ///
 /// The metrics are flushed once the gateway has stopped, while the runtime
 /// an OTLP push runs on is still up.
@@ -358,7 +360,7 @@ fn serve_command(
     config: Option<PathBuf>,
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
-    let admin = settings.metrics.listen;
+    let admin = admin::listener(&settings.metrics, state);
     let outcome = runtime.block_on(async {
         use anyhow::Context;
 
@@ -371,12 +373,16 @@ fn serve_command(
             .await
             .with_context(|| format!("binding {}", server.listen))?;
         tracing::info!(listen = %server.listen, "listening");
-        if let Some(address) = admin {
+        if let Some((address, app)) = admin {
             let metrics = TcpListener::bind(address)
                 .await
                 .with_context(|| format!("binding metrics.listen {address}"))?;
-            tracing::info!(listen = %address, path = metrics::PATH, "serving metrics");
-            let app = metrics::router(Arc::clone(state.metrics()));
+            tracing::info!(
+                listen = %address,
+                path = metrics::PATH,
+                distribute = admin::DISTRIBUTE,
+                "serving the admin listener"
+            );
             tokio::spawn(async move {
                 if let Err(error) = axum::serve(metrics, app).await {
                     tracing::error!(%error, "the metrics listener stopped");

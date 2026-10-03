@@ -23,6 +23,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The operator can send a stored-query version the registry holds to the
+  members that missed it (#342; §12.7 stored-query-drift, N44, CP-40; no
+  specification gives drift repair a request, so this is our own design).
+  `POST /admin/stored-queries/{name}/{version}/distribute` on the admin
+  listener (`[metrics] listen`), with no body and the members in the
+  targeting headers, sends the registry's held copy to them and changes
+  nothing at the registry. The answer has the shape and statuses of a first
+  distribution, and its new `meta.registry` member says `held`, where a
+  first distribution's says `stored`. It is `404` for a version the
+  registry does not hold, `400` for a request naming no member, a body, a
+  deployment without distribution or an endpoint-targeted definition, and
+  `405` with an empty `Allow` at a read-only registry. Without the admin
+  listener the action does not exist. Every second `PUT` of a held version
+  stays `409` (`stored-query-held`), the same query naming members
+  included. The book's stored-query page has a "Repairing drift" section.
 - A metrics surface (#281; no specification governs metrics). One
   OpenTelemetry meter provider counts the integrity incidents by `kind`
   (`ferrofed_integrity_incidents_total`), the requests sent to each member

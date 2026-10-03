@@ -58,6 +58,7 @@ mod run;
 mod shutdown;
 mod stored;
 mod stored_fan_out;
+mod stored_redistribution;
 mod support;
 mod targeting;
 mod telemetry;
