@@ -256,6 +256,14 @@ pub(super) fn order_for(
 /// a `LIMIT` every selected path must be one a node can order and every other
 /// selected column must be fixed by the selected paths (`pinned_by_paths`).
 ///
+/// Outside `DISTINCT`, with a `LIMIT` every `ORDER BY` path must be one a node
+/// can order ([`comparable`]): §11.6.1 contains the federated first `n` rows in
+/// the union of each node's first `n` "under a total order", and AQL defines
+/// none for any other value (AQL master03-syntax §ORDER BY). With no `LIMIT`
+/// every row a node matches reaches the Tier, which orders them all under its
+/// own total order, so such a path is sent as written and the answer is the
+/// same on every repeat (§11.6.1).
+///
 /// `one_ehr` says the gateway scoped the node query to one `ehr_id`, so an
 /// `EHR`'s own id is the same on every row and is not a key.
 ///
@@ -273,7 +281,8 @@ pub(super) fn order_for(
 /// [`Refusal::OrderNotSelected`] for a `DISTINCT` query ordered on a path it
 /// does not select, [`Refusal::IncomparableDistinctKey`] for a `DISTINCT`
 /// query with a `LIMIT` that selects a path no node can order,
-/// [`Refusal::UnorderedDistinctCut`] for a `DISTINCT` query with a `LIMIT`
+/// [`Refusal::IncomparableOrderKey`] for any other query with a `LIMIT`
+/// ordered on such a path, [`Refusal::UnorderedDistinctCut`] for a `DISTINCT` query with a `LIMIT`
 /// whose selected paths do not fix every column, and
 /// [`Refusal::NegativePaging`] for a negative `LIMIT`.
 fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<ResultOrder, Refusal> {
@@ -302,6 +311,13 @@ fn push_order(query: &mut SelectQuery, one_ehr: bool, dedup: bool) -> Result<Res
     }
     let mut keys = Vec::with_capacity(query.order_by.len());
     for term in &query.order_by {
+        // NOTE: AQL master03-syntax §ORDER BY assumes comparable data, and §11.6.1 contains the
+        // federated first rows in each node's first rows only under a total order.
+        if !distinct && limit.is_some() && !comparable(&term.path, &query.from) {
+            return Err(Refusal::IncomparableOrderKey {
+                at: term.path.span.bytes(),
+            });
+        }
         let column = match selected(&query.select.columns, &term.path) {
             Some(column) => column,
             None if distinct => {

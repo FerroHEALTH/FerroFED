@@ -552,6 +552,21 @@ federated query and identity resolution shipped in 0.0.3.
   value, such as `c/context/start_time`, are pinned as before. The `aql`
   feature of `openehr-federation` now depends on `openehr-rm`; the crate is
   0.0.28 and adds `Refusal::IncomparableDistinctKey`.
+- A query with `ORDER BY` and `LIMIT` (or `TOP`, the `fetch` member, or a
+  bounded `OFFSET` page) ordered on a path whose value AQL defines no order
+  for is refused `400` with the new code `incomparable-order-key`, where it
+  used to be sent to every node and re-ordered at the Tier unchecked (#242;
+  §11.6.1, N39, CP-32). AQL ordering "assumes that data identified by the
+  path … are comparable", the primitives and `Ordered` types (AQL
+  master03-syntax §ORDER BY), and §11.6.1 holds the federated first `n`
+  rows in each node's first `n` only "under a total order", so a node's cut
+  on `ORDER BY c/name LIMIT 10`, a `DV_TEXT`, could drop a row of the
+  answer. The rewrite uses the comparability rule of #234, and the
+  refusal points at the key by position. The same order with no `LIMIT` is
+  answered: every row reaches the Tier, which orders them all under its own
+  total order, the same on every repeat. Under `DISTINCT` the refusal stays
+  `incomparable-distinct-key`. `openehr-federation` is 0.0.29 and adds
+  `Refusal::IncomparableOrderKey`.
 - Under version-identity dedup, `SELECT DISTINCT` compares the version uid
   without regard to case, as the dedup and the Tier order already do (#234;
   §10.2, CP-8, CP-9; BASE `master05-identification_package.adoc`
