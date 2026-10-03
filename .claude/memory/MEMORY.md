@@ -57,7 +57,8 @@
   the template with the licensing box ticked
 - [Upstream reports stay here](upstream-reports-stay-here.md): one standing
   issue (#212), one comment per report, written to the upstream's contributing
-  rules so the owner can report it back at the end
+  rules: the problem and a proposed resolution with its rationale, never how
+  FerroFED does it
 - [Upstream reports carry no milestone](upstream-reports-no-milestone.md): the
   in-repo decision is a separate, milestoned issue
 - [Subagent reports go to a file](subagent-reports-to-file.md): a long agent
