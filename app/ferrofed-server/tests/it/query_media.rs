@@ -20,9 +20,9 @@ use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
-use wiremock::MockServer;
 
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, body, dev_gateway, node_answering, patient_query, received,
@@ -59,7 +59,7 @@ fn posted(
 }
 
 /// Node A and node B, each answering the federated query with one row.
-async fn nodes() -> (MockServer, MockServer) {
+async fn nodes() -> (Server, Server) {
     (
         node_answering("uid-at-a::cdr-a.example.org::1").await,
         node_answering("uid-at-b::cdr-b.example.org::1").await,
@@ -67,7 +67,7 @@ async fn nodes() -> (MockServer, MockServer) {
 }
 
 /// Asserts that neither `a` nor `b` received anything.
-async fn asked_neither(a: &MockServer, b: &MockServer) -> TestResult {
+async fn asked_neither(a: &Server, b: &Server) -> TestResult {
     assert!(received(a).await?.is_empty(), "node A was asked");
     assert!(received(b).await?.is_empty(), "node B was asked");
     Ok(())
@@ -126,11 +126,7 @@ async fn an_adhoc_query_in_the_listed_media_type_or_none_is_answered() -> TestRe
 
 /// A registry gateway over `a` and `b` holding [`NAME`], a query naming the
 /// patient through `$patient`.
-async fn holding(
-    dir: &std::path::Path,
-    a: &MockServer,
-    b: &MockServer,
-) -> Result<Router, Box<dyn Error>> {
+async fn holding(dir: &std::path::Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
     let app = crate::stored::gateway(
         dir,
         &registry(&a.uri(), &b.uri(), ""),

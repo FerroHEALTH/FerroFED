@@ -22,10 +22,10 @@ use ferrofed_server::config::Config;
 use ferrofed_server::facade::options::MAX_WINDOW;
 use ferrofed_server::federation::{Federation, FederationError};
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers;
 use openehr_federation::options::{DefinitionBehaviour, OptionsRoot, SpecVersion};
-use wiremock::MockServer;
 
 use crate::facade::{PATIENT, crossref, schema, settings_with_room};
 use crate::support::{call, error_body, send};
@@ -460,7 +460,7 @@ async fn the_description_needs_no_patient_identifier_and_holds_none() -> TestRes
 // conformance: CP-23
 #[tokio::test]
 async fn options_on_a_sub_path_names_the_methods_served_there() -> TestResult {
-    let node = MockServer::start().await;
+    let node = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), &node.uri(), "", "")?;
     for (uri, expected) in [

@@ -12,10 +12,11 @@ use std::process::Command;
 
 use axum::Router;
 use axum::routing::get;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::proxy::CapturingProxy;
 use http::{Request, StatusCode};
 use wiremock::matchers::{method, path_regex};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use super::cases;
 use super::{
@@ -27,7 +28,7 @@ use crate::support::{LogLine, Logs, lines, request_lines, send};
 /// Two mock nodes and the proxy in front of each.
 struct MockNodes {
     /// Node A and node B, kept alive while their proxies forward to them.
-    _servers: [MockServer; 2],
+    _servers: [Server; 2],
     /// The proxy in front of node A.
     a: CapturingProxy,
     /// The proxy in front of node B.
@@ -36,8 +37,8 @@ struct MockNodes {
 
 /// A node that answers the ITS-REST query with one row, the EHR read, and a
 /// commit with the `Location` and `ETag` of the version it minted.
-async fn node(system_id: &str) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(system_id: &str) -> Server {
+    let server = Server::start().await;
     let rows = format!(
         r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["uid::{system_id}::1"]]}}"##
     );

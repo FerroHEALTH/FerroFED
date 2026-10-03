@@ -14,8 +14,8 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
-use wiremock::MockServer;
 
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, body, crossref, dev_gateway, gateway, node_answering,
@@ -58,7 +58,7 @@ fn holds(haystack: &[u8], needle: &str) -> bool {
 
 /// The one `x-request-id` `server` received, after asserting that `absent`
 /// is in no byte of the request line, any header or the body.
-async fn the_id_at(server: &MockServer, absent: &str) -> Result<String, Box<dyn Error>> {
+async fn the_id_at(server: &Server, absent: &str) -> Result<String, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let [request] = requests.as_slice() else {
         return Err(format!("expected one request, got {}", requests.len()).into());

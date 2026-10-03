@@ -23,10 +23,11 @@ use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, Request, StatusCode, header};
 use openehr_federation::headers::{COMPLETENESS, ENDPOINT, SYSTEM_ID};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::directive::{EHR_C, directed, members, patient};
 use crate::facade::{
@@ -51,8 +52,8 @@ const SYSTEM_IDS: [&str; 3] = [
 ];
 
 /// A node answering `POST /v1/query/aql` with a result set of no rows.
-async fn node_empty() -> MockServer {
-    let server = MockServer::start().await;
+async fn node_empty() -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(
@@ -68,7 +69,7 @@ async fn node_empty() -> MockServer {
 /// completion, resolving the patient at the members `rows` name.
 fn three(
     dir: &std::path::Path,
-    (a, b, c): (&MockServer, &MockServer, &MockServer),
+    (a, b, c): (&Server, &Server, &Server),
     rows: &[(&str, &str)],
 ) -> Result<Router, Box<dyn Error>> {
     // The tables follow the gateway's own `[federation]` keys, so the

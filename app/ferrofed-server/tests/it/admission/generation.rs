@@ -4,9 +4,10 @@
 //! The identifier-generation and `system_id` conditions of §12b.2 at each node (N42a).
 
 use ferrofed_server::admission::report::{Condition, Verdict};
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use super::{
     SYSTEM_A, SYSTEM_B, TestResult, UNREACHABLE_B, V4, check_a, dev_federation, node, verdict,
@@ -176,7 +177,7 @@ async fn an_unreachable_node_fails_every_condition_it_exercises() -> TestResult 
 
 #[tokio::test]
 async fn a_node_refusing_the_create_fails_with_its_status_and_never_its_body() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let echo = "ffd-admission-echoed-by-the-node";
     Mock::given(method("POST"))
         .and(path("/v1/ehr"))

@@ -16,8 +16,9 @@
 )]
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::EHR_A;
 use crate::path_ehr_id::{ENDPOINT_A, TestResult, answer, holder, over, probe_at, stranger};
@@ -88,7 +89,7 @@ async fn a_read_whose_ehr_id_is_a_uuid_is_still_resolved_by_the_probe() -> TestR
 #[tokio::test]
 async fn an_ehr_id_that_is_no_uuid_is_forwarded_to_the_named_node_alone_and_then_indexed()
 -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(
         &a,
         "GET",

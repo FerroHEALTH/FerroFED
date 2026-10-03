@@ -22,10 +22,11 @@ use ferrofed_identity::pixm::PixmConfigError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
 use ferrofed_server::federation::{Federation, FederationError};
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::StatusCode;
 use wiremock::matchers::{method, path, query_param};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, gateway, node_answering, patient_query, post,
@@ -44,7 +45,7 @@ const OPERATION: &str = "/fhir/Patient/$ihe-pix";
 
 /// A PIX Manager answering ITI-83 with one `targetIdentifier` per
 /// `(domain, ehr_id)`.
-async fn manager_matching(identifiers: &[(&str, &str)]) -> MockServer {
+async fn manager_matching(identifiers: &[(&str, &str)]) -> Server {
     let parameter: Vec<String> = identifiers
         .iter()
         .map(|(system, value)| {
@@ -67,8 +68,8 @@ async fn manager_matching(identifiers: &[(&str, &str)]) -> MockServer {
 }
 
 /// A PIX Manager answering ITI-83 with `status` and `answer`.
-async fn manager_answering(status: u16, answer: String) -> MockServer {
-    let server = MockServer::start().await;
+async fn manager_answering(status: u16, answer: String) -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(OPERATION))
         .respond_with(
@@ -81,7 +82,7 @@ async fn manager_answering(status: u16, answer: String) -> MockServer {
 }
 
 /// A PIX Manager that does not know the patient (ITI-83 §2:3.83.4.2.3, case 3).
-async fn manager_not_knowing() -> MockServer {
+async fn manager_not_knowing() -> Server {
     manager_answering(
         404,
         r#"{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"not-found"}]}"#
@@ -104,7 +105,7 @@ fn pix_gateway(dir: &Path, a: &str, b: &str, pix: &str) -> Result<Router, Box<dy
 }
 
 /// Every byte the PIX Manager received.
-async fn asked(server: &MockServer) -> Result<usize, Box<dyn Error>> {
+async fn asked(server: &Server) -> Result<usize, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await
@@ -117,7 +118,7 @@ async fn asked(server: &MockServer) -> Result<usize, Box<dyn Error>> {
 async fn one_pix_call_resolves_the_patient_and_both_members_answer() -> TestResult {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
-    let pix = MockServer::start().await;
+    let pix = Server::start().await;
     Mock::given(method("GET"))
         .and(path(OPERATION))
         .and(query_param("sourceIdentifier", format!("{NAMESPACE}|{PATIENT}")))

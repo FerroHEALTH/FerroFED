@@ -28,8 +28,9 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
-use wiremock::{MockServer, Request, Respond, ResponseTemplate};
+use wiremock::{Request, Respond, ResponseTemplate};
 
 use crate::facade::{EHR_A, body, patient_query, post, settings_with_room};
 use crate::path_ehr_id::holder;
@@ -143,7 +144,7 @@ fn ids<T: std::str::FromStr>(values: &[&str]) -> Result<Vec<T>, T::Err> {
 }
 
 /// How many requests `server` received.
-async fn hits(server: &MockServer) -> Result<usize, Box<dyn Error>> {
+async fn hits(server: &Server) -> Result<usize, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await
@@ -161,7 +162,7 @@ fn snapshot_of_a_and_b() -> Result<RegistrySnapshot, Box<dyn Error>> {
 /// The gateway over node A, a holder of [`EHR_A`], after a reload that removed
 /// node B, with an index entry learned after the reload naming both: the
 /// entry a request in flight on the old registry could leave behind.
-async fn indexed_at_a_departed_member() -> Result<(Gateway, MockServer), Box<dyn Error>> {
+async fn indexed_at_a_departed_member() -> Result<(Gateway, Server), Box<dyn Error>> {
     let a = holder().await;
     let b = holder().await;
     let gateway = Gateway::start(&(member("a", &a.uri()) + &member("b", &b.uri())), "", "")?;

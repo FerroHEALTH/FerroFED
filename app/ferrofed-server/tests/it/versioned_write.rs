@@ -21,8 +21,9 @@ use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, EHR_B, PATIENT, body, gateway, node_answering, post, registry};
 use crate::path_ehr_id::{answer, probe_at};
@@ -55,8 +56,8 @@ const CLIENT_TOKEN: &str = "synthetic-client-token";
 /// The gateway over node A and node B, with the registry `extra` appended.
 pub(crate) fn over(
     dir: &std::path::Path,
-    a: &MockServer,
-    b: &MockServer,
+    a: &Server,
+    b: &Server,
     extra: &str,
 ) -> Result<Router, Box<dyn Error>> {
     gateway(dir, &registry(&a.uri(), &b.uri(), extra), "", "")
@@ -113,7 +114,7 @@ fn composition() -> String {
 
 /// The request target and every header `server` received, without the
 /// bodies: what the gateway composes for a node (§5.4.1, N33).
-pub(crate) async fn outside_bodies(server: &MockServer) -> Result<String, Box<dyn Error>> {
+pub(crate) async fn outside_bodies(server: &Server) -> Result<String, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut text = String::new();
     for request in requests {
@@ -132,7 +133,7 @@ pub(crate) async fn refused_at_neither(
     app: Router,
     request: Request<Body>,
     (status, code): (StatusCode, &str),
-    (a, b): (&MockServer, &MockServer),
+    (a, b): (&Server, &Server),
 ) -> Result<String, Box<dyn Error>> {
     let (answered, acting, text) = answer(app, request).await?;
     assert_eq!(status, answered, "{text}");
@@ -152,7 +153,7 @@ async fn a_versioned_write_reaches_its_controlling_cdr_and_no_other_node() -> Te
         format!("/v1/ehr/{EHR_A}/composition/{CREATED_AT_A}"),
     ));
     for (verb, at) in writes {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         mount(
             &a,
             verb.as_str(),
@@ -160,7 +161,7 @@ async fn a_versioned_write_reaches_its_controlling_cdr_and_no_other_node() -> Te
             ResponseTemplate::new(200).insert_header("ETag", quoted(SECOND_AT_A).as_str()),
         )
         .await;
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let preceding = (verb == Method::PUT || at.ends_with("directory")).then_some(CREATED_AT_A);
         let request = versioned(&verb, &at, Some(ENDPOINT_A), preceding, "{}")?;
@@ -186,7 +187,7 @@ async fn a_versioned_write_the_index_routes_reaches_its_controlling_cdr_unprobed
     let a = crate::path_ehr_id::holder().await;
     let at = format!("/v1/ehr/{EHR_A}/composition/{OBJECT_AT_A}");
     mount(&a, "PUT", at.clone(), ResponseTemplate::new(200)).await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b, "")?;
     let (read, _, _) = answer(
@@ -212,9 +213,9 @@ async fn a_versioned_write_the_index_routes_reaches_its_controlling_cdr_unprobed
 #[tokio::test]
 async fn a_registered_creating_system_mapping_makes_its_node_the_controlling_cdr() -> TestResult {
     let at = format!("/v1/ehr/{EHR_A}/composition/{OBJECT_AT_A}");
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(&a, "PUT", at.clone(), ResponseTemplate::new(200)).await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b, LEGACY_MAPPING)?;
     let request = versioned(
@@ -241,8 +242,8 @@ async fn a_write_its_path_node_does_not_control_is_refused_409_and_reaches_no_no
         format!("/v1/ehr/{EHR_A}/composition/{CREATED_AT_A}"),
     ));
     for (verb, at) in writes {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let preceding = (verb == Method::PUT || at.ends_with("directory")).then_some(CREATED_AT_A);
         let request = versioned(&verb, &at, Some(ENDPOINT_B), preceding, "{}")?;
@@ -270,8 +271,8 @@ async fn a_write_its_path_node_does_not_control_is_refused_409_and_reaches_no_no
 // conformance: CP-15
 #[tokio::test]
 async fn a_write_of_a_version_no_member_is_known_to_control_is_refused_409() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let request = versioned(
         &Method::PUT,
@@ -303,7 +304,7 @@ async fn a_write_of_a_version_no_member_is_known_to_control_is_refused_409() -> 
 // conformance: CP-15 CP-13
 #[tokio::test]
 async fn a_learned_holder_is_never_the_controlling_cdr_of_a_write() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(
         &a,
         "POST",
@@ -381,8 +382,8 @@ async fn a_versioned_write_naming_no_single_preceding_version_is_a_400_before_an
         ),
     ];
     for (verb, at, tags) in cases {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let mut request = versioned(&verb, &at, Some(ENDPOINT_A), None, "{}")?;
         for tag in &tags {
@@ -406,7 +407,7 @@ async fn a_versioned_write_lands_byte_identical_and_carries_no_identifier_outsid
     let at = format!("/v1/ehr/{EHR_A}/composition/{OBJECT_AT_A}");
     let location =
         format!("https://cdr-a.example.org/openehr/v1/ehr/{EHR_A}/composition/{SECOND_AT_A}");
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(
         &a,
         "PUT",
@@ -416,7 +417,7 @@ async fn a_versioned_write_lands_byte_identical_and_carries_no_identifier_outsid
             .insert_header("Location", location.as_str()),
     )
     .await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let sent = composition();
     let mut request = versioned(
@@ -500,7 +501,7 @@ async fn no_write_without_a_target_is_ever_probed_for() -> TestResult {
 #[tokio::test]
 async fn a_new_ehr_is_created_by_the_targeting_headers_alone_never_by_the_index() -> TestResult {
     let a = crate::path_ehr_id::holder().await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b, "")?;
     let (read, _, _) = answer(
@@ -533,8 +534,8 @@ async fn a_new_ehr_naming_more_than_one_endpoint_is_refused_and_reaches_no_node(
             ("node-a-pub, node-b-pub", "endpoint-several"),
             ("*", "endpoint-unknown"),
         ] {
-            let a = MockServer::start().await;
-            let b = MockServer::start().await;
+            let a = Server::start().await;
+            let b = Server::start().await;
             let dir = tempfile::tempdir()?;
             let request = Request::builder()
                 .method(verb.clone())
@@ -557,7 +558,7 @@ async fn a_new_ehr_naming_more_than_one_endpoint_is_refused_and_reaches_no_node(
 #[tokio::test]
 async fn a_new_ehr_lands_byte_identical_at_the_one_named_node() -> TestResult {
     let created = format!("https://cdr-b.example.org/openehr/v1/ehr/{EHR_B}");
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     mount(
         &b,
         "POST",
@@ -567,7 +568,7 @@ async fn a_new_ehr_lands_byte_identical_at_the_one_named_node() -> TestResult {
             .insert_header("ETag", quoted(EHR_B).as_str()),
     )
     .await;
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let dir = tempfile::tempdir()?;
     let sent = format!(
         "{{\"_type\":\"EHR_STATUS\", \"subject\":{{\"external_ref\":{{\"id\":{{\"_type\":\"GENERIC_ID\",\"value\":\"{PATIENT}\",\"scheme\":\"synthetic\"}},\"namespace\":\"urn:oid:2.999.1\",\"type\":\"PERSON\"}}}},\n \"is_queryable\":true, \"is_modifiable\":true}}\n"
@@ -622,8 +623,8 @@ async fn a_new_ehr_lands_byte_identical_at_the_one_named_node() -> TestResult {
 
 #[tokio::test]
 async fn a_read_of_the_ehr_collection_without_a_subject_asks_nobody() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let request = Request::get("/v1/ehr")
         .header("openEHR-federation-endpoint", ENDPOINT_A)

@@ -18,11 +18,12 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::meta::FederationMeta;
 use serde::de::IgnoredAny;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+use wiremock::{Mock, Request, Respond, ResponseTemplate};
 
 use crate::facade::{Answer, body, gateway, post, received, registry, schema, statuses};
 use crate::support::{call, error_body};
@@ -34,7 +35,7 @@ const QUERY: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
                      ORDER BY c/context/start_time/value DESC LIMIT 2";
 
 /// A node answering the pushed query with `(uid, start_time)` rows.
-async fn node(rows: &[(&str, &str)]) -> MockServer {
+async fn node(rows: &[(&str, &str)]) -> Server {
     let rows: Vec<String> = rows
         .iter()
         .map(|(uid, time)| format!("[\"{uid}\",\"{time}\"]"))
@@ -43,7 +44,7 @@ async fn node(rows: &[(&str, &str)]) -> MockServer {
         r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}},{{"name":"#1","path":"c/context/start_time/value"}}],"rows":[{}]}}"##,
         rows.join(",")
     );
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(
@@ -338,8 +339,8 @@ impl Respond for EhrNode {
     }
 }
 
-async fn ehr_node(ehrs: &[Ehr]) -> MockServer {
-    let server = MockServer::start().await;
+async fn ehr_node(ehrs: &[Ehr]) -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(EhrNode {
@@ -519,8 +520,8 @@ impl Respond for DistinctNode {
     }
 }
 
-async fn distinct_node(compositions: &[Composition]) -> MockServer {
-    let server = MockServer::start().await;
+async fn distinct_node(compositions: &[Composition]) -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(DistinctNode {

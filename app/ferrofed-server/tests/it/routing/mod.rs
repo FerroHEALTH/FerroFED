@@ -23,9 +23,10 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, Method, Request, Response, StatusCode, header};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{EHR_A, PATIENT, gateway, registry};
 use crate::support::{error_body, send};
@@ -62,8 +63,8 @@ fn digest(bytes: &[u8]) -> u64 {
 }
 
 /// A node answering `verb` at `at` with `answer`.
-async fn node(verb: &str, at: String, answer: ResponseTemplate) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(verb: &str, at: String, answer: ResponseTemplate) -> Server {
+    let server = Server::start().await;
     Mock::given(method(verb))
         .and(path(at))
         .respond_with(answer)
@@ -73,8 +74,8 @@ async fn node(verb: &str, at: String, answer: ResponseTemplate) -> MockServer {
 }
 
 /// A node that answers nothing, so it can only show it was never asked.
-async fn silent() -> MockServer {
-    MockServer::start().await
+async fn silent() -> Server {
+    Server::start().await
 }
 
 /// The gateway over node A at `a` and node B at `b`, with an onward bearer
@@ -132,7 +133,7 @@ fn names_node_a(headers: &HeaderMap, case: &str) {
 }
 
 /// The one request `server` received, or an error.
-async fn only_request(server: &MockServer) -> Result<wiremock::Request, Box<dyn Error>> {
+async fn only_request(server: &Server) -> Result<wiremock::Request, Box<dyn Error>> {
     let mut requests = server.received_requests().await.ok_or("recording is on")?;
     assert_eq!(1, requests.len(), "the node is asked exactly once");
     requests.pop().ok_or_else(|| "one request".into())

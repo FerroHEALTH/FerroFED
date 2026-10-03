@@ -12,9 +12,10 @@
 
 use std::error::Error;
 
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{Answer, body, gateway, post, received, registry, schema};
 use crate::support::call;
@@ -22,13 +23,13 @@ use crate::support::call;
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// A node answering the one-column distinct query with `names`.
-async fn node(names: &[&str]) -> MockServer {
+async fn node(names: &[&str]) -> Server {
     let rows: Vec<String> = names.iter().map(|name| format!("[\"{name}\"]")).collect();
     let answer = format!(
         r##"{{"q":"node","columns":[{{"name":"#0","path":"c/name/value"}}],"rows":[{}]}}"##,
         rows.join(",")
     );
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(

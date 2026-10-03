@@ -95,13 +95,14 @@ mod tests {
     };
     use crate::hygiene::{Part, Withheld};
     use ferrofed_registry::snapshot::RegistrySnapshot;
+    use ferrofed_testkit::mock::Server;
     use http::HeaderValue;
     use openehr_its::rest::client::ReqwestTransport;
     use secrecy::SecretString;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
     use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::{Mock, ResponseTemplate};
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -118,7 +119,7 @@ mod tests {
     async fn sent(
         aql: &str,
     ) -> Result<(Result<NodeReply, DispatchError>, Vec<Vec<u8>>), Box<dyn std::error::Error>> {
-        let server = MockServer::start().await;
+        let server = Server::start().await;
         Mock::given(method("POST"))
             .and(path("/v1/query/aql"))
             .respond_with(ResponseTemplate::new(200).set_body_raw(

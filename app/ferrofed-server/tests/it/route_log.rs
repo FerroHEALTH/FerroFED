@@ -14,9 +14,10 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_server::request_log::UNMATCHED;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::base_url::{gateway_at, under};
 use crate::facade::EHR_A;
@@ -39,12 +40,12 @@ fn to_a(verb: Method, uri: &str) -> Result<Request<Body>, http::Error> {
 
 /// Node A, answering a read of the EHR and of one composition in it, and
 /// node B, answering nothing.
-fn nodes() -> Result<(MockServer, MockServer), Box<dyn Error>> {
+fn nodes() -> Result<(Server, Server), Box<dyn Error>> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     Ok(runtime.block_on(async {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         for resource in [
             format!("/v1/ehr/{EHR_A}"),
             format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}"),
@@ -55,7 +56,7 @@ fn nodes() -> Result<(MockServer, MockServer), Box<dyn Error>> {
                 .mount(&a)
                 .await;
         }
-        (a, MockServer::start().await)
+        (a, Server::start().await)
     }))
 }
 

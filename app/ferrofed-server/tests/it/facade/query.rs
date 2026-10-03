@@ -13,10 +13,11 @@
 use std::error::Error;
 
 use ferrofed_engine::hygiene::mask::MASK;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::outcome::ErrorDetail;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use super::{
     Answer, Column, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, dev_gateway,
@@ -243,7 +244,7 @@ async fn a_failing_node_fails_the_query_and_the_envelope_still_comes_back() -> T
 #[tokio::test]
 async fn a_node_error_carries_the_nodes_message_with_the_subject_masked() -> TestResult {
     let a = node_answering("uid-at-a").await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let said = format!(
         r#"{{"message":"no EHR at this node for {PATIENT}\r\n\u0007 in namespace {NAMESPACE}"}}"#
     );

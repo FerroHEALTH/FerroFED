@@ -4,6 +4,7 @@
 //! The synthetic seed builder: what it writes, how, and that nothing it
 //! writes is a real identifier.
 
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::seed::{
     self, CompositionSeed, DemoComposition, EXAMPLE_ARC, EhrSeed, PatientId, SeedError, SeedPlan,
     TEMPLATE_ID,
@@ -13,7 +14,7 @@ use openehr_its::json::{from_canonical_json, to_canonical_json};
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use uuid::Uuid;
 use wiremock::matchers::{header, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 const EHR: Uuid = Uuid::from_u128(0x1111_1111_1111_4111_8111_1111_1111_1111);
 
@@ -147,8 +148,8 @@ fn the_vendored_demo_data_carries_no_patient_identifier() {
 
 /// A stub node that accepts every seed step, answering the composition with
 /// an `ETag`.
-async fn accepting_node() -> MockServer {
-    let server = MockServer::start().await;
+async fn accepting_node() -> Server {
+    let server = Server::start().await;
     Mock::given(method("PUT"))
         .and(path(format!("/rest/openehr/v1/ehr/{EHR}")))
         .and(header("content-type", "application/json"))
@@ -246,7 +247,7 @@ async fn a_seed_writes_over_its_rest_alone_in_plan_order() {
 
 #[tokio::test]
 async fn a_refused_step_is_an_error_naming_the_step_and_the_status() {
-    let node = MockServer::start().await;
+    let node = Server::start().await;
     Mock::given(method("PUT"))
         .respond_with(ResponseTemplate::new(409))
         .mount(&node)

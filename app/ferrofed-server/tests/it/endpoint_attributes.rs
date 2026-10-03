@@ -23,10 +23,11 @@ use axum::Router;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{NAMESPACE, body, post, received, schema, settings_with_room, wire};
 use crate::support::{call, error_body};
@@ -45,7 +46,7 @@ const EHR_1: &str = "5555eeee-5555-4555-8555-555555555555";
 const EHR_2: &str = "6666ffff-6666-4666-8666-666666666666";
 
 /// A node answering `POST /v1/query/aql` with `rows` of string cells.
-async fn node(rows: &[&[&str]]) -> MockServer {
+async fn node(rows: &[&[&str]]) -> Server {
     let rows: Vec<String> = rows
         .iter()
         .map(|cells| {
@@ -54,7 +55,7 @@ async fn node(rows: &[&[&str]]) -> MockServer {
         })
         .collect();
     let answer = format!(r#"{{"q":"node","rows":[{}]}}"#, rows.join(","));
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(
@@ -120,9 +121,9 @@ managing_organisation = "org-c"
 
 /// The three mock nodes, each answering `rows`.
 struct Nodes {
-    one: MockServer,
-    two: MockServer,
-    three: MockServer,
+    one: Server,
+    two: Server,
+    three: Server,
 }
 
 impl Nodes {

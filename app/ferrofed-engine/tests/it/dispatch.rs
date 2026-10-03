@@ -27,6 +27,7 @@ use ferrofed_engine::hygiene::mask::MASK;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -35,7 +36,7 @@ use openehr_its::rest::client::{
 };
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, Request, ResponseTemplate};
+use wiremock::{Mock, Request, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -95,8 +96,8 @@ fn within(budget: Duration) -> Result<DispatchOptions, Box<dyn Error>> {
 }
 
 /// A mock node answering `POST {prefix}/v1/query/aql` with `answer`.
-async fn node_answering(prefix: &str, answer: ResponseTemplate) -> MockServer {
-    let server = MockServer::start().await;
+async fn node_answering(prefix: &str, answer: ResponseTemplate) -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path(format!("{prefix}/v1/query/aql")))
         .respond_with(answer)
@@ -111,7 +112,7 @@ fn json(status: u16, body: &str) -> ResponseTemplate {
 }
 
 /// Dispatches `NODE_AQL` to `server` under `/openehr` and returns the reply.
-async fn dispatch_to(server: &MockServer) -> Result<NodeReply, Box<dyn Error>> {
+async fn dispatch_to(server: &Server) -> Result<NodeReply, Box<dyn Error>> {
     let client = client_at(&format!("{}/openehr", server.uri()))?;
     Ok(client
         .query(&NodeQuery::new(NODE_AQL), &within(Duration::from_secs(5))?)
@@ -128,7 +129,7 @@ fn error_text(reply: &NodeReply) -> Result<String, Box<dyn Error>> {
 }
 
 /// The requests the mock node received.
-async fn received(server: &MockServer) -> Result<Vec<Request>, Box<dyn Error>> {
+async fn received(server: &Server) -> Result<Vec<Request>, Box<dyn Error>> {
     server
         .received_requests()
         .await
@@ -215,7 +216,7 @@ async fn a_5xx_is_a_node_error_never_offline() -> TestResult {
 
 /// Dispatches `NODE_AQL` to `server` under `/openehr`, withholding
 /// [`SUBJECT`], and returns the text of the reply's `error`.
-async fn error_withholding_the_subject(server: &MockServer) -> Result<String, Box<dyn Error>> {
+async fn error_withholding_the_subject(server: &Server) -> Result<String, Box<dyn Error>> {
     let client = client_at(&format!("{}/openehr", server.uri()))?;
     let options = within(Duration::from_secs(5))?
         .with_withheld(Arc::new(Withheld::new([SecretString::from(SUBJECT)])));
@@ -660,8 +661,8 @@ async fn a_failure_report_never_echoes_the_query() -> TestResult {
 
 #[tokio::test]
 async fn the_snapshot_gives_one_client_per_endpoint_with_its_own_credentials() -> TestResult {
-    let first = MockServer::start().await;
-    let second = MockServer::start().await;
+    let first = Server::start().await;
+    let second = Server::start().await;
     for server in [&first, &second] {
         Mock::given(method("POST"))
             .and(path("/openehr/v1/query/aql"))

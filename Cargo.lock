@@ -935,6 +935,7 @@ version = "0.0.2"
 dependencies = [
  "async-trait",
  "ferrofed-registry",
+ "ferrofed-testkit",
  "http",
  "ihe-iti",
  "openehr-its",

@@ -18,8 +18,8 @@ use std::error::Error;
 use std::path::Path;
 
 use axum::Router;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
-use wiremock::MockServer;
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, gateway,
@@ -78,9 +78,9 @@ managing_organisation = "org-a"
 
 /// The three mock nodes.
 pub(crate) struct Nodes {
-    pub(crate) a: MockServer,
-    pub(crate) b: MockServer,
-    pub(crate) c: MockServer,
+    pub(crate) a: Server,
+    pub(crate) b: Server,
+    pub(crate) c: Server,
 }
 
 impl Nodes {

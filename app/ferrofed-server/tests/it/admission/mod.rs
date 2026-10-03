@@ -27,11 +27,12 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_server::admission::report::{Condition, Report, Verdict};
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
+use ferrofed_testkit::mock::Server;
 use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
 use openehr_its::json::from_canonical_json;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use wiremock::matchers::{method, path, path_regex};
-use wiremock::{Match, Mock, MockServer, Request, Respond, ResponseTemplate};
+use wiremock::{Match, Mock, Request, Respond, ResponseTemplate};
 
 use crate::facade::{crossref, registry};
 
@@ -135,8 +136,8 @@ impl Respond for Reading {
 ///
 /// A create whose body is not a readable `EHR_STATUS` falls through to a
 /// mock that expects no request, so the node fails its test when dropped.
-async fn node(ids: &[&str], system_id: &str) -> (MockServer, Issued) {
-    let server = MockServer::start().await;
+async fn node(ids: &[&str], system_id: &str) -> (Server, Issued) {
+    let server = Server::start().await;
     let issued = Issued::default();
     Mock::given(method("POST"))
         .and(path("/v1/ehr"))
@@ -197,8 +198,8 @@ impl Respond for Crossref {
 }
 
 /// A PIX Manager over `issued`, answering wrongly when `shift` is not zero.
-async fn manager(issued: &Issued, shift: usize) -> MockServer {
-    let server = MockServer::start().await;
+async fn manager(issued: &Issued, shift: usize) -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path("/fhir/Patient/$ihe-pix"))
         .respond_with(Crossref {

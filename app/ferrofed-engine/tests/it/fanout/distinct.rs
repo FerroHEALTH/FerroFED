@@ -12,10 +12,10 @@ use std::error::Error;
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::Plan;
 use ferrofed_registry::id::EndpointId;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::order::{Direction, ResultOrder, SortKey};
 use openehr_federation::status::EndpointStatus;
-use wiremock::MockServer;
 
 use super::{TestResult, budget, federation, json, node, rows_text, run, validated_body};
 
@@ -24,7 +24,7 @@ use super::{TestResult, budget, federation, json, node, rows_text, run, validate
 const NODE_AQL: &str = "SELECT DISTINCT c/name/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398' ORDER BY c/name/value ASC LIMIT 2";
 
 /// A mock node answering one-column rows, each cell as written.
-async fn distinct_node(cells: &[&str]) -> MockServer {
+async fn distinct_node(cells: &[&str]) -> Server {
     let rows: Vec<String> = cells.iter().map(|cell| format!("[{cell}]")).collect();
     let body = format!(
         r##"{{"q":"node","columns":[{{"name":"#0"}}],"rows":[{}]}}"##,

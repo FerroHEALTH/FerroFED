@@ -14,10 +14,11 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::Request;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{EHR_A, PATIENT, gateway, registry};
 use crate::request_log::logged;
@@ -71,13 +72,13 @@ fn no_event_of_a_routed_request_names_the_clients_id() -> TestResult {
         .enable_all()
         .build()?;
     let (holder, other) = runtime.block_on(async {
-        let holder = MockServer::start().await;
+        let holder = Server::start().await;
         Mock::given(method("GET"))
             .and(path(format!("/v1/ehr/{EHR_A}")))
             .respond_with(ResponseTemplate::new(200))
             .mount(&holder)
             .await;
-        let other = MockServer::start().await;
+        let other = Server::start().await;
         Mock::given(method("GET"))
             .and(path(format!("/v1/ehr/{EHR_A}")))
             .respond_with(ResponseTemplate::new(200))

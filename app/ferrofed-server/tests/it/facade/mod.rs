@@ -26,10 +26,11 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Request, header};
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::support::settings;
 
@@ -70,8 +71,8 @@ pub(crate) fn body(aql: &str) -> Result<String, serde_json::Error> {
 }
 
 /// A node answering `POST /v1/query/aql` with one row holding `uid`.
-pub(crate) async fn node_answering(uid: &str) -> MockServer {
-    let server = MockServer::start().await;
+pub(crate) async fn node_answering(uid: &str) -> Server {
+    let server = Server::start().await;
     let answer = format!(
         r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["{uid}"]]}}"##
     );
@@ -86,8 +87,8 @@ pub(crate) async fn node_answering(uid: &str) -> MockServer {
 }
 
 /// A node answering `POST /v1/query/aql` with `status` and an ITS-REST error.
-pub(crate) async fn node_failing(status: u16) -> MockServer {
-    let server = MockServer::start().await;
+pub(crate) async fn node_failing(status: u16) -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(ResponseTemplate::new(status).set_body_raw(
@@ -218,7 +219,7 @@ pub(crate) fn post(body: String) -> Result<Request<Body>, http::Error> {
 }
 
 /// The bodies of every request `server` received.
-pub(crate) async fn received(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
+pub(crate) async fn received(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut bodies = Vec::new();
     for request in requests {
@@ -263,7 +264,7 @@ impl std::fmt::Display for Wire {
 
 /// Every byte `server` received: the request target, each header name and
 /// raw value, and the raw body.
-pub(crate) async fn wire(server: &MockServer) -> Result<Wire, Box<dyn Error>> {
+pub(crate) async fn wire(server: &Server) -> Result<Wire, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut bytes = Vec::new();
     for request in requests {

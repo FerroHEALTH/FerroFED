@@ -3,16 +3,17 @@
 
 //! The capturing and fault proxy, offline, in front of a `wiremock` node.
 
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::proxy::{CapturingProxy, Fault};
 use http::StatusCode;
 use std::time::{Duration, Instant};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 /// A stub node that answers `GET /ferroehr/rest/openehr/v1/ehr/{id}` with a
 /// body and an `ETag`, and records what reached it.
-async fn node() -> MockServer {
-    let server = MockServer::start().await;
+async fn node() -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path("/ferroehr/rest/openehr/v1/ehr/7f4c"))
         .respond_with(

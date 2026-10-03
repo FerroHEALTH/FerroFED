@@ -16,9 +16,10 @@ use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, PATIENT, body, dev_gateway, patient_query, post, received, schema,
@@ -47,14 +48,14 @@ fn from_form() -> String {
 
 /// A node that answers the probe for [`EHR_A`] with `holds` (`200` or
 /// `404`) and every query with one row holding `uid`.
-async fn node(holds: u16, uid: &str) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(holds: u16, uid: &str) -> Server {
+    let server = Server::start().await;
     mount(&server, holds, uid).await;
     server
 }
 
 /// Mounts the answers of [`node`] on `server`.
-async fn mount(server: &MockServer, holds: u16, uid: &str) {
+async fn mount(server: &Server, holds: u16, uid: &str) {
     Mock::given(method("GET"))
         .and(path(format!("/v1/ehr/{EHR_A}")))
         .respond_with(
@@ -76,11 +77,7 @@ async fn mount(server: &MockServer, holds: u16, uid: &str) {
 }
 
 /// The gateway over `a` and `b`, the patient resolving at both.
-fn gateway(
-    dir: &std::path::Path,
-    a: &MockServer,
-    b: &MockServer,
-) -> Result<Router, Box<dyn Error>> {
+fn gateway(dir: &std::path::Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
     dev_gateway(
         dir,
         &a.uri(),
@@ -90,7 +87,7 @@ fn gateway(
 }
 
 /// The methods and paths every request `server` received was sent with.
-async fn requests(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+async fn requests(server: &Server) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     Ok(requests
         .iter()
@@ -99,7 +96,7 @@ async fn requests(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn 
 }
 
 /// The queries a node was sent.
-async fn queries(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
+async fn queries(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut bodies = Vec::new();
     for request in requests

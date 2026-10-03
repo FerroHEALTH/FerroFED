@@ -20,9 +20,10 @@ use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, PATIENT, body, gateway, post, registry, wire};
 use crate::request_log::logged;
@@ -48,7 +49,7 @@ const LEARNED: &str = "learned a route for a creating_system_id";
 const CLIENT_TOKEN: &str = "synthetic-client-token";
 
 /// The gateway over node A and node B.
-fn over(dir: &std::path::Path, a: &MockServer, b: &MockServer) -> Result<Router, Box<dyn Error>> {
+fn over(dir: &std::path::Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
     gateway(dir, &registry(&a.uri(), &b.uri(), ""), "", "")
 }
 
@@ -64,8 +65,8 @@ fn read_body(uid: &str) -> String {
 
 /// A node holding the EHR `ehr_id` with a version of each of `uids` in it,
 /// and answering the federated query with one row per uid in `rows`.
-async fn node(ehr_id: &str, uids: &[&str], rows: &[&str]) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(ehr_id: &str, uids: &[&str], rows: &[&str]) -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(format!("/v1/ehr/{ehr_id}")))
         .respond_with(ResponseTemplate::new(200))
@@ -135,7 +136,7 @@ async fn answer(
 }
 
 /// The method and path of every request `server` received, in order.
-async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+async fn asked(server: &Server) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await
@@ -245,7 +246,7 @@ fn a_routed_answer_teaches_the_table_the_version_its_etag_names() -> TestResult 
         .enable_all()
         .build()?;
     let (a, b) = runtime.block_on(async {
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         Mock::given(method("GET"))
             .and(path(composition(EHR_A, OBJECT_ELSEWHERE)))
             .respond_with(
@@ -255,7 +256,7 @@ fn a_routed_answer_teaches_the_table_the_version_its_etag_names() -> TestResult 
             )
             .mount(&b)
             .await;
-        (MockServer::start().await, b)
+        (Server::start().await, b)
     });
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b)?;
@@ -325,13 +326,13 @@ fn a_routed_read_teaches_the_table_the_version_it_named() -> TestResult {
         .enable_all()
         .build()?;
     let (a, b) = runtime.block_on(async {
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         Mock::given(method("GET"))
             .and(path(composition(EHR_A, CREATED_ELSEWHERE)))
             .respond_with(ResponseTemplate::new(200))
             .mount(&b)
             .await;
-        (MockServer::start().await, b)
+        (Server::start().await, b)
     });
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b)?;

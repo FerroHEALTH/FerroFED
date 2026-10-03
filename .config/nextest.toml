@@ -11,9 +11,10 @@
 slow-timeout = { period = "30s", terminate-after = 2 }
 
 # A container-backed test pulls images and starts PostgreSQL and two
-# FerroEHR nodes, so it gets ten minutes before it is killed.
+# FerroEHR nodes, so it gets ten minutes before it is killed. Every such test
+# sits in an e2e module (scripts/checks/e2e-placement.sh).
 [[profile.default.overrides]]
-filter = 'package(ferrofed-testkit) or test(/^e2e::/)'
+filter = 'test(/^e2e::/)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 # The CI lanes select this profile. It repeats the default limit, and the

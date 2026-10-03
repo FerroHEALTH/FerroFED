@@ -24,9 +24,9 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use serde::Deserialize;
-use wiremock::MockServer;
 
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, registry, settings_with_room};
 use crate::support::call;
@@ -90,7 +90,7 @@ pub(crate) fn gateway(
 }
 
 /// A registry gateway over node A and node B, the patient known at both.
-fn two_members(dir: &Path, a: &MockServer, b: &MockServer) -> Result<Router, Box<dyn Error>> {
+fn two_members(dir: &Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
     gateway(
         dir,
         &registry(&a.uri(), &b.uri(), ""),

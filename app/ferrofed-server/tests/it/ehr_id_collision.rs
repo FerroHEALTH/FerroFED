@@ -30,10 +30,11 @@ use ferrofed_registry::incident::{Detection, TARGET};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::facade::owner::{self, Claimed, Held, Located};
 use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, Method, Request, StatusCode, header};
 use serde::Deserialize;
 use serde::de::IgnoredAny;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::declared::composition_at;
 use crate::facade::{
@@ -152,7 +153,7 @@ fn refused_naming_both(answered: &Answered) -> TestResult {
 /// two members claim one `ehr_id`.
 async fn resolving_at_both(
     dir: &std::path::Path,
-) -> Result<(Router, MockServer, MockServer), Box<dyn Error>> {
+) -> Result<(Router, Server, Server), Box<dyn Error>> {
     let a = node_answering("8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1").await;
     let b = node_answering("2c1fd7e4-6a43-4d0e-9a5e-6f1b2f1d6a01::cdr-b.example.org::1").await;
     let app = dev_gateway(
@@ -420,8 +421,8 @@ async fn no_incident_or_log_line_names_a_patient_identifier() -> TestResult {
 // conformance: CP-26 CP-33
 #[tokio::test]
 async fn an_ehr_id_that_is_no_uuid_is_never_named_by_an_incident() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     for server in [&a, &b] {
         mount(
             server,

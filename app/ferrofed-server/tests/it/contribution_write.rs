@@ -20,8 +20,9 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, EHR_B, PATIENT};
 use crate::path_ehr_id::{answer, holder};
@@ -146,9 +147,9 @@ fn contribution(versions: &[String]) -> String {
 #[tokio::test]
 async fn a_contribution_its_path_node_controls_reaches_it_once_byte_identical() -> TestResult {
     let at = contribution_of(EHR_A);
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(&a, "POST", at.clone(), ResponseTemplate::new(201)).await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let sent = contribution(&[version(Some(CREATED_AT_A)), version(None)]);
     let mut request = versioned(&Method::POST, &at, Some(ENDPOINT_A), None, &sent)?;
@@ -178,9 +179,9 @@ async fn a_contribution_its_path_node_controls_reaches_it_once_byte_identical() 
 #[tokio::test]
 async fn a_contribution_amending_a_registered_mapping_s_version_reaches_its_node() -> TestResult {
     let at = contribution_of(EHR_A);
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(&a, "POST", at.clone(), ResponseTemplate::new(201)).await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let sent = contribution(&[
         version(Some(CREATED_AT_A)),
@@ -199,8 +200,8 @@ async fn a_contribution_amending_a_registered_mapping_s_version_reaches_its_node
 #[tokio::test]
 async fn a_contribution_of_creations_alone_routes_by_its_path_ehr_id() -> TestResult {
     let at = contribution_of(EHR_B);
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     mount(&b, "POST", at.clone(), ResponseTemplate::new(201)).await;
     let dir = tempfile::tempdir()?;
     let sent = contribution(&[version(None), version(None)]);
@@ -224,8 +225,8 @@ async fn a_contribution_with_one_version_another_member_controls_is_409_and_reac
         vec![version(Some(CREATED_AT_A)), version(Some(CREATED_AT_B))],
         vec![version(Some(CREATED_AT_B)), version(None)],
     ] {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let request = versioned(
             &Method::POST,
@@ -258,8 +259,8 @@ async fn a_contribution_with_one_version_another_member_controls_is_409_and_reac
 // conformance: CP-15
 #[tokio::test]
 async fn a_contribution_amending_a_version_no_member_is_known_to_control_is_409() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let sent = contribution(&[
         version(Some(CREATED_AT_A)),
@@ -314,8 +315,8 @@ async fn a_body_that_is_no_contribution_naming_object_version_ids_is_a_400_befor
         ("no UTF-8", vec![0x7b, 0xff, 0xfe, 0x7d]),
     ];
     for (case, sent) in cases {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let request = Request::post(contribution_of(EHR_A))
             .header(header::CONTENT_TYPE, "application/json")
@@ -340,7 +341,7 @@ async fn a_body_that_is_no_contribution_naming_object_version_ids_is_a_400_befor
 /// Asserts that the node `server` was sent `sent` once, byte-identical, as
 /// `media`, and nothing composed by the gateway carries the patient's
 /// identifier.
-async fn sent_once_as(server: &MockServer, media: &str, sent: &str) -> TestResult {
+async fn sent_once_as(server: &Server, media: &str, sent: &str) -> TestResult {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let [received] = requests.as_slice() else {
         return Err(format!("{media}: one request, not {}", requests.len()).into());
@@ -371,8 +372,8 @@ async fn sent_once_as(server: &MockServer, media: &str, sent: &str) -> TestResul
 async fn a_simplified_contribution_of_creations_alone_routes_by_its_path_ehr_id() -> TestResult {
     for (media, data) in simplified() {
         let at = contribution_of(EHR_B);
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         mount(&b, "POST", at.clone(), ResponseTemplate::new(201)).await;
         let dir = tempfile::tempdir()?;
         let sent = contribution(&[
@@ -399,9 +400,9 @@ async fn a_simplified_contribution_its_path_node_controls_reaches_it_once_byte_i
 -> TestResult {
     for (media, data) in simplified() {
         let at = contribution_of(EHR_A);
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         mount(&a, "POST", at.clone(), ResponseTemplate::new(201)).await;
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let sent = contribution(&[
             simplified_version(Some(CREATED_AT_A), &data),
@@ -432,8 +433,8 @@ async fn a_simplified_contribution_its_path_node_controls_reaches_it_once_byte_i
 #[tokio::test]
 async fn a_simplified_contribution_with_one_version_another_member_controls_is_409() -> TestResult {
     for (media, data) in simplified() {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let sent = contribution(&[
             simplified_version(Some(CREATED_AT_A), &data),
@@ -493,8 +494,8 @@ async fn a_malformed_flat_contribution_is_a_400_before_any_node() -> TestResult 
         ("no body", String::new()),
     ];
     for (case, sent) in cases {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let request = posted(&contribution_of(EHR_A), flat, ENDPOINT_A, &sent)?;
         let text = refused_at_neither(
@@ -523,8 +524,8 @@ async fn a_contribution_in_canonical_xml_is_never_forwarded() -> TestResult {
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<contribution xmlns=\"http://schemas.openehr.org/v1\">\n  <versions>\n    <preceding_version_uid><value>{CREATED_AT_A}</value></preceding_version_uid>\n  </versions>\n</contribution>\n"
     );
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let request = posted(&contribution_of(EHR_A), "application/xml", ENDPOINT_A, &xml)?;
     let text = refused_at_neither(

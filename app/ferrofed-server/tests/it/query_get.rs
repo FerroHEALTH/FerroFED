@@ -20,8 +20,8 @@ use std::path::Path;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
-use wiremock::MockServer;
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, dev_gateway, node_answering, post,
@@ -73,7 +73,7 @@ fn get(uri: &str) -> Result<Request<Body>, http::Error> {
 
 /// A development gateway over two fresh mock nodes that both hold the
 /// patient, with the nodes.
-async fn both_members(dir: &Path) -> Result<(Router, MockServer, MockServer), Box<dyn Error>> {
+async fn both_members(dir: &Path) -> Result<(Router, Server, Server), Box<dyn Error>> {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let app = dev_gateway(
@@ -87,7 +87,7 @@ async fn both_members(dir: &Path) -> Result<(Router, MockServer, MockServer), Bo
 
 /// A registry gateway offering stored queries over two fresh mock nodes,
 /// with the nodes.
-async fn registry_members(dir: &Path) -> Result<(Router, MockServer, MockServer), Box<dyn Error>> {
+async fn registry_members(dir: &Path) -> Result<(Router, Server, Server), Box<dyn Error>> {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let app = crate::stored::gateway(
@@ -100,7 +100,7 @@ async fn registry_members(dir: &Path) -> Result<(Router, MockServer, MockServer)
 
 /// What a node received, less what differs per gateway by design: the
 /// minted `X-Request-Id` and the `Host` of the mock.
-async fn capture(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
+async fn capture(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut captured = Vec::new();
     for request in requests {
@@ -141,7 +141,7 @@ fn outcome(status: StatusCode, text: &str) -> Result<Outcome, Box<dyn Error>> {
 
 /// Asserts that no capture of `servers` holds the patient identifier, its
 /// tail or its namespace (§5.4.1, N33).
-async fn nothing_identifying(servers: [&MockServer; 2]) -> TestResult {
+async fn nothing_identifying(servers: [&Server; 2]) -> TestResult {
     for server in servers {
         let captured = wire(server).await?;
         assert!(!captured.is_empty(), "each member was asked");

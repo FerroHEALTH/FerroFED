@@ -26,6 +26,7 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use openehr_federation::meta::FederationMeta;
 use openehr_federation::options::{DefinitionBehaviour, OptionsRoot};
@@ -33,7 +34,7 @@ use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::generated::definition::StoredQuery;
 use serde::Deserialize;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, registry, schema, wire};
 use crate::support::{asked, call, error_body, exchange, field, mount};
@@ -87,7 +88,7 @@ fn definition() -> String {
 }
 
 /// The registry of node A, node B and node C at `a`, `b` and `c`.
-fn three(a: &MockServer, b: &MockServer, c: &MockServer) -> String {
+fn three(a: &Server, b: &Server, c: &Server) -> String {
     let endpoint = format!(
         "{THIRD}\n[[endpoint]]\nid = \"node-c-pub\"\nnode = \"node-c\"\nurl = \"{}\"\n\
          connection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-c\"\n",
@@ -119,7 +120,7 @@ fn gateway(dir: &Path, registry: &str, federation: &str) -> Result<Router, Box<d
 }
 
 /// The gateway over the three nodes with definition fan-out offered.
-fn offered(dir: &Path, nodes: [&MockServer; 3]) -> Result<Router, Box<dyn Error>> {
+fn offered(dir: &Path, nodes: [&Server; 3]) -> Result<Router, Box<dyn Error>> {
     let [a, b, c] = nodes;
     gateway(dir, &three(a, b, c), "fan_out_stored_queries = true")
 }
@@ -185,8 +186,8 @@ fn get(target: Option<&str>) -> Result<Request<Body>, http::Error> {
 }
 
 /// A node answering the definition `PUT` with `status` and its own body.
-async fn storing(status: u16) -> MockServer {
-    let server = MockServer::start().await;
+async fn storing(status: u16) -> Server {
+    let server = Server::start().await;
     let answer = ResponseTemplate::new(status).set_body_raw(
         format!(r#"{{"message":"{NODE_BODY}"}}"#).into_bytes(),
         "application/json",
@@ -196,8 +197,8 @@ async fn storing(status: u16) -> MockServer {
 }
 
 /// A node holding `aql` as its copy of the definition.
-async fn holding(aql: &str) -> Result<MockServer, Box<dyn Error>> {
-    let server = MockServer::start().await;
+async fn holding(aql: &str) -> Result<Server, Box<dyn Error>> {
+    let server = Server::start().await;
     let copy = StoredQuery {
         name: NAME.to_owned(),
         r#type: "AQL".to_owned(),
@@ -250,7 +251,7 @@ fn drift_code(meta: &FederationMeta, endpoint: &str) -> Option<String> {
 
 /// Asserts that `server` received exactly one definition `PUT` carrying
 /// `aql` as `text/plain`, and nothing else: nothing was rolled back.
-async fn stored_once(server: &MockServer, aql: &str) -> TestResult {
+async fn stored_once(server: &Server, aql: &str) -> TestResult {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let [only] = requests.as_slice() else {
         return Err(format!("one request, not {}", requests.len()).into());
@@ -533,7 +534,7 @@ async fn the_drift_report_names_matching_differing_and_missing_members() -> Test
     );
     let a = holding(&definition()).await?;
     let b = holding(&differing).await?;
-    let c = MockServer::start().await;
+    let c = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = offered(dir.path(), [&a, &b, &c])?;
     let (status, text) = call(app.clone(), put(&definition(), None)?).await?;

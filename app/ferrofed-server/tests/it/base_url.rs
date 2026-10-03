@@ -25,9 +25,10 @@ use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::{Config, error};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, crossref, node_answering, patient_query,
@@ -89,7 +90,7 @@ fn to_a(verb: Method, uri: &str, body: Body) -> Result<Request<Body>, http::Erro
 }
 
 /// The paths every request `server` received was sent to.
-async fn paths(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
+async fn paths(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     Ok(requests
         .iter()
@@ -101,7 +102,7 @@ async fn paths(server: &MockServer) -> Result<Vec<String>, Box<dyn Error>> {
 #[tokio::test]
 async fn a_routed_read_is_served_at_the_root_and_under_a_prefix() -> TestResult {
     for base in BASES {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         Mock::given(method("GET"))
             .and(path(format!("/v1/ehr/{EHR_A}")))
             .respond_with(ResponseTemplate::new(200).set_body_raw(
@@ -110,7 +111,7 @@ async fn a_routed_read_is_served_at_the_root_and_under_a_prefix() -> TestResult 
             ))
             .mount(&a)
             .await;
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let app = gateway_at(dir.path(), base, &a.uri(), &b.uri())?;
         let read = to_a(
@@ -134,7 +135,7 @@ async fn a_routed_read_is_served_at_the_root_and_under_a_prefix() -> TestResult 
 #[tokio::test]
 async fn a_read_by_subject_is_served_at_the_root_and_under_a_prefix() -> TestResult {
     for base in BASES {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         Mock::given(method("GET"))
             .and(path(format!("/v1/ehr/{EHR_A}")))
             .respond_with(ResponseTemplate::new(200).set_body_raw(
@@ -143,7 +144,7 @@ async fn a_read_by_subject_is_served_at_the_root_and_under_a_prefix() -> TestRes
             ))
             .mount(&a)
             .await;
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let app = gateway_at(dir.path(), base, &a.uri(), &b.uri())?;
         let uri = under(
@@ -168,7 +169,7 @@ async fn a_read_by_subject_is_served_at_the_root_and_under_a_prefix() -> TestRes
 async fn a_routed_write_is_served_at_the_root_and_under_a_prefix_with_location_untouched()
 -> TestResult {
     for base in BASES {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         let location = format!("http://cdr-a.example.org/v1/ehr/{EHR_A}/composition/{VERSION_A}");
         Mock::given(method("POST"))
             .and(path(format!("/v1/ehr/{EHR_A}/composition")))
@@ -179,7 +180,7 @@ async fn a_routed_write_is_served_at_the_root_and_under_a_prefix_with_location_u
             )
             .mount(&a)
             .await;
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let app = gateway_at(dir.path(), base, &a.uri(), &b.uri())?;
         let write = to_a(

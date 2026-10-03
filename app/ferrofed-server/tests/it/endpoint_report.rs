@@ -28,6 +28,7 @@ use ferrofed_engine::fanout::{Budget, FederatedAnswer, fan_out};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::facade::plan::{self, Selection};
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::aql::{Analysis, Context, Paging, Targeting, analyse};
 use openehr_federation::status::EndpointStatus;
@@ -35,7 +36,7 @@ use openehr_its::rest::client::ReqwestTransport;
 use openehr_query::bind::Parameters;
 use serde_json::Value;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::schema;
 
@@ -45,13 +46,13 @@ type TestResult = Result<(), Box<dyn Error>>;
 const FACADE_AQL: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
 
 /// A mock CDR answering `POST /v1/query/aql` with one row per uid.
-async fn node(uids: &[&str]) -> MockServer {
+async fn node(uids: &[&str]) -> Server {
     let rows: Vec<String> = uids.iter().map(|uid| format!("[\"{uid}\"]")).collect();
     let body = format!(
         r##"{{"q":"{FACADE_AQL}","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[{}]}}"##,
         rows.join(",")
     );
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(
