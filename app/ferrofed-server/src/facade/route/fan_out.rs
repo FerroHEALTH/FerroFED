@@ -56,7 +56,7 @@ use openehr_federation::status;
 use openehr_its::rest::client::{ErrorBody, ReqwestTransport};
 use openehr_its::rest::routes::RouteMatch;
 use serde::Serialize;
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 
 use super::chosen::{Chooser, named, to_named};
 use super::{Arrived, DEFINITION_GROUP, Deadlines, held, unheld};
@@ -211,13 +211,19 @@ pub(crate) enum Asked<R> {
 ///
 /// Each member is asked independently: one that fails or is late changes
 /// nothing for the others, and nothing is undone (§12.6 item 3).
+///
+/// # Errors
+///
+/// Returns [`Unfinished`] when a task panicked, so the caller fails the
+/// request as the probe and the query fan-out do, and attributes nothing to
+/// any member.
 pub(crate) async fn each<R, F, Fut>(
     federation: &Federation,
     targets: &[&Endpoint],
     (budget, outbound): (&Deadlines, OutboundId),
     logged: &str,
     call: F,
-) -> Vec<(Asked<R>, u64)>
+) -> Result<Vec<(Asked<R>, u64)>, Unfinished>
 where
     F: Fn(NodeClient<ReqwestTransport>, DispatchOptions) -> Fut,
     Fut: Future<Output = R> + Send + 'static,
@@ -227,7 +233,6 @@ where
     let until = tokio::time::Instant::from_std(budget.overall());
     let mut tasks = JoinSet::new();
     let mut sent: Vec<Option<(Asked<R>, u64)>> = targets.iter().map(|_| None).collect();
-    let fanned = Instant::now();
     for (index, endpoint) in targets.iter().enumerate() {
         let Some(client) = federation.clients().get(endpoint.id()).cloned() else {
             tracing::error!(
@@ -253,25 +258,26 @@ where
         });
     }
     while let Some(joined) = tasks.join_next().await {
-        match joined {
-            Ok((index, asked, latency_ms)) => {
-                if let Some(slot) = sent.get_mut(index) {
-                    *slot = Some((asked, latency_ms));
-                }
-            }
-            Err(joined) => {
-                tracing::error!(
-                    error = %joined,
-                    request_id = logged,
-                    "a fan-out task did not finish"
-                );
-            }
+        let (index, asked, latency_ms) = joined.map_err(Unfinished::Task)?;
+        if let Some(slot) = sent.get_mut(index) {
+            *slot = Some((asked, latency_ms));
         }
     }
-    let abandoned_after = elapsed_ms(fanned);
     sent.into_iter()
-        .map(|slot| slot.unwrap_or((Asked::Abandoned, abandoned_after)))
-        .collect()
+        .collect::<Option<Vec<_>>>()
+        .ok_or(Unfinished::Unanswered)
+}
+
+/// A fan-out that could not tell what became of every member's request: a
+/// defect on the gateway's side, never a member's answer.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum Unfinished {
+    /// A task panicked or was cancelled.
+    #[error("a fan-out task did not finish")]
+    Task(#[source] JoinError),
+    /// A member was left with no record of its request.
+    #[error("a fan-out member was left with no record of its request")]
+    Unanswered,
 }
 
 /// The §11.1 outcome of a member's request that ended as `sent` after
@@ -349,6 +355,17 @@ async fn fan_out(
         },
     )
     .await;
+    let sent = match sent {
+        Ok(sent) => sent,
+        Err(unfinished) => {
+            tracing::error!(
+                error = %crate::chain(&unfinished),
+                request_id = logged,
+                "the fan-out upload could not tell what became of every member"
+            );
+            return error::fixed(Code::Internal, request_id);
+        }
+    };
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
         let reached = contact(&sent, Contact::of_forwarded);

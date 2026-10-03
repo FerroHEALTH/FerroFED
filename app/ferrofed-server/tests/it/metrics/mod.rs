@@ -15,6 +15,7 @@ mod exposition;
 mod hygiene;
 mod incidents;
 mod nodes;
+mod panicked;
 mod reload;
 mod unsent;
 

@@ -22,7 +22,7 @@ use wiremock::{Mock, ResponseTemplate};
 use crate::base_url::{gateway_at, under};
 use crate::facade::EHR_A;
 use crate::request_log::logged;
-use crate::support::request_lines;
+use crate::support::{request_lines, without_minted};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -58,6 +58,16 @@ fn nodes() -> Result<(Server, Server), Box<dyn Error>> {
         }
         (a, Server::start().await)
     }))
+}
+
+/// The log `text` with the request id of each request line masked, each one
+/// the gateway minted, which a search for a fragment of a version uid reads.
+fn without_request_ids(text: &str) -> Result<String, Box<dyn Error>> {
+    let ids: Vec<String> = request_lines(text)?
+        .into_iter()
+        .filter_map(|line| line.request_id)
+        .collect();
+    without_minted(text, ids.iter().map(String::as_str))
 }
 
 /// The routes the request lines of `text` name, in order.
@@ -103,7 +113,7 @@ fn a_routed_read_logs_its_route_template_and_never_its_identifiers() -> TestResu
     );
     assert!(!text.contains(EHR_A), "the ehr_id reached the log: {text}");
     assert!(
-        !text.contains("8849182c"),
+        !without_request_ids(&text)?.contains("8849182c"),
         "the version uid reached the log: {text}"
     );
     Ok(())
@@ -162,7 +172,7 @@ fn options_logs_the_template_of_the_resource_it_describes() -> TestResult {
         );
         assert!(!text.contains(EHR_A), "the ehr_id reached the log: {text}");
         assert!(
-            !text.contains("8849182c"),
+            !without_request_ids(&text)?.contains("8849182c"),
             "the uid reached the log: {text}"
         );
         assert!(!text.contains("SYNTHETIC-PATH-ID"), "{text}");

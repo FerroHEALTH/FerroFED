@@ -13,6 +13,7 @@
 //! validation against the vendored schemas.
 
 mod query;
+mod scan;
 pub(crate) mod schema;
 
 use std::collections::BTreeMap;
@@ -32,7 +33,7 @@ use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::settings;
+use crate::support::{MINTED_REQUEST_ID, is_minted_form, settings};
 
 /// The synthetic patient identifier: visibly synthetic, under no real scheme.
 pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38kq";
@@ -264,6 +265,11 @@ impl std::fmt::Display for Wire {
 
 /// Every byte `server` received: the request target, each header name and
 /// raw value, and the raw body.
+///
+/// The one exception is an `x-request-id` in the form the gateway mints,
+/// recorded as [`MINTED_REQUEST_ID`]: a random UUID can hold a short
+/// synthetic identifier by chance. Every other value stays raw, so a client
+/// value reaching a node is still searched.
 pub(crate) async fn wire(server: &Server) -> Result<Wire, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let mut bytes = Vec::new();
@@ -271,11 +277,22 @@ pub(crate) async fn wire(server: &Server) -> Result<Wire, Box<dyn Error>> {
         bytes.extend_from_slice(request.url.as_str().as_bytes());
         for (name, value) in &request.headers {
             bytes.extend_from_slice(name.as_str().as_bytes());
-            bytes.extend_from_slice(value.as_bytes());
+            if minted(name, value) {
+                bytes.extend_from_slice(MINTED_REQUEST_ID.as_bytes());
+            } else {
+                bytes.extend_from_slice(value.as_bytes());
+            }
         }
         bytes.extend_from_slice(&request.body);
     }
     Ok(Wire(bytes))
+}
+
+/// Whether `name` and `value` are the `x-request-id` the gateway mints.
+fn minted(name: &http::HeaderName, value: &http::HeaderValue) -> bool {
+    // NOTE: §5.4.1, N33; exempting the minted id is our own design: the outbound
+    // gate skips that one value, so the scan skips its form and no other value.
+    name == "x-request-id" && value.to_str().is_ok_and(is_minted_form)
 }
 
 /// The federated answer, read for the members the tests assert on.
