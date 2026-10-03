@@ -195,6 +195,26 @@ pub enum Error {
         "the [dev] table is not valid: every [[dev.crossref]] row names namespace, value, member and ehr_id, and nothing else"
     )]
     DevTable,
+    /// `metrics.listen` names an address other than a loopback one, and
+    /// `metrics.allow_remote` does not allow it.
+    #[error(
+        "metrics.listen is {address}, which is not a loopback address; the metrics listener has no authentication, so set metrics.allow_remote = true to serve it beyond this host"
+    )]
+    MetricsRemote {
+        /// The address `metrics.listen` names.
+        address: std::net::SocketAddr,
+    },
+    /// `metrics.listen` names the address `server.listen` binds.
+    #[error("metrics.listen is {address}, the address server.listen binds; give it its own")]
+    MetricsShared {
+        /// The address both keys name.
+        address: std::net::SocketAddr,
+    },
+    /// `metrics.otlp_endpoint` is not an `http://` URL.
+    #[error(
+        "metrics.otlp_endpoint must be an http:// URL: the OTLP push speaks gRPC without TLS, to a collector beside the gateway"
+    )]
+    OtlpScheme,
     /// The request timeout does not exceed the overall fan-out budget plus
     /// the combining margin, so it could cut the answer and the `504`
     /// envelope the budget produces when it expires (§11.4, §11.5).

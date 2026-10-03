@@ -14,6 +14,7 @@ use crate::config::settings::Settings;
 use crate::federation::{Federation, FederationError, read_registry};
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
+use crate::metrics::{Metrics, MetricsError};
 use crate::stored::RedbStore;
 
 /// The state the router is built over.
@@ -34,6 +35,9 @@ pub struct AppState {
     /// The stored-query registry, when it is offered (§12.7). It sits beside
     /// the federation, which holds no store handle.
     definitions: Option<Arc<Definitions>>,
+    /// The metrics surface every recording site and the admin listener
+    /// share; it outlives every federation a reload builds.
+    metrics: Arc<Metrics>,
 }
 
 /// A state that cannot be built from the settings.
@@ -52,6 +56,9 @@ pub enum StateError {
         #[source]
         source: StoreError,
     },
+    /// The metrics surface cannot be built.
+    #[error(transparent)]
+    Metrics(#[from] MetricsError),
 }
 
 impl AppState {
@@ -61,11 +68,15 @@ impl AppState {
     /// stored-query store opened with every definition it holds read, before
     /// the gateway serves. Each subsystem built gets a [`Built`] indicator,
     /// and no member node or identity source gets one. The state is booting
-    /// until the run path marks boot complete.
+    /// until the run path marks boot complete. The metrics surface is built
+    /// with an OTLP push when `metrics.otlp_endpoint` is set, which needs a
+    /// Tokio runtime context, and the federation records its node requests
+    /// through it.
     ///
     /// # Errors
     /// Returns a [`StateError`] when the federation `settings` describe
-    /// cannot be built, or the stored-query store cannot be opened or read.
+    /// cannot be built, the stored-query store cannot be opened or read, or
+    /// the metrics surface cannot be built.
     pub fn build(settings: &Settings) -> Result<Self, StateError> {
         Self::build_read(settings, read_registry(settings))
     }
@@ -84,7 +95,9 @@ impl AppState {
         document: Option<Result<RegistrySnapshot, FederationError>>,
     ) -> Result<Self, StateError> {
         settings.log_summary();
-        let federation = Federation::load_read(settings, document)?;
+        let metrics = Arc::new(Metrics::new(&settings.metrics)?);
+        let federation = Federation::load_read(settings, document)?
+            .map(|federation| federation.metered(metrics.nodes()));
         let definitions = settings
             .stored_queries
             .as_deref()
@@ -110,6 +123,7 @@ impl AppState {
             health: Registry::new(built),
             federation: RwLock::new(federation.map(Arc::new)),
             definitions: definitions.map(Arc::new),
+            metrics,
         })
     }
 
@@ -122,6 +136,7 @@ impl AppState {
             health,
             federation: RwLock::new(None),
             definitions: None,
+            metrics: Arc::default(),
         }
     }
 
@@ -129,11 +144,13 @@ impl AppState {
     /// `federation`.
     #[must_use]
     pub fn with_federation(federation: Federation) -> Self {
+        let metrics = Arc::new(Metrics::default());
         Self {
             lifecycle: Lifecycle::default(),
             health: Registry::default(),
-            federation: RwLock::new(Some(Arc::new(federation))),
+            federation: RwLock::new(Some(Arc::new(federation.metered(metrics.nodes())))),
             definitions: None,
+            metrics,
         }
     }
 
@@ -173,6 +190,12 @@ impl AppState {
             .write()
             .unwrap_or_else(PoisonError::into_inner)
             .replace(federation)
+    }
+
+    /// Returns the metrics surface.
+    #[must_use]
+    pub fn metrics(&self) -> &Arc<Metrics> {
+        &self.metrics
     }
 
     /// Returns the stored-query registry, when it is offered (§12.7).

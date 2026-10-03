@@ -1,0 +1,188 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The node request counter and duration histogram, recorded from what the
+//! gateway already observes of each request it sends to a member.
+//!
+//! A request's `outcome` is the §11.1 status the per-endpoint report gives
+//! it: `active`, `offline`, `time-out`, `node-error` or `consent-denied`, the
+//! statuses that carry a `latency_ms` because a request was sent (§9.5). A
+//! request routed to one node has no per-endpoint report, so its outcome is
+//! read the same way from its answer: a server error or a refusal of the
+//! gateway's onward credentials is `node-error`. A request the gateway never
+//! sent is not counted. The `endpoint` label is an endpoint id of the
+//! registry snapshot the request ran on, never anything a request carries.
+
+use std::collections::BTreeSet;
+use std::time::Duration;
+
+use ferrofed_engine::forward::{ForwardError, Forwarded};
+use ferrofed_engine::probe::Answer;
+use ferrofed_registry::id::EndpointId;
+use http::StatusCode;
+use openehr_federation::meta::FederationMeta;
+use openehr_federation::outcome::Outcome;
+use openehr_federation::status::EndpointStatus;
+use opentelemetry::KeyValue;
+use opentelemetry::metrics::{Counter, Histogram, Meter};
+
+use crate::metrics::{NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION, NODE_REQUESTS};
+
+/// The node request instruments of one meter provider, shared by every
+/// federation a reload builds.
+#[derive(Debug, Clone)]
+pub struct Instruments {
+    requests: Counter<u64>,
+    duration: Histogram<f64>,
+}
+
+impl Instruments {
+    /// Creates the instruments on `meter`.
+    #[must_use]
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            requests: meter
+                .u64_counter(NODE_REQUESTS)
+                .with_description("Requests sent to a member node, by endpoint and outcome")
+                .build(),
+            duration: meter
+                .f64_histogram(NODE_REQUEST_DURATION)
+                .with_description("The time a member node took to answer a request")
+                .with_unit("s")
+                .with_boundaries(NODE_DURATION_BUCKETS.to_vec())
+                .build(),
+        }
+    }
+}
+
+/// What one federation records of its node requests: the endpoints of its
+/// registry snapshot, and the instruments, when the server meters it.
+#[derive(Debug)]
+pub struct NodeRequests {
+    endpoints: BTreeSet<EndpointId>,
+    instruments: Option<Instruments>,
+}
+
+impl NodeRequests {
+    /// Returns a record of `endpoints` that records nothing until
+    /// [`NodeRequests::metered`] gives it instruments.
+    #[must_use]
+    pub fn new<'a>(endpoints: impl IntoIterator<Item = &'a EndpointId>) -> Self {
+        Self {
+            endpoints: endpoints.into_iter().cloned().collect(),
+            instruments: None,
+        }
+    }
+
+    /// Records through `instruments` from now on.
+    pub fn metered(&mut self, instruments: Instruments) {
+        self.instruments = Some(instruments);
+    }
+
+    /// Returns the instruments this record writes to, when it is metered.
+    #[must_use]
+    pub fn instruments(&self) -> Option<&Instruments> {
+        self.instruments.as_ref()
+    }
+
+    /// Records every request a fan-out sent, from the per-endpoint report
+    /// `meta.federation` carries (§9.5, §11.1).
+    pub fn report(&self, federation: &FederationMeta) {
+        for outcome in federation.endpoints() {
+            // NOTE: no specification governs this: our own design; an id the
+            // registry would refuse names no endpoint here, so it is not counted.
+            if let Ok(endpoint) = EndpointId::new(outcome.id().as_str()) {
+                self.settled(&endpoint, outcome.outcome());
+            }
+        }
+    }
+
+    /// Records the request to `endpoint` that ended as `outcome` in a
+    /// per-member record, when a request was sent.
+    pub fn settled(&self, endpoint: &EndpointId, outcome: &Outcome) {
+        if let Some(latency_ms) = outcome.latency_ms() {
+            self.count(
+                endpoint,
+                outcome.status(),
+                Some(Duration::from_millis(latency_ms)),
+            );
+        }
+    }
+
+    /// Records a request forwarded to `endpoint` that took `elapsed`, when
+    /// the gateway sent it.
+    pub fn forwarded(
+        &self,
+        endpoint: &EndpointId,
+        outcome: &Result<Forwarded, ForwardError>,
+        elapsed: Duration,
+    ) {
+        let status = match outcome {
+            Ok(answer) => Some(answered(answer.status())),
+            Err(error) => failed(error),
+        };
+        if let Some(status) = status {
+            self.count(endpoint, status, Some(elapsed));
+        }
+    }
+
+    /// Records an ask-all probe of `endpoint`, when the gateway sent it.
+    ///
+    /// A probe answer carries no measurement of its own, so a probe is
+    /// counted and not timed.
+    pub fn probed(&self, endpoint: &EndpointId, answer: &Answer) {
+        let status = match answer {
+            Answer::Holds(forwarded) => Some(answered(forwarded.status())),
+            Answer::Absent => Some(EndpointStatus::Active),
+            Answer::Erred(status) => Some(answered(*status)),
+            Answer::Failed(error) => failed(error),
+            Answer::Abandoned => Some(EndpointStatus::TimeOut),
+        };
+        if let Some(status) = status {
+            self.count(endpoint, status, None);
+        }
+    }
+
+    /// Counts one request to `endpoint` that ended as `status`, and records
+    /// `elapsed` when it was measured; an endpoint outside the snapshot is
+    /// not recorded.
+    fn count(&self, endpoint: &EndpointId, status: EndpointStatus, elapsed: Option<Duration>) {
+        let Some(instruments) = &self.instruments else {
+            return;
+        };
+        // NOTE: §5.4.1, N33: a label value is a registry endpoint id or an enum
+        // name, never request text, so no identifier reaches the surface.
+        let Some(endpoint) = self.endpoints.get(endpoint) else {
+            return;
+        };
+        let label = KeyValue::new("endpoint", endpoint.as_str().to_owned());
+        instruments.requests.add(
+            1,
+            &[label.clone(), KeyValue::new("outcome", status.as_str())],
+        );
+        if let Some(elapsed) = elapsed {
+            instruments.duration.record(elapsed.as_secs_f64(), &[label]);
+        }
+    }
+}
+
+/// The outcome of a request the node answered with `status`: a server error
+/// is `node-error`, and any other answer is an answer.
+fn answered(status: StatusCode) -> EndpointStatus {
+    if status.is_server_error() {
+        EndpointStatus::NodeError
+    } else {
+        EndpointStatus::Active
+    }
+}
+
+/// The outcome of a request that got no answer of the node's, or `None` when
+/// the gateway sent nothing.
+fn failed(error: &ForwardError) -> Option<EndpointStatus> {
+    match error {
+        ForwardError::TimeOut { .. } => Some(EndpointStatus::TimeOut),
+        ForwardError::Unreachable { .. } => Some(EndpointStatus::Offline),
+        ForwardError::Refused { .. } => Some(EndpointStatus::NodeError),
+        _ => None,
+    }
+}

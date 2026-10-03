@@ -23,6 +23,24 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- A metrics surface (#281; no specification governs metrics). One
+  OpenTelemetry meter provider counts the integrity incidents by `kind`
+  (`ferrofed_integrity_incidents_total`), the requests sent to each member
+  endpoint by the §11.1 outcome the per-endpoint report gives them
+  (`ferrofed_node_requests_total{endpoint, outcome}`), how long each member
+  took to answer (`ferrofed_node_request_duration_seconds{endpoint}`), and
+  the registry reloads by `result`, `applied` or `refused`
+  (`ferrofed_registry_reloads_total`). `[metrics] listen` serves the
+  Prometheus text exposition at `GET /metrics` on an admin listener of its
+  own, never the gateway's listener, and `[metrics] otlp_endpoint` pushes the
+  same metrics to an OTLP gRPC collector; both are off by default. `serve`
+  and `config check` refuse a listener on a non-loopback address unless
+  `[metrics] allow_remote = true` is set, a listener on `server.listen`, and
+  a collector that is no `http://` URL. Every label value is drawn from a
+  closed set or the registry document, never from a request (§5.4.1, N33).
+  The book's operate section has a Metrics page listing every metric and its
+  labels. The integrity incident webhook the architecture named is removed
+  from the design: alert on the counter.
 - `PUT {base}/v1/ehr/{ehr_id}` is checked against what the gateway already
   knows of the `ehr_id` before anything is sent (#289; §12.4, §12.5.2, N23,
   N42, CP-15; ITS-REST 1.1.0 `ehr_create_with_id`). When a resolution
@@ -278,8 +296,8 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   incident naming the members, keeps both and routes neither; a held
   collision lasts until the entry is forgotten or the gateway restarts. An
   incident names an `ehr_id` only when it is a bare UUID, and never a patient
-  identifier. The gateway has no metrics endpoint, so the log is the record;
-  the book's configuration page says what an operator sees and does.
+  identifier. The book's configuration page says what an operator sees and
+  does, and the metrics surface (#281) counts each incident by `kind`.
 - The obligations checklist (#278): `conformance/obligations.tsv` holds one
   row per normative statement of the pinned Federation Tier specification,
   447 across its 26 pages and both JSON schemas, each with the status

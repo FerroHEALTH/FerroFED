@@ -81,6 +81,18 @@ tokio = { version = "1.53.1", default-features = false }
 tracing = "0.1.44"
 # The console: the env filter, the JSON line format and the pretty one.
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt", "env-filter", "json", "ansi"] }
+# The metrics surface (#281; no specification governs it: our own design): one
+# OpenTelemetry MeterProvider feeds the Prometheus pull reader and the optional
+# OTLP push, so an instrument cannot exist on one surface and not the other.
+# The four opentelemetry crates are released in lockstep and move together;
+# scripts/checks/versions.sh holds them equal against docs/VERSIONS.md.
+# Verified against crates.io on 2026-10-03.
+opentelemetry = { version = "0.33.0", default-features = false, features = ["metrics", "internal-logs"] }
+opentelemetry_sdk = { version = "0.33.0", default-features = false, features = ["metrics", "internal-logs", "rt-tokio", "experimental_metrics_custom_reader"] }
+opentelemetry-prometheus = "0.33.0"
+opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["metrics", "internal-logs", "grpc-tonic"] }
+# The registry and text encoder the Prometheus reader renders through.
+prometheus = { version = "0.14.0", default-features = false }
 # The minted request id when a client sends none or sends an illegal one.
 uuid = { version = "1.26.1", default-features = false, features = ["v4", "std"] }
 # Test-only: a real HTTP client for the cases that drive a real socket.

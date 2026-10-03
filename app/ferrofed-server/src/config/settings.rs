@@ -45,6 +45,8 @@ pub struct Settings {
     /// The store file of the stored-query registry, when it is offered
     /// (§12.7).
     pub stored_queries: Option<PathBuf>,
+    /// The metrics surface.
+    pub metrics: MetricsSettings,
 }
 
 /// The PIXm resolver, resolved.
@@ -130,6 +132,16 @@ pub struct TelemetrySettings {
     pub filter: String,
 }
 
+/// The metrics surface, resolved.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MetricsSettings {
+    /// The admin listener's address, already held to loopback unless remote
+    /// serving was allowed; `None` runs no listener.
+    pub listen: Option<SocketAddr>,
+    /// The OTLP collector the metrics are pushed to; `None` pushes nothing.
+    pub otlp_endpoint: Option<url::Url>,
+}
+
 /// The authentication scheme a credentials section resolves to.
 ///
 /// `Debug` redacts every secret, because [`SecretString`] does.
@@ -182,6 +194,8 @@ impl Settings {
             fan_out_stored_queries = self.federation.fan_out_stored_queries,
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             stored_query_registry = self.stored_queries.is_some(),
+            metrics_listen = self.metrics.listen.map(|address| address.to_string()),
+            metrics_otlp_push = self.metrics.otlp_endpoint.is_some(),
             credentials = endpoints.join(","),
             "configuration resolved"
         );

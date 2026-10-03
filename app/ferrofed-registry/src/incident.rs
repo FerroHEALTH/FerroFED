@@ -7,9 +7,9 @@
 //!
 //! An incident is an event. It is emitted once, as a structured `tracing`
 //! event at `ERROR` under [`TARGET`] with a stable kind and the routing ids
-//! involved, and handed back to its caller; it never carries a body or a
-//! patient identifier (no specification governs the event's form: our own
-//! design). An `ehr_id` is node-local and names no patient (§5.2), so an
+//! involved, counted per [`Kind`] for the metrics surface, and handed back to
+//! its caller; it never carries a body or a patient identifier (no
+//! specification governs the event's form: our own design). An `ehr_id` is node-local and names no patient (§5.2), so an
 //! incident about one carries it; the event and the `Display` text name it
 //! only when it is a bare UUID, because any other `HIER_OBJECT_ID` form could
 //! be a patient identifier a client wrote in a path (§5.4.1, N33).
@@ -29,6 +29,7 @@
 //! ```
 
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::id::{EhrId, EndpointId, NodeId, SystemId};
 
@@ -81,6 +82,86 @@ pub enum Incident {
     },
 }
 
+/// The kind of an integrity incident: the closed set a log pipeline or a
+/// counter keys on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum Kind {
+    /// [`Incident::LearnedCreatingSystemConflict`].
+    LearnedCreatingSystemConflict,
+    /// [`Incident::RegisteredCreatingSystemConflict`].
+    RegisteredCreatingSystemConflict,
+    /// [`Incident::EhrIdCollision`].
+    EhrIdCollision,
+    /// [`Incident::IndexInsertCollision`].
+    IndexInsertCollision,
+}
+
+/// How many [`Kind::LearnedCreatingSystemConflict`] incidents were emitted.
+static LEARNED_CONFLICTS: AtomicU64 = AtomicU64::new(0);
+/// How many [`Kind::RegisteredCreatingSystemConflict`] incidents were emitted.
+static REGISTERED_CONFLICTS: AtomicU64 = AtomicU64::new(0);
+/// How many [`Kind::EhrIdCollision`] incidents were emitted.
+static EHR_ID_COLLISIONS: AtomicU64 = AtomicU64::new(0);
+/// How many [`Kind::IndexInsertCollision`] incidents were emitted.
+static INDEX_INSERT_COLLISIONS: AtomicU64 = AtomicU64::new(0);
+
+impl Kind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 4] = [
+        Self::LearnedCreatingSystemConflict,
+        Self::RegisteredCreatingSystemConflict,
+        Self::EhrIdCollision,
+        Self::IndexInsertCollision,
+    ];
+
+    /// The kind's stable name, as the event and a counter label carry it.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::LearnedCreatingSystemConflict => "LearnedCreatingSystemConflict",
+            Self::RegisteredCreatingSystemConflict => "RegisteredCreatingSystemConflict",
+            Self::EhrIdCollision => "EhrIdCollision",
+            Self::IndexInsertCollision => "IndexInsertCollision",
+        }
+    }
+
+    /// Returns how many incidents of this kind [`Incident::emit`] has
+    /// emitted in this process since it started.
+    #[must_use]
+    pub fn emitted(self) -> u64 {
+        self.counter().load(Ordering::Relaxed)
+    }
+
+    /// The process-wide counter of this kind.
+    const fn counter(self) -> &'static AtomicU64 {
+        match self {
+            Self::LearnedCreatingSystemConflict => &LEARNED_CONFLICTS,
+            Self::RegisteredCreatingSystemConflict => &REGISTERED_CONFLICTS,
+            Self::EhrIdCollision => &EHR_ID_COLLISIONS,
+            Self::IndexInsertCollision => &INDEX_INSERT_COLLISIONS,
+        }
+    }
+}
+
+impl fmt::Display for Kind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl PartialEq<&str> for Kind {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<Kind> for &str {
+    fn eq(&self, other: &Kind) -> bool {
+        *self == other.as_str()
+    }
+}
+
 /// The step of §12.5.1 that found an `ehr_id` at more than one member.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -119,12 +200,12 @@ impl Incident {
     /// The incident's stable kind, the name a log pipeline or a counter keys
     /// on.
     #[must_use]
-    pub fn kind(&self) -> &'static str {
+    pub const fn kind(&self) -> Kind {
         match self {
-            Self::LearnedCreatingSystemConflict { .. } => "LearnedCreatingSystemConflict",
-            Self::RegisteredCreatingSystemConflict { .. } => "RegisteredCreatingSystemConflict",
-            Self::EhrIdCollision { .. } => "EhrIdCollision",
-            Self::IndexInsertCollision { .. } => "IndexInsertCollision",
+            Self::LearnedCreatingSystemConflict { .. } => Kind::LearnedCreatingSystemConflict,
+            Self::RegisteredCreatingSystemConflict { .. } => Kind::RegisteredCreatingSystemConflict,
+            Self::EhrIdCollision { .. } => Kind::EhrIdCollision,
+            Self::IndexInsertCollision { .. } => Kind::IndexInsertCollision,
         }
     }
 
@@ -155,11 +236,15 @@ impl Incident {
     }
 
     /// Emits the incident as an `ERROR` event under [`TARGET`] carrying its
-    /// kind and routing ids only.
+    /// kind and routing ids only, and counts it under its [`Kind`]
+    /// ([`Kind::emitted`]).
     ///
     /// The code that detects a defect emits its incident once; a caller that
     /// is handed one back never emits it again.
     pub fn emit(&self) {
+        // NOTE: no specification governs this: our own design; an operator
+        // alerts on this count, and no webhook is called.
+        self.kind().counter().fetch_add(1, Ordering::Relaxed);
         match self {
             Self::LearnedCreatingSystemConflict {
                 creating_system_id,
@@ -167,7 +252,7 @@ impl Incident {
                 second,
             } => tracing::error!(
                 target: TARGET,
-                kind = self.kind(),
+                kind = self.kind().as_str(),
                 creating_system_id = %creating_system_id,
                 first_endpoint_id = %first,
                 second_endpoint_id = %second,
@@ -179,7 +264,7 @@ impl Incident {
                 learned,
             } => tracing::error!(
                 target: TARGET,
-                kind = self.kind(),
+                kind = self.kind().as_str(),
                 creating_system_id = %creating_system_id,
                 node_id = %registered,
                 endpoint_id = %learned,
@@ -191,7 +276,7 @@ impl Incident {
                 claimants,
             } => tracing::error!(
                 target: TARGET,
-                kind = self.kind(),
+                kind = self.kind().as_str(),
                 ehr_id = uuid_form(ehr_id),
                 detection = detection.as_str(),
                 claimants = %Listed(claimants),
@@ -199,7 +284,7 @@ impl Incident {
             ),
             Self::IndexInsertCollision { ehr_id, claimants } => tracing::error!(
                 target: TARGET,
-                kind = self.kind(),
+                kind = self.kind().as_str(),
                 ehr_id = uuid_form(ehr_id),
                 claimants = %Listed(claimants),
                 "integrity incident: the ehr_id index learned an ehr_id it holds at another member"
@@ -283,7 +368,27 @@ impl fmt::Display for Incident {
 
 #[cfg(test)]
 mod tests {
-    use super::{Detection, Incident};
+    use super::{Detection, Incident, Kind};
+
+    #[test]
+    fn an_emitted_incident_is_counted_under_its_kind_alone() {
+        let incident = Incident::IndexInsertCollision {
+            ehr_id: "7d44b88c-4199-4bad-97dc-d78268e01398".parse().unwrap(),
+            claimants: vec!["node-a".parse().unwrap(), "node-b".parse().unwrap()],
+        };
+        let before = Kind::ALL.map(Kind::emitted);
+        incident.emit();
+        let after = Kind::ALL.map(Kind::emitted);
+        for ((kind, was), now) in Kind::ALL.into_iter().zip(before).zip(after) {
+            let expected = if kind == Kind::IndexInsertCollision {
+                was + 1
+            } else {
+                was
+            };
+            assert_eq!(expected, now, "{kind}");
+        }
+        assert_eq!("IndexInsertCollision", incident.kind());
+    }
 
     #[test]
     fn an_ehr_id_that_is_no_uuid_is_never_shown() {

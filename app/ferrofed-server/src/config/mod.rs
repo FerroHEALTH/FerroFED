@@ -74,6 +74,9 @@ pub struct Config {
     pub pixm: Option<Pixm>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
+    /// The metrics surface (`[metrics]`): the admin listener and the OTLP
+    /// push, both off by default.
+    pub metrics: Metrics,
 }
 
 impl Default for Config {
@@ -88,6 +91,7 @@ impl Default for Config {
             dev: None,
             pixm: None,
             stored_queries: stored_queries::StoredQueries::default(),
+            metrics: Metrics::default(),
         }
     }
 }
@@ -381,6 +385,25 @@ impl Default for Telemetry {
             filter: String::from(DEFAULT_FILTER),
         }
     }
+}
+
+/// The metrics surface: one meter provider read by the Prometheus text
+/// exposition on its own listener and, when set, pushed over OTLP.
+///
+/// Both are off by default. No specification governs metrics: our own design.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Metrics {
+    /// The socket address the admin listener binds to serve `GET /metrics`.
+    /// Unset, no listener runs; it never shares `server.listen`.
+    pub listen: Option<String>,
+    /// Whether `listen` may name an address other than a loopback one. A
+    /// remote address is refused unless this is set, because the listener
+    /// has no authentication of its own.
+    pub allow_remote: bool,
+    /// The `http://` URL of an OTLP collector the metrics are pushed to over
+    /// gRPC. Unset, nothing is pushed.
+    pub otlp_endpoint: Option<String>,
 }
 
 /// The credentials one endpoint expects.
