@@ -33,7 +33,7 @@ use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::settings;
+use crate::support::{MINTED_REQUEST_ID, is_minted_form, settings};
 
 /// The synthetic patient identifier: visibly synthetic, under no real scheme.
 pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38kq";
@@ -288,21 +288,11 @@ pub(crate) async fn wire(server: &Server) -> Result<Wire, Box<dyn Error>> {
     Ok(Wire(bytes))
 }
 
-/// What [`wire`] records in place of an `x-request-id` the gateway minted.
-pub(crate) const MINTED_REQUEST_ID: &str = "<minted-request-id>";
-
-/// Whether `name` and `value` are the `x-request-id` the gateway mints: a
-/// version 4 UUID, hyphenated and lowercase, as `OutboundId` writes it.
+/// Whether `name` and `value` are the `x-request-id` the gateway mints.
 fn minted(name: &http::HeaderName, value: &http::HeaderValue) -> bool {
     // NOTE: §5.4.1, N33; exempting the minted id is our own design: the outbound
     // gate skips that one value, so the scan skips its form and no other value.
-    name == "x-request-id"
-        && value.to_str().is_ok_and(|text| {
-            uuid::Uuid::try_parse(text).is_ok_and(|id| {
-                id.get_version() == Some(uuid::Version::Random)
-                    && id.hyphenated().to_string() == text
-            })
-        })
+    name == "x-request-id" && value.to_str().is_ok_and(is_minted_form)
 }
 
 /// The federated answer, read for the members the tests assert on.

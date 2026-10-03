@@ -14,7 +14,8 @@ use std::error::Error;
 
 use ferrofed_testkit::mock::Server;
 
-use super::{MINTED_REQUEST_ID, wire};
+use super::wire;
+use crate::support::{MINTED_REQUEST_ID, without_minted};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -100,6 +101,29 @@ async fn every_header_but_a_minted_request_id_is_recorded_raw() -> TestResult {
             "{name} is recorded with its raw value: {captured}"
         );
         assert!(!captured.contains(MINTED_REQUEST_ID), "{captured}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_text_search_masks_only_the_request_ids_it_is_given_in_the_minted_form() -> TestResult {
+    let other = "4f6b8f8e-0d7c-4b1a-9e2f-3c5d7e9fa1b3";
+    let text = format!(r#"{{"request_id":"{MINTED_BY_CHANCE}","uid":"{other}::{SYNTHETIC}"}}"#);
+    let masked = without_minted(&text, [MINTED_BY_CHANCE])?;
+    assert_eq!(
+        format!(r#"{{"request_id":"{MINTED_REQUEST_ID}","uid":"{other}::{SYNTHETIC}"}}"#),
+        masked,
+        "only the named id is masked, and every other value stays"
+    );
+    for refused in [
+        "req-12345",
+        SYNTHETIC,
+        "0A12345B-7C3D-4E5F-9A1B-2C3D4E5F6A7B",
+    ] {
+        assert!(
+            without_minted(&text, [refused]).is_err(),
+            "{refused} is not in the minted form, so it is never masked"
+        );
     }
     Ok(())
 }
