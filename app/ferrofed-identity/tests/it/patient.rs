@@ -21,6 +21,10 @@ fn debug_and_display_never_show_the_value() -> Result<(), Box<dyn Error>> {
         rendered.contains("2.999.1"),
         "the namespace is shown: {rendered}"
     );
+    assert!(
+        rendered.contains(r#"value: "***""#),
+        "the family's placeholder: {rendered}"
+    );
     assert_eq!(
         patient.namespace().as_str(),
         "2.999.1",

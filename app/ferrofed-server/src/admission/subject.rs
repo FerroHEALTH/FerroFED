@@ -14,6 +14,7 @@
 use std::fmt;
 
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
+use ferrofed_registry::secret::REDACTED;
 use openehr_base::v1_3::base_types::identification::archetype_id::ArchetypeId;
 use openehr_base::v1_3::base_types::identification::generic_id::GenericId;
 use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
@@ -116,7 +117,7 @@ impl fmt::Debug for SyntheticSubject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SyntheticSubject")
             .field("namespace", &NAMESPACE)
-            .field("value", &"[REDACTED]")
+            .field("value", &REDACTED)
             .finish()
     }
 }
@@ -145,5 +146,6 @@ mod tests {
         let subject = SyntheticSubject::fresh();
         let shown = format!("{subject:?}");
         assert!(!shown.contains(subject.value().expose_secret()), "{shown}");
+        assert!(shown.contains(r#"value: "***""#), "{shown}");
     }
 }

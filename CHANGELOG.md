@@ -599,7 +599,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   of its resource, whose `header` list may hold a credential. The crate
   carries this redaction itself and depends on nothing in FerroFED. Every
   redacted value in `ihe-iti` now shows the family's `***`, where the
-  identifiers, the matched Patients and the page links showed `[REDACTED]`.
+  identifiers, the matched Patients and the page links showed `[REDACTED]`,
+  and so do `ferrofed-identity`'s `PatientRef` and the admission probe's
+  synthetic subject.
   `ihe-iti` is 0.0.9.
 - A URL whose password holds an unencoded `/`, `?` or `#`, such as
   `https://user:pa/ss@host`, no longer shows that password in the rendering
