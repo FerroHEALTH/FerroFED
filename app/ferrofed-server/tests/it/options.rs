@@ -432,7 +432,7 @@ async fn options_on_a_sub_path_names_the_methods_served_there() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), &node.uri(), "", "")?;
     for (uri, expected) in [
-        ("/v1/query/aql", "POST, OPTIONS"),
+        ("/v1/query/aql", "GET, POST, OPTIONS"),
         ("/v1/ehr", "GET, POST, OPTIONS"),
         ("/v1/ehr/7d44", "GET, PUT, OPTIONS"),
         ("/v1/ehr/7d44/composition", "POST, OPTIONS"),

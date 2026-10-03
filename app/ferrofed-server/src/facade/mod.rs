@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The ITS-REST façade: `POST {base}/v1/query/aql` answered as one federated
-//! `RESULT_SET` over every member (§7, §9, §11).
+//! The ITS-REST façade: `POST {base}/v1/query/aql`, and its `GET` form,
+//! answered as one federated `RESULT_SET` over every member (§7, §9, §11).
 //!
 //! An unmodified openEHR client sends a §7.2 façade query and receives one
 //! ITS-REST `RESULT_SET` with the rows of every member that answered and
@@ -65,7 +65,7 @@ pub mod subject;
 pub mod target;
 pub mod write;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -79,12 +79,16 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::Endpoint;
-use http::{HeaderMap, HeaderValue, StatusCode};
+use http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::{Analysis, Paging, Targeting};
 use openehr_federation::dedup::DedupMode;
-use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
+use openehr_its::rest::generated::query::{
+    AdhocQueryExecute, QueryExecuteAdhocQueryParams, ResultSet,
+};
+use openehr_its::rest::routes::{self, Lookup, RouteMatch};
+use openehr_its::rest::runtime::ApiError;
 
 use crate::error::{self, Code};
 use crate::federation::Federation;
@@ -93,6 +97,10 @@ use crate::state::AppState;
 
 /// The route the federated query is served at, under the ITS-REST prefix.
 pub const QUERY_AQL: &str = "/v1/query/aql";
+
+/// The ad hoc query's path relative to the ITS-REST base, as the
+/// `openehr-its` route table names it.
+const ADHOC_QUERY: &str = "/query/aql";
 
 /// `POST {base}/v1/query/aql`: the federated ad hoc query.
 ///
@@ -107,18 +115,63 @@ pub async fn query_aql(
     body: Bytes,
 ) -> Response {
     let started = Instant::now();
-    let request_id = request_id::of(&headers).unwrap_or_default().to_owned();
     let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
+    federated(
+        &state,
+        (&headers, outbound, started),
+        Submitted::Body(&body),
+    )
+    .await
+}
+
+/// `GET {base}/v1/query/aql`: the federated ad hoc query, its members in the
+/// query string (ITS-REST Query API, `query_execute_adhoc_query`).
+///
+/// The query string is decoded by the generated parameters of the
+/// operation, and the request it stands for runs the pipeline of
+/// [`query_aql`] unchanged (N1, CP-1). A query string the decoder refuses is
+/// a `400` (`body-invalid`), the answer to a malformed `POST` body.
+pub async fn query_aql_get(
+    State(state): State<Arc<AppState>>,
+    outbound: Option<Extension<OutboundId>>,
+    uri: Uri,
+    headers: HeaderMap,
+) -> Response {
+    let started = Instant::now();
+    let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
+    let Lookup::Matched(matched) = routes::lookup(&Method::GET, ADHOC_QUERY) else {
+        tracing::error!(
+            request_id = %outbound,
+            "openehr-its declares no GET {ADHOC_QUERY}"
+        );
+        let request_id = request_id::of(&headers).unwrap_or_default();
+        return error::fixed(Code::Internal, request_id);
+    };
+    let submitted = Submitted::Query {
+        matched: &matched,
+        query: uri.query(),
+    };
+    federated(&state, (&headers, outbound, started), submitted).await
+}
+
+/// Runs `submitted` over the configured federation, or answers `501` when
+/// none is configured.
+async fn federated(
+    state: &AppState,
+    (headers, outbound, started): (&HeaderMap, OutboundId, Instant),
+    submitted: Submitted<'_>,
+) -> Response {
+    let request_id = request_id::of(headers).unwrap_or_default();
     let Some(federation) = state.federation() else {
-        return error::fixed(Code::NotImplemented, &request_id);
+        return error::fixed(Code::NotImplemented, request_id);
     };
     let arrived = Arrived {
-        headers: &headers,
-        request_id: &request_id,
+        headers,
+        request_id,
         outbound,
         started,
     };
-    answer(&federation, arrived, Submitted::Body(&body)).await
+    answer(&federation, arrived, submitted).await
 }
 
 /// One federated query request, as it arrived.
@@ -140,6 +193,14 @@ pub(crate) enum Submitted<'a> {
     /// The body of `POST {base}/v1/query/aql`, an ITS-REST
     /// `AdhocQueryExecute`.
     Body(&'a [u8]),
+    /// The query string of `GET {base}/v1/query/aql`, the operation
+    /// `matched` names, which the generated parameters decode.
+    Query {
+        /// The matched `query_execute_adhoc_query` operation.
+        matched: &'a RouteMatch,
+        /// The query string, without its `?`.
+        query: Option<&'a str>,
+    },
     /// A stored query invoked by name: its AQL with the client's `offset`,
     /// `fetch` and `query_parameters`, run exactly as if submitted inline,
     /// and the qualified name the answer carries (§12.7, N44).
@@ -177,7 +238,7 @@ pub(crate) async fn answer(
     let wait = prefer::wait(headers);
     let budget = wait.map_or(configured, |wait| configured.shortened_to(wait));
     let name = match &submitted {
-        Submitted::Body(_) => None,
+        Submitted::Body(_) | Submitted::Query { .. } => None,
         Submitted::Stored { name, .. } => Some((*name).to_owned()),
     };
     let query = Query {
@@ -231,6 +292,11 @@ enum Failure {
     /// The request body is not an ITS-REST `AdhocQueryExecute`.
     #[error("the request body is not an ITS-REST ad hoc query")]
     Body,
+    /// The query string is not an ITS-REST ad hoc query.
+    // NOTE: §5.4.3, the decoder's message may name a query parameter the client
+    // chose, so the answer carries a fixed message.
+    #[error("the query string is not an ITS-REST ad hoc query")]
+    Query(#[source] ApiError),
     /// The completeness header is refused.
     #[error(transparent)]
     Completeness(#[from] completeness::CompletenessError),
@@ -275,7 +341,7 @@ impl Failure {
     /// The code of this failure, which names its status (§11.2).
     fn code(&self) -> Code {
         match self {
-            Self::Body => Code::BodyInvalid,
+            Self::Body | Self::Query(_) => Code::BodyInvalid,
             Self::Completeness(completeness::CompletenessError::NotOffered) => {
                 Code::PartialUnsupported
             }
@@ -389,6 +455,7 @@ fn read(
         // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
         // body is refused with a fixed message.
         Submitted::Body(body) => serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?,
+        Submitted::Query { matched, query } => adhoc(matched, query)?,
         Submitted::Stored { request, .. } => request,
     };
     let (facade, named) = directed(federation, &request.q, headers, request_id)?;
@@ -400,6 +467,26 @@ fn read(
         request_id,
     )?;
     Ok((request, named, analysis))
+}
+
+/// The ad hoc query the query string `query` of `matched` carries, decoded
+/// by the generated parameters of `query_execute_adhoc_query`: one pair per
+/// scalar, one per `query_parameters` member, each name and value
+/// percent-decoded (RFC 3986 §2.1, so a `+` is a literal plus).
+fn adhoc(matched: &RouteMatch, query: Option<&str>) -> Result<AdhocQueryExecute, Failure> {
+    // NOTE: no specification governs this: our own design; the façade reads its
+    // headers itself, as for a POST, so the decoder reads the query string alone.
+    let params = QueryExecuteAdhocQueryParams::from_request(matched, query, &HeaderMap::new())
+        .map_err(Failure::Query)?;
+    // NOTE: §5.4.1, N33: the node is scoped by its own ehr_id, so a client's
+    // `ehr_id` is dropped, as the POST body's undeclared members are.
+    Ok(AdhocQueryExecute {
+        q: params.q,
+        offset: params.offset,
+        fetch: params.fetch,
+        query_parameters: params.query_parameters,
+        additional_properties: BTreeMap::new(),
+    })
 }
 
 /// The façade query `q`, parsed, and the endpoints its directive or the
@@ -563,11 +650,19 @@ mod tests {
     use ferrofed_identity::patient::PatientRefError;
     use http::StatusCode;
     use openehr_federation::aql::refusal::Refusal;
+    use openehr_its::rest::runtime::ApiError;
 
     #[test]
     fn each_failure_answers_its_code_and_status() {
         let table = [
             (Failure::Body, "body-invalid", StatusCode::BAD_REQUEST),
+            (
+                Failure::Query(ApiError::BadRequest(
+                    "the required query parameter `q` is missing".to_owned(),
+                )),
+                "body-invalid",
+                StatusCode::BAD_REQUEST,
+            ),
             (
                 Failure::Completeness(completeness::CompletenessError::Value),
                 "completeness-invalid",

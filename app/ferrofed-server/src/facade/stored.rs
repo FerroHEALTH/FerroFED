@@ -15,9 +15,10 @@
 //! N33). A second `PUT` of a held name and version is a `409`, and the held
 //! text stands (§12.7, N44; ITS-REST `409_StoredQuery_version`).
 //!
-//! `POST {base}/v1/query/{name}[/{version}]` expands the definition with the
-//! client's `offset`, `fetch` and `query_parameters` and runs it through the
-//! pipeline of `POST {base}/v1/query/aql`, exactly as if the client had
+//! `GET` and `POST {base}/v1/query/{name}[/{version}]` expand the definition
+//! with the client's `offset`, `fetch` and `query_parameters`, from the query
+//! string or the body, and run it through the pipeline of
+//! `POST {base}/v1/query/aql`, exactly as if the client had
 //! submitted the text inline: the targeting headers, the completion and dedup
 //! modes and the budget apply unchanged, and the answer carries ITS-REST's
 //! `name` naming the gateway's definition (§12.7, N44). Without a version,
@@ -29,13 +30,18 @@ use std::time::Instant;
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
+use ferrofed_engine::declared::query;
 use ferrofed_registry::definition::store::{Definitions, Insertion};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition, VersionPattern};
-use http::{HeaderValue, StatusCode, header};
+use http::{HeaderMap, HeaderValue, StatusCode, header};
 use jiff::Timestamp;
 use openehr_federation::aql::definition::{Definition, SubjectOrigin};
-use openehr_its::rest::generated::definition::StoredQuery;
-use openehr_its::rest::generated::query::{AdhocQueryExecute, Query};
+use openehr_its::rest::generated::definition::{
+    DefinitionQueryVersionStoreYamlParams, StoredQuery,
+};
+use openehr_its::rest::generated::query::{
+    AdhocQueryExecute, Query, QueryExecuteStoredQueryParams, QueryExecuteStoredQueryVersionParams,
+};
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::error::{self, Code};
@@ -49,8 +55,9 @@ const NAME_PARAM: &str = "qualified_query_name";
 /// The path parameter that names its version.
 const VERSION_PARAM: &str = "version";
 
-/// The query parameter naming the query language of a definition.
-const QUERY_TYPE: &str = "query_type";
+/// The message of a query string the generated parameters refuse.
+const QUERY_STRING_INVALID: &str =
+    "the query string is not the one the ITS-REST operation declares";
 
 /// The query language the registry stores, the ITS-REST `query_type`
 /// default.
@@ -69,8 +76,18 @@ enum Operation {
     Read,
     /// `GET /definition/query/{name}`.
     List,
-    /// `POST /query/{name}` and `POST /query/{name}/{version}`.
-    Execute,
+    /// `GET` or `POST` of `/query/{name}` and `/query/{name}/{version}`,
+    /// its members in the `carrier`.
+    Execute(Carrier),
+}
+
+/// Where a stored-query invocation carries its members (ITS-REST Query API).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Carrier {
+    /// The `Query` body of a `POST`.
+    Body,
+    /// The query string of a `GET`.
+    Query,
 }
 
 /// The registry operation `matched` names, or `None` for every other
@@ -82,7 +99,10 @@ fn operation(matched: &RouteMatch) -> Option<Operation> {
         "definition_query_version_get" => Some(Operation::Read),
         "definition_query_list" => Some(Operation::List),
         "query_execute_stored_query_body" | "query_execute_stored_query_version_body" => {
-            Some(Operation::Execute)
+            Some(Operation::Execute(Carrier::Body))
+        }
+        "query_execute_stored_query" | "query_execute_stored_query_version" => {
+            Some(Operation::Execute(Carrier::Query))
         }
         _ => None,
     }
@@ -113,7 +133,9 @@ pub(crate) async fn serve<'a>(
         Operation::StoreUnversioned => Err(Refused::fixed(Code::QueryVersionRequired)),
         Operation::Read => read(definitions, matched),
         Operation::List => list(definitions, matched),
-        Operation::Execute => execute(federation, definitions, matched, arrived).await,
+        Operation::Execute(carrier) => {
+            execute(federation, definitions, (matched, carrier), arrived).await
+        }
     };
     Ok(answered.unwrap_or_else(|refused| refused.respond(request_id)))
 }
@@ -178,24 +200,61 @@ fn pattern(matched: &RouteMatch) -> Result<Option<VersionPattern>, Refused> {
 
 /// Checks the query string of a `PUT`: only the declared `query_type`, and
 /// only AQL (ITS-REST Definition API).
+///
+/// Parameter names are held to those the operation declares, by position,
+/// and the query string is decoded by the operation's generated parameters
+/// (RFC 3986 §2.1, so a `+` is a literal plus).
 fn query_string(matched: &RouteMatch, arrived: &Arrived<'_>) -> Result<(), Refused> {
-    let Some(query) = arrived.uri.query() else {
-        return Ok(());
-    };
-    let pairs = url::form_urlencoded::parse(query.as_bytes());
-    for (position, (key, value)) in (1_usize..).zip(pairs) {
-        if matched.query_key(&key).is_none() {
-            security::forward_refused(position, &arrived.outbound.to_string());
-            return Err(Refused::with(
-                Code::QueryParameterRefused,
-                &format!("query parameter {position} is not one the ITS-REST operation declares"),
-            ));
-        }
-        if key == QUERY_TYPE && !value.eq_ignore_ascii_case(AQL) {
-            return Err(Refused::fixed(Code::QueryTypeUnsupported));
-        }
+    let query = arrived.uri.query();
+    if let Some(query) = query {
+        query::every_declared(matched, query).map_err(|unlisted| {
+            security::forward_refused(unlisted.position, &arrived.outbound.to_string());
+            Refused::with(Code::QueryParameterRefused, &unlisted)
+        })?;
     }
-    Ok(())
+    let params =
+        DefinitionQueryVersionStoreYamlParams::from_request(matched, query, &HeaderMap::new())
+            .map_err(|_named| Refused::with(Code::BodyInvalid, &QUERY_STRING_INVALID))?;
+    match params.query_type {
+        Some(language) if !language.eq_ignore_ascii_case(AQL) => {
+            Err(Refused::fixed(Code::QueryTypeUnsupported))
+        }
+        Some(_) | None => Ok(()),
+    }
+}
+
+/// The members of a stored-query invocation: the `Query` body of a `POST`,
+/// or the query string of a `GET`, which the operation's generated
+/// parameters decode, a `q` key included as a query parameter, since the
+/// `GET` forms declare none (ITS-REST Query API).
+///
+/// A decoded `ehr_id` is dropped, as the body's undeclared members are.
+fn members(
+    matched: &RouteMatch,
+    arrived: &Arrived<'_>,
+    carrier: Carrier,
+) -> Result<Query, Refused> {
+    let decoded = |offset, fetch, query_parameters| Query {
+        offset,
+        fetch,
+        query_parameters,
+        additional_properties: BTreeMap::new(),
+    };
+    let (query, headers) = (arrived.uri.query(), &HeaderMap::new());
+    // NOTE: §5.4.3, the reader's and the decoder's messages may quote the
+    // request, so a malformed one is refused with a fixed message.
+    match carrier {
+        Carrier::Body => serde_json::from_slice(&arrived.body)
+            .map_err(|_quoted| Refused::fixed(Code::BodyInvalid)),
+        Carrier::Query if matched.path_param(VERSION_PARAM).is_some() => {
+            QueryExecuteStoredQueryVersionParams::from_request(matched, query, headers)
+                .map(|p| decoded(p.offset, p.fetch, p.query_parameters))
+                .map_err(|_named| Refused::with(Code::BodyInvalid, &QUERY_STRING_INVALID))
+        }
+        Carrier::Query => QueryExecuteStoredQueryParams::from_request(matched, query, headers)
+            .map(|p| decoded(p.offset, p.fetch, p.query_parameters))
+            .map_err(|_named| Refused::with(Code::BodyInvalid, &QUERY_STRING_INVALID)),
+    }
 }
 
 /// `PUT {base}/v1/definition/query/{name}/{version}`: stores the definition
@@ -216,12 +275,12 @@ async fn store(
     arrived: &Arrived<'_>,
 ) -> Result<Response, Refused> {
     let logged = arrived.outbound.to_string();
-    query_string(matched, arrived)?;
     let name = name(matched)?;
     let version = segment(matched, VERSION_PARAM)
         .unwrap_or_default()
         .parse::<QueryVersion>()
         .map_err(|refused| Refused::with(Code::QueryVersionInvalid, &refused))?;
+    query_string(matched, arrived)?;
     let text =
         std::str::from_utf8(&arrived.body).map_err(|_text| Refused::fixed(Code::BodyInvalid))?;
     let admitted = Definition::admit(text, federation.context()).map_err(|refusal| {
@@ -311,12 +370,13 @@ fn list(definitions: &Definitions, matched: &RouteMatch) -> Result<Response, Ref
     Ok((StatusCode::OK, Json(listed)).into_response())
 }
 
-/// `POST {base}/v1/query/{name}[/{version}]`: the stored query, run as if its
-/// AQL were submitted inline with the body's members (§12.7, N44).
+/// `GET` or `POST {base}/v1/query/{name}[/{version}]`: the stored query, run
+/// as if its AQL were submitted inline with the request's members (§12.7,
+/// N44, N1).
 async fn execute(
     federation: &Federation,
     definitions: &Definitions,
-    matched: &RouteMatch,
+    (matched, carrier): (&RouteMatch, Carrier),
     arrived: Arrived<'_>,
 ) -> Result<Response, Refused> {
     let started = Instant::now();
@@ -325,10 +385,7 @@ async fn execute(
     let definition = definitions
         .find(&name, pattern.as_ref())
         .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;
-    // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
-    // body is refused with a fixed message.
-    let members: Query = serde_json::from_slice(&arrived.body)
-        .map_err(|_quoted| Refused::fixed(Code::BodyInvalid))?;
+    let members = members(matched, &arrived, carrier)?;
     let request = AdhocQueryExecute {
         q: definition.aql().to_owned(),
         offset: members.offset,

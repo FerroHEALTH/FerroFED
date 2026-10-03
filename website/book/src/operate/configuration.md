@@ -396,7 +396,7 @@ path = "/var/lib/ferrofed/stored-queries.redb"
   the path is set, and `false` without it; without it a stored-query
   definition request goes to the one node the targeting headers name, except
   `PUT /v1/definition/query/{name}/{version}`, which answers `501` (#298), and
-  `POST /v1/query/{name}` answers `501`. Whether the registry is offered is
+  `GET` and `POST /v1/query/{name}` answer `501`. Whether the registry is offered is
   named in the startup log line.
 
 The [client contract](../integrate/client-contract.md#stored-queries) says how
@@ -566,7 +566,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `OPTIONS {base}/` | the federation's self-description (§7a.2) |
 | `GET {base}/health` | `200` while the process is up |
 | `GET {base}/health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
-| `POST {base}/v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
+| `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |
 | `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT {base}/v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |

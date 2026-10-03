@@ -224,14 +224,15 @@ fn its_rest(
 ) -> Result<ItsRestAreas, DescribeError> {
     let (query, definition) = if registry {
         (
-            "federated: POST {base}/v1/query/aql and POST {base}/v1/query/{name}[/{version}] fan out",
+            "federated: GET and POST {base}/v1/query/aql and GET and POST \
+             {base}/v1/query/{name}[/{version}] fan out",
             "routed-single-node: a template request under {base}/v1/definition/template/ goes \
              to the one endpoint the targeting headers name, never merged; \
              stored queries at the gateway registry",
         )
     } else {
         (
-            "federated: POST {base}/v1/query/aql fans out",
+            "federated: GET and POST {base}/v1/query/aql fan out",
             "routed-single-node: a request under {base}/v1/definition/ goes to the one \
              endpoint the targeting headers name, never merged; \
              PUT {base}/v1/definition/query/{name}/{version} unsupported: 501",
@@ -331,7 +332,7 @@ pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
 /// The methods the gateway serves for `path`, `OPTIONS` last, or `None`
 /// when it serves none there.
 ///
-/// The federated query takes `POST` only; an EHR resource under a path
+/// The federated query takes `GET` and `POST` (N1); an EHR resource under a path
 /// `ehr_id` takes every method ITS-REST declares for it, because each is
 /// routed to one node (§7a.1), and the EHR collection takes `GET`, the read
 /// of an EHR by subject at the one member that resolves it (§5.2, N33), and
@@ -340,14 +341,14 @@ pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
 /// A definition resource takes every method ITS-REST declares for it that
 /// is routed to the one node the targeting headers name (§12.6), which
 /// leaves out the versioned stored-query `PUT`. Where the stored-query
-/// `registry` is offered, a stored query takes `POST`, and a stored-query
+/// `registry` is offered, a stored query takes `GET` and `POST`, and a stored-query
 /// definition `GET` and `PUT` at the gateway (§12.7). Where a `demographic`
 /// endpoint is configured, a DEMOGRAPHIC resource takes every method
 /// ITS-REST declares for it, each routed to that endpoint (§7a.1, N32).
 fn served(path: &str, registry: bool, demographic: bool) -> Option<Vec<Method>> {
     let query = QUERY_AQL.strip_prefix(crate::ITS_REST_PREFIX.trim_end_matches('/'));
     let mut methods = if query == Some(path) {
-        vec![Method::POST]
+        vec![Method::GET, Method::POST]
     } else {
         let Lookup::MethodNotAllowed { allowed } = routes::lookup(&Method::OPTIONS, path) else {
             return None;

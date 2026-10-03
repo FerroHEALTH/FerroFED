@@ -13,7 +13,7 @@
 //!
 //! Every route sits under the configured base path ([`base_path`]; §4.1,
 //! N28). The ITS-REST façade serves the federated query,
-//! `POST {base}/v1/query/aql` ([`facade`], §7), and routes every request to
+//! `POST {base}/v1/query/aql` and its `GET` form ([`facade`], §7), and routes every request to
 //! an EHR resource under a path `ehr_id`, the creation of an EHR, and every
 //! definition request, to one node ([`facade::route`], §7a.1, §12.4,
 //! §12.6), unless the stored-query registry holds the definition
@@ -53,7 +53,7 @@ use std::time::Duration;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::{Extension, Json, Router};
 use clap::Parser;
 use ferrofed_engine::outbound_id::OutboundId;
@@ -313,7 +313,8 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// `GET {base}/health/readiness` answers `200` when every registered
 /// indicator is up and `503` with each indicator's state otherwise.
 /// `POST {base}/v1/query/aql` answers the federated query when a registry is
-/// configured ([`facade::query_aql`]). Every other path under
+/// configured ([`facade::query_aql`]), and so does `GET {base}/v1/query/aql`
+/// from its query string ([`facade::query_aql_get`]). Every other path under
 /// [`ITS_REST_PREFIX`] is routed or answers `501`, and every path outside it,
 /// or outside the base, answers `404`. Under a base other than `/`, the base
 /// itself and the base with a trailing `/` are both `{base}/`.
@@ -323,7 +324,9 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         .route("/health/readiness", get(readiness))
         .route(
             facade::QUERY_AQL,
-            post(facade::query_aql).fallback(unrouted),
+            get(facade::query_aql_get)
+                .post(facade::query_aql)
+                .fallback(unrouted),
         )
         .fallback(unrouted);
     let routes = if server.base_path.is_root() {

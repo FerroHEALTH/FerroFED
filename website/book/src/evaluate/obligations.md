@@ -19,10 +19,10 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 292 | 290 | a test asserts it |
+| tested | 294 | 292 | a test asserts it |
 | built-untested | 1 | 1 | the code does it and no test asserts it yet |
 | planned | 36 | 33 | not built yet; an open issue holds the work |
-| missing | 3 | 3 | not built, found missing by the audit; an issue holds the work |
+| missing | 1 | 1 | not built, found missing by the audit; an issue holds the work |
 | deferred | 5 | 4 | not built, by a decision of the owner |
 | new-gap | 8 | 7 | the text contradicts itself or is silent, found by the audit and reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) |
 | contradiction | 10 | 9 | the text contradicts itself, reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) before the audit |
@@ -39,8 +39,6 @@ statement where the text disagrees with itself, by status.
 
 | Statement | Actor | Keyword | Requirement | Point | Statement text | Evidence |
 |---|---|---|---|---|---|---|
-| [architecture#3.2.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/architecture.html) | Gateway | MUST | N1 | CP-1 | The client interface MUST be a conformant openEHR Query API, and a conformant ITS-REST surface generally | POST {base}/v1/query/aql is tested (`app/ferrofed-server/tests/it/facade.rs::a_patient_query_is_one_result_set_over_both_nodes`), but the ITS-REST GET forms of ad-hoc and stored execution (query_execute_adhoc_query, query_execute_stored_query[_version]) answer 501 (app/ferrofed-server/src/lib.rs router, app/ferrofed-server/src/facade/stored.rs operation()); [#287](https://github.com/FerroHEALTH/FerroFED/issues/287) |
-| [requirements#n1.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n1) | Gateway | MUST | N1 | CP-1 | the interface MUST be a conformant openEHR Query API | GET {base}/v1/query/aql and GET {base}/v1/query/{name}[/{version}] answer 501 (app/ferrofed-server/src/lib.rs router; app/ferrofed-server/src/facade/stored.rs operation()); [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) T159 addendum item 5 already calls the same 501 "against N1" in the reference implementation; [#287](https://github.com/FerroHEALTH/FerroFED/issues/287) |
 | [rest-facade#write-headers.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/rest-facade.html#write-headers) | Gateway | SHOULD | N31 | CP-24 | These headers SHOULD also be set on federated AQL responses, listing the endpoints that contributed | the federated AQL answer sets neither header: only app/ferrofed-server/src/facade/route.rs (routed answers) inserts headers::ENDPOINT and headers::SYSTEM_ID; [#288](https://github.com/FerroHEALTH/FerroFED/issues/288) |
 
 ### Built, not yet tested

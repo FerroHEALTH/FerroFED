@@ -113,7 +113,7 @@ the node is reported and the query succeeds.
 
 | Code | Status | When |
 |---|---|---|
-| `body-invalid` | 400 | The request body is not the ITS-REST request the route takes, for example an `AdhocQueryExecute` without a string `q`. |
+| `body-invalid` | 400 | The request body is not the ITS-REST request the route takes, for example an `AdhocQueryExecute` without a string `q`. On a `GET` form of query execution, and on a stored-query `PUT`, it answers a query string the ITS-REST decoder refuses: a required parameter absent, a parameter given twice, a value that is not of its declared type, or a pair that does not percent-decode to UTF-8 text. |
 | `completeness-invalid` | 400 | The `openEHR-federation-completeness` header is repeated, or carries neither `all` nor `partial` (§11.4). |
 | `partial-unsupported` | 400 | The request asks for `partial`, and this gateway does not offer best-effort (§11.4, N37). |
 | `dedup-invalid` | 400 | The `openEHR-federation-dedup` header is repeated, or names neither `none` nor `version-identity` (§10, §7a.2). |

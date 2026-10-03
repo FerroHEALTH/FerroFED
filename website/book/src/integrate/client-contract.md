@@ -6,7 +6,8 @@
 A client of a federation gateway is an ordinary openEHR client. This page sets
 out what the specification promises that client. Once a registry is
 configured, FerroFED serves the federated query at
-`POST {base}/v1/query/aql` and routes the EHR resources under a path
+`POST {base}/v1/query/aql`, and at its `GET` form
+([the GET form](#the-get-form)), and routes the EHR resources under a path
 `ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it, to one node (§7a.1). It
 reads an EHR by subject at `GET {base}/v1/ehr?subject_id=…&subject_namespace=…`
 from the one member that resolves the subject
@@ -15,7 +16,7 @@ request under `{base}/v1/definition/` goes to the one node you name
 ([templates and definitions](#templates-and-definitions), §12.6). A
 deployment that offers the stored-query registry stores queries under
 `{base}/v1/definition/query/` itself instead, and runs them by name at
-`POST {base}/v1/query/{name}` ([stored queries](#stored-queries), §12.7).
+`GET` or `POST {base}/v1/query/{name}` ([stored queries](#stored-queries), §12.7).
 The DEMOGRAPHIC API under `{base}/v1/demographic/` is never federated: it
 answers `501`, or goes to the one endpoint the deployment declared for it when
 you name that endpoint ([demographics](#demographics), §7a.1, N32). Every other ITS-REST path under
@@ -51,6 +52,37 @@ No federation-specific syntax is needed for a basic patient query (§3.2, N1).
 A client that wants to pin a query to named systems can do so in the AQL,
 with `FROM ENDPOINT …` or `ORGANISATION …`, or beside it, with a request
 header (§8).
+
+### The GET form
+
+ITS-REST also defines the ad hoc query as a `GET`, with the members of the
+`AdhocQueryExecute` body in the query string, and FerroFED serves it (N1):
+
+```http
+GET {base}/v1/query/aql?q=SELECT%20c%2Fuid%2Fvalue%20FROM%20EHR%20e%20CONTAINS%20COMPOSITION%20c%20WHERE%20e%2Fehr_status%2Fsubject%2Fexternal_ref%2Fid%2Fvalue%20%3D%20%24patient&patient=P-12345&fetch=10
+```
+
+- `q`, `offset` and `fetch` are the body's members of the same name, and
+  every other pair is one member of `query_parameters`: `patient=P-12345`
+  binds `$patient`. A value that reads as JSON other than a JSON string (a
+  number, a boolean, `null`) is that value, and anything else is text. So a
+  value of digits alone binds as a number: bind an identifier of digits
+  through the `POST` form, where it stays a string. A `+` is a literal plus,
+  never a space (RFC 3986 §2.1); send a space as `%20`.
+- The request runs the pipeline of the `POST` form unchanged: each node
+  receives the same request, and you get the same `RESULT_SET`, status and
+  headers. The headers of [pinning a query](#pinning-a-query-to-named-systems),
+  completeness and dedup apply as they do to a `POST`.
+- `ehr_id` is dropped, as it is from a `POST` body: the gateway scopes each
+  node by its own `ehr_id` (§5.4.1, N33).
+- A query string the ITS-REST decoder refuses is a `400` (`body-invalid`),
+  the answer to a malformed `POST` body, and no node is asked: no `q`, a `q`,
+  `offset` or `fetch` given twice, a query parameter given twice, an `offset`
+  or `fetch` that is no integer, or a pair that does not percent-decode to
+  UTF-8 text. A parameter of `null` is a `400` (`parameter-invalid`), as in
+  a body.
+- The request log never records `q` or a parameter value, only `offset` and
+  `fetch` when they are digits.
 
 ## Pinning a query to named systems
 
@@ -614,11 +646,17 @@ Content-Type: application/json
   gateway's stored query and `q` its stored text (§9.1, §12.7). No node
   receives your patient identifier, and no node receives the stored query by
   name: each gets the standard AQL of an inline query.
+- `GET {base}/v1/query/{name}[/{version}]` runs it the same way with the
+  members in the query string, as [the GET form](#the-get-form) of an inline
+  query does: `offset` and `fetch` by name, and every other pair a query
+  parameter. The stored `GET` forms declare no `q`, so `q=…` binds `$q`.
+  `ehr_id` is dropped, and a query string the decoder refuses is a `400`
+  (`body-invalid`).
 
 The gateway does not distribute definitions to the nodes, and
 `definition.stored_query_fan_out` is `false` (§12.7). Templates go to the one
 node you name ([templates and definitions](#templates-and-definitions)).
-Without the registry, `POST {base}/v1/query/{name}` answers `501`.
+Without the registry, `GET` and `POST {base}/v1/query/{name}` answer `501`.
 
 ## Self-description
 
@@ -659,13 +697,13 @@ What is absent is absent on purpose:
   strategy.
 
 `OPTIONS` on a path under `{base}/v1/` answers `204` with the methods served
-there in `Allow`: `POST, OPTIONS` for `/v1/query/aql`, and the ITS-REST
+there in `Allow`: `GET, POST, OPTIONS` for `/v1/query/aql`, and the ITS-REST
 methods of the resource for an EHR resource under a path `ehr_id`, such as
 `GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`, and `GET, POST, OPTIONS` for
 `/v1/ehr`. A definition resource answers the
 ITS-REST methods of the resource, such as `GET, POST, OPTIONS` for
 `/v1/definition/template/adl1.4`. Where the stored-query registry is
-offered, a stored query answers `POST, OPTIONS`. Where the DEMOGRAPHIC area is
+offered, a stored query answers `GET, POST, OPTIONS`. Where the DEMOGRAPHIC area is
 routed, a DEMOGRAPHIC resource answers its ITS-REST methods, such as
 `GET, PUT, DELETE, OPTIONS` for `/v1/demographic/person/{uid_based_id}`. The
 gateway answers it without asking a node. A path the gateway does not serve
