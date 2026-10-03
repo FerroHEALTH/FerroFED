@@ -379,6 +379,19 @@ picks a node for you and never probes for one:
   the node does not hold, or a `400` for a template it rejects, is never
   masked or rewritten (§12.6, §11.2).
 
+One operation is not routed yet. Without the registry,
+`PUT {base}/v1/definition/query/{name}/{version}` answers `501`
+(`not-implemented`), and `OPTIONS` on that path does not list `PUT`: the
+ITS-REST library the gateway forwards through declares no `Content-Type` for
+that operation, so the node would receive the query text without its media
+type (#298). The unversioned `PUT {base}/v1/definition/query/{name}` is
+routed.
+
+A malformed value of a header or query parameter the operation declares is
+refused before the target is read: a `400` (`parameter-value-invalid`), or
+the `406` or `415` a node would answer an `Accept` or a `Content-Type` it
+cannot serve, never `target-required`.
+
 Where the gateway offers the stored-query registry, the registry answers every
 request under `{base}/v1/definition/query/` itself, with or without a header,
 and templates still go to the one node you name ([stored
@@ -489,7 +502,7 @@ says what the gateway does, not what it was once meant to do:
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
 | `definition` | `fan_out_template_upload: false` and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
-| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered (§12.6, §7a.2), and `demographic` unsupported (`501`) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and `PUT {base}/v1/definition/query/{name}/{version}` unsupported (`501`) when it is not (§12.6, §7a.2), and `demographic` unsupported (`501`) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 
 What is absent is absent on purpose:

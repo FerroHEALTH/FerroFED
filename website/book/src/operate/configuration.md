@@ -389,7 +389,8 @@ path = "/var/lib/ferrofed/stored-queries.redb"
   configuration, naming `registry.document`.
 - `OPTIONS {base}/` declares `definition.stored_query_registry: true` while
   the path is set, and `false` without it; without it a stored-query
-  definition request goes to the one node the targeting headers name, and
+  definition request goes to the one node the targeting headers name, except
+  `PUT /v1/definition/query/{name}/{version}`, which answers `501` (#298), and
   `POST /v1/query/{name}` answers `501`. Whether the registry is offered is
   named in the startup log line.
 
@@ -418,8 +419,8 @@ define, is refused like any other unknown key.
 | `GET /health` | `200` while the process is up |
 | `GET /health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
 | `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
-| `/v1/ehr/{ehr_id}` and below | routed to the one node `openEHR-federation-endpoint` names, and answered as that node answered; `501` when no registry is configured |
-| `/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; `501` when no registry is configured |
+| `/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
+| `/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT /v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |
 | any other path under `/v1/` | `501` |
 | any other path | `404` |
 

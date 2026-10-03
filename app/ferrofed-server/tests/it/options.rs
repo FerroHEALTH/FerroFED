@@ -443,7 +443,7 @@ async fn options_on_a_sub_path_names_the_methods_served_there() -> TestResult {
         ("/v1/definition/template/adl1.4", "GET, POST, OPTIONS"),
         ("/v1/definition/template/adl2/t.v1", "GET, OPTIONS"),
         ("/v1/definition/query/org::q", "GET, PUT, OPTIONS"),
-        ("/v1/definition/query/org::q/1.0.0", "GET, PUT, OPTIONS"),
+        ("/v1/definition/query/org::q/1.0.0", "GET, OPTIONS"),
     ] {
         let response = send(app.clone(), options(uri)?).await?;
         assert_eq!(StatusCode::NO_CONTENT, response.status(), "{uri}");

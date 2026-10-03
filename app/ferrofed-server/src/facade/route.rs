@@ -37,8 +37,9 @@
 //! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3).
 //!
 //! A request under `{base}/v1/definition/` (a template upload, list, read or
-//! example, or stored-query management where the gateway holds no registry)
-//! is routed by the targeting headers alone too, to exactly one endpoint,
+//! example, or stored-query management where the gateway holds no registry,
+//! except the versioned stored-query `PUT`, which answers `501`) is routed
+//! by the targeting headers alone too, to exactly one endpoint,
 //! and answered as that node answered: no node is picked implicitly and no
 //! two nodes' answers are combined (§7a.1, §12.6, §12.7, N43).
 
@@ -143,9 +144,12 @@ pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
 }
 
 /// Whether `matched` is an operation of the definition area, a template or
-/// a stored query under `{base}/v1/definition/` (§7a.1, §12.6).
+/// a stored query under `{base}/v1/definition/`, that the gateway routes to
+/// one node (§7a.1, §12.6).
 pub(crate) fn in_definition_area(matched: &RouteMatch) -> bool {
+    // TODO(#298): openehr-its declares no Content-Type for this PUT (FerroEHR#3543), so it is 501.
     matched.group == DEFINITION_GROUP
+        && matched.operation_id != "definition_query_version_store.yaml"
 }
 
 /// Routes one request in the EHR area to the owner of its path `ehr_id` and
@@ -318,8 +322,10 @@ fn locate<'a>(
 ///
 /// A new EHR has no owner for a binding or the index to name, and a template
 /// or a stored query lives at the node it was sent to, so only the client
-/// can name the node. Without the headers the request is a `400`
-/// (`target-required`): nothing is probed and no node is picked implicitly.
+/// can name the node. The query string and the declared values are checked
+/// first, as on the EHR route ([`refused_carriers`]). Without the headers the
+/// request is then a `400` (`target-required`): nothing is probed and no
+/// node is picked implicitly.
 /// Headers selecting more than one endpoint are a `400` (`endpoint-several`),
 /// so a definition never fans out and an EHR is created at one node only
 /// (§2.3, N23). The body is forwarded byte-identical, and the node's answer,
@@ -334,7 +340,7 @@ async fn named(
     let started = Instant::now();
     let request_id = arrived.request_id;
     let logged = arrived.outbound.to_string();
-    if let Some(refused) = query_refused(matched, &arrived, &logged) {
+    if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
         return refused;
     }
     let snapshot = federation.snapshot();
@@ -724,11 +730,15 @@ mod tests {
             (Method::GET, "/definition/template/adl1.4/t.v1/example"),
             (Method::POST, "/definition/template/adl2"),
             (Method::GET, "/definition/template/adl2/t.v1/1.0.0"),
-            (Method::PUT, "/definition/query/org::q/1.0.0"),
+            (Method::GET, "/definition/query/org::q/1.0.0"),
         ] {
             assert!(area(&method, path), "{method} {path}");
         }
-        for (method, path) in [(Method::POST, "/query/org::q"), (Method::POST, "/ehr")] {
+        for (method, path) in [
+            (Method::PUT, "/definition/query/org::q/1.0.0"),
+            (Method::POST, "/query/org::q"),
+            (Method::POST, "/ehr"),
+        ] {
             assert!(!area(&method, path), "{method} {path}");
         }
     }

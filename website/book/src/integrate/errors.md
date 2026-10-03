@@ -80,10 +80,15 @@ code, because the body is the node's. The single-node routes are the EHR
 resources under a path `ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it
 (§7a.1), `POST {base}/v1/ehr`, the creation of an EHR (§12.4), and every
 request under `{base}/v1/definition/` the stored-query registry does not
-answer itself (§12.6). A template-missing validation failure a node reports
-is that node's error and passes through unmasked (§12.6). Every other
-ITS-REST path except the federated query and, where the registry is offered,
-a stored query run by name answers `501` with the code `not-implemented`.
+answer itself (§12.6), except `PUT {base}/v1/definition/query/{name}/{version}`
+without the registry, which answers `501` until #298. A template-missing
+validation failure a node reports is that node's error and passes through
+unmasked (§12.6). Every other ITS-REST path except the federated query and,
+where the registry is offered, a stored query run by name answers `501` with
+the code `not-implemented`. On a request routed by its target alone (a new
+EHR or a definition request), a malformed declared value is refused before
+the missing target is: `parameter-value-invalid`, or the `406` or `415`, comes
+before `target-required`.
 
 Three answers on a routed request are the gateway's, because the node gave
 none of its own to pass on: `node-timeout` and `node-unreachable` (`504`),

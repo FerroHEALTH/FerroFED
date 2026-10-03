@@ -228,7 +228,8 @@ fn its_rest(registry: bool) -> Result<ItsRestAreas, DescribeError> {
         (
             "federated: POST {base}/v1/query/aql fans out",
             "routed-single-node: a request under {base}/v1/definition/ goes to the one \
-             endpoint the targeting headers name, never merged",
+             endpoint the targeting headers name, never merged; \
+             PUT {base}/v1/definition/query/{name}/{version} unsupported: 501",
         )
     };
     Ok(ItsRestAreas {
@@ -318,10 +319,11 @@ pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
 /// `ehr_id` takes every method ITS-REST declares for it, because each is
 /// routed to one node (§7a.1), and the EHR collection takes `POST`, the
 /// creation of an EHR at the one node the targeting headers name (§12.4).
-/// A definition resource takes every method ITS-REST declares for it, each
-/// routed to the one node the targeting headers name (§12.6). Where the
-/// stored-query `registry` is offered, a stored query takes `POST`, and a
-/// stored-query definition `GET` and `PUT` at the gateway (§12.7).
+/// A definition resource takes every method ITS-REST declares for it that
+/// is routed to the one node the targeting headers name (§12.6), which
+/// leaves out the versioned stored-query `PUT`. Where the stored-query
+/// `registry` is offered, a stored query takes `POST`, and a stored-query
+/// definition `GET` and `PUT` at the gateway (§12.7).
 fn served(path: &str, registry: bool) -> Option<Vec<Method>> {
     let query = QUERY_AQL.strip_prefix(crate::ITS_REST_PREFIX.trim_end_matches('/'));
     let mut methods = if query == Some(path) {

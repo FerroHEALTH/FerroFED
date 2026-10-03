@@ -231,7 +231,7 @@ async fn a_definition_request_without_a_target_is_refused_and_no_node_is_asked()
     let mut operations = every_operation();
     operations.push((
         Method::PUT,
-        format!("/v1/definition/query/{QUERY}/1.0.0"),
+        format!("/v1/definition/query/{QUERY}"),
         "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
     ));
     for (verb, at, sent) in operations {
@@ -421,7 +421,7 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
 // conformance: CP-34
 #[tokio::test]
 async fn without_the_registry_a_stored_query_definition_is_the_named_nodes() -> TestResult {
-    let at = format!("/v1/definition/query/{QUERY}/1.0.0");
+    let at = format!("/v1/definition/query/{QUERY}");
     let a = MockServer::start().await;
     mount(&a, "PUT", at.clone(), ResponseTemplate::new(200)).await;
     let b = MockServer::start().await;
@@ -439,7 +439,82 @@ async fn without_the_registry_a_stored_query_definition_is_the_named_nodes() -> 
         return Err(format!("one request at node A, not {}", requests.len()).into());
     };
     assert_eq!(sent.as_bytes(), stored.body.as_slice(), "byte-identical");
+    assert_eq!(
+        Some("text/plain"),
+        field(&stored.headers, "content-type"),
+        "the declared media type travels"
+    );
     assert!(asked(&b).await?.is_empty(), "node B is never asked");
+    Ok(())
+}
+
+#[tokio::test]
+async fn without_the_registry_a_versioned_stored_query_put_is_not_implemented() -> TestResult {
+    // TODO(#298): route it to the named node once openehr-its declares its Content-Type.
+    for target in [Some(ENDPOINT_A), None] {
+        let a = MockServer::start().await;
+        let b = MockServer::start().await;
+        let dir = tempfile::tempdir()?;
+        let mut request = Request::put(format!("/v1/definition/query/{QUERY}/1.0.0"))
+            .header(header::CONTENT_TYPE, "text/plain");
+        if let Some(target) = target {
+            request = request.header(ENDPOINT, target);
+        }
+        let request = request.body(Body::from("SELECT c FROM EHR e CONTAINS COMPOSITION c"))?;
+        let (status, headers, body) = exchange(over(dir.path(), &a, &b)?, request).await?;
+        let text = String::from_utf8(body)?;
+        assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "{target:?}: {text}");
+        assert_eq!("not-implemented", error_body(&text)?.code);
+        assert_eq!(None, field(&headers, ENDPOINT), "no endpoint acted");
+        assert!(asked(&a).await?.is_empty(), "node A received nothing");
+        assert!(asked(&b).await?.is_empty(), "node B received nothing");
+    }
+    Ok(())
+}
+
+// conformance: CP-34 CP-26
+#[tokio::test]
+async fn a_malformed_declared_value_is_refused_before_the_missing_target() -> TestResult {
+    let cases = [
+        (
+            Request::get(format!("{ADL14}?offset=first")).body(Body::empty())?,
+            StatusCode::BAD_REQUEST,
+            "parameter-value-invalid",
+        ),
+        (
+            Request::get(ADL14)
+                .header(header::ACCEPT, "text/html")
+                .body(Body::empty())?,
+            StatusCode::NOT_ACCEPTABLE,
+            "media-type-not-acceptable",
+        ),
+        (
+            Request::post(ADL14)
+                .header(header::CONTENT_TYPE, "text/html")
+                .body(Body::from(template()))?,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "media-type-unsupported",
+        ),
+        (
+            Request::post("/v1/ehr")
+                .header(header::CONTENT_TYPE, "text/html")
+                .body(Body::from("{}"))?,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "media-type-unsupported",
+        ),
+    ];
+    for (request, refused, code) in cases {
+        let at = request.uri().to_string();
+        let a = MockServer::start().await;
+        let b = MockServer::start().await;
+        let dir = tempfile::tempdir()?;
+        let (status, _, body) = exchange(over(dir.path(), &a, &b)?, request).await?;
+        let text = String::from_utf8(body)?;
+        assert_eq!(refused, status, "{at}: {text}");
+        assert_eq!(code, error_body(&text)?.code, "{at}: {text}");
+        assert!(asked(&a).await?.is_empty(), "{at}: node A received nothing");
+        assert!(asked(&b).await?.is_empty(), "{at}: node B received nothing");
+    }
     Ok(())
 }
 
