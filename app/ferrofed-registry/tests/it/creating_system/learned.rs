@@ -19,6 +19,7 @@ const EXTERNAL: &str = "ext.example.org";
 /// Covers the mapping half of CP-13 (N21, §12.2): a version created under a
 /// registered `creating_system_id` and imported into `node-b` routes to its
 /// creating node, `node-a`, and the copy teaches the learned map nothing.
+// conformance: CP-13
 #[test]
 fn an_imported_version_resolves_to_its_creating_node_through_a_registered_mapping() -> TestResult {
     let snapshot = registered()?;
@@ -95,6 +96,7 @@ fn an_unknown_creating_system_id_is_a_typed_miss() -> TestResult {
     Ok(())
 }
 
+// conformance: CP-13
 #[test]
 fn one_sighting_learns_a_route_to_the_endpoint_it_was_seen_at() -> TestResult {
     let snapshot = unregistered()?;
@@ -128,6 +130,7 @@ fn a_second_endpoint_of_the_same_node_confirms_the_learned_mapping() -> TestResu
     Ok(())
 }
 
+// conformance: CP-13
 #[test]
 fn a_sighting_at_a_second_node_raises_the_incident_and_withdraws_the_mapping() -> TestResult {
     let snapshot = unregistered()?;

@@ -44,6 +44,7 @@
 //! records the mode on every answer, with what it suppressed beside the rows.
 
 mod answer;
+mod seen;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -52,6 +53,7 @@ use std::time::{Duration, Instant};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
+use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::aggregate::Recombination;
 use openehr_federation::attribute::EndpointAttribute;
 use openehr_federation::dedup::DedupMode;
@@ -407,6 +409,7 @@ pub struct FederatedAnswer {
     federation: FederationMeta,
     rows: Vec<ResultSetRow>,
     attributes: Vec<Vec<String>>,
+    seen: Vec<(EndpointId, ObjectVersionId)>,
 }
 
 impl FederatedAnswer {
@@ -446,6 +449,18 @@ impl FederatedAnswer {
     #[must_use]
     pub fn attributes(&self) -> &[Vec<String>] {
         &self.attributes
+    }
+
+    /// The versions the rows of each answering endpoint show it holding, one
+    /// per endpoint and `creating_system_id`, in endpoint id order: what the
+    /// follow-up routing table learns from (§12.2, N21).
+    ///
+    /// They are read from every endpoint that sent rows, a failing answer's
+    /// included.
+    pub fn seen(&self) -> impl Iterator<Item = (&EndpointId, &ObjectVersionId)> {
+        self.seen
+            .iter()
+            .map(|(endpoint, version)| (endpoint, version))
     }
 
     /// The federated ITS-REST `RESULT_SET` of this answer, with the façade's

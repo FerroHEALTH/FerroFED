@@ -12,13 +12,13 @@
 //! N37, N38). [`forward`] passes one client request to one node once,
 //! byte-identical (§7a.3, N22, N31). [`probe`] asks every member at once
 //! whether it holds a path `ehr_id`, the read-only last step of §12.5.1.
+//! A fan-out answer names the versions each endpoint's rows show it holding,
+//! which the follow-up routing table learns from (§12.2, N21).
 //! [`hygiene`] is the outbound gate every
 //! request to a node passes before it is sent (#45). [`outbound_id`] is the
 //! correlation id the gateway mints for a node request, with the inventory of
 //! every header a node request carries (§5.4.1, N33).
 #![doc(test(attr(deny(warnings))))]
-
-// TODO(#64): follow-up reads routed on creating_system_id, then endpoint_id, then ask-all (§12.3).
 
 pub mod dispatch;
 pub mod fanout;

@@ -930,6 +930,7 @@ dependencies = [
  "http",
  "jiff",
  "jsonschema",
+ "openehr-base",
  "openehr-federation",
  "openehr-its",
  "openehr-query",

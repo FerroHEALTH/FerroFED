@@ -14,6 +14,7 @@ use crate::fixture::TWO_NODES;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
+// conformance: CP-13
 #[test]
 fn every_member_is_answered_by_its_id() -> TestResult {
     let registry = RegistrySnapshot::from_toml_str(TWO_NODES)?;
@@ -55,6 +56,7 @@ fn every_member_is_answered_by_its_id() -> TestResult {
     Ok(())
 }
 
+// conformance: CP-13
 #[test]
 fn an_endpoint_carries_its_url_connection_type_and_managing_organisation() -> TestResult {
     let registry = RegistrySnapshot::from_toml_str(TWO_NODES)?;
@@ -118,6 +120,7 @@ fn a_node_lists_its_own_endpoints() -> TestResult {
     Ok(())
 }
 
+// conformance: CP-13
 #[test]
 fn a_system_id_routes_to_its_node() -> TestResult {
     let registry = RegistrySnapshot::from_toml_str(TWO_NODES)?;

@@ -29,6 +29,8 @@ openehr-query.workspace = true
 # The identifiers the gate withholds are never printed (#45).
 secrecy.workspace = true
 http.workspace = true
+# The result cells the versions a node holds are read from (§12.2, #64).
+serde_json.workspace = true
 thiserror.workspace = true
 # One task per in-scope node under one deadline (§11.5, N38).
 tokio = { workspace = true, features = ["rt", "time"] }

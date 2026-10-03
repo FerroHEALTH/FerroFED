@@ -368,8 +368,10 @@ each has its own normative order (§12.3 to §12.5, the routing-key table of
 §12a.2). A path `ehr_id` is resolved by the explicit target, the session's
 resolution binding, the `ehr_id` index, and only for a read an ask-all probe,
 never skipping a step that answers (N41); several claimants are a `409` and an
-integrity incident, never a choice (N42). A `VERSION` uid routes on its
-`creating_system_id`, then the row's `endpoint_id`, then ask-all (N22). A
+integrity incident, never a choice (N42). A read of a `VERSION` under a path
+`ehr_id` routes by that `ehr_id` in the same order, never by its
+`creating_system_id` (decision A46): every ITS-REST version read is
+EHR-scoped, so the order of §12.3 routes none of them. A
 versioned write goes only to the controlling CDR and a new object only to an
 explicit target, and a write that cannot be routed exactly is a `400` (N23,
 N41). The answer is forwarded once, byte-identical, and no uid is rewritten.
@@ -377,7 +379,7 @@ N41). The answer is forwarded once, byte-identical, and no uid is rewritten.
 ```mermaid
 flowchart TD
     req["follow-up request"] --> kind{"what does it address?"}
-    kind -->|"path ehr_id, §12.5.1"| s1{"1. openEHR-federation-endpoint header?"}
+    kind -->|"path ehr_id, version reads included, §12.5.1, A46"| s1{"1. openEHR-federation-endpoint header?"}
     s1 -->|yes| one["route to that node"]
     s1 -->|no| s2{"2. resolution binding held for this session?"}
     s2 -->|exactly one node| one
@@ -389,11 +391,6 @@ flowchart TD
     s4 -->|one claimant| one
     s4 -->|none| r404["404"]
     s4 -->|several claimants| r409["409 listing the claimants, integrity incident (N42)"]
-    kind -->|"VERSION uid, §12.3"| v1{"creating_system_id in the registry?"}
-    v1 -->|yes| one
-    v1 -->|no| v2{"endpoint_id on the row?"}
-    v2 -->|yes| one
-    v2 -->|no| v3["ask-all, reads only"]
     kind -->|"versioned write, §12.4"| w1{"controlling node: system_id equals creating_system_id?"}
     w1 -->|exactly one| one
     w1 -->|otherwise| r400
@@ -727,7 +724,7 @@ silent on storage, so this section is FerroFED's own).
 | State | Origin | Where it lives |
 |---|---|---|
 | Organisations, nodes, endpoints, node identifiers, configured `system_id` | the operator, at admission (§12b.1) | a reviewed bootstrap document, loaded into an immutable snapshot |
-| Observed `creating_system_id` to node (N21) | learned from result rows | an in-memory map, written by a task off the request path |
+| Observed `creating_system_id` to node (N21) | learned from result rows and routed answers | an in-memory map behind one lock every request shares, as the `ehr_id` index is, written once each answer is settled (#64) |
 | The `ehr_id` to node index (§12.5.1 step 3) | learned from resolution and probes | a bounded in-memory LRU |
 | Resolution bindings (§12.5.1 step 2) | per client session | in memory, keyed by the session (decision A20) |
 | Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log, a counter, an optional webhook |
@@ -765,7 +762,10 @@ only an id the document does not route: an import keeps its uid (§10.2), so a
 routed id seen elsewhere is a copy and teaches nothing. One sighting learns a
 read route to the endpoint it was seen at, because more sightings would still
 not prove that the holder created the version (§12.2, §10.3), and a learned
-route is never a write's controlling CDR. A sighting at a second node, or a
+route is never a write's controlling CDR. A read of a version under a path
+`ehr_id` never takes a learned route (decision A46); the map answers which
+node holds a `creating_system_id`'s versions for the write routing of §12.4
+and §10.3. A sighting at a second node, or a
 learned route a reloaded document contradicts, withdraws it and raises an
 integrity incident (`LearnedCreatingSystemConflict`,
 `RegisteredCreatingSystemConflict`). An index insert that finds the same `ehr_id` at
@@ -1618,3 +1618,4 @@ R4 is #23, #25 and #27).
 | A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |
 | A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject (upstream report on #212); a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
 | A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (upstream report on #212) | decided (owner, 2026-10-02) |
+| A46 | Follow-up reads of EHR-scoped versions [owner, #64] | route by N41, not `creating_system_id`: a read of a version under `{base}/v1/ehr/{ehr_id}/…` goes by the explicit target, the binding, the index and the ask-all probe of the path `ehr_id`; the learned `creating_system_id` map is still fed from every answer (CP-13) | N41 and §12.5.1 order every path `ehr_id` and forbid skipping a step that answers; §12a.1 [[route-ehr]] routes an EHR-scoped request "not on `creating_system_id`"; N22 forbids mutating the uid-bearing path, so the holder's `ehr_id` cannot be rewritten for the creator; N42a means the creator never adopted that `ehr_id`, so the forwarded read would `404`, against N1; the holder's copy carries the same immutable version; the contradiction with §12.3 and N22's order is on #212, and CP-14 stays planned | decided (owner, 2026-10-03) |

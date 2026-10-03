@@ -31,6 +31,9 @@ clap.workspace = true
 ferrofed-engine.workspace = true
 ferrofed-identity.workspace = true
 ferrofed-registry.workspace = true
+# The version uid a follow-up read names, read for its creating_system_id
+# (§12.3, #64).
+openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["aql"] }
 openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true

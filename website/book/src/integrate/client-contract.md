@@ -184,10 +184,34 @@ A request that fails answers the status §11.2 names and a stable code; the
 ## Follow-ups
 
 A composition id in a result row is an `OBJECT_VERSION_ID`, which already
-carries the `creating_system_id` of the CDR that created it. A follow-up read
-or write sent to the gateway is routed to that CDR (§7.2, §12). A new object
-is always created on one node the client names; creation across nodes is
-refused (§2.3, N23).
+carries the `creating_system_id` of the CDR that created it (§12.2). A new
+object is always created on one node the client names; creation across
+nodes is refused (§2.3, N23).
+
+### Reading one version
+
+A read whose path names one version, such as
+`GET {base}/v1/ehr/{ehr_id}/composition/{uid_based_id}`, or a `version_uid`
+under `versioned_composition`, `ehr_status`, `versioned_ehr_status` or
+`directory`, goes to the node you name in `openEHR-federation-endpoint`, or
+else to the node the path `ehr_id` resolves to, in the order below (§12.5.1,
+N41). The version's `creating_system_id` does not route it: a request under a
+path `ehr_id` is routed on that `ehr_id` (§12a.1), and the gateway never
+rewrites the path for another node (N22). A copy imported into another node
+carries the same version, so reading it where the row came from returns the
+same content. To read the copy at the node that created it, send that node's
+`ehr_id` for the patient, which a row from that node carries.
+
+The gateway still learns which node holds versions of each
+`creating_system_id` the registry document does not map (§12.2, N21). It
+reads every version uid in a federated query's rows (as `c/uid/value`, as a
+`uid`, or as the `uid` of a selected `COMPOSITION` or `VERSION`) and every
+version uid a routed read names or answers with in its `ETag`. A system seen
+at two nodes raises an integrity incident for the operator. These learned
+routes never route a read under a path `ehr_id`, and never make a node that
+holds a copy the CDR that controls it.
+
+### Routing a path `ehr_id`
 
 An `ehr_id` carries no system component, so a request to
 `{base}/v1/ehr/{ehr_id}/…` does not say on its face which node holds the EHR

@@ -22,6 +22,15 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- The follow-up routing table learns from every answer (#64; §12.2, N21,
+  CP-13). Each version uid in a federated query's rows, and each one a
+  routed read names or answers with in its `ETag`, teaches a route for a
+  `creating_system_id` the registry document does not map; one seen at two
+  nodes raises the `LearnedCreatingSystemConflict` integrity incident and is
+  routed on by neither. CP-13 is now scored. A follow-up read of a version
+  under `{base}/v1/ehr/{ehr_id}/…` routes by the path `ehr_id` in the order
+  of N41, never by the version's `creating_system_id` (§12a.1, §12.5.1, N22,
+  N42a), and reaches the node byte-identical.
 - The federated stored-query registry (#77; §12.7, N44, N33, CP-40,
   CP-28). With `[stored_queries] path` set, the gateway holds stored queries
   itself in an embedded `redb` file that survives a restart, and

@@ -17,6 +17,7 @@ mod endpoint_attributes;
 mod endpoint_report;
 mod errors;
 mod facade;
+mod follow_up;
 mod http;
 mod hygiene;
 mod no_destination;
