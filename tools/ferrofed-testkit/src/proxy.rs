@@ -27,6 +27,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -114,6 +115,8 @@ struct Shared {
     journal: Mutex<Vec<Capture>>,
     /// What the proxy does with the next request.
     fault: Mutex<Fault>,
+    /// How many connections were closed unread under [`Fault::Refuse`].
+    refused: AtomicUsize,
 }
 
 impl Shared {
@@ -162,6 +165,7 @@ impl CapturingProxy {
             client,
             journal: Mutex::new(Vec::new()),
             fault: Mutex::new(Fault::Forward),
+            refused: AtomicUsize::new(0),
         });
         let task = tokio::spawn(accept_loop(listener, Arc::clone(&shared)));
         Ok(Self {
@@ -207,6 +211,16 @@ impl CapturingProxy {
             .clone()
     }
 
+    /// Returns how many connections the proxy has closed before reading a
+    /// byte, because they arrived under [`Fault::Refuse`].
+    ///
+    /// Such a connection leaves nothing in the journal, so this count is
+    /// how a test tells that nobody tried to reach a node that is down.
+    #[must_use]
+    pub fn refused(&self) -> usize {
+        self.shared.refused.load(Ordering::SeqCst)
+    }
+
     /// Forgets every request received so far.
     pub fn clear_journal(&self) {
         self.shared
@@ -244,6 +258,7 @@ async fn accept_loop(listener: TcpListener, shared: Arc<Shared>) {
             continue;
         };
         if shared.fault() == Fault::Refuse {
+            shared.refused.fetch_add(1, Ordering::SeqCst);
             drop(stream);
             continue;
         }

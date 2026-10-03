@@ -250,6 +250,12 @@ async fn a_refuse_fault_closes_the_connection_without_an_answer() {
         node.received_requests().await.unwrap().is_empty(),
         "a refused request never reaches the node"
     );
+    assert!(
+        proxy.journal().is_empty(),
+        "a connection closed unread leaves no capture"
+    );
+    let refused = proxy.refused();
+    assert!(refused > 0, "the refused connection is counted");
 
     proxy.clear_fault();
     let answer = reqwest::get(format!(
@@ -263,6 +269,19 @@ async fn a_refuse_fault_closes_the_connection_without_an_answer() {
         StatusCode::OK,
         "clearing the fault serves again"
     );
+    assert_eq!(
+        refused,
+        proxy.refused(),
+        "a served connection is not counted"
+    );
+}
+
+#[tokio::test]
+async fn a_proxy_that_refused_nothing_counts_nothing() {
+    let node = node().await;
+    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    proxy.set_fault(Fault::Refuse);
+    assert_eq!(0, proxy.refused(), "no connection was tried");
 }
 
 #[tokio::test]

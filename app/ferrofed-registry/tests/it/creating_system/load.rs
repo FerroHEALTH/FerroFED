@@ -48,6 +48,37 @@ fn a_registered_mapping_loads_and_is_listed() -> TestResult {
 }
 
 #[test]
+fn a_registered_creating_system_id_is_named_as_the_document_spells_it() -> TestResult {
+    let snapshot = registered()?;
+    let asked = system("LEGACY-A.EXAMPLE.ORG")?;
+    let (spelled, route) = snapshot
+        .registered_creating_system(&asked)
+        .ok_or("the mapping answers")?;
+    assert_eq!(LEGACY, spelled.as_str(), "the mapping's spelling");
+    assert_eq!(snapshot.registered_route(&asked), Some(route));
+    let member = system("CDR-A.Example.Org")?;
+    let (spelled, route) = snapshot
+        .registered_creating_system(&member)
+        .ok_or("the member answers")?;
+    assert_eq!(
+        "cdr-a.example.org",
+        spelled.as_str(),
+        "the member's spelling"
+    );
+    assert_eq!(
+        CreatingSystemRoute::Member {
+            node: node("node-a")?,
+        },
+        route
+    );
+    assert_eq!(
+        None,
+        snapshot.registered_creating_system(&system("external.example.org")?)
+    );
+    Ok(())
+}
+
+#[test]
 fn a_document_without_mappings_registers_only_the_members() -> TestResult {
     let snapshot = super::unregistered()?;
     assert_eq!(snapshot.creating_systems().count(), 0);

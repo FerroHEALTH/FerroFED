@@ -13,6 +13,7 @@ mod contribution_write;
 mod credentials;
 mod declared;
 mod dedup;
+mod dedup_write;
 mod definition;
 mod demographic;
 mod directive;

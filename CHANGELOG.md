@@ -205,6 +205,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   target-required`. Naming the node in `openEHR-federation-endpoint` still
   routes the request to it (§12.5.1 step 1, N41). The integrity incidents of
   the `creating_system_id` map are logged under `ferrofed::integrity` too.
+- The `409 controlling-system-unreachable` message now names the controlling
+  system in every case (#66; §10.3 `copy-write-reject`, N36, CP-29). Where
+  the registry routes the version's `creating_system_id` to another member,
+  it names that `creating_system_id` as the registry spells it, with the
+  member's node and endpoint. Where no member is known to control the
+  version, it points at the place in the request that names the version
+  (`If-Match`, the path, or a `CONTRIBUTION` version by position), and still
+  quotes nothing of the request. CP-29 is scored end to end: a write against
+  a row that `version-identity` dedup kept, sent through the copy's `ehr_id`,
+  is refused `409` whether the creating node is down or up, the copy's node
+  is sent nothing and the creating node is never tried, and a write through
+  the creating node's own `ehr_id` reaches it alone and its answer names no
+  copy.
 
 ### Fixed
 

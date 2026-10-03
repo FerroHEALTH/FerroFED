@@ -29,8 +29,14 @@
 //! version is never sent the write, and no other node is either: the path
 //! `ehr_id` is that node's own, so no other node can take the request
 //! unchanged (N22, N42a), and the write is refused `409` naming the
-//! controlling node where the registry knows it (§10.3 `copy-write-reject`).
-//! No value of the request is quoted back.
+//! controlling system (§10.3 `copy-write-reject`, N36): its
+//! `creating_system_id` as the registry spells it, with the controlling node
+//! and its endpoint, or, for a system the registry does not know, the place
+//! in the request that names the version. No value of the request is quoted
+//! back. The refusal never asks the controlling node anything, so it is the
+//! same whether that node is up or down, and a write derived from a
+//! de-duplicated row is held to it whichever endpoint the row was read from
+//! (§10.3 `dedup-write-target`, CP-29).
 //!
 //! A `CONTRIBUTION` is read with `openehr-its`'s ITS-REST `NewContribution`
 //! for its versions' `preceding_version_uid`s only; the body forwarded is the
@@ -163,17 +169,45 @@ pub enum PrecedingInvalid {
     Contribution,
 }
 
+/// Where a versioned write names a version it amends, which a refusal points
+/// at in place of quoting the version (§5.4.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Named {
+    /// `If-Match`.
+    IfMatch,
+    /// The `uid_based_id` segment of the request path.
+    Path,
+    /// The `preceding_version_uid` of the version at this position of a
+    /// `CONTRIBUTION`'s `versions`, counted from 1 in body order.
+    Contribution(usize),
+}
+
+impl fmt::Display for Named {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IfMatch => f.write_str("the version If-Match names"),
+            Self::Path => f.write_str("the version the request path names"),
+            Self::Contribution(position) => write!(
+                f,
+                "the preceding_version_uid of version {position} of the CONTRIBUTION"
+            ),
+        }
+    }
+}
+
 /// Why the node a versioned write routes to may not take it (§10.3, §12a.1,
-/// N23).
+/// N23, N36).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotControlling {
     /// The registry routes the preceding version's `creating_system_id` to
     /// another node.
     #[error(
-        "a version this write amends is controlled by node {controller}{}, and the request's ehr_id routes it to node {at}, which does not control it; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)",
+        "a version this write amends was created by system {creating_system_id}, which node {controller}{} controls, and the request's ehr_id routes the write to node {at}, which does not control it; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23, N36)",
         Through(.endpoint.as_ref())
     )]
     Elsewhere {
+        /// The version's `creating_system_id`, as the registry spells it.
+        creating_system_id: SystemId,
         /// The controlling node.
         controller: NodeId,
         /// The endpoint the controlling node is reached through, where it
@@ -185,9 +219,11 @@ pub enum NotControlling {
     /// The registry routes the preceding version's `creating_system_id` to no
     /// node: it is no member's `system_id` and no registered mapping's.
     #[error(
-        "a version this write amends was created by a system that is no member's system_id and no registered creating_system mapping, so no member is known to control it, and the request's ehr_id routes it to node {at}, which does not; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)"
+        "the controlling system of {named} is the creating_system_id in it, which is no member's system_id and no registered creating_system mapping, so no member is known to control the version, and the request's ehr_id routes the write to node {at}, which does not; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23, N36)"
     )]
     Unregistered {
+        /// Where the request names the version.
+        named: Named,
         /// The node the path `ehr_id` routes to.
         at: NodeId,
     },
@@ -212,46 +248,57 @@ pub fn controlled(
     at: &NodeId,
 ) -> Result<(), Refused> {
     let versions = match preceding {
-        Preceding::IfMatch => vec![if_match(headers)?],
-        Preceding::Path => vec![in_path(matched)?],
+        Preceding::IfMatch => vec![(Named::IfMatch, if_match(headers)?)],
+        Preceding::Path => vec![(Named::Path, in_path(matched)?)],
         Preceding::Contribution => amended(body)?,
     };
     versions
         .iter()
-        .try_for_each(|version| controlled_at(snapshot, version, at))
+        .try_for_each(|(named, version)| controlled_at(snapshot, (*named, version), at))
 }
 
-/// Whether the registry routes `version`'s `creating_system_id` to `at`
-/// (§12a.1 `route-write`).
+/// Whether the registry routes the `creating_system_id` of `version`, which
+/// the request names where `named` says, to `at` (§12a.1 `route-write`).
 fn controlled_at(
     snapshot: &RegistrySnapshot,
-    version: &ObjectVersionId,
+    (named, version): (Named, &ObjectVersionId),
     at: &NodeId,
 ) -> Result<(), Refused> {
     // NOTE: §12a.1, a creating_system_id that is no openEHR uid is no member's
     // system_id, so it names no controlling CDR, the unregistered answer.
-    let route = SystemId::creating_system_id_of(version)
+    let registered = SystemId::creating_system_id_of(version)
         .ok()
-        .and_then(|creating_system_id| snapshot.registered_route(&creating_system_id));
-    match route {
-        Some(route) if route.node() == at => Ok(()),
-        Some(route) => Err(NotControlling::Elsewhere {
+        .and_then(|creating_system_id| {
+            snapshot
+                .registered_creating_system(&creating_system_id)
+                .map(|(spelled, route)| (spelled.clone(), route))
+        });
+    match registered {
+        Some((_, route)) if route.node() == at => Ok(()),
+        Some((creating_system_id, route)) => Err(NotControlling::Elsewhere {
+            creating_system_id,
             endpoint: through(snapshot, &route),
             controller: route.node().clone(),
             at: at.clone(),
         }
         .into()),
-        None => Err(NotControlling::Unregistered { at: at.clone() }.into()),
+        // NOTE: §10.3 copy-write-reject with §5.4.3: the unregistered system is the
+        // request's own value, so the refusal identifies it by where the request names it.
+        None => Err(NotControlling::Unregistered {
+            named,
+            at: at.clone(),
+        }
+        .into()),
     }
 }
 
 /// The versions a `CONTRIBUTION` body amends, in body order: each version's
 /// `preceding_version_uid` (ITS-REST 1.1.0 EHR API, `contribution_create`,
-/// `NewContribution`).
+/// `NewContribution`), with its place in the body.
 ///
 /// A version with no `preceding_version_uid` creates an object, and amends
 /// none.
-fn amended(body: &[u8]) -> Result<Vec<ObjectVersionId>, PrecedingInvalid> {
+fn amended(body: &[u8]) -> Result<Vec<(Named, ObjectVersionId)>, PrecedingInvalid> {
     let text = std::str::from_utf8(body).map_err(|_not_utf8| PrecedingInvalid::Contribution)?;
     // TODO(#297): a CONTRIBUTION in XML or a Simplified Format is refused 400 until openehr-its reads it.
     let contribution: NewContribution =
@@ -259,7 +306,12 @@ fn amended(body: &[u8]) -> Result<Vec<ObjectVersionId>, PrecedingInvalid> {
     Ok(contribution
         .versions
         .into_iter()
-        .filter_map(|version| version.preceding_version_uid)
+        .zip(1_usize..)
+        .filter_map(|(version, position)| {
+            version
+                .preceding_version_uid
+                .map(|preceding| (Named::Contribution(position), preceding))
+        })
         .collect())
 }
 

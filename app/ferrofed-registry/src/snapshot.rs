@@ -334,16 +334,34 @@ impl RegistrySnapshot {
     /// master05 §"Composite Identifiers and Case" requires.
     #[must_use]
     pub fn registered_route(&self, creating_system_id: &SystemId) -> Option<CreatingSystemRoute> {
-        if let Some(node) = self.by_system_id.get(creating_system_id) {
-            return Some(CreatingSystemRoute::Member { node: node.clone() });
+        self.registered_creating_system(creating_system_id)
+            .map(|(_, route)| route)
+    }
+
+    /// The route the document gives a `creating_system_id`, with the
+    /// identifier as the document spells it, or `None` when only a learned
+    /// mapping could answer for it (N21, §12.2).
+    ///
+    /// The spelling is the member's own `system_id` or the mapping's
+    /// `creating_system_id`, which may differ in case from the one asked
+    /// for, so a caller that names the system quotes the registry and never
+    /// the request (§5.4.3).
+    #[must_use]
+    pub fn registered_creating_system(
+        &self,
+        creating_system_id: &SystemId,
+    ) -> Option<(&SystemId, CreatingSystemRoute)> {
+        if let Some((spelled, node)) = self.by_system_id.get_key_value(creating_system_id) {
+            return Some((spelled, CreatingSystemRoute::Member { node: node.clone() }));
         }
-        let endpoint = self.creating_systems.get(creating_system_id)?;
-        self.endpoints
-            .get(endpoint)
-            .map(|declared| CreatingSystemRoute::Registered {
+        let (spelled, endpoint) = self.creating_systems.get_key_value(creating_system_id)?;
+        self.endpoints.get(endpoint).map(|declared| {
+            let route = CreatingSystemRoute::Registered {
                 node: declared.node.clone(),
                 endpoint: endpoint.clone(),
-            })
+            };
+            (spelled, route)
+        })
     }
 
     /// Every `[[creating_system]]` mapping, ordered by `creating_system_id`.

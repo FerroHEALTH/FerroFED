@@ -191,7 +191,11 @@ The gateway then orders the version uid without regard to case too, in an
 `ORDER BY` on it and as the tie-break, so the page a `LIMIT` cuts does not
 depend on the case a node wrote it in (§11.6.1).
 `meta.federation.dedup` then names the endpoints whose
-copies were dropped and counts the rows (§10.2, §10.3). Two versions of one
+copies were dropped and counts the rows (§10.2, §10.3). A write you derive
+from a kept row is routed like any other versioned write (see
+[Writing a new version](#writing-a-new-version)): it reaches the CDR that
+created the version, and it does not update the copies the dedup dropped.
+Two versions of one
 composition are two rows either way, and `none` states the default
 explicitly. Any other value is refused `400` with the code `dedup-invalid`.
 
@@ -378,10 +382,15 @@ outcomes:
   it, and the node's answer comes back with its `ETag` and `Location`.
 - Another member controls it, or no member is known to: the write is a `409`
   (`controlling-system-unreachable`), and no node is sent it. The message
-  names the controlling node and its endpoint where the registry knows them.
-  The path `ehr_id` belongs to the node it routes to, so the gateway cannot
-  send the write to the controlling node instead; send it there under that
-  node's own `ehr_id` for the patient.
+  names the controlling system: the version's `creating_system_id` as the
+  registry spells it, with the controlling node and its endpoint. When no
+  member is known to control the version, the message points at the place in
+  your request that names it (`If-Match`, the path, or the version of a
+  `CONTRIBUTION` by its position), because the only spelling of that system
+  is your own and the gateway never quotes your request. The path `ehr_id`
+  belongs to the node it routes to, so the gateway cannot send the write to
+  the controlling node instead; send it there under that node's own `ehr_id`
+  for the patient.
 - The write names no single version: `If-Match` is absent, repeated, a list,
   `*`, a weak tag, unquoted, or no `OBJECT_VERSION_ID`, or a composition
   delete's path is no `OBJECT_VERSION_ID`. That is a `400`
@@ -402,6 +411,17 @@ read as one, a `preceding_version_uid` that is no `OBJECT_VERSION_ID`, an
 XML body, or versions whose `data` is in a Simplified Format, is a `400`
 (`preceding-version-invalid`), because the gateway cannot tell which
 versions it amends (§12.4), and nothing is sent.
+
+The same rule covers a write against a row that de-duplication kept
+(§10.3, N36). Suppose node A created a composition and node B holds an
+imported copy under its own `ehr_id`. The kept row names node A's endpoint,
+and `meta.federation.dedup` names node B's. A write through node B's
+`ehr_id` is a `409` naming node A's system and endpoint, and node B is sent
+nothing. That holds while node A is down too: the gateway never asks node A
+before refusing, and it never falls back to writing at the copy. Send the
+write through node A's `ehr_id`. Its answer names node A alone in
+`openEHR-federation-endpoint` and `openEHR-federation-system-id`. Copies do
+not converge: node B keeps the old version until it imports again.
 
 ### Creating an EHR
 
