@@ -45,6 +45,12 @@ pub enum LocalizerError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    /// The localization exchange took place, but its audit message could
+    /// not be recorded, so its answer is not used. Unlike every other
+    /// failure, this one never widens to ask-all: the gateway lost its own
+    /// audit trail, which no failure policy covers.
+    #[error("the localization exchange could not be audited")]
+    AuditFailed(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl LocalizerError {
@@ -54,7 +60,7 @@ impl LocalizerError {
     pub fn status(&self) -> Option<http::StatusCode> {
         match self {
             Self::Answered { status, .. } => Some(*status),
-            Self::DeadlineExceeded | Self::Backend(_) => None,
+            Self::DeadlineExceeded | Self::Backend(_) | Self::AuditFailed(_) => None,
         }
     }
 }

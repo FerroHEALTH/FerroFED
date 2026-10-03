@@ -65,6 +65,8 @@ enum Script {
     Down,
     /// The service answers with a failure `status`.
     Answers(StatusCode),
+    /// The exchange took place and its audit message could not be recorded.
+    AuditFailed,
 }
 
 /// A scripted localizer that counts its calls.
@@ -101,6 +103,9 @@ impl Localizer for Scripted {
                 status,
                 source: Box::new(Failure),
             }),
+            Script::AuditFailed => {
+                Localization::Unavailable(LocalizerError::AuditFailed(Box::new(Failure)))
+            }
         }
     }
 }
@@ -387,5 +392,122 @@ async fn each_localizer_call_is_counted_by_outcome() -> TestResult {
             "{script:?}"
         );
     }
+    Ok(())
+}
+
+/// What the tests read of an answer's `meta.federation`.
+#[derive(Debug, Deserialize)]
+struct Envelope {
+    meta: EnvelopeMeta,
+}
+
+#[derive(Debug, Deserialize)]
+struct EnvelopeMeta {
+    federation: Federated,
+}
+
+#[derive(Debug, Deserialize)]
+struct Federated {
+    endpoints: Vec<Reported>,
+    localization: Option<Report>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Reported {
+    status: String,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Report {
+    error: String,
+}
+
+// conformance: CP-5
+#[tokio::test]
+async fn an_unaudited_exchange_fails_closed_even_under_ask_all() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_answering("uid-at-b").await;
+    let (app, state, _asked) = scripted(
+        (&a, &b),
+        KnownAt(BOTH),
+        (Script::AuditFailed, OnFailure::AskAll),
+    )?;
+
+    let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let envelope: Envelope = serde_json::from_str(&text)?;
+    for endpoint in &envelope.meta.federation.endpoints {
+        assert_eq!("not-localized", endpoint.status, "{text}");
+        assert!(
+            endpoint
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("could not be audited")),
+            "every member carries the audit error: {text}"
+        );
+    }
+    assert!(
+        envelope
+            .meta
+            .federation
+            .localization
+            .is_some_and(|report| report.error.contains("could not be audited")),
+        "§14.1: the failure is in meta.federation: {text}"
+    );
+    assert!(wire(&a).await?.is_empty(), "nothing is dispatched");
+    assert!(wire(&b).await?.is_empty(), "nothing is dispatched");
+    assert_eq!(Some("failing".to_owned()), localizer_state(&app).await?);
+    assert_eq!(
+        Some("1".to_owned()),
+        localizer_calls(&state, "audit-failed")?
+    );
+    Ok(())
+}
+
+// conformance: CP-5
+#[tokio::test]
+async fn a_localizer_outage_still_widens_under_a_declared_ask_all() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_answering("uid-at-b").await;
+    let (app, _state, _asked) =
+        scripted((&a, &b), KnownAt(BOTH), (Script::Down, OnFailure::AskAll))?;
+
+    let (status, text) = call(app, post(body(&patient_query())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let envelope: Envelope = serde_json::from_str(&text)?;
+    let statuses: Vec<&str> = envelope
+        .meta
+        .federation
+        .endpoints
+        .iter()
+        .map(|endpoint| endpoint.status.as_str())
+        .collect();
+    assert_eq!(
+        vec!["active", "active"],
+        statuses,
+        "§14.1: the declared widening"
+    );
+    assert_eq!(1, received(&a).await?.len());
+    assert_eq!(1, received(&b).await?.len());
+    Ok(())
+}
+
+// conformance: CP-5
+#[tokio::test]
+async fn an_unaudited_read_by_subject_fails_closed_even_under_ask_all() -> TestResult {
+    let a = ehr_node("cdr-a.example.org", EHR_A).await;
+    let b = ehr_node("cdr-b.example.org", EHR_B).await;
+    let (app, _state, _asked) = scripted(
+        (&a, &b),
+        KnownAt(AT_B),
+        (Script::AuditFailed, OnFailure::AskAll),
+    )?;
+
+    let (status, text) = call(app, by_subject()?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
+    assert_eq!("localization-unavailable", error_body(&text)?.code);
+    assert!(wire(&a).await?.is_empty());
+    assert!(wire(&b).await?.is_empty());
     Ok(())
 }

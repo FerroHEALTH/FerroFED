@@ -507,8 +507,9 @@ are dispatched (N8).
   an audit message for every exchange, and ITI TF-1 Table 27.1.3-1 groups it
   with an ATNA Secure Node. `ihe-iti` hands the full message to an
   `AuditRecorder`, and a message the recorder cannot accept fails the
-  discovery, so the localizer is `Unavailable` and §14.1 applies; no answer
-  is used without its audit. The server's `[xcpd] audit` has no default:
+  discovery as `LocalizerError::AuditFailed`, which fails closed under every
+  `on_failure` policy: ask-all covers a localizer outage, never an exchange
+  the gateway could not audit, so no answer is used without its audit. The server's `[xcpd] audit` has no default:
   `log` writes a structured event at the `ferrofed::audit` target without the
   query parameters, and `off` is refused outside the development profile and
   declared in `OPTIONS` (#410).

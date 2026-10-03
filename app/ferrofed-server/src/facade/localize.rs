@@ -117,6 +117,15 @@ pub(crate) async fn localize(
             failure: None,
         },
         Localization::NoRecords => Localized::nobody(None),
+        Localization::Unavailable(error @ LocalizerError::AuditFailed(_)) => {
+            let cause = crate::chain(&error);
+            // NOTE: §14.1, ITI TF-2 §3.55.5.1: ask-all covers a localizer outage, never an
+            // exchange the gateway could not audit, so this fails closed under every policy.
+            tracing::error!(error = %cause, "the localization exchange could not be audited");
+            Localized::nobody(Some(ErrorDetail::Text(format!(
+                "the localization exchange could not be audited, so its answer is not used: {cause}"
+            ))))
+        }
         Localization::Unavailable(error) => {
             let cause = crate::chain(&error);
             tracing::warn!(

@@ -496,7 +496,7 @@ impl Code {
             Self::AuthenticationUnavailable => "the access token cannot be verified now (§13.1)",
             Self::OperationRefused => "this gateway admits no caller to this operation",
             Self::LocalizationUnavailable => {
-                "the localizer could not answer, so no member was asked and where the subject has an EHR is unknown (§14.1, N4)"
+                "the localizer could not answer, or its exchange could not be audited, so no member was asked and where the subject has an EHR is unknown (§14.1, N4)"
             }
         }
     }

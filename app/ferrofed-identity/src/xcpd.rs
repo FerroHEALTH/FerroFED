@@ -445,7 +445,18 @@ impl XcpdLocalizer {
         if timeout.is_zero() {
             return Err(LocalizerError::DeadlineExceeded);
         }
-        let answers = self.broadcast(&query, assertion, timeout).await;
+        let mut answers = self.broadcast(&query, assertion, timeout).await;
+        // NOTE: ITI TF-2 §3.55.5.1, §14.1: an exchange whose audit was not recorded is
+        // reported as that before any other failure, since no failure policy may widen it.
+        let unaudited = answers
+            .iter()
+            .position(|answer| matches!(answer, Some(Err(XcpdError::Audit(_)))));
+        if let Some(index) = unaudited
+            && let Some(Some(Err(source))) = answers.get_mut(index).map(Option::take)
+        {
+            let error = XcpdLocalizeError::Gateway { index, source };
+            return Err(LocalizerError::AuditFailed(Box::new(error)));
+        }
         let mut candidates = BTreeSet::new();
         for (index, answer) in answers.into_iter().enumerate() {
             match answer {

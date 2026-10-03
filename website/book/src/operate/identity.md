@@ -275,7 +275,10 @@ What a deployment must provide:
   target to your audit repository. `audit = "off"` records nothing and is
   refused outside `profile = "development"`. `OPTIONS {base}/` declares the
   choice as `localization.audit`. A message the destination cannot accept
-  fails the discovery closed, so no answer is used without its audit.
+  fails the discovery closed under every policy, `on_failure = "ask-all"`
+  included, since that policy covers a localizer outage and never an
+  exchange the gateway could not audit: no answer is used without its audit,
+  and no member is asked.
 
 The discovery fails closed as a whole. One responding gateway that faults,
 answers an error (Case 5 of §3.55.4.2.3), asks for demographics (Case 3),

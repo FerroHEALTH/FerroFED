@@ -24,7 +24,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use ferrofed_engine::dispatch::Contact;
 use ferrofed_identity::consent::ConsentDecision;
-use ferrofed_identity::localizer::Localization;
+use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use serde::Serialize;
@@ -109,12 +109,16 @@ impl Observed {
     /// Returns what a localizer's answer says of its service, by the rule the
     /// members follow: an answer, or a failure answered below `500`, is
     /// [`Observed::Up`], a `5xx` is [`Observed::Failing`], and no answer is
-    /// [`Observed::Down`]; `None` when no localizer was asked.
+    /// [`Observed::Down`]; an exchange that could not be audited is
+    /// [`Observed::Failing`]; `None` when no localizer was asked.
     #[must_use]
     pub fn of_localization(localization: &Localization) -> Option<Self> {
         match localization {
             Localization::NotConfigured => None,
             Localization::Candidates(_) | Localization::NoRecords => Some(Self::Up),
+            // NOTE: no specification governs this: our own design; an exchange the
+            // gateway could not audit is a failure of the localization path itself.
+            Localization::Unavailable(LocalizerError::AuditFailed(_)) => Some(Self::Failing),
             Localization::Unavailable(error) => {
                 Some(error.status().map_or(Self::Down, Self::of_answer))
             }

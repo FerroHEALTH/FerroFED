@@ -419,7 +419,7 @@ enum Unserved {
     /// The localizer could not answer, the deployment fails closed, and so no
     /// member was asked (§14.1, N4).
     #[error(
-        "the localizer could not answer, so no member was asked and whether the subject has an EHR is unknown (§14.1, N4)"
+        "the localizer could not answer, or its exchange could not be audited, so no member was asked and whether the subject has an EHR is unknown (§14.1, N4)"
     )]
     Unlocalized,
     /// The request's deadline cannot be represented.

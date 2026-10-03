@@ -22,7 +22,7 @@ use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::probe::{Answer, Probed};
 use ferrofed_identity::consent::ConsentDecision;
-use ferrofed_identity::localizer::Localization;
+use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 use openehr_federation::outcome::Outcome;
@@ -191,6 +191,7 @@ impl NodeRequests {
             Localization::Candidates(_) => "candidates",
             Localization::NoRecords => "no-records",
             Localization::NotConfigured => "not-configured",
+            Localization::Unavailable(LocalizerError::AuditFailed(_)) => "audit-failed",
             Localization::Unavailable(_) => "unavailable",
         };
         instruments

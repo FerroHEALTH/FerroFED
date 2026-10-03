@@ -63,6 +63,7 @@ no answer is `down`. It is absent when no pre-filter is configured
 ([Consent](identity.md#consent)). A call to the localizer updates `localizer`
 by the same rule: a candidate set, or an answer that no member holds the
 patient, is `up`, a failure answered below `500` is `up`, a `5xx` is
+`failing`, an XCPD exchange whose audit message could not be recorded is
 `failing`, and no answer, a silent localizer past its budget included, is
 `down`. It is absent when no localizer is configured
 ([Node selection](registry.md#node-selection)). The body names endpoint ids

@@ -353,7 +353,7 @@ async fn a_discovery_whose_audit_is_refused_fails_closed() -> TestResult {
     let stub = RespondingGateway::answering(holds(COMMUNITY_A)).await;
     let localizer = localizer(&[&stub])?.audited(Arc::new(Refusing));
     match localize(&localizer).await? {
-        Localization::Unavailable(error) => {
+        Localization::Unavailable(error @ LocalizerError::AuditFailed(_)) => {
             let rendered = ferrofed_chain(&error);
             if rendered.contains("audit") {
                 Ok(())
@@ -362,5 +362,40 @@ async fn a_discovery_whose_audit_is_refused_fails_closed() -> TestResult {
             }
         }
         other => Err(format!("no candidate without its audit (§3.55.5.1): {other:?}").into()),
+    }
+}
+
+/// A recorder that refuses the audit of every exchange that was answered,
+/// and accepts the others.
+struct RefusingAnswers;
+
+impl ihe_iti::xcpd::audit::AuditRecorder for RefusingAnswers {
+    fn record(
+        &self,
+        event: ihe_iti::xcpd::audit::AuditEvent,
+    ) -> Result<(), ihe_iti::xcpd::audit::AuditError> {
+        if event.outcome == ihe_iti::xcpd::audit::EventOutcome::Success {
+            return Err(ihe_iti::xcpd::audit::AuditError(Box::new(AuditOutage)));
+        }
+        Ok(())
+    }
+}
+
+// conformance: CP-5
+#[tokio::test]
+async fn an_audit_failure_outranks_another_gateway_s_timeout() -> TestResult {
+    let silent = RespondingGateway::answering(Answer::Silent).await;
+    let answering = RespondingGateway::answering(holds(COMMUNITY_A)).await;
+    let localizer = localizer(&[&silent, &answering])?.audited(Arc::new(RefusingAnswers));
+    let answer = localizer
+        .localize(
+            &patient()?,
+            &members()?,
+            Instant::now() + Duration::from_millis(500),
+        )
+        .await;
+    match answer {
+        Localization::Unavailable(LocalizerError::AuditFailed(_)) => Ok(()),
+        other => Err(format!("an unaudited exchange is never a plain outage: {other:?}").into()),
     }
 }

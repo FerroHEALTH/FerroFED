@@ -130,7 +130,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `ihe-iti` 0.0.12 hands every exchange's message to an `AuditRecorder`, and
   `[xcpd] audit = "log"` writes it at the `ferrofed::audit` log target
   without the query parameters, which name the patient. A message the
-  recorder cannot accept fails the discovery closed.
+  recorder cannot accept fails the discovery closed under every
+  `on_failure` policy, `ask-all` included, and shows the localizer
+  `failing`.
 
 - Client authentication at the gateway (§13.1, N25, CP-17 inbound half,
   #80). A request to the ITS-REST surface and `OPTIONS {base}/` carries an
