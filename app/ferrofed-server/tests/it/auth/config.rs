@@ -109,11 +109,22 @@ fn an_issuer_naming_two_ways_to_verify_is_refused() -> Result<(), Box<dyn Error>
 
 #[test]
 fn a_key_set_over_plain_http_to_another_host_is_refused() -> Result<(), Box<dyn Error>> {
-    refused_for(
-        &issuer("", "http://issuer.example.test/jwks"),
-        "auth.issuer[0].jwks_uri",
-        AuthFault::PlainHttp,
-    )?;
+    for profile in ["production", "development"] {
+        let text = format!(
+            "profile = \"{profile}\"\n{}",
+            issuer("", "http://issuer.example.test/jwks")
+        );
+        match refusal(&text)? {
+            Some(ConfigError::TrustAnchor(refused)) => {
+                assert_eq!("auth.issuer[0].jwks_uri", refused.key, "{profile}");
+            }
+            other => {
+                return Err(
+                    format!("{profile}: a key set in the clear is refused: {other:?}").into(),
+                );
+            }
+        }
+    }
     assert!(
         refusal(&issuer("", "http://127.0.0.1:8443/jwks"))?.is_none(),
         "plain http to loopback resolves"

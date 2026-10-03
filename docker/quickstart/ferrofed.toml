@@ -9,6 +9,10 @@
 # synthetic patients to their EHRs, and it is no identity binding (no
 # specification governs it: our own design). scripts/quickstart/seed.sh reads
 # the same rows and creates each EHR over ITS-REST, so the two never disagree.
+#
+# The nodes are reached over plain http inside the Docker network, which only
+# the development profile allows for a credential: the gateway starts and
+# names each credential that travels unencrypted in its banner and its log.
 
 profile = "development"
 

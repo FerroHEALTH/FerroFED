@@ -38,7 +38,10 @@ the federation reaches it. `serve` and `config check` refuse:
 - a `listen` address equal to `server.listen`;
 - an `otlp_endpoint` that is not an `http://` URL. The push speaks gRPC
   without TLS, so run the collector beside the gateway, on the same host or
-  in the same pod, and let it forward over TLS.
+  in the same pod, and let it forward over TLS;
+- an `otlp_endpoint` with a user name or a password in it, outside
+  `profile = "development"`, since that credential would travel in cleartext
+  ([What must travel over https](configuration.md#what-must-travel-over-https)).
 
 The push sends every 60 seconds; the standard `OTEL_METRIC_EXPORT_INTERVAL`
 environment variable, in milliseconds, changes the interval. A push that

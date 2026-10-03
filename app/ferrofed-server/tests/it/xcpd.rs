@@ -304,8 +304,8 @@ fn an_http_gateway_outside_development_refuses_to_boot_naming_its_key() -> TestR
     .unwrap_or_default()
     .to_owned();
     match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
-        Err(error::Error::Insecure { key }) => {
-            assert_eq!("xcpd.gateway[0].url", key);
+        Err(error::Error::Cleartext(refused)) => {
+            assert_eq!("xcpd.gateway[0].url", refused.site.url_key);
             Ok(())
         }
         other => Err(format!("plain http carries the identifier in clear text: {other:?}").into()),

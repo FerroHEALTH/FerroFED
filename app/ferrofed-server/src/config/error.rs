@@ -11,6 +11,7 @@ use openehr_its::rest::client::InvalidCredentials;
 
 use crate::config::ENV_PREFIX;
 use crate::config::stored_queries::Backend;
+use crate::config::transport::{CleartextError, TrustAnchorError};
 
 /// A configuration the server refuses to start on.
 #[derive(Debug, thiserror::Error)]
@@ -366,13 +367,12 @@ pub enum Error {
     },
     /// A URL that carries a patient identifier or a credential is not
     /// `https`, outside a configuration marked for development.
-    #[error(
-        "{key} is not an https URL; plain http is accepted only under profile = \"development\" (ITI TF-1 §27.4.1)"
-    )]
-    Insecure {
-        /// The key that carries the URL.
-        key: String,
-    },
+    #[error(transparent)]
+    Cleartext(#[from] CleartextError),
+    /// A URL the gateway verifies its callers against is plain `http` to a
+    /// host that is not loopback.
+    #[error(transparent)]
+    TrustAnchor(#[from] TrustAnchorError),
     /// The localizer's budget does not end before the overall budget, so the
     /// localizer could leave no time to resolve and ask the members (§11.5,
     /// §14.1).

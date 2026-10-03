@@ -14,7 +14,8 @@
 #      at the paths the rendered compose file mounts them, in the pinned base
 #      image of docker/Dockerfile, with synthetic files for the credentials
 #      the example names; and it refuses the same configuration once a member
-#      is left out of the PIX Manager, naming that member.
+#      is left out of the PIX Manager, naming that member, and once the PIX
+#      Manager's credential would travel over plain http, naming its URL key.
 #
 # Usage:
 #   scripts/checks/release-compose.sh                  checks 1 and 2
@@ -118,6 +119,18 @@ elif [ -n "$rendered" ]; then
     bad "ferrofed config check refuses a missing member without naming it: $out"
   else
     echo "OK: a member no PIX Manager resolves is refused by name"
+  fi
+  # A credential sent over plain http is refused under the production profile.
+  sed -E 's|^url = "https://(pix\.[^"]*)"$|url = "http://\1"|' "$RELEASE/ferrofed.toml" > "$work/refused.toml"
+  cat "$work/refused.toml" > "$work/ferrofed.toml"
+  if cmp -s "$RELEASE/ferrofed.toml" "$work/ferrofed.toml"; then
+    bad "the example names no https PIX Manager URL to rewrite"
+  elif out="$(check 2>&1)"; then
+    bad "ferrofed config check accepts a PIX Manager credential sent over plain http"
+  elif ! grep -qF 'pixm.manager[0].url' <<< "$out"; then
+    bad "ferrofed config check refuses a cleartext credential without naming its key: $out"
+  else
+    echo "OK: a credential sent over plain http is refused by key"
   fi
 fi
 

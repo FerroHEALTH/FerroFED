@@ -75,6 +75,10 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
   Listen           0.0.0.0:8080
   Registry         4 members, 4 endpoints
   Stored queries   off
+  Plain http       credentials.node-a-query
+                   credentials.node-b-query
+                   credentials.node-c-query
+                   credentials.node-d-query
 
   DEVELOPMENT: this deployment runs the development profile, which may resolve
   patients from a static development table. It must not hold or reach real
@@ -88,7 +92,10 @@ reads `none` when no document is set, and says the document does not load
 when it cannot be read, in which case the boot stops on the next lines with
 the reason. The development notice prints only under
 `profile = "development"`, in red on a terminal with colour and in the same
-words without it.
+words without it. The `Plain http` lines name, by key, each credential or
+patient identifier that travels unencrypted, which only the development
+profile allows
+([What must travel over https](#what-must-travel-over-https)).
 
 Colour follows the terminal, and an explicit `format = "pretty"` keeps it
 into a pipe. A `NO_COLOR` environment variable that is set and not empty
@@ -100,8 +107,8 @@ The banner prints only when the log renders as `pretty`: with
 `json`, or with `auto` and stdout piped to a collector, the first line on
 stdout is a JSON log line. `config check`, `healthcheck` and
 `admission check` print no banner. The banner shows counts, an address, a
-path and switches, and never a credential, a URL, a header value or anything
-from a request.
+path, switches and configuration keys, and never a credential, a URL, a
+header value or anything from a request.
 
 ## The file
 
@@ -185,6 +192,62 @@ password in it is refused naming the key, as an endpoint URL in the registry
 document is. Its credentials go in `[pixm.manager.credentials]`, which takes
 a bearer token or a user and a password, never an `oauth2` grant.
 
+### What must travel over https
+
+Every outbound URL in the configuration is held to one of two rules, by
+what it carries.
+
+**Credentials and patient identifiers.** Outside `profile = "development"`,
+a URL that a configured credential or a patient identifier is sent to must
+be `https`. `serve`, `config check`, `admission check` and every
+[reload](registry.md#reloading-the-registry) refuse anything else, with exit
+code 78 and one line naming the URL's key and what would travel over it,
+never a value. The rule covers:
+
+- the URL of a registry endpoint that has a `[credentials."<id>"]` section,
+  which receives its bearer token, its basic credentials or the access token
+  its `oauth2` grant obtains;
+- the `token_endpoint` of an `oauth2` section, which receives the client
+  assertion;
+- the `url` of every PIX Manager, which is asked for patient identifiers
+  with or without `[pixm.manager.credentials]`;
+- the `url` of every XCPD responding gateway, which is sent the patient
+  identifier and, when one is configured, the XUA assertion;
+- `metrics.otlp_endpoint` when it carries a user name or a password.
+
+```text
+ferrofed: cannot start: the url of endpoint hospital-a in registry.document is not an https URL, and credentials.hospital-a would travel over it in cleartext: outside profile = "development" a credential or a patient identifier is sent only over https
+```
+
+A node URL no credential is sent to may stay `http`, for example a node on a
+private network whose transport a sidecar protects with mutual TLS: the
+gateway sends a node its own `ehr_id`, never the patient identifier (§5.4,
+N33). The stored-query store's PostgreSQL connection string is not an `http`
+URL, so the rule does not read it: whether that connection is encrypted is
+its own `sslmode`.
+
+Under the development profile the same configuration starts, so the
+[quickstart](container.md#the-quickstart) can reach its nodes over `http`
+inside its Docker network. Each credential or patient identifier that
+travels unencrypted is named by key in the startup banner, in a `WARN` log
+line at boot and after each reload, and on stderr by `config check`.
+
+**Trust anchors.** A URL the gateway verifies its callers against, an
+issuer's `jwks_uri` or `introspection_endpoint` in
+[`[auth]`](authentication.md), must be `https`, or `http` to a loopback
+host, under every profile, development included. A key set fetched in the
+clear would let anyone on the network substitute keys and forge callers.
+
+**The profile takes a restart.** A reload whose file changes `profile` is
+refused (class `profile`), and the running configuration stays. Every
+decision the development profile admits, these transport rules, the
+development cross-reference and consent table, and an `http` XCPD gateway,
+reads the profile the process started with.
+
+The specification assumes a protected transport and leaves it to the
+security profiles (§2.2, §13); no specification governs these rules, which
+are FerroFED's own design.
+
 ### OAuth 2.0 to a node
 
 An `oauth2` section makes the gateway authenticate to that node as itself
@@ -200,8 +263,9 @@ section is required except those two:
 - `scope` is space-separated SMART on openEHR scopes, each a resource scope
   of the `system` compartment (`system/aql-*.s`, `system/composition-*.cru`);
   anything else is refused at load.
-- `token_endpoint` is an `http` or `https` URL with no user name, password,
-  query or fragment.
+- `token_endpoint` is an `https` URL with no user name, password, query or
+  fragment; `http` is accepted only under `profile = "development"`
+  ([What must travel over https](#what-must-travel-over-https)).
 
 The gateway caches a token until 30 seconds before the end of the lifetime
 its `expires_in` states, with one token request per endpoint at a time. A

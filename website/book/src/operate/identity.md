@@ -61,8 +61,11 @@ bearer_token_file = "/run/secrets/pix-token"
   resolved by exactly one: a member no Manager names, a member two Managers
   name, and a name the registry does not hold each refuse the configuration.
 - Each domain, and each value of `[pixm.namespaces]`, is an absolute URI.
-- `url` is the Manager's FHIR base, `http` or `https`, with no query or
-  fragment. A user name or password in it refuses the configuration, naming
+- `url` is the Manager's FHIR base, `https`, with no query or fragment. The
+  Manager is asked for patient identifiers, so `http` is refused naming
+  `pixm.manager[N].url`, with or without credentials, unless the profile is
+  `development`
+  ([What must travel over https](configuration.md#what-must-travel-over-https)). A user name or password in it refuses the configuration, naming
   `pixm.manager[N].url` and never quoting it; the credentials go in
   `[pixm.manager.credentials]`, with the keys of an endpoint's
   [credentials](configuration.md#the-file): `bearer_token`, or `user` and

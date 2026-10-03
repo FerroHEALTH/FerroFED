@@ -25,6 +25,7 @@ use url::Url;
 
 use crate::config::error::Error;
 use crate::config::secrets::secret;
+use crate::config::transport;
 
 /// The most clock skew `auth.clock_skew_s` may allow, in seconds.
 ///
@@ -258,8 +259,6 @@ pub enum AuthFault {
     /// More than one issuer is introspected, so an opaque token, which names
     /// no issuer, could go to either.
     SeveralIntrospection,
-    /// A URL reaches a host other than a loopback one in plain `http`.
-    PlainHttp,
     /// The inline key set is not a JWK Set.
     KeySet,
     /// The header is no HTTP field name.
@@ -284,7 +283,6 @@ impl fmt::Display for AuthFault {
             Self::SeveralIntrospection => {
                 "introspects at a second issuer: an opaque token names no issuer, so one issuer at most is introspected"
             }
-            Self::PlainHttp => "is plain http to a host that is not loopback; use https",
             Self::KeySet => "is not a JWK Set (RFC 7517 §5)",
             Self::HeaderName => "is not an HTTP field name",
             Self::EdgeIssuer => {
@@ -450,8 +448,8 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
     })
 }
 
-/// Parses the URL at `key`: `https`, or `http` to a loopback host, with no
-/// credentials in it.
+/// Parses the URL at `key`, held to the trust-anchor policy of
+/// [`transport::trust_anchor`], with no credentials in it.
 fn url(key: &str, text: &str) -> Result<Url, Error> {
     let url = Url::parse(text).map_err(|source| Error::Url {
         key: key.to_owned(),
@@ -467,18 +465,9 @@ fn url(key: &str, text: &str) -> Result<Url, Error> {
         });
     }
     // NOTE: RFC 7662 §4, the introspection endpoint is protected by TLS; a key
-    // set is held to the same, and plain http to loopback is our own design.
-    let loopback = match url.host() {
-        Some(url::Host::Ipv4(address)) => address.is_loopback(),
-        Some(url::Host::Ipv6(address)) => address.is_loopback(),
-        Some(url::Host::Domain(name)) => name == "localhost",
-        None => false,
-    };
-    match url.scheme() {
-        "https" => Ok(url),
-        "http" if loopback => Ok(url),
-        _ => Err(fault(key, AuthFault::PlainHttp)),
-    }
+    // set is held to the same trust-anchor policy, loopback http being our own design.
+    transport::trust_anchor(key, &url)?;
+    Ok(url)
 }
 
 /// The refusal of `key` for `fault`.

@@ -196,6 +196,28 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `system/aql-*` scope counts only for a listed backend client. The
   DEMOGRAPHIC API admits only the clients an issuer lists in
   `demographic_clients`. The client's token is never forwarded to a node.
+- Outside `profile = "development"`, `serve`, `config check`,
+  `admission check` and every reload refuse a credential sent to a URL that
+  is not `https`, naming the key of the URL and of the credential: a registry
+  endpoint with a `[credentials]` section, an `oauth2` token endpoint, a PIX
+  Manager with credentials, and a `metrics.otlp_endpoint` carrying a user
+  name or a password. A reload keeps the profile the process started with.
+  Under the development profile the same configuration starts, and the
+  startup banner, a `WARN` log line and `config check` name each credential
+  that travels unencrypted, by key, an XCPD responding gateway's XUA
+  assertion included (#402).
+- A PIX Manager and an XCPD responding gateway are sent patient identifiers,
+  so outside the development profile each must be `https`, with or without
+  a credential configured. Under the development profile they are named in
+  the banner, the log and `config check` like a cleartext credential (#402).
+- A reload whose file changes `profile` is refused with class `profile`, and
+  the running configuration stays, so nothing the development profile admits
+  can enter a process that started under another profile. A reload under
+  another profile could admit an `http` XCPD gateway before (#402).
+- One module holds every transport rule: a URL a credential or a patient
+  identifier is sent to must be `https` outside the development profile,
+  and a key set or introspection endpoint the gateway verifies callers
+  against must be `https`, or `http` to loopback, under every profile (#402).
 
 ## [0.0.7] - 2026-10-03
 

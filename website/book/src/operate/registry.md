@@ -273,8 +273,8 @@ Five sections take effect on a reload:
 
 | Reloaded | Needs a restart |
 |---|---|
-| `[registry]`: the document's contents, its path and its `format` | `profile` |
-| `[credentials]` | `[server]` |
+| `[registry]`: the document's contents, its path and its `format` | `[server]` |
+| `[credentials]` | `[signing]` |
 | `[dev]` | `[telemetry]` and `[metrics]` |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
 | `[xcpd]` | |
@@ -282,6 +282,12 @@ Five sections take effect on a reload:
 `federation.demographic_endpoint` keeps its running value until a restart,
 and the document must still declare it: a reload whose document drops that
 endpoint is refused (`demographic-endpoint`, below).
+
+A reload whose file changes `profile` is refused (`profile`, below), so
+everything the development profile admits, the development cross-reference
+and consent table, and a credential or patient identifier over plain `http`
+([What must travel over https](configuration.md#what-must-travel-over-https)),
+follows the profile the process started with.
 
 A valid configuration replaces the running registry at once. A request that
 started before the reload finishes on the registry it started with, nodes
@@ -326,6 +332,8 @@ the same file to see the fault. The classes are:
 | `localization` | the localizer refuses the new members, or the node selection has none |
 | `node-clients`, `http-client`, `self-description` | the node clients or the `OPTIONS {base}/` body cannot be built |
 | `registry-presence` | `registry.document` was set or unset, which takes a restart |
+| `profile` | `profile` was changed, which takes a restart |
+| `cleartext` | a credential or a patient identifier would travel over a URL that is not `https`, outside the development profile the process started with |
 
 Reloading uses a Unix signal, and FerroFED runs on Unix only
 ([Supported platforms](deployment-shape.md#supported-platforms)). Each

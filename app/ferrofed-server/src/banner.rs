@@ -11,8 +11,9 @@
 //!
 //! The banner prints only when the console renders the terminal form, so a
 //! log pipeline reading JSON never receives it. It shows counts, an address,
-//! a path and switches: never a credential, a URL, a header value or anything
-//! from a request. No specification governs the banner: our own design.
+//! a path, switches, and the configuration keys of each credential or
+//! patient identifier that travels over plain `http`: never a credential, a
+//! URL, a header value or anything from a request. No specification governs the banner: our own design.
 
 use std::fmt::Write as _;
 use std::net::SocketAddr;
@@ -21,6 +22,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::base_path::BasePath;
 use crate::config::stored_queries::Backend;
+use crate::config::transport::{CleartextError, ProtectedSite};
 use crate::federation::FederationError;
 use crate::telemetry::{Format, Rendering};
 
@@ -83,6 +85,9 @@ pub struct Deployment {
     pub stored_queries: Option<Backend>,
     /// Whether the configuration declares the development profile.
     pub development: bool,
+    /// Each credential or patient identifier that travels over plain `http`,
+    /// which only the development profile allows, by key.
+    pub cleartext: Vec<ProtectedSite>,
 }
 
 impl Deployment {
@@ -120,7 +125,25 @@ impl Deployment {
             registry,
             stored_queries,
             development,
+            cleartext: Vec::new(),
         }
+    }
+
+    /// Returns this deployment with the credentials and patient identifiers
+    /// [`check`](crate::config::transport::check) found travelling over plain
+    /// `http`.
+    ///
+    /// A refusal shows none: the build over the same settings stops the boot
+    /// on it.
+    #[must_use]
+    pub fn with_cleartext(mut self, checked: Result<&[ProtectedSite], &CleartextError>) -> Self {
+        // NOTE: no specification governs this: our own design; the build over
+        // these settings stops the boot on the typed error the banner omits.
+        self.cleartext = match checked {
+            Ok(sites) => sites.to_vec(),
+            Err(_refused) => Vec::new(),
+        };
+        self
     }
 }
 
@@ -176,6 +199,10 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
         Some(Backend::Files) => "on, files, read-only",
     };
     line(&mut out, "Stored queries", stored_queries);
+    for (index, site) in deployment.cleartext.iter().enumerate() {
+        let label = if index == 0 { "Plain http" } else { "" };
+        line(&mut out, label, &site.payload);
+    }
     if deployment.development {
         // The same words with and without colour, because colour is the first
         // thing a scraped log loses.
