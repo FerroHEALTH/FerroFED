@@ -7,8 +7,9 @@ The `ferrofed` binary reads one TOML file and the environment. It serves the
 process shape (health, readiness, the request log, graceful shutdown) and, once
 a registry is configured, the federated query `POST /v1/query/aql`, the EHR
 resources and the definition area routed to one node, and, when
-`[stored_queries]` is set, the stored-query registry; every other path under
-`/v1/` answers `501`.
+`[stored_queries]` is set, the stored-query registry. The DEMOGRAPHIC area
+answers `501` unless `federation.demographic_endpoint` routes it to one
+endpoint, and every other path under `/v1/` answers `501`.
 
 ## Running it
 
@@ -397,6 +398,40 @@ path = "/var/lib/ferrofed/stored-queries.redb"
 The [client contract](../integrate/client-contract.md#stored-queries) says how
 a client stores and invokes a query.
 
+## The DEMOGRAPHIC area
+
+The gateway never federates the openEHR DEMOGRAPHIC API (§7a.1, N32): the
+patient's identity is resolved through the identity binding, never through a
+node's demographic store. By default every request under `/v1/demographic/`
+answers `501` and no node is asked.
+
+A deployment that keeps its demographics in one member may route the area to
+that member's endpoint:
+
+```toml
+[federation]
+demographic_endpoint = "hospital-a.demographic"
+```
+
+- Every DEMOGRAPHIC operation ITS-REST 1.1.0 defines then goes to that
+  endpoint alone, through the same single-node path as a definition request:
+  the query string and the declared headers are held to what the operation
+  declares, the body travels byte-identical, and the node's answer comes back
+  as the node sent it, with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id` naming the endpoint (§7a.3, N31). Nothing is
+  probed, fanned out or sent to another member.
+- A client may name the same endpoint in `openEHR-federation-endpoint`. A
+  header naming another endpoint is a `400` (`targeting-conflict`), several
+  endpoints an `endpoint-several`, and `*` or an unknown id an
+  `endpoint-unknown`.
+- The value must be an endpoint id of the registry. Any other value refuses
+  the configuration, naming `federation.demographic_endpoint`, and so does
+  setting it without `registry.document`. A suspended endpoint answers
+  `no-destination`.
+- `OPTIONS {base}/` declares `its_rest.demographic` as `unsupported: 501`
+  without the setting, and as `routed-single-node` naming the endpoint with
+  it. The setting is named in the startup log line.
+
 ## The environment
 
 Any key can be set or overridden with `FERROFED__<SECTION>__<KEY>`, upper or
@@ -421,6 +456,7 @@ define, is refused like any other unknown key.
 | `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
 | `/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT /v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |
+| `/v1/demographic/` and below | `501`, never federated; routed to the one endpoint `federation.demographic_endpoint` names, when it is set |
 | any other path under `/v1/` | `501` |
 | any other path | `404` |
 

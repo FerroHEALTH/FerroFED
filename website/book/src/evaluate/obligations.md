@@ -19,8 +19,8 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 278 | 276 | a test asserts it |
-| built-untested | 3 | 3 | the code does it and no test asserts it yet |
+| tested | 280 | 278 | a test asserts it |
+| built-untested | 2 | 2 | the code does it and no test asserts it yet |
 | planned | 47 | 44 | not built yet; an open issue holds the work |
 | missing | 3 | 3 | not built, found missing by the audit; an issue holds the work |
 | deferred | 5 | 4 | not built, by a decision of the owner |
@@ -28,7 +28,7 @@ report behind its status.
 | contradiction | 10 | 9 | the text contradicts itself, reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) before the audit |
 | node | 15 | 0 | a member node must meet it |
 | operator | 24 | 0 | the federation operator must meet it |
-| n/a | 54 | 29 | no gateway obligation: a client or an editor must meet it, or it is a permission the gateway does not take |
+| n/a | 53 | 28 | no gateway obligation: a client or an editor must meet it, or it is a permission the gateway does not take |
 
 ## Gaps
 
@@ -47,9 +47,8 @@ statement where the text disagrees with itself, by status.
 
 | Statement | Actor | Keyword | Requirement | Point | Statement text | Evidence |
 |---|---|---|---|---|---|---|
-| [requirements#n32.3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n32) | Gateway | MUST | N32, N30 | CP-25 | and MUST be declared under N30 | [#290](https://github.com/FerroHEALTH/FerroFED/issues/290); app/ferrofed-server/src/facade/options.rs its_rest() declares demographic "unsupported: 501" and the definition area; no test asserts the its_rest values, nor that the 501 behaviour matches the declaration (CP-25 "the behaviour matches what OPTIONS declares") |
 | [deduplication#dedup-write-target.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/deduplication.html#dedup-write-target) | Gateway | MUST | N36 | CP-29 | After dedup, the surviving row MUST still identify the originating endpoint | [#290](https://github.com/FerroHEALTH/FerroFED/issues/290); crates/openehr-federation/src/merge/dedup.rs suppress() keeps each kept row with its endpoint, and crates/openehr-federation/src/merge/mod.rs carries its ENDPOINT attributes beside it; no test selects an ENDPOINT attribute under version-identity and asserts the kept row names the originating endpoint (the dedup tests assert the kept uid and suppressed_endpoints only) |
-| [options-root.schema#/properties/federation/properties/its_rest](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/federation-spec/modules/ROOT/attachments/options-root.schema.json) | Gateway | MUST | N30, N32 | CP-23 | Unsupported areas MUST be declared here, not discovered by a 501 | [#290](https://github.com/FerroHEALTH/FerroFED/issues/290); app/ferrofed-server/src/facade/options.rs its_rest(); app/ferrofed-server/tests/it/options.rs only asserts its_rest.extra is empty, never the four declared strings |
+| [options-root.schema#/properties/federation/properties/its_rest](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/federation-spec/modules/ROOT/attachments/options-root.schema.json) | Gateway | MUST | N30, N32 | CP-23 | Unsupported areas MUST be declared here, not discovered by a 501 | [#290](https://github.com/FerroHEALTH/FerroFED/issues/290); app/ferrofed-server/src/facade/options.rs its_rest(); demographic and definition are asserted (`app/ferrofed-server/tests/it/demographic.rs::options_declares_each_mode_and_the_behaviour_matches_it`, `app/ferrofed-server/tests/it/options.rs::the_definition_area_declares_nothing_offered`), query and ehr are not |
 
 ### Contradictions and silences found by the audit
 

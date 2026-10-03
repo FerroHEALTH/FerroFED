@@ -92,6 +92,9 @@ pub struct FederationSettings {
     /// `aggregates.decomposable` an `OPTIONS {base}/` body declares
     /// (§11.6.3, §7a.2).
     pub decomposable: BTreeSet<AggregateFunction>,
+    /// The one member endpoint the DEMOGRAPHIC area is routed to, or `None`
+    /// when that area answers `501` (§7a.1, N32).
+    pub demographic_endpoint: Option<EndpointId>,
 }
 
 /// The HTTP surface, resolved.
@@ -158,6 +161,11 @@ impl Settings {
             offset_strategy = self.federation.offset.name(),
             max_offset_window = self.federation.offset.max_window().map(NonZeroU32::get),
             decomposable_aggregates = decomposable.join(","),
+            demographic_endpoint = self
+                .federation
+                .demographic_endpoint
+                .as_ref()
+                .map(EndpointId::as_str),
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             stored_query_registry = self.stored_queries.is_some(),
             credentials = endpoints.join(","),

@@ -23,6 +23,22 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The DEMOGRAPHIC area is never federated, and may be routed to one
+  configured endpoint (#68; §7a.1, §12.6, N32, N31, CP-25). By default every
+  request under `{base}/v1/demographic/` answers `501` and no node is asked.
+  The new `[federation] demographic_endpoint` setting names one registry
+  endpoint; every DEMOGRAPHIC operation then goes to that endpoint alone,
+  through the single-node path definition requests use: the body
+  byte-identical, only what the ITS-REST operation declares, and the node's
+  answer as the node sent it with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id`. A targeting header naming that endpoint is
+  accepted; one naming another endpoint is `400 targeting-conflict`, and
+  several endpoints, `*` or an unknown id are refused as on any routed
+  request. `config check` refuses an id the registry does not hold, and the
+  setting without `registry.document`. `OPTIONS {base}/` declares
+  `its_rest.demographic` as `unsupported: 501`, or as `routed-single-node`
+  naming the endpoint, and `OPTIONS` on a DEMOGRAPHIC path names its ITS-REST
+  methods only when the area is routed.
 - Definition requests are routed to one explicitly chosen node (#75; §7a.1,
   §12.6, §12.7, N43, N31, N33, CP-34). Every request under
   `{base}/v1/definition/`, an ADL 1.4 or ADL 2 template upload, list, read or

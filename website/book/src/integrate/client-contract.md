@@ -13,7 +13,10 @@ request under `{base}/v1/definition/` goes to the one node you name
 deployment that offers the stored-query registry stores queries under
 `{base}/v1/definition/query/` itself instead, and runs them by name at
 `POST {base}/v1/query/{name}` ([stored queries](#stored-queries), §12.7).
-Every other ITS-REST path under `/v1/` answers `501` (N32).
+The DEMOGRAPHIC API under `{base}/v1/demographic/` is never federated: it
+answers `501`, or goes to the one endpoint the deployment configured for it
+([demographics](#demographics), §7a.1, N32). Every other ITS-REST path under
+`/v1/` answers `501` (N32).
 
 ## What a client sends
 
@@ -410,6 +413,28 @@ request under `{base}/v1/definition/query/` itself, with or without a header,
 and templates still go to the one node you name ([stored
 queries](#stored-queries), §7a.2).
 
+## Demographics
+
+The federation keeps demographics outside the CDRs: the gateway resolves the
+patient through its identity binding, and never federates the openEHR
+DEMOGRAPHIC API (§5.1, §7a.1, N32). Read `its_rest.demographic` in
+`OPTIONS {base}/` to see which of two behaviours a gateway runs:
+
+- `unsupported: 501`, the default. Every request under
+  `{base}/v1/demographic/` answers `501` (`not-implemented`), and no node is
+  asked.
+- `routed-single-node`, naming one endpoint. The deployment keeps its
+  demographics at that member, and every DEMOGRAPHIC operation goes there
+  alone, as a definition request goes to the node you name: the body byte for
+  byte, only the headers and query parameters the operation declares, and the
+  node's answer as it sent it, with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id` naming who acted (§7a.3, N31). You need no
+  targeting header. A header naming that same endpoint is accepted; one
+  naming another endpoint is a `400` (`targeting-conflict`) naming both, and
+  several endpoints, `*` or an unknown id are refused as on any routed
+  request (`endpoint-several`, `endpoint-unknown`). Nothing is fanned out or
+  merged.
+
 ## Stored queries
 
 A deployment that sets `[stored_queries]` offers the federated stored-query
@@ -515,7 +540,7 @@ says what the gateway does, not what it was once meant to do:
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
 | `definition` | `fan_out_template_upload: false` and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
-| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and `PUT {base}/v1/definition/query/{name}/{version}` unsupported (`501`) when it is not (§12.6, §7a.2), and `demographic` unsupported (`501`) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and `PUT {base}/v1/definition/query/{name}/{version}` unsupported (`501`) when it is not (§12.6, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the configured endpoint when `federation.demographic_endpoint` is set; never federated (§7a.1, N32) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 
 What is absent is absent on purpose:
@@ -538,5 +563,8 @@ methods of the resource for an EHR resource under a path `ehr_id`, such as
 `GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`. A definition resource answers the
 ITS-REST methods of the resource, such as `GET, POST, OPTIONS` for
 `/v1/definition/template/adl1.4`. Where the stored-query registry is
-offered, a stored query answers `POST, OPTIONS`. The gateway answers it without
-asking a node. A path the gateway does not serve answers `501`.
+offered, a stored query answers `POST, OPTIONS`. Where the DEMOGRAPHIC area is
+routed, a DEMOGRAPHIC resource answers its ITS-REST methods, such as
+`GET, PUT, DELETE, OPTIONS` for `/v1/demographic/person/{uid_based_id}`. The
+gateway answers it without asking a node. A path the gateway does not serve
+answers `501`.

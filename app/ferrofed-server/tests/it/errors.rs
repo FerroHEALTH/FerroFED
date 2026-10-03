@@ -407,6 +407,7 @@ async fn a_node_timing_out_under_best_effort_is_a_200_reporting_it() -> TestResu
     Ok(())
 }
 
+// conformance: CP-25
 #[tokio::test]
 async fn an_unexposed_its_rest_area_is_a_501_not_implemented() -> TestResult {
     let dir = tempfile::tempdir()?;

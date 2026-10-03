@@ -42,6 +42,12 @@
 //! by the targeting headers alone too, to exactly one endpoint,
 //! and answered as that node answered: no node is picked implicitly and no
 //! two nodes' answers are combined (§7a.1, §12.6, §12.7, N43).
+//!
+//! A request under `{base}/v1/demographic/` is never federated (§7a.1, N32).
+//! It answers `501` unless the deployment names one member endpoint for the
+//! area (`federation.demographic_endpoint`); then it goes to that endpoint
+//! alone by the same path, and a targeting header may name that endpoint and
+//! no other (§12.6, §8.4.1).
 
 use std::time::{Duration, Instant};
 
@@ -63,15 +69,21 @@ use openehr_federation::headers;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::error::{self, Code};
+use crate::facade::route::chosen::{Chooser, named};
 use crate::facade::write::{self, Write};
 use crate::facade::{follow_up, owner, security};
 use crate::federation::Federation;
+
+mod chosen;
 
 /// The API group of the EHR area (§7a.1).
 pub(crate) const EHR_GROUP: &str = "ehr";
 
 /// The API group of the definition area (§7a.1).
 const DEFINITION_GROUP: &str = "definition";
+
+/// The API group of the DEMOGRAPHIC area (§7a.1).
+const DEMOGRAPHIC_GROUP: &str = "demographic";
 
 /// The path template every single-node EHR resource sits at or below
 /// (§7a.1).
@@ -107,7 +119,8 @@ pub struct Arrived<'a> {
 /// Answers a request under the ITS-REST prefix that no other route serves.
 ///
 /// A request in the single-node EHR area, the creation of an EHR and a
-/// request in the definition area are each routed to one node; every other
+/// request in the definition area are each routed to one node, and so is a
+/// DEMOGRAPHIC request where the deployment names its endpoint; every other
 /// ITS-REST path answers `501`, because the gateway does not expose that
 /// area (§7a.1, N32), and so does every path when no federation is
 /// configured. The stored-query registry, where offered, answers its own
@@ -116,21 +129,42 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
     let Some(federation) = federation else {
         return error::fixed(Code::NotImplemented, arrived.request_id);
     };
-    // TODO(#68): DEMOGRAPHIC at 501 through the generated router, or routed as declared.
     match routes::lookup(arrived.method, arrived.path) {
         Lookup::Matched(matched) if in_ehr_area(&matched) => {
             route(federation, arrived, &matched).await
         }
         Lookup::Matched(matched) if write::creates_ehr(&matched) => {
-            named(federation, arrived, &matched, EHR_GROUP).await
+            named(federation, arrived, &matched, EHR_GROUP, Chooser::Client).await
         }
         Lookup::Matched(matched) if in_definition_area(&matched) => {
-            named(federation, arrived, &matched, DEFINITION_GROUP).await
+            named(
+                federation,
+                arrived,
+                &matched,
+                DEFINITION_GROUP,
+                Chooser::Client,
+            )
+            .await
+        }
+        Lookup::Matched(matched) if in_demographic_area(&matched) => {
+            match federation.demographic_endpoint() {
+                Some(configured) => {
+                    let chooser = Chooser::Configured(configured);
+                    named(federation, arrived, &matched, DEMOGRAPHIC_GROUP, chooser).await
+                }
+                None => error::fixed(Code::NotImplemented, arrived.request_id),
+            }
         }
         Lookup::Matched(_) | Lookup::MethodNotAllowed { .. } | Lookup::NotFound => {
             error::fixed(Code::NotImplemented, arrived.request_id)
         }
     }
+}
+
+/// Whether `matched` is an operation of the DEMOGRAPHIC area under
+/// `{base}/v1/demographic/` (§7a.1, N32).
+pub(crate) fn in_demographic_area(matched: &RouteMatch) -> bool {
+    matched.group == DEMOGRAPHIC_GROUP
 }
 
 /// Whether `matched` is an operation on an EHR resource addressed by a path
@@ -314,65 +348,6 @@ fn locate<'a>(
         now: started,
     });
     owner::located(snapshot, headers, held, federation.index(), ehr_id)
-}
-
-/// Routes a request to the one endpoint the targeting headers name, and
-/// answers as that node did (§7a.1, §12.4, §12.6, N23, N43); `area` names
-/// what was routed in the debug event.
-///
-/// A new EHR has no owner for a binding or the index to name, and a template
-/// or a stored query lives at the node it was sent to, so only the client
-/// can name the node. The query string and the declared values are checked
-/// first, as on the EHR route ([`refused_carriers`]). Without the headers the
-/// request is then a `400` (`target-required`): nothing is probed and no
-/// node is picked implicitly.
-/// Headers selecting more than one endpoint are a `400` (`endpoint-several`),
-/// so a definition never fans out and an EHR is created at one node only
-/// (§2.3, N23). The body is forwarded byte-identical, and the node's answer,
-/// an error included, comes back as the node sent it with the acting
-/// endpoint named; no two nodes' answers are combined (N22, N31, N33).
-async fn named(
-    federation: &Federation,
-    arrived: Arrived<'_>,
-    matched: &RouteMatch,
-    area: &'static str,
-) -> Response {
-    let started = Instant::now();
-    let request_id = arrived.request_id;
-    let logged = arrived.outbound.to_string();
-    if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
-        return refused;
-    }
-    let snapshot = federation.snapshot();
-    let endpoint = match owner::targeted(snapshot, arrived.headers) {
-        Ok(Some(endpoint)) => endpoint,
-        Ok(None) => return error::fixed(Code::TargetRequired, request_id),
-        Err(untargeted) => {
-            return error::response(untargeted.code(), untargeted.to_string(), request_id);
-        }
-    };
-    if endpoint.status() == EndpointStatus::Suspended {
-        return error::fixed(Code::NoDestination, request_id);
-    }
-    let Some(budget) = Deadlines::from(federation, started) else {
-        tracing::error!(
-            request_id = logged,
-            "the routed request's deadline cannot be represented"
-        );
-        return error::fixed(Code::Internal, request_id);
-    };
-    tracing::debug!(
-        endpoint = %endpoint.id(),
-        area,
-        request_id = logged,
-        "routed to the endpoint the targeting headers name"
-    );
-    let provenance = Provenance::of(snapshot, endpoint);
-    match forward(federation, endpoint, &arrived, &budget, &logged).await {
-        Ok(forwarded) => provenance.stamp(answered(forwarded)),
-        Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
-        Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
-    }
 }
 
 /// The refusal of a versioned write the path `ehr_id` routes to `endpoint`,
@@ -689,7 +664,7 @@ fn header_name(name: &str) -> HeaderName {
 
 #[cfg(test)]
 mod tests {
-    use super::{in_definition_area, in_ehr_area};
+    use super::{in_definition_area, in_demographic_area, in_ehr_area};
     use http::Method;
     use openehr_its::rest::routes::{Lookup, lookup};
 
@@ -740,6 +715,35 @@ mod tests {
             (Method::POST, "/ehr"),
         ] {
             assert!(!area(&method, path), "{method} {path}");
+        }
+    }
+
+    fn demographic(method: &Method, path: &str) -> bool {
+        matches!(lookup(method, path), Lookup::Matched(matched) if in_demographic_area(&matched))
+    }
+
+    #[test]
+    fn every_party_operation_is_the_demographic_area_and_nothing_else_is() {
+        for (method, path) in [
+            (Method::POST, "/demographic/person"),
+            (Method::GET, "/demographic/person/u::s::1"),
+            (Method::PUT, "/demographic/agent/u::s::1"),
+            (Method::DELETE, "/demographic/role/u::s::1"),
+            (
+                Method::GET,
+                "/demographic/versioned_party/7d44/revision_history",
+            ),
+            (Method::POST, "/demographic/contribution"),
+        ] {
+            assert!(demographic(&method, path), "{method} {path}");
+        }
+        for (method, path) in [
+            (Method::GET, "/demographic/party/u::s::1"),
+            (Method::GET, "/ehr/7d44"),
+            (Method::POST, "/definition/template/adl2"),
+            (Method::POST, "/query/aql"),
+        ] {
+            assert!(!demographic(&method, path), "{method} {path}");
         }
     }
 }

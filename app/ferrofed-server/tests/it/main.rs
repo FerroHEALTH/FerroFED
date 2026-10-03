@@ -12,6 +12,7 @@ mod credentials;
 mod declared;
 mod dedup;
 mod definition;
+mod demographic;
 mod directive;
 mod distinct;
 mod e2e;

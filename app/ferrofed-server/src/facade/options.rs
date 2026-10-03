@@ -150,7 +150,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         },
         // TODO(#81): declare auth.jwks_uri once the gateway publishes its JWKS (§13.1).
         auth: None,
-        its_rest: its_rest(registry)?,
+        its_rest: its_rest(registry, federation.demographic_endpoint())?,
         extra: Extra::new(),
     };
     Ok(OptionsRoot {
@@ -215,8 +215,13 @@ fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
 /// The `its_rest` member: how each ITS-REST area is served (§7a.1, N30,
 /// N32), with stored queries held at the gateway when `registry` is `true`
 /// (§12.7) and every other definition request routed to one explicitly
-/// chosen node (§12.6, N43).
-fn its_rest(registry: bool) -> Result<ItsRestAreas, DescribeError> {
+/// chosen node (§12.6, N43). The DEMOGRAPHIC area is never federated: it is
+/// `501`, or routed to the one `demographic` endpoint the deployment
+/// configured (§7a.1, §12.6, N32).
+fn its_rest(
+    registry: bool,
+    demographic: Option<&ferrofed_registry::id::EndpointId>,
+) -> Result<ItsRestAreas, DescribeError> {
     let (query, definition) = if registry {
         (
             "federated: POST {base}/v1/query/aql and POST {base}/v1/query/{name}[/{version}] fan out",
@@ -241,7 +246,13 @@ fn its_rest(registry: bool) -> Result<ItsRestAreas, DescribeError> {
               POST {base}/v1/ehr to the one endpoint the targeting headers name"
             .to_owned(),
         definition: definition.to_owned(),
-        demographic: DemographicSupport::new("unsupported: 501")?,
+        demographic: DemographicSupport::new(match demographic {
+            Some(endpoint) => format!(
+                "routed-single-node: a request under {{base}}/v1/demographic/ goes to the \
+                 configured endpoint {endpoint} alone, never federated"
+            ),
+            None => "unsupported: 501".to_owned(),
+        })?,
         extra: Extra::new(),
     })
 }
@@ -294,7 +305,9 @@ fn member(
 #[must_use]
 pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
     let registry = state.definitions().is_some();
-    let served = state.federation().and_then(|_| served(path, registry));
+    let served = state
+        .federation()
+        .and_then(|federation| served(path, registry, federation.demographic_endpoint().is_some()));
     let Some(methods) = served else {
         return error::fixed(Code::NotImplemented, request_id);
     };
@@ -323,8 +336,10 @@ pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
 /// is routed to the one node the targeting headers name (§12.6), which
 /// leaves out the versioned stored-query `PUT`. Where the stored-query
 /// `registry` is offered, a stored query takes `POST`, and a stored-query
-/// definition `GET` and `PUT` at the gateway (§12.7).
-fn served(path: &str, registry: bool) -> Option<Vec<Method>> {
+/// definition `GET` and `PUT` at the gateway (§12.7). Where a `demographic`
+/// endpoint is configured, a DEMOGRAPHIC resource takes every method
+/// ITS-REST declares for it, each routed to that endpoint (§7a.1, N32).
+fn served(path: &str, registry: bool, demographic: bool) -> Option<Vec<Method>> {
     let query = QUERY_AQL.strip_prefix(crate::ITS_REST_PREFIX.trim_end_matches('/'));
     let mut methods = if query == Some(path) {
         vec![Method::POST]
@@ -345,6 +360,7 @@ fn served(path: &str, registry: bool) -> Option<Vec<Method>> {
                             || write::creates_ehr(&matched)
                             || route::in_definition_area(&matched)
                             || (registry && stored::serves(&matched))
+                            || (demographic && route::in_demographic_area(&matched))
                 )
             })
             .collect()
