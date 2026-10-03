@@ -78,8 +78,8 @@ pub enum Code {
     /// A request that only an explicit target can route names no node: a
     /// write to an EHR resource that no held binding or `ehr_id` index entry
     /// routes to exactly one (§12.5.1, N41), the creation of an EHR (§12.4,
-    /// N23), or a definition request (§12.6, N43), which only the targeting
-    /// headers route.
+    /// N23), a definition request (§12.6, N43), or a DEMOGRAPHIC request
+    /// (§7a.1, N32), which only the targeting headers route.
     TargetRequired,
     /// The targeting headers of a request routed to a single node select
     /// more than one endpoint (§7a.1, §12.4).
@@ -98,7 +98,7 @@ pub enum Code {
     /// Two targeting mechanisms of one request, the AQL directive and a
     /// header or the two headers, select different node sets (§8.4.1, N35),
     /// or the headers of a DEMOGRAPHIC request name an endpoint other than
-    /// the one the deployment configured for that area (§7a.1, N32).
+    /// the one the deployment declared for that area (§7a.1, N32).
     /// The body names both sets.
     TargetingConflict,
     /// The `ehr_id` in a request path is not an openEHR `HIER_OBJECT_ID`
@@ -327,7 +327,7 @@ impl Code {
                 "the organisation directive or header names an organisation the registry does not know (§8.4.1)"
             }
             Self::TargetRequired => {
-                "a write that no binding or index routes to one node, the creation of an EHR, and a definition request name their node in the openEHR-federation-endpoint header (§12.4, §12.5.1, §12.6, N23, N41, N43)"
+                "a write that no binding or index routes to one node, the creation of an EHR, a definition request and a DEMOGRAPHIC request name their node in the openEHR-federation-endpoint header (§7a.1, §12.4, §12.5.1, §12.6, N23, N41, N43)"
             }
             Self::EndpointSeveral => {
                 "a request routed to one node selects exactly one endpoint through its targeting headers (§7a.1)"

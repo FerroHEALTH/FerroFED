@@ -14,8 +14,8 @@ deployment that offers the stored-query registry stores queries under
 `{base}/v1/definition/query/` itself instead, and runs them by name at
 `POST {base}/v1/query/{name}` ([stored queries](#stored-queries), §12.7).
 The DEMOGRAPHIC API under `{base}/v1/demographic/` is never federated: it
-answers `501`, or goes to the one endpoint the deployment configured for it
-([demographics](#demographics), §7a.1, N32). Every other ITS-REST path under
+answers `501`, or goes to the one endpoint the deployment declared for it when
+you name that endpoint ([demographics](#demographics), §7a.1, N32). Every other ITS-REST path under
 `/v1/` answers `501` (N32).
 
 ## What a client sends
@@ -424,13 +424,16 @@ DEMOGRAPHIC API (§5.1, §7a.1, N32). Read `its_rest.demographic` in
   `{base}/v1/demographic/` answers `501` (`not-implemented`), and no node is
   asked.
 - `routed-single-node`, naming one endpoint. The deployment keeps its
-  demographics at that member, and every DEMOGRAPHIC operation goes there
-  alone, as a definition request goes to the node you name: the body byte for
-  byte, only the headers and query parameters the operation declares, and the
-  node's answer as it sent it, with `openEHR-federation-endpoint` and
-  `openEHR-federation-system-id` naming who acted (§7a.3, N31). You need no
-  targeting header. A header naming that same endpoint is accepted; one
-  naming another endpoint is a `400` (`targeting-conflict`) naming both, and
+  demographics at that member, and you name that endpoint in
+  `openEHR-federation-endpoint` on every DEMOGRAPHIC request, as you name the
+  node of a definition request: the gateway never picks the node for you
+  (§7a.1, §12.4, §12.6, N23). The request then goes there alone: the body
+  byte for byte, only the headers and query parameters the operation
+  declares, and the node's answer as it sent it, with
+  `openEHR-federation-endpoint` and `openEHR-federation-system-id` naming who
+  acted (§7a.3, N31). Without the header the request is a `400`
+  (`target-required`) and no node is asked; a header naming another endpoint
+  is a `400` (`targeting-conflict`) naming both, and
   several endpoints, `*` or an unknown id are refused as on any routed
   request (`endpoint-several`, `endpoint-unknown`). Nothing is fanned out or
   merged.
@@ -540,7 +543,7 @@ says what the gateway does, not what it was once meant to do:
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
 | `definition` | `fan_out_template_upload: false` and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
-| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and `PUT {base}/v1/definition/query/{name}/{version}` unsupported (`501`) when it is not (§12.6, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the configured endpoint when `federation.demographic_endpoint` is set; never federated (§7a.1, N32) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and `PUT {base}/v1/definition/query/{name}/{version}` unsupported (`501`) when it is not (§12.6, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 
 What is absent is absent on purpose:

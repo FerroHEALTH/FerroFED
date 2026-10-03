@@ -5,8 +5,8 @@
 //! definition request and a DEMOGRAPHIC request each go to one endpoint that
 //! is named, never found (§7a.1, §12.4, §12.6, N23, N32, N43).
 //!
-//! The client names it in the targeting headers, or, for the DEMOGRAPHIC
-//! area, the deployment configured it and a header may only confirm it.
+//! The client names it in the targeting headers, always; for the DEMOGRAPHIC
+//! area the deployment declares the one endpoint the client may name.
 //! Nothing is probed and no node is picked implicitly.
 
 use std::time::Instant;
@@ -22,14 +22,15 @@ use crate::error::{self, Code};
 use crate::facade::owner;
 use crate::federation::Federation;
 
-/// Who names the one node a request without an owner is routed to.
+/// Which endpoints the targeting headers of a request without an owner may
+/// name.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum Chooser<'a> {
-    /// The client, in the targeting headers (§8.4, §12.4, §12.6).
+    /// Any one endpoint of the registry (§8.4, §12.4, §12.6).
     Client,
-    /// The deployment, which configured this endpoint for the area; the
-    /// targeting headers may name it and no other (§7a.1, N32).
-    Configured(&'a EndpointId),
+    /// Only this endpoint, the one the deployment declared for the area
+    /// (§7a.1, N32).
+    Declared(&'a EndpointId),
 }
 
 /// Routes a request to the one endpoint `chooser` names, and answers as that
@@ -38,8 +39,8 @@ pub(super) enum Chooser<'a> {
 ///
 /// A new EHR has no owner for a binding or the index to name, and a template
 /// or a stored query lives at the node it was sent to, so only the client
-/// can name the node; a DEMOGRAPHIC request goes to the endpoint the
-/// deployment configured. The query string and the declared values are
+/// can name the node; a DEMOGRAPHIC request names the endpoint the
+/// deployment declared for it. The query string and the declared values are
 /// checked first, as on the EHR route ([`refused_carriers`]); then the
 /// endpoint is [`chosen`]: nothing is probed and no node is picked
 /// implicitly. The body is forwarded byte-identical, and the node's answer,
@@ -59,7 +60,7 @@ pub(super) async fn named(
         return refused;
     }
     let snapshot = federation.snapshot();
-    let endpoint = match chosen(snapshot, arrived.headers, chooser, &logged) {
+    let endpoint = match chosen(snapshot, arrived.headers, chooser) {
         Ok(endpoint) => endpoint,
         Err((code, message)) => return error::response(code, message, request_id),
     };
@@ -87,50 +88,37 @@ pub(super) async fn named(
     }
 }
 
-/// The one endpoint of `snapshot` that `chooser` and the targeting headers
-/// of `headers` select together, or the code and the message refusing the
+/// The one endpoint of `snapshot` the targeting headers of `headers` name,
+/// where `chooser` allows it, or the code and the message refusing the
 /// request (§8.4.1, §12.6).
 ///
-/// For the client, the headers must name exactly one endpoint the registry
-/// holds: none is `target-required`, several `endpoint-several`, and an
-/// unknown id or `*` `endpoint-unknown`. For a configured endpoint, the
-/// headers may name that endpoint or nothing; a header that names another
-/// is `targeting-conflict`, naming both, and the header refusals above stand.
+/// The headers must name exactly one endpoint the registry holds: none is
+/// `target-required`, several `endpoint-several`, and an unknown id or `*`
+/// `endpoint-unknown`. Where the deployment declared the area's endpoint, a
+/// header naming another is `targeting-conflict`, naming both.
 fn chosen<'a>(
     snapshot: &'a RegistrySnapshot,
     headers: &HeaderMap,
     chooser: Chooser<'_>,
-    logged: &str,
 ) -> Result<&'a Endpoint, (Code, String)> {
     let targeted = owner::targeted(snapshot, headers)
         .map_err(|untargeted| (untargeted.code(), untargeted.to_string()))?;
-    let configured = match (chooser, targeted) {
-        (Chooser::Client, Some(endpoint)) => return Ok(endpoint),
-        (Chooser::Client, None) => {
-            let code = Code::TargetRequired;
-            return Err((code, code.message().to_owned()));
-        }
-        (Chooser::Configured(configured), Some(endpoint)) if endpoint.id() == configured => {
-            return Ok(endpoint);
-        }
-        // NOTE: §7a.1, N32: the deployment's configured endpoint is the explicit
-        // choice, so a header may confirm it and never redirect the request (§8.4.1).
-        (Chooser::Configured(configured), Some(endpoint)) => {
-            let message = format!(
-                "the targeting headers select the endpoint {}, and this area is routed \
-                 to the configured endpoint {configured} alone (§7a.1, §8.4.1, N32)",
-                endpoint.id()
-            );
-            return Err((Code::TargetingConflict, message));
-        }
-        (Chooser::Configured(configured), None) => configured,
+    // NOTE: §7a.1, §12.6, §12.4, N23: the request names its node, so a declared
+    // endpoint only bounds what it may name and is never applied as a default.
+    let Some(endpoint) = targeted else {
+        let code = Code::TargetRequired;
+        return Err((code, code.message().to_owned()));
     };
-    snapshot.endpoint(configured).ok_or_else(|| {
-        tracing::error!(
-            endpoint = %configured,
-            request_id = logged,
-            "the configured endpoint left the snapshot"
-        );
-        (Code::Internal, Code::Internal.message().to_owned())
-    })
+    match chooser {
+        Chooser::Client => Ok(endpoint),
+        Chooser::Declared(declared) if endpoint.id() == declared => Ok(endpoint),
+        Chooser::Declared(declared) => Err((
+            Code::TargetingConflict,
+            format!(
+                "the targeting headers select the endpoint {}, and this area is served \
+                 by the declared endpoint {declared} alone (§7a.1, §8.4.1, N32)",
+                endpoint.id()
+            ),
+        )),
+    }
 }

@@ -14,7 +14,8 @@ use openehr_base::v1_3::base_types::identification::lexical::is_uuid;
 use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVersionId;
 use openehr_its::rest::routes::{Param, ParamKind, ParamLocation, RouteMatch};
 
-use super::{Carrier, Expected, MalformedValue, fits, is_free_text};
+use super::kind::{fits, is_free_text};
+use super::{Carrier, Expected, MalformedValue};
 
 /// The path parameter the routing reads as the EHR's `HIER_OBJECT_ID`.
 const EHR_ID: &str = "ehr_id";
