@@ -503,6 +503,10 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- Every link in `llms.txt` is now an absolute URL (#392). The file is
+  served at the site root, where its repository-relative links resolved to
+  nothing.
+
 - A fan-out template upload, a stored-query distribution or repair, and a
   stored-query drift check fail with a `500` when the task for one member
   panics (#380; no specification governs the metrics or health probes). Such
