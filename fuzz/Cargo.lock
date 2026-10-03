@@ -629,6 +629,7 @@ dependencies = [
  "openehr-query",
  "openehr-rm",
  "redb",
+ "reqwest",
  "secrecy",
  "serde",
  "serde_json",

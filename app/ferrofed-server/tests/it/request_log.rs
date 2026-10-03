@@ -427,3 +427,80 @@ fn a_body_over_the_ceiling_has_its_line_with_four_hundred_and_thirteen()
     );
     Ok(())
 }
+
+/// A request line: every key one carries, and no other.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[expect(
+    dead_code,
+    reason = "the fields are read by serde to refuse any other key"
+)]
+struct StrictRequestLine {
+    timestamp: String,
+    level: String,
+    target: String,
+    message: String,
+    method: String,
+    route: String,
+    status: u16,
+    latency_ms: f64,
+    query: String,
+    request_id: String,
+    client_named: bool,
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_health_routes_log_the_same_line_as_every_route_and_no_endpoint()
+-> Result<(), Box<dyn StdError>> {
+    use crate::facade::{EHR_A, EHR_B, body, crossref, gateway, patient_query, post, registry};
+    use ferrofed_testkit::unreachable;
+
+    let dir = tempfile::tempdir()?;
+    let app = gateway(
+        dir.path(),
+        &registry(
+            unreachable::BASE,
+            &format!("{}/node-b", unreachable::BASE),
+            "",
+        ),
+        "profile = \"development\"",
+        &crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]),
+    )?;
+    let text = logged(
+        &app,
+        "info",
+        vec![
+            Request::get("/health/readiness").body(Body::empty())?,
+            Request::get("/health/dependencies").body(Body::empty())?,
+            post(body(&patient_query())?)?,
+            Request::get("/health/dependencies").body(Body::empty())?,
+        ],
+    )?;
+    let mut routes = Vec::new();
+    for line in text.lines() {
+        if request_lines(line)?.is_empty() {
+            continue;
+        }
+        let strict: StrictRequestLine = serde_json::from_str(line)?;
+        assert!(
+            !line.contains("node-a-pub") && !line.contains("node-b-pub"),
+            "a request line names no endpoint: {line}"
+        );
+        routes.push(strict.route);
+    }
+    assert_eq!(
+        vec![
+            "/health/readiness",
+            "/health/dependencies",
+            "/v1/query/aql",
+            "/health/dependencies"
+        ],
+        routes,
+        "{text}"
+    );
+    Ok(())
+}

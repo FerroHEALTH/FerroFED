@@ -24,10 +24,81 @@ digest of its image index. The image:
 - starts `ferrofed serve` as PID 1, so `SIGTERM` reaches the server and it
   drains before it exits.
 
-The image declares no `HEALTHCHECK`. The base has no HTTP client and the
-binary has no probe subcommand, so probe it from outside: `GET /health`
-answers `200` while the process is up, and `GET /health/readiness` answers
-`200` when every registered indicator is up.
+The base has no shell and no HTTP client, so the image's `HEALTHCHECK` runs
+the binary itself:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["/usr/local/bin/ferrofed", "healthcheck"]
+```
+
+`ferrofed healthcheck` reads the configuration the way `serve` does, asks
+`GET /health/readiness` on the configured listen port over loopback, and
+prints one line. It exits `0` only when readiness answers `200`, and `1` for
+any other status, a refused connection, no answer within three seconds, or a
+configuration that does not load. `docker inspect --format
+'{{.State.Health.Status}}' <container>` shows the outcome.
+
+## The health probes
+
+| Route | Answers | Use it as |
+|---|---|---|
+| `GET /health` | `200` while the process serves; it checks nothing else | liveness |
+| `GET /health/readiness` | `200` while the gateway serves and its own subsystems are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives | readiness, startup, the image `HEALTHCHECK` |
+| `GET /health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint and of the resolver | monitoring, never a probe |
+
+Readiness reports the gateway's own subsystems by name: the configuration,
+the registry and the outbound clients when a registry is configured, and the
+stored-query store when one is. Its body names the phase of the process,
+`booting`, `serving` or `draining`. On `SIGTERM` readiness turns `503` before
+the drain starts, so a load balancer stops sending requests while the
+requests in flight finish.
+
+No member node and no identity source gates readiness. A node outage is
+reported per query in `meta.federation` (§11), and a gateway that went unready
+with one node would turn one CDR outage into a total outage. Their state is on
+`GET /health/dependencies` instead:
+
+```json
+{
+  "endpoints": { "node-a-query": "up", "node-b-query": "down" },
+  "resolver": "up"
+}
+```
+
+Each state is the one the last request the gateway made for a client
+observed: `up` (it answered), `failing` (it answered with a failure), `down`
+(unreachable, or no answer in time), or `unknown` (no request has reached it
+since the registry was loaded or reloaded). The gateway sends no request of its
+own to find out. `resolver` is absent when no resolver is configured. The body
+names endpoint ids and states only, never a URL, a credential or a body.
+
+## Kubernetes
+
+`deploy/kubernetes/` holds an example: a ConfigMap with the configuration and
+the registry document and no secret, a Deployment, a Service and a
+PodDisruptionBudget. CI validates every manifest with `kubeconform` in strict
+mode. The Deployment:
+
+- probes startup and readiness on `GET /health/readiness` and liveness on
+  `GET /health`;
+- runs as the numeric user `65532` with `runAsNonRoot`, a read-only root
+  filesystem, `allowPrivilegeEscalation: false`, every capability dropped and
+  the `RuntimeDefault` seccomp profile;
+- sets resource requests and limits, a starting point to size from your own
+  load;
+- gives the pod a `terminationGracePeriodSeconds` of 30, longer than the
+  10-second `server.shutdown_timeout_ms` of the example configuration, so the
+  kubelet never kills a drain in progress. Keep the grace period longer than
+  the drain if you change either.
+
+The PodDisruptionBudget keeps one of the two replicas serving through a
+voluntary disruption. Credentials belong in a Secret mounted beside the
+ConfigMap and named by a `_file` key ([Configuration](configuration.md)).
+
+```sh
+kubectl apply -f deploy/kubernetes/
+```
 
 The image lane publishes it as `ghcr.io/ferrohealth/ferrofed`, tagged with the
 release version, its `major.minor` and `latest`, and attests the index and
@@ -73,7 +144,9 @@ docker compose up --wait
 curl http://127.0.0.1:8080/health
 ```
 
-The gateway service runs `ghcr.io/ferrohealth/ferrofed` at the current release,
+`--wait` returns once every service reports healthy; the gateway's
+healthcheck is the image's own `ferrofed healthcheck`, which an image of a
+release before v0.0.7 does not have. The gateway service runs `ghcr.io/ferrohealth/ferrofed` at the current release,
 the tag default `compose.yaml` holds equal to the product version, and
 `FERROFED_VERSION` selects another published version. To run an image you
 built from staged binaries instead, add `--build`.

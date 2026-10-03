@@ -30,6 +30,8 @@ use openehr_federation::error::WireError;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use secrecy::SecretString;
 
+use crate::health::dependencies::Observed;
+
 /// The plan of one query, and where each façade column of a node row comes
 /// from.
 #[derive(Debug)]
@@ -46,6 +48,9 @@ pub struct Targets {
     /// The `{node, ehr_id}` set the resolution produced, for the session's
     /// resolution bindings (§12.5.1 step 2).
     pub resolved: Vec<(NodeId, EhrId)>,
+    /// What the resolver showed of itself, when it was asked: up when it
+    /// answered for every member, down when it could not answer for one.
+    pub resolver: Option<Observed>,
 }
 
 /// A plan that cannot be built.
@@ -200,6 +205,7 @@ pub async fn patient(
         sources,
         resolution_failed,
         resolved: bound,
+        resolver: Observed::of_resolutions(&resolutions),
     })
 }
 
@@ -233,6 +239,7 @@ pub fn unscoped(
         sources: query.node_query().columns().to_vec(),
         resolution_failed: false,
         resolved: Vec::new(),
+        resolver: None,
     })
 }
 

@@ -8,8 +8,9 @@
 //! deployment pipeline tests a configuration without binding a socket.
 //! `admission check` exercises one configured member against the
 //! identifier-integrity conditions of §12b.2 and writes the report to
-//! standard output (§12b.1, N42a, CP-33a). No specification governs the
-//! command line: our own design.
+//! standard output (§12b.1, N42a, CP-33a). `healthcheck` asks the gateway on
+//! this host for its readiness, for a container runtime with no HTTP client
+//! of its own. No specification governs the command line: our own design.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -49,6 +50,9 @@ pub enum Command {
         #[command(subcommand)]
         command: AdmissionCommand,
     },
+    /// Asks the gateway running on this host whether it is ready, and exits
+    /// `0` only when readiness answers `200`.
+    Healthcheck,
 }
 
 /// The `config` jobs.
@@ -89,8 +93,9 @@ mod tests {
 
     #[test]
     fn every_documented_subcommand_parses() {
-        let cases: [(&[&str], Command); 4] = [
+        let cases: [(&[&str], Command); 5] = [
             (&["ferrofed", "serve"], Command::Serve),
+            (&["ferrofed", "healthcheck"], Command::Healthcheck),
             (
                 &["ferrofed", "config", "check"],
                 Command::Config {

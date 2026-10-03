@@ -523,10 +523,10 @@ pub(crate) async fn send(
         );
         return Err(Failure::Internal);
     };
-    client
-        .forward(request, options)
-        .await
-        .map_err(Failure::Forward)
+    let forwarded = client.forward(request, options).await;
+    let dependencies = federation.dependencies();
+    dependencies.forwarded(endpoint.id(), &forwarded);
+    forwarded.map_err(Failure::Forward)
 }
 
 /// Runs the ask-all probe and returns the one owner it found with its
@@ -554,6 +554,7 @@ pub(crate) async fn ask_all<'a>(
         if let Answer::Failed(ForwardError::Withheld { part, .. }) = answer {
             security::forward_withheld(endpoint, *part, logged);
         }
+        federation.dependencies().probed(endpoint, answer);
     }
     let (endpoint, answer) = match owner::settled(answers) {
         owner::Settled::Owner { endpoint, answer } => (endpoint, answer),

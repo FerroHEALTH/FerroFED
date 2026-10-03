@@ -46,6 +46,7 @@ impl HealthIndicator for Stub {
 #[serde(deny_unknown_fields)]
 struct Report {
     state: String,
+    phase: String,
     indicators: BTreeMap<String, Indicator>,
 }
 
@@ -64,6 +65,7 @@ async fn readiness(stubs: Vec<Stub>) -> Result<(StatusCode, Report), Box<dyn Std
         indicators.push(Arc::new(stub));
     }
     let state = Arc::new(AppState::with_health(Registry::new(indicators)));
+    state.lifecycle().booted();
     let app = ferrofed_server::router(state, &support::settings());
     let (status, body) = call(app, Request::get("/health/readiness").body(Body::empty())?).await?;
     Ok((status, serde_json::from_str(&body)?))
@@ -88,6 +90,7 @@ async fn with_no_indicator_registered_the_gateway_is_ready() -> Result<(), Box<d
     assert_eq!(StatusCode::OK, status);
     assert_eq!("up", report.state);
     assert!(report.indicators.is_empty());
+    assert_eq!("serving", report.phase);
     Ok(())
 }
 

@@ -77,7 +77,7 @@ use axum::{Extension, Json};
 use ferrofed_engine::fanout::{Budget, Completion, FanOutError, fan_out_within};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
-use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
+use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use openehr_federation::aql::directive::FacadeQuery;
@@ -512,9 +512,11 @@ fn directed(
 }
 
 /// Holds the `{node, ehr_id}` set a resolution produced as the `session`'s
-/// resolution bindings (§12.5.1 step 2), and teaches the `ehr_id` index
-/// where each `ehr_id` is held (step 3).
-fn remember(federation: &Federation, session: Option<&SessionKey>, resolved: &[(NodeId, EhrId)]) {
+/// resolution bindings (§12.5.1 step 2), teaches the `ehr_id` index where
+/// each `ehr_id` is held (step 3), and records the state the resolution
+/// showed of the resolver.
+fn remember(federation: &Federation, session: Option<&SessionKey>, targets: &plan::Targets) {
+    let resolved = &targets.resolved;
     if let Some(session) = session {
         federation.bindings().record(
             session,
@@ -524,6 +526,9 @@ fn remember(federation: &Federation, session: Option<&SessionKey>, resolved: &[(
     }
     for (node, ehr_id) in resolved {
         owner::learn(federation.index(), ehr_id, node);
+    }
+    if let Some(observed) = targets.resolver {
+        federation.dependencies().resolver(observed);
     }
 }
 
@@ -587,7 +592,7 @@ async fn federate<'f>(
     if targets.plan.has_no_destination() {
         return Err(Failure::NoDestination);
     }
-    remember(federation, session, &targets.resolved);
+    remember(federation, session, &targets);
     let attributes = analysis.attributes();
     let mut plan = targets
         .plan
@@ -611,6 +616,7 @@ async fn federate<'f>(
         security::fan_out(&error, request_id);
         Failure::FanOut(error)
     })?;
+    federation.dependencies().fan_out(answer.federation());
     follow_up::observe(federation, answer.seen(), request_id);
     let mut status = answer.status();
     // NOTE: no specification governs this (§11.3 covers only an answered lookup):

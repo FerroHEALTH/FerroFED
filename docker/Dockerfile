@@ -38,9 +38,12 @@ EXPOSE 8080/tcp
 # it does not read, so `runAsNonRoot: true` refuses a named USER.
 USER 65532:65532
 
-# No HEALTHCHECK: the base has no shell and no HTTP client, and the binary has
-# no probe subcommand, so the probe is external, a GET /health (and
-# /health/readiness) from the orchestrator or the compose file.
+# The base has no shell and no HTTP client, so the healthcheck is the binary's
+# own subcommand: it asks GET /health/readiness on the configured listen port
+# over loopback and exits 0 on 200, 1 otherwise. Readiness gates only on the
+# gateway's own subsystems, never on a member node.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["/usr/local/bin/ferrofed", "healthcheck"]
 
 # Exec form: the binary is PID 1 and receives SIGTERM itself, which it drains
 # on.

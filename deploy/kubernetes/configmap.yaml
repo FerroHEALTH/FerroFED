@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# An example configuration for the gateway: the configuration file and the
+# registry document, mounted read-only at /etc/ferrofed by deployment.yaml.
+# It holds no secret. An endpoint that needs credentials gets a
+# [credentials."<endpoint id>"] section whose bearer_token_file or
+# password_file names a file of a Secret mounted beside this one; the value
+# itself never goes in a ConfigMap.
+#
+# The member URLs are placeholders under example.org: replace them, the
+# organisations, the nodes and their system_ids with your own members.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ferrofed-config
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+data:
+  ferrofed.toml: |
+    [server]
+    # The address the image binds; the probes and the Service use the port.
+    listen = "0.0.0.0:8080"
+    # The drain after SIGTERM. The pod's terminationGracePeriodSeconds must
+    # stay longer than this, so the kubelet never kills a drain in progress.
+    shutdown_timeout_ms = 10000
+
+    [telemetry]
+    format = "json"
+    filter = "info,hyper=warn,tower=warn,h2=warn"
+
+    [registry]
+    document = "/etc/ferrofed/registry.toml"
+
+    [federation]
+    id = "example-federation"
+    node_selection = "ask-all"
+    per_node_timeout_ms = 10000
+    overall_timeout_ms = 25000
+
+  registry.toml: |
+    [[organisation]]
+    id = "org-a"
+    name = "Example organisation A"
+
+    [[organisation]]
+    id = "org-b"
+    name = "Example organisation B"
+
+    [[node]]
+    id = "node-a"
+    organisation = "org-a"
+    system_id = "cdr-a.example.org"
+
+    [[node]]
+    id = "node-b"
+    organisation = "org-b"
+    system_id = "cdr-b.example.org"
+
+    [[endpoint]]
+    id = "node-a-query"
+    node = "node-a"
+    url = "https://cdr-a.example.org/openehr"
+    connection_type = "openehr-rest-query"
+    managing_organisation = "org-a"
+
+    [[endpoint]]
+    id = "node-b-query"
+    node = "node-b"
+    url = "https://cdr-b.example.org/openehr"
+    connection_type = "openehr-rest-query"
+    managing_organisation = "org-b"

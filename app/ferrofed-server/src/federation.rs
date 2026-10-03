@@ -32,7 +32,7 @@ use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::incident::Incident;
-use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
@@ -42,6 +42,7 @@ use openehr_its::rest::client::{Credentials, ReqwestTransport};
 use crate::config::settings::{PixmSettings, Scheme, Settings};
 use crate::config::{NodeSelection, RegistryFormat};
 use crate::facade::options::{self, DescribeError};
+use crate::health::dependencies::Dependencies;
 
 /// The federation a server serves the federated query over.
 pub struct Federation {
@@ -54,6 +55,7 @@ pub struct Federation {
     budget: Budget,
     best_effort: bool,
     demographic: Option<EndpointId>,
+    dependencies: Dependencies,
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -307,6 +309,8 @@ impl Federation {
         if let Some(namespace) = &settings.federation.default_namespace {
             context = context.with_default_namespace(namespace.clone());
         }
+        let dependencies =
+            Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
         let federation = Self {
             id,
             snapshot: Arc::new(snapshot),
@@ -322,6 +326,7 @@ impl Federation {
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
             demographic: settings.federation.demographic_endpoint.clone(),
+            dependencies,
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -340,6 +345,8 @@ impl Federation {
         context: Context,
         budget: Budget,
     ) -> Self {
+        let dependencies =
+            Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
         Self {
             id,
             snapshot: Arc::new(snapshot),
@@ -355,6 +362,7 @@ impl Federation {
             budget,
             best_effort: crate::config::Federation::default().best_effort,
             demographic: None,
+            dependencies,
         }
     }
 
@@ -408,6 +416,16 @@ impl Federation {
             "an identity change dropped resolution bindings"
         );
         dropped
+    }
+
+    /// The last state the gateway observed of each member endpoint and of
+    /// the resolver, one slot each.
+    ///
+    /// Every slot is unknown when the federation is built, on a registry
+    /// reload too, because a reload can move an endpoint or swap the resolver.
+    #[must_use]
+    pub fn dependencies(&self) -> &Dependencies {
+        &self.dependencies
     }
 
     /// The federation's own identifier (§7a.2, N30).

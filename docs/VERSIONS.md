@@ -249,8 +249,11 @@ the manifest wins. A crate joins a member with `dep.workspace = true`.
 The tier-1 lanes of `.github/workflows/ci.yml` run the analyzers below, each
 pinned to an exact version so a CI result matches the local one. `zizmor` and
 `shellcheck` are fetched by `taiki-e/install-action`, which verifies the
-upstream release checksum; `actionlint` and `hadolint` run from their official
-container images, pinned by tag and by digest.
+upstream release checksum; `actionlint`, `hadolint` and `kubeconform` run from
+their official container images, pinned by tag and by digest. `kubeconform`
+validates the example manifests under `deploy/kubernetes/` against the schemas
+of one Kubernetes release, read from `yannh/kubernetes-json-schema` at a pinned
+commit, so neither a new schema nor a new release moves the result.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -258,6 +261,9 @@ container images, pinned by tag and by digest.
 | `actionlint` | 1.7.12 | `.github/workflows/ci.yml` |
 | `shellcheck` | 0.11.0 | `.github/workflows/ci.yml` |
 | `hadolint` | 2.15.1 | `.github/workflows/ci.yml` |
+| `kubeconform` | 0.8.0 | `.github/workflows/ci.yml` |
+| `kubeconform schema version` | 1.34.0 | `.github/workflows/ci.yml` |
+| `kubernetes-json-schema` | `8df8a883b68a24a104b4a9e43c1288090ae60b3b` | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).
