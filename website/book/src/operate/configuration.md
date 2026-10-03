@@ -46,6 +46,60 @@ user or password holding a control character such as a newline (RFC 7617
 §2), or a basic user holding a colon. That refusal names the key the value came from, and never
 the value. The gateway never falls back to a default for a value you set.
 
+### The startup banner
+
+When the log renders for a person, `serve` prints a banner before the first
+log line: the wordmark, the version, the releases the gateway serves, and the
+deployment facts to check first. Run on a terminal, the development
+configuration of [the quickstart](container.md#the-quickstart) prints this:
+
+```text
+ _____                   _____ _____ ____
+|  ___|__ _ __ _ __ ___ |  ___| ____|  _ \
+| |_ / _ \ '__| '__/ _ \| |_  |  _| | | | |
+|  _|  __/ |  | | | (_) |  _| | |___| |_| |
+|_|  \___|_|  |_|  \___/|_|   |_____|____/
+
+  openEHR federation gateway · v0.0.6
+  Maintained by Ruben Talstra · https://github.com/FerroHEALTH/FerroFED
+
+  Federation Tier  0.9.0
+  ITS-REST         1.1.0
+  AQL              1.1.0
+  openehr-*        0.0.80
+
+  Base path        /
+  Listen           0.0.0.0:8080
+  Registry         4 members, 4 endpoints
+  Stored queries   off
+
+  DEVELOPMENT: this deployment runs the development profile, which may resolve
+  patients from a static development table. It must not hold or reach real
+  patient data.
+```
+
+The `Registry` line counts the members and endpoints of the registry
+document. The gateway reads the document once, before the banner, and serves
+that same read, so the counts are those of the registry it serves. The line
+reads `none` when no document is set, and says the document does not load
+when it cannot be read, in which case the boot stops on the next lines with
+the reason. The development notice prints only under
+`profile = "development"`, in red on a terminal with colour and in the same
+words without it.
+
+Colour follows the terminal, and an explicit `format = "pretty"` keeps it
+into a pipe. A `NO_COLOR` environment variable that is set and not empty
+switches colour off in both the banner and the log, whatever the format
+(<https://no-color.org>).
+
+The banner prints only when the log renders as `pretty`: with
+`telemetry.format = "pretty"`, or with `auto` when stdout is a terminal. With
+`json`, or with `auto` and stdout piped to a collector, the first line on
+stdout is a JSON log line. `config check`, `healthcheck` and
+`admission check` print no banner. The banner shows counts, an address, a
+path and switches, and never a credential, a URL, a header value or anything
+from a request.
+
 ## The file
 
 ```toml

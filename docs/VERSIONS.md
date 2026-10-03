@@ -91,10 +91,10 @@ reads scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.80 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-its` | 0.0.80 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-base` | 0.0.80 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-rm` | 0.0.80 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-query` | 0.0.80 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.80 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.80 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.80 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,

@@ -8,7 +8,8 @@
 //! environment into one [`config::settings::Settings`], [`telemetry`] installs the
 //! subscriber, [`router`] builds the HTTP surface over [`state::AppState`],
 //! and [`serve`] runs it on a bound listener until the process is asked to
-//! stop, while [`reload`] replaces the registry on `SIGHUP`. `main.rs` only
+//! stop, while [`reload`] replaces the registry on `SIGHUP`. On a terminal,
+//! `serve` prints the [`banner`] before the subscriber starts. `main.rs` only
 //! hands in the arguments and returns the exit code.
 //!
 //! Every route sits under the configured base path ([`base_path`]; §4.1,
@@ -30,6 +31,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod admission;
+pub mod banner;
 pub mod base_path;
 pub mod body;
 pub mod cli;
@@ -92,6 +94,13 @@ pub const EXIT_CONFIG: u8 = 78;
 /// The path prefix the ITS-REST surface lives under (`{base}/v1/…`).
 pub const ITS_REST_PREFIX: &str = "/v1/";
 
+/// The release of the `openehr-*` crate family this server is built on.
+///
+/// The family moves in lockstep, so one version names every member the
+/// workspace pins (`openehr-query`, `openehr-its`, `openehr-base`,
+/// `openehr-rm`).
+pub const OPENEHR_FAMILY: &str = "0.0.80";
+
 /// Runs the binary with `args` and returns the process exit code.
 ///
 /// `args` is the whole argument vector, the program name included, so the
@@ -136,31 +145,54 @@ where
         Command::Admission {
             command: AdmissionCommand::Check { endpoint, count },
         } => admission_command(&settings, &endpoint, count),
-        Command::Serve => {
-            let stdout_is_terminal = std::io::stdout().is_terminal();
-            if let Err(error) = telemetry::init(
-                settings.telemetry.format,
-                &settings.telemetry.filter,
-                stdout_is_terminal,
-            ) {
-                eprintln!("ferrofed: cannot start: {}", chain(&error));
-                return ExitCode::from(EXIT_CONFIG);
-            }
-            panic::install_hook();
-            let state = match AppState::build(&settings) {
-                Ok(state) => Arc::new(state),
-                Err(error) => {
-                    tracing::error!(error = chain(&error), "cannot start");
-                    return ExitCode::from(EXIT_CONFIG);
-                }
-            };
-            match serve_command(settings, state, cli.config) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(error) => {
-                    tracing::error!(error = format!("{error:#}"), "cannot serve");
-                    ExitCode::FAILURE
-                }
-            }
+        Command::Serve => serve_job(settings, cli.config),
+    }
+}
+
+/// Runs `serve`: the banner on a terminal, the subscriber, the state, and
+/// the server, until the process is asked to stop.
+///
+/// The registry document is read once, before the banner, and the state is
+/// built over that read after the subscriber starts, so the banner describes
+/// the registry the gateway serves and the build still logs.
+#[expect(
+    clippy::print_stderr,
+    reason = "a refused log filter is reported before any log subscriber exists"
+)]
+fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
+    let stdout_is_terminal = std::io::stdout().is_terminal();
+    let no_color = std::env::var_os("NO_COLOR");
+    let format = settings.telemetry.format;
+    let document = federation::read_registry(&settings);
+    if banner::prints(format, stdout_is_terminal) {
+        let described = document.as_ref().map(Result::as_ref);
+        banner::print(
+            &banner::Deployment::of(&settings, described),
+            format.colour(stdout_is_terminal, no_color.as_deref()),
+        );
+    }
+    if let Err(error) = telemetry::init(
+        format,
+        &settings.telemetry.filter,
+        stdout_is_terminal,
+        no_color.as_deref(),
+    ) {
+        eprintln!("ferrofed: cannot start: {}", chain(&error));
+        return ExitCode::from(EXIT_CONFIG);
+    }
+    panic::install_hook();
+    let state = match AppState::build_read(&settings, document) {
+        Ok(state) => Arc::new(state),
+        Err(error) => {
+            tracing::error!(error = chain(&error), "cannot start");
+            return ExitCode::from(EXIT_CONFIG);
+        }
+    };
+    match serve_command(settings, state, config) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!(error = format!("{error:#}"), "cannot serve");
+            ExitCode::FAILURE
         }
     }
 }

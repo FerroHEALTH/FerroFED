@@ -9,6 +9,7 @@
 //! configuration. No specification governs the console: our own design.
 
 use serde::Deserialize;
+use std::ffi::OsStr;
 use std::io;
 use tracing::Subscriber;
 use tracing_subscriber::EnvFilter;
@@ -56,6 +57,22 @@ impl Format {
             Self::Auto if stdout_is_terminal => Rendering::Pretty,
             Self::Json | Self::Auto => Rendering::Json,
         }
+    }
+
+    /// Decides whether the console writes colour, from whether stdout is a
+    /// terminal and the value of the `NO_COLOR` environment variable.
+    ///
+    /// A `NO_COLOR` that is set and not empty switches colour off, whatever
+    /// the format and the terminal (<https://no-color.org>). Otherwise an
+    /// explicit `pretty` keeps its colour into a pipe, because a person asked
+    /// for it, and `auto` and `json` follow the terminal. The caller passes
+    /// both facts rather than reading them, so a test fixes the decision.
+    #[must_use]
+    pub fn colour(self, stdout_is_terminal: bool, no_color: Option<&OsStr>) -> bool {
+        if no_color.is_some_and(|value| !value.is_empty()) {
+            return false;
+        }
+        matches!(self, Self::Pretty) || stdout_is_terminal
     }
 }
 
@@ -116,17 +133,27 @@ where
 
 /// Installs the process-wide subscriber on stdout and returns its rendering.
 ///
+/// The `pretty` rendering writes colour as [`Format::colour`] decides from
+/// `stdout_is_terminal` and `no_color`, the value of `NO_COLOR`.
+///
 /// # Errors
 /// Returns [`Error::Filter`] when `filter` does not parse and
 /// [`Error::AlreadyInstalled`] when this process already has a subscriber.
-pub fn init(format: Format, filter: &str, stdout_is_terminal: bool) -> Result<Rendering, Error> {
+pub fn init(
+    format: Format,
+    filter: &str,
+    stdout_is_terminal: bool,
+    no_color: Option<&OsStr>,
+) -> Result<Rendering, Error> {
     let rendering = format.resolve(stdout_is_terminal);
-    // An explicit `pretty` keeps its colour into a pipe, because a person
-    // asked for it; `auto` follows the terminal.
-    let ansi = matches!(format, Format::Pretty) || stdout_is_terminal;
-    subscriber(rendering, filter, ansi, io::stdout)?
-        .try_init()
-        .map_err(|source| Error::AlreadyInstalled { source })?;
+    subscriber(
+        rendering,
+        filter,
+        format.colour(stdout_is_terminal, no_color),
+        io::stdout,
+    )?
+    .try_init()
+    .map_err(|source| Error::AlreadyInstalled { source })?;
     Ok(rendering)
 }
 

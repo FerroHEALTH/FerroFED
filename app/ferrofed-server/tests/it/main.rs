@@ -6,6 +6,7 @@
 mod admission;
 mod aggregate;
 mod ask_all;
+mod banner;
 mod base_url;
 mod completeness;
 mod config;
