@@ -14,9 +14,12 @@ asked does not answer, the query fails: `504` when the node timed out or was
 unreachable, and `424` when it answered with an error. When both happen, the
 answer is `504`. A failing answer returns no rows, and its `meta.federation`
 names every node with its status and `complete: false`. A member that does not
-know the patient (`not-resolved`) or that refuses on consent grounds
-(`consent-denied`) clears `complete` and never fails the query. A member that
-was never in scope (`excluded`, `not-localized`) leaves `complete` alone. When
+know the patient (`not-resolved`) clears `complete` and never fails the
+query; so would a `consent-denied` member, a status the gateway does not
+produce yet ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83),
+planned for v0.0.8). A member the cross-reference could not answer for fails
+the query `424` ([Identity resolution](identity.md)). A member that was never
+in scope (`excluded`, `not-localized`) leaves `complete` alone. When
 every endpoint is `excluded`, for example because every one is suspended, no
 member is in scope and the request cannot be resolved to any destination: the
 gateway answers `404` and asks no node (§11.2, §11.3).
@@ -52,6 +55,13 @@ request_timeout_ms = 30000    # must exceed overall_timeout_ms by more than 1000
 per_node_timeout_ms = 10000   # one node's request
 overall_timeout_ms = 25000    # the whole fan-out
 ```
+
+A client can shorten the budget for one request with `Prefer: wait=<seconds>`
+(RFC 7240 §4.3). A shorter wait replaces the overall budget, and the answer
+names it in `Preference-Applied`; a longer one leaves the configured budget
+in force. Only the first `wait` counts, a malformed one is ignored and never
+refused, and `wait=0` asks no node and reports each one `time-out`. The
+budget in force is the one `meta.federation.timeout` reports.
 
 The server's own `request_timeout_ms` answers `408` with an empty body, which
 would drop that envelope. A gateway that federates therefore refuses to boot,

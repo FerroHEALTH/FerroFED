@@ -32,62 +32,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD ["/usr/local/bin/ferrofed", "healthcheck"]
 ```
 
-`ferrofed healthcheck` reads the configuration the way `serve` does, asks
-`GET /health/readiness` on the configured listen port over loopback, and
-prints one line. It exits `0` only when readiness answers `200`, and `1` for
-any other status, a refused connection, no answer within three seconds, or a
-configuration that does not load. `docker inspect --format
-'{{.State.Health.Status}}' <container>` shows the outcome.
-
-## The health probes
-
-| Route | Answers | Use it as |
-|---|---|---|
-| `GET /health` | `200` while the process serves; it checks nothing else | liveness |
-| `GET /health/readiness` | `200` while the gateway serves and its own subsystems are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives | readiness, startup, the image `HEALTHCHECK` |
-| `GET /health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint and of the resolver | monitoring, never a probe |
-
-Readiness reports the gateway's own subsystems by name: the configuration,
-the registry and the outbound clients when a registry is configured, and the
-stored-query store when one is. Its body names the phase of the process,
-`booting`, `serving` or `draining`. On `SIGTERM` readiness turns `503` before
-the drain starts, so a load balancer stops sending requests while the
-requests in flight finish.
-
-No member node and no identity source gates readiness. A node outage is
-reported per query in `meta.federation` (§11), and a gateway that went unready
-with one node would turn one CDR outage into a total outage. Their state is on
-`GET /health/dependencies` instead:
-
-```json
-{
-  "endpoints": { "node-a-query": "up", "node-b-query": "down" },
-  "resolver": "up"
-}
-```
-
-Each state is the one the last request the gateway made for a client
-observed, and it reports the member's reachability and health, never whether
-that request was valid:
-
-| State | The last request |
-|---|---|
-| `up` | got an answer below `500`, a refusal such as `400`, `401`, `404` or `409` included |
-| `failing` | got a `5xx` answer |
-| `down` | got no answer: the member could not be reached, or did not answer in time |
-| `unknown` | none has reached the member since the registry was loaded or reloaded |
-
-The state reads the node's own HTTP status, whatever the call's §11.1 record
-in `meta.federation` says: a query member that answered `400` is
-`node-error` there and `up` here. The gateway sends no request of its own to
-find out, and a request that never left the gateway changes nothing. Every
-call that sends a request to a member updates it: a federated query, a
-request routed to one node, the ask-all probe, a fan-out template upload, and
-a stored-query distribution, repair or drift check. A drift check that finds
-a member's copy different or missing records the member `up`, because it
-answered. A resolution updates `resolver`, which is absent when no resolver
-is configured. The body names endpoint ids and states only, never a URL, a
-credential or a body.
+`ferrofed healthcheck` asks the gateway's readiness over loopback and exits
+`0` only when it answers `200`; [Health probes](health.md) has the details.
+`docker inspect --format '{{.State.Health.Status}}' <container>` shows the
+outcome.
 
 ## Kubernetes
 
@@ -163,12 +111,13 @@ scripts/quickstart/seed.sh
 curl http://127.0.0.1:8080/health
 ```
 
-`--wait` returns once every service reports healthy; the gateway's
-healthcheck is the image's own `ferrofed healthcheck`, which an image of a
-release before v0.0.7 does not have. The gateway service runs `ghcr.io/ferrohealth/ferrofed` at the current release,
-the tag default `compose.yaml` holds equal to the product version, and
-`FERROFED_VERSION` selects another published version. To run an image you
-built from staged binaries instead, add `--build`.
+`--wait` returns once every service reports healthy. The gateway service
+runs `ghcr.io/ferrohealth/ferrofed` at the product version, the tag default
+`compose.yaml` holds, and `FERROFED_VERSION` selects another published
+version. Its healthcheck is the image's own `ferrofed healthcheck`, which
+images before v0.0.7 do not carry, so with an older `FERROFED_VERSION` the
+gateway never turns healthy and `--wait` fails. To run an image you built
+from staged binaries instead, add `--build`.
 
 | Service | What it is | On the host |
 |---|---|---|
@@ -213,7 +162,7 @@ quickstart credentials; Compose mounts both read-only. The configuration runs
 in the development profile, with a static cross-reference from four synthetic
 patients to their EHRs. It is a testing device and no identity binding; a
 deployment resolves patients through an identifier cross-reference service,
-such as a PIXm Manager ([What FerroFED runs beside](deployment-shape.md)).
+a PIX Manager ([Identity resolution](identity.md)).
 
 `docker compose down -v` stops the stack and removes its volumes.
 

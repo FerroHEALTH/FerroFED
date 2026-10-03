@@ -19,16 +19,18 @@ The line:
 | v0.0.1 | the repository setup and the architecture of record | 0.0.1, 2026-10-01 |
 | v0.0.2 | the Cargo workspace and the first federated query over two nodes | 0.0.3, 2026-10-02 |
 | v0.0.3 | identity resolution outside AQL (§5) | 0.0.3, 2026-10-02 |
-| v0.0.4 | the federated answer: completeness, timeouts, ordering, de-duplication (§9 to §11) | open |
-| v0.0.5 | the ITS-REST surface and follow-up routing (§7a, §12) | open |
-| v0.0.6 | targeting and self-description (§8, §7a.2) | open |
+| v0.0.4 | the federated answer: completeness, timeouts, ordering, de-duplication (§9 to §11) | 0.0.6, 2026-10-03 |
+| v0.0.5 | the ITS-REST surface and follow-up routing (§7a, §12) | 0.0.6, 2026-10-03 |
+| v0.0.6 | targeting and self-description (§8, §7a.2) | 0.0.6, 2026-10-03 |
 | v0.0.7 | definitions and membership (§12.6, §12.7, §12b) | open |
 | v0.0.8 | security and the bindings (§13 to §15, Annex A, Annex B) | open |
 | v0.0.9 | conformance: every conformance point scored (§16, §17) | open |
 
-v0.0.2 and v0.0.3 shipped together as release 0.0.3, and no final 0.0.2 was
-tagged. The [releases page](https://github.com/FerroHEALTH/FerroFED/releases) carries each
-release with its signed assets, and the
+A release can carry more than one milestone. v0.0.2 and v0.0.3 shipped
+together as release 0.0.3, and v0.0.4 to v0.0.6 as release 0.0.6; no final
+0.0.2, 0.0.4 or 0.0.5 was tagged. The
+[releases page](https://github.com/FerroHEALTH/FerroFED/releases) carries
+each release with its signed assets, and the
 [project board](https://github.com/orgs/FerroHEALTH/projects/1) shows the same
 issues by status.
 

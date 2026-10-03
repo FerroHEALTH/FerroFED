@@ -36,3 +36,8 @@ cannot ship, and the identity bindings are on the gateway's critical path.
   behind a seam, shaped to move, and record the move as a later issue. This
   does not override [[openehr-crates-are-the-model]]: a gap in a crate that is
   published is still a FerroEHR issue, never a local copy.
+
+On 2026-10-03 the owner confirmed the order: "we do not move it yet because we
+will build everything first here and then move it, because then we can go
+faster in this FED project". The move is #367, deliberately unscheduled (no
+milestone) until the owner calls it; nothing is moved piecemeal before then.
