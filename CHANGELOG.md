@@ -301,6 +301,8 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   rounding is FerroFED's own. When a node's `SUM` is a real, `AVG` is the
   decimal mean written as the nearest JSON number, as before.
   `openehr-federation` is 0.0.33.
+- The `openehr-*` family moves to 0.0.81 (FerroEHR #3548, #3551, #3552), and
+  `openehr-federation` to 0.0.34 with it.
 - The compose quickstart runs four FerroEHR nodes, `ferroehr-a` to
   `ferroehr-d` on ports 8081 to 8084, each with its own `system_id` (#322).
   They share one FerroEHR PostgreSQL container, `ferroehr-postgres`, with a

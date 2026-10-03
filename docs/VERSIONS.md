@@ -84,17 +84,17 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.80 since 2026-10-03. The family's
+pin is the latest version on crates.io, 0.0.81 since 2026-10-03. The family's
 `openehr-sdt` (the SMART on openEHR scope grammar) is not a dependency yet: it
 joins the group at the family pin when client authentication (#80) first
 reads scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.80 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.80 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.80 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.80 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.81 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.81 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -122,6 +122,10 @@ parameter, #291), #3540 (a public decoder from a request to each operation's
 params, #287, #292), #3541 (a reader for a Simplified Formats CONTRIBUTION,
 #297) and #3543 (every operation's request-body media types, #298). FerroEHR
 #3542, the canonical XML CONTRIBUTION reader, stays open upstream (#308).
+0.0.81, published on 2026-10-03, carries FerroEHR #3548 (the `201_EHR` body of
+`ehr_create` typed), #3551 (the request-body media-type picker made public)
+and #3552 (`ROUTE_REQUEST_MEDIA` agreeing with each operation's `Content-Type`
+parameter); #329 drops the three workarounds they replace.
 
 ## FHIR model crate (crates.io)
 
