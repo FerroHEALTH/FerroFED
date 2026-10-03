@@ -40,7 +40,7 @@ use std::time::{Duration, Instant};
 
 use axum::body::{Body, Bytes};
 use axum::response::Response;
-use ferrofed_engine::declared;
+use ferrofed_engine::declared::{self, Refusal};
 use ferrofed_engine::dispatch::{DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded};
 use ferrofed_engine::hygiene;
@@ -397,15 +397,25 @@ fn refused_carriers(matched: &RouteMatch, arrived: &Arrived<'_>, logged: &str) -
     if let Some(refused) = query_refused(matched, arrived, logged) {
         return Some(refused);
     }
-    if let Err(malformed) = declared::held(matched, arrived.uri.query(), arrived.headers) {
-        security::value_refused(malformed.carrier(), logged);
-        return Some(error::response(
-            Code::ParameterValueInvalid,
-            malformed.to_string(),
-            request_id,
-        ));
-    }
-    None
+    declared::held(matched, arrived.uri.query(), arrived.headers)
+        .err()
+        .map(|refusal| declared_refused(&refusal, request_id, logged))
+}
+
+/// The answer to a request whose declared values `refusal` refuses: `400`
+/// for a malformed value, a security event as well, and the `406` or `415` a
+/// node answers an `Accept` or a `Content-Type` it cannot serve with (RFC
+/// 9110 §12.4.1, §15.5.16).
+fn declared_refused(refusal: &Refusal, request_id: &str, logged: &str) -> Response {
+    let code = match refusal {
+        Refusal::Malformed(malformed) => {
+            security::value_refused(malformed.carrier(), logged);
+            Code::ParameterValueInvalid
+        }
+        Refusal::NotAcceptable { .. } => Code::MediaTypeNotAcceptable,
+        Refusal::UnsupportedMediaType { .. } => Code::MediaTypeUnsupported,
+    };
+    error::response(code, refusal.to_string(), request_id)
 }
 
 /// The `ehr_id` the path segment of `matched` decodes to, or `None` when it
@@ -569,10 +579,7 @@ fn failed(
             security::forward_refused(unlisted.position, logged);
             return error::response(Code::QueryParameterRefused, failure.to_string(), request_id);
         }
-        ForwardError::Value(malformed) => {
-            security::value_refused(malformed.carrier(), logged);
-            return error::response(Code::ParameterValueInvalid, failure.to_string(), request_id);
-        }
+        ForwardError::Value(refusal) => return declared_refused(refusal, request_id, logged),
         ForwardError::Withheld { endpoint, part } => {
             security::forward_withheld(endpoint, *part, logged);
             Code::Internal

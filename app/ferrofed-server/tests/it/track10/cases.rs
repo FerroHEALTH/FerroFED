@@ -378,9 +378,21 @@ pub(crate) fn on_the_route(ehr_a: Uuid) -> Vec<Case> {
             refused(),
         ),
         routed(
-            "Accept, an enumerated header",
+            "Accept, a composed header",
             ehr.clone(),
             &[("accept", format!("application/json; patient={value}"))],
+            Expect::Routed(StatusCode::OK),
+        ),
+        routed(
+            "a version_uid in the path",
+            format!("{ehr}/ehr_status/{value}"),
+            &[],
+            refused(),
+        ),
+        routed(
+            "a versioned_object_uid in the path",
+            format!("{ehr}/versioned_composition/{value}"),
+            &[],
             refused(),
         ),
         routed(

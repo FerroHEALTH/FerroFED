@@ -32,6 +32,7 @@ use http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::declared::composition_at;
 use crate::facade::{
     EHR_A, PATIENT, body, dev_gateway, gateway, patient_query, post, registry, wire,
 };
@@ -619,10 +620,7 @@ async fn a_write_no_earlier_step_routes_is_a_400_and_probes_nobody() -> TestResu
     let dir = tempfile::tempdir()?;
     for (verb, at) in [
         (Method::POST, format!("/v1/ehr/{EHR_A}/composition")),
-        (
-            Method::PUT,
-            format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}"),
-        ),
+        (Method::PUT, composition_at(&Method::PUT, VERSION_A)),
         (
             Method::DELETE,
             format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}"),

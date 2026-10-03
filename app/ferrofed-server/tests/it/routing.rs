@@ -23,6 +23,7 @@ use http::{HeaderMap, Method, Request, Response, StatusCode, header};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::declared::composition_at;
 use crate::facade::{EHR_A, PATIENT, gateway, registry, wire};
 use crate::support::{error_body, send};
 
@@ -219,7 +220,6 @@ async fn a_committed_composition_lands_byte_identical_and_location_and_etag_pass
 // conformance: CP-24
 #[tokio::test]
 async fn every_routed_answer_names_the_acting_endpoint_and_its_system_id() -> TestResult {
-    let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
     // NOTE: ITS-REST 1.1.0 EHR API: only `PUT` of a composition declares
     // `If-Match`, so it travels there and is stripped from `GET` and `DELETE`.
     for (verb, answer, declares_if_match) in [
@@ -235,6 +235,7 @@ async fn every_routed_answer_names_the_acting_endpoint_and_its_system_id() -> Te
         ),
         (Method::DELETE, ResponseTemplate::new(204), false),
     ] {
+        let resource = composition_at(&verb, VERSION_A);
         let a = node(verb.as_str(), resource.clone(), answer).await;
         let b = silent().await;
         let dir = tempfile::tempdir()?;
@@ -474,7 +475,7 @@ async fn a_write_that_names_no_node_is_a_400_target_required_and_probes_nobody()
         let at = if verb == Method::POST {
             format!("/v1/ehr/{EHR_A}/composition")
         } else {
-            format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}")
+            composition_at(&verb, VERSION_A)
         };
         let request = Request::builder()
             .method(verb.clone())

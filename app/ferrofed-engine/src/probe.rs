@@ -7,8 +7,8 @@
 //! Each probe is a [`NodeClient::forward`](crate::dispatch::NodeClient::forward) of the one request, so it passes
 //! the same outbound gate as every routed request: the path carries the
 //! node-local `ehr_id` and nothing else, and of the client's headers only the
-//! ones `GET {base}/v1/ehr/{ehr_id}` declares travel, each only when its value
-//! matches the kind that operation declares for it (§5.4.1, N33). The
+//! ones `GET {base}/v1/ehr/{ehr_id}` declares travel, each composed for that
+//! operation and left out when it does not fit it (§5.4.1, N33). The
 //! `ehr_id` is a [`ProbedEhrId`], a bare UUID, because the probe carries it
 //! to members the client never named and any other form may be a patient
 //! identifier (§5.4.1, N33). Every

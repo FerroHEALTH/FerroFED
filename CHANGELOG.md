@@ -82,31 +82,41 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Security
 
-- A request routed to one node no longer forwards a declared header or query
-  value of the wrong kind (#261; §5.4.1, N33, CP-26). The routed path
-  resolves no patient, so the outbound gate had nothing to compare a
-  client's `version_at_time`, `Prefer` or `Accept` against, and a patient
-  identifier written there reached the node. Every header and query value
-  the ITS-REST operation declares is now held to the kind `openehr-its`'s
-  parameter table states for it: a date-time is an extended ISO 8601
-  date-time read by `openehr-base`'s `Iso8601_date_time` (ITS-REST Overview,
-  "Datetime format"), an enumerated value is exactly one of the listed
-  values, and a UUID, an integer, a number or a boolean parses as one. A
-  value of another kind is refused with the new code
+- A request routed to one node no longer forwards client text in a path
+  identifier, a structured query value or a negotiation header (#261;
+  §5.4.1, N33, CP-26). The routed path resolves no patient, so the outbound
+  gate had nothing to compare a client's `version_at_time`, `Accept` or
+  path `version_uid` against, and a patient identifier written there
+  reached the node. The gateway now works from what the ITS-REST operation
+  declares in `openehr-its`'s parameter table. It composes `Accept`,
+  `Content-Type` and `Prefer` itself, so the node receives a value the
+  operation lists, in its own spelling: `Accept` is negotiated as an
+  RFC 9110 §12.5.1 media-range list, `*/*` or no `Accept` sending the first
+  listed type, and one that admits no listed type is refused with the new
+  code `media-type-not-acceptable` (`406`); `Content-Type` must name a
+  listed type, with `charset=utf-8` accepted and dropped, or it is refused
+  with the new code `media-type-unsupported` (`415`); `Prefer` keeps only
+  the listed preferences and ignores the rest (RFC 7240 §2). Each path
+  identifier parses as the openEHR identifier it names with `openehr-base`
+  (`version_uid` an `OBJECT_VERSION_ID`, a text `uid_based_id` a
+  `UID_BASED_ID`, a `uuid`-format parameter a canonical UUID), and the path
+  then travels byte for byte (N22). Each query value matches its declared
+  kind: a date-time is an extended ISO 8601 date-time read by
+  `openehr-base`'s `Iso8601_date_time` (ITS-REST Overview, "Datetime
+  format"). A malformed value is refused with the new code
   `parameter-value-invalid` (`400`), naming the header, or the parameter by
-  position and declared name, never the value, and no node is asked, the
-  ask-all probe included. The refusal is logged as the security event
-  `parameter-value-refused`. `Accept: */*`, a list of media types and a
-  media-type parameter are refused, since none is a listed value. The free
-  text the table states no kind for (`If-Match`, `openehr-audit-details`,
+  position and declared name, never the value; no node is asked, the
+  ask-all probe included, and the refusal is logged as the security event
+  `parameter-value-refused`. A composition update must address the
+  versioned object's UUID, as ITS-REST declares. The free text the table
+  states no kind for (`If-Match`, `openehr-audit-details`,
   `openehr-item-tag`, `openehr-template-id`, `openehr-version`,
-  `openehr-version-item-tag`, `path`, `tag_key`, `tag_value`,
-  `tag_target_path`) still travels as sent; whether N33 covers a forwarded
-  client value is recorded on #212. The ask-all probe leaves out a client
-  header whose value its own operation does not admit. Track 10 gains a
-  date-time parameter and an enumerated header carrying the identifier.
-  `ferrofed-engine` adds the `declared` module and
-  `ForwardError::Value`.
+  `openehr-version-item-tag`, the item-tag `key`, `path`, `tag_key`,
+  `tag_value`, `tag_target_path`) still travels as sent; whether N33 covers
+  a forwarded client value is recorded on #212. Track 10 gains the
+  identifier in a date-time parameter, an `Accept` parameter and a path
+  uid. `ferrofed-engine` adds the `declared` module, which takes `mime` for
+  the media types, and `ForwardError::Value`.
 
 ## [0.0.6] - 2026-10-03
 

@@ -281,14 +281,19 @@ A routed request reaches the node as you sent it:
   parameter is a `400` (`query-parameter-refused`) and nothing is sent,
   because the gateway cannot tell an identifying value from any other
   (§5.4.1, N33);
-- each declared header and query value only when it is of the kind the
-  operation states for it: a `version_at_time` in the extended ISO 8601
-  format, a `Prefer`, `Accept` or `Content-Type` that is exactly one of the
-  values the operation lists. Any other value is a `400`
-  (`parameter-value-invalid`) and nothing is sent. Send `Accept` as one media
-  type the operation lists, or leave it out: `*/*`, a list or a media-type
-  parameter is refused. A value of free text, such as `If-Match` or a
-  directory `path`, travels as you sent it (see
+- `Accept`, `Content-Type` and `Prefer` as the gateway composes them from
+  yours: the media type the operation lists that your `Accept` prefers (the
+  first listed for `*/*` or no `Accept`), the listed media type your
+  `Content-Type` names, with a `charset=utf-8` dropped, and only the listed
+  preferences of your `Prefer`. An `Accept` that admits no listed media type
+  is a `406` (`media-type-not-acceptable`), and a `Content-Type` that names
+  none is a `415` (`media-type-unsupported`), as a node would answer;
+- each path identifier and each other declared value only when it is what
+  the operation declares: a `version_uid` that is an `OBJECT_VERSION_ID`, a
+  `versioned_object_uid` that is a UUID, a `version_at_time` in the extended
+  ISO 8601 format. Any other value is a `400` (`parameter-value-invalid`) and
+  nothing is sent. A value of free text, such as `If-Match` or a directory
+  `path`, travels as you sent it (see
   [Configuration](../operate/configuration.md#declared-values)).
 
 The answer is the node's: its status, its body, and its `Location` and `ETag`

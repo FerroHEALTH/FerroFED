@@ -16,6 +16,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::declared::Refusal;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
 use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::{Part, Withheld};
@@ -152,7 +153,9 @@ async fn the_body_arrives_byte_for_byte_and_only_the_declared_headers_travel() -
 #[tokio::test]
 async fn a_header_the_operation_declares_travels_and_one_it_does_not_is_stripped() -> TestResult {
     let uid = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
-    let at = format!("/ehr/{EHR}/composition/{uid}");
+    // NOTE: ITS-REST EHR API, PUT composition addresses the versioned_object_uid (format uuid) and
+    // names the preceding version in If-Match, so the path carries the object id, not the version.
+    let at = format!("/ehr/{EHR}/composition/8849182c-82ad-4088-a07f-48ead4180515");
     let server = MockServer::start().await;
     for verb in ["PUT", "GET"] {
         Mock::given(method(verb))
@@ -373,7 +376,7 @@ async fn a_well_formed_date_time_is_forwarded_byte_identical() -> TestResult {
 
 // conformance: CP-26
 #[tokio::test]
-async fn an_enumerated_header_outside_its_values_is_refused_unsent() -> TestResult {
+async fn an_accept_that_admits_nothing_listed_is_not_acceptable_unsent() -> TestResult {
     let mut headers = HeaderMap::new();
     headers.insert(
         "accept",
@@ -381,10 +384,56 @@ async fn an_enumerated_header_outside_its_values_is_refused_unsent() -> TestResu
     );
     let (answered, sent) = directory_read("", headers).await?;
     assert!(
-        matches!(&answered, Err(ForwardError::Value(_))),
-        "{answered:?}"
+        matches!(
+            &answered,
+            Err(ForwardError::Value(Refusal::NotAcceptable { .. }))
+        ),
+        "RFC 9110 §12.5.1: {answered:?}"
     );
     assert!(sent.is_empty(), "nothing is sent");
+    Ok(())
+}
+
+/// The `Accept` a directory read sent with the client's `accept` reaches the
+/// node with.
+async fn accept_at_the_node(accept: Option<&str>) -> Result<Option<String>, Box<dyn Error>> {
+    let mut headers = HeaderMap::new();
+    if let Some(accept) = accept {
+        headers.insert("accept", accept.parse()?);
+    }
+    let (answered, sent) = directory_read("", headers).await?;
+    assert_eq!(StatusCode::OK, answered?, "the node answers the read");
+    let [one] = sent.as_slice() else {
+        return Err(format!("one request reaches the node, not {}", sent.len()).into());
+    };
+    Ok(one
+        .headers
+        .get("accept")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned))
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn any_media_type_reaches_the_node_as_the_first_listed() -> TestResult {
+    for accept in [Some("*/*"), None] {
+        assert_eq!(
+            Some("application/json".to_owned()),
+            accept_at_the_node(accept).await?,
+            "{accept:?}"
+        );
+    }
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn an_accept_list_reaches_the_node_as_its_best_listed_match() -> TestResult {
+    let list = format!("text/html, application/xml;q=0.8;patient={PATIENT}, application/xml;q=0.5");
+    assert_eq!(
+        Some("application/xml".to_owned()),
+        accept_at_the_node(Some(&list)).await?
+    );
     Ok(())
 }
 
