@@ -30,20 +30,21 @@ publish = false
 # The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
 # one lockstep family at the latest published release, moved together by the
 # dependency sweep and checked against docs/VERSIONS.md by
-# scripts/checks/versions.sh. The pin is 0.0.79, whose RM model carries the
-# BASE primitives, the Ordered marker and the OBJECT_REF targets (FerroEHR
-# #3537), so the rewrite asks it which paths a node can order.
-openehr-base = "0.0.79"
-openehr-rm = "0.0.79"
-openehr-query = { version = "0.0.79", features = ["federation"] }
-openehr-its = { version = "0.0.79", default-features = false }
+# scripts/checks/versions.sh. The pin is 0.0.80, whose ITS-REST crate decodes
+# a request into each operation's params, reads a Simplified Formats
+# CONTRIBUTION and declares every request-body media type (FerroEHR #3539 to
+# #3541, #3543).
+openehr-base = "0.0.80"
+openehr-rm = "0.0.80"
+openehr-query = { version = "0.0.80", features = ["federation"] }
+openehr-its = { version = "0.0.80", default-features = false }
 # TODO(#80): add openehr-sdt to the family when client authentication reads
 # the SMART on openEHR scopes with it.
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.30" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.31" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.8" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }

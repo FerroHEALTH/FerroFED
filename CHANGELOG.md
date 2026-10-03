@@ -142,6 +142,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The `openehr-*` family moves to 0.0.80 (FerroEHR #3539 to #3541, #3543), and
+  `openehr-federation` to 0.0.31 with it. The fuzz crate is now held to the
+  family pin by `scripts/checks/versions.sh`.
 - An `ehr_id` that the session's resolution bindings or the `ehr_id` index
   hold at two members is now refused `409 ehr-id-collision` listing the
   claimants, on a write as on a read (#63; §12.5.2, N42). A read no longer
