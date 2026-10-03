@@ -197,6 +197,36 @@ impl ResolutionBindings {
         dropped
     }
 
+    /// Drops `session`'s binding of `ehr_id` when it names a member `present`
+    /// says the registry no longer holds, and returns whether it did.
+    ///
+    /// A lookup that finds such a binding calls it: the binding is stale
+    /// whole, so it is never narrowed to the members that remain (§12.5.2,
+    /// N42). A binding naming only present members is kept.
+    pub fn forget_absent(
+        &self,
+        session: &SessionKey,
+        ehr_id: &EhrId,
+        present: impl Fn(&NodeId) -> bool,
+    ) -> bool {
+        let mut sessions = self.lock();
+        let Some(held) = sessions.get_mut(session) else {
+            return false;
+        };
+        let stale = held
+            .by_ehr
+            .get(ehr_id)
+            .is_some_and(|nodes| !nodes.iter().all(&present));
+        if stale {
+            held.by_ehr.remove(ehr_id);
+            if held.by_ehr.is_empty() {
+                sessions.remove(session);
+            }
+        }
+        drop(sessions);
+        stale
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<SessionKey, Session>> {
         // NOTE: a panic while the lock was held leaves bindings that may be
         // incomplete; they are still only routing hints, so they stay usable.

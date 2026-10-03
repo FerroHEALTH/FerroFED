@@ -86,7 +86,10 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   never called again. A learned `creating_system_id` route the new document
   maps elsewhere is withdrawn with a `RegisteredCreatingSystemConflict`
   incident, and `ehr_id` index entries and resolution bindings naming a
-  member that left are dropped. A change to any other setting is logged as
+  member that left are dropped; one a request in flight learns after the
+  swap is dropped at its next lookup, and a read then probes every member
+  while a write needs its target, so an entry is never narrowed to the
+  claimant that remains (§12.5.2, N42). A change to any other setting is logged as
   needing a restart while the rest applies. A configuration that does not
   load is refused, the running registry stays, and the `ERROR` line names
   the failure class and the files, never their content. `config check` is

@@ -486,7 +486,11 @@ held to the new document:
 - every `ehr_id` index entry and resolution binding that names a member the
   document no longer holds is dropped. An entry that names such a member
   beside others is dropped whole, so a collision is never narrowed to the
-  member that remains; a later read asks every member again.
+  member that remains; a later read asks every member again. An entry a
+  request already running learns after the reload, naming a member that
+  left, is dropped the first time a request looks it up, with the same
+  effect: a read asks every member, and a write without a target header is
+  refused `400` (`target-required`).
 
 The reload logs `registry reloaded` at `INFO` with `members` (how many the
 registry now holds), `endpoints_added`, `endpoints_removed`,

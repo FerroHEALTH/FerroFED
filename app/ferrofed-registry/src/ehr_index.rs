@@ -230,6 +230,23 @@ impl EhrIndex {
         gone.len()
     }
 
+    /// Forgets `ehr_id` when its entry names a member `present` says the
+    /// registry no longer holds, and returns whether it did.
+    ///
+    /// A lookup that finds such an entry calls it: the entry is stale whole,
+    /// so it is never narrowed to the claimants that remain (§12.5.2, N42).
+    /// An entry naming only present members is kept, whatever it names.
+    pub fn forget_absent(&self, ehr_id: &EhrId, present: impl Fn(&NodeId) -> bool) -> bool {
+        let mut held = self.lock();
+        let used = match held.entries.get(ehr_id) {
+            Some(entry) if !entry.owners.iter().all(&present) => entry.used,
+            Some(_) | None => return false,
+        };
+        held.entries.remove(ehr_id);
+        held.recency.remove(&used);
+        true
+    }
+
     /// How many `ehr_id`s the index holds.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -381,6 +398,22 @@ mod tests {
         assert_eq!(2, index.len(), "the freed place is used, nothing evicted");
         assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_2)));
         assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_3)));
+    }
+
+    #[test]
+    fn an_entry_naming_an_absent_member_is_forgotten_and_one_naming_present_members_kept() {
+        let index = EhrIndex::new(NonZeroUsize::new(2).unwrap());
+        index.learn(&ehr(EHR_1), &node("node-a"));
+        index.learn(&ehr(EHR_1), &node("node-b"));
+        index.learn(&ehr(EHR_2), &node("node-a"));
+        let present = |member: &NodeId| *member == node("node-a");
+        assert!(index.forget_absent(&ehr(EHR_1), present));
+        assert!(!index.forget_absent(&ehr(EHR_2), present));
+        assert!(!index.forget_absent(&ehr(EHR_3), present));
+        assert_eq!(Indexed::None, index.lookup(&ehr(EHR_1)));
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_2)));
+        index.learn(&ehr(EHR_3), &node("node-a"));
+        assert_eq!(2, index.len(), "the forgotten place is reused");
     }
 
     #[test]

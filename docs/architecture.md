@@ -746,7 +746,10 @@ silent on storage, so this section is FerroFED's own).
 `deny_unknown_fields` throughout, or a FHIR R4 `Bundle` of `Organization` and
 `Endpoint` resources, the form N19 recommends, with a registered connection
 type on every `Endpoint` and exactly one managing organisation (N20). It is
-validated strictly and published as an immutable snapshot through `arc-swap`.
+validated strictly and published as an immutable snapshot: the server holds
+the federation built over it as an `Arc` behind a std `RwLock`, which guards
+only the clone of that `Arc` and its replacement (#282; `arc-swap` is not a
+dependency).
 A `[[node]]` may record its CDR `product` and `version`; they reach
 `meta.federation.endpoints[]` only from there, and are absent when the registry
 does not say, never invented (§9.5, N40).
@@ -757,7 +760,10 @@ one id twice, or re-maps a member's `system_id` refuses the document.
 A query takes the snapshot once at entry and uses it to the end, so a reload
 never changes membership under a running query. Admission is a reviewed act,
 so there is no registry write API; the document's own change process (review,
-deploy, reload on `SIGHUP` or a file watch) is its audit trail. An admin
+deploy, reload) is its audit trail. The reload is on `SIGHUP` only, with no
+file watch, because a watch can read a document the operator is still
+writing; the reloaded configuration passes the boot checks or is refused and
+the running registry stays. An admin
 surface would need its own authorization design and has its own issue when it
 is planned.
 
@@ -850,7 +856,9 @@ binding table on the request thread.
 **Membership change.** An added or re-addressed node applies to queries that
 start after the reload. A removed node finishes the queries already running
 and is never asked again, and bindings and index entries naming it are dropped
-at the swap. A suspended endpoint (a `status` other than `active` in the
+at the swap. An entry naming it that a running query learns after the swap is
+dropped at its next lookup and never narrowed to the claimant that remains
+(§12.5.2, N42). A suspended endpoint (a `status` other than `active` in the
 document) is reported `excluded` with an operator-policy reason (§11.1) and is
 not contacted. §12b.3 leaves revocation open, so these rules are FerroFED's
 own, held on #17 as the behaviour to put to the working group.

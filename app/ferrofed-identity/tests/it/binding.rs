@@ -225,6 +225,41 @@ fn a_departed_member_takes_every_binding_that_names_it() {
 }
 
 #[test]
+fn a_binding_naming_an_absent_member_is_dropped_and_one_naming_present_members_kept() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let other = SessionKey::new("session-2");
+    let now = Instant::now();
+    bindings.record(
+        &session,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_A)),
+            (&node("node-a"), &ehr(EHR_B)),
+        ],
+    );
+    bindings.record(&other, now, [(&node("node-b"), &ehr(EHR_A))]);
+    let present = |member: &NodeId| *member == node("node-a");
+    assert!(bindings.forget_absent(&session, &ehr(EHR_A), present));
+    assert!(!bindings.forget_absent(&session, &ehr(EHR_B), present));
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&session, now, &ehr(EHR_A)),
+        "a stale collision is dropped whole, never narrowed to node-a (N42)"
+    );
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&session, now, &ehr(EHR_B))
+    );
+    assert_eq!(
+        Bound::One(node("node-b")),
+        bindings.lookup(&other, now, &ehr(EHR_A)),
+        "another session's binding is its own"
+    );
+}
+
+#[test]
 fn an_identity_change_naming_no_bound_ehr_id_drops_nothing() {
     let bindings = ResolutionBindings::new(Duration::from_secs(60));
     let session = SessionKey::new("session-1");

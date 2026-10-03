@@ -37,7 +37,11 @@ use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 use crate::facade::{
     EHR_A, EHR_B, body, crossref, node_answering, patient_query, post, settings_with_room,
 };
-use crate::support::{Logs, call};
+use crate::path_ehr_id::{answer, asked, holder, probe_at};
+use crate::support::{Logs, call, error_body};
+
+/// A version uid node A minted, held by [`holder`].
+const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -471,6 +475,63 @@ async fn a_departed_member_leaves_the_index_and_the_bindings() -> TestResult {
     assert_eq!(
         Bound::One(node_a),
         federation.bindings().lookup(&session, now, &ehr_a)
+    );
+    Ok(())
+}
+
+/// The gateway over node A, a holder of [`EHR_A`], after a reload that removed
+/// node B, with an index entry learned after the reload naming both: the
+/// entry a request in flight on the old registry could leave behind.
+async fn indexed_at_a_departed_member() -> Result<(Gateway, MockServer), Box<dyn Error>> {
+    let a = holder().await;
+    let b = holder().await;
+    let gateway = Gateway::start(&(member("a", &a.uri()) + &member("b", &b.uri())), "", "")?;
+    gateway.write_registry(&member("a", &a.uri()))?;
+    gateway.reloader.reload()?;
+    let federation = gateway.federation()?;
+    let ehr_a: EhrId = EHR_A.parse()?;
+    federation.index().learn(&ehr_a, &"node-a".parse()?);
+    federation.index().learn(&ehr_a, &"node-b".parse()?);
+    Ok((gateway, a))
+}
+
+#[tokio::test]
+async fn a_read_never_routes_on_an_entry_naming_a_departed_claimant() -> TestResult {
+    let (gateway, a) = indexed_at_a_departed_member().await?;
+    let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
+    let request = http::Request::get(&resource).body(axum::body::Body::empty())?;
+
+    let (status, acting, text) = answer(gateway.app.clone(), request).await?;
+
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(Some("node-a-pub"), acting.as_deref());
+    assert_eq!(
+        vec![probe_at(), ("GET".to_owned(), resource)],
+        asked(&a).await?,
+        "the stale entry is dropped and the ask-all probe finds the owner (§12.5.1, N42)"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_write_never_routes_on_an_entry_naming_a_departed_claimant() -> TestResult {
+    let (gateway, a) = indexed_at_a_departed_member().await?;
+    let request = http::Request::post(format!("/v1/ehr/{EHR_A}/composition"))
+        .body(axum::body::Body::from(r#"{"_type":"COMPOSITION"}"#))?;
+
+    let (status, acting, text) = answer(gateway.app.clone(), request).await?;
+
+    assert_eq!(
+        (StatusCode::BAD_REQUEST, "target-required".to_owned()),
+        (status, error_body(&text)?.code),
+        "never sent to node-a on a narrowed entry (§12.5.2, N42): {text}"
+    );
+    assert!(acting.is_none());
+    assert!(asked(&a).await?.is_empty(), "node A is sent nothing");
+    assert_eq!(
+        Indexed::None,
+        gateway.federation()?.index().lookup(&EHR_A.parse()?),
+        "the stale entry is dropped"
     );
     Ok(())
 }
