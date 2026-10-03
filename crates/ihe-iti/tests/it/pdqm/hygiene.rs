@@ -210,6 +210,7 @@ async fn a_page_link_and_its_failure_carry_no_value() {
         !shows_a_value(&format!("{first:?} {page:?}")),
         "the Debug of a result or a page link"
     );
+    assert_eq!("Page(***)", format!("{page:?}"), "the family's placeholder");
     let error = client
         .next_page(page, Duration::from_millis(200))
         .await
@@ -244,6 +245,10 @@ async fn a_match_shows_no_demographics() {
     assert!(
         !shows_a_value(&shown),
         "the Debug of a result shows a demographic: {shown}"
+    );
+    assert!(
+        shown.contains(r#"full_url: "***", patient: "***""#),
+        "the family's placeholder: {shown}"
     );
 }
 

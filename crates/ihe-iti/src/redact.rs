@@ -24,11 +24,15 @@ impl fmt::Debug for RedactedUrl<'_> {
 
 /// Returns `url` with its userinfo and its query replaced by [`REDACTED`].
 ///
-/// The authority runs from after `://` to the first `/`, `?` or `#`, and the
-/// userinfo is everything in it before its last `@`, since a host holds no
-/// `@` (RFC 3986 §3.2). The userinfo becomes `***@` and the query `?***`; the
-/// scheme, the host, the port, the path and the fragment show as written.
-/// Text with no `://` has no authority to find a credential in, so it shows as
+/// The userinfo is everything after `://` up to an `@`, since a host holds no
+/// `@` (RFC 3986 §3.2). When the text parses as a URL (the WHATWG URL
+/// Standard, as `url` and every client built on it read it), the authority
+/// ends at its first `/`, `?` or `#`, so an `@` after it is in the path
+/// or the query and shows as written. When it does not parse, the userinfo
+/// runs to its last `@`, so a password holding a `/`, a `?` or a `#` is still
+/// found. The userinfo becomes `***@` and the query `?***`; the scheme, the
+/// host, the port, the path and the fragment show as written. Text with no
+/// `://` has no authority to find a credential in, so it shows as
 /// [`REDACTED`] whole. The text is never decoded, so it is redacted as
 /// written.
 fn redact(url: &str) -> String {
@@ -38,23 +42,32 @@ fn redact(url: &str) -> String {
     let Some((scheme, rest)) = url.split_once("://") else {
         return REDACTED.to_owned();
     };
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let (authority, tail) = rest.split_at_checked(end).unwrap_or((rest, ""));
-    let host = match authority.rfind('@') {
-        Some(at) => format!("{REDACTED}@{}", authority.get(at + 1..).unwrap_or_default()),
-        None => authority.to_owned(),
+    let at = if url::Url::parse(url).is_ok() {
+        let authority = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        rest.get(..authority).and_then(|text| text.rfind('@'))
+    } else {
+        rest.rfind('@')
     };
-    let tail = match tail.split_once('?') {
-        Some((path, query)) => {
+    let (userinfo, rest) = match at {
+        Some(at) => (
+            format!("{REDACTED}@"),
+            rest.get(at + 1..).unwrap_or_default(),
+        ),
+        None => (String::new(), rest),
+    };
+    let end = rest.find(['?', '#']).unwrap_or(rest.len());
+    let (hierarchy, tail) = rest.split_at_checked(end).unwrap_or((rest, ""));
+    let tail = match tail.strip_prefix('?') {
+        Some(query) => {
             let fragment = query
                 .find('#')
                 .and_then(|at| query.get(at..))
                 .unwrap_or_default();
-            format!("{path}?{REDACTED}{fragment}")
+            format!("?{REDACTED}{fragment}")
         }
         None => tail.to_owned(),
     };
-    format!("{scheme}://{host}{tail}")
+    format!("{scheme}://{userinfo}{hierarchy}{tail}")
 }
 
 #[cfg(test)]
@@ -89,6 +102,59 @@ mod tests {
         ] {
             assert_eq!(redacted, redact(raw), "{raw}");
         }
+    }
+
+    #[test]
+    fn a_password_holding_a_delimiter_is_redacted() {
+        for (raw, redacted) in [
+            ("https://u:p/x@host", "https://***@host"),
+            (
+                "https://u:Qz7/pass@pix.example.org/fhir",
+                "https://***@pix.example.org/fhir",
+            ),
+            (
+                "https://u:Qz7?pass@pix.example.org/fhir?x=1",
+                "https://***@pix.example.org/fhir?***",
+            ),
+            (
+                "https://u:Qz7#pass@pix.example.org/fhir",
+                "https://***@pix.example.org/fhir",
+            ),
+        ] {
+            assert_eq!(redacted, redact(raw), "{raw}");
+        }
+    }
+
+    #[test]
+    fn an_at_sign_after_the_authority_is_not_userinfo() {
+        for (raw, redacted) in [
+            (
+                "https://directory.example.org/fhir/Endpoint/@handle",
+                "https://directory.example.org/fhir/Endpoint/@handle",
+            ),
+            (
+                "https://pix.example.org/fhir/a@b/Patient",
+                "https://pix.example.org/fhir/a@b/Patient",
+            ),
+            (
+                "https://pix.example.org/fhir/Patient?email=someone@example.org",
+                "https://pix.example.org/fhir/Patient?***",
+            ),
+            (
+                "https://pix.example.org/fhir#section@b",
+                "https://pix.example.org/fhir#section@b",
+            ),
+        ] {
+            assert_eq!(redacted, redact(raw), "{raw}");
+        }
+    }
+
+    #[test]
+    fn text_that_does_not_parse_is_redacted_to_its_last_at_sign() {
+        assert_eq!(
+            "https://***@handle",
+            redact("https://pix example.org/fhir/@handle")
+        );
     }
 
     #[test]

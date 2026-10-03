@@ -597,8 +597,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `DirectoryOrganization` and `DirectoryEndpoint` show their `fullUrl` and
   the endpoint `address` the same way, and the endpoint leaves out the rest
   of its resource, whose `header` list may hold a credential. The crate
-  carries this redaction itself and depends on nothing in FerroFED.
+  carries this redaction itself and depends on nothing in FerroFED. Every
+  redacted value in `ihe-iti` now shows the family's `***`, where the
+  identifiers, the matched Patients and the page links showed `[REDACTED]`.
   `ihe-iti` is 0.0.9.
+- A URL whose password holds an unencoded `/`, `?` or `#`, such as
+  `https://user:pa/ss@host`, no longer shows that password in the rendering
+  of a `ferrofed_registry::secret::SecretUrl` or of an `ihe-iti` type
+  (#370). The userinfo was taken to end at the first `/`, `?` or `#`, so no
+  `@` was found and the text showed as written. Text that parses as a URL
+  is now read as the URL parser reads it, so an `@` in a path or a query
+  is not userinfo, and text that does not parse is redacted up to its last
+  `@`.
 
 ## [0.0.6] - 2026-10-03
 
