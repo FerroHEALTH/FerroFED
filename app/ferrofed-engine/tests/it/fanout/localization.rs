@@ -21,13 +21,13 @@ fn failure() -> ErrorDetail {
 }
 
 /// A plan in which localization named neither endpoint.
-fn not_localized(error: Option<ErrorDetail>) -> Result<Plan, Box<dyn std::error::Error>> {
+fn not_localized(error: Option<&ErrorDetail>) -> Result<Plan, Box<dyn std::error::Error>> {
     let mut plan = Plan::new();
     for id in ["node_a", "node_b"] {
         plan = plan.settle(
             EndpointId::new(id)?,
             Outcome::NotLocalized {
-                error: error.clone(),
+                error: error.cloned(),
             },
         )?;
     }
@@ -41,7 +41,7 @@ async fn a_localizer_failure_is_carried_in_meta_federation_and_on_every_endpoint
         ("node_a", "http://127.0.0.1:9/"),
         ("node_b", "http://127.0.0.1:10/"),
     ])?;
-    let plan = not_localized(Some(failure()))?.localization_failed(failure());
+    let plan = not_localized(Some(&failure()))?.localization_failed(failure());
     assert!(
         !plan.has_no_destination(),
         "an empty candidate set is no 404 (§14.1)"
