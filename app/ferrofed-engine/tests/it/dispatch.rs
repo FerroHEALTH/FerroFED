@@ -46,6 +46,10 @@ const NODE_AQL: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHE
 /// its AQL literal form differs from the raw one.
 const SUBJECT: &str = "O'SYNTHETIC-SUBJECT-7c1d";
 
+/// The host of the testkit's unreachable base, withheld as a synthetic value
+/// the HTTP client's reason names when the connection is refused.
+const UNREACHABLE_HOST: &str = "127.0.0.1";
+
 /// An empty ITS-REST `RESULT_SET`.
 const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c","columns":[{"name":"#0","path":"c/uid/value"}],"rows":[]}"##;
 
@@ -409,6 +413,24 @@ async fn a_refused_connection_is_offline_with_a_reason() -> TestResult {
         error.len() > "the node could not be reached: ".len(),
         "the refusal carries no reason: {error}"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_withheld_value_in_the_reason_a_node_was_unreachable_is_masked() -> TestResult {
+    let base = format!("{}/openehr", unreachable::BASE);
+    let client = client_at(&base)?;
+    let withheld = Withheld::new([SecretString::from(UNREACHABLE_HOST)]);
+    let options = within(Duration::from_secs(5))?.with_withheld(Arc::new(withheld));
+    let reply = client.query(&NodeQuery::new(NODE_AQL), &options).await?;
+    assert_eq!(reply.status(), EndpointStatus::Offline, "§11.1");
+    let error = error_text(&reply)?;
+    assert!(
+        error.starts_with("the node could not be reached: "),
+        "{error}"
+    );
+    assert!(!error.contains(UNREACHABLE_HOST), "{error}");
+    assert!(error.contains(MASK), "the reason named the host: {error}");
     Ok(())
 }
 

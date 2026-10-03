@@ -11,7 +11,8 @@
 //! cut to [`MESSAGE_LIMIT`] characters, with every control, format and
 //! separator character turned into a space and every withheld identifier
 //! replaced by [`MASK`], so nothing the gateway withholds for the request
-//! reaches the answer (§5.4.1, N33).
+//! reaches the answer (§5.4.1, N33). The HTTP client's reason for an
+//! `offline` or `time-out` node is held to the same rule.
 
 use http::StatusCode;
 use openehr_federation::outcome::ErrorDetail;
@@ -46,12 +47,21 @@ pub fn answered(status: StatusCode, body: &ErrorBody, withheld: &Withheld) -> Er
 #[must_use]
 pub fn said(lead: String, body: &ErrorBody, withheld: &Withheld) -> ErrorDetail {
     match body.message().or_else(|| body.text()) {
-        Some(message) => match excerpt(message, withheld) {
-            Excerpt::Kept(kept) => ErrorDetail::Text(format!("{lead}: {kept}")),
-            Excerpt::Withheld => ErrorDetail::Text(format!("{lead}: {MASK}")),
-            Excerpt::Empty => ErrorDetail::Text(lead),
-        },
+        Some(message) => followed_by(lead, message, withheld),
         None => ErrorDetail::Text(lead),
+    }
+}
+
+/// The `error` that reads `lead`, then an excerpt of `reason`, text the
+/// gateway writes but did not compose: a node's message, or the HTTP
+/// client's account of why the node was not reached.
+///
+/// The excerpt follows the rule of [`said`].
+pub(crate) fn followed_by(lead: String, reason: &str, withheld: &Withheld) -> ErrorDetail {
+    match excerpt(reason, withheld) {
+        Excerpt::Kept(kept) => ErrorDetail::Text(format!("{lead}: {kept}")),
+        Excerpt::Withheld => ErrorDetail::Text(format!("{lead}: {MASK}")),
+        Excerpt::Empty => ErrorDetail::Text(lead),
     }
 }
 

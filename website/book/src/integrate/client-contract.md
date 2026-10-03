@@ -303,6 +303,8 @@ the body's text otherwise.
   percent-encoded for one, the whole message reads `[withheld]`.
 - A node that sent no message, or nothing printable, is reported by its
   status alone.
+- A node reported `offline` or `time-out` in a federated query carries the
+  HTTP client's reason it was not reached, held to the same three rules.
 
 One rule covers every per-member record FerroFED writes: a federated query,
 the [fan-out template upload](#fan-out-template-upload), and the
