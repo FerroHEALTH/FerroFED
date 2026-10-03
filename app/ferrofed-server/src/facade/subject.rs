@@ -35,7 +35,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::response::Response;
-use ferrofed_engine::declared;
+use ferrofed_engine::declared::{self, query};
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::forward::ClientRequest;
 use ferrofed_engine::hygiene::Withheld;
@@ -46,7 +46,9 @@ use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, Method};
 use openehr_its::rest::client::path_segment;
+use openehr_its::rest::generated::ehr::EhrGetBySubjectParams;
 use openehr_its::rest::routes::RouteMatch;
+use openehr_its::rest::runtime::ApiError;
 use secrecy::SecretString;
 
 use crate::error::{self, Code};
@@ -57,12 +59,6 @@ use crate::federation::Federation;
 
 /// The ITS-REST operation that reads an EHR by its subject.
 const OPERATION: &str = "ehr_get_by_subject";
-
-/// The query parameter that carries the patient identifier.
-const SUBJECT_ID: &str = "subject_id";
-
-/// The query parameter that carries the identifier's issuing namespace.
-const SUBJECT_NAMESPACE: &str = "subject_namespace";
 
 /// Whether `matched` is `GET {base}/v1/ehr`, the read of an EHR by subject.
 pub(crate) fn serves(matched: &RouteMatch) -> bool {
@@ -153,31 +149,24 @@ struct Subject {
 impl Subject {
     /// The subject the query string `query` of `matched` names.
     ///
-    /// Each parameter must be one the operation declares, and `subject_id`
-    /// and `subject_namespace` must each be given once (ITS-REST 1.1.0, both
-    /// `required`; a `form` scalar is one pair).
+    /// Each parameter must be one the operation declares, and the query
+    /// string is decoded by the operation's generated parameters: `subject_id`
+    /// and `subject_namespace` each given once (ITS-REST 1.1.0, both
+    /// `required`; a `form` scalar is one pair), each percent-decoded to UTF-8
+    /// text (RFC 3986 §2.1, so a `+` is a literal plus).
     fn of(matched: &RouteMatch, query: Option<&str>) -> Result<Self, Unserved> {
-        let mut values = Vec::new();
-        let mut namespaces = Vec::new();
-        // TODO(#292): decode through the openehr-its params of ehr_get_by_subject (FerroEHR#3540).
-        let pairs = url::form_urlencoded::parse(query.unwrap_or_default().as_bytes());
-        for (position, (name, value)) in (1_usize..).zip(pairs) {
-            match matched.query_key(&name).map(|param| param.name) {
-                Some(SUBJECT_ID) => values.push(SecretString::from(value.into_owned())),
-                Some(SUBJECT_NAMESPACE) => namespaces.push(value.into_owned()),
-                Some(_) | None => return Err(Unserved::Undeclared { position }),
-            }
+        if let Some(query) = query {
+            query::every_declared(matched, query).map_err(|unlisted| Unserved::Undeclared {
+                position: unlisted.position,
+            })?;
         }
-        let (mut values, mut namespaces) = (values.into_iter(), namespaces.into_iter());
-        let (Some(value), None, Some(namespace), None) = (
-            values.next(),
-            values.next(),
-            namespaces.next(),
-            namespaces.next(),
-        ) else {
-            return Err(Unserved::NotOnce);
-        };
-        let namespace = IdentifierNamespace::new(namespace).map_err(Unserved::Patient)?;
+        // NOTE: no specification governs this: our own design; the headers are held
+        // by `declared::held`, so the generated decoder reads the query string alone.
+        let params = EhrGetBySubjectParams::from_request(matched, query, &HeaderMap::new())
+            .map_err(Unserved::Malformed)?;
+        let namespace =
+            IdentifierNamespace::new(params.subject_namespace).map_err(Unserved::Patient)?;
+        let value = SecretString::from(params.subject_id);
         let patient = PatientRef::new(namespace, value.clone()).map_err(Unserved::Patient)?;
         Ok(Self { patient, value })
     }
@@ -321,11 +310,13 @@ enum Unserved {
         /// The parameter's position in the query string, counted from 1.
         position: usize,
     },
-    /// `subject_id` or `subject_namespace` is absent or repeated.
+    /// The query string is no `ehr_get_by_subject` query: `subject_id` or
+    /// `subject_namespace` is absent or repeated, or a pair does not
+    /// percent-decode to UTF-8 text.
     #[error(
-        "GET {{base}}/v1/ehr names its subject by subject_id and subject_namespace, each given once (ITS-REST 1.1.0)"
+        "GET {{base}}/v1/ehr names its subject by subject_id and subject_namespace, each given once as UTF-8 text (ITS-REST 1.1.0)"
     )]
-    NotOnce,
+    Malformed(#[source] ApiError),
     /// The subject cannot form a patient reference.
     #[error("the subject cannot form a patient reference (§5.2)")]
     Patient(#[source] PatientRefError),
@@ -364,7 +355,7 @@ impl Unserved {
     fn code(&self) -> Code {
         match self {
             Self::Undeclared { .. } => Code::QueryParameterRefused,
-            Self::NotOnce | Self::Patient(_) => Code::PatientInvalid,
+            Self::Malformed(_) | Self::Patient(_) => Code::PatientInvalid,
             Self::Target(untargeted) => untargeted.code(),
             Self::Suspended | Self::Nowhere => Code::NoDestination,
             Self::Several(_) => Code::SubjectSeveral,
@@ -401,6 +392,7 @@ mod tests {
     use ferrofed_identity::patient::PatientRefError;
     use ferrofed_registry::id::EndpointId;
     use http::StatusCode;
+    use openehr_its::rest::runtime::ApiError;
 
     fn endpoint(id: &str) -> EndpointId {
         EndpointId::new(id).unwrap()
@@ -415,7 +407,9 @@ mod tests {
                 StatusCode::BAD_REQUEST,
             ),
             (
-                Unserved::NotOnce,
+                Unserved::Malformed(ApiError::BadRequest(
+                    "the query parameter `subject_id` is given more than once".to_owned(),
+                )),
                 "patient-invalid",
                 StatusCode::BAD_REQUEST,
             ),

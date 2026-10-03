@@ -415,7 +415,7 @@ async fn an_unexposed_its_rest_area_is_a_501_not_implemented() -> TestResult {
     let b = node_answering("uid-at-b").await;
     for path in [
         format!("/v1/demographic/party/{PATIENT}"),
-        format!("/v1/definition/template/adl1.4/{PATIENT}"),
+        format!("/v1/admin/ehr/{PATIENT}"),
     ] {
         let app = gateway(dir.path(), &a.uri(), &b.uri(), 2000, true)?;
         let (status, text) = call(app, Request::get(&path).body(Body::empty())?).await?;

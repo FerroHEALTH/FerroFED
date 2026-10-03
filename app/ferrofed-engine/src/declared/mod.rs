@@ -29,6 +29,7 @@
 mod kind;
 mod negotiate;
 mod path;
+pub mod query;
 
 use std::fmt;
 

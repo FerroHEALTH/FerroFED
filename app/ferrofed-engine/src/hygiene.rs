@@ -125,21 +125,10 @@ pub fn forwarded_query<'q>(
     operation: &RouteMatch,
     query: &'q str,
 ) -> Result<&'q str, UnlistedParameter> {
-    let unlisted = query
-        .split('&')
-        .filter(|pair| !pair.is_empty())
-        .position(|pair| {
-            let name = pair.split('=').next().unwrap_or(pair);
-            let name = percent_decoded(name);
-            WITHHELD_QUERY_PARAMETERS.contains(&name.as_str())
-                || operation.query_key(&name).is_none()
-        });
-    match unlisted {
-        Some(index) => Err(UnlistedParameter {
-            position: index.saturating_add(1),
-        }),
-        None => Ok(query),
-    }
+    crate::declared::query::admitted(query, |name| {
+        !WITHHELD_QUERY_PARAMETERS.contains(&name) && operation.query_key(name).is_some()
+    })?;
+    Ok(query)
 }
 
 /// A query parameter a single-node route does not forward, so the request is

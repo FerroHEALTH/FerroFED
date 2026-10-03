@@ -536,6 +536,70 @@ async fn a_subject_not_given_once_or_an_undeclared_parameter_is_a_400_that_asks_
     Ok(())
 }
 
+// conformance: CP-26
+#[tokio::test]
+async fn a_subject_that_is_no_utf8_text_is_a_400_that_asks_no_resolver() -> TestResult {
+    let a = node(SYSTEM_A, EHR_A).await;
+    let b = node(SYSTEM_B, EHR_B).await;
+    let manager = failing_manager().await;
+    let dir = tempfile::tempdir()?;
+    let app = pix_gateway(dir.path(), &a.uri(), &b.uri(), &manager.uri())?;
+    for uri in [
+        format!("/v1/ehr?subject_id=SENTINEL-%FF-38kq&subject_namespace={NAMESPACE}"),
+        format!("/v1/ehr?subject_id={PATIENT}&subject_namespace=urn%3Aoid%3A%C3"),
+    ] {
+        let (status, _, text) = answer(app.clone(), get(&uri, None)?).await?;
+        assert_eq!(
+            StatusCode::BAD_REQUEST,
+            status,
+            "the generated decoder refuses a pair that is no UTF-8 text (RFC 3986 §2.1): {text}"
+        );
+        assert_eq!("patient-invalid", error_body(&text)?.code, "{text}");
+        quotes_no_subject(&text);
+    }
+    assert_eq!(0, asked(&manager).await?, "no resolver is asked (§5.2)");
+    assert_eq!(0, asked(&a).await? + asked(&b).await?, "nobody is asked");
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_plus_in_the_subject_is_a_literal_plus() -> TestResult {
+    let a = node(SYSTEM_A, EHR_A).await;
+    let b = node(SYSTEM_B, EHR_B).await;
+    let dir = tempfile::tempdir()?;
+    let rows = format!(
+        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL+PLUS-38kq\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL PLUS-38kq\"\nmember = \"node-b\"\nehr_id = \"{EHR_B}\"\n"
+    );
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "profile = \"development\"",
+        &rows,
+    )?;
+    let uri = format!("/v1/ehr?subject_id=SENTINEL+PLUS-38kq&subject_namespace={NAMESPACE}");
+
+    let (status, headers, text) = answer(app, get(&uri, None)?).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "a + percent-decodes to itself, never a space (RFC 3986 §2.1): {text}"
+    );
+    names(&headers, ENDPOINT_A, SYSTEM_A);
+    asked_by_ehr_id_alone(&a, EHR_A).await?;
+    let sent = wire(&a).await?;
+    assert!(
+        !sent.contains_ignoring_ascii_case("PLUS"),
+        "the subject reached the node (§5.4.1, N33): {sent}"
+    );
+    assert_eq!(
+        0,
+        asked(&b).await?,
+        "the member holding the space-decoded value is not asked"
+    );
+    Ok(())
+}
+
 #[test]
 fn the_subject_reaches_no_log_line() -> TestResult {
     let runtime = tokio::runtime::Builder::new_current_thread()
