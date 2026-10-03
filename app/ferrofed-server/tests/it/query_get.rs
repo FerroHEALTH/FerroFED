@@ -54,7 +54,7 @@ fn parameterised() -> String {
 
 /// `text` percent-encoded byte for byte, the unreserved set of RFC 3986
 /// §2.3 kept.
-fn encoded(text: &str) -> String {
+pub(crate) fn encoded(text: &str) -> String {
     text.bytes().fold(String::new(), |mut out, byte| {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
             out.push(char::from(byte));
