@@ -15,7 +15,8 @@
 # to curl on stdin, never on its command line.
 #
 # Exit 0 with the log written. Exit 1 naming what failed: no report task, a
-# failed or timed-out analysis, or an API error.
+# failed or timed-out analysis, an API error, or more issues than the API
+# serves.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -80,8 +81,8 @@ while :; do
     break
   fi
   if [ "$page" -ge "$MAX_PAGES" ]; then
-    echo "sonar-sarif: $total open issues; the log carries the first $((MAX_PAGES * PAGE_SIZE))." >&2
-    break
+    echo "sonar-sarif: $total open issues exceed the API's $((MAX_PAGES * PAGE_SIZE)); no partial log is written." >&2
+    exit 1
   fi
   page=$((page + 1))
 done
