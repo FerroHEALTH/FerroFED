@@ -264,7 +264,7 @@ the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
 gateway reloads on the signal only and never watches the file, so write the
 new document completely, then send the signal.
 
-Four sections take effect on a reload:
+Five sections take effect on a reload:
 
 | Reloaded | Needs a restart |
 |---|---|
@@ -272,6 +272,7 @@ Four sections take effect on a reload:
 | `[credentials]` | `[server]` |
 | `[dev]` | `[telemetry]` and `[metrics]` |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
+| `[xcpd]` | |
 
 `federation.demographic_endpoint` keeps its running value until a restart,
 and the document must still declare it: a reload whose document drops that

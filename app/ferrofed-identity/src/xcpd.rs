@@ -87,6 +87,15 @@ impl FixedAssertion {
     pub fn new(assertion: XuaAssertion) -> Self {
         Self(assertion)
     }
+
+    /// The source that always gives the assertion `xml` holds.
+    ///
+    /// # Errors
+    /// [`InvalidInput::Assertion`] when `xml` is not one SAML 2.0
+    /// `Assertion` element ([`XuaAssertion::new`]).
+    pub fn from_xml(xml: &SecretString) -> Result<Self, InvalidInput> {
+        XuaAssertion::new(xml.expose_secret()).map(Self)
+    }
 }
 
 #[async_trait]

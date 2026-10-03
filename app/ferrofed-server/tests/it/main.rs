@@ -70,3 +70,4 @@ mod template_fan_out;
 mod timeouts;
 mod track10;
 mod versioned_write;
+mod xcpd;

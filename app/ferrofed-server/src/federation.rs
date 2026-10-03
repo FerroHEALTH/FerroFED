@@ -302,6 +302,10 @@ impl Federation {
             if settings.pixm.is_some() {
                 return Err(FederationError::PixmWithoutRegistry);
             }
+            if settings.xcpd.is_some() {
+                let error = localization::LocalizationError::XcpdWithoutRegistry;
+                return Err(FederationError::Localization(error));
+            }
             if settings.federation.demographic_endpoint.is_some() {
                 return Err(FederationError::DemographicWithoutRegistry);
             }
@@ -334,7 +338,7 @@ impl Federation {
             }
             (None, Some(pixm)) => Some(pixm_resolver(pixm, &snapshot)?),
         };
-        let localization = localization::policy(&settings.federation, selection, development)
+        let localization = localization::policy(settings, selection, development, &snapshot)
             .map_err(FederationError::Localization)?;
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.
