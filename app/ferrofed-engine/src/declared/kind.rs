@@ -99,7 +99,7 @@ mod tests {
     use crate::declared::path::{PathValue, expected};
     use openehr_its::rest::generated::ehr::{ROUTE_PARAMS, ROUTES};
     use openehr_its::rest::generated::{definition, demographic};
-    use openehr_its::rest::routes::{Param, ParamLocation};
+    use openehr_its::rest::routes::{Param, ParamKind, ParamLocation};
 
     /// The free-text parameters of the EHR area, as the module's `// NOTE:`
     /// and the configuration page list them.
@@ -220,5 +220,37 @@ mod tests {
             }),
             "§7a.1, N32: the DEMOGRAPHIC area"
         );
+    }
+
+    #[test]
+    fn the_structured_kinds_hold_their_values() {
+        let cases: [(ParamKind, &str, bool); 15] = [
+            (
+                ParamKind::Uuid,
+                "7d44b88c-4199-4bad-97dc-d78268e01398",
+                true,
+            ),
+            (ParamKind::Uuid, "7d44b88c41994bad97dcd78268e01398", false),
+            (ParamKind::Uuid, "4711", false),
+            (ParamKind::Date, "2015-01-20", true),
+            (ParamKind::Date, "2015-01-20T19:30:22Z", false),
+            (ParamKind::Date, "2015-01-20[patient=4711]", false),
+            (ParamKind::Integer, "-12", true),
+            (ParamKind::Integer, "12a", false),
+            (ParamKind::Number, "1.5", true),
+            (ParamKind::Number, "NaN", false),
+            (ParamKind::Boolean, "true", true),
+            (ParamKind::Boolean, "yes", false),
+            (ParamKind::Array(&ParamKind::Integer), "1, 2,3", true),
+            (ParamKind::Array(&ParamKind::Integer), "1,x", false),
+            (ParamKind::Enum(&["a", "b"]), "c", false),
+        ];
+        for (kind, value, expected) in cases {
+            assert_eq!(
+                expected,
+                super::fits(&kind, value, true),
+                "{kind:?} {value}"
+            );
+        }
     }
 }

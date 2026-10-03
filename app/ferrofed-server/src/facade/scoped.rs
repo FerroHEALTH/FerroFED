@@ -30,7 +30,8 @@ use http::HeaderMap;
 use openehr_federation::aql::Analysis;
 
 use crate::error::Code;
-use crate::facade::{owner, route, security};
+use crate::facade::route::ehr;
+use crate::facade::{owner, security};
 use crate::federation::Federation;
 
 /// The member an `ehr_id`-scoped query is sent to, and the step of §12.5.1
@@ -193,7 +194,7 @@ async fn owner<'a>(
                 overall,
                 request_id: scoped.outbound,
             };
-            let (endpoint, _answer) = route::ask_all(federation, &probe, &logged)
+            let (endpoint, _answer) = ehr::ask_all(federation, &probe, &logged)
                 .await
                 .map_err(|(code, message)| Unrouted::Probe { code, message })?;
             owner::learn(federation.index(), &ehr_id, endpoint.node());

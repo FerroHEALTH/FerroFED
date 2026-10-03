@@ -14,7 +14,9 @@
 //! identifier and each value that travels matches what the operation
 //! declares for it, and `Accept`, `Content-Type` and `Prefer` travel as values
 //! the operation lists ([`declared::held`]); a body never travels without a
-//! `Content-Type` its operation's body is declared in. The
+//! `Content-Type` its operation's body is declared in. A [`HeldRequest`]
+//! carries those headers, composed once, so a route that reads them before
+//! sending sends the same ones. The
 //! endpoint's onward credentials set `Authorization`, and the request's
 //! minted [`OutboundId`](crate::outbound_id::OutboundId) sets `X-Request-Id`.
 //!
@@ -193,28 +195,36 @@ pub enum ForwardError {
     Unrouted,
 }
 
-impl<T: Transport> NodeClient<T> {
-    /// Forwards `request` to the node once and returns its answer.
-    ///
-    /// The ITS-REST operation the method and path address decides which of
-    /// the client's headers and query parameters travel, and each must match
-    /// the kind the operation declares for it. The deadline and the
-    /// request id of `options` apply, and the outbound gate reads the URL and
-    /// every forwarded header against the identifiers `options` withholds.
+/// A client request held to the ITS-REST operation its method and path
+/// address, with the headers composed for the node once
+/// ([`declared::held`]).
+///
+/// Only [`HeldRequest::hold`] builds one, so a held request's query string
+/// names only parameters its operation declares, and its headers are the
+/// ones the operation declares, each held to its kind. `Debug` shows the
+/// method and the sizes, never the path, a header or the body.
+#[derive(Clone)]
+pub struct HeldRequest {
+    method: Method,
+    path: String,
+    query: Option<String>,
+    operation: RouteMatch,
+    headers: HeaderMap,
+    body: Vec<u8>,
+}
+
+impl HeldRequest {
+    /// Holds `request` to the ITS-REST operation its method and path
+    /// address, and composes the headers the node receives.
     ///
     /// # Errors
     ///
-    /// Returns [`ForwardError::Unrouted`], [`ForwardError::QueryParameter`],
-    /// [`ForwardError::Value`] and [`ForwardError::Withheld`] with nothing sent,
-    /// [`ForwardError::Credentials`] and [`ForwardError::Compose`] when the
-    /// request could not leave, [`ForwardError::TimeOut`] and
-    /// [`ForwardError::Unreachable`] when the node gave no answer, and
-    /// [`ForwardError::Refused`] when it answered `401`.
-    pub async fn forward(
-        &self,
-        request: ClientRequest,
-        options: &DispatchOptions,
-    ) -> Result<Forwarded, ForwardError> {
+    /// Returns [`ForwardError::Unrouted`] when the method and path address no
+    /// operation, [`ForwardError::QueryParameter`] for a query parameter the
+    /// operation does not declare or a route never forwards, and
+    /// [`ForwardError::Value`] for a declared value that does not match its
+    /// kind, or an `Accept` or `Content-Type` naming no listed media type.
+    pub fn hold(request: ClientRequest) -> Result<Self, ForwardError> {
         let ClientRequest {
             method,
             path,
@@ -225,12 +235,93 @@ impl<T: Transport> NodeClient<T> {
         let Lookup::Matched(operation) = routes::lookup(&method, &path) else {
             return Err(ForwardError::Unrouted);
         };
+        if let Some(query) = query.as_deref() {
+            hygiene::forwarded_query(&operation, query)?;
+        }
+        let headers = declared::held(&operation, query.as_deref(), &headers, &body)?;
+        Ok(Self {
+            method,
+            path,
+            query,
+            operation,
+            headers,
+            body,
+        })
+    }
+
+    /// The headers composed for the node: each one the operation declares,
+    /// held to its kind, with `Accept`, `Content-Type` and `Prefer` as listed
+    /// values ([`declared::held`]).
+    #[must_use]
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+}
+
+impl fmt::Debug for HeldRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HeldRequest")
+            .field("method", &self.method)
+            .field("operation", &self.operation.operation_id)
+            .field("headers", &self.headers.len())
+            .field("body_bytes", &self.body.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T: Transport> NodeClient<T> {
+    /// Forwards `request` to the node once and returns its answer.
+    ///
+    /// The ITS-REST operation the method and path address decides which of
+    /// the client's headers and query parameters travel, and each must match
+    /// the kind the operation declares for it ([`HeldRequest::hold`]); the
+    /// held request then leaves as [`NodeClient::forward_held`] sends it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`ForwardError`] of [`HeldRequest::hold`] with nothing
+    /// sent, and otherwise that of [`NodeClient::forward_held`].
+    pub async fn forward(
+        &self,
+        request: ClientRequest,
+        options: &DispatchOptions,
+    ) -> Result<Forwarded, ForwardError> {
+        self.forward_held(HeldRequest::hold(request)?, options)
+            .await
+    }
+
+    /// Forwards the held `request` to the node once and returns its answer.
+    ///
+    /// The headers travel as they were composed when the request was held.
+    /// The deadline and the request id of `options` apply, and the outbound
+    /// gate reads the URL and every forwarded header against the identifiers
+    /// `options` withholds (§5.4.1, N33).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForwardError::Withheld`] with nothing sent,
+    /// [`ForwardError::Credentials`] and [`ForwardError::Compose`] when the
+    /// request could not leave, [`ForwardError::TimeOut`] and
+    /// [`ForwardError::Unreachable`] when the node gave no answer, and
+    /// [`ForwardError::Refused`] when it answered `401`.
+    pub async fn forward_held(
+        &self,
+        request: HeldRequest,
+        options: &DispatchOptions,
+    ) -> Result<Forwarded, ForwardError> {
+        let HeldRequest {
+            method,
+            path,
+            query,
+            operation,
+            headers,
+            body,
+        } = request;
         let mut outgoing = Request::new(method, path);
         if let Some(query) = query.as_deref() {
-            outgoing.raw_query(hygiene::forwarded_query(&operation, query)?);
+            outgoing.raw_query(query);
         }
-        let sent = declared::held(&operation, query.as_deref(), &headers, &body)?;
-        outgoing.headers_mut().extend(sent);
+        outgoing.headers_mut().extend(headers);
         let call = options
             .call_options()
             .map_err(|source| ForwardError::Compose {

@@ -25,11 +25,10 @@ use http::{Request, StatusCode, header};
 use openehr_federation::options::OptionsRoot;
 use wiremock::{MockServer, ResponseTemplate};
 
-use crate::definition::{acted, exchange, field, refused_at_neither};
 use crate::facade::{PATIENT, gateway, registry, schema, wire};
 use crate::path_ehr_id::{asked, mount};
 use crate::run::binary;
-use crate::support::{call, error_body};
+use crate::support::{acted, call, error_body, exchange, field, refused_at_neither};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

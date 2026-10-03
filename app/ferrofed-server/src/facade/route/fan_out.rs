@@ -31,7 +31,8 @@ use axum::Json;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::TIMEOUT_POLICY;
-use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded};
+use ferrofed_engine::forward::{ForwardError, Forwarded, HeldRequest};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, StatusCode};
@@ -44,8 +45,8 @@ use openehr_its::rest::routes::RouteMatch;
 use serde::Serialize;
 use tokio::task::JoinSet;
 
-use super::chosen::{Chooser, named};
-use super::{Arrived, DEFINITION_GROUP, Deadlines, refused_carriers};
+use super::chosen::{Chooser, named, to_named};
+use super::{Arrived, DEFINITION_GROUP, Deadlines, held, unheld};
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::security;
@@ -71,24 +72,32 @@ pub(super) async fn definition(
     arrived: Arrived<'_>,
     matched: &RouteMatch,
 ) -> Response {
-    if federation.fans_out_template_upload() && uploads_template(matched) {
-        let started = Instant::now();
-        let logged = arrived.outbound.to_string();
-        if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
-            return refused;
-        }
-        match members(federation.snapshot(), arrived.headers) {
-            Ok(Some(selected)) => {
-                return fan_out(federation, &arrived, &selected, (started, &logged)).await;
-            }
-            Ok(None) => {}
-            Err(refused) => {
-                return error::response(refused.code(), refused.to_string(), arrived.request_id);
-            }
-        }
-    }
     let chooser = Chooser::Client;
-    named(federation, arrived, matched, DEFINITION_GROUP, chooser).await
+    if !(federation.fans_out_template_upload() && uploads_template(matched)) {
+        return named(federation, arrived, DEFINITION_GROUP, chooser).await;
+    }
+    let started = Instant::now();
+    let logged = arrived.outbound.to_string();
+    let request = match held(&arrived) {
+        Ok(request) => request,
+        Err(failure) => return unheld(&failure, arrived.request_id, &logged),
+    };
+    match members(federation.snapshot(), arrived.headers) {
+        Ok(Some(selected)) => {
+            fan_out(
+                federation,
+                &arrived,
+                (&request, &selected),
+                (started, &logged),
+            )
+            .await
+        }
+        Ok(None) => {
+            let held = (request, started);
+            to_named(federation, arrived, held, DEFINITION_GROUP, chooser).await
+        }
+        Err(refused) => error::response(refused.code(), refused.to_string(), arrived.request_id),
+    }
 }
 
 /// Whether `matched` uploads a template (§12.6).
@@ -164,12 +173,13 @@ enum Reply {
     Abandoned,
 }
 
-/// Sends the client's upload to each member of `selected` independently,
-/// within the request's budget, and answers per node (§12.6, §11.5).
+/// Sends the client's upload, held as `request`, to each member of
+/// `selected` independently, within the request's budget, and answers per
+/// node (§12.6, §11.5).
 async fn fan_out(
     federation: &Federation,
     arrived: &Arrived<'_>,
-    selected: &BTreeSet<EndpointId>,
+    (request, selected): (&HeldRequest, &BTreeSet<EndpointId>),
     (started, logged): (Instant, &str),
 ) -> Response {
     let request_id = arrived.request_id;
@@ -194,7 +204,8 @@ async fn fan_out(
         );
         return error::fixed(Code::Internal, request_id);
     };
-    let replies = send_all(federation, arrived, &targets, &budget, logged).await;
+    let sent = (request, arrived.outbound);
+    let replies = send_all(federation, sent, &targets, &budget, logged).await;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (reply, latency_ms)) in targets.iter().zip(replies) {
         outcomes.push((endpoint.id(), outcome(endpoint, reply, latency_ms, logged)));
@@ -221,17 +232,17 @@ async fn fan_out(
     }
 }
 
-/// Sends the client's request to each of `targets` at once, and returns
-/// what each made of it with the gateway's measurement of its request in
-/// milliseconds, in the order of `targets`.
+/// Sends the held `request` to each of `targets` at once under the gateway's
+/// `outbound` id, and returns what each made of it with the gateway's
+/// measurement of its request in milliseconds, in the order of `targets`.
 async fn send_all(
     federation: &Federation,
-    arrived: &Arrived<'_>,
+    (request, outbound): (&HeldRequest, OutboundId),
     targets: &[&Endpoint],
     budget: &Deadlines,
     logged: &str,
 ) -> Vec<(Reply, u64)> {
-    let options = DispatchOptions::new(budget.per_node()).with_request_id(arrived.outbound);
+    let options = DispatchOptions::new(budget.per_node()).with_request_id(outbound);
     let mut tasks = JoinSet::new();
     let mut replies: Vec<Option<(Reply, u64)>> = targets.iter().map(|_| None).collect();
     let fanned = Instant::now();
@@ -247,17 +258,11 @@ async fn send_all(
             }
             continue;
         };
-        let request = ClientRequest {
-            method: arrived.method.clone(),
-            path: arrived.path.to_owned(),
-            query: arrived.uri.query().map(str::to_owned),
-            headers: arrived.headers.clone(),
-            body: arrived.body.to_vec(),
-        };
+        let request = request.clone();
         let options = options.clone();
         tasks.spawn(async move {
             let asked = Instant::now();
-            let answer = client.forward(request, &options).await;
+            let answer = client.forward_held(request, &options).await;
             (index, answer, elapsed_ms(asked))
         });
     }

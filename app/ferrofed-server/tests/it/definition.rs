@@ -19,12 +19,12 @@ use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
-use http::{HeaderMap, Method, Request, StatusCode, header};
+use http::{Method, Request, StatusCode, header};
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, PATIENT, gateway, registry, wire};
 use crate::path_ehr_id::{asked, mount};
-use crate::support::{error_body, send};
+use crate::support::{acted, error_body, exchange, field, refused_at_neither};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -88,52 +88,6 @@ fn media_type(at: &str) -> &'static str {
     } else {
         "text/plain"
     }
-}
-
-/// The status, the headers and the body bytes `app` answers `request` with.
-pub(crate) async fn exchange(
-    app: Router,
-    request: Request<Body>,
-) -> Result<(StatusCode, HeaderMap, Vec<u8>), Box<dyn Error>> {
-    let response = send(app, request).await?;
-    let status = response.status();
-    let headers = response.headers().clone();
-    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
-    Ok((status, headers, bytes.to_vec()))
-}
-
-/// The value of the field `name` in `headers`, when it is text.
-pub(crate) fn field<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
-    headers.get(name).and_then(|value| value.to_str().ok())
-}
-
-/// Asserts that `headers` name `endpoint` and its node's `system_id` as the
-/// ones that acted (§7a.3, N31, §9.6).
-pub(crate) fn acted(headers: &HeaderMap, endpoint: &str, system_id: &str) {
-    assert_eq!(Some(endpoint), field(headers, ENDPOINT), "N31");
-    assert_eq!(
-        Some(system_id),
-        field(headers, "openEHR-federation-system-id"),
-        "§9.6"
-    );
-}
-
-/// Asserts that `request` is refused `400` with `code`, names no acting
-/// endpoint, and that neither node received anything.
-pub(crate) async fn refused_at_neither(
-    app: Router,
-    request: Request<Body>,
-    code: &str,
-    (a, b): (&MockServer, &MockServer),
-) -> TestResult {
-    let (status, headers, body) = exchange(app, request).await?;
-    let text = String::from_utf8(body)?;
-    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
-    assert_eq!(code, error_body(&text)?.code, "{text}");
-    assert_eq!(None, field(&headers, ENDPOINT), "no endpoint acted: {text}");
-    assert!(asked(a).await?.is_empty(), "node A received nothing");
-    assert!(asked(b).await?.is_empty(), "node B received nothing");
-    Ok(())
 }
 
 /// Every operation of the definition area ITS-REST 1.1.0 declares, as the

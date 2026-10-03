@@ -37,7 +37,7 @@ use std::time::Instant;
 use axum::response::Response;
 use ferrofed_engine::declared::{self, query};
 use ferrofed_engine::dispatch::DispatchOptions;
-use ferrofed_engine::forward::ClientRequest;
+use ferrofed_engine::forward::{ClientRequest, HeldRequest};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
@@ -125,7 +125,11 @@ pub(crate) async fn serve(
         body: Vec::new(),
     };
     let provenance = Provenance::of(snapshot, endpoint);
-    match route::send(federation, endpoint, request, &options, &logged).await {
+    let forwarded = match HeldRequest::hold(request) {
+        Ok(request) => route::send(federation, endpoint, request, &options, &logged).await,
+        Err(refused) => Err(Failure::Forward(refused)),
+    };
+    match forwarded {
         Ok(forwarded) => {
             route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
             provenance.stamp(route::answered(forwarded))

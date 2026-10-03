@@ -32,10 +32,9 @@ use openehr_federation::status::EndpointStatus;
 use serde::Deserialize;
 use wiremock::{MockServer, ResponseTemplate};
 
-use crate::definition::{exchange, field};
 use crate::facade::{PATIENT, registry, settings_with_room, wire};
 use crate::path_ehr_id::{asked, mount};
-use crate::support::error_body;
+use crate::support::{error_body, exchange, field};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
