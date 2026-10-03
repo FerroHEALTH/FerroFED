@@ -62,15 +62,15 @@ use ferrofed_engine::hygiene;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_identity::binding::SessionKey;
-use ferrofed_registry::id::{EhrId, EndpointId};
+use ferrofed_registry::id::EhrId;
 use ferrofed_registry::incident::Detection;
-use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
-use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
+use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
+use http::{HeaderMap, Method, Uri};
 use openehr_base::prelude::ObjectVersionId;
-use openehr_federation::headers;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::error::{self, Code};
+use crate::facade::provenance::Provenance;
 use crate::facade::route::chosen::{Chooser, named};
 use crate::facade::write::{self, Write};
 use crate::facade::{follow_up, owner, security, subject};
@@ -607,7 +607,7 @@ pub(crate) fn answered(forwarded: Forwarded) -> Response {
 /// gateway's own `logged` id.
 pub(crate) fn failed(
     failure: &ForwardError,
-    provenance: Provenance<'_>,
+    provenance: Provenance,
     (request_id, logged): (&str, &str),
 ) -> Response {
     let code = match failure {
@@ -634,57 +634,6 @@ pub(crate) fn failed(
         );
     }
     provenance.stamp(error::response(code, failure.to_string(), request_id))
-}
-
-/// The acting endpoint and its node's `system_id`, which every routed answer
-/// names (§7a.3, N31).
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Provenance<'a> {
-    endpoint: &'a EndpointId,
-    system_id: Option<&'a str>,
-}
-
-impl<'a> Provenance<'a> {
-    /// The provenance of an answer `endpoint` of `snapshot` acted for.
-    pub(crate) fn of(snapshot: &'a RegistrySnapshot, endpoint: &'a Endpoint) -> Self {
-        Self {
-            endpoint: endpoint.id(),
-            system_id: snapshot
-                .node(endpoint.node())
-                .map(|node| node.system_id().as_str()),
-        }
-    }
-}
-
-impl Provenance<'_> {
-    /// `response` with `openEHR-federation-endpoint` set to the acting
-    /// endpoint and `openEHR-federation-system-id` to its node's `system_id`.
-    #[expect(
-        clippy::expect_used,
-        reason = "registry ids are ASCII letters, digits and . - _, and a system_id is an openEHR UID, so both are valid header values"
-    )]
-    pub(crate) fn stamp(self, mut response: Response) -> Response {
-        let fields = response.headers_mut();
-        let endpoint = HeaderValue::try_from(self.endpoint.as_str())
-            .expect("a registry endpoint id should be a valid header value");
-        fields.insert(header_name(headers::ENDPOINT), endpoint);
-        if let Some(system_id) = self.system_id {
-            let system_id = HeaderValue::try_from(system_id)
-                .expect("a registry system_id should be a valid header value");
-            fields.insert(header_name(headers::SYSTEM_ID), system_id);
-        }
-        response
-    }
-}
-
-/// The field name `name` spells, lower-cased as HTTP/2 sends it.
-#[expect(
-    clippy::expect_used,
-    reason = "the federation's header names are ASCII tokens, which are valid field names"
-)]
-fn header_name(name: &str) -> HeaderName {
-    HeaderName::from_bytes(name.as_bytes())
-        .expect("a federation header name should be a valid field name")
 }
 
 #[cfg(test)]

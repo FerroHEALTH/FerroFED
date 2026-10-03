@@ -53,7 +53,8 @@ use secrecy::SecretString;
 
 use crate::error::{self, Code};
 use crate::facade::owner::{self, Listed};
-use crate::facade::route::{self, Arrived, Deadlines, Failure, Provenance};
+use crate::facade::provenance::Provenance;
+use crate::facade::route::{self, Arrived, Deadlines, Failure};
 use crate::facade::security;
 use crate::federation::Federation;
 use crate::health::dependencies::Observed;
