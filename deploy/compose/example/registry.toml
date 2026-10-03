@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# An example registry document for the release compose.yaml: two members,
+# each one CDR with one ITS-REST endpoint. Put your own beside compose.yaml as
+# registry.toml, with your organisations, nodes, system_ids and URLs; the
+# members here are placeholders under example.org. No specification governs
+# the document format: our own design over the §12b.1 registry entry (N21).
+
+[[organisation]]
+id = "org-a"
+name = "Example organisation A"
+
+[[organisation]]
+id = "org-b"
+name = "Example organisation B"
+
+[[node]]
+id = "node-a"
+organisation = "org-a"
+system_id = "cdr-a.example.org"
+
+[[node]]
+id = "node-b"
+organisation = "org-b"
+system_id = "cdr-b.example.org"
+
+[[endpoint]]
+id = "node-a-query"
+node = "node-a"
+url = "https://cdr-a.example.org/openehr"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-a"
+
+[[endpoint]]
+id = "node-b-query"
+node = "node-b"
+url = "https://cdr-b.example.org/openehr"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-b"

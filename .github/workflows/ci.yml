@@ -547,6 +547,28 @@ jobs:
           -E 'package(ferrofed-testkit) or test(/^e2e::/)'
           --no-tests=pass
 
+  # The compose.yaml every release carries, deploy/compose/compose.yaml (no
+  # specification governs it: our own design). Docker Compose renders it with
+  # the example values of deploy/compose/example/ and refuses it without each
+  # required variable, and `ferrofed config check`, built here, accepts the
+  # gateway configuration it embeds. It sits in the Rust tier because the
+  # check needs the binary; the runner image carries Docker Compose and jq.
+  release-compose:
+    name: release compose
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - run: cargo build --locked -p ferrofed-server --bin ferrofed
+      - run: bash scripts/checks/release-compose.sh target/debug/ferrofed
+
   doc:
     name: rustdoc
     needs: detect
@@ -736,6 +758,7 @@ jobs:
       - clippy
       - test
       - e2e
+      - release-compose
       - doc
       - cargo-deny
       - msrv

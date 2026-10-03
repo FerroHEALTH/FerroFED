@@ -9,8 +9,9 @@
 # build-binaries and build-image are calls to the reusable workflows
 # release-build.yml and release-image.yml, the SLSA Build Level 3 lanes.
 #
-# The release is created as a DRAFT, the binaries, SBOMs and attestation
-# bundles are attached to it, the image is pushed to GHCR, and only
+# The release is created as a DRAFT, the gateway compose file, the binaries,
+# SBOMs and attestation bundles are attached to it, the image is pushed to
+# GHCR, and only
 # once the expected asset set is complete is it PUBLISHED. Publishing last
 # means a half-assembled release is never visible.
 #
@@ -164,6 +165,16 @@ jobs:
           ' Cargo.toml)"
           check "the root Cargo.toml [workspace.package] version" "$manifest"
 
+          # The compose.yaml asset runs the gateway image at its default tag,
+          # so a file left at the previous version would start the previous
+          # release. Same reading scripts/checks/versions.sh does.
+          if [ ! -f deploy/compose/compose.yaml ]; then
+            echo "::error::deploy/compose/compose.yaml is missing, so $TAG has no compose.yaml to attach." >&2
+            exit 1
+          fi
+          compose="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\1|p' deploy/compose/compose.yaml | sort -u | tr '\n' ' ' | sed 's/ $//')"
+          check "the deploy/compose/compose.yaml gateway image tag" "$compose"
+
           [ "$fail" -eq 0 ] || exit 1
 
       - id: notes
@@ -232,6 +243,14 @@ jobs:
     permissions:
       contents: write # create the GitHub release
     steps:
+      # The tag's tree, for the compose file attached below. Checked out
+      # first, because checkout cleans the workspace and would remove the
+      # notes downloaded after it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
       - name: Download the release notes
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -277,6 +296,18 @@ jobs:
               exit 1
               ;;
           esac
+
+      # The gateway alone, at this release's image, so a downloader starts it
+      # with `docker compose up` and no checkout. The asset is named after the
+      # file, compose.yaml, the name Compose reads without `-f`. --clobber
+      # replaces the copy a re-run of this job attached to the same draft.
+      - name: Attach the gateway compose file
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" deploy/compose/compose.yaml --repo "$GITHUB_REPOSITORY" --clobber
 
   # ---- build-binaries: the SLSA Build L3 lane, once per target --------------
 
@@ -361,6 +392,9 @@ jobs:
                 || missing="$missing ferrofed-${TAG}-${target}${suffix}"
             done
           done < <(printf '%s' "$TARGETS" | jq -r '.include[].target')
+          # The release-wide asset github-release attaches: the gateway
+          # compose file a downloader runs without a checkout.
+          printf '%s\n' "$assets" | grep -Fxq "compose.yaml" || missing="$missing compose.yaml"
           if [ -n "$missing" ]; then
             echo "::error::the draft is missing assets, so it will not be published:$missing" >&2
             exit 1

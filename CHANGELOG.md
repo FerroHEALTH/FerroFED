@@ -23,6 +23,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Every release carries `compose.yaml`, which starts the gateway alone in
+  front of the CDRs you already run, with no checkout of the repository
+  (#385; no specification governs packaging: our own design). It runs
+  `ghcr.io/ferrohealth/ferrofed` at the release's version and embeds the
+  gateway configuration, filled in from `.env`: the federation id, the PIX
+  Manager's URL and each member's `ehr_id` domain there are required, and
+  each endpoint's credentials are optional. The registry document is
+  `registry.toml` beside the file and every credential is a file under
+  `secrets/`, read through a `_file` key, so a federation of any size runs
+  the file unchanged. A `ferrofed-config` service runs `ferrofed config
+  check` before the gateway starts, so a bad value stops `docker compose up`
+  naming its key. The gateway runs read-only, as uid 65532, with every
+  capability dropped, `no-new-privileges`, CPU and memory limits and the
+  `ferrofed healthcheck` probe. The release lane attaches the file to the
+  draft and refuses to publish a draft without it, `scripts/checks/versions.sh`
+  and the release plan hold its image tag to the product version, and the
+  CI job `release compose` renders it and checks the configuration it embeds.
+  The repository's `compose.yaml` stays the four-node quickstart. The
+  container page of the book has a section "The gateway from a release".
 - The operator can send a stored-query version the registry holds to the
   members that missed it (#342; §12.7 stored-query-drift, N44, CP-40; no
   specification gives drift repair a request, so this is our own design).

@@ -4,9 +4,122 @@
 # The container image and the quickstart
 
 FerroFED ships one static binary, `ferrofed`, and an image that carries it on
-distroless static. The repository's `compose.yaml` starts that image beside
-four member CDRs, four FerroEHR instances, so the topology a federated query
-runs over is up in one command.
+distroless static. Every release carries `compose.yaml`, which runs that image
+alone in front of the CDRs you already run ([The gateway from a
+release](#the-gateway-from-a-release)). The repository's own `compose.yaml`
+starts the image beside four member CDRs, four FerroEHR instances, so the
+topology a federated query runs over is up in one command ([The
+quickstart](#the-quickstart)).
+
+## The gateway from a release
+
+The `compose.yaml` attached to every release starts the gateway and nothing
+else, at the image of that release, with no checkout of the repository. It
+needs Docker Compose 2.24 or later. Download it into a directory of its own:
+
+```sh
+mkdir ferrofed && cd ferrofed
+curl -LO https://github.com/FerroHEALTH/FerroFED/releases/latest/download/compose.yaml
+```
+
+`…/releases/download/vX.Y.Z/compose.yaml` downloads the file of one version.
+Put three things beside it:
+
+- `registry.toml`, the [registry document](registry.md): your organisations,
+  nodes and endpoints, as many as the federation has.
+- `secrets/`, one file per credential. Compose mounts the directory read-only
+  at `/run/secrets/ferrofed/`, and the configuration names each file through
+  a `_file` key. The gateway runs as uid 65532, so that user reads them:
+  `sudo chown -R 65532:65532 secrets && sudo chmod 0400 secrets/*`. Create
+  the directory even when no endpoint needs a credential: Compose refuses to
+  mount one that does not exist.
+- `.env`, the variables below, which Compose reads from the same directory.
+
+For two members behind one PIX Manager, the `.env` reads:
+
+```sh
+FERROFED_FEDERATION_ID=example-federation
+FERROFED_PIXM_URL=https://pix.example.org/fhir/
+FERROFED_PIXM_MEMBERS='{ "node-a" = "urn:oid:2.999.10", "node-b" = "urn:oid:2.999.20" }'
+FERROFED_CREDENTIALS='{ "node-a-query" = { bearer_token_file = "/run/secrets/ferrofed/node-a" }, "node-b-query" = { user = "ferrofed", password_file = "/run/secrets/ferrofed/node-b" } }'
+```
+
+`deploy/compose/example/` in the repository holds this file as
+`example.env`, with the `registry.toml` it matches. Then start the gateway and
+ask it:
+
+```sh
+docker compose up --wait
+curl http://127.0.0.1:8080/health
+```
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `FERROFED_FEDERATION_ID` | required | `federation.id`, the federation's name ([Federation id](registry.md#federation-id)) |
+| `FERROFED_PIXM_URL` | required | the FHIR base URL of the PIX Manager ([Identity resolution](identity.md)) |
+| `FERROFED_PIXM_MEMBERS` | required | each registry node id mapped to its `ehr_id` domain at the PIX Manager, as a TOML inline table |
+| `FERROFED_CREDENTIALS` | none | each endpoint id mapped to the credentials the gateway sends it, as a TOML inline table of [credentials sections](configuration.md#the-file) |
+| `FERROFED_PIXM_CREDENTIALS` | none | the credentials the gateway sends the PIX Manager, one credentials section as a TOML inline table |
+| `FERROFED_REGISTRY` | `./registry.toml` | the registry document |
+| `FERROFED_REGISTRY_FORMAT` | `toml` | `fhir` reads the document as a FHIR Bundle |
+| `FERROFED_SECRETS_DIR` | `./secrets` | the directory of credential files |
+| `FERROFED_VERSION` | the release's version | the image tag |
+| `FERROFED_BIND_HOST`, `FERROFED_PORT` | `127.0.0.1`, `8080` | the host address the gateway is published on |
+| `FERROFED_LOG_FORMAT`, `FERROFED_LOG_FILTER` | `auto`, `info` | `telemetry.format` and `telemetry.filter` |
+| `FERROFED_CPUS`, `FERROFED_MEMORY` | `1`, `256M` | the container's CPU and memory limits |
+
+Without a required variable, Compose stops before it starts anything and
+prints the variable's message. The registry, each member's domain and each
+endpoint's credentials grow with the federation, so they come from the file
+you write and from the two inline tables, and a federation of any size runs
+the downloaded file unchanged.
+
+Never put a secret in a variable. A credential is a file under `secrets/`,
+named by a `bearer_token_file` or `password_file` key. The configuration the
+variables produce is also a label of the gateway container, which
+`docker inspect` shows.
+
+Every other configuration key goes in `ferrofed.env` beside the file, one
+[environment override](configuration.md#the-environment) per line, which both
+services read when it exists:
+
+```sh
+FERROFED__FEDERATION__DEFAULT_NAMESPACE=urn:oid:2.999.1
+FERROFED__PIXM__NAMESPACES='{ "2.999.1" = "urn:oid:2.999.1" }'
+```
+
+### How it starts
+
+The file runs two services. `ferrofed-config` writes the gateway
+configuration into a volume and runs `ferrofed config check` over it, the
+registry and the secrets, then exits. The gateway, `ferrofed`, starts only
+once that check passes, and reads the configuration from the volume. Compose
+refuses an inline configuration in a container with a read-only root
+filesystem, which is why the check service writes it. A value the gateway
+refuses stops `docker compose up` with `service "ferrofed-config" didn't
+complete successfully: exit 78`, and `docker compose logs ferrofed-config`
+names the key at fault.
+
+The check runs on every `docker compose up`. When a variable changed, the
+gateway's configuration label changed with it, so Compose recreates the
+gateway. A change the check refuses leaves the gateway stopped until you
+correct the value and run `docker compose up --wait` again.
+
+The gateway service runs as uid 65532 with a read-only root filesystem, every
+capability dropped, `no-new-privileges`, CPU and memory limits, a restart
+policy of `unless-stopped`, and the image's `ferrofed healthcheck`, so
+`--wait` returns once the gateway is ready. Its port binds the loopback
+interface unless you set `FERROFED_BIND_HOST`, for the reason under [The
+quickstart](#the-quickstart). A registry URL can name a CDR on the Docker
+host itself as `host.docker.internal`. The stop grace period of 20 seconds is
+longer than the gateway's 10-second drain.
+
+To move to a newer release, download its `compose.yaml` over the old one and
+run `docker compose up --wait`.
+
+The file has no development cross-reference. That table is for trials only,
+and the quickstart below carries it; a deployment resolves patients through
+its PIX Manager.
 
 ## The image
 

@@ -1,0 +1,201 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# FerroFED alone, in front of the openEHR CDRs you already run. Every release
+# carries this file as its compose.yaml asset, so it needs no checkout of the
+# repository. It starts no CDR; the repository's own compose.yaml is the
+# four-node quickstart, which does.
+#
+#   curl -LO https://github.com/FerroHEALTH/FerroFED/releases/latest/download/compose.yaml
+#   docker compose up --wait
+#   curl http://127.0.0.1:8080/health
+#
+# It needs Docker Compose 2.24 or later. The book's container page has the
+# whole walk-through: https://ferrofed.eu/docs/operate/container.html
+#
+# WHAT YOU PUT BESIDE THIS FILE.
+#
+#   registry.toml  The registry document: your organisations, nodes and
+#                  endpoints, as many as the federation has
+#                  (https://ferrofed.eu/docs/operate/registry.html).
+#                  FERROFED_REGISTRY names another file.
+#   secrets/       One file per credential, mounted read-only at
+#                  /run/secrets/ferrofed/ and read through the gateway's
+#                  `_file` keys. The gateway runs as uid 65532, so that user
+#                  must be able to read each file. The directory must exist,
+#                  even empty. FERROFED_SECRETS_DIR names another one.
+#   .env           The variables below; Docker Compose reads it from this
+#                  directory.
+#   ferrofed.env   Optional: any other configuration key, one
+#                  FERROFED__<SECTION>__<KEY>=value per line.
+#
+# REQUIRED VARIABLES. Without one, Docker Compose stops and prints its message.
+#
+#   FERROFED_FEDERATION_ID  The federation's identifier.
+#   FERROFED_PIXM_URL       The FHIR base URL of your PIX Manager (IHE PIXm).
+#   FERROFED_PIXM_MEMBERS   Each registry node id mapped to its ehr_id domain at
+#                           the PIX Manager, as a TOML inline table:
+#                           '{ "node-a" = "urn:oid:2.999.10" }'
+#
+# OPTIONAL VARIABLES.
+#
+#   FERROFED_CREDENTIALS       Each endpoint id mapped to the credentials the
+#                              gateway sends it, as a TOML inline table:
+#                              '{ "node-a-query" = { bearer_token_file =
+#                              "/run/secrets/ferrofed/node-a" } }'
+#   FERROFED_PIXM_CREDENTIALS  The credentials for the PIX Manager, the same
+#                              way: '{ bearer_token_file = "/run/secrets/ferrofed/pix" }'
+#   FERROFED_REGISTRY_FORMAT   toml, the default, or fhir for a FHIR Bundle.
+#   FERROFED_VERSION           Another published image tag.
+#   FERROFED_BIND_HOST         127.0.0.1 by default.
+#   FERROFED_PORT              8080 by default.
+#   FERROFED_LOG_FORMAT        auto by default; json or pretty.
+#   FERROFED_LOG_FILTER        info by default.
+#   FERROFED_CPUS              1 by default.
+#   FERROFED_MEMORY            256M by default.
+#
+# NEVER PUT A SECRET IN A VARIABLE. A credential is a file under secrets/,
+# named by a `_file` key. The configuration the variables produce is also a
+# label of the gateway container, readable with `docker inspect`, so that a
+# changed value recreates the gateway on the next `docker compose up`.
+#
+# HOW IT STARTS. The ferrofed-config service writes the configuration below
+# into a volume and runs `ferrofed config check` over it, the registry and
+# the secrets; the gateway starts only once that check has passed, so a bad
+# value stops `docker compose up` with one line naming its key. Compose
+# refuses an inline configuration in a read-only container, which is why the
+# check service writes it and the gateway reads it from the volume.
+#
+# PORTS. The port binds the loopback interface by default. A published port is
+# DNAT'd ahead of the host firewall's own chains, so a port on 0.0.0.0 is
+# reachable from the network even when the firewall says otherwise
+# (https://docs.docker.com/engine/network/packet-filtering-firewalls/). To
+# serve another machine, name the interface (FERROFED_BIND_HOST=10.0.0.7) or
+# put a reverse proxy in front.
+#
+# The image tag below is the release this file shipped with;
+# scripts/checks/versions.sh keeps it equal to the workspace version.
+
+name: ferrofed-gateway
+
+# The gateway configuration, TOML, with the variables above filled in by
+# Compose (https://docs.docker.com/reference/compose-file/configs/). A line
+# with `:+` is written only when its variable is set.
+x-ferrofed-toml: &ferrofed-toml |
+  profile = "production"
+  ${FERROFED_CREDENTIALS:+credentials = ${FERROFED_CREDENTIALS}}
+
+  [server]
+  listen = "0.0.0.0:8080"
+
+  [registry]
+  document = "/etc/ferrofed/registry"
+  format = "${FERROFED_REGISTRY_FORMAT:-toml}"
+
+  [federation]
+  id = "${FERROFED_FEDERATION_ID:?set FERROFED_FEDERATION_ID to the federation's identifier}"
+  node_selection = "ask-all"
+
+  [[pixm.manager]]
+  url = "${FERROFED_PIXM_URL:?set FERROFED_PIXM_URL to the FHIR base URL of the PIX Manager}"
+  members = ${FERROFED_PIXM_MEMBERS:?set FERROFED_PIXM_MEMBERS to each node id and its ehr_id domain, as a TOML inline table}
+  ${FERROFED_PIXM_CREDENTIALS:+credentials = ${FERROFED_PIXM_CREDENTIALS}}
+
+# What both services share: the image, the environment, the secrets and the
+# hardening. The image runs as the numeric user 65532 and has no shell.
+x-ferrofed: &ferrofed
+  image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.6}
+  environment:
+    FERROFED_CONFIG: /etc/ferrofed/config/ferrofed.toml
+    # `auto` renders pretty output on a terminal and JSON otherwise.
+    FERROFED__TELEMETRY__FORMAT: ${FERROFED_LOG_FORMAT:-auto}
+    FERROFED__TELEMETRY__FILTER: ${FERROFED_LOG_FILTER:-info}
+  env_file:
+    - path: ferrofed.env
+      required: false
+  secrets:
+    - source: ferrofed-secrets
+      target: ferrofed
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  deploy:
+    resources:
+      limits:
+        cpus: "${FERROFED_CPUS:-1}"
+        memory: ${FERROFED_MEMORY:-256M}
+
+services:
+  # Writes the configuration into the volume and checks it, then exits. It is
+  # started again on every `docker compose up`, so the check runs each time.
+  ferrofed-config:
+    <<: *ferrofed
+    command: ["config", "check"]
+    restart: "no"
+    configs:
+      - source: ferrofed-toml
+        target: /etc/ferrofed/config/ferrofed.toml
+      - source: ferrofed-registry
+        target: /etc/ferrofed/registry
+    volumes:
+      - type: volume
+        source: ferrofed-config
+        target: /etc/ferrofed/config
+
+  ferrofed:
+    <<: *ferrofed
+    restart: unless-stopped
+    depends_on:
+      ferrofed-config:
+        condition: service_completed_successfully
+    labels:
+      eu.ferrofed.compose.configuration: *ferrofed-toml
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_PORT:-8080}:8080"
+    # Lets a registry URL name a CDR on the Docker host itself as
+    # host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    configs:
+      - source: ferrofed-registry
+        target: /etc/ferrofed/registry
+    volumes:
+      - type: volume
+        source: ferrofed-config
+        target: /etc/ferrofed/config
+        read_only: true
+    # The gateway writes nothing: no cache, no scratch file, and every secret is
+    # read at boot. So the root filesystem is read-only with no tmpfs beside it.
+    read_only: true
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 16384
+    # Longer than the gateway's 10-second drain (server.shutdown_timeout_ms),
+    # so `docker compose down` never kills a drain in progress.
+    stop_grace_period: 20s
+    # The image's own HEALTHCHECK, repeated so `docker compose up --wait`
+    # visibly waits on it. Readiness gates on the gateway alone, so a CDR that
+    # is down never marks the gateway unhealthy. An image of a release before
+    # v0.0.7 has no `healthcheck` subcommand and never turns healthy.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ferrofed", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+configs:
+  ferrofed-toml:
+    content: *ferrofed-toml
+  ferrofed-registry:
+    file: ${FERROFED_REGISTRY:-./registry.toml}
+
+secrets:
+  # A directory: one file per credential, so the number of members never
+  # changes this file.
+  ferrofed-secrets:
+    file: ${FERROFED_SECRETS_DIR:-./secrets}
+
+volumes:
+  ferrofed-config:

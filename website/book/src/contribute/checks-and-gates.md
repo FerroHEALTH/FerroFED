@@ -42,8 +42,9 @@ The first tier runs on every change, because it needs no Rust:
 | crate-version-guard self-test | the crate-version guard judges only what a pull request changes, against a stub repository |
 
 The second tier is the Rust lane: formatting, the fuzz crate's lockfile,
-clippy, the tests, the end-to-end suite against two containerised nodes,
-rustdoc, `cargo deny`, the MSRV build, every feature of each published crate
+clippy, the tests, the end-to-end suite against two containerised nodes, the
+release `compose.yaml` rendered by Docker Compose and its embedded
+configuration passed through `ferrofed config check`, rustdoc, `cargo deny`, the MSRV build, every feature of each published crate
 on its own, the packaging dry run, the crate-version guard and dependency
 review. A `detect` job gates
 it on the root `Cargo.toml`, which exists, so the tier runs on every change;
