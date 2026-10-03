@@ -8,7 +8,8 @@
 //! environment into one [`config::settings::Settings`], [`telemetry`] installs the
 //! subscriber, [`router`] builds the HTTP surface over [`state::AppState`],
 //! and [`serve`] runs it on a bound listener until the process is asked to
-//! stop, while [`reload`] replaces the registry on `SIGHUP`. `main.rs` only
+//! stop, while [`reload`] replaces the registry on `SIGHUP`. On a terminal,
+//! `serve` prints the [`banner`] before the subscriber starts. `main.rs` only
 //! hands in the arguments and returns the exit code.
 //!
 //! Every route sits under the configured base path ([`base_path`]; §4.1,
@@ -30,6 +31,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod admission;
+pub mod banner;
 pub mod base_path;
 pub mod body;
 pub mod cli;
@@ -92,6 +94,13 @@ pub const EXIT_CONFIG: u8 = 78;
 /// The path prefix the ITS-REST surface lives under (`{base}/v1/…`).
 pub const ITS_REST_PREFIX: &str = "/v1/";
 
+/// The release of the `openehr-*` crate family this server is built on.
+///
+/// The family moves in lockstep, so one version names every member the
+/// workspace pins (`openehr-query`, `openehr-its`, `openehr-base`,
+/// `openehr-rm`).
+pub const OPENEHR_FAMILY: &str = "0.0.80";
+
 /// Runs the binary with `args` and returns the process exit code.
 ///
 /// `args` is the whole argument vector, the program name included, so the
@@ -138,6 +147,13 @@ where
         } => admission_command(&settings, &endpoint, count),
         Command::Serve => {
             let stdout_is_terminal = std::io::stdout().is_terminal();
+            let format = settings.telemetry.format;
+            if banner::prints(format, stdout_is_terminal) {
+                banner::print(
+                    &banner::Deployment::of(&settings),
+                    format.colour(stdout_is_terminal),
+                );
+            }
             if let Err(error) = telemetry::init(
                 settings.telemetry.format,
                 &settings.telemetry.filter,

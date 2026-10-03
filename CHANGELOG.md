@@ -46,6 +46,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   The provenance headers list the members that accepted. A plain upload still
   names its one node, and `*` stays `endpoint-unknown` on every other
   definition request and whenever the setting is off.
+- `ferrofed serve` opens with a startup banner when its log renders for a
+  person (#330): the FerroFED wordmark, the version, the maintainer and the
+  repository, the Federation Tier, ITS-REST, AQL and `openehr-*` releases it
+  serves, then the base path, the listen address, the member and endpoint
+  counts of the registry document, and whether the stored-query registry is
+  offered. Under `profile = "development"` a red notice, in plain words where
+  there is no colour, says the deployment must not hold or reach real
+  patient data. The banner prints only before the `pretty` rendering, so a
+  log collector reading JSON never receives it, and `config check`,
+  `healthcheck` and `admission check` print none. It never shows a
+  credential, a URL, a header value or request data. Each pin comes from the
+  crate constant `scripts/checks/versions.sh` holds to `docs/VERSIONS.md`,
+  and the `openehr-*` family version is a new constant the guard checks.
 - The ITS-REST `GET` forms of query execution are served (#287; N1, CP-1).
   `GET {base}/v1/query/aql` and, where the stored-query registry is offered,
   `GET {base}/v1/query/{name}[/{version}]` carry the request in the query

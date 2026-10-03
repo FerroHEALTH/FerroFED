@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU32, NonZeroUsize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ferrofed_engine::dispatch::{NodeClients, SetupError, SharedCredentials};
@@ -265,20 +265,7 @@ impl Federation {
         let Some(id) = settings.federation.id.clone() else {
             return Err(FederationError::IdUndeclared);
         };
-        let snapshot = match settings.registry_format {
-            RegistryFormat::Toml => {
-                RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
-                    path: path.clone(),
-                    source: Box::new(source),
-                })?
-            }
-            RegistryFormat::Fhir => {
-                directory::read(path).map_err(|source| FederationError::FhirRegistry {
-                    path: path.clone(),
-                    source: Box::new(source),
-                })?
-            }
-        };
+        let snapshot = read_registry(path, settings.registry_format)?;
         if let Some(endpoint) = &settings.federation.demographic_endpoint
             && snapshot.endpoint(endpoint).is_none()
         {
@@ -543,6 +530,34 @@ impl std::fmt::Debug for Federation {
                 &self.context.decomposable_aggregates(),
             )
             .finish_non_exhaustive()
+    }
+}
+
+/// Reads the registry document at `path`, written in `format`.
+///
+/// The document is read and checked as [`Federation::load`] reads it, and
+/// nothing else is built.
+///
+/// # Errors
+/// Returns [`FederationError::Registry`] or [`FederationError::FhirRegistry`]
+/// for a document that cannot be read or refuses to load.
+pub fn read_registry(
+    path: &Path,
+    format: RegistryFormat,
+) -> Result<RegistrySnapshot, FederationError> {
+    match format {
+        RegistryFormat::Toml => {
+            RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
+                path: path.to_path_buf(),
+                source: Box::new(source),
+            })
+        }
+        RegistryFormat::Fhir => {
+            directory::read(path).map_err(|source| FederationError::FhirRegistry {
+                path: path.to_path_buf(),
+                source: Box::new(source),
+            })
+        }
     }
 }
 

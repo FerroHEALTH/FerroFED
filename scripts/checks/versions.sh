@@ -15,8 +15,10 @@
 #                          `ITS_REST`, `AQL`).
 #   2. model crates        openehr-query and openehr-its across
 #                          docs/architecture.md, docs/VERSIONS.md, and the root
-#                          Cargo.toml [workspace.dependencies] requirement.
-#   3. toolchain           rust-toolchain.toml channel, plus the root
+#                          Cargo.toml [workspace.dependencies] requirement,
+#                          and every family row against the crate constant
+#                          it names (`OPENEHR_FAMILY`).
+#   3. toolchain          rust-toolchain.toml channel, plus the root
 #                          Cargo.toml edition, rust-version and resolver.
 #   4. product version     CITATION.cff version against the docs/VERSIONS.md
 #                          product-version row, and against the root Cargo.toml
@@ -529,6 +531,9 @@ for crate in openehr-query openehr-its openehr-base openehr-rm; do
   elif [ "$want" != "$family_pin" ]; then
     bad "$crate: $matrix pins $want, the rest of the openehr-* family $family_pin; the family moves together"
   fi
+  # The startup banner prints the family version from a crate constant,
+  # which each family row names.
+  spec_constant "$crate" "$matrix" .
   case "$crate" in
   openehr-query | openehr-its) ;;
   *)

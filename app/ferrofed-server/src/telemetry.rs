@@ -57,6 +57,16 @@ impl Format {
             Self::Json | Self::Auto => Rendering::Json,
         }
     }
+
+    /// Decides whether the console writes colour, from whether stdout is a
+    /// terminal.
+    ///
+    /// An explicit `pretty` keeps its colour into a pipe, because a person
+    /// asked for it; `auto` and `json` follow the terminal.
+    #[must_use]
+    pub const fn colour(self, stdout_is_terminal: bool) -> bool {
+        matches!(self, Self::Pretty) || stdout_is_terminal
+    }
 }
 
 /// A subscriber could not be built or installed.
@@ -121,12 +131,14 @@ where
 /// [`Error::AlreadyInstalled`] when this process already has a subscriber.
 pub fn init(format: Format, filter: &str, stdout_is_terminal: bool) -> Result<Rendering, Error> {
     let rendering = format.resolve(stdout_is_terminal);
-    // An explicit `pretty` keeps its colour into a pipe, because a person
-    // asked for it; `auto` follows the terminal.
-    let ansi = matches!(format, Format::Pretty) || stdout_is_terminal;
-    subscriber(rendering, filter, ansi, io::stdout)?
-        .try_init()
-        .map_err(|source| Error::AlreadyInstalled { source })?;
+    subscriber(
+        rendering,
+        filter,
+        format.colour(stdout_is_terminal),
+        io::stdout,
+    )?
+    .try_init()
+    .map_err(|source| Error::AlreadyInstalled { source })?;
     Ok(rendering)
 }
 
