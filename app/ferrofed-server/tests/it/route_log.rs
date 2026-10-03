@@ -129,6 +129,47 @@ fn a_path_that_names_no_route_logs_unmatched() -> TestResult {
 }
 
 #[test]
+fn options_logs_the_template_of_the_resource_it_describes() -> TestResult {
+    for base in ["/", "/fed/openehr"] {
+        let (a, b) = nodes()?;
+        let dir = tempfile::tempdir()?;
+        let app = gateway_at(dir.path(), base, &a.uri(), &b.uri())?;
+        let text = logged(
+            &app,
+            "info",
+            vec![
+                to_a(
+                    Method::OPTIONS,
+                    &under(base, &format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}")),
+                )?,
+                to_a(Method::OPTIONS, &under(base, &format!("/v1/ehr/{EHR_A}")))?,
+                to_a(
+                    Method::OPTIONS,
+                    &under(base, "/v1/nothing/SYNTHETIC-PATH-ID"),
+                )?,
+            ],
+        )?;
+        let prefix = if base == "/" { "" } else { base };
+        assert_eq!(
+            vec![
+                format!("{prefix}/v1/ehr/{{ehr_id}}/composition/{{uid_based_id}}"),
+                format!("{prefix}/v1/ehr/{{ehr_id}}"),
+                UNMATCHED.to_owned(),
+            ],
+            routes(&text)?,
+            "{base}: {text}"
+        );
+        assert!(!text.contains(EHR_A), "the ehr_id reached the log: {text}");
+        assert!(
+            !text.contains("8849182c"),
+            "the uid reached the log: {text}"
+        );
+        assert!(!text.contains("SYNTHETIC-PATH-ID"), "{text}");
+    }
+    Ok(())
+}
+
+#[test]
 fn under_a_base_path_the_route_names_the_base_once() -> TestResult {
     let base = "/fed/openehr";
     let (a, b) = nodes()?;

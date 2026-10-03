@@ -107,16 +107,16 @@ fn analysed(
     Ok(analysis)
 }
 
-/// The answer refusing the `Content-Type` of a query `POST` addressing
-/// `matched`, or `None` when the operation takes it (ITS-REST 1.1.0 Query
-/// API; RFC 9110 §8.3).
+/// The answer refusing the `Content-Type` of a request the gateway answers
+/// itself, addressing `matched`, or `None` when the operation takes it
+/// (ITS-REST 1.1.0; RFC 9110 §8.3).
 ///
 /// A `Content-Type` naming no media type the operation lists is a `415`
 /// (`media-type-unsupported`) naming the client's `request_id`, answered
-/// before the body is read or anything is sent (RFC 9110 §15.5.16); the
+/// before the body is read, stored or sent anywhere (RFC 9110 §15.5.16); the
 /// gateway's `logged` id names any event. A body sent without a
-/// `Content-Type` is read as the first listed media type, `application/json`
-/// for every query `POST`.
+/// `Content-Type` is read as the first listed media type: `application/json`
+/// for a query `POST`, `text/plain` for a stored-query definition `PUT`.
 pub(crate) fn unsupported_media(
     matched: &RouteMatch,
     headers: &HeaderMap,

@@ -6,6 +6,8 @@
 //! `application/json`, the one media type ITS-REST 1.1.0 lists for both. A
 //! `Content-Type` naming another is a `415` that asks no node (RFC 9110
 //! §15.5.16), and a body sent without one is read as the listed media type.
+//! The stored-query definition `PUT` the registry answers takes `text/plain`
+//! under the same rule, and stores nothing under another media type.
 //!
 //! The security event of a refused query parameter holds for every caller,
 //! a request the gateway answers itself included (§5.4.3).
@@ -187,6 +189,63 @@ async fn a_stored_query_post_in_the_listed_media_type_or_none_is_answered() -> T
         assert_eq!(StatusCode::OK, status, "{content_type:?}: {text}");
         assert_eq!(1, received(&a).await?.len(), "{content_type:?}");
         assert_eq!(1, received(&b).await?.len(), "{content_type:?}");
+    }
+    Ok(())
+}
+
+/// `PUT {base}/v1/definition/query/{NAME}/{version}` with a plain AQL body,
+/// under `content_type` when one is given.
+fn definition_put(version: &str, content_type: Option<&str>) -> Result<Request<Body>, http::Error> {
+    let mut request = Request::put(format!("/v1/definition/query/{NAME}/{version}"));
+    if let Some(value) = content_type {
+        request = request.header(header::CONTENT_TYPE, value);
+    }
+    request.body(Body::from(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c",
+    ))
+}
+
+#[tokio::test]
+async fn a_definition_put_in_an_unlisted_media_type_is_415_and_stores_nothing() -> TestResult {
+    for content_type in [
+        "application/json",
+        "text/html",
+        "text/plain; charset=latin1",
+    ] {
+        let (a, b) = nodes().await;
+        let dir = tempfile::tempdir()?;
+        let app = crate::stored::gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), &[])?;
+        let (status, text) =
+            call(app.clone(), definition_put("1.0.0", Some(content_type))?).await?;
+        assert_eq!(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            status,
+            "{content_type}: {text}"
+        );
+        let error = error_body(&text)?;
+        assert_eq!("media-type-unsupported", error.code, "{content_type}");
+        assert!(error.message.contains("text/plain"), "{text}");
+        let read = Request::get(format!("/v1/definition/query/{NAME}/1.0.0")).body(Body::empty())?;
+        let (status, text) = call(app, read).await?;
+        assert_eq!(StatusCode::NOT_FOUND, status, "nothing was stored: {text}");
+        assert_eq!("stored-query-unknown", error_body(&text)?.code);
+        asked_neither(&a, &b).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_definition_put_in_the_listed_media_type_or_none_is_stored() -> TestResult {
+    for (version, content_type) in [
+        ("1.0.0", Some("text/plain; charset=utf-8")),
+        ("1.0.1", None),
+    ] {
+        let (a, b) = nodes().await;
+        let dir = tempfile::tempdir()?;
+        let app = crate::stored::gateway(dir.path(), &registry(&a.uri(), &b.uri(), ""), &[])?;
+        let (status, text) = call(app, definition_put(version, content_type)?).await?;
+        assert_eq!(StatusCode::OK, status, "{content_type:?}: {text}");
+        asked_neither(&a, &b).await?;
     }
     Ok(())
 }

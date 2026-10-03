@@ -854,10 +854,11 @@ never the path the client sent: a request the gateway routes or answers
 under `{base}/v1/` is logged under the template of the ITS-REST operation it
 addresses, so a routed composition read is logged as
 `/v1/ehr/{ehr_id}/composition/{uid_based_id}`, with the configured base path
-in front of it once, and its `ehr_id` and version uid stay out of the line. A
-path that names no route, and a method the ITS-REST operation does not
-declare, is logged as `<unmatched>`. The client's own `x-request-id` is a header value too, and it is never
-logged, so a request the client named is found in the log by its time, route
+in front of it once, and its `ehr_id` and version uid stay out of the line.
+An `OPTIONS` request is logged under the template of the resource it
+describes. A path that names no route, and any other method the ITS-REST
+operation does not declare, is logged as `<unmatched>`. The client's own
+`x-request-id` is a header value too, and it is never logged, so a request the client named is found in the log by its time, route
 and status, and in a node's log by the `request_id` of that line. A request
 the gateway answers before its handler finishes has its line too, with the
 status it answered: `500` for a handler panic, `408` past the request

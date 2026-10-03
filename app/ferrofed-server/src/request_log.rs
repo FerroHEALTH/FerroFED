@@ -130,15 +130,37 @@ pub fn route(base: &BasePath, request: &Request) -> String {
 /// The template of the ITS-REST operation `method` and `path` address under
 /// `{base}/v1`, with that prefix, or `None` when `path` is outside it or
 /// names no operation that declares `method`.
+///
+/// An `OPTIONS` request describes a resource, which ITS-REST declares no
+/// `OPTIONS` operation for, so it is logged under the template of the
+/// resource its path names, read through any method declared there.
 fn its_rest_template(base: &BasePath, method: &Method, path: &str) -> Option<String> {
     let prefix = base.join(ITS_REST_PREFIX.trim_end_matches('/'));
     let relative = path
         .strip_prefix(prefix.as_str())
         .filter(|relative| relative.starts_with('/'))?;
-    match routes::lookup(method, relative) {
-        Lookup::Matched(matched) => Some(format!("{prefix}{}", matched.template)),
-        Lookup::MethodNotAllowed { .. } | Lookup::NotFound => None,
-    }
+    let template = match routes::lookup(method, relative) {
+        Lookup::Matched(matched) => matched.template,
+        Lookup::MethodNotAllowed { allowed } if *method == Method::OPTIONS => {
+            resource_template(relative, &allowed)?
+        }
+        Lookup::MethodNotAllowed { .. } | Lookup::NotFound => return None,
+    };
+    Some(format!("{prefix}{template}"))
+}
+
+/// The template of the resource at `path`, read through the first of its
+/// `allowed` methods whose operation the route table matches.
+fn resource_template(path: &str, allowed: &[&str]) -> Option<&'static str> {
+    allowed.iter().find_map(|name| {
+        // NOTE: RFC 9110 §9.1, a declared name that is no method token names no
+        // operation, so it is passed over for the next declared method.
+        let method = Method::from_bytes(name.as_bytes()).ok()?;
+        match routes::lookup(&method, path) {
+            Lookup::Matched(matched) => Some(matched.template),
+            Lookup::MethodNotAllowed { .. } | Lookup::NotFound => None,
+        }
+    })
 }
 
 /// Returns the `key=value` pairs of `query` this server may log.

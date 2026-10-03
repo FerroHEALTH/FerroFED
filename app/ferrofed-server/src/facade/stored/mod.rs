@@ -268,7 +268,9 @@ fn members(
 /// `PUT {base}/v1/definition/query/{name}/{version}`: stores the definition
 /// unless its name and version are held (§12.7, N44).
 ///
-/// The body is the AQL text (ITS-REST `text/plain`). It is analysed as a
+/// The body is the AQL text (ITS-REST `text/plain`), and a `Content-Type`
+/// naming another media type is a `415` before anything is read or stored.
+/// It is analysed as a
 /// façade query, with every `$parameter` standing in for a value an
 /// invocation binds, and refused with a `400` when the rewrite would refuse
 /// it whatever is bound, or when it names its patient by a literal. The text
@@ -290,6 +292,10 @@ async fn store(
 ) -> Result<Response, Refused> {
     let started = Instant::now();
     let logged = arrived.outbound.to_string();
+    let ids = (arrived.request_id, logged.as_str());
+    if let Some(response) = request::unsupported_media(matched, arrived.headers, ids) {
+        return Ok(response);
+    }
     let name = name(matched)?;
     let version = segment(matched, VERSION_PARAM)
         .unwrap_or_default()

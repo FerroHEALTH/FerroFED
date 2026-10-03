@@ -709,7 +709,10 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
 - The name is `[{namespace}::]{query-name}` over `a-z`, `A-Z`, `0-9`, `_`, `.`
   and `-`, and the query name is never `aql` (ITS-REST). The version is
   `major.minor.patch` (ITS-REST's semver path segment, §12.7). Anything else
-  is a `400` (`query-name-invalid`, `query-version-invalid`). A `PUT` with no
+  is a `400` (`query-name-invalid`, `query-version-invalid`). The body is
+  `text/plain`: send that `Content-Type`, with `charset=utf-8` if you like,
+  or none. Any other is a `415` (`media-type-unsupported`), and nothing is
+  stored. A `PUT` with no
   version is a `400` (`query-version-required`), because the registry stores
   only at a version. `query_type`, when sent, is `AQL` in any case.
 - A stored version is immutable. A second `PUT` to a name and version the
