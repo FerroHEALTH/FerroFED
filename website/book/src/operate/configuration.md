@@ -8,8 +8,9 @@ process shape (health, readiness, the request log, graceful shutdown) and, once
 a registry is configured, the federated query `POST /v1/query/aql`, the EHR
 resources and the definition area routed to one node, and, when
 `[stored_queries]` is set, the stored-query registry. The DEMOGRAPHIC area
-answers `501` unless `federation.demographic_endpoint` routes it to one
-endpoint, and every other path under `/v1/` answers `501`.
+answers `501` unless `federation.demographic_endpoint` declares the one
+endpoint a request names to reach it, and every other path under `/v1/`
+answers `501`.
 
 ## Running it
 
@@ -406,23 +407,26 @@ patient's identity is resolved through the identity binding, never through a
 node's demographic store. By default every request under `/v1/demographic/`
 answers `501` and no node is asked.
 
-A deployment that keeps its demographics in one member may route the area to
-that member's endpoint:
+A deployment that keeps its demographics in one member may declare that
+member's endpoint as the one that serves the area:
 
 ```toml
 [federation]
 demographic_endpoint = "hospital-a.demographic"
 ```
 
-- Every DEMOGRAPHIC operation ITS-REST 1.1.0 defines then goes to that
-  endpoint alone, through the same single-node path as a definition request:
+- The request chooses its node, as a definition request does (§7a.1, §12.4,
+  §12.6, N23): every DEMOGRAPHIC operation ITS-REST 1.1.0 defines names that
+  endpoint in `openEHR-federation-endpoint`, and then goes to it alone,
+  through the same single-node path as a definition request:
   the query string and the declared headers are held to what the operation
   declares, the body travels byte-identical, and the node's answer comes back
   as the node sent it, with `openEHR-federation-endpoint` and
   `openEHR-federation-system-id` naming the endpoint (§7a.3, N31). Nothing is
   probed, fanned out or sent to another member.
-- A client may name the same endpoint in `openEHR-federation-endpoint`. A
-  header naming another endpoint is a `400` (`targeting-conflict`), several
+- The gateway never applies the setting as a default. A request naming no
+  endpoint is a `400` (`target-required`), and no node is asked. A header
+  naming another endpoint is a `400` (`targeting-conflict`), several
   endpoints an `endpoint-several`, and `*` or an unknown id an
   `endpoint-unknown`.
 - The value must be an endpoint id of the registry. Any other value refuses
@@ -430,8 +434,8 @@ demographic_endpoint = "hospital-a.demographic"
   setting it without `registry.document`. A suspended endpoint answers
   `no-destination`.
 - `OPTIONS {base}/` declares `its_rest.demographic` as `unsupported: 501`
-  without the setting, and as `routed-single-node` naming the endpoint with
-  it. The setting is named in the startup log line.
+  without the setting, and as `routed-single-node` naming the endpoint a
+  client names, with it. The setting is named in the startup log line.
 
 ## The environment
 
@@ -533,7 +537,7 @@ has no metrics endpoint yet, so the log lines are the record of each reload.
 | `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
 | `/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT /v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |
-| `/v1/demographic/` and below | `501`, never federated; routed to the one endpoint `federation.demographic_endpoint` names, when it is set |
+| `/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
 | any other path under `/v1/` | `501` |
 | any other path | `404` |
 
@@ -633,7 +637,12 @@ classify them and forwards them as the client sent them. In the EHR area they
 are the headers `If-Match`, `openehr-audit-details`, `openehr-item-tag`,
 `openehr-template-id`, `openehr-version` and `openehr-version-item-tag`, the
 path parameter `key` of an item tag, and the query parameters `path`,
-`tag_key`, `tag_value` and `tag_target_path`.
+`tag_key`, `tag_value` and `tag_target_path`. The creation of an EHR adds
+none beyond `openehr-version` and `openehr-audit-details`. The definition
+area has the path parameters `qualified_query_name`, `template_id` and
+`version`, and the query parameters `concept`, `query_type`, `template_id`
+and `version`. The DEMOGRAPHIC area, where it is routed, has the same ones as
+the EHR area except `path`.
 N33 forbids an identifier in the parts of a request the gateway composes
 (§5.4.1). Whether a client value the gateway forwards unchanged is one of
 those parts is a question the specification leaves open, recorded on

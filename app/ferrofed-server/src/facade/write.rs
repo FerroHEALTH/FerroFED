@@ -395,6 +395,7 @@ mod tests {
                 method: Method::POST,
                 path_params: Vec::new(),
                 params: &[],
+                request_media: &[],
             };
             assert_eq!(Write::Routed, Write::of(&elsewhere), "{operation_id}");
             assert!(!creates_ehr(&elsewhere), "{operation_id}");

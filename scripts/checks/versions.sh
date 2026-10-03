@@ -134,7 +134,7 @@ manifest_req() {
       match(s, /"[^"]+"/)
       print substr(s, RSTART + 1, RLENGTH - 2); exit
     }
-  ' Cargo.toml
+  ' "${2:-Cargo.toml}"
 }
 
 # The `default:` of composite-action input KEY, unquoted. An input key sits at
@@ -565,6 +565,20 @@ for crate in openehr-query openehr-its openehr-base openehr-rm; do
     note "no root Cargo.toml yet, skipped the $crate requirement ($matrix pins $want)"
   fi
 done
+# The fuzz crate sits outside the workspace with its own lockfile, so it names
+# the family by version and drifts unseen unless it is held to the same pin.
+if [ -f fuzz/Cargo.toml ] && [ -n "$family_pin" ]; then
+  for crate in openehr-query openehr-its openehr-base openehr-rm; do
+    req="$(manifest_req "$crate" fuzz/Cargo.toml)"
+    if [ -z "$req" ]; then
+      continue
+    elif [ "$req" != "$family_pin" ]; then
+      bad "$crate: fuzz/Cargo.toml requires $req, the openehr-* family is pinned at $family_pin"
+    else
+      note "OK: $crate $req (fuzz/Cargo.toml agrees)"
+    fi
+  done
+fi
 
 echo "== toolchain (rust-toolchain.toml and Cargo.toml <-> $matrix)"
 if [ -f rust-toolchain.toml ]; then

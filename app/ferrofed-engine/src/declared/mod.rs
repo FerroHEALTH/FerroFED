@@ -23,9 +23,10 @@
 //! A value of a structured kind carries only what its kind admits. A
 //! malformed value is a [`Refusal`] that names a header by its declared name
 //! and a path or query parameter by its position and declared name, never by
-//! its value. A kind the table states as free text ([`is_free_text`]) admits
+//! its value. A kind the table states as free text admits
 //! any value, so the gateway cannot classify it and forwards it as received.
 
+mod kind;
 mod negotiate;
 mod path;
 
@@ -33,39 +34,13 @@ use std::fmt;
 
 use http::header::{ACCEPT, CONTENT_TYPE};
 use http::{HeaderMap, HeaderName, HeaderValue};
-use openehr_base::v1_3::base_types::identification::lexical::is_uuid;
-use openehr_base::v1_3::foundation_types::time::iso8601_date::Iso8601Date;
-use openehr_base::v1_3::foundation_types::time::iso8601_date_time::Iso8601DateTime;
-use openehr_base::validate::Validate;
 use openehr_its::rest::routes::{Param, ParamKind, RouteMatch};
 
+use crate::declared::kind::{fits, header_fits};
 use crate::hygiene;
 
 /// The `Prefer` request header (RFC 7240 §2).
 const PREFER: &str = "prefer";
-
-// NOTE: §5.4.1, N33: whether a forwarded client value is composed is unresolved (#212), so If-Match,
-// openehr-audit-details, openehr-item-tag, openehr-template-id, openehr-version, openehr-version-item-tag,
-// the path key, path, tag_key, tag_target_path and tag_value, free text in the EHR area, pass unclassified.
-/// Whether a value of `kind` is free text the gateway cannot classify: a
-/// string with no `format`, or one whose `format` no kind names, an object, a
-/// schema with no `type`, or an array of any of these.
-#[must_use]
-pub fn is_free_text(kind: &ParamKind) -> bool {
-    match kind {
-        ParamKind::Text | ParamKind::Formatted(_) | ParamKind::Object | ParamKind::Unspecified => {
-            true
-        }
-        ParamKind::Array(inner) => is_free_text(inner),
-        ParamKind::Enum(_)
-        | ParamKind::Uuid
-        | ParamKind::Date
-        | ParamKind::DateTime
-        | ParamKind::Integer
-        | ParamKind::Number
-        | ParamKind::Boolean => false,
-    }
-}
 
 /// Holds the declared values of a routed request to their declared kinds,
 /// and returns the headers the route sends for `headers`.
@@ -232,59 +207,6 @@ fn query_values(operation: &RouteMatch, query: &str) -> Result<(), MalformedValu
     Ok(())
 }
 
-/// Whether the field line `value` of a header of `kind` matches it.
-///
-/// A header array is a comma-separated list (OAS 3.0.3 §Style Values,
-/// `simple`). A value that is not visible ASCII is free text or no match.
-fn header_fits(kind: &ParamKind, value: &HeaderValue) -> bool {
-    if is_free_text(kind) {
-        return true;
-    }
-    value.to_str().is_ok_and(|text| fits(kind, text, true))
-}
-
-/// Whether `value` matches `kind`; `list` reads an array value as a
-/// comma-separated list, and otherwise as one item.
-fn fits(kind: &ParamKind, value: &str, list: bool) -> bool {
-    match kind {
-        ParamKind::Text | ParamKind::Formatted(_) | ParamKind::Object | ParamKind::Unspecified => {
-            true
-        }
-        ParamKind::Enum(values) => values.contains(&value),
-        ParamKind::Uuid => is_uuid(value),
-        ParamKind::Date => is_date(value),
-        ParamKind::DateTime => is_date_time(value),
-        ParamKind::Integer => value.parse::<i64>().is_ok(),
-        ParamKind::Number => value.parse::<f64>().is_ok_and(f64::is_finite),
-        ParamKind::Boolean => value.parse::<bool>().is_ok(),
-        ParamKind::Array(inner) if list => value
-            .split(',')
-            .all(|item| fits(inner, item.trim_matches([' ', '\t']), false)),
-        ParamKind::Array(inner) => fits(inner, value, false),
-    }
-}
-
-/// Whether `value` is an openEHR `Iso8601_date_time` in the extended format.
-///
-/// ITS-REST requires a date-time query parameter in the extended ISO 8601
-/// format, with the semantics of the BASE `foundation_types.time` package,
-/// and an offset only when needed (ITS-REST Overview §Datetime format).
-fn is_date_time(value: &str) -> bool {
-    let date_time = Iso8601DateTime {
-        value: value.to_owned(),
-    };
-    date_time.invariants().is_empty() && date_time.is_extended()
-}
-
-/// Whether `value` is an openEHR `Iso8601_date` in the extended format
-/// (ITS-REST Overview §Datetime format).
-fn is_date(value: &str) -> bool {
-    let date = Iso8601Date {
-        value: value.to_owned(),
-    };
-    date.invariants().is_empty() && date.is_extended()
-}
-
 /// Why a routed request's declared values keep it from being sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Refusal {
@@ -421,13 +343,10 @@ impl fmt::Display for Described<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
 
-    use super::path::{PathValue, expected};
-    use super::{Carrier, Expected, MalformedValue, Refusal, held, is_free_text};
+    use super::{Carrier, Expected, MalformedValue, Refusal, held};
     use http::{HeaderMap, Method};
-    use openehr_its::rest::generated::ehr::{ROUTE_PARAMS, ROUTES};
-    use openehr_its::rest::routes::{Lookup, ParamKind, ParamLocation, RouteMatch, lookup};
+    use openehr_its::rest::routes::{Lookup, ParamKind, RouteMatch, lookup};
 
     const EHR: &str = "/ehr/7d44b88c-4199-4bad-97dc-d78268e01398";
 
@@ -690,46 +609,5 @@ mod tests {
             "query parameter 1 (version_at_time) is not an extended ISO 8601 date-time, which the ITS-REST operation declares for it, so the request was not sent",
             malformed.to_string()
         );
-    }
-
-    /// The free-text parameters of the EHR area, as the module's `// NOTE:`
-    /// and the configuration page list them.
-    const FREE_TEXT: [(ParamLocation, &str); 11] = [
-        (ParamLocation::Path, "key"),
-        (ParamLocation::Header, "If-Match"),
-        (ParamLocation::Header, "openehr-audit-details"),
-        (ParamLocation::Header, "openehr-item-tag"),
-        (ParamLocation::Header, "openehr-template-id"),
-        (ParamLocation::Header, "openehr-version"),
-        (ParamLocation::Header, "openehr-version-item-tag"),
-        (ParamLocation::Query, "path"),
-        (ParamLocation::Query, "tag_key"),
-        (ParamLocation::Query, "tag_target_path"),
-        (ParamLocation::Query, "tag_value"),
-    ];
-
-    #[test]
-    fn the_listed_free_text_parameters_are_the_tables() {
-        let mut free = BTreeSet::new();
-        for ((_, template, _), params) in ROUTES.iter().zip(ROUTE_PARAMS) {
-            if !template.starts_with("/ehr/{ehr_id}") {
-                continue;
-            }
-            for param in *params {
-                let unclassified = match param.location {
-                    ParamLocation::Path => expected(param) == PathValue::Free,
-                    ParamLocation::Query | ParamLocation::Header => is_free_text(&param.kind),
-                    ParamLocation::Cookie => false,
-                };
-                if unclassified {
-                    free.insert((format!("{:?}", param.location), param.name));
-                }
-            }
-        }
-        let listed: BTreeSet<(String, &str)> = FREE_TEXT
-            .iter()
-            .map(|(location, name)| (format!("{location:?}"), *name))
-            .collect();
-        assert_eq!(listed, free);
     }
 }

@@ -456,8 +456,8 @@ impl Federation {
         self.best_effort
     }
 
-    /// The one member endpoint every DEMOGRAPHIC request is routed to, or
-    /// `None` when that area answers `501` (§7a.1, §12.6, N32), as
+    /// The one member endpoint a DEMOGRAPHIC request may name and be routed
+    /// to, or `None` when that area answers `501` (§7a.1, §12.6, N32), as
     /// `its_rest.demographic` declares it in `OPTIONS {base}/` (§7a.2).
     #[must_use]
     pub fn demographic_endpoint(&self) -> Option<&EndpointId> {

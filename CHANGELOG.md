@@ -24,21 +24,24 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 ### Added
 
 - The DEMOGRAPHIC area is never federated, and may be routed to one
-  configured endpoint (#68; §7a.1, §12.6, N32, N31, CP-25). By default every
-  request under `{base}/v1/demographic/` answers `501` and no node is asked.
-  The new `[federation] demographic_endpoint` setting names one registry
-  endpoint; every DEMOGRAPHIC operation then goes to that endpoint alone,
-  through the single-node path definition requests use: the body
-  byte-identical, only what the ITS-REST operation declares, and the node's
-  answer as the node sent it with `openEHR-federation-endpoint` and
-  `openEHR-federation-system-id`. A targeting header naming that endpoint is
-  accepted; one naming another endpoint is `400 targeting-conflict`, and
+  declared endpoint that the request names (#68, #311; §7a.1, §12.4, §12.6,
+  N23, N32, N31, CP-25). By default every request under
+  `{base}/v1/demographic/` answers `501` and no node is asked. The new
+  `[federation] demographic_endpoint` setting declares the one registry
+  endpoint that serves the area. A DEMOGRAPHIC request names that endpoint
+  in `openEHR-federation-endpoint` and then goes to it alone, through the
+  single-node path definition requests use: the body byte-identical, only
+  what the ITS-REST operation declares, and the node's answer as the node
+  sent it with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id`. The setting is never applied as a default:
+  a request naming no endpoint is `400 target-required` and no node is
+  asked, one naming another endpoint is `400 targeting-conflict`, and
   several endpoints, `*` or an unknown id are refused as on any routed
   request. `config check` refuses an id the registry does not hold, and the
   setting without `registry.document`. `OPTIONS {base}/` declares
   `its_rest.demographic` as `unsupported: 501`, or as `routed-single-node`
-  naming the endpoint, and `OPTIONS` on a DEMOGRAPHIC path names its ITS-REST
-  methods only when the area is routed.
+  naming the endpoint a request names, and `OPTIONS` on a DEMOGRAPHIC path
+  names its ITS-REST methods only when the area is routed.
 - Definition requests are routed to one explicitly chosen node (#75; §7a.1,
   §12.6, §12.7, N43, N31, N33, CP-34). Every request under
   `{base}/v1/definition/`, an ADL 1.4 or ADL 2 template upload, list, read or
@@ -156,6 +159,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The `openehr-*` family moves to 0.0.80 (FerroEHR #3539 to #3541, #3543), and
+  `openehr-federation` to 0.0.31 with it. The fuzz crate is now held to the
+  family pin by `scripts/checks/versions.sh`.
 - An `ehr_id` that the session's resolution bindings or the `ehr_id` index
   hold at two members is now refused `409 ehr-id-collision` listing the
   claimants, on a write as on a read (#63; §12.5.2, N42). A read no longer

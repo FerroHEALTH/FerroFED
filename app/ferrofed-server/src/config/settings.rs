@@ -92,8 +92,8 @@ pub struct FederationSettings {
     /// `aggregates.decomposable` an `OPTIONS {base}/` body declares
     /// (§11.6.3, §7a.2).
     pub decomposable: BTreeSet<AggregateFunction>,
-    /// The one member endpoint the DEMOGRAPHIC area is routed to, or `None`
-    /// when that area answers `501` (§7a.1, N32).
+    /// The one member endpoint that may serve the DEMOGRAPHIC area, or
+    /// `None` when that area answers `501` (§7a.1, N32).
     pub demographic_endpoint: Option<EndpointId>,
 }
 
