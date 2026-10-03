@@ -14,22 +14,25 @@
 )]
 
 use std::error::Error;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 use axum::Router;
-use ferrofed_identity::binding::{Bound, SessionKey};
+use ferrofed_identity::binding::{Bound, ResolutionBindings, SessionKey};
 use ferrofed_registry::creating_system::{CreatingSystemRoute, Sighting};
-use ferrofed_registry::ehr_index::Indexed;
+use ferrofed_registry::ehr_index::{EhrIndex, Indexed};
 use ferrofed_registry::error::CreatingSystemMiss;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId, SystemId};
 use ferrofed_registry::incident::Incident;
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::Config;
+use ferrofed_server::facade::owner::{self, Held, Located};
 use ferrofed_server::reload::{Applied, ReloadError, Reloader};
 use ferrofed_server::state::AppState;
 use ferrofed_server::telemetry::{Rendering, subscriber};
-use http::StatusCode;
+use http::{HeaderMap, StatusCode};
 use openehr_base::prelude::ObjectVersionId;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
@@ -134,7 +137,8 @@ impl Gateway {
 }
 
 /// The configuration text over `document`, a development profile with
-/// `top`, and `tables` appended.
+/// `top`, and `tables` appended after the `[federation]` keys, so keys before
+/// its first table header extend `[federation]`.
 fn configuration(document: &Path, top: &str, tables: &str) -> String {
     let document = toml::Value::String(document.display().to_string());
     format!(
@@ -359,6 +363,53 @@ async fn an_invalid_document_is_refused_and_the_running_registry_stays() -> Test
 }
 
 #[tokio::test]
+async fn a_document_that_drops_the_demographic_endpoint_is_refused() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-b::cdr-b.example.org::1").await;
+    let tables =
+        String::from("demographic_endpoint = \"node-b-pub\"\n") + &crossref(&[("node-a", EHR_A)]);
+    let gateway = Gateway::start(
+        &(member("a", &a.uri()) + &member("b", &b.uri())),
+        "",
+        &tables,
+    )?;
+    let running = gateway.federation()?;
+    gateway.write_registry(&member("a", &a.uri()))?;
+
+    let refused =
+        gateway.reloader.reload().err().ok_or(
+            "a demographic endpoint the document no longer declares is refused, as at boot",
+        )?;
+    assert_eq!("demographic-endpoint", refused.class());
+    assert!(Arc::ptr_eq(&running, &gateway.federation()?));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_changed_demographic_endpoint_takes_a_restart() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-b::cdr-b.example.org::1").await;
+    let registry = member("a", &a.uri()) + &member("b", &b.uri());
+    let rows = crossref(&[("node-a", EHR_A)]);
+    let gateway = Gateway::start(
+        &registry,
+        "",
+        &(String::from("demographic_endpoint = \"node-a-pub\"\n") + &rows),
+    )?;
+    gateway.write_config(
+        "",
+        &(String::from("demographic_endpoint = \"node-b-pub\"\n") + &rows),
+    )?;
+
+    let applied = gateway.reloader.reload()?;
+    assert_eq!(
+        vec!["federation.demographic_endpoint"],
+        applied.needs_restart
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn an_unreadable_document_is_refused() -> TestResult {
     let a = node_answering("uid-a::cdr-a.example.org::1").await;
     let gateway = Gateway::start(&member("a", &a.uri()), "", &crossref(&[("node-a", EHR_A)]))?;
@@ -479,6 +530,67 @@ async fn a_departed_member_leaves_the_index_and_the_bindings() -> TestResult {
     Ok(())
 }
 
+/// The registry of node A and node B, at addresses nothing listens on.
+fn snapshot_of_a_and_b() -> Result<RegistrySnapshot, Box<dyn Error>> {
+    Ok(RegistrySnapshot::from_toml_str(
+        &(member("a", "http://127.0.0.1:9/a") + &member("b", "http://127.0.0.1:9/b")),
+    )?)
+}
+
+#[test]
+fn a_binding_naming_a_departed_claimant_is_dropped_and_never_narrowed() -> TestResult {
+    let snapshot = snapshot_of_a_and_b()?;
+    let ehr_a: EhrId = EHR_A.parse()?;
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let now = Instant::now();
+    bindings.record(
+        &session,
+        now,
+        [
+            (&"node-a".parse()?, &ehr_a),
+            (&"node-gone".parse()?, &ehr_a),
+        ],
+    );
+    let index = EhrIndex::new(NonZeroUsize::MIN);
+    let held = Held {
+        bindings: &bindings,
+        session: &session,
+        now,
+    };
+    let located = owner::located(&snapshot, &HeaderMap::new(), Some(held), &index, &ehr_a)?;
+    assert!(
+        matches!(located, Located::Unknown),
+        "never narrowed to node-a (§12.5.2, N42): {located:?}"
+    );
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&session, now, &ehr_a),
+        "the stale binding is dropped"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_index_entry_naming_a_departed_claimant_is_dropped_and_never_narrowed() -> TestResult {
+    let snapshot = snapshot_of_a_and_b()?;
+    let ehr_a: EhrId = EHR_A.parse()?;
+    let index = EhrIndex::new(NonZeroUsize::MIN);
+    index.learn(&ehr_a, &"node-a".parse()?);
+    index.learn(&ehr_a, &"node-gone".parse()?);
+    let located = owner::located(&snapshot, &HeaderMap::new(), None, &index, &ehr_a)?;
+    assert!(
+        matches!(located, Located::Unknown),
+        "never narrowed to node-a (§12.5.2, N42): {located:?}"
+    );
+    assert_eq!(
+        Indexed::None,
+        index.lookup(&ehr_a),
+        "the stale entry is dropped"
+    );
+    Ok(())
+}
+
 /// The gateway over node A, a holder of [`EHR_A`], after a reload that removed
 /// node B, with an index entry learned after the reload naming both: the
 /// entry a request in flight on the old registry could leave behind.
@@ -538,13 +650,13 @@ async fn a_write_never_routes_on_an_entry_naming_a_departed_claimant() -> TestRe
 
 /// A node that holds every request until the test releases it, and says
 /// when one arrived.
-struct Held {
+struct Holding {
     arrived: tokio::sync::mpsc::UnboundedSender<()>,
     release: Mutex<mpsc::Receiver<()>>,
     answer: String,
 }
 
-impl Respond for Held {
+impl Respond for Holding {
     fn respond(&self, _request: &Request) -> ResponseTemplate {
         // NOTE: a closed channel means the test already failed, so the send
         // result has nothing to report.
@@ -572,7 +684,7 @@ async fn a_request_in_flight_finishes_on_the_registry_it_started_with() -> TestR
     );
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
-        .respond_with(Held {
+        .respond_with(Holding {
             arrived,
             release: Mutex::new(held),
             answer,

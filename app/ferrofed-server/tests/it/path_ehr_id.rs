@@ -237,55 +237,6 @@ fn a_member_the_registry_no_longer_holds_names_nothing() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn a_binding_naming_a_departed_claimant_is_dropped_and_never_narrowed() -> TestResult {
-    let snapshot = snapshot()?;
-    let bindings = ResolutionBindings::new(Duration::from_secs(60));
-    let session = SessionKey::new("session-1");
-    let now = Instant::now();
-    bindings.record(
-        &session,
-        now,
-        [(&node("node-a")?, &ehr()?), (&node("node-gone")?, &ehr()?)],
-    );
-    let index = EhrIndex::new(NonZeroUsize::MIN);
-    let held = Held {
-        bindings: &bindings,
-        session: &session,
-        now,
-    };
-    let located = owner::located(&snapshot, &HeaderMap::new(), Some(held), &index, &ehr()?)?;
-    assert!(
-        matches!(located, Located::Unknown),
-        "never narrowed to node-a (§12.5.2, N42): {located:?}"
-    );
-    assert_eq!(
-        ferrofed_identity::binding::Bound::None,
-        bindings.lookup(&session, now, &ehr()?),
-        "the stale binding is dropped"
-    );
-    Ok(())
-}
-
-#[test]
-fn an_index_entry_naming_a_departed_claimant_is_dropped_and_never_narrowed() -> TestResult {
-    let snapshot = snapshot()?;
-    let index = EhrIndex::new(NonZeroUsize::MIN);
-    index.learn(&ehr()?, &node("node-a")?);
-    index.learn(&ehr()?, &node("node-gone")?);
-    let located = owner::located(&snapshot, &HeaderMap::new(), None, &index, &ehr()?)?;
-    assert!(
-        matches!(located, Located::Unknown),
-        "never narrowed to node-a (§12.5.2, N42): {located:?}"
-    );
-    assert_eq!(
-        ferrofed_registry::ehr_index::Indexed::None,
-        index.lookup(&ehr()?),
-        "the stale entry is dropped"
-    );
-    Ok(())
-}
-
 /// A node answering `verb` at `at` with `answer`, and `404` to the rest.
 pub(crate) async fn mount(server: &MockServer, verb: &str, at: String, answer: ResponseTemplate) {
     Mock::given(method(verb))

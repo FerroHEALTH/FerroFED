@@ -471,7 +471,11 @@ Four sections take effect on a reload:
 | `[registry]`: the document's contents, its path and its `format` | `profile` |
 | `[credentials]` | `[server]` |
 | `[dev]` | `[telemetry]` |
-| `[pixm]` | `[federation]` and `[stored_queries]` |
+| `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
+
+`federation.demographic_endpoint` keeps its running value until a restart,
+and the document must still declare it: a reload whose document drops that
+endpoint is refused (`demographic-endpoint`, below).
 
 A valid configuration replaces the running registry at once. A request that
 started before the reload finishes on the registry it started with, nodes
@@ -511,6 +515,7 @@ the same file to see the fault. The classes are:
 | `registry-unreadable` | the registry document cannot be read |
 | `registry-invalid` | the registry document breaks a registry rule |
 | `credentials` | a `[credentials]` section names an endpoint the document does not declare |
+| `demographic-endpoint` | `federation.demographic_endpoint` names an endpoint the new document does not declare |
 | `dev-cross-reference`, `pixm`, `resolvers` | the resolver refuses the new members, or both resolvers are set |
 | `node-clients`, `http-client`, `self-description` | the node clients or the `OPTIONS {base}/` body cannot be built |
 | `registry-presence` | `registry.document` was set or unset, which takes a restart |

@@ -347,6 +347,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             was.decomposable != now.decomposable,
         ),
         (
+            "federation.demographic_endpoint",
+            was.demographic_endpoint != now.demographic_endpoint,
+        ),
+        (
             "stored_queries.path",
             boot.stored_queries != fresh.stored_queries,
         ),
@@ -376,6 +380,8 @@ fn federation_class(error: &FederationError) -> &'static str {
         | FederationError::Pixm(_) => "pixm",
         FederationError::TwoResolvers => "resolvers",
         FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
+        FederationError::DemographicWithoutRegistry
+        | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",
         FederationError::Describe(_) => "self-description",
         FederationError::Clients(SetupError::UnknownEndpoint { .. }) => "credentials",
         FederationError::Clients(_) => "node-clients",
