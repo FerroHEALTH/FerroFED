@@ -218,6 +218,7 @@ fn a_query_with_no_patient_is_dispatched_as_written_to_the_endpoints_it_names() 
     );
 }
 
+// conformance: CP-22
 #[test]
 fn a_query_already_scoped_by_ehr_id_is_accepted_as_written() {
     let aql = format!("SELECT c/uid/value {FROM} WHERE e/ehr_id/value = '{EHR_ID}'");

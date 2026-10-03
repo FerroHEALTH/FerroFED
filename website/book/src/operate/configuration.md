@@ -5,12 +5,13 @@
 
 The `ferrofed` binary reads one TOML file and the environment. It serves the
 process shape (health, readiness, the request log, graceful shutdown) and, once
-a registry is configured, the federated query `POST /v1/query/aql`, the EHR
-resources and the definition area routed to one node, and, when
+a registry is configured, the federated query `POST {base}/v1/query/aql`, the
+EHR resources and the definition area routed to one node, and, when
 `[stored_queries]` is set, the stored-query registry. The DEMOGRAPHIC area
 answers `501` unless `federation.demographic_endpoint` declares the one
-endpoint a request names to reach it, and every other path under `/v1/`
-answers `501`.
+endpoint a request names to reach it, and every other path under
+`{base}/v1/` answers `501`. `{base}` is `/` unless you set
+[the base path](#the-base-path).
 
 ## Running it
 
@@ -42,6 +43,7 @@ the value. The gateway never falls back to a default for a value you set.
 ```toml
 [server]
 listen = "127.0.0.1:8080"     # the socket address to bind
+base_path = "/"               # the path of the base URL every route sits under; see The base path
 request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 shutdown_timeout_ms = 10000   # the drain after SIGTERM is bounded by this
 body_limit_bytes = 1048576    # a body past this answers 413
@@ -527,19 +529,49 @@ the same file to see the fault. The classes are:
 Reloading is built on Unix only; the container image is Linux. The gateway
 has no metrics endpoint yet, so the log lines are the record of each reload.
 
+## The base path
+
+`server.base_path` is the path of the base URL the gateway is served at,
+`{base}` in the specification, and every route in the table below sits under
+it (§4.1, N28). It is `/` by default, so the gateway serves at the root. Set
+it to mount the gateway under a path of your choosing, for example behind a
+reverse proxy that does not strip the path:
+
+```toml
+[server]
+base_path = "/fed/openehr"
+```
+
+The gateway then serves `GET /fed/openehr/`, `OPTIONS /fed/openehr/`,
+`GET /fed/openehr/health`, `POST /fed/openehr/v1/query/aql` and the rest of
+the table, serves `{base}` without the trailing slash as `{base}/`, and
+answers `404` for every path outside the base, the root included, so point a
+health probe at `{base}/health`. The specification reserves no prefix, and
+the gateway reserves none either: `/rest/openehr` is a valid base when you
+choose it, and is not served unless you do. The base is checked at boot: it
+starts with `/`, has no trailing `/` unless it is `/`, has no query or
+fragment, and has no empty, `.` or `..` segment, or the gateway refuses to
+start and names `server.base_path`. Tell clients the full base URL, scheme,
+host and this path, through the registry or service discovery; nodes never
+see it, because the gateway asks each node at the node's own base URL.
+
 ## The HTTP surface
+
+Every route is under the [base path](#the-base-path); with the default `/`,
+`{base}/` is `/`.
 
 | Route | Answers |
 |---|---|
-| `GET /` | the product name and version |
-| `GET /health` | `200` while the process is up |
-| `GET /health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
-| `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
-| `/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
-| `GET /v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, answered as that node answered; `501` when no registry is configured |
-| `/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT /v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |
-| `/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
-| any other path under `/v1/` | `501` |
+| `GET {base}/` | the product name and version |
+| `OPTIONS {base}/` | the federation's self-description (§7a.2) |
+| `GET {base}/health` | `200` while the process is up |
+| `GET {base}/health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
+| `POST {base}/v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
+| `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
+| `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |
+| `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT {base}/v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |
+| `{base}/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
+| any other path under `{base}/v1/` | `501` |
 | any other path | `404` |
 
 Every response carries an `x-request-id`: the client's value when it is short

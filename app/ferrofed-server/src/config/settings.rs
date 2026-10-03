@@ -17,6 +17,7 @@ use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
 use secrecy::SecretString;
 
+use crate::base_path::BasePath;
 use crate::config::{DevSection, NodeSelection, RegistryFormat};
 use crate::telemetry::Format;
 
@@ -102,6 +103,8 @@ pub struct FederationSettings {
 pub struct ServerSettings {
     /// The socket address to bind.
     pub listen: SocketAddr,
+    /// The path every route sits under (§4.1, N28).
+    pub base_path: BasePath,
     /// How long one request may take before the server answers `408`.
     pub request_timeout: Duration,
     /// How long the drain may take after the stop signal.
@@ -152,6 +155,7 @@ impl Settings {
             .collect();
         tracing::info!(
             listen = %self.server.listen,
+            base_path = %self.server.base_path,
             profile = ?self.profile,
             registry = self.registry_document.is_some(),
             registry_format = ?self.registry_format,

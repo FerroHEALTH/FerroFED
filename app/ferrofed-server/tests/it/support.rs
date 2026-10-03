@@ -98,6 +98,7 @@ pub(crate) fn request_lines(text: &str) -> Result<Vec<LogLine>, serde_json::Erro
 pub(crate) fn settings() -> ServerSettings {
     ServerSettings {
         listen: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
+        base_path: ferrofed_server::base_path::BasePath::default(),
         request_timeout: Duration::from_secs(5),
         shutdown_timeout: Duration::from_secs(5),
         body_limit: 1024,

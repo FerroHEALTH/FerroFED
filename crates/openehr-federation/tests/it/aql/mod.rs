@@ -23,6 +23,7 @@ mod hygiene;
 mod offset;
 mod order;
 mod rules;
+mod scope;
 
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::aql::refusal::Refusal;

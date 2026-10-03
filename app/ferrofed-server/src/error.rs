@@ -102,16 +102,17 @@ pub enum Code {
     /// the one the deployment declared for that area (§7a.1, N32).
     /// The body names both sets.
     TargetingConflict,
-    /// The `ehr_id` in a request path is not an openEHR `HIER_OBJECT_ID`
-    /// (§12.5).
+    /// The `ehr_id` in a request path, or the one a query is scoped to, is
+    /// not an openEHR `HIER_OBJECT_ID` (§12.5, N29).
     EhrIdInvalid,
     /// A node answered with an error, so the request cannot be completed
     /// (§11.2): a member answered the ask-all probe of a path `ehr_id` with
     /// neither a success nor `404` (§12.5.1).
     NodeError,
-    /// A read of an EHR resource that no targeting header, binding or index
-    /// routes to one node has a path `ehr_id` that is no bare UUID, so it is
-    /// never probed at every member (§5.4.1, N33, §12.5.1).
+    /// A read of an EHR resource, or a query scoped to one `ehr_id`, that no
+    /// targeting header, binding or index routes to one node has an `ehr_id`
+    /// that is no bare UUID, so it is never probed at every member (§5.4.1,
+    /// N33, §12.5.1).
     ProbeRequiresUuid,
     /// A stored query's name is not `[{namespace}::]{query-name}` over the
     /// ITS-REST characters, or is the reserved `aql`.

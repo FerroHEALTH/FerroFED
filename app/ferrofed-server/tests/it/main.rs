@@ -6,6 +6,7 @@
 mod admission;
 mod aggregate;
 mod ask_all;
+mod base_url;
 mod completeness;
 mod config;
 mod contribution_write;
@@ -19,6 +20,7 @@ mod distinct;
 mod e2e;
 mod ehr_by_subject;
 mod ehr_id_collision;
+mod ehr_scope;
 mod endpoint_attributes;
 mod endpoint_report;
 mod errors;

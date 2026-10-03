@@ -320,6 +320,11 @@ impl fmt::Debug for DevSection {
 pub struct Server {
     /// The socket address to bind.
     pub listen: String,
+    /// The path of the deployment's base URL, `{base}`, which every route
+    /// sits under: `/`, the default, or a path such as `/fed/openehr` with no
+    /// trailing `/`, query or fragment (§4.1, N28). The specification
+    /// reserves no prefix.
+    pub base_path: String,
     /// How long one request may take before the server answers `408`. With a
     /// registry configured, it must exceed `federation.overall_timeout_ms`
     /// by more than [`COMBINING_MARGIN_MS`].
@@ -334,6 +339,7 @@ impl Default for Server {
     fn default() -> Self {
         Self {
             listen: String::from("127.0.0.1:8080"),
+            base_path: String::from("/"),
             request_timeout_ms: 30_000,
             shutdown_timeout_ms: 10_000,
             body_limit_bytes: 1024 * 1024,

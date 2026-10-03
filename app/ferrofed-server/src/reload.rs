@@ -303,6 +303,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
         ("profile", boot.profile != fresh.profile),
         ("server.listen", boot.server.listen != fresh.server.listen),
         (
+            "server.base_path",
+            boot.server.base_path != fresh.server.base_path,
+        ),
+        (
             "server.request_timeout_ms",
             boot.server.request_timeout != fresh.server.request_timeout,
         ),

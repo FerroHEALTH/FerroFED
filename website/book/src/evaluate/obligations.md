@@ -19,9 +19,9 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 280 | 278 | a test asserts it |
+| tested | 281 | 279 | a test asserts it |
 | built-untested | 2 | 2 | the code does it and no test asserts it yet |
-| planned | 47 | 44 | not built yet; an open issue holds the work |
+| planned | 46 | 43 | not built yet; an open issue holds the work |
 | missing | 3 | 3 | not built, found missing by the audit; an issue holds the work |
 | deferred | 5 | 4 | not built, by a decision of the owner |
 | new-gap | 8 | 7 | the text contradicts itself or is silent, found by the audit and reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) |
@@ -94,7 +94,6 @@ statement where the text disagrees with itself, by status.
 | [requirements#n26.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n26) | Gateway | MUST NOT | N26 | CP-18 | the gateway MUST NOT be the sole authority for releasing sensitive data | [#83](https://github.com/FerroHEALTH/FerroFED/issues/83) (the gateway makes no release decision today) |
 | [requirements#n27.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n27) | Gateway | MUST NOT | N27 | CP-36 | A gateway MUST NOT assume that a node appearing in a localization result is consent-cleared | [#83](https://github.com/FerroHEALTH/FerroFED/issues/83), [#85](https://github.com/FerroHEALTH/FerroFED/issues/85) (no localizer is consumed yet) |
 | [requirements#n27a.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n27a) | Gateway | MAY | N27a | CP-36 | the Tier MAY use its decision to exclude nodes before dispatch, and MUST then report each excluded node as consent-denied | [#83](https://github.com/FerroHEALTH/FerroFED/issues/83) |
-| [requirements#n29.3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n29) | Gateway | SHOULD | N29 | CP-22 | and SHOULD accept FROM EHR e[ehr_id/value=…] | [#69](https://github.com/FerroHEALTH/FerroFED/issues/69) (the form is forwarded as written but is not recognised as ehr-scoped: crates/openehr-federation/src/aql/scan.rs ehr_scoped) |
 | [requirements#n36.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n36) | Gateway | MUST | N36 | CP-29 | A write derived from a de-duplicated row MUST be routed on the target version's creating_system_id | [#66](https://github.com/FerroHEALTH/FerroFED/issues/66) |
 | [requirements#n36.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n36) | Gateway | MUST NOT | N36 | CP-29 | A gateway MUST NOT route a versioned write to a node that merely holds a copy | [#66](https://github.com/FerroHEALTH/FerroFED/issues/66); a learned route never routes a write: `app/ferrofed-server/tests/it/follow_up.rs::a_learned_route_never_routes_a_write` |
 | [requirements#n36.3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/requirements.html#n36) | Gateway | MUST | N36 | CP-29 | If no reachable node has system_id == creating_system_id, it MUST reject with 409 Conflict naming the controlling system | [#66](https://github.com/FerroHEALTH/FerroFED/issues/66) (400 vs 409 overlap: T156 on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212)) |

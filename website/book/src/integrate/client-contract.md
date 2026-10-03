@@ -21,6 +21,19 @@ answers `501`, or goes to the one endpoint the deployment declared for it when
 you name that endpoint ([demographics](#demographics), §7a.1, N32). Every other ITS-REST path under
 `/v1/` answers `501` (N32).
 
+## The base URL
+
+Every path on this page is relative to `{base}`, the base URL the deployment
+chose and the registry or service discovery gives you (§4.1, N28). The
+specification mandates and reserves no prefix: `/rest/openehr` is a vendor
+convention, so do not hard-code it or any other. A gateway mounted at the
+root serves `POST /v1/query/aql`; one the operator mounted at `/fed/openehr`
+serves `POST /fed/openehr/v1/query/aql`, `OPTIONS /fed/openehr/` and
+`GET /fed/openehr/v1/ehr/{ehr_id}`, and answers `404` for every path outside
+that base. The gateway asks each node at the node's own base URL, so its own
+base never reaches a node, and it passes a node's `Location` through
+unmodified (N31).
+
 ## What a client sends
 
 A conformant openEHR AQL request to `POST {base}/v1/query/aql`, where `{base}`
@@ -269,6 +282,37 @@ is sent it (§12.5.2, N42). The explicit target of step 1 still routes such an
 `ehr_id` to the node you name. A write that none of the first three steps routes is a `400`
 with the code `target-required`, and nothing is probed, because the gateway
 never finds a write's destination by trial (§12.5.1, N41).
+
+### Querying one EHR by its `ehr_id`
+
+An AQL query can address one EHR the way the path does, in either form
+(N29), and the gateway treats the two as the same query:
+
+```sql
+SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c
+WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'
+
+SELECT c/uid/value
+FROM EHR e[ehr_id/value='7d44b88c-4199-4bad-97dc-d78268e01398'] CONTAINS COMPOSITION c
+```
+
+The node receives the first form, the canonical one of §7.1, whichever you
+sent, so both answer the same rows. An `ehr_id` belongs to the node that
+issued it (§12.5), so a query scoped to one `ehr_id` and naming no endpoint
+goes only to the node that owns it, found in the order above: your session's
+binding, the `ehr_id` index, then the ask-all probe, a query being a read.
+`meta.federation.endpoints[]` reports that node and every other member as
+`excluded`, and the `openEHR-federation-endpoint` header names the node
+(N31). The answers of the probe apply as they do to a path: two members
+holding the `ehr_id` are a `409` (`ehr-id-collision`) and neither is queried,
+an `ehr_id` no member holds is a `404` (`no-destination`), an `ehr_id` that
+is not a bare UUID and that no earlier step routes is a `400`
+(`probe-requires-uuid`), and one that is not an openEHR `HIER_OBJECT_ID` is a
+`400` (`ehr-id-invalid`). A query that names its endpoints, by the directive
+or a header, goes to those endpoints as named. The query is scoped only when
+every top-level `ehr_id` predicate names the same `ehr_id`, joined by `AND`;
+a query that names two `ehr_id`s, or one under `OR`, is answered as a query
+over every member.
 
 A routed request reaches the node as you sent it:
 

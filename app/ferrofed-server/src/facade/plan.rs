@@ -73,6 +73,25 @@ pub enum Selection<'a> {
     /// endpoint is `excluded`, because a decision ruled it out, and stays out
     /// of scope: it neither clears `complete` nor fails the query (§11.1).
     Directed(&'a BTreeSet<EndpointId>),
+    /// The query is scoped to one `ehr_id`, and the order of §12.5.1 routes
+    /// it to the member this endpoint reaches (N29, N41). Every other
+    /// endpoint is `excluded`, because the routing decision ruled it out
+    /// (§11.1).
+    Owner(&'a EndpointId),
+}
+
+impl<'a> Selection<'a> {
+    /// The selection of a request whose directive or headers name `named`,
+    /// or whose `ehr_id` routes it to `owner`: the explicit target first
+    /// (§8, §12.5.1 step 1).
+    #[must_use]
+    pub fn of(named: Option<&'a BTreeSet<EndpointId>>, owner: Option<&'a EndpointId>) -> Self {
+        match (named, owner) {
+            (Some(named), _) => Self::Directed(named),
+            (None, Some(owner)) => Self::Owner(owner),
+            (None, None) => Self::Undirected,
+        }
+    }
 }
 
 impl Selection<'_> {
@@ -81,6 +100,15 @@ impl Selection<'_> {
         match self {
             Self::Undirected => true,
             Self::Directed(named) => named.contains(endpoint),
+            Self::Owner(owner) => owner == endpoint,
+        }
+    }
+
+    /// Why an endpoint the selection does not admit is `excluded`.
+    fn reason(self) -> &'static str {
+        match self {
+            Self::Undirected | Self::Directed(_) => "not named by the request's endpoint directive",
+            Self::Owner(_) => "the query's ehr_id is routed to another member (§12.5.1, N29)",
         }
     }
 }
@@ -178,8 +206,9 @@ pub async fn patient(
 /// The plan of a query that names no patient, dispatched as written.
 ///
 /// It goes to every member `selection` admits: every member in a deployment
-/// with no localizer (N4, last sentence), or the endpoints a
-/// directed request names (§8).
+/// with no localizer (N4, last sentence), the endpoints a
+/// directed request names (§8), or the owner of the one `ehr_id` the query
+/// is scoped to (§12.5.1, N29).
 ///
 /// # Errors
 /// Returns a [`TargetsError`] when a status cannot be described.
@@ -217,10 +246,7 @@ fn membership(snapshot: &RegistrySnapshot, selection: Selection<'_>) -> Membersh
         let mut chosen: Option<EndpointId> = None;
         for endpoint in endpoints {
             if !selection.admits(endpoint.id()) {
-                excluded.push((
-                    endpoint.id().clone(),
-                    String::from("not named by the request's endpoint directive"),
-                ));
+                excluded.push((endpoint.id().clone(), String::from(selection.reason())));
                 continue;
             }
             match (endpoint.status(), &chosen) {

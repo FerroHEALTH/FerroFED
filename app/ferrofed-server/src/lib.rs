@@ -11,21 +11,23 @@
 //! stop, while [`reload`] replaces the registry on `SIGHUP`. `main.rs` only
 //! hands in the arguments and returns the exit code.
 //!
-//! The ITS-REST façade serves the federated query, `POST /v1/query/aql`
-//! ([`facade`], §7), and routes every request to an EHR resource under a
-//! path `ehr_id`, the creation of an EHR, and every definition request, to
-//! one node ([`facade::route`], §7a.1, §12.4, §12.6), unless the
-//! stored-query registry holds the definition ([`facade::stored`], §12.7).
-//! A DEMOGRAPHIC request goes to the one endpoint the deployment declared
-//! for it when it names that endpoint, and answers `501` where none is
-//! declared (§7a.1, §12.6, N32); every other path
-//! under `/v1/` answers `501` until its issue lands.
+//! Every route sits under the configured base path ([`base_path`]; §4.1,
+//! N28). The ITS-REST façade serves the federated query,
+//! `POST {base}/v1/query/aql` ([`facade`], §7), and routes every request to
+//! an EHR resource under a path `ehr_id`, the creation of an EHR, and every
+//! definition request, to one node ([`facade::route`], §7a.1, §12.4,
+//! §12.6), unless the stored-query registry holds the definition
+//! ([`facade::stored`], §12.7). A DEMOGRAPHIC request goes to the one
+//! endpoint the deployment declared for it when it names that endpoint, and
+//! answers `501` where none is declared (§7a.1, §12.6, N32); every other
+//! path under `{base}/v1/` answers `501` until its issue lands.
 //!
 //! [`admission`] is the `admission check` job: one member exercised against
 //! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
 #![doc(test(attr(deny(warnings))))]
 
 pub mod admission;
+pub mod base_path;
 pub mod body;
 pub mod cli;
 pub mod config;
@@ -303,28 +305,53 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 
 /// Builds the HTTP application over `state`, with the shared middleware.
 ///
-/// `GET /` answers a small JSON document naming the product and its version,
-/// `OPTIONS /` the federation's self-description
-/// ([`facade::options::options_root`]),
-/// `GET /health` answers `200` while the process is up, and
-/// `GET /health/readiness` answers `200` when every registered indicator is up
-/// and `503` with each indicator's state otherwise. `POST /v1/query/aql` answers
-/// the federated query when a registry is configured ([`facade::query_aql`]).
-/// Every other path under [`ITS_REST_PREFIX`] answers `501`, because its
-/// part of the façade is not built yet, and every path outside it answers
-/// `404`.
+/// Every route sits under the configured base path, `{base}`
+/// ([`ServerSettings::base_path`]; §4.1, N28). `GET {base}/` answers a small
+/// JSON document naming the product and its version, `OPTIONS {base}/` the
+/// federation's self-description ([`facade::options::options_root`]),
+/// `GET {base}/health` answers `200` while the process is up, and
+/// `GET {base}/health/readiness` answers `200` when every registered
+/// indicator is up and `503` with each indicator's state otherwise.
+/// `POST {base}/v1/query/aql` answers the federated query when a registry is
+/// configured ([`facade::query_aql`]). Every other path under
+/// [`ITS_REST_PREFIX`] is routed or answers `501`, and every path outside it,
+/// or outside the base, answers `404`. Under a base other than `/`, the base
+/// itself and the base with a trailing `/` are both `{base}/`.
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
-    let routes = Router::new()
-        .route("/", get(root).options(facade::options::options_root))
+    let surface = Router::new()
         .route("/health", get(liveness))
         .route("/health/readiness", get(readiness))
         .route(
             facade::QUERY_AQL,
             post(facade::query_aql).fallback(unrouted),
         )
-        .fallback(unrouted)
-        .with_state(state);
-    with_middleware(routes, server)
+        .fallback(unrouted);
+    let routes = if server.base_path.is_root() {
+        surface.route("/", base_root())
+    } else {
+        // NOTE: no specification governs this: our own design; `{base}/` is the
+        // root N28 names, and `{base}` without the slash is served the same.
+        let base = server.base_path.as_str();
+        Router::new()
+            .route(base, base_root())
+            .route(&server.base_path.join("/"), base_root())
+            .nest(base, surface)
+            .fallback(outside_the_base)
+    };
+    with_middleware(routes.with_state(state), server)
+}
+
+/// `GET` and `OPTIONS` of `{base}/` (§7a.2).
+fn base_root() -> axum::routing::MethodRouter<Arc<AppState>> {
+    get(root).options(facade::options::options_root)
+}
+
+/// Every path outside the configured base: `404`, naming no path.
+async fn outside_the_base(headers: HeaderMap) -> Response {
+    error::fixed(
+        error::Code::NotFound,
+        request_id::of(&headers).unwrap_or_default(),
+    )
 }
 
 /// Applies the middleware stack every FerroFED surface carries to `router`.
