@@ -7,9 +7,9 @@
 
 ## Start here
 
-- [README](README.md): what FerroFED is, and the licence.
-- [Working discipline](CLAUDE.md): the engineering rules for changing the code, the status, and the repo map.
-- [Vendored specifications](docs/specs/): the Federation Tier specification and its reference implementation, each with its provenance.
+- [README](https://github.com/FerroHEALTH/FerroFED/blob/main/README.md): what FerroFED is, and the licence.
+- [Working discipline](https://github.com/FerroHEALTH/FerroFED/blob/main/CLAUDE.md): the engineering rules for changing the code, the status, and the repo map.
+- [Vendored specifications](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs): the Federation Tier specification and its reference implementation, each with its provenance.
 - [Documentation](https://ferrofed.eu/docs/): the book, by reader intent: Evaluate, Operate, Integrate, Contribute.
 
 ## The specification
@@ -20,24 +20,24 @@
 
 ## Rules (`.claude/rules/`)
 
-- [spec-adherence.md](.claude/rules/spec-adherence.md): the specifications are the oracle; strictness and citation.
-- [codegen.md](.claude/rules/codegen.md): what is generated and what is hand-written; never hand-edit a `// @generated` file.
-- [reliability.md](.claude/rules/reliability.md): the machine-enforced safety rules.
-- [rust-style.md](.claude/rules/rust-style.md): idiomatic Rust style and import discipline.
-- [testing.md](.claude/rules/testing.md): test discipline; never weaken a test to make a build pass.
-- [comments.md](.claude/rules/comments.md): comment budgets (RFC 505 and RFC 1574).
-- [writing-style.md](.claude/rules/writing-style.md): the prose rules for all human-facing text.
-- [vendored-inputs.md](.claude/rules/vendored-inputs.md): external material enters through a committed fetch script, verbatim, with provenance.
-- [ci-cd.md](.claude/rules/ci-cd.md): workflow security and the supply-chain discipline.
-- [ai-code-review.md](.claude/rules/ai-code-review.md): SonarQube Cloud and CodeQL are advisory, never authority.
-- [issue-workflow.md](.claude/rules/issue-workflow.md): the GitHub Issues work loop.
+- [spec-adherence.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/spec-adherence.md): the specifications are the oracle; strictness and citation.
+- [codegen.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/codegen.md): what is generated and what is hand-written; never hand-edit a `// @generated` file.
+- [reliability.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/reliability.md): the machine-enforced safety rules.
+- [rust-style.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/rust-style.md): idiomatic Rust style and import discipline.
+- [testing.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/testing.md): test discipline; never weaken a test to make a build pass.
+- [comments.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/comments.md): comment budgets (RFC 505 and RFC 1574).
+- [writing-style.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/writing-style.md): the prose rules for all human-facing text.
+- [vendored-inputs.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/vendored-inputs.md): external material enters through a committed fetch script, verbatim, with provenance.
+- [ci-cd.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/ci-cd.md): workflow security and the supply-chain discipline.
+- [ai-code-review.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/ai-code-review.md): SonarQube Cloud and CodeQL are advisory, never authority.
+- [issue-workflow.md](https://github.com/FerroHEALTH/FerroFED/blob/main/.claude/rules/issue-workflow.md): the GitHub Issues work loop.
 
 ## Governance and policies
 
-- [AI statement](AI_STATEMENT.md): how AI tools are used to develop FerroFED, and the fact that the product ships no AI.
-- [Governance](GOVERNANCE.md): how decisions get made, and by whom.
-- [Maintainers](MAINTAINERS.md): the roster and the access-continuity answer.
-- [Contributing](CONTRIBUTING.md): setup, gates, and the hard rules.
-- [Support](SUPPORT.md): where to get help.
-- [Security policy](SECURITY.md): report a vulnerability privately.
-- [Changelog](CHANGELOG.md): every change with a user-visible effect.
+- [AI statement](https://github.com/FerroHEALTH/FerroFED/blob/main/AI_STATEMENT.md): how AI tools are used to develop FerroFED, and the fact that the product ships no AI.
+- [Governance](https://github.com/FerroHEALTH/FerroFED/blob/main/GOVERNANCE.md): how decisions get made, and by whom.
+- [Maintainers](https://github.com/FerroHEALTH/FerroFED/blob/main/MAINTAINERS.md): the roster and the access-continuity answer.
+- [Contributing](https://github.com/FerroHEALTH/FerroFED/blob/main/CONTRIBUTING.md): setup, gates, and the hard rules.
+- [Support](https://github.com/FerroHEALTH/FerroFED/blob/main/SUPPORT.md): where to get help.
+- [Security policy](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md): report a vulnerability privately.
+- [Changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md): every change with a user-visible effect.
