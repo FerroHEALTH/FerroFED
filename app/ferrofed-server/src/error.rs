@@ -106,6 +106,26 @@ pub enum Code {
     /// routes to one node has a path `ehr_id` that is no bare UUID, so it is
     /// never probed at every member (§5.4.1, N33, §12.5.1).
     ProbeRequiresUuid,
+    /// A stored query's name is not `[{namespace}::]{query-name}` over the
+    /// ITS-REST characters, or is the reserved `aql`.
+    QueryNameInvalid,
+    /// A stored query's version is not `major.minor.patch`, or, where a
+    /// version is looked up, a `{major}` or `{major}.{minor}` prefix.
+    QueryVersionInvalid,
+    /// A stored query is `PUT` without a version, which the registry
+    /// requires (§12.7, N44).
+    QueryVersionRequired,
+    /// A stored query's `query_type` is not AQL.
+    QueryTypeUnsupported,
+    /// A stored-query definition names the patient by a literal, which the
+    /// registry would hold at rest; the patient is a `$parameter` (§5.4.1,
+    /// N33).
+    SubjectLiteral,
+    /// The registry already holds the stored query's name and version, and
+    /// the held definition stands unchanged (§12.7, N44).
+    StoredQueryHeld,
+    /// The registry holds no stored query at the name and version (§12.7).
+    StoredQueryUnknown,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -121,7 +141,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 24] = [
+    pub const GATEWAY: [Self; 31] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -146,6 +166,13 @@ impl Code {
         Self::EhrIdInvalid,
         Self::NodeError,
         Self::ProbeRequiresUuid,
+        Self::QueryNameInvalid,
+        Self::QueryVersionInvalid,
+        Self::QueryVersionRequired,
+        Self::QueryTypeUnsupported,
+        Self::SubjectLiteral,
+        Self::StoredQueryHeld,
+        Self::StoredQueryUnknown,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -186,6 +213,13 @@ impl Code {
             Self::EhrIdInvalid => "ehr-id-invalid",
             Self::NodeError => "node-error",
             Self::ProbeRequiresUuid => "probe-requires-uuid",
+            Self::QueryNameInvalid => "query-name-invalid",
+            Self::QueryVersionInvalid => "query-version-invalid",
+            Self::QueryVersionRequired => "query-version-required",
+            Self::QueryTypeUnsupported => "query-type-unsupported",
+            Self::SubjectLiteral => "subject-literal",
+            Self::StoredQueryHeld => "stored-query-held",
+            Self::StoredQueryUnknown => "stored-query-unknown",
         }
     }
 
@@ -207,9 +241,18 @@ impl Code {
             | Self::QueryParameterRefused
             | Self::TargetingConflict
             | Self::EhrIdInvalid
-            | Self::ProbeRequiresUuid => StatusCode::BAD_REQUEST,
-            Self::NoDestination | Self::NotFound => StatusCode::NOT_FOUND,
-            Self::EhrIdCollision | Self::ControllingSystemUnreachable => StatusCode::CONFLICT,
+            | Self::ProbeRequiresUuid
+            | Self::QueryNameInvalid
+            | Self::QueryVersionInvalid
+            | Self::QueryVersionRequired
+            | Self::QueryTypeUnsupported
+            | Self::SubjectLiteral => StatusCode::BAD_REQUEST,
+            Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
+                StatusCode::NOT_FOUND
+            }
+            Self::EhrIdCollision | Self::ControllingSystemUnreachable | Self::StoredQueryHeld => {
+                StatusCode::CONFLICT
+            }
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
@@ -266,6 +309,25 @@ impl Code {
             Self::NodeError => "a node answered with an error (§11.2)",
             Self::ProbeRequiresUuid => {
                 "a read of an EHR resource that no header, binding or index routes to one node is probed at every member only when its ehr_id is a UUID, so name its node in the openEHR-federation-endpoint header (§5.4.1, N33, §12.5.1)"
+            }
+            Self::QueryNameInvalid => {
+                "a stored query name is [{namespace}::]{query-name} over a-z, A-Z, 0-9, _, . and -, and never aql"
+            }
+            Self::QueryVersionInvalid => {
+                "a stored query version is major.minor.patch, or {major} or {major}.{minor} where a version is looked up"
+            }
+            Self::QueryVersionRequired => {
+                "the registry stores a definition at a version: PUT {base}/v1/definition/query/{name}/{version} (§12.7)"
+            }
+            Self::QueryTypeUnsupported => "the registry stores AQL only",
+            Self::SubjectLiteral => {
+                "a stored query names its patient through a $parameter, never a literal the registry would hold (§5.4.1, N33)"
+            }
+            Self::StoredQueryHeld => {
+                "the registry holds this name and version, and a stored version is immutable: store a new version (§12.7, N44)"
+            }
+            Self::StoredQueryUnknown => {
+                "the registry holds no stored query at this name and version"
             }
         }
     }
@@ -350,6 +412,13 @@ mod tests {
             Code::EhrIdInvalid => Some(21),
             Code::NodeError => Some(22),
             Code::ProbeRequiresUuid => Some(23),
+            Code::QueryNameInvalid => Some(24),
+            Code::QueryVersionInvalid => Some(25),
+            Code::QueryVersionRequired => Some(26),
+            Code::QueryTypeUnsupported => Some(27),
+            Code::SubjectLiteral => Some(28),
+            Code::StoredQueryHeld => Some(29),
+            Code::StoredQueryUnknown => Some(30),
         }
     }
 
@@ -418,6 +487,13 @@ mod tests {
             (Code::EhrIdInvalid, StatusCode::BAD_REQUEST),
             (Code::NodeError, StatusCode::FAILED_DEPENDENCY),
             (Code::ProbeRequiresUuid, StatusCode::BAD_REQUEST),
+            (Code::QueryNameInvalid, StatusCode::BAD_REQUEST),
+            (Code::QueryVersionInvalid, StatusCode::BAD_REQUEST),
+            (Code::QueryVersionRequired, StatusCode::BAD_REQUEST),
+            (Code::QueryTypeUnsupported, StatusCode::BAD_REQUEST),
+            (Code::SubjectLiteral, StatusCode::BAD_REQUEST),
+            (Code::StoredQueryHeld, StatusCode::CONFLICT),
+            (Code::StoredQueryUnknown, StatusCode::NOT_FOUND),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

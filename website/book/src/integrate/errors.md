@@ -122,8 +122,15 @@ the node is reported and the query succeeds.
 | `ehr-id-invalid` | 400 | The `ehr_id` in the request path is not an openEHR `HIER_OBJECT_ID`, so it names no EHR and the request is not routed (§12.5). The message never quotes the path. |
 | `node-error` | 424 | A member the ask-all probe asked answered with neither a success nor `404`, so whether it holds the `ehr_id` is unknown and the read is not served (§11.2, §12.5.1). The message names the member and its status. |
 | `probe-requires-uuid` | 400 | A read of an EHR resource that no targeting header, resolution binding or `ehr_id` index entry routes to one node has a path `ehr_id` that is not a bare UUID: an ISO OID, an internet id, or a UUID with an extension. The gateway cannot tell such a value from a patient identifier, and the ask-all probe would send it to every member, so it asks no member anything (§5.4.1, N33, §12.5.1). Name the node in `openEHR-federation-endpoint`. The message never quotes the path. |
+| `query-name-invalid` | 400 | A stored query's name is not `[{namespace}::]{query-name}` over `a-z`, `A-Z`, `0-9`, `_`, `.` and `-`, or its query name is `aql`, which ITS-REST reserves. The message never quotes the name. |
+| `query-version-invalid` | 400 | A stored query's version is not `major.minor.patch` with no leading zeros, or, where a version is looked up, not a `{major}` or `{major}.{minor}` prefix either (ITS-REST, "Qualified query name"). |
+| `query-version-required` | 400 | A definition is `PUT` at `{base}/v1/definition/query/{name}` with no version. The registry stores a definition only at a version, because a stored version is immutable (§12.7, N44). |
+| `query-type-unsupported` | 400 | A definition's `query_type` is not `AQL`; the registry stores AQL only. |
+| `subject-literal` | 400 | A definition names its patient by a literal identifier. The registry would hold that identifier at rest, so it refuses the definition; name the patient through a `$parameter` and bind it in `query_parameters` when you invoke the query (§5.4.1, N33). |
+| `stored-query-held` | 409 | The registry already holds a definition at this name and version. A stored version is immutable, so the second `PUT` is refused and the held text stands; store the change as a new version (§12.7, N44). |
+| `stored-query-unknown` | 404 | The registry holds no stored query at this name, or none at the version or version prefix the path names. |
 
-The two `409` codes belong to follow-up routing (§12). `ehr-id-collision`
+Two of the `409` codes belong to follow-up routing (§12). `ehr-id-collision`
 answers a read today; the integrity incident it also raises for the operator,
 and `controlling-system-unreachable`, are planned build order. The codes are
 fixed now, so a client can handle them before they occur.

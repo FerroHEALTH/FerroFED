@@ -40,6 +40,9 @@ pub struct Settings {
     pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
     pub pixm: Option<PixmSettings>,
+    /// The store file of the stored-query registry, when it is offered
+    /// (§12.7).
+    pub stored_queries: Option<PathBuf>,
 }
 
 /// The PIXm resolver, resolved.
@@ -155,6 +158,7 @@ impl Settings {
             max_offset_window = self.federation.offset.max_window().map(NonZeroU32::get),
             decomposable_aggregates = decomposable.join(","),
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
+            stored_query_registry = self.stored_queries.is_some(),
             credentials = endpoints.join(","),
             "configuration resolved"
         );

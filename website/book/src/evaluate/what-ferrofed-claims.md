@@ -53,7 +53,8 @@ per-endpoint report, the best-effort completeness opt-in, the client's
 `SELECT DISTINCT` across nodes, `OFFSET` paging, decomposable aggregates
 (`COUNT`, `SUM`, `MIN`, `MAX` and `AVG`) recombined into one row across
 nodes, opt-in version-identity de-duplication (§9.5, §10, §11.2 to
-§11.6), and the §11.2 status mapping with the stable error codes of
+§11.6), the federated stored-query registry with immutable versions invoked
+by name (§12.7), and the §11.2 status mapping with the stable error codes of
 [Errors and status codes](../integrate/errors.md), on the `openehr-*` crates
 at the pin [Pinned versions](versions.md) records.
 

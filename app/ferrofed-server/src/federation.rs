@@ -227,7 +227,7 @@ impl Federation {
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
         };
-        options::describe(&federation).map_err(FederationError::Describe)?;
+        options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
     }
 

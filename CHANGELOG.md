@@ -22,6 +22,34 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- The federated stored-query registry (#77; §12.7, N44, N33, CP-40,
+  CP-28). With `[stored_queries] path` set, the gateway holds stored queries
+  itself in an embedded `redb` file that survives a restart, and
+  `OPTIONS {base}/` declares `definition.stored_query_registry: true`.
+  `PUT {base}/v1/definition/query/{name}/{version}` stores the AQL on
+  ITS-REST's semver segment: the name is `[{namespace}::]{query-name}`, the
+  version `major.minor.patch`, and the text is analysed as an inline query
+  would be, with each `$parameter` standing in for a bound value, and held
+  as its canonical print. A definition that names the patient by a literal
+  is refused `400 subject-literal`, so no patient identifier is held at
+  rest; a second `PUT` of a held name and version is refused
+  `409 stored-query-held` and the held text stands, across a restart too.
+  `GET` on the same path reads the ITS-REST `StoredQuery` back, and
+  `GET {base}/v1/definition/query/{pattern}` lists the versions of every
+  name the pattern starts. `POST {base}/v1/query/{name}[/{version}]` runs
+  the stored query over every member exactly as if its text were sent
+  inline, with the client's `offset`, `fetch` and `query_parameters`, the
+  targeting, completeness and dedup headers and the budget; without a
+  version the highest runs, and a `{major}` or `{major}.{minor}` prefix runs
+  the highest it matches. The answer carries ITS-REST's `name` naming the
+  gateway's definition. New codes: `query-name-invalid`,
+  `query-version-invalid`, `query-version-required`, `query-type-unsupported`,
+  `subject-literal` (each `400`), `stored-query-held` (`409`) and
+  `stored-query-unknown` (`404`). Without `[stored_queries]` the definition
+  routes still answer `501`. `openehr-federation` is 0.0.30 and adds
+  `aql::definition::Definition`, the admission analysis of a stored
+  definition. Definition fan-out to the nodes is #78.
+
 - Routing a path `ehr_id` in the order of §12.5.1 (#62; §12.5, N41,
   CP-33). A request to `{base}/v1/ehr/{ehr_id}` or below it goes to the node
   the targeting headers name, then the node a resolution binding of the

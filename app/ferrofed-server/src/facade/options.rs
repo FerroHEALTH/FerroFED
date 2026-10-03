@@ -38,7 +38,7 @@ use openehr_federation::options::{
 use openehr_its::rest::routes::{self, Lookup};
 
 use crate::error::{self, Code};
-use crate::facade::{QUERY_AQL, route};
+use crate::facade::{QUERY_AQL, route, stored};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
@@ -85,7 +85,7 @@ pub async fn options_root(State(state): State<Arc<AppState>>, headers: HeaderMap
         return error::fixed(Code::NotImplemented, request_id);
     };
     // TODO(#80): answer 401 to a caller the gateway has not authenticated (§7a.2, §13).
-    match describe(federation) {
+    match describe(federation, state.definitions().is_some()) {
         Ok(body) => (
             StatusCode::OK,
             [(header::ALLOW, HeaderValue::from_static(ROOT_ALLOW))],
@@ -99,14 +99,15 @@ pub async fn options_root(State(state): State<Arc<AppState>>, headers: HeaderMap
     }
 }
 
-/// Builds the `OPTIONS {base}/` body of `federation` (§7a.2, N30).
+/// Builds the `OPTIONS {base}/` body of `federation` (§7a.2, N30), declaring
+/// the stored-query registry offered when `registry` is `true` (§12.7, N44).
 ///
 /// # Errors
 ///
 /// Returns a [`DescribeError`] when a configured value is one the wire type
 /// refuses, a budget does not fit in a `u64` of milliseconds, or an endpoint
 /// names a node the registry does not hold.
-pub fn describe(federation: &Federation) -> Result<OptionsRoot, DescribeError> {
+pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, DescribeError> {
     let gateway = GatewayDescription {
         id: federation.id().clone(),
         spec_version: SpecVersion::of_release(openehr_federation::FEDERATION_SPEC)?,
@@ -137,10 +138,9 @@ pub fn describe(federation: &Federation) -> Result<OptionsRoot, DescribeError> {
             extra: Extra::new(),
         },
         // TODO(#76): declare fan_out_template_upload true once template fan-out upload is offered.
-        // TODO(#77): declare stored_query_registry true once the stored-query registry is offered.
         // TODO(#78): declare stored_query_fan_out true once definitions fan out to the nodes.
         definition: DefinitionBehaviour::new(false)
-            .with_stored_query_registry(false)?
+            .with_stored_query_registry(registry)?
             .with_stored_query_fan_out(false)?,
         // NOTE: §14.1, fail-closed is the default and the gateway offers no
         // fail-open, so `closed` holds for any localizer it is configured with.
@@ -150,7 +150,7 @@ pub fn describe(federation: &Federation) -> Result<OptionsRoot, DescribeError> {
         },
         // TODO(#81): declare auth.jwks_uri once the gateway publishes its JWKS (§13.1).
         auth: None,
-        its_rest: its_rest()?,
+        its_rest: its_rest(registry)?,
         extra: Extra::new(),
     };
     Ok(OptionsRoot {
@@ -213,16 +213,28 @@ fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
 }
 
 /// The `its_rest` member: how each ITS-REST area is served (§7a.1, N30,
-/// N32).
-fn its_rest() -> Result<ItsRestAreas, DescribeError> {
+/// N32), with stored queries held at the gateway when `registry` is `true`
+/// (§12.7).
+fn its_rest(registry: bool) -> Result<ItsRestAreas, DescribeError> {
+    let (query, definition) = if registry {
+        (
+            "federated: POST {base}/v1/query/aql and POST {base}/v1/query/{name}[/{version}] fan out",
+            "stored queries at the gateway registry; templates unsupported: 501",
+        )
+    } else {
+        (
+            "federated: POST {base}/v1/query/aql fans out",
+            "unsupported: 501",
+        )
+    };
     Ok(ItsRestAreas {
-        query: "federated: POST {base}/v1/query/aql fans out".to_owned(),
+        query: query.to_owned(),
         ehr: "routed: a request under {base}/v1/ehr/{ehr_id} goes to the one node \
               that owns the ehr_id, found by the targeting headers, the session's \
               resolution binding, the ehr_id index, then for a read an ask-all probe"
             .to_owned(),
         // TODO(#75): describe definition requests routed to one explicitly chosen node.
-        definition: "unsupported: 501".to_owned(),
+        definition: definition.to_owned(),
         demographic: DemographicSupport::new("unsupported: 501")?,
         extra: Extra::new(),
     })
@@ -274,8 +286,9 @@ fn member(
 /// in `Allow`, or `501` for a resource it does not serve (N32; RFC 9110
 /// §9.3.7, §10.2.1). The gateway answers itself: no node is asked, so nothing is dispatched.
 #[must_use]
-pub fn allow(federation: Option<&Federation>, path: &str, request_id: &str) -> Response {
-    let served = federation.and_then(|_| served(path));
+pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
+    let registry = state.definitions().is_some();
+    let served = state.federation().and_then(|_| served(path, registry));
     let Some(methods) = served else {
         return error::fixed(Code::NotImplemented, request_id);
     };
@@ -298,8 +311,9 @@ pub fn allow(federation: Option<&Federation>, path: &str, request_id: &str) -> R
 ///
 /// The federated query takes `POST` only; an EHR resource under a path
 /// `ehr_id` takes every method ITS-REST declares for it, because each is
-/// routed to one node (§7a.1).
-fn served(path: &str) -> Option<Vec<Method>> {
+/// routed to one node (§7a.1). Where the stored-query `registry` is offered,
+/// a stored query takes `POST`, and a definition `GET` and `PUT` (§12.7).
+fn served(path: &str, registry: bool) -> Option<Vec<Method>> {
     let query = QUERY_AQL.strip_prefix(crate::ITS_REST_PREFIX.trim_end_matches('/'));
     let mut methods = if query == Some(path) {
         vec![Method::POST]
@@ -315,7 +329,8 @@ fn served(path: &str) -> Option<Vec<Method>> {
             .filter(|method| {
                 matches!(
                     routes::lookup(method, path),
-                    Lookup::Matched(matched) if route::in_ehr_area(&matched)
+                    Lookup::Matched(matched)
+                        if route::in_ehr_area(&matched) || (registry && stored::serves(&matched))
                 )
             })
             .collect()

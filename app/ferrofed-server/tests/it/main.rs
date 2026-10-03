@@ -35,6 +35,7 @@ mod routing;
 mod routing_log;
 mod run;
 mod shutdown;
+mod stored;
 mod support;
 mod targeting;
 mod telemetry;

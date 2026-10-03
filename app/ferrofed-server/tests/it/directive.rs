@@ -107,6 +107,21 @@ impl Nodes {
         )
     }
 
+    /// A development gateway over the three nodes that offers the
+    /// stored-query registry, its store in `dir`, resolving the patient at
+    /// the members `rows` name (§12.7).
+    pub(crate) fn gateway_with_store(
+        &self,
+        dir: &Path,
+        rows: &[(&str, &str)],
+    ) -> Result<Router, Box<dyn Error>> {
+        crate::stored::gateway(
+            dir,
+            &members(&self.a.uri(), &self.b.uri(), &self.c.uri()),
+            rows,
+        )
+    }
+
     /// How many requests each node received, A, B and C.
     pub(crate) async fn asked(&self) -> Result<[usize; 3], Box<dyn Error>> {
         Ok([
