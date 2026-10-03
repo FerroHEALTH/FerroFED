@@ -33,6 +33,7 @@ use crate::telemetry::{DEFAULT_FILTER, Format};
 pub mod error;
 mod secrets;
 pub mod settings;
+pub mod stored_queries;
 
 /// The prefix of every environment override.
 ///
@@ -83,6 +84,8 @@ pub struct Config {
     /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
     /// `ehr_id` domain there (#43).
     pub pixm: Option<Pixm>,
+    /// The federated stored-query registry (`[stored_queries]`, §12.7).
+    pub stored_queries: stored_queries::StoredQueries,
 }
 
 impl Default for Config {
@@ -96,6 +99,7 @@ impl Default for Config {
             credentials: BTreeMap::new(),
             dev: None,
             pixm: None,
+            stored_queries: stored_queries::StoredQueries::default(),
         }
     }
 }
@@ -533,6 +537,7 @@ impl Config {
             credentials,
             dev: self.dev.clone(),
             pixm,
+            stored_queries: stored_queries::resolve(self)?,
         })
     }
 

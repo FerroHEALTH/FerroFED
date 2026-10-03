@@ -43,7 +43,7 @@ openehr-its = { version = "0.0.79", default-features = false }
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.29" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.30" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.8" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
@@ -86,6 +86,12 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
+# The one time library (clippy.toml): the `saved` instant of a stored query
+# (#77).
+jiff = { version = "0.2.37", default-features = false, features = ["std"] }
+# The embedded store behind the stored-query registry (#77), reached only from
+# the server (app/ferrofed-engine/tests/it/architecture.rs).
+redb = { version = "4.3.0", default-features = false, features = ["std"] }
 # The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
 # ImplementationGuide), compiled only in crates/ihe-iti and, for its PIX Manager
 # test device, in tools/ferrofed-testkit; checked against docs/VERSIONS.md by

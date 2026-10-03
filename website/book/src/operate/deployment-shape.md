@@ -32,9 +32,11 @@ if the deployment offers it, the federated stored-query definitions it is
 authoritative for (§12.7). The specification is silent on storage, so this is
 FerroFED's own design: the registry is a reviewed TOML document, loaded at boot
 into an immutable snapshot, and the resolution bindings of each client session
-are held in memory with a bounded lifetime. The stored-query registry, the one
-durable store, is planned
-([#77](https://github.com/FerroHEALTH/FerroFED/issues/77)).
+are held in memory with a bounded lifetime. The stored-query registry is the
+one durable store: an embedded `redb` file at the path
+[`[stored_queries]`](configuration.md#stored-queries) names, opened by one
+gateway process at a time, holding parameterised AQL and never a patient
+identifier.
 
 ## Failure behaviour you should know before you run it
 

@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 23 of 35 covered, 12 planned, 0 deferred.
+**Gateway points:** 24 of 35 covered, 11 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -48,7 +48,7 @@ and a gateway is never marked down for them (section 17).
 | [CP-25](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-25) | Gateway | N32 | 9 | planned | [#68](https://github.com/FerroHEALTH/FerroFED/issues/68) | - |
 | [CP-26](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-26) | Gateway | N33 | 10 | covered | [#45](https://github.com/FerroHEALTH/FerroFED/issues/45), [#90](https://github.com/FerroHEALTH/FerroFED/issues/90), [#217](https://github.com/FerroHEALTH/FerroFED/issues/217) | - |
 | [CP-27](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-27) | Node | N34 | 10 | node-profile | [#93](https://github.com/FerroHEALTH/FerroFED/issues/93) | a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design |
-| [CP-28](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-28) | Gateway | N35 | 3 | covered | [#70](https://github.com/FerroHEALTH/FerroFED/issues/70), [#71](https://github.com/FerroHEALTH/FerroFED/issues/71), [#77](https://github.com/FerroHEALTH/FerroFED/issues/77) | the stored-query clause is scored on the ad hoc query, one AQL text targeted by the header and by the directive with the same answer (section 8.4); a query stored at the gateway and invoked by name is the stored-query registry (section 12.7, #77) |
+| [CP-28](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-28) | Gateway | N35 | 3 | covered | [#70](https://github.com/FerroHEALTH/FerroFED/issues/70), [#71](https://github.com/FerroHEALTH/FerroFED/issues/71), [#77](https://github.com/FerroHEALTH/FerroFED/issues/77) | the stored-query clause is scored on a query stored at the gateway and invoked by name, targeted by the header and by the directive with the same answer, and refused 400 when the two select different node sets (section 8.4, section 12.7) |
 | [CP-29](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-29) | Gateway | N36 | 5, 6 | planned | [#56](https://github.com/FerroHEALTH/FerroFED/issues/56), [#66](https://github.com/FerroHEALTH/FerroFED/issues/66) | - |
 | [CP-30](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-30) | Gateway | N37 | 4 | covered | [#37](https://github.com/FerroHEALTH/FerroFED/issues/37), [#50](https://github.com/FerroHEALTH/FerroFED/issues/50) | - |
 | [CP-31](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-31) | Gateway | N38, N40 | 4 | covered | [#49](https://github.com/FerroHEALTH/FerroFED/issues/49), [#51](https://github.com/FerroHEALTH/FerroFED/issues/51) | - |
@@ -60,7 +60,7 @@ and a gateway is never marked down for them (section 17).
 | [CP-36](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-36) | Gateway | N8 | 2, 7 | covered | [#43](https://github.com/FerroHEALTH/FerroFED/issues/43), [#83](https://github.com/FerroHEALTH/FerroFED/issues/83) | - |
 | [CP-37](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-37) | Gateway | N12 | 3 | covered | [#72](https://github.com/FerroHEALTH/FerroFED/issues/72) | - |
 | [CP-39](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-39) | Operator | N25 | 7 | operator | [#84](https://github.com/FerroHEALTH/FerroFED/issues/84) | verified at admission or in the registry, not on a request (section 16.2) |
-| [CP-40](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-40) | Gateway | N44 | 9 | planned | [#77](https://github.com/FerroHEALTH/FerroFED/issues/77), [#78](https://github.com/FerroHEALTH/FerroFED/issues/78) | - |
+| [CP-40](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-40) | Gateway | N44 | 9 | covered | [#77](https://github.com/FerroHEALTH/FerroFED/issues/77), [#78](https://github.com/FerroHEALTH/FerroFED/issues/78) | the registry clauses are scored: invocation by name over more than one member with name and endpoints[], the refused second PUT, and a directed definition stored and executed federated; the definition fan-out clauses apply only where fan-out is offered, which it is not (#78) |
 
 ## Test tracks
 

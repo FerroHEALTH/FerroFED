@@ -54,6 +54,7 @@ mod paging;
 mod rewrite;
 mod scan;
 
+pub mod definition;
 pub mod directive;
 pub mod refusal;
 pub mod subject;

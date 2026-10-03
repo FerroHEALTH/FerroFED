@@ -45,6 +45,7 @@ pub mod plan;
 pub mod prefer;
 pub mod route;
 pub mod security;
+pub mod stored;
 pub mod target;
 
 use std::collections::BTreeSet;
@@ -93,22 +94,77 @@ pub async fn query_aql(
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, &request_id);
     };
+    let arrived = Arrived {
+        headers: &headers,
+        request_id: &request_id,
+        outbound,
+        started,
+    };
+    answer(federation, arrived, Submitted::Body(&body)).await
+}
+
+/// One federated query request, as it arrived.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Arrived<'a> {
+    /// The request headers, which select the modes and may name the node set.
+    pub(crate) headers: &'a HeaderMap,
+    /// The exchange id the answer names, empty when the client sent none.
+    pub(crate) request_id: &'a str,
+    /// The gateway's id for the request, the one every node receives.
+    pub(crate) outbound: OutboundId,
+    /// When the request arrived, the instant the overall budget runs from.
+    pub(crate) started: Instant,
+}
+
+/// What a federated query request submits.
+#[derive(Debug)]
+pub(crate) enum Submitted<'a> {
+    /// The body of `POST {base}/v1/query/aql`, an ITS-REST
+    /// `AdhocQueryExecute`.
+    Body(&'a [u8]),
+    /// A stored query invoked by name: its AQL with the client's `offset`,
+    /// `fetch` and `query_parameters`, run exactly as if submitted inline,
+    /// and the qualified name the answer carries (§12.7, N44).
+    Stored {
+        /// The expanded request.
+        request: AdhocQueryExecute,
+        /// The qualified name of the gateway's definition.
+        name: &'a str,
+    },
+}
+
+/// Runs the federated query `submitted` and answers it (§7, §9, §11).
+pub(crate) async fn answer(
+    federation: &Federation,
+    arrived: Arrived<'_>,
+    submitted: Submitted<'_>,
+) -> Response {
+    let Arrived {
+        headers,
+        request_id,
+        outbound,
+        started,
+    } = arrived;
     // TODO(#80): the authenticated client session the resolution bindings belong to.
     let session: Option<SessionKey> = None;
-    let completion = match completeness::of(&headers, federation.best_effort()) {
+    let completion = match completeness::of(headers, federation.best_effort()) {
         Ok(completion) => completion,
-        Err(error) => return Failure::Completeness(error).respond(&request_id, outbound),
+        Err(error) => return Failure::Completeness(error).respond(request_id, outbound),
     };
-    let dedup = match dedup::of(&headers) {
+    let dedup = match dedup::of(headers) {
         Ok(mode) => mode,
-        Err(error) => return Failure::Dedup(error).respond(&request_id, outbound),
+        Err(error) => return Failure::Dedup(error).respond(request_id, outbound),
     };
     let configured = federation.budget();
-    let wait = prefer::wait(&headers);
+    let wait = prefer::wait(headers);
     let budget = wait.map_or(configured, |wait| configured.shortened_to(wait));
+    let name = match &submitted {
+        Submitted::Body(_) => None,
+        Submitted::Stored { name, .. } => Some((*name).to_owned()),
+    };
     let query = Query {
-        body: &body,
-        headers: &headers,
+        sent: submitted,
+        headers,
         completion,
         dedup,
         budget,
@@ -117,14 +173,16 @@ pub async fn query_aql(
         session: session.as_ref(),
     };
     match federate(federation, query).await {
-        Ok((status, result_set)) => {
+        Ok((status, mut result_set)) => {
+            // NOTE: §12.7, N44: the answer to a stored query names the gateway's definition.
+            result_set.name = name;
             let mut response = (status, Json(result_set)).into_response();
             if let Some(applied) = wait.filter(|_| budget != configured) {
                 applied_wait(&mut response, applied);
             }
             response
         }
-        Err(failure) => failure.respond(&request_id, outbound),
+        Err(failure) => failure.respond(request_id, outbound),
     }
 }
 
@@ -228,10 +286,10 @@ impl Failure {
 }
 
 /// One federated query, as the façade read it from the request.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct Query<'a> {
-    /// The request body.
-    body: &'a [u8],
+    /// What the request sent.
+    sent: Submitted<'a>,
     /// The request headers, which may name the node set (§8.4).
     headers: &'a HeaderMap,
     /// The completion strategy the request selects (§11.4).
@@ -289,18 +347,20 @@ fn analysed(
     Ok(analysis)
 }
 
-/// The request in `body`, the endpoints its directive or its `headers`
+/// The request `sent`, the endpoints its directive or its `headers`
 /// select, and the analysis of its query under the request's modes.
 fn read(
     federation: &Federation,
-    (body, headers): (&[u8], &HeaderMap),
+    (sent, headers): (Submitted<'_>, &HeaderMap),
     modes: (Completion, DedupMode),
     request_id: &str,
 ) -> Result<(AdhocQueryExecute, Option<BTreeSet<EndpointId>>, Analysis), Failure> {
-    // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
-    // body is refused with a fixed message.
-    let request: AdhocQueryExecute =
-        serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?;
+    let request: AdhocQueryExecute = match sent {
+        // NOTE: §5.4.3, the reader's message may quote the body, so a malformed
+        // body is refused with a fixed message.
+        Submitted::Body(body) => serde_json::from_slice(body).map_err(|_quoted| Failure::Body)?,
+        Submitted::Stored { request, .. } => request,
+    };
     let (facade, named) = directed(federation, &request.q, headers, request_id)?;
     let analysis = analysed(
         federation,
@@ -346,7 +406,7 @@ async fn federate(
     query: Query<'_>,
 ) -> Result<(StatusCode, ResultSet), Failure> {
     let Query {
-        body,
+        sent,
         headers,
         completion,
         dedup,
@@ -358,7 +418,7 @@ async fn federate(
     let logged = outbound.to_string();
     let request_id = logged.as_str();
     let (request, named, analysis) =
-        read(federation, (body, headers), (completion, dedup), request_id)?;
+        read(federation, (sent, headers), (completion, dedup), request_id)?;
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;

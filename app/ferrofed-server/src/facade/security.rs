@@ -99,6 +99,18 @@ pub(super) fn forward_withheld(endpoint: &EndpointId, part: Part, request_id: &s
     );
 }
 
+/// A stored-query definition naming its patient by a literal was refused, so
+/// the registry holds no identifier (§12.7, §5.4.3).
+pub(super) fn definition_refused(at: Option<&Range<usize>>, request_id: &str) {
+    tracing::warn!(
+        target: TARGET,
+        event = "definition-subject-literal",
+        at = %Position(at),
+        request_id,
+        "a stored-query definition named its patient by a literal, and was not stored"
+    );
+}
+
 /// A byte range as `a..b`, or `unknown`.
 struct Position<'a>(Option<&'a Range<usize>>);
 

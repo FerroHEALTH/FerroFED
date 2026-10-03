@@ -58,6 +58,11 @@ impl FacadeQuery {
         self.federated.directive.as_ref()
     }
 
+    /// The parse: the directive and the strict AQL that remains.
+    pub(super) fn federated(&self) -> &Federated {
+        &self.federated
+    }
+
     /// Analyses the query and prepares the node queries, as [`super::analyse`]
     /// does.
     ///

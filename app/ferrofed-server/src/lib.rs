@@ -27,6 +27,7 @@ pub mod panic;
 pub mod request_id;
 pub mod request_log;
 pub mod state;
+pub mod stored;
 pub mod telemetry;
 
 use std::future::Future;
@@ -43,6 +44,7 @@ use axum::{Extension, Json, Router};
 use clap::Parser;
 use ferrofed_engine::outbound_id::OutboundId;
 use http::{HeaderMap, Method, StatusCode, Uri};
+use openehr_its::rest::routes::{self, Lookup};
 use tokio::net::TcpListener;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -310,9 +312,9 @@ async fn unrouted(
         return error::fixed(error::Code::NotFound, request_id);
     };
     if method == Method::OPTIONS {
-        return facade::options::allow(state.federation(), path, request_id);
+        return facade::options::allow(&state, path, request_id);
     }
-    let arrived = facade::route::Arrived {
+    let mut arrived = facade::route::Arrived {
         method: &method,
         path,
         uri: &uri,
@@ -321,6 +323,14 @@ async fn unrouted(
         request_id,
         outbound,
     };
+    if let (Some(federation), Some(definitions)) = (state.federation(), state.definitions())
+        && let Lookup::Matched(matched) = routes::lookup(&method, path)
+    {
+        match facade::stored::serve(federation, definitions, &matched, arrived).await {
+            Ok(response) => return response,
+            Err(unanswered) => arrived = unanswered,
+        }
+    }
     facade::route::serve(state.federation(), arrived).await
 }
 

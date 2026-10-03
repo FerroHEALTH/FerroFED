@@ -16,6 +16,7 @@ readme = "README.md"
 publish = false
 
 [dependencies]
+jiff.workspace = true
 openehr-base.workspace = true
 serde.workspace = true
 thiserror.workspace = true
@@ -24,6 +25,7 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+jiff.workspace = true
 proptest.workspace = true
 
 [lints]

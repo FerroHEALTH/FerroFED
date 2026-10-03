@@ -56,6 +56,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod creating_system;
+pub mod definition;
 pub mod document;
 pub mod ehr_index;
 pub mod error;

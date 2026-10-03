@@ -35,6 +35,8 @@ openehr-federation = { workspace = true, features = ["aql"] }
 openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true
 http.workspace = true
+jiff.workspace = true
+redb.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true

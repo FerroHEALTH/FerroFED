@@ -11,6 +11,7 @@ mod aggregate;
 mod attribute;
 mod comparable;
 mod dedup;
+mod definition;
 mod directive;
 mod distinct;
 mod entry;

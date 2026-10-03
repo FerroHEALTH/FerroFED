@@ -5,8 +5,9 @@
 
 The `ferrofed` binary reads one TOML file and the environment. It serves the
 process shape (health, readiness, the request log, graceful shutdown) and, once
-a registry is configured, the federated query `POST /v1/query/aql`; every other
-path under `/v1/` answers `501`.
+a registry is configured, the federated query `POST /v1/query/aql`, the EHR
+resources routed to one node, and, when `[stored_queries]` is set, the
+stored-query registry; every other path under `/v1/` answers `501`.
 
 ## Running it
 
@@ -352,6 +353,39 @@ decomposable_aggregates = ["COUNT", "SUM", "MIN", "MAX", "AVG"]   # the default;
 ```
 
 The list is named in the startup log line.
+
+## Stored queries
+
+The gateway can hold stored queries itself, the federated stored-query
+registry of §12.7 (N44). Name the file it keeps them in, and the registry is
+offered:
+
+```toml
+[stored_queries]
+path = "/var/lib/ferrofed/stored-queries.redb"
+```
+
+- The file is an embedded `redb` store, created at boot when it does not
+  exist. Put it on a persistent volume: a stored version must outlive the
+  process, because clients invoke it by name after a restart, and a second
+  `PUT` refused before a restart is refused after it too.
+- One gateway process opens the file at a time. A second process pointed at
+  the same file refuses to start, so run one gateway per file.
+- The file holds each definition's name, version, the instant it was stored
+  and its AQL, and nothing else. A definition names its patient through a
+  `$parameter`, never a literal, and the values a client binds when it
+  invokes a query are never written, so no patient identifier reaches the
+  file (§5.4.1, N33).
+- The registry needs the federation that runs its queries, so setting
+  `stored_queries.path` without `registry.document` refuses the
+  configuration, naming `registry.document`.
+- `OPTIONS {base}/` declares `definition.stored_query_registry: true` while
+  the path is set, and `false` without it; without it the definition routes
+  answer `501`. Whether the registry is offered is named in the startup log
+  line.
+
+The [client contract](../integrate/client-contract.md#stored-queries) says how
+a client stores and invokes a query.
 
 ## The environment
 

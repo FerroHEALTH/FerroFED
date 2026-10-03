@@ -7,8 +7,11 @@ A client of a federation gateway is an ordinary openEHR client. This page sets
 out what the specification promises that client. Once a registry is
 configured, FerroFED serves the federated query at
 `POST {base}/v1/query/aql` and routes the EHR resources under a path
-`ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it, to one node (§7a.1). Every
-other ITS-REST path under `/v1/` answers `501` (N32).
+`ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it, to one node (§7a.1). A
+deployment that offers the stored-query registry also stores queries under
+`{base}/v1/definition/query/` and runs them by name at
+`POST {base}/v1/query/{name}` ([stored queries](#stored-queries), §12.7).
+Every other ITS-REST path under `/v1/` answers `501` (N32).
 
 ## What a client sends
 
@@ -261,6 +264,89 @@ answer, `POST`, `PUT` and `DELETE` included, names the acting endpoint in
 node's own URL or path, so following it bypasses the gateway; send the
 follow-up to the gateway with the version uid instead.
 
+## Stored queries
+
+A deployment that sets `[stored_queries]` offers the federated stored-query
+registry, and `OPTIONS {base}/` declares it as
+`definition.stored_query_registry: true` (§12.7, N44). The gateway then holds
+each definition itself: it is authoritative for it, and a query invoked by
+name runs over every member exactly as if you had sent its text to
+`POST {base}/v1/query/aql`.
+
+Store a query with its AQL as the `text/plain` body, at a version:
+
+```http
+PUT {base}/v1/definition/query/org.example::compositions/1.0.0
+Content-Type: text/plain
+
+SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c
+WHERE e/ehr_status/subject/external_ref/id/value = $patient
+  AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1'
+```
+
+- The name is `[{namespace}::]{query-name}` over `a-z`, `A-Z`, `0-9`, `_`, `.`
+  and `-`, and the query name is never `aql` (ITS-REST). The version is
+  `major.minor.patch` (ITS-REST's semver path segment, §12.7). Anything else
+  is a `400` (`query-name-invalid`, `query-version-invalid`). A `PUT` with no
+  version is a `400` (`query-version-required`), because the registry stores
+  only at a version. `query_type`, when sent, is `AQL` in any case.
+- A stored version is immutable. A second `PUT` to a name and version the
+  registry holds is a `409` (`stored-query-held`), the held text stands, and
+  so does the refusal after the gateway restarts. Store a change as a new
+  version (§12.7, N44).
+- The gateway analyses the text as it analyses a query you send, with every
+  `$parameter` standing in for a value you will bind. A text it would refuse
+  whatever you bind is refused now, `400` with the same code a query would
+  get (`not-aql`, `unreducible`, and so on). A refusal that depends on how
+  you target the query, such as an aggregate across several members, is left
+  to each invocation.
+- Name the patient through a `$parameter`. A definition that names the
+  patient by a literal identifier is refused `400` (`subject-literal`),
+  because the registry would hold that identifier at rest (§5.4.1, N33).
+  The message never quotes it, and the security log records only the
+  position of the predicate.
+- The answer is `200` with `Location` naming the stored version, as a
+  reference relative to the request URL, because the gateway does not know
+  the base URL its clients use (§4.1).
+
+The gateway holds the canonical print of the parsed query, so a comment or
+any other text the parser drops is not kept, and `GET` returns the query in
+that form.
+
+Read it back with `GET` on the same path, which answers the ITS-REST
+`StoredQuery` (`name`, `type`, `version`, `saved`, `q`), or `404`
+(`stored-query-unknown`). `GET {base}/v1/definition/query/{pattern}` lists
+every version of every stored query whose name starts with the pattern.
+
+Run it by name, binding its parameters in the ITS-REST `Query` body:
+
+```http
+POST {base}/v1/query/org.example::compositions
+Content-Type: application/json
+
+{"query_parameters": {"patient": "12345"}}
+```
+
+- Without a version, the highest version runs. `/{version}` picks one: an
+  exact `major.minor.patch`, or a `{major}` or `{major}.{minor}` prefix that
+  runs the highest version it matches (ITS-REST). A name or version the
+  registry does not hold is a `404` (`stored-query-unknown`).
+- Every rule of an inline query applies unchanged: `offset` and `fetch`, the
+  completeness and dedup headers, `Prefer: wait`, and the
+  [targeting headers](#pinning-a-query-to-named-systems). A definition that
+  carries `FROM ENDPOINT` or `ORGANISATION` is targeted by it, and a header
+  that selects other endpoints is a `400` (`targeting-conflict`).
+- A parameter you do not bind, or bind and the query does not use, is a `400`
+  (`parameters`) naming it, never its value.
+- The answer is the ordinary federated `RESULT_SET`, with `name` naming the
+  gateway's stored query and `q` its stored text (§9.1, §12.7). No node
+  receives your patient identifier, and no node receives the stored query by
+  name: each gets the standard AQL of an inline query.
+
+The gateway does not distribute definitions to the nodes, and
+`definition.stored_query_fan_out` is `false` (§12.7). Templates are not
+served: `{base}/v1/definition/template/…` answers `501`.
+
 ## Self-description
 
 `OPTIONS {base}/` returns what the gateway does and which members stand
@@ -280,9 +366,9 @@ says what the gateway does, not what it was once meant to do:
 | `completeness` | `default: "all-or-nothing"`; `best_effort` and, when it is offered, `opt_in` naming `openEHR-federation-completeness: partial` (§11.4, N37) |
 | `paging` | `offset_strategy: "bounded"` with the configured `max_window`, or `"reject"`; never `"cursor"`, because no cursor is offered (§11.6.2, N39) |
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
-| `definition` | all three `false`: no template fan-out upload, no stored-query registry, no definition fan-out (N43, N44) |
+| `definition` | `fan_out_template_upload: false` and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
-| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` and `demographic` unsupported (`501`) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` held at the gateway registry for stored queries when it is offered and unsupported (`501`) otherwise, and `demographic` unsupported (`501`) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 
 What is absent is absent on purpose:
@@ -302,5 +388,7 @@ What is absent is absent on purpose:
 `OPTIONS` on a path under `{base}/v1/` answers `204` with the methods served
 there in `Allow`: `POST, OPTIONS` for `/v1/query/aql`, and the ITS-REST
 methods of the resource for an EHR resource under a path `ehr_id`, such as
-`GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`. The gateway answers it without
+`GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`. Where the stored-query registry is
+offered, a stored query answers `POST, OPTIONS` and a definition
+`GET, PUT, OPTIONS`. The gateway answers it without
 asking a node. A path the gateway does not serve answers `501`.
