@@ -68,7 +68,30 @@ federated query and identity resolution shipped in 0.0.3.
   `Analysis::attributes`, `NodeAnswer::with_attributes` and
   `Merged::attributes`; the engine adds `Plan::annotating` and
   `FederatedAnswer::attributes`. CP-37 is covered.
-
+- Track 10, the adversarial identifier-leakage suite, judged on node-side
+  wire capture (#90; §16.3 track 10, §5.4, N33, N34, N5, CP-26). One
+  synthetic patient identifier is supplied in each of the four positions the
+  track names: an `EHR_STATUS.subject.external_ref` predicate, a
+  `PARTY_IDENTIFIED`/`DV_IDENTIFIER` predicate, a `SELECT` projection, and
+  the client's query string or headers (`X-Request-Id`, `Authorization`,
+  `Prefer`, the targeting and completeness headers, and a free-form header).
+  Each runs on the fan-out, on a query directed at one node, and on the
+  single-node route, and the journal of the capturing proxy in front of each
+  node must hold no occurrence of the identifier, its namespace or any of its
+  fragments in the path, the query string, a header or the dispatched AQL,
+  raw or percent-decoded; a refusal must be the `400` the specification
+  names, with no node asked. Every dispatched request must locate its node by
+  the node's own `ehr_id` alone, and a projected subject column must be the
+  re-injected identifier. The converse check commits a `COMPOSITION` with
+  the identifier in a `DV_IDENTIFIER` and finds it byte-identical at the
+  node, compared by bytes and by digest. The gateway's own log (the request
+  lines, the security events and the panic line) is searched too and must
+  hold none of it. The suite runs against two mock nodes in the normal suite
+  and against the two FerroEHR nodes of the harness behind `FERROFED_E2E`,
+  and the conformance matrix records track 10 as covered for the gateway's
+  half; CP-27, the node's own obligation, stays with the node profile (#93).
+  `ferrofed-testkit` adds the `leak` module, the search over the proxy
+  journal.
 - The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
   request headers, the targeting mechanism beside the AQL (#71; §8.4,
   §8.4.1, N35, CP-28). Each carries a comma-separated list of registry ids,
