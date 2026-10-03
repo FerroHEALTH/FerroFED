@@ -68,7 +68,7 @@ use super::{Refused, its_rest};
 use crate::error::Code;
 use crate::facade::provenance::Provenance;
 use crate::facade::route::fan_out::{
-    self, answer_status, contact, each, not_sent, observed, record_meta, settled,
+    self, Asked, Unfinished, answer_status, contact, each, not_sent, observed, record_meta, settled,
 };
 use crate::facade::route::{Arrived, Deadlines};
 use crate::facade::security;
@@ -189,6 +189,22 @@ fn deadlines(
     })
 }
 
+/// What became of each member's request, or the internal refusal when the
+/// fan-out could not tell, which is never attributed to a member.
+fn finished<R>(
+    sent: Result<Vec<(Asked<R>, u64)>, Unfinished>,
+    logged: &str,
+) -> Result<Vec<(Asked<R>, u64)>, Refused> {
+    sent.map_err(|unfinished| {
+        tracing::error!(
+            error = %crate::chain(&unfinished),
+            request_id = logged,
+            "the registry fan-out could not tell what became of every member"
+        );
+        Refused::fixed(Code::Internal)
+    })
+}
+
 /// Sends the registry's `definition` to each member of `selected` and
 /// answers per node, the registry's definition standing whatever they
 /// answer, with `registry` saying whether the request stored it (§12.7
@@ -222,6 +238,7 @@ pub(super) async fn distribute(
         },
     )
     .await;
+    let sent = finished(sent, &logged)?;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
         let reached = contact(&sent, |stored| match stored {
@@ -290,6 +307,7 @@ pub(super) async fn drift(
         },
     )
     .await;
+    let sent = finished(sent, &logged)?;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
         let reached = contact(&sent, |copy| match copy {
