@@ -248,13 +248,15 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
     };
     Ok(ItsRestAreas {
         query: query.to_owned(),
-        ehr: "routed: a request under {base}/v1/ehr/{ehr_id} goes to the one node \
-              that owns the ehr_id, found by the targeting headers, the session's \
-              resolution binding, the ehr_id index, then for a read an ask-all probe; \
+        // TODO(#80): name the session's resolution binding among the owner steps once client sessions exist.
+        ehr: "routed: a new EHR, POST {base}/v1/ehr or PUT {base}/v1/ehr/{ehr_id}, goes \
+              only to the one endpoint the targeting headers name, and a PUT is refused \
+              when another member holds its ehr_id; every other request under \
+              {base}/v1/ehr/{ehr_id} goes to the one node that owns the ehr_id, found by \
+              the targeting headers, the ehr_id index, then for a read an ask-all probe; \
               a versioned write only when that node controls the version it amends; \
               GET {base}/v1/ehr?subject_id= resolves the subject and goes to the one \
-              member that holds it, by its ehr_id; \
-              POST {base}/v1/ehr to the one endpoint the targeting headers name"
+              member that holds it, by its ehr_id"
             .to_owned(),
         definition: if federation.fans_out_template_upload() {
             format!(
