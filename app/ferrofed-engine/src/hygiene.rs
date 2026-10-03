@@ -10,11 +10,13 @@
 //! and paging of the body, the path and query of the URL, and the headers the
 //! gateway adds, against the identifiers resolution consumed, and refuses to
 //! send a request that still carries one in any form a node could read it in.
-//! The authority of the URL (its host and port) is never read: it is the
-//! endpoint URL of the operator's registry, built from no request, and
-//! §5.4.1 names the path, the query string and the headers. A refusal names
-//! the part of the request, never the value, and nothing is sent. A write
-//! body is never inspected or altered (§5.4 scope note).
+//! The authority of the URL (its host and port) is never read, and neither is
+//! the `Host` header the HTTP client writes from it. §5.4.1 governs what the
+//! gateway composes for a request, and both are the endpoint URL of the
+//! operator's registry, composed from no request, so neither can carry a
+//! client-supplied identifier; a client's own `Host` is never forwarded.
+//! A refusal names the part of the request, never the value, and nothing is
+//! sent. A write body is never inspected or altered (§5.4 scope note).
 //!
 //! The dispatcher passes every header it adds except the minted
 //! `X-Request-Id`: that value is an
@@ -290,8 +292,8 @@ impl fmt::Display for Part {
 /// Whether the path, query or fragment of `url`, raw or percent-decoded,
 /// carries `value`, once the `composed` segment of the path is masked.
 fn carried_in_target<'a>(url: &'a Url, composed: Composed<'a>, value: &str) -> bool {
-    // NOTE: §5.4.1, N33 name the request path, the query string and the headers;
-    // the authority comes from the operator's registry, never a request, so it is unread.
+    // NOTE: §5.4.1, N33 name the parts the gateway composes; the authority, and the `Host`
+    // written from it, is the registry endpoint URL, composed from no request, so it is unread.
     let (before, after) = searched_path(url.path(), composed, value);
     let mut target = after.to_owned();
     if let Some(query) = url.query() {
