@@ -37,6 +37,7 @@ The first tier runs on every change, because it needs no Rust:
 | conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
 | e2e-placement | every test that checks the `FERROFED_E2E` gate lives in its crate's `e2e` test module, and the CI end-to-end job still sets the gate and selects `test(/^e2e::/)` |
 | obligations | the [obligations checklist](../evaluate/obligations.md) agrees with the vendored specification, the conformance matrix and the tests it names, and a re-pin fails until every changed page is reclassified |
+| site-links | every internal link and anchor of the assembled site (the landing page and this book) and of the README, checked offline by lychee, so a page or an anchor that does not exist fails the change |
 | tracker-helpers | the self-tests of the `scripts/gh` tracker helpers |
 | crate-version-guard self-test | the crate-version guard judges only what a pull request changes, against a stub repository |
 
@@ -50,6 +51,8 @@ the crate-version guard and dependency review run on pull requests only.
 
 The `Docs` workflow builds this book and the landing page on every pull
 request, and publishes them from `main`. A book that does not build fails it.
+The required link check is the `site-links` job of `ci.yml`, because the
+`Docs` build is no required check.
 
 ## Running them locally
 
@@ -65,6 +68,8 @@ bash scripts/checks/e2e-placement.sh --self-test
 bash scripts/checks/e2e-placement.sh
 bash scripts/checks/obligations.sh --self-test
 bash scripts/checks/obligations.sh
+bash scripts/checks/site-links.sh --self-test
+bash scripts/checks/site-links.sh
 bash scripts/checks/crate-version-guard.sh --self-test
 for helper in fields labels migrate-fields rel; do bash "scripts/gh/$helper.sh" --self-test; done
 find scripts .claude/hooks -name '*.sh' -exec shellcheck --severity=style {} +

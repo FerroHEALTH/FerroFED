@@ -374,6 +374,23 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- CI checks every internal link and anchor of the published site (#377; no
+  specification governs this: our own design). The new tier-1 job
+  `site-links`, in the required `conclusion`, assembles the site as the Docs
+  workflow publishes it and runs lychee 0.24.2, pinned by version and
+  SHA-256, with `--offline --include-fragments` over every page, and over
+  `README.md` against the repository tree, so a link to a page or an anchor
+  that does not exist fails the change and no request leaves the runner.
+  `scripts/checks/site-links.sh` runs the same check locally, with a
+  self-test, and `scripts/site/assemble.sh` takes `SITE_ROADMAP=off` to leave
+  the roadmap block unrendered. `docs/VERSIONS.md` pins lychee, and the
+  versions and pin-freshness guards hold the pin.
+- The errors page names the requests that answer `501 not-implemented`
+  (#378; §7a.1, N32): every path under `{base}/v1/`, and `OPTIONS {base}/`,
+  without a registry; the DEMOGRAPHIC API unless its endpoint is declared;
+  the ADMIN API; stored-query execution without the stored-query registry; a
+  path ITS-REST does not define or a method it does not declare; and
+  `OPTIONS` on an unserved path. The errors test now sends each of them.
 - The README, the landing page and the book are rewritten against what the
   gateway does on `main` (#363; no specification governs the website). The
   book's claims page lists what v0.0.3, v0.0.6 and v0.0.7 carry and what

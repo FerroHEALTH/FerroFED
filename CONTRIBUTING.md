@@ -33,10 +33,13 @@ scripts/checks/favicon-sync.sh
 scripts/checks/conformance-matrix.sh
 scripts/checks/obligations.sh
 scripts/checks/e2e-placement.sh
+scripts/checks/site-links.sh
 ```
 
 These are the tier-1 guards `ci.yml` runs, with the same flags, so a local
 pass means a CI pass. `hadolint` lints `docker/Dockerfile` in the same tier.
+`site-links.sh` needs the docs toolchain of `docs/VERSIONS.md` and lychee on
+your `PATH`.
 The `conclusion` job aggregates every job and is the single required check on
 `main`.
 
