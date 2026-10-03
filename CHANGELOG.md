@@ -627,6 +627,29 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   quoting it, as an endpoint URL in the registry document already is (#364).
   Its credentials go in `[pixm.manager.credentials]`. A configuration that
   put them in the URL must move them there.
+- The `Debug` output of `ihe-iti`'s types no longer prints a credential
+  (#370). `PixmClient` and `PdqmClient` derived `Debug`, so a base URL that
+  carried a user name and password showed both in clear, and the HTTP
+  client they hold showed its default headers, an `Authorization` header
+  among them. Each client now shows its URLs with the userinfo and the
+  query replaced by `***`, and leaves the HTTP client out. mCSD's
+  `DirectoryOrganization` and `DirectoryEndpoint` show their `fullUrl` and
+  the endpoint `address` the same way, and the endpoint leaves out the rest
+  of its resource, whose `header` list may hold a credential. The crate
+  carries this redaction itself and depends on nothing in FerroFED. Every
+  redacted value in `ihe-iti` now shows the family's `***`, where the
+  identifiers, the matched Patients and the page links showed `[REDACTED]`,
+  and so do `ferrofed-identity`'s `PatientRef` and the admission probe's
+  synthetic subject.
+  `ihe-iti` is 0.0.9.
+- A URL whose password holds an unencoded `/`, `?` or `#`, such as
+  `https://user:pa/ss@host`, no longer shows that password in the rendering
+  of a `ferrofed_registry::secret::SecretUrl` or of an `ihe-iti` type
+  (#370). The userinfo was taken to end at the first `/`, `?` or `#`, so no
+  `@` was found and the text showed as written. Text that parses as a URL
+  is now read as the URL parser reads it, so an `@` in a path or a query
+  is not userinfo, and text that does not parse is redacted up to its last
+  `@`.
 
 ## [0.0.6] - 2026-10-03
 

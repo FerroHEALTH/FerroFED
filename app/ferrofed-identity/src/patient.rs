@@ -6,6 +6,7 @@
 
 use std::fmt;
 
+use ferrofed_registry::secret::REDACTED;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use thiserror::Error;
@@ -120,7 +121,7 @@ impl fmt::Debug for PatientRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PatientRef")
             .field("namespace", &self.namespace)
-            .field("value", &"[REDACTED]")
+            .field("value", &REDACTED)
             .finish()
     }
 }
