@@ -1356,7 +1356,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.34"
+version = "0.0.35"
 dependencies = [
  "openehr-base",
  "openehr-its",
