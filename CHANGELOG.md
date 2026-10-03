@@ -302,7 +302,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   decimal mean written as the nearest JSON number, as before.
   `openehr-federation` is 0.0.33.
 - The `openehr-*` family moves to 0.0.81 (FerroEHR #3548, #3551, #3552), and
-  `openehr-federation` to 0.0.34 with it.
+  `openehr-federation` to 0.0.34 with it (#329).
+- A body routed to one node without a `Content-Type` travels with the first
+  media type the operation lists, `application/json` wherever ITS-REST lists
+  several, where it was a `415` for an operation whose body is declared in
+  more than one (#329). ITS-REST 1.1.0 makes `Content-Type` optional with no
+  default, so the first listed is the gateway's own choice, as for a missing
+  `Accept`. The `Content-Type` of a body is held to the media types the
+  operation's body is declared in, and a `CONTRIBUTION` is read for its
+  preceding versions by the request body reader of `openehr-its`.
 - The compose quickstart runs four FerroEHR nodes, `ferroehr-a` to
   `ferroehr-d` on ports 8081 to 8084, each with its own `system_id` (#322).
   They share one FerroEHR PostgreSQL container, `ferroehr-postgres`, with a

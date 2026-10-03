@@ -19,7 +19,7 @@
 //!   and composed as listed values, so a node receives the operation's own
 //!   spelling and never the client's text;
 //! - a body travels with a `Content-Type` the operation lists for it
-//!   (`openehr-its`'s `request_media`), the one listed media type when the
+//!   (`openehr-its`'s `request_media`), the first listed media type when the
 //!   client sent none;
 //! - every other declared header matches its kind, as a query value does.
 //!
@@ -64,8 +64,8 @@ use crate::declared::headers::{Strictness, body_media_type, composed};
 ///
 /// A non-empty `body` always travels with a `Content-Type` the operation
 /// lists ([`RouteMatch::request_media`]): the client's, as its listed value,
-/// or, when the client sent none, the one media type the operation's body is
-/// declared in.
+/// or, when the client sent none, the first media type the operation's body
+/// is declared in.
 ///
 /// [`hygiene::forwarded_query`]: crate::hygiene::forwarded_query
 /// [`hygiene::forwarded_headers`]: crate::hygiene::forwarded_headers
@@ -75,8 +75,7 @@ use crate::declared::headers::{Strictness, body_media_type, composed};
 /// Returns [`Refusal::Malformed`] for the first value that does not match its
 /// kind, [`Refusal::NotAcceptable`] for an `Accept` that admits no listed
 /// media type, and [`Refusal::UnsupportedMediaType`] for a `Content-Type`
-/// that names none, or for a body sent without one to an operation whose
-/// body is declared in several media types.
+/// that names none.
 pub fn held(
     operation: &RouteMatch,
     query: Option<&str>,
@@ -122,9 +121,7 @@ fn holding(
         query::values(operation, query)?;
     }
     let mut sent = composed(operation, headers, strictness)?;
-    if !sent.contains_key(CONTENT_TYPE)
-        && let Some(value) = body_media_type(operation, headers, !body.is_empty())?
-    {
+    if let Some(value) = body_media_type(operation, headers, !body.is_empty())? {
         sent.insert(CONTENT_TYPE, value);
     }
     Ok(sent)

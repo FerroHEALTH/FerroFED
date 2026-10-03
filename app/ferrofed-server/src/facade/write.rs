@@ -38,10 +38,10 @@
 //! de-duplicated row is held to it whichever endpoint the row was read from
 //! (§10.3 `dedup-write-target`, CP-29).
 //!
-//! A `CONTRIBUTION` is read with `openehr-its`'s ITS-REST `NewContribution`
-//! for its versions' `preceding_version_uid`s only, in the representation its
-//! `Content-Type` selects: canonical JSON, or a canonical envelope whose
-//! versions' `data` is FLAT or STRUCTURED (ITS-REST 1.1.0
+//! A `CONTRIBUTION` is read by `openehr-its`'s `contribution_create` request
+//! body reader for its versions' `preceding_version_uid`s only, in the
+//! representation its `Content-Type` selects: canonical JSON, or a canonical
+//! envelope whose versions' `data` is FLAT or STRUCTURED (ITS-REST 1.1.0
 //! `contribution_create`, §Simplified Formats). The body forwarded is the one
 //! received, byte for byte (N22). Every version that names a preceding
 //! version must be controlled by the path node, and a version that names none
@@ -53,30 +53,19 @@ use std::fmt;
 use ferrofed_registry::creating_system::CreatingSystemRoute;
 use ferrofed_registry::id::{EndpointId, NodeId, SystemId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use http::{HeaderMap, header};
+use http::{HeaderMap, HeaderValue, header};
 use openehr_base::prelude::ObjectVersionId;
-use openehr_its::json;
-use openehr_its::rest::generated::ehr::{NewContribution, Versionable};
+use openehr_its::rest::generated::common::UpdateVersion;
+use openehr_its::rest::generated::ehr::contribution_create_request_body;
 use openehr_its::rest::routes::{IdentifierClass, ParamLocation, RouteMatch};
-use serde::de::{DeserializeOwned, IgnoredAny};
+use openehr_its::rest::runtime::Payload;
 
 use crate::error::Code;
 use crate::facade::owner;
 use crate::facade::route::EHR_GROUP;
 
-/// The canonical JSON media type (ITS-REST 1.1.0 overview, §JSON Format).
-const CANONICAL_JSON: &str = "application/json";
-
 /// The canonical XML media type (ITS-REST 1.1.0 overview, §XML Format).
 const CANONICAL_XML: &str = "application/xml";
-
-/// The Simplified Flat media type (ITS-REST 1.1.0 overview, §Simplified
-/// Formats).
-const SIMPLIFIED_FLAT: &str = "application/openehr.wt.flat+json";
-
-/// The Simplified Structured media type (ITS-REST 1.1.0 overview,
-/// §Simplified Formats).
-const SIMPLIFIED_STRUCTURED: &str = "application/openehr.wt.structured+json";
 
 /// What an ITS-REST operation routed to one node writes (§12.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -272,7 +261,7 @@ pub fn controlled(
     let versions = match preceding {
         Preceding::IfMatch => vec![(Named::IfMatch, if_match(headers)?)],
         Preceding::Path => vec![(Named::Path, in_path(matched)?)],
-        Preceding::Contribution => amended(media_type(headers), body)?,
+        Preceding::Contribution => amended(headers.get(header::CONTENT_TYPE), body)?,
     };
     versions
         .iter()
@@ -314,38 +303,32 @@ fn controlled_at(
     }
 }
 
-/// The media type the composed `Content-Type` of `headers` names, spelled
-/// as the operation lists it, or `None` when the request sends none.
-fn media_type(headers: &HeaderMap) -> Option<&str> {
-    // NOTE: RFC 9110 §5.5, a composed Content-Type is a listed media type in
-    // visible ASCII, so a value that is not text was never composed.
-    headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-}
-
 /// The versions a `CONTRIBUTION` body amends, in body order: each version's
 /// `preceding_version_uid` (ITS-REST 1.1.0 EHR API, `contribution_create`,
 /// `NewContribution`), with its place in the body.
 ///
-/// `media` is the listed media type the request's `Content-Type` names, and
-/// `None` when it sends none, which reads as canonical JSON. Under a
-/// Simplified Format the envelope stays canonical and only each version's
-/// `data` is FLAT or STRUCTURED (ITS-REST 1.1.0 `contribution_create`), so
-/// the envelope is read as in canonical JSON and `data` is left to the node.
-/// A version with no `preceding_version_uid` creates an object, and amends
-/// none.
+/// `content_type` is the `Content-Type` `declared::held` composed, a listed
+/// media type. The body is read by `openehr-its`'s
+/// `contribution_create_request_body`, the reader its generated router uses,
+/// which selects the representation by that media type: canonical JSON, or
+/// a canonical envelope whose versions' `data` is FLAT or STRUCTURED
+/// (ITS-REST 1.1.0 `contribution_create`). A version with no
+/// `preceding_version_uid` creates an object, and amends none.
 fn amended(
-    media: Option<&str>,
+    content_type: Option<&HeaderValue>,
     body: &[u8],
 ) -> Result<Vec<(Named, ObjectVersionId)>, PrecedingInvalid> {
-    let text = std::str::from_utf8(body).map_err(|_not_utf8| PrecedingInvalid::Contribution)?;
-    let preceding = match media {
-        None | Some(CANONICAL_JSON) => preceding_of::<Versionable>(text)?,
-        Some(SIMPLIFIED_FLAT | SIMPLIFIED_STRUCTURED) => preceding_of::<IgnoredAny>(text)?,
-        // TODO(#308): a CONTRIBUTION in canonical XML is refused 400 until openehr-its reads it.
-        Some(CANONICAL_XML) => return Err(PrecedingInvalid::XmlContribution),
-        Some(_unlisted) => return Err(PrecedingInvalid::Contribution),
+    // TODO(#308): a CONTRIBUTION in canonical XML is refused 400 until openehr-its reads it.
+    if content_type.is_some_and(|value| value.as_bytes() == CANONICAL_XML.as_bytes()) {
+        return Err(PrecedingInvalid::XmlContribution);
+    }
+    let read = contribution_create_request_body(content_type, body)
+        .map_err(|_quoted| PrecedingInvalid::Contribution)?;
+    let preceding = match read {
+        Payload::Canonical(contribution) => preceding_of(contribution.versions),
+        Payload::Flat(contribution) | Payload::Structured(contribution) => {
+            preceding_of(contribution.versions)
+        }
     };
     Ok(preceding
         .into_iter()
@@ -356,18 +339,12 @@ fn amended(
         .collect())
 }
 
-/// Each version's `preceding_version_uid` of the `CONTRIBUTION` `text`, in
-/// body order, read with each version's `data` as a `T`.
-fn preceding_of<T: DeserializeOwned>(
-    text: &str,
-) -> Result<Vec<Option<ObjectVersionId>>, PrecedingInvalid> {
-    let contribution: NewContribution<T> =
-        json::from_canonical_json(text).map_err(|_quoted| PrecedingInvalid::Contribution)?;
-    Ok(contribution
-        .versions
+/// Each version's `preceding_version_uid` of `versions`, in body order.
+fn preceding_of<T>(versions: Vec<UpdateVersion<T>>) -> Vec<Option<ObjectVersionId>> {
+    versions
         .into_iter()
         .map(|version| version.preceding_version_uid)
-        .collect())
+        .collect()
 }
 
 /// The endpoint the controlling node of `route` is named by: the mapped

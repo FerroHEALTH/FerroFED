@@ -738,13 +738,16 @@ lists, in the operation's own spelling, and never the client's text:
   `charset=utf-8` is accepted and dropped, since the listed value carries no
   parameter and JSON is UTF-8 (RFC 8259 §8.1). Any other parameter, or a
   type that is not listed, is a `415` (`media-type-unsupported`). The listed
-  values are those of the operation's `Content-Type` parameter, or, for an
-  operation that declares none, such as the versioned stored-query `PUT`,
-  the media types its request body is declared in (`openehr-its`'s
-  `request_media`). A body never travels without a `Content-Type`: when the
-  client sends none, the node receives the one media type the operation's
-  body is declared in, and an operation whose body is declared in several
-  is a `415`.
+  values are the media types the operation's request body is declared in
+  (`openehr-its`'s `request_media`), which are the values of its
+  `Content-Type` parameter where it declares one; the versioned stored-query
+  `PUT` declares no parameter and takes `text/plain`. A body never travels
+  without a `Content-Type`: when the client sends none, the node receives
+  the first media type the operation lists. ITS-REST makes `Content-Type`
+  optional and declares no default, and RFC 9110 §8.3 names none, so the
+  first listed is the gateway's own choice, as for `Accept`. Wherever an
+  ITS-REST operation lists several, `application/json`, the canonical JSON,
+  comes first.
 - `Prefer` is read as a list of preferences (RFC 7240 §2). The node receives
   only the preferences the operation lists, in their listed spelling: a
   preference name is compared without regard to case, its value exactly, and
