@@ -43,6 +43,7 @@ fn deployment() -> Result<Deployment, Box<dyn Error>> {
         },
         stored_queries: Some(Backend::Redb),
         development: false,
+        cleartext: Vec::new(),
     })
 }
 

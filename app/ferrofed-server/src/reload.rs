@@ -9,7 +9,8 @@
 //! [`Config::load`], [`Config::resolve`], then
 //! [`Federation::reloaded`](crate::federation::Federation::reloaded),
 //! which is [`Federation::load`](crate::federation::Federation::load) over
-//! what the process has learned. A valid
+//! what the process has learned, and [`transport::check`] under the profile
+//! the process started with. A valid
 //! registry replaces the running one at once; a request that already took
 //! the running one finishes on it. Learned `creating_system_id` routes the
 //! new document contradicts are withdrawn with their incidents, and index
@@ -31,6 +32,7 @@ use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 
 use crate::config::settings::Settings;
+use crate::config::transport::{self, CleartextError, CredentialSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{FederationError, Reconciled};
 use crate::metrics::ReloadResult;
@@ -71,6 +73,9 @@ pub struct Applied {
     pub reconciled: Reconciled,
     /// The changed settings that take effect only on a restart, by key.
     pub needs_restart: Vec<&'static str>,
+    /// The credentials that travel over plain `http`, which only the
+    /// development profile allows ([`transport::check`]).
+    pub cleartext: Vec<CredentialSite>,
 }
 
 /// A reload that was refused, leaving the running registry in place.
@@ -95,6 +100,10 @@ pub enum ReloadError {
     /// `registry.document` was set or unset since the process started.
     #[error("registry.document was set or unset, which takes a restart")]
     RegistryPresence,
+    /// A credential would travel over a URL that is not `https`, outside the
+    /// development profile the process started with.
+    #[error("a credential would travel in cleartext")]
+    Cleartext(#[source] CleartextError),
 }
 
 impl ReloadError {
@@ -105,6 +114,7 @@ impl ReloadError {
             Self::Config(_) => "configuration",
             Self::Federation { source, .. } => federation_class(source),
             Self::RegistryPresence => "registry-presence",
+            Self::Cleartext(_) => "cleartext-credential",
         }
     }
 
@@ -113,7 +123,7 @@ impl ReloadError {
     pub fn document(&self) -> Option<&std::path::Path> {
         match self {
             Self::Federation { document, .. } => document.as_deref(),
-            Self::Config(_) | Self::RegistryPresence => None,
+            Self::Config(_) | Self::RegistryPresence | Self::Cleartext(_) => None,
         }
     }
 }
@@ -171,6 +181,8 @@ impl Reloader {
                 source: Box::new(source),
             })?
             .ok_or(ReloadError::RegistryPresence)?;
+        let cleartext =
+            transport::check(&effective, Some(next.snapshot())).map_err(ReloadError::Cleartext)?;
         let next = Arc::new(next);
         let (before, after) = (running.snapshot(), next.snapshot());
         let members_removed: Vec<NodeId> = before
@@ -198,6 +210,7 @@ impl Reloader {
             members_removed,
             reconciled,
             needs_restart,
+            cleartext,
         })
     }
 
@@ -218,6 +231,7 @@ impl Reloader {
                     bindings_dropped = applied.reconciled.bindings_dropped,
                     "registry reloaded"
                 );
+                transport::warn(&applied.cleartext);
                 if !applied.needs_restart.is_empty() {
                     tracing::warn!(
                         settings = applied.needs_restart.join(","),

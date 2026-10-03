@@ -196,6 +196,16 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `system/aql-*` scope counts only for a listed backend client. The
   DEMOGRAPHIC API admits only the clients an issuer lists in
   `demographic_clients`. The client's token is never forwarded to a node.
+- Outside `profile = "development"`, `serve`, `config check`,
+  `admission check` and every reload refuse a credential sent to a URL that
+  is not `https`, naming the key of the URL and of the credential: a registry
+  endpoint with a `[credentials]` section, an `oauth2` token endpoint, a PIX
+  Manager with credentials, and a `metrics.otlp_endpoint` carrying a user
+  name or a password. A reload keeps the profile the process started with.
+  Under the development profile the same configuration starts, and the
+  startup banner, a `WARN` log line and `config check` name each credential
+  that travels unencrypted, by key, an XCPD responding gateway's XUA
+  assertion included (#402).
 
 ## [0.0.7] - 2026-10-03
 

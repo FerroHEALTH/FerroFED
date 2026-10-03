@@ -10,7 +10,8 @@
 # A credential is never written here. Each one is a file in secrets/ beside
 # compose.yaml, mounted read-only at /run/secrets/ferrofed/, and named below
 # by a `_file` key. The gateway runs as uid 65532, so that user must be able
-# to read each file.
+# to read each file. Every URL a credential is sent to is https: under the
+# production profile the gateway refuses a credential sent over plain http.
 #
 # Every key, with its default, is in the book:
 # https://ferrofed.eu/docs/operate/configuration.html. A value the gateway

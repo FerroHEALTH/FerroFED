@@ -12,6 +12,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::settings::Settings;
 use crate::config::stored_queries::{Backend, Store};
+use crate::config::transport::{self, CleartextError, CredentialSite};
 use crate::federation::{Federation, FederationError, read_registry};
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
@@ -72,6 +73,10 @@ pub enum StateError {
         "the gateway federates, and [auth] names no [[auth.issuer]]: every caller authenticates (§13.1, N25)"
     )]
     NoIssuer,
+    /// A credential would travel over a URL that is not `https`, outside the
+    /// development profile.
+    #[error(transparent)]
+    Cleartext(#[from] CleartextError),
 }
 
 impl AppState {
@@ -84,12 +89,16 @@ impl AppState {
     /// until the run path marks boot complete. The metrics surface is built
     /// with an OTLP push when `metrics.otlp_endpoint` is set, which needs a
     /// Tokio runtime context, and the federation records its node requests
-    /// through it.
+    /// through it. Every credential is held to the transport rule of
+    /// [`transport::check`] before anything that could send one is built, and
+    /// under the development profile each one that travels over plain `http`
+    /// is logged as a warning.
     ///
     /// # Errors
     /// Returns a [`StateError`] when the federation `settings` describe
-    /// cannot be built, the stored-query store cannot be opened or read, or
-    /// the metrics surface cannot be built.
+    /// cannot be built, a credential would travel in cleartext outside the
+    /// development profile, the stored-query store cannot be opened or read,
+    /// or the metrics surface cannot be built.
     pub fn build(settings: &Settings) -> Result<Self, StateError> {
         Self::build_read(settings, read_registry(settings))
     }
@@ -108,9 +117,11 @@ impl AppState {
         document: Option<Result<RegistrySnapshot, FederationError>>,
     ) -> Result<Self, StateError> {
         settings.log_summary();
+        let federation = Federation::load_read(settings, document)?;
+        let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
+        transport::warn(&cleartext);
         let metrics = Arc::new(Metrics::new(&settings.metrics)?);
-        let federation = Federation::load_read(settings, document)?
-            .map(|federation| federation.metered(metrics.nodes()));
+        let federation = federation.map(|federation| federation.metered(metrics.nodes()));
         let definitions = definitions(settings, federation.as_ref())?;
         let mut built: Vec<Arc<dyn HealthIndicator>> = vec![Arc::new(Built("configuration"))];
         if federation.is_some() {
@@ -130,21 +141,26 @@ impl AppState {
     }
 
     /// Checks what `settings` describe without serving: the federation
-    /// builds, and a read-only stored-query directory loads. A shared or
-    /// embedded store is not opened, so the check reaches no database and
-    /// takes no file lock.
+    /// builds, every credential travels over `https` unless the profile is
+    /// development ([`transport::check`]), and a read-only stored-query
+    /// directory loads. A shared or embedded store is not opened, so the
+    /// check reaches no database and takes no file lock.
+    ///
+    /// Returns the credentials that travel over plain `http` under the
+    /// development profile, so the caller can say so.
     ///
     /// # Errors
     /// Returns the [`StateError`] [`AppState::build`] would return for the
-    /// federation or the definition files.
-    pub fn check(settings: &Settings) -> Result<(), StateError> {
+    /// federation, the transport of a credential, or the definition files.
+    pub fn check(settings: &Settings) -> Result<Vec<CredentialSite>, StateError> {
         let federation = Federation::load(settings)?;
+        let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
         if let (Some(store @ Store::Files(_)), Some(federation)) =
             (&settings.stored_queries, federation.as_ref())
         {
             opened(store, federation)?;
         }
-        Ok(())
+        Ok(cleartext)
     }
 
     /// Returns a booting state with `health` as its registry and no

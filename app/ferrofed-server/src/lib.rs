@@ -156,10 +156,11 @@ where
         Command::Healthcheck => healthcheck_command(&settings),
         Command::Config {
             command: ConfigCommand::Check,
-        } => match AppState::check(&settings)
-            .and_then(|()| state::admits_callers(&settings, settings.registry_document.is_some()))
-        {
-            Ok(()) => config_checked(),
+        } => match AppState::check(&settings).and_then(|cleartext| {
+            state::admits_callers(&settings, settings.registry_document.is_some())
+                .map(|()| cleartext)
+        }) {
+            Ok(cleartext) => config_checked(&cleartext),
             Err(error) => {
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 ExitCode::from(EXIT_CONFIG)
@@ -189,6 +190,9 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     let document = federation::read_registry(&settings);
     if banner::prints(format, stdout_is_terminal) {
         let described = document.as_ref().map(Result::as_ref);
+        // NOTE: no specification governs this: our own design; a document that
+        // does not read has no endpoint URLs, and the build stops on its error.
+        let cleartext = config::transport::check(&settings, described.and_then(Result::ok));
         banner::print(
             &banner::Deployment::of(
                 settings.server.base_path.clone(),
@@ -199,7 +203,8 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
                     .as_ref()
                     .map(config::stored_queries::Store::backend),
                 settings.profile == Profile::Development,
-            ),
+            )
+            .with_cleartext(cleartext.as_deref()),
             format.colour(stdout_is_terminal, no_color.as_deref()),
         );
     }
@@ -247,12 +252,13 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     }
 }
 
-/// Reports a configuration that resolved, and exits successfully.
+/// Reports a resolved configuration and its `cleartext` credentials, and exits.
 #[expect(
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
 )]
-fn config_checked() -> ExitCode {
+fn config_checked(cleartext: &[config::transport::CredentialSite]) -> ExitCode {
+    config::transport::print_warnings(cleartext);
     println!("ferrofed: the configuration is valid");
     ExitCode::SUCCESS
 }
@@ -286,6 +292,10 @@ fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode
             return ExitCode::from(EXIT_CONFIG);
         }
     };
+    if let Err(error) = config::transport::check_and_print(settings, Some(federation.snapshot())) {
+        eprintln!("ferrofed: cannot start: {}", chain(&error));
+        return ExitCode::from(EXIT_CONFIG);
+    }
     let endpoint = match ferrofed_registry::id::EndpointId::new(endpoint) {
         Ok(endpoint) => endpoint,
         Err(error) => {

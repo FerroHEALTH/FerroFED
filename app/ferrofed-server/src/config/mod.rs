@@ -28,6 +28,7 @@ mod resolve;
 mod secrets;
 pub mod settings;
 pub mod stored_queries;
+pub mod transport;
 pub mod xcpd;
 
 /// The prefix of every environment override.

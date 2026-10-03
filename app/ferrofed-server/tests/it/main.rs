@@ -71,5 +71,6 @@ mod telemetry;
 mod template_fan_out;
 mod timeouts;
 mod track10;
+mod transport;
 mod versioned_write;
 mod xcpd;
