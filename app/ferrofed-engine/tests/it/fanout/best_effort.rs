@@ -16,8 +16,8 @@ use openehr_federation::outcome::{ConsentRefusal, EndpointOutcome, ErrorDetail, 
 use openehr_federation::status::EndpointStatus;
 
 use super::{
-    TestResult, budget, federation, json, node, plan_for, result_set, rows_text, run, statuses,
-    validated_body,
+    SLACK_MS, TestResult, budget, federation, json, node, plan_for, result_set, rows_text, run,
+    statuses, validated_body,
 };
 
 /// Both completion strategies, the default first.
@@ -46,14 +46,15 @@ fn record_of<'a>(
 async fn a_time_out_under_best_effort_is_a_200_with_the_answering_rows() -> TestResult {
     let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
     let slow = node(
-        json(200, &result_set(&["s1::cdr-1.example.org::1"])).set_delay(Duration::from_secs(3)),
+        json(200, &result_set(&["s1::cdr-1.example.org::1"]))
+            .set_delay(Duration::from_millis(2 * SLACK_MS)),
     )
     .await;
     let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-s-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,
         best_effort(&["node-a-pub", "node-s-pub"])?,
-        budget(300, 2_000)?,
+        budget(SLACK_MS, 2 * SLACK_MS)?,
     )
     .await?;
     assert_eq!(answer.verdict(), Verdict::Partial);
@@ -131,7 +132,8 @@ async fn an_offline_node_under_best_effort_is_a_200_reporting_it() -> TestResult
 #[tokio::test]
 async fn every_failure_together_under_best_effort_is_still_a_200() -> TestResult {
     let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
-    let slow = node(json(200, &result_set(&[])).set_delay(Duration::from_secs(3))).await;
+    let slow =
+        node(json(200, &result_set(&[])).set_delay(Duration::from_millis(2 * SLACK_MS))).await;
     let broken = node(json(503, "")).await;
     let snapshot = federation(&[
         ("node-a-pub", &a.uri()),
@@ -141,7 +143,7 @@ async fn every_failure_together_under_best_effort_is_still_a_200() -> TestResult
     let answer = run(
         &snapshot,
         best_effort(&["node-a-pub", "node-e-pub", "node-s-pub"])?,
-        budget(300, 2_000)?,
+        budget(SLACK_MS, 2 * SLACK_MS)?,
     )
     .await?;
     assert_eq!(answer.verdict(), Verdict::Partial);
@@ -166,7 +168,8 @@ async fn every_failure_together_under_best_effort_is_still_a_200() -> TestResult
 #[tokio::test]
 async fn no_node_answering_under_best_effort_is_a_200_with_no_rows() -> TestResult {
     let broken = node(json(500, "")).await;
-    let slow = node(json(200, &result_set(&[])).set_delay(Duration::from_secs(3))).await;
+    let slow =
+        node(json(200, &result_set(&[])).set_delay(Duration::from_millis(300 + SLACK_MS))).await;
     let snapshot = federation(&[("node-e-pub", &broken.uri()), ("node-s-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,

@@ -17,7 +17,9 @@ use openehr_federation::aggregate::{Recombination, Recombine};
 use openehr_federation::status::EndpointStatus;
 use wiremock::MockServer;
 
-use super::{TestResult, budget, clients, federation, json, node, rows_text, run, statuses};
+use super::{
+    SLACK_MS, TestResult, budget, clients, federation, json, node, rows_text, run, statuses,
+};
 
 /// The node query of `SELECT COUNT(*), AVG(x)`, as the rewrite dispatches it.
 const NODE_AQL: &str = "SELECT COUNT(*), SUM(o/data[at0001]/value/magnitude), COUNT(o/data[at0001]/value/magnitude) FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'";
@@ -98,7 +100,7 @@ async fn a_value_the_recombination_cannot_use_fails_the_query_424() -> TestResul
 #[tokio::test]
 async fn a_node_that_does_not_answer_fails_the_aggregate_504() -> TestResult {
     let a = aggregate_node("[3, 12, 2]", Duration::ZERO).await;
-    let slow = aggregate_node("[2, 0.5, 1]", Duration::from_millis(800)).await;
+    let slow = aggregate_node("[2, 0.5, 1]", Duration::from_millis(200 + SLACK_MS)).await;
     let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,

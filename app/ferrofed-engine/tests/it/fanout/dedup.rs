@@ -21,7 +21,7 @@ use openehr_federation::outcome::EndpointOutcome;
 use openehr_federation::status::EndpointStatus;
 use wiremock::MockServer;
 
-use super::{TestResult, budget, federation, json, node, rows_text, run, validated_body};
+use super::{SLACK_MS, TestResult, budget, federation, json, node, rows_text, run, validated_body};
 
 /// A synthetic node query in the shape the rewrite writes under the mode:
 /// the uid and a label, no `ORDER BY`, no `LIMIT`.
@@ -157,7 +157,8 @@ async fn a_failing_424_envelope_records_the_mode() -> TestResult {
 #[tokio::test]
 async fn a_failing_504_envelope_records_the_mode() -> TestResult {
     let (a, _) = scenario().await?;
-    let slow = node(json(200, r#"{"rows":[]}"#).set_delay(Duration::from_secs(3))).await;
+    let slow =
+        node(json(200, r#"{"rows":[]}"#).set_delay(Duration::from_millis(400 + SLACK_MS))).await;
     let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,

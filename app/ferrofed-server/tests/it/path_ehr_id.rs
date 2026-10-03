@@ -34,9 +34,9 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::declared::composition_at;
 use crate::facade::{
-    EHR_A, PATIENT, body, dev_gateway, gateway, patient_query, post, registry, wire,
+    EHR_A, PATIENT, body, dev_gateway, gateway, gateway_within, patient_query, post, registry, wire,
 };
-use crate::support::{error_body, send};
+use crate::support::{SLACK, error_body, millis, send};
 
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
@@ -550,24 +550,37 @@ async fn two_members_holding_the_ehr_id_are_a_409_naming_both_and_neither_is_rea
 // conformance: CP-33
 #[tokio::test]
 async fn a_member_that_does_not_answer_the_probe_in_time_leaves_the_owner_unknown() -> TestResult {
+    let per_node = SLACK;
+    let abandoned_by = per_node + SLACK;
+    let overall = abandoned_by + SLACK;
     let slow = MockServer::start().await;
     mount(
         &slow,
         "GET",
         format!("/v1/ehr/{EHR_A}"),
-        ResponseTemplate::new(404).set_delay(Duration::from_millis(2600)),
+        ResponseTemplate::new(404).set_delay(overall + SLACK),
     )
     .await;
+    let a = holder().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway_within(
+        dir.path(),
+        &registry(&a.uri(), &slow.uri(), ""),
+        "",
+        "",
+        (millis(per_node)?, millis(overall)?),
+    )?;
     let started = Instant::now();
-    let (status, code, text, a, _) = refused_with(
+    let (status, acting, text) = answer(
+        app,
         Request::get(format!("/v1/ehr/{EHR_A}")).body(Body::empty())?,
-        slow,
     )
     .await?;
     let elapsed = started.elapsed();
+    assert!(acting.is_none(), "no endpoint acted: {text}");
     assert_eq!(
         (StatusCode::GATEWAY_TIMEOUT, "node-timeout"),
-        (status, code.as_str()),
+        (status, error_body(&text)?.code.as_str()),
         "a time-out means unknown, never absent (§11.5, §11.2): {text}"
     );
     assert!(
@@ -575,8 +588,9 @@ async fn a_member_that_does_not_answer_the_probe_in_time_leaves_the_owner_unknow
         "the silent member is named: {text}"
     );
     assert!(
-        elapsed < Duration::from_millis(2600),
-        "the member is abandoned at the per-node timeout of 2000 ms: {elapsed:?}"
+        elapsed < abandoned_by,
+        "the member is abandoned at the per-node timeout of {per_node:?}, before the overall \
+         budget of {overall:?} and never waiting for the member: {elapsed:?}"
     );
     assert_eq!(
         vec![probe_at()],

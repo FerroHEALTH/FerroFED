@@ -20,10 +20,10 @@ the rules every workflow keeps.
 Twelve workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
-  (zizmor, actionlint, shellcheck, hadolint, the comment-style guard, the
-  versions guard, the favicon guard, the conformance-matrix guard, the
-  obligations guard, the e2e-placement guard, the tracker-helper
-  self-tests); tier 2 is the Rust set, gated behind a `detect`
+  (zizmor, actionlint, shellcheck, hadolint, kubeconform over the example
+  Kubernetes manifests, the comment-style guard, the versions guard, the
+  favicon guard, the conformance-matrix guard, the obligations guard, the
+  e2e-placement guard, the tracker-helper self-tests); tier 2 is the Rust set, gated behind a `detect`
   job that looks for the root `Cargo.toml`, so it runs on every change. The
   `conclusion` job is the single required status check on `main`. The design
   is `docs/ci-cd.md`.
