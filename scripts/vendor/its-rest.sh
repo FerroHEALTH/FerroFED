@@ -4,8 +4,12 @@
 # scripts/vendor/its-rest.sh
 #
 # Vendors the openEHR ITS-REST OpenAPI documents into docs/specs/its-rest/:
-# the code-generation document of every one of the seven API modules, plus the
-# repository's licence file.
+# the code-generation document of every one of the seven API modules, the
+# validation document of the Query API, and the repository's licence file.
+#
+# Federation Tier with AQL §9.1 names `query-validation.openapi.yaml`, schema
+# `ResultSet`, as the normative list of the RESULT_SET members, so that one
+# validation document is taken beside the code-generation set.
 #
 # The gateway is transparent over the whole ITS-REST surface, read and write,
 # and names the parts it does not federate (Federation Tier with AQL §7a), so
@@ -44,6 +48,7 @@ paths=()
 for module in "${modules[@]}"; do
   paths+=("$oas/$module-codegen.openapi.yaml")
 done
+paths+=("$oas/query-validation.openapi.yaml")
 paths+=("LICENSE")
 
 pin="$(corpus_pin_cell "openEHR ITS-REST OpenAPI")"
@@ -78,6 +83,16 @@ while IFS= read -r file; do
 | \`$path\` | \`$(corpus_sha256 "$file")\` | \`$(corpus_blob_id "$file")\` |"
 done < <(find "$dest" -type f ! -name PROVENANCE.md | LC_ALL=C sort)
 
+# Said only when it holds at the pin, so a re-pin that splits the two
+# renderings drops the sentence instead of carrying a stale claim.
+query_same=""
+if [ "$(corpus_blob_id "$dest/$oas/query-validation.openapi.yaml")" \
+  = "$(corpus_blob_id "$dest/$oas/query-codegen.openapi.yaml")" ]; then
+  query_same="
+At this tag the Query API's validation and code-generation documents are the
+same bytes: the table below gives both one git blob id."
+fi
+
 licence="$(sed -nE 's/^[[:space:]]+name:[[:space:]]*(Creative Commons.*)$/\1/p' \
   "$dest/$oas/ehr-codegen.openapi.yaml" | head -n1)"
 [ -n "$licence" ] || die "ehr-codegen.openapi.yaml declares no info.license.name"
@@ -108,6 +123,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
 - Read by: #26 (the façade and the dispatch on the generated ITS-REST contract)
+  and #310 (the result-set schema test against \`query-validation.openapi.yaml\`)
 
 ## Why every module
 
@@ -120,10 +136,13 @@ module's lifecycle status, as its document declares it:
 | Module | Title | \`info.x-status\` |
 |---|---|---|$status_rows
 
-Only the \`-codegen\` rendering of each module is taken. The \`-html\` and
-\`-validation\` renderings of the same release describe the same API, and the
-Simplified Formats sources are not here because the gateway passes a commit
-body through unmodified and never reads its format.
+The \`-codegen\` rendering of each module is taken. The \`-html\` and
+\`-validation\` renderings of the same release describe the same API, with one
+exception taken here: \`query-validation.openapi.yaml\`, because Federation
+Tier with AQL §9.1 names it, schema \`ResultSet\`, as the normative list of
+the RESULT_SET members that the result-set schema's \`\$defs/itsRest\` subset
+restates. The Simplified Formats sources are not here because the gateway
+passes a commit body through unmodified and never reads its format.$query_same
 
 ## Why a blob id per file
 

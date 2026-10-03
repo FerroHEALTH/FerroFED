@@ -8,16 +8,17 @@ change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <https://github.com/openEHR/specifications-ITS-REST>
 - Pin: tag `Release-1.1.0`, which resolves to commit `24058992d5fa96e8dfbd855d9c133f328387fc09`
-- Fetched: 2026-10-02
+- Fetched: 2026-10-03
 - Upstream licence: the specification content declares `Creative Commons Attribution-NoDerivs 3.0 Unported` in each
   document's `info.license`. The repository's own `LICENSE` file is the
   Apache License 2.0 and is vendored beside this file, so both statements are
   here and neither is assumed.
 - Layout: the upstream paths, unchanged
-- Files: 8
+- Files: 9
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `8bc0e7435441f21b5c6ff463f126b71aac54f77046251f7aa7303afbed73fb6d`
+  `PROVENANCE.md` excluded): `b45e39f27438c694aa44638f03bb31bcc43e169ba749ce35842465b765dc5714`
 - Read by: #26 (the façade and the dispatch on the generated ITS-REST contract)
+  and #310 (the result-set schema test against `query-validation.openapi.yaml`)
 
 ## Why every module
 
@@ -37,10 +38,15 @@ module's lifecycle status, as its document declares it:
 | demographic | Demographic API | `DEVELOPMENT` |
 | admin | Admin API | `DEVELOPMENT` |
 
-Only the `-codegen` rendering of each module is taken. The `-html` and
-`-validation` renderings of the same release describe the same API, and the
-Simplified Formats sources are not here because the gateway passes a commit
-body through unmodified and never reads its format.
+The `-codegen` rendering of each module is taken. The `-html` and
+`-validation` renderings of the same release describe the same API, with one
+exception taken here: `query-validation.openapi.yaml`, because Federation
+Tier with AQL §9.1 names it, schema `ResultSet`, as the normative list of
+the RESULT_SET members that the result-set schema's `$defs/itsRest` subset
+restates. The Simplified Formats sources are not here because the gateway
+passes a commit body through unmodified and never reads its format.
+At this tag the Query API's validation and code-generation documents are the
+same bytes: the table below gives both one git blob id.
 
 ## Why a blob id per file
 
@@ -57,4 +63,5 @@ and the git blob id of each file are what identify these bytes.
 | `computable/OAS/ehr-codegen.openapi.yaml` | `a0e37a217524c5a2c6351d128041c88d1c137fcde106badda05dde8c0269cd5c` | `d18ba6bbb0ac503a62840c0e83d8fdfbb72bf415` |
 | `computable/OAS/overview-codegen.openapi.yaml` | `67761b4b06d6439a146ae04857520dad4bf1bacf448380d265dfff282a7788b9` | `79bd302402949f1b364e0d0f3b3adb3b2ace96ec` |
 | `computable/OAS/query-codegen.openapi.yaml` | `d92e82c9cd6c9c8f6543ea425ea88b11e2fd0b133a1003347d470625d1d19bec` | `0a56228f763f1306a85a1edf4258a3a8a1d07757` |
+| `computable/OAS/query-validation.openapi.yaml` | `d92e82c9cd6c9c8f6543ea425ea88b11e2fd0b133a1003347d470625d1d19bec` | `0a56228f763f1306a85a1edf4258a3a8a1d07757` |
 | `computable/OAS/system-codegen.openapi.yaml` | `82c8a6583d833da395f7add0961c27f3796c32a55256a01b54e541ad232d4213` | `e815cbe028eaa70ebf21e9536fe657209a5b3bc4` |

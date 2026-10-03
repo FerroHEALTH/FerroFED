@@ -195,3 +195,157 @@ pub(crate) fn member_names(text: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let object = value.as_object().ok_or("not a JSON object")?;
     Ok(object.keys().cloned().collect())
 }
+
+/// The vendored ITS-REST Query API validation document, the one §9.1 names
+/// as the normative list of the `RESULT_SET` members.
+const QUERY_VALIDATION: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docs/specs/its-rest/computable/OAS/query-validation.openapi.yaml"
+);
+
+/// The keywords that annotate a schema without constraining an instance.
+const ANNOTATIONS: [&str; 8] = [
+    "title",
+    "description",
+    "example",
+    "examples",
+    "$comment",
+    "$schema",
+    "$id",
+    "$defs",
+];
+
+/// Deeper than any schema the comparison reads; a `$ref` cycle stops here.
+const MAX_DEPTH: usize = 16;
+
+/// The constraints a schema object puts on an instance, with every `$ref`
+/// resolved in its own document and the annotations left out.
+///
+/// An absent `additionalProperties` is `true` and an absent `items` is the
+/// empty schema, as the schema dialects of both documents read them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct Shape {
+    /// The `type` keyword, its one name or its list, sorted.
+    pub(crate) kind: Vec<String>,
+    /// The `format` keyword.
+    pub(crate) format: Option<String>,
+    /// The `required` members, sorted.
+    pub(crate) required: Vec<String>,
+    /// The `properties`, by member name.
+    pub(crate) properties: std::collections::BTreeMap<String, Shape>,
+    /// The `items` schema, the empty schema when absent.
+    pub(crate) items: Option<Box<Shape>>,
+    /// Whether `additionalProperties` admits unknown members.
+    pub(crate) open: bool,
+    /// Every other constraining keyword, as its JSON text.
+    pub(crate) other: std::collections::BTreeMap<String, String>,
+}
+
+/// The [`Shape`] of the component schema `name` of the ITS-REST Query API
+/// validation document.
+pub(crate) fn its_rest_shape(name: &str) -> Result<Shape, Box<dyn Error>> {
+    let document: Value = serde_saphyr::from_str(&std::fs::read_to_string(QUERY_VALIDATION)?)?;
+    shape_at(&document, &format!("/components/schemas/{name}"), 0)
+}
+
+/// The [`Shape`] of the object at `pointer` in the named vendored schema.
+pub(crate) fn schema_shape(schema_name: &str, pointer: &str) -> Result<Shape, Box<dyn Error>> {
+    shape_at(&schema(schema_name)?, pointer, 0)
+}
+
+fn shape_at(document: &Value, pointer: &str, depth: usize) -> Result<Shape, Box<dyn Error>> {
+    let node = document
+        .pointer(pointer)
+        .ok_or_else(|| format!("the document has no {pointer}"))?;
+    shape_of(document, node, depth)
+}
+
+fn shape_of(document: &Value, node: &Value, depth: usize) -> Result<Shape, Box<dyn Error>> {
+    if depth > MAX_DEPTH {
+        return Err("the schema nests deeper than the comparison reads".into());
+    }
+    let object = node.as_object().ok_or("a schema is not an object")?;
+    if let Some(reference) = object.get("$ref") {
+        let target = reference
+            .as_str()
+            .and_then(|reference| reference.strip_prefix('#'))
+            .ok_or("a $ref is not a pointer into its own document")?;
+        if object
+            .keys()
+            .any(|key| key != "$ref" && !ANNOTATIONS.contains(&key.as_str()))
+        {
+            return Err(format!("the $ref to {target} has constraining siblings").into());
+        }
+        return shape_at(document, target, depth + 1);
+    }
+    let mut shape = Shape {
+        open: true,
+        ..Shape::default()
+    };
+    for (key, value) in object {
+        match key.as_str() {
+            "type" => {
+                let kinds = match value {
+                    Value::Array(kinds) => kinds.iter().collect(),
+                    kind => vec![kind],
+                };
+                for kind in kinds {
+                    shape
+                        .kind
+                        .push(kind.as_str().ok_or("a type is not a string")?.into());
+                }
+                shape.kind.sort();
+            }
+            "format" => {
+                shape.format = Some(value.as_str().ok_or("a format is not a string")?.into());
+            }
+            "required" => {
+                let names = value.as_array().ok_or("required is not an array")?;
+                for name in names {
+                    shape.required.push(
+                        name.as_str()
+                            .ok_or("a required name is not a string")?
+                            .into(),
+                    );
+                }
+                shape.required.sort();
+            }
+            "properties" => {
+                let properties = value.as_object().ok_or("properties is not an object")?;
+                for (name, property) in properties {
+                    shape
+                        .properties
+                        .insert(name.clone(), shape_of(document, property, depth + 1)?);
+                }
+            }
+            "items" => {
+                let items = shape_of(document, value, depth + 1)?;
+                if items != Shape::any() {
+                    shape.items = Some(Box::new(items));
+                }
+            }
+            "additionalProperties" => {
+                shape.open = value.as_bool().ok_or(
+                    "additionalProperties is a schema, which the comparison does not read",
+                )?;
+            }
+            key if ANNOTATIONS.contains(&key) => {}
+            key => {
+                shape
+                    .other
+                    .insert(key.to_owned(), serde_json::to_string(value)?);
+            }
+        }
+    }
+    Ok(shape)
+}
+
+impl Shape {
+    /// The empty schema, which admits any instance.
+    pub(crate) fn any() -> Self {
+        Self {
+            open: true,
+            ..Self::default()
+        }
+    }
+}
