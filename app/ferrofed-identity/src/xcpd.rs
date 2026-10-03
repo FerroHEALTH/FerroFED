@@ -34,6 +34,7 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ihe_iti::xcpd::XcpdClient;
+use ihe_iti::xcpd::audit::{self, AuditError, AuditEvent, AuditRecorder};
 use ihe_iti::xcpd::discovery::Discovery;
 use ihe_iti::xcpd::error::{InvalidInput, XcpdError};
 use ihe_iti::xcpd::identifier::{HomeCommunityId, Oid, PatientIdentifier};
@@ -46,6 +47,46 @@ use url::Url;
 
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
+
+/// The `tracing` target the [`LogAudit`] recorder writes to.
+pub const AUDIT_TARGET: &str = "ferrofed::audit";
+
+/// The audit recorder that writes each ITI-55 audit message as a structured
+/// `tracing` event at [`AUDIT_TARGET`], for a deployment that routes its log
+/// to its audit repository.
+///
+/// The event carries every field of the message but the query parameters,
+/// which name the patient identifier: it says that they were recorded, and
+/// never what they hold. It accepts every event.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogAudit;
+
+impl AuditRecorder for LogAudit {
+    fn record(&self, event: AuditEvent) -> Result<(), AuditError> {
+        let (access_point_type, access_point) = event
+            .destination_access_point
+            .as_ref()
+            .map_or(("", String::new()), |point| (point.type_code(), point.id()));
+        let mut destination = event.destination.clone();
+        destination.set_query(None);
+        tracing::info!(
+            target: AUDIT_TARGET,
+            event_id = audit::EVENT_ID.0,
+            event_action = audit::EVENT_ACTION,
+            event_type = audit::EVENT_TYPE.0,
+            event_date_time = %event.date_time,
+            event_outcome = event.outcome.code(),
+            source_alternative_user_id = event.process_id,
+            destination_user_id = %destination,
+            destination_access_point_type = access_point_type,
+            destination_access_point = %access_point,
+            home_community = event.home_community.as_ref().map(ToString::to_string),
+            participant_object_query = "recorded, not logged",
+            "ITI-55 Cross Gateway Patient Discovery audit message"
+        );
+        Ok(())
+    }
+}
 
 /// Where a deployment's XUA assertion comes from (ITI-40).
 ///
@@ -350,6 +391,14 @@ impl XcpdLocalizer {
         })
     }
 
+    /// This localizer, recording the ITI-55 audit message of every exchange
+    /// through `recorder` (ITI TF-2 §3.55.5.1.1).
+    #[must_use]
+    pub fn audited(mut self, recorder: Arc<dyn AuditRecorder>) -> Self {
+        self.client = self.client.audited(recorder);
+        self
+    }
+
     /// The assigning authority `namespace` stands for.
     fn authority(&self, namespace: &IdentifierNamespace) -> Option<Oid> {
         if let Some(oid) = self.namespaces.get(namespace) {
@@ -412,11 +461,23 @@ impl XcpdLocalizer {
                 }
                 Some(Ok(Discovery::NoMatch)) => {}
                 Some(Ok(_)) => {
-                    return Err(backend(XcpdLocalizeError::DemographicsRequested { index }));
+                    // NOTE: §3.55.4.2.3 Case 3 is answered with a 200 (§3.55.4.2.2.6).
+                    return Err(LocalizerError::Answered {
+                        status: http::StatusCode::OK,
+                        source: Box::new(XcpdLocalizeError::DemographicsRequested { index }),
+                    });
                 }
                 Some(Err(XcpdError::Timeout)) => return Err(LocalizerError::DeadlineExceeded),
                 Some(Err(source)) => {
-                    return Err(backend(XcpdLocalizeError::Gateway { index, source }));
+                    let status = source.status();
+                    let error = XcpdLocalizeError::Gateway { index, source };
+                    return Err(match status {
+                        Some(status) => LocalizerError::Answered {
+                            status,
+                            source: Box::new(error),
+                        },
+                        None => backend(error),
+                    });
                 }
                 None => return Err(backend(XcpdLocalizeError::Task { index })),
             }

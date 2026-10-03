@@ -351,7 +351,8 @@ impl Federation {
         }
         let dependencies =
             Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some())
-                .with_consent(consent.is_some());
+                .with_consent(consent.is_some())
+                .with_localizer(localization.localizer().is_some());
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
         let federation = Self {
             id,
@@ -461,6 +462,9 @@ impl Federation {
     #[must_use]
     pub fn with_localization(mut self, localization: LocalizationPolicy) -> Self {
         self.context = self.context.with_targeting(Targeting::Localized);
+        self.dependencies = self
+            .dependencies
+            .with_localizer(localization.localizer().is_some());
         self.localization = localization;
         self
     }

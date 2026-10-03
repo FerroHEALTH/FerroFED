@@ -38,6 +38,7 @@ mod hygiene;
 mod its_rest_areas;
 mod lifecycle;
 mod localization;
+mod localizer_surface;
 mod metrics;
 mod no_destination;
 mod onward;

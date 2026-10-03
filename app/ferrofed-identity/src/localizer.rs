@@ -32,10 +32,31 @@ pub enum LocalizerError {
     /// The localization budget ran out before the localizer answered.
     #[error("the localizer did not answer within its budget")]
     DeadlineExceeded,
-    /// The localization service failed: an outage, a refusal, or an answer
-    /// that could not be read.
+    /// The localization service could not be reached, or gave no answer.
     #[error("the localization service failed")]
     Backend(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// The localization service answered `status` with a failure, or with an
+    /// answer that could not be read.
+    #[error("the localization service answered {status}")]
+    Answered {
+        /// The HTTP status the service answered with.
+        status: http::StatusCode,
+        /// What was wrong with the answer.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
+
+impl LocalizerError {
+    /// The HTTP status the localization service answered with, when it
+    /// answered.
+    #[must_use]
+    pub fn status(&self) -> Option<http::StatusCode> {
+        match self {
+            Self::Answered { status, .. } => Some(*status),
+            Self::DeadlineExceeded | Self::Backend(_) => None,
+        }
+    }
 }
 
 /// The answer of a localizer about one patient (§14.1).

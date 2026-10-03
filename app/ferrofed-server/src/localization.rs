@@ -22,8 +22,8 @@ use ferrofed_identity::dev::StaticResolver;
 use ferrofed_identity::localizer::{Localizer, OnFailure};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::xcpd::{
-    AssertionSource, FixedAssertion, GatewayConfig, Tls, Transport, XcpdConfig, XcpdConfigError,
-    XcpdLocalizer,
+    AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Tls, Transport, XcpdConfig,
+    XcpdConfigError, XcpdLocalizer,
 };
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::NodeId;
@@ -31,7 +31,7 @@ use ferrofed_registry::secret::Secret;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::settings::{LocalizationSettings, Settings};
-use crate::config::xcpd::XcpdSettings;
+use crate::config::xcpd::{AuditDestination, XcpdSettings};
 use crate::config::{self, NodeSelection};
 
 /// The localizer of a federation, with its failure policy and budget.
@@ -39,6 +39,7 @@ use crate::config::{self, NodeSelection};
 pub struct LocalizationPolicy {
     localizer: Option<Arc<dyn Localizer>>,
     mode: Option<&'static str>,
+    audit: Option<&'static str>,
     on_failure: OnFailure,
     timeout: Duration,
 }
@@ -51,6 +52,7 @@ impl LocalizationPolicy {
         Self {
             localizer: None,
             mode: None,
+            audit: None,
             on_failure: OnFailure::Closed,
             timeout: Duration::ZERO,
         }
@@ -68,6 +70,7 @@ impl LocalizationPolicy {
         Self {
             localizer: Some(localizer),
             mode: Some(mode),
+            audit: None,
             on_failure,
             timeout,
         }
@@ -97,12 +100,27 @@ impl LocalizationPolicy {
     pub fn timeout(&self) -> Duration {
         self.timeout
     }
+
+    /// This policy, its localizer's exchanges audited to `audit`, which
+    /// `OPTIONS {base}/` declares as `localization.audit`.
+    #[must_use]
+    pub fn audited(mut self, audit: &'static str) -> Self {
+        self.audit = Some(audit);
+        self
+    }
+
+    /// Where the localizer's audit messages go, when it records any.
+    #[must_use]
+    pub fn audit(&self) -> Option<&'static str> {
+        self.audit
+    }
 }
 
 impl fmt::Debug for LocalizationPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LocalizationPolicy")
             .field("mode", &self.mode)
+            .field("audit", &self.audit)
             .field("on_failure", &self.on_failure)
             .field("timeout", &self.timeout)
             .finish_non_exhaustive()
@@ -200,12 +218,12 @@ pub fn policy(
                 (None, Some(development)) => (development, DEVELOPMENT_STATIC),
                 (None, None) => return Err(LocalizationError::NoLocalizer),
             };
-            Ok(LocalizationPolicy::new(
-                localizer,
-                mode,
-                declared.on_failure,
-                declared.timeout,
-            ))
+            let policy =
+                LocalizationPolicy::new(localizer, mode, declared.on_failure, declared.timeout);
+            Ok(match &settings.xcpd {
+                Some(xcpd) => policy.audited(xcpd.audit.as_str()),
+                None => policy,
+            })
         }
     }
 }
@@ -266,5 +284,15 @@ fn xcpd_localizer(
             roots: xcpd.trust_roots.clone(),
         },
     };
-    XcpdLocalizer::from_config(config, assertion, snapshot).map_err(LocalizationError::Xcpd)
+    let localizer =
+        XcpdLocalizer::from_config(config, assertion, snapshot).map_err(LocalizationError::Xcpd)?;
+    Ok(match xcpd.audit {
+        AuditDestination::Log => localizer.audited(Arc::new(LogAudit)),
+        AuditDestination::Off => {
+            tracing::warn!(
+                "[xcpd] audit = \"off\": no ITI-55 audit message is recorded (development only)"
+            );
+            localizer
+        }
+    })
 }

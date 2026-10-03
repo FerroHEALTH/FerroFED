@@ -22,6 +22,7 @@ use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::probe::{Answer, Probed};
 use ferrofed_identity::consent::ConsentDecision;
+use ferrofed_identity::localizer::Localization;
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 use openehr_federation::outcome::Outcome;
@@ -30,7 +31,8 @@ use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
 use crate::metrics::{
-    CONSENT_PREFILTER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION, NODE_REQUESTS,
+    CONSENT_PREFILTER_REQUESTS, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
+    NODE_REQUESTS,
 };
 
 /// The node request instruments of one meter provider, shared by every
@@ -40,6 +42,7 @@ pub struct Instruments {
     requests: Counter<u64>,
     duration: Histogram<f64>,
     prefilter: Counter<u64>,
+    localizer: Counter<u64>,
 }
 
 impl Instruments {
@@ -60,6 +63,10 @@ impl Instruments {
             prefilter: meter
                 .u64_counter(CONSENT_PREFILTER_REQUESTS)
                 .with_description("Calls to the consent pre-filter, by outcome")
+                .build(),
+            localizer: meter
+                .u64_counter(LOCALIZER_REQUESTS)
+                .with_description("Calls to the localizer, by outcome")
                 .build(),
         }
     }
@@ -156,8 +163,6 @@ impl NodeRequests {
         }
     }
 
-    /// Counts one request to `endpoint` that ended as `status` after
-    /// `elapsed`; an endpoint outside the snapshot is not recorded.
     /// Counts one call to the consent pre-filter that ended in `decision`, in
     /// a series of its own: the pre-filter is no member, so it has no
     /// `endpoint` and no §11.1 outcome.
@@ -175,6 +180,26 @@ impl NodeRequests {
             .add(1, &[KeyValue::new("outcome", outcome)]);
     }
 
+    /// Counts one call to the localizer that ended in `localization`, in a
+    /// series of its own: the localizer is no member, so it has no
+    /// `endpoint` and no §11.1 outcome.
+    pub fn localized(&self, localization: &Localization) {
+        let Some(instruments) = &self.instruments else {
+            return;
+        };
+        let outcome = match localization {
+            Localization::Candidates(_) => "candidates",
+            Localization::NoRecords => "no-records",
+            Localization::NotConfigured => "not-configured",
+            Localization::Unavailable(_) => "unavailable",
+        };
+        instruments
+            .localizer
+            .add(1, &[KeyValue::new("outcome", outcome)]);
+    }
+
+    /// Counts one request to `endpoint` that ended as `status` after
+    /// `elapsed`; an endpoint outside the snapshot is not recorded.
     fn count(&self, endpoint: &EndpointId, status: EndpointStatus, elapsed: Duration) {
         let Some(instruments) = &self.instruments else {
             return;

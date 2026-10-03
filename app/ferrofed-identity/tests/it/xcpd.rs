@@ -146,12 +146,15 @@ async fn no_match_anywhere_is_no_records() -> TestResult {
 // conformance: CP-5
 #[tokio::test]
 async fn one_failing_gateway_fails_the_whole_discovery_closed() -> TestResult {
-    for failing in [Answer::Busy, Answer::Fault] {
+    for (failing, answered) in [(Answer::Busy, 200), (Answer::Fault, 500)] {
         let answering = RespondingGateway::answering(holds(COMMUNITY_A)).await;
         let down = RespondingGateway::answering(failing.clone()).await;
         match localize(&localizer(&[&answering, &down])?).await? {
-            Localization::Unavailable(LocalizerError::Backend(error)) => {
-                let rendered = format!("{error} {error:?}");
+            Localization::Unavailable(error @ LocalizerError::Answered { .. }) => {
+                if error.status().map(|status| status.as_u16()) != Some(answered) {
+                    return Err(format!("the status the gateway answered: {error:?}").into());
+                }
+                let rendered = format!("{} {error:?}", ferrofed_chain(&error));
                 if rendered.contains(PATIENT_VALUE) {
                     return Err(format!("the error carries the identifier: {rendered}").into());
                 }
@@ -298,4 +301,66 @@ fn no_rendering_shows_the_tls_identity() -> TestResult {
         return Err(format!("the key shows: {rendered}").into());
     }
     Ok(())
+}
+
+/// `error` and every cause behind it, as one line.
+fn ferrofed_chain(error: &(dyn Error + 'static)) -> String {
+    let mut line = error.to_string();
+    let mut cause = error.source();
+    while let Some(source) = cause {
+        line.push_str(": ");
+        line.push_str(&source.to_string());
+        cause = source.source();
+    }
+    line
+}
+
+#[tokio::test]
+async fn an_unreachable_gateway_has_no_status() -> TestResult {
+    let localizer = XcpdLocalizer::from_config(
+        config(
+            &["http://127.0.0.1:0/rg".to_owned()],
+            Transport::UnencryptedForDevelopment,
+        )?,
+        None,
+        &registry(),
+    )?;
+    match localize(&localizer).await? {
+        Localization::Unavailable(error) if error.status().is_none() => Ok(()),
+        other => Err(format!("no answer, no status: {other:?}").into()),
+    }
+}
+
+/// A recorder that accepts nothing.
+struct Refusing;
+
+#[derive(Debug, thiserror::Error)]
+#[error("synthetic audit repository outage")]
+struct AuditOutage;
+
+impl ihe_iti::xcpd::audit::AuditRecorder for Refusing {
+    fn record(
+        &self,
+        _event: ihe_iti::xcpd::audit::AuditEvent,
+    ) -> Result<(), ihe_iti::xcpd::audit::AuditError> {
+        Err(ihe_iti::xcpd::audit::AuditError(Box::new(AuditOutage)))
+    }
+}
+
+// conformance: CP-5
+#[tokio::test]
+async fn a_discovery_whose_audit_is_refused_fails_closed() -> TestResult {
+    let stub = RespondingGateway::answering(holds(COMMUNITY_A)).await;
+    let localizer = localizer(&[&stub])?.audited(Arc::new(Refusing));
+    match localize(&localizer).await? {
+        Localization::Unavailable(error) => {
+            let rendered = ferrofed_chain(&error);
+            if rendered.contains("audit") {
+                Ok(())
+            } else {
+                Err(format!("the audit failure is named: {rendered}").into())
+            }
+        }
+        other => Err(format!("no candidate without its audit (§3.55.5.1): {other:?}").into()),
+    }
 }

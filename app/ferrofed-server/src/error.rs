@@ -193,6 +193,11 @@ pub enum Code {
     AuthenticationUnavailable,
     /// No caller is admitted to the operation: an admin or an unknown one.
     OperationRefused,
+    /// The configured localizer could not answer while localizing the
+    /// subject of `GET {base}/v1/ehr`, and the deployment fails closed, so
+    /// no member was asked and whether the subject has an EHR is unknown
+    /// (§14.1, N4). The body never names the subject.
+    LocalizationUnavailable,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -208,7 +213,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 47] = [
+    pub const GATEWAY: [Self; 48] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -256,6 +261,7 @@ impl Code {
         Self::PurposeOfUseRequired,
         Self::AuthenticationUnavailable,
         Self::OperationRefused,
+        Self::LocalizationUnavailable,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -319,6 +325,7 @@ impl Code {
             Self::PurposeOfUseRequired => "purpose-of-use-required",
             Self::AuthenticationUnavailable => "authentication-unavailable",
             Self::OperationRefused => "operation-refused",
+            Self::LocalizationUnavailable => "localization-unavailable",
         }
     }
 
@@ -361,9 +368,10 @@ impl Code {
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
-            Self::NodeRefused | Self::NodeError | Self::ResolutionUnavailable => {
-                StatusCode::FAILED_DEPENDENCY
-            }
+            Self::NodeRefused
+            | Self::NodeError
+            | Self::ResolutionUnavailable
+            | Self::LocalizationUnavailable => StatusCode::FAILED_DEPENDENCY,
             Self::MediaTypeNotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StoredQueryReadOnly => StatusCode::METHOD_NOT_ALLOWED,
@@ -487,6 +495,9 @@ impl Code {
             Self::PurposeOfUseRequired => "the access token declares no purpose of use (§13.4)",
             Self::AuthenticationUnavailable => "the access token cannot be verified now (§13.1)",
             Self::OperationRefused => "this gateway admits no caller to this operation",
+            Self::LocalizationUnavailable => {
+                "the localizer could not answer, so no member was asked and where the subject has an EHR is unknown (§14.1, N4)"
+            }
         }
     }
 }
@@ -593,6 +604,7 @@ mod tests {
             Code::PurposeOfUseRequired => Some(44),
             Code::AuthenticationUnavailable => Some(45),
             Code::OperationRefused => Some(46),
+            Code::LocalizationUnavailable => Some(47),
         }
     }
 
@@ -690,6 +702,7 @@ mod tests {
                 StatusCode::SERVICE_UNAVAILABLE,
             ),
             (Code::OperationRefused, StatusCode::FORBIDDEN),
+            (Code::LocalizationUnavailable, StatusCode::FAILED_DEPENDENCY),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

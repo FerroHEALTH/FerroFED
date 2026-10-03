@@ -58,6 +58,7 @@ mod consent;
 pub mod dedup;
 pub mod follow_up;
 pub mod intake;
+mod localize;
 pub mod options;
 pub mod owner;
 pub mod plan;

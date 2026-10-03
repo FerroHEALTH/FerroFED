@@ -118,6 +118,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 - `ihe-iti` 0.0.11: the `xcpd` feature, the ITI-55 Initiating Gateway client.
   It is the only feature that compiles `uuid` and `jiff`, and it adds no
   crate to the graph beyond them.
+- The read of an EHR by subject is localized (#409; N4, §5.2, §14.1): under
+  `node_selection = "localized"` the subject is resolved only at the members
+  the localizer names, and no other member learns of the request. A
+  localizer that fails closed answers `424 localization-unavailable` with no
+  member asked; a targeted read is never localized (§8).
+- The localizer on `GET /health/dependencies` as `localizer`, under the
+  members' rule, and its calls in `ferrofed_localizer_requests_total` by
+  `outcome` (#410).
+- The ITI-55 Initiating Gateway audit message (#410, ITI TF-2 §3.55.5.1.1):
+  `ihe-iti` 0.0.12 hands every exchange's message to an `AuditRecorder`, and
+  `[xcpd] audit = "log"` writes it at the `ferrofed::audit` log target
+  without the query parameters, which name the patient. A message the
+  recorder cannot accept fails the discovery closed.
 
 - Client authentication at the gateway (§13.1, N25, CP-17 inbound half,
   #80). A request to the ITS-REST surface and `OPTIONS {base}/` carries an
@@ -149,6 +162,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   to every caller, where it answered `501`.
 - A gateway that federates and trusts no issuer refuses to start, and
   `config check` refuses its configuration, with exit code 78.
+- `[xcpd]` requires `audit` (#410): `"log"`, or `"off"`, which only
+  `profile = "development"` accepts and `OPTIONS {base}/` declares as
+  `localization.audit`. A configuration without it refuses to boot.
+- `ihe-iti` 0.0.12: `XcpdError::Fault` carries the HTTP status it came with,
+  `XcpdError::status()` names the status the responding gateway answered
+  with, an unreadable answer with a status other than `200` is `Rejected`,
+  and `XcpdError::Audit` reports an audit message the recorder refused.
 - An onward credential that cannot be obtained fails that node as
   `node-error` with nothing sent to it, on the federated query, the
   definition fan-out and a routed request (`424 node-error`), where it was a

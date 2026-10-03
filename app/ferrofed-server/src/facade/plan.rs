@@ -21,7 +21,7 @@ use std::time::Instant;
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError, OnFailure};
+
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -33,9 +33,9 @@ use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use secrecy::SecretString;
 
 use crate::facade::consent;
+use crate::facade::localize::{Localized, localize};
 use crate::federation::Federation;
 use crate::health::dependencies::Observed;
-use crate::localization::LocalizationPolicy;
 
 /// The plan of one query, and where each façade column of a node row comes
 /// from.
@@ -191,13 +191,10 @@ pub async fn patient(
         None
     };
     let located = match (localizer, &patient) {
-        (Some(localizer), Some(patient)) => {
-            let policy = federation.localization();
-            localize(policy, localizer, patient, &members, deadline).await?
-        }
+        (Some(_), Some(patient)) => localize(federation, patient, &members, deadline).await,
         _ => Localized::everyone(),
     };
-    plan = located.settle_alternates(plan, membership.alternates)?;
+    plan = settle_alternates(&located, plan, membership.alternates)?;
     let mut candidates: Vec<NodeId> = members
         .into_iter()
         .filter(|member| located.admits(member))
@@ -375,120 +372,25 @@ fn membership(snapshot: &RegistrySnapshot, selection: Selection<'_>) -> Membersh
     }
 }
 
-/// What localization left of the members asked (§14.1).
-struct Localized {
-    /// The members localization named, or `None` when every member is a
-    /// candidate.
-    candidates: Option<BTreeSet<NodeId>>,
-    /// The error every member it did not name carries: the localizer's
-    /// failure, under fail-closed.
-    error: Option<ErrorDetail>,
-    /// The localizer's failure, carried in `meta.federation` too.
-    failure: Option<ErrorDetail>,
-}
-
-impl Localized {
-    /// `plan` with every endpoint of `alternates` settled: `excluded` for a member
-    /// localization admitted, which is asked through another endpoint, and
-    /// `not-localized` for one it did not (§11.1).
-    fn settle_alternates(
-        &self,
-        mut plan: Plan,
-        alternates: Vec<(NodeId, EndpointId, String)>,
-    ) -> Result<Plan, TargetsError> {
-        for (member, endpoint, reason) in alternates {
-            let outcome = if self.admits(&member) {
-                Outcome::Excluded {
-                    error: Some(detail(&reason)?),
-                }
-            } else {
-                self.not_localized()
-            };
-            plan = settle(plan, endpoint, outcome)?;
-        }
-        Ok(plan)
+/// `plan` with every endpoint of `alternates` settled: `excluded` for a member
+/// localization admitted, which is asked through another endpoint, and
+/// `not-localized` for one it did not (§11.1).
+fn settle_alternates(
+    located: &Localized,
+    mut plan: Plan,
+    alternates: Vec<(NodeId, EndpointId, String)>,
+) -> Result<Plan, TargetsError> {
+    for (member, endpoint, reason) in alternates {
+        let outcome = if located.admits(&member) {
+            Outcome::Excluded {
+                error: Some(detail(&reason)?),
+            }
+        } else {
+            located.not_localized()
+        };
+        plan = settle(plan, endpoint, outcome)?;
     }
-
-    /// Every member a candidate: no localizer, or one that is not consulted.
-    fn everyone() -> Self {
-        Self {
-            candidates: None,
-            error: None,
-            failure: None,
-        }
-    }
-
-    /// No member a candidate, each carrying `error` when there is one.
-    fn nobody(error: Option<ErrorDetail>) -> Self {
-        Self {
-            candidates: Some(BTreeSet::new()),
-            failure: error.clone(),
-            error,
-        }
-    }
-
-    /// Whether `member` is a candidate.
-    fn admits(&self, member: &NodeId) -> bool {
-        self.candidates
-            .as_ref()
-            .is_none_or(|candidates| candidates.contains(member))
-    }
-
-    /// The status of a member that is not a candidate (§11.1).
-    fn not_localized(&self) -> Outcome {
-        Outcome::NotLocalized {
-            error: self.error.clone(),
-        }
-    }
-}
-
-/// Asks `localizer` which of `members` might hold `patient`'s data, within
-/// the budget `policy` gives it and before `deadline` (§14.1, N4).
-///
-/// A localizer still silent at the end of its budget did not answer, and the
-/// failure policy applies as to any other failure.
-async fn localize(
-    policy: &LocalizationPolicy,
-    localizer: &dyn Localizer,
-    patient: &PatientRef,
-    members: &[NodeId],
-    deadline: Instant,
-) -> Result<Localized, TargetsError> {
-    let until = Instant::now()
-        .checked_add(policy.timeout())
-        .map_or(deadline, |at| at.min(deadline));
-    let answer = tokio::time::timeout_at(
-        tokio::time::Instant::from_std(until),
-        localizer.localize(patient, members, until),
-    )
-    .await
-    .unwrap_or(Localization::Unavailable(LocalizerError::DeadlineExceeded));
-    match answer {
-        Localization::NotConfigured => Ok(Localized::everyone()),
-        Localization::Candidates(named) => Ok(Localized {
-            candidates: Some(named),
-            error: None,
-            failure: None,
-        }),
-        Localization::NoRecords => Ok(Localized::nobody(None)),
-        Localization::Unavailable(error) => {
-            let cause = crate::chain(&error);
-            tracing::warn!(
-                error = %cause,
-                on_failure = %policy.on_failure(),
-                "the localizer did not answer"
-            );
-            let failure = detail(&format!("the localizer could not answer: {cause}"))?;
-            Ok(match policy.on_failure() {
-                OnFailure::Closed => Localized::nobody(Some(failure)),
-                OnFailure::AskAll => Localized {
-                    candidates: None,
-                    error: None,
-                    failure: Some(failure),
-                },
-            })
-        }
-    }
+    Ok(plan)
 }
 
 /// `plan` with every endpoint of `excluded` settled as `excluded`.

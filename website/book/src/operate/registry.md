@@ -174,7 +174,12 @@ the named members only. A directed query (the `FROM ENDPOINT` directive or the
 targeting headers) is never localized: the directive selects its node set
 (§8). A query that names no patient is refused with a `400` under this
 selection, because localization is keyed on the patient and no node set is
-defined (N4).
+defined (N4). The read of an EHR by subject, `GET {base}/v1/ehr?subject_id=…`,
+names the patient and no node, so it is localized as an undirected query is:
+the specification does not limit N4 to AQL, and a deployment that relies on
+its localizer to narrow which members learn of a patient keeps that narrowing
+on every patient route
+([Reading an EHR by subject](../integrate/follow-ups.md#reading-an-ehr-by-subject)).
 
 When the localizer does not answer within `timeout_ms`, or fails, the gateway
 fails closed: it asks no member, reports every member `not-localized` with the

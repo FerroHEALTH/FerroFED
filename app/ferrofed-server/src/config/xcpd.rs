@@ -69,6 +69,32 @@ pub struct Xcpd {
     /// A file of PEM trust roots the responding gateways' certificates chain
     /// to, beside the platform's.
     pub trust_roots_file: Option<PathBuf>,
+    /// Where the ITI-55 audit message of every exchange goes: `log`, or
+    /// `off`, which only `profile = "development"` admits. It has no default.
+    pub audit: Option<AuditDestination>,
+}
+
+/// Where the ITI-55 audit messages go (ITI TF-2 §3.55.5.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuditDestination {
+    /// A structured event at the `ferrofed::audit` log target, without the
+    /// query parameters, for a deployment that routes its log to its audit
+    /// repository.
+    Log,
+    /// No audit message: development only.
+    Off,
+}
+
+impl AuditDestination {
+    /// The value as the configuration and `OPTIONS {base}/` spell it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Log => "log",
+            Self::Off => "off",
+        }
+    }
 }
 
 /// One responding gateway.
@@ -106,6 +132,8 @@ pub struct XcpdSettings {
     /// Whether an `http` gateway is admitted: only under the development
     /// profile.
     pub development: bool,
+    /// Where the audit messages go.
+    pub audit: AuditDestination,
 }
 
 impl fmt::Debug for XcpdSettings {
@@ -118,6 +146,7 @@ impl fmt::Debug for XcpdSettings {
             .field("client_identity", &self.client_identity.is_some())
             .field("trust_roots", &self.trust_roots.is_some())
             .field("development", &self.development)
+            .field("audit", &self.audit)
             .finish_non_exhaustive()
     }
 }
@@ -126,10 +155,12 @@ impl fmt::Debug for XcpdSettings {
 /// development, and every secret and file read.
 ///
 /// # Errors
-/// [`Error::Missing`] for no registry document, no `sender_device` or no
+/// [`Error::Missing`] for no registry document, no `sender_device`, no
+/// `audit` or no
 /// gateway, [`Error::Url`]
 /// for a gateway URL that does not parse, [`Error::Insecure`] for an `http`
-/// gateway outside the development profile, and the errors of a secret or a
+/// gateway outside the development profile, [`Error::AuditOff`] for
+/// `audit = "off"` outside it, and the errors of a secret or a
 /// file that cannot be read.
 pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
     let Some(xcpd) = &config.xcpd else {
@@ -153,6 +184,21 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         });
     }
     let development = config.profile == Profile::Development;
+    // NOTE: ITI TF-2 §3.55.5.1, ITI TF-1 Table 27.1.3-1: the actor records every
+    // exchange, so no audit at all is a declared, development-only choice.
+    let audit = match xcpd.audit {
+        None => {
+            return Err(Error::Missing {
+                key: String::from("xcpd.audit"),
+            });
+        }
+        Some(AuditDestination::Off) if !development => {
+            return Err(Error::AuditOff {
+                key: String::from("xcpd.audit"),
+            });
+        }
+        Some(destination) => destination,
+    };
     for (index, gateway) in xcpd.gateway.iter().enumerate() {
         let key = format!("xcpd.gateway[{index}].url");
         let url = url::Url::parse(gateway.url.expose()).map_err(|source| Error::Url {
@@ -201,5 +247,6 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         client_identity,
         trust_roots,
         development,
+        audit,
     }))
 }

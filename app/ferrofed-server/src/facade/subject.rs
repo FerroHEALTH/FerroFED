@@ -16,7 +16,9 @@
 //!
 //! The targeting headers select the one endpoint the subject is resolved at
 //! (§8.4, §7a.1); without them, every member with an active endpoint is a
-//! candidate. The consent pre-filter is asked about the candidates first,
+//! candidate, narrowed by the localizer where one is configured: the read
+//! names the patient and no node, so it is undirected (N4, §14.1). The
+//! consent pre-filter is asked about the candidates first,
 //! as a federated query asks it: a member it denies is never resolved or
 //! contacted, and one it does not deny is left to its node (N27a, N27). The resolution settles the answer:
 //!
@@ -28,6 +30,8 @@
 //! - the consent pre-filter denied every member that might hold it, and no
 //!   other member knows it: `403 consent-denied` naming the denied endpoints
 //!   (N27a; no specification governs the answer: our own design);
+//! - the localizer could not answer and the deployment fails closed: `424`
+//!   with no member asked, because a holder may be among them (§14.1);
 //! - no member knows it: `404`, the operation's own answer for a subject with
 //!   no EHR (ITS-REST 1.1.0 `404_EHR_subject`, §11.2).
 //!
@@ -58,6 +62,7 @@ use secrecy::SecretString;
 
 use crate::error::{self, Code};
 use crate::facade::consent;
+use crate::facade::localize::{Localized, localize};
 use crate::facade::owner::{self, Listed};
 use crate::facade::provenance::Provenance;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
@@ -101,10 +106,28 @@ pub(crate) async fn serve(
         return Unserved::Clock.respond(request_id, &logged);
     };
     let snapshot = federation.snapshot();
-    let candidates = match candidates(snapshot, arrived.headers) {
+    let (candidates, directed) = match candidates(snapshot, arrived.headers) {
         Ok(candidates) => candidates,
         Err(unserved) => return unserved.respond(request_id, &logged),
     };
+    let members: Vec<NodeId> = candidates
+        .iter()
+        .map(|endpoint| endpoint.node().clone())
+        .collect();
+    // NOTE: N4, §5.2, §14.1: a read that names the patient and no node is undirected,
+    // so the localizer narrows which members learn of the patient; a targeted one is not (§8).
+    let located = if directed {
+        Localized::everyone()
+    } else {
+        localize(federation, &subject.patient, &members, budget.overall()).await
+    };
+    if located.failed_closed() {
+        return Unserved::Unlocalized.respond(request_id, &logged);
+    }
+    let candidates: Vec<&Endpoint> = candidates
+        .into_iter()
+        .filter(|endpoint| located.admits(endpoint.node()))
+        .collect();
     let members: Vec<NodeId> = candidates
         .iter()
         .map(|endpoint| endpoint.node().clone())
@@ -198,7 +221,8 @@ impl Subject {
 }
 
 /// The endpoints the subject is resolved at: the one the targeting headers
-/// name, or the endpoint each member is asked through (§8.4, §11.1).
+/// name, or the endpoint each member is asked through (§8.4, §11.1), and
+/// whether the headers named it.
 ///
 /// # Errors
 ///
@@ -208,17 +232,18 @@ impl Subject {
 fn candidates<'a>(
     snapshot: &'a RegistrySnapshot,
     headers: &HeaderMap,
-) -> Result<Vec<&'a Endpoint>, Unserved> {
+) -> Result<(Vec<&'a Endpoint>, bool), Unserved> {
     if let Some(endpoint) = owner::targeted(snapshot, headers)? {
         if endpoint.status() == EndpointStatus::Suspended {
             return Err(Unserved::Suspended);
         }
-        return Ok(vec![endpoint]);
+        return Ok((vec![endpoint], true));
     }
-    Ok(snapshot
+    let every = snapshot
         .nodes()
         .filter_map(|node| snapshot.asked_through(node.id()))
-        .collect())
+        .collect();
+    Ok((every, false))
 }
 
 /// What the cross-reference said about each candidate.
@@ -391,6 +416,12 @@ enum Unserved {
         Listed(.0)
     )]
     ConsentDenied(Vec<EndpointId>),
+    /// The localizer could not answer, the deployment fails closed, and so no
+    /// member was asked (§14.1, N4).
+    #[error(
+        "the localizer could not answer, so no member was asked and whether the subject has an EHR is unknown (§14.1, N4)"
+    )]
+    Unlocalized,
     /// The request's deadline cannot be represented.
     #[error("the request's deadline cannot be represented")]
     Clock,
@@ -407,6 +438,7 @@ impl Unserved {
             Self::Several(_) => Code::SubjectSeveral,
             Self::Unresolved(_) => Code::ResolutionUnavailable,
             Self::ConsentDenied(_) => Code::ConsentDenied,
+            Self::Unlocalized => Code::LocalizationUnavailable,
             Self::Clock => Code::Internal,
         }
     }
@@ -418,7 +450,7 @@ impl Unserved {
         let code = self.code();
         match &self {
             Self::Undeclared { position } => security::query_parameter_refused(*position, logged),
-            Self::Unresolved(_) | Self::Clock => tracing::error!(
+            Self::Unresolved(_) | Self::Unlocalized | Self::Clock => tracing::error!(
                 code = code.as_str(),
                 error = %self,
                 request_id = logged,
@@ -481,6 +513,11 @@ mod tests {
                 Unserved::ConsentDenied(vec![endpoint("a")]),
                 "consent-denied",
                 StatusCode::FORBIDDEN,
+            ),
+            (
+                Unserved::Unlocalized,
+                "localization-unavailable",
+                StatusCode::FAILED_DEPENDENCY,
             ),
             (
                 Unserved::Clock,

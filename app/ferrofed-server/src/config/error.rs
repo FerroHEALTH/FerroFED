@@ -355,6 +355,15 @@ pub enum Error {
         /// The request timeout.
         request_ms: u64,
     },
+    /// Audit messages are turned off outside a configuration marked for
+    /// development.
+    #[error(
+        "{key} = \"off\" records no ITI-55 audit message, which only profile = \"development\" accepts; set it to \"log\" (ITI TF-2 §3.55.5.1)"
+    )]
+    AuditOff {
+        /// The key that turned the audit off.
+        key: String,
+    },
     /// A URL that carries a patient identifier or a credential is not
     /// `https`, outside a configuration marked for development.
     #[error(

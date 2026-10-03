@@ -493,7 +493,25 @@ are dispatched (N8).
   CP-5). XCPD discovery is a broadcast that tells every responding community
   the patient was asked about, which is why §14.1 forbids widening silently.
   With no localizer configured, every registry member is a candidate (§4.3,
-  #46).
+  #46). The read of an EHR by subject (`GET {base}/v1/ehr?subject_id=…`) is
+  localized too (#409): it names the patient and no node, so it is undirected,
+  and N4 and §5.2 speak of "an undirected query" without limiting it to AQL.
+  A deployment relies on its localizer to narrow which members learn of a
+  patient, so every patient route keeps that narrowing. A targeted read is
+  not localized (§8); a localizer that fails closed answers `424
+  localization-unavailable` with no member asked. The specification is
+  silent on whether a by-subject read is a query; the question is a draft on
+  #212. The localizer shows on `GET /health/dependencies` under the members'
+  rule and is counted by outcome (#410).
+- **The XCPD audit.** ITI TF-2 §3.55.5.1 has the Initiating Gateway record
+  an audit message for every exchange, and ITI TF-1 Table 27.1.3-1 groups it
+  with an ATNA Secure Node. `ihe-iti` hands the full message to an
+  `AuditRecorder`, and a message the recorder cannot accept fails the
+  discovery, so the localizer is `Unavailable` and §14.1 applies; no answer
+  is used without its audit. The server's `[xcpd] audit` has no default:
+  `log` writes a structured event at the `ferrofed::audit` target without the
+  query parameters, and `off` is refused outside the development profile and
+  declared in `OPTIONS` (#410).
 - **The resolver** (decision A17). A resolver that cannot answer is not a
   patient who is unknown. An ITI-83 `404`, or a `200` with no identifier in a
   domain, is `not-resolved` and, per N6, does not fail the query. An outage, a

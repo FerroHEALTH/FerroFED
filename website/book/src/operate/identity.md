@@ -214,6 +214,7 @@ timeout_ms = 5000
 [xcpd]
 sender_device = "2.999.40.1"           # the gateway's device OID
 home_community = "2.999.40"            # optional: the gateway's own community
+audit = "log"                          # required: "log", or "off" in development
 assertion_file = "/run/secrets/xua.xml"            # optional
 client_identity_file = "/run/secrets/xcpd-client.pem"
 trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"  # optional
@@ -263,6 +264,18 @@ What a deployment must provide:
   `saml2:Assertion` element that declares every namespace prefix it uses;
   anything else is refused at boot. An assertion expires: replace the file
   before its `NotOnOrAfter` and [reload](registry.md#reloading-the-registry).
+- **An audit destination.** The Initiating Gateway records an audit message
+  for every exchange (ITI TF-2 §3.55.5.1.1), so `audit` has no default.
+  `audit = "log"` writes each message as a structured event at the log
+  target `ferrofed::audit`: the event, its outcome (`0` success, `4` the
+  gateway answered with a failure, `8` no answer), this process's id, the
+  responding gateway's endpoint and host, and the `homeCommunityId` the
+  request named. The query parameters, which name the patient identifier,
+  are never logged; the event says only that they were recorded. Route that
+  target to your audit repository. `audit = "off"` records nothing and is
+  refused outside `profile = "development"`. `OPTIONS {base}/` declares the
+  choice as `localization.audit`. A message the destination cannot accept
+  fails the discovery closed, so no answer is used without its audit.
 
 The discovery fails closed as a whole. One responding gateway that faults,
 answers an error (Case 5 of §3.55.4.2.3), asks for demographics (Case 3),
