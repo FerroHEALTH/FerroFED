@@ -58,16 +58,12 @@ use http::{HeaderMap, header};
 use openehr_base::prelude::ObjectVersionId;
 use openehr_its::json;
 use openehr_its::rest::generated::ehr::{NewContribution, Versionable};
-use openehr_its::rest::routes::RouteMatch;
+use openehr_its::rest::routes::{IdentifierClass, ParamLocation, RouteMatch};
 use serde::de::{DeserializeOwned, IgnoredAny};
 
 use crate::error::Code;
 use crate::facade::owner;
 use crate::facade::route::EHR_GROUP;
-
-/// The path parameter a `DELETE` of a composition names the version it
-/// amends in (ITS-REST 1.1.0 EHR API, `composition_delete`).
-const PRECEDING_PARAM: &str = "uid_based_id";
 
 /// The canonical JSON media type (ITS-REST 1.1.0 overview, §JSON Format).
 const CANONICAL_JSON: &str = "application/json";
@@ -415,10 +411,19 @@ pub fn path_refused(write: Write, matched: &RouteMatch) -> Option<Refused> {
 
 /// The version the path of a composition `DELETE` names (ITS-REST 1.1.0 EHR
 /// API: "the `uid_based_id` MUST be in a form of an `OBJECT_VERSION_ID`").
+///
+/// The segment read is the path parameter `openehr-its`'s table states as an
+/// `OBJECT_VERSION_ID` for the matched operation.
 fn in_path(matched: &RouteMatch) -> Result<ObjectVersionId, PrecedingInvalid> {
     let decoded = matched
-        .path_param(PRECEDING_PARAM)
-        .and_then(|param| param.decoded().ok())
+        .params
+        .iter()
+        .find(|param| {
+            param.location == ParamLocation::Path
+                && param.identifier == Some(IdentifierClass::ObjectVersion)
+        })
+        .and_then(|param| matched.path_param(param.name))
+        .and_then(|segment| segment.decoded().ok())
         .ok_or(PrecedingInvalid::Malformed)?;
     ObjectVersionId::new(decoded.as_str()).map_err(|_malformed| PrecedingInvalid::Malformed)
 }
