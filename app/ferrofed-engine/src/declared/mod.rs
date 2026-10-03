@@ -42,8 +42,8 @@ pub mod query;
 
 use std::fmt;
 
-use http::HeaderMap;
 use http::header::CONTENT_TYPE;
+use http::{HeaderMap, HeaderValue};
 use openehr_its::rest::routes::{ParamKind, RouteMatch};
 
 use crate::declared::headers::{Strictness, body_media_type, composed};
@@ -107,6 +107,28 @@ pub fn fitting(
     body: &[u8],
 ) -> Result<HeaderMap, Refusal> {
     holding(operation, (query, headers, body), Strictness::LeaveOut)
+}
+
+/// Returns the listed media type the `body` of a request to `operation` is
+/// read as, or `None` for a request with no body or an operation that takes
+/// none.
+///
+/// It is the `Content-Type` [`held`] sends a body with, so a request the
+/// gateway answers itself is held to the rule of one it routes: the client's
+/// `Content-Type` as the listed media type it names or, when the client sent
+/// none, the first listed. No other header, path or query value is read.
+///
+/// # Errors
+///
+/// Returns [`Refusal::UnsupportedMediaType`] for a `Content-Type` that names
+/// no listed media type, or carries a parameter other than a `utf-8`
+/// charset (RFC 9110 §8.3).
+pub fn content_type(
+    operation: &RouteMatch,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<Option<HeaderValue>, Refusal> {
+    body_media_type(operation, headers, !body.is_empty())
 }
 
 /// Holds the declared values of a request to `operation`, each header to
@@ -267,7 +289,7 @@ impl fmt::Display for Described<'_> {
 #[cfg(test)]
 mod tests {
 
-    use super::{Carrier, Expected, MalformedValue, Refusal, held};
+    use super::{Carrier, Expected, MalformedValue, Refusal, content_type, held};
     use http::{HeaderMap, Method};
     use openehr_its::rest::routes::{Lookup, ParamKind, RouteMatch, lookup};
 
@@ -369,6 +391,45 @@ mod tests {
         );
         let lines = [("if-match", "4711"), ("openehr-audit-details", "a=1, b=2")];
         assert_eq!(Some("4711".to_owned()), sent(&update, &lines, "if-match"));
+    }
+
+    #[test]
+    fn the_content_type_of_a_query_post_is_held_to_its_listed_media_type() {
+        for path in ["/query/aql", "/query/org::q", "/query/org::q/1.0.0"] {
+            let query = operation(&Method::POST, path);
+            let read = |lines: &[(&'static str, &str)], body: &[u8]| {
+                content_type(&query, &headers(lines), body)
+                    .map(|sent| sent.and_then(|v| v.to_str().ok().map(str::to_owned)))
+            };
+            let json = Ok(Some("application/json".to_owned()));
+            for value in ["application/json", "Application/JSON; charset=UTF-8"] {
+                assert_eq!(
+                    json,
+                    read(&[("content-type", value)], b"{}"),
+                    "{path} {value}"
+                );
+            }
+            for value in ["text/plain", "application/xml", "application/json; q=1"] {
+                assert!(
+                    matches!(
+                        read(&[("content-type", value)], b"{}"),
+                        Err(Refusal::UnsupportedMediaType { .. })
+                    ),
+                    "{path} {value}"
+                );
+            }
+            let other = [("accept", "text/html"), ("prefer", "4711")];
+            assert_eq!(
+                json,
+                read(&other, b"{}"),
+                "{path}: none sent reads as the first listed"
+            );
+            assert_eq!(
+                Ok(None),
+                read(&other, b""),
+                "{path}: no body is read as nothing"
+            );
+        }
     }
 
     #[test]

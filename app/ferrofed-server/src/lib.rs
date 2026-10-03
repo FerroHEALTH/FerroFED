@@ -478,7 +478,10 @@ pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
             server.request_timeout,
         ))
         .layer(CatchPanicLayer::custom(panic::caught))
-        .layer(axum::middleware::from_fn(request_log::log))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::new(server.base_path.clone()),
+            request_log::log,
+        ))
         .layer(PropagateRequestIdLayer::new(request_id::HEADER))
         .layer(SetRequestIdLayer::new(request_id::HEADER, request_id::Mint))
         .layer(axum::middleware::from_fn(request_id::mint_outbound))

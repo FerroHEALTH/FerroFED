@@ -19,8 +19,8 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 307 | 305 | a test asserts it |
-| built-untested | 1 | 1 | the code does it and no test asserts it yet |
+| tested | 308 | 306 | a test asserts it |
+| built-untested | 0 | 0 | the code does it and no test asserts it yet |
 | planned | 35 | 32 | not built yet; an open issue holds the work |
 | missing | 0 | 0 | not built, found missing by the audit; an issue holds the work |
 | deferred | 5 | 4 | not built, by a decision of the owner |
@@ -41,9 +41,7 @@ None.
 
 ### Built, not yet tested
 
-| Statement | Actor | Keyword | Requirement | Point | Statement text | Evidence |
-|---|---|---|---|---|---|---|
-| [options-root.schema#/properties/federation/properties/its_rest](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/specs/federation-spec/modules/ROOT/attachments/options-root.schema.json) | Gateway | MUST | N30, N32 | CP-23 | Unsupported areas MUST be declared here, not discovered by a 501 | [#290](https://github.com/FerroHEALTH/FerroFED/issues/290); app/ferrofed-server/src/facade/options.rs its_rest(); demographic and definition are asserted (`app/ferrofed-server/tests/it/demographic.rs::options_declares_each_mode_and_the_behaviour_matches_it`, `app/ferrofed-server/tests/it/options.rs::the_definition_area_declares_nothing_offered`), query and ehr are not |
+None.
 
 ### Contradictions and silences found by the audit
 

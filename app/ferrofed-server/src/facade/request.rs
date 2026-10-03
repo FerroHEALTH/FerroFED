@@ -14,6 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroUsize;
 use std::time::Instant;
 
+use axum::response::Response;
+use ferrofed_engine::declared;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
@@ -25,7 +27,7 @@ use openehr_its::rest::generated::query::{AdhocQueryExecute, QueryExecuteAdhocQu
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::facade::answer::Failure;
-use crate::facade::{intake, security, target};
+use crate::facade::{intake, route, security, target};
 use crate::federation::Federation;
 
 /// One federated query request, as it arrived.
@@ -103,6 +105,27 @@ fn analysed(
         security::stripped(query, request_id);
     }
     Ok(analysis)
+}
+
+/// The answer refusing the `Content-Type` of a request the gateway answers
+/// itself, addressing `matched`, or `None` when the operation takes it
+/// (ITS-REST 1.1.0; RFC 9110 §8.3).
+///
+/// A `Content-Type` naming no media type the operation lists is a `415`
+/// (`media-type-unsupported`) naming the client's `request_id`, answered
+/// before the body is read, stored or sent anywhere (RFC 9110 §15.5.16); the
+/// gateway's `logged` id names any event. A `body` sent without a
+/// `Content-Type` is read as the first listed media type
+/// ([`declared::content_type`]): `application/json` for a query `POST`,
+/// `text/plain` for a stored-query definition `PUT`.
+pub(crate) fn unsupported_media(
+    matched: &RouteMatch,
+    (headers, body): (&HeaderMap, &[u8]),
+    (request_id, logged): (&str, &str),
+) -> Option<Response> {
+    declared::content_type(matched, headers, body)
+        .err()
+        .map(|refusal| route::declared_refused(&refusal, request_id, logged))
 }
 
 /// The request `sent`, the endpoints its directive or its `headers`

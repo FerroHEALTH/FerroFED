@@ -415,6 +415,39 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- A request the gateway routes or answers under `{base}/v1/` is logged under
+  the path template of the ITS-REST operation it addresses, such as
+  `/v1/ehr/{ehr_id}/composition/{uid_based_id}`, where its request line named
+  `<unmatched>` (#219). The template comes from `openehr-its`'s route table,
+  so the line never carries the `ehr_id` or version uid of the path, and the
+  configured base path appears in front of it once. An `OPTIONS` request is
+  logged under the template of the resource it describes. A path that names
+  no route, or any other method its operation does not declare, is still
+  logged as `<unmatched>`.
+- `POST {base}/v1/query/aql` and the stored-query `POST {base}/v1/query/{name}`
+  hold their `Content-Type` to `application/json`, the media type ITS-REST
+  1.1.0 lists for both (#269). Another media type, or a parameter other than
+  `charset=utf-8`, is `415 media-type-unsupported`, and no node is asked
+  (RFC 9110 §15.5.16); a body sent as `text/plain` used to be read as JSON.
+  A body sent without a `Content-Type` is read as JSON, the first listed
+  media type, as for a missing `Accept`, since ITS-REST and RFC 9110 §8.3
+  name no default. The stored-query definition
+  `PUT {base}/v1/definition/query/{name}/{version}` the registry answers
+  holds its `Content-Type` to `text/plain` under the same rule: another media
+  type is `415 media-type-unsupported` and nothing is stored.
+- The `query-parameter-refused` security event says "a request carried a
+  query parameter the gateway does not admit for its operation, and was
+  refused", which is true of a routed request and of the stored-query
+  definition `PUT` that raises it too (#269).
+- `OPTIONS {base}/` declares the EHR area as the gateway routes it (#290;
+  §7a.2, N30, CP-23). `its_rest.ehr` now says that a new EHR, by
+  `POST {base}/v1/ehr` or by `PUT {base}/v1/ehr/{ehr_id}`, goes only to the
+  endpoint the targeting headers name, and that the `PUT` is refused when
+  another member holds its `ehr_id`. It no longer names the session's
+  resolution binding as a routing step, because without client
+  authentication no request has a session. Each of the four `its_rest`
+  declarations is now tested against the behaviour of its area in every
+  configuration mode.
 - A query dispatched to a single node, directed at one endpoint by the
   `openEHR-federation-endpoint` header or `FROM ENDPOINT`, or undirected with
   the patient resolving at one member alone, answers with
