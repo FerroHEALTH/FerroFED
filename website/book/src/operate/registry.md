@@ -289,7 +289,7 @@ endpoint is refused (`demographic-endpoint`, below).
 A reload whose file changes `profile` is refused (`profile`, below), so
 everything the development profile admits, the development cross-reference
 and consent table, and a credential or patient identifier over plain `http`
-([What must travel over https](configuration.md#what-must-travel-over-https)),
+([What must travel encrypted](configuration.md#what-must-travel-encrypted)),
 follows the profile the process started with.
 
 A valid configuration replaces the running registry at once. A request that
