@@ -227,7 +227,8 @@ jobs:
 
   # The file-length guard: a hand-written Rust file or book page stays under
   # 1000 lines and a listed breach may not grow (no specification governs
-  # this: our own design). It passes on a tree with no .rs file.
+  # this: our own design). It passes on a tree with no .rs file. Its
+  # self-test proves each refusal and each pass over fixture repositories.
   file-length:
     name: file-length
     runs-on: ubuntu-latest
@@ -238,7 +239,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: bash scripts/checks/file-length.sh
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/file-length.sh --self-test
+          bash scripts/checks/file-length.sh
 
   # The version-drift guard. It compares every present config file against
   # docs/VERSIONS.md and skips loudly for the files that have not landed yet,

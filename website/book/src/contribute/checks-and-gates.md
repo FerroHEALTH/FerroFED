@@ -52,6 +52,7 @@ the crate-version guard and dependency review run on pull requests only.
 bash scripts/checks/versions.sh --self-test
 bash scripts/checks/versions.sh
 bash scripts/checks/comment-style.sh --all
+bash scripts/checks/file-length.sh --self-test
 bash scripts/checks/file-length.sh
 bash scripts/checks/favicon-sync.sh
 bash scripts/checks/conformance-matrix.sh
