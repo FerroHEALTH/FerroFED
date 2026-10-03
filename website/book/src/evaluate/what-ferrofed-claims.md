@@ -84,6 +84,15 @@ once the milestone closes.
   §12b.2 (N42a), the registry reload on `SIGHUP`, the stored-query registry
   on `redb`, PostgreSQL or read-only files, health probes, and metrics.
 
+### v0.0.8, on `main` so far
+
+The v0.0.8 milestone is in progress; `main` carries these parts of it.
+
+- Undirected patient queries localized by IHE XCPD ITI-55: a member whose
+  community no responding gateway names is `not-localized` and never asked,
+  and a localizer that does not answer fails closed, with its error on every
+  member and in `meta.federation` (N4, N10, §14.1, Annex A.3, CP-5).
+
 ## Planned
 
 Each milestone on the
@@ -105,9 +114,7 @@ v0.0.8, security and the bindings (§13 to §15, Annex A, Annex B):
 - consent left to the node with the optional Step-1 pre-filter
   ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)), and the §13.4
   deployment decisions ([#84](https://github.com/FerroHEALTH/FerroFED/issues/84));
-- XCPD localization failing closed
-  ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)), the registry
-  read from an mCSD directory
+- the registry read from an mCSD directory
   ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)), and PMIR
   identity-lifecycle notifications
   ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147));

@@ -104,6 +104,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `GET {base}/.well-known/jwks.json`, each with its RFC 7638 thumbprint as
   `kid`, and declares the configured location as `federation.auth.jwks_uri` in
   `OPTIONS {base}/` (§13.1, N30).
+- XCPD localization (#85, Annex A.3): `[xcpd]` makes the gateway an IHE XCPD
+  Initiating Gateway (ITI-55, ITI TF-2 Revision 20.1). An undirected patient
+  query asks every configured Responding Gateway by the patient identifier
+  alone, and only the members whose communities a gateway names are asked.
+  One gateway that faults, answers an error, asks for demographics or stays
+  silent fails the discovery closed. Gateway URLs are `https` outside
+  `profile = "development"`; a client certificate, extra trust roots and a
+  SAML XUA assertion your identity provider signed are configured with
+  `_file` keys, and the assertion is sent unchanged. `OPTIONS {base}/`
+  declares `localization.mode = "xcpd"`, and `[xcpd]` takes effect on a
+  reload.
+- `ihe-iti` 0.0.11: the `xcpd` feature, the ITI-55 Initiating Gateway client.
+  It is the only feature that compiles `uuid` and `jiff`, and it adds no
+  crate to the graph beyond them.
 
 - Client authentication at the gateway (§13.1, N25, CP-17 inbound half,
   #80). A request to the ITS-REST surface and `OPTIONS {base}/` carries an

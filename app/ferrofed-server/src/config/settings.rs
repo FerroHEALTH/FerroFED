@@ -49,6 +49,8 @@ pub struct Settings {
     pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
     pub pixm: Option<PixmSettings>,
+    /// The XCPD localizer, with every secret and file read.
+    pub xcpd: Option<crate::config::xcpd::XcpdSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
     /// The metrics surface.

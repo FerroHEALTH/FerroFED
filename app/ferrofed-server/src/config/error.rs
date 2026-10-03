@@ -355,6 +355,15 @@ pub enum Error {
         /// The request timeout.
         request_ms: u64,
     },
+    /// A URL that carries a patient identifier or a credential is not
+    /// `https`, outside a configuration marked for development.
+    #[error(
+        "{key} is not an https URL; plain http is accepted only under profile = \"development\" (ITI TF-1 §27.4.1)"
+    )]
+    Insecure {
+        /// The key that carries the URL.
+        key: String,
+    },
     /// The localizer's budget does not end before the overall budget, so the
     /// localizer could leave no time to resolve and ask the members (§11.5,
     /// §14.1).

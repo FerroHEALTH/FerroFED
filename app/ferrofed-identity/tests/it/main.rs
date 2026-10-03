@@ -20,3 +20,4 @@ mod pixm;
 mod static_consent;
 mod static_resolver;
 mod support;
+mod xcpd;

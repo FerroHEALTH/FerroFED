@@ -45,7 +45,11 @@ A18): PIXm 3.1.0, mCSD 4.0.0 and PMIR 1.6.0 (CC-BY-4.0) and `fhir.nl.gf`
 0.3.0 (EUPL-1.2), each vendored under `docs/specs/` and moved into the corpus
 table below by the issue that first reads it (#42, #74 and #86, #48, #87).
 XCPD has no FHIR package; its adapter (#85) binds the ITI Technical Framework
-revision below, which is not vendored until its terms are read. PDQm is not
+revision below, cited and not vendored: IHE International licenses its own
+text for reproduction (General Introduction ch. 9), but the ITI-55 pages
+reproduce HL7 v3 tables whose rights HL7 reserves. The client is held to the
+revision by synthetic fixtures shaped after its examples
+(`crates/ihe-iti/tests/fixtures/xcpd/`). PDQm is not
 used by the gateway; its ITI-78 client is a capability of `crates/ihe-iti`
 for other callers (#119), vendored with it. The versions are what the FHIR
 package registry listed as latest on 2026-10-01.

@@ -118,6 +118,7 @@ impl Config {
         }
         let federation = self.resolve_federation(request_timeout)?;
         let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
+        let xcpd = crate::config::xcpd::resolve(self)?;
         let stored_queries = stored_queries::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen)?;
         // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
@@ -151,6 +152,7 @@ impl Config {
             credentials,
             dev: self.dev.clone(),
             pixm,
+            xcpd,
             stored_queries,
             metrics,
             signing,

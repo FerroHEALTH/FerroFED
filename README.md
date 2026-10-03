@@ -68,8 +68,12 @@ lists what each release shipped and what is planned.
   published `openehr-*` crates.
 - IHE PIXm ITI-83 for identity resolution. The `ihe-iti` crate also carries
   the PDQm ITI-78 client, and the mCSD resource reader the FHIR form of the
-  registry uses. XCPD localization, mCSD addressing, PMIR and the Dutch
-  Generic Functions are planned for v0.0.8.
+  registry uses.
+- IHE XCPD ITI-55 for localization: the `xcpd` feature of `ihe-iti` is an
+  Initiating Gateway, and an undirected patient query asks only the members
+  whose communities it discovers, failing closed when a gateway does not
+  answer. mCSD addressing, PMIR and the Dutch Generic Functions are planned
+  for v0.0.8.
 
 ## Quickstart
 
