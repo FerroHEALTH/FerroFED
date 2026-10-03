@@ -21,25 +21,25 @@ use crate::hygiene;
 const PREFER: &str = "prefer";
 
 /// The `Content-Type` the route sends for the body of a request to
-/// `operation` whose `Content-Type` the operation's own parameter did not
-/// compose, or `None` when it sends none.
+/// `operation`, or `None` when it sends none.
 ///
-/// A `Content-Type` the client sent to an operation that declares a body but
-/// no `Content-Type` parameter travels as the listed media type it names.
-/// With none sent, a body travels with the one media type the operation
-/// lists; a request with no body, or to an operation that declares none,
-/// travels without one.
+/// The listed values are the media types the operation's body is declared in
+/// ([`RouteMatch::request_media`]), which `openehr-its` holds equal to the
+/// values of a declared `Content-Type` parameter. A `Content-Type` the client
+/// sent travels as the listed media type it names. With none sent, a body
+/// travels with the first listed media type; a request with no body, or to
+/// an operation that takes none, travels without one.
 pub(super) fn body_media_type(
     operation: &RouteMatch,
     client: &HeaderMap,
     body: bool,
 ) -> Result<Option<HeaderValue>, Refusal> {
     let accepted = operation.request_media;
+    if accepted.is_empty() {
+        return Ok(None);
+    }
     let lines: Vec<&HeaderValue> = client.get_all(CONTENT_TYPE).iter().collect();
     if !lines.is_empty() {
-        if accepted.is_empty() || operation.header_param(CONTENT_TYPE.as_str()).is_some() {
-            return Ok(None);
-        }
         return negotiate::content_type(accepted, &lines)
             .and_then(listed)
             .map(Some)
@@ -48,11 +48,9 @@ pub(super) fn body_media_type(
     if !body {
         return Ok(None);
     }
-    match accepted {
-        [] => Ok(None),
-        [only] => Ok(listed(only)),
-        several => Err(Refusal::UnsupportedMediaType { accepted: several }),
-    }
+    // NOTE: ITS-REST 1.1.0 and RFC 9110 §8.3 give an absent Content-Type no default, so no
+    // specification governs this: our own design sends the first listed, as for Accept.
+    Ok(accepted.first().copied().and_then(listed))
 }
 
 /// What a header that does not fit its operation comes to.
@@ -75,6 +73,11 @@ enum Sent {
 }
 
 /// The headers the route sends for `client` under `operation`.
+///
+/// The `Content-Type` of an operation that takes a body is left to
+/// [`body_media_type`]; one an operation declares with no body, as the
+/// `GET`s of a versioned object do, is held to its parameter as any other
+/// listed header.
 pub(super) fn composed(
     operation: &RouteMatch,
     client: &HeaderMap,
@@ -83,6 +86,9 @@ pub(super) fn composed(
     let forwarded = hygiene::forwarded_headers(operation, client);
     let mut sent = HeaderMap::new();
     for name in forwarded.keys() {
+        if *name == CONTENT_TYPE && !operation.request_media.is_empty() {
+            continue;
+        }
         let Some(param) = operation.header_param(name.as_str()) else {
             continue;
         };
@@ -343,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn a_body_sent_without_a_content_type_travels_with_the_one_declared() {
+    fn a_body_sent_without_a_content_type_travels_as_the_first_declared() {
         assert_eq!(
             Some("text/plain".to_owned()),
             body_type(&version_store(), &[], b"SELECT c FROM COMPOSITION c")
@@ -351,6 +357,15 @@ mod tests {
         assert_eq!(
             Some("application/json".to_owned()),
             body_type(&create(), &[], b"{}")
+        );
+        let contribution = operation(&Method::POST, &format!("{EHR}/contribution"));
+        assert!(
+            contribution.request_media.len() > 1,
+            "contribution_create declares its body in several media types"
+        );
+        assert_eq!(
+            Some("application/json".to_owned()),
+            body_type(&contribution, &[], b"{}")
         );
     }
 
@@ -389,12 +404,97 @@ mod tests {
     }
 
     #[test]
-    fn a_body_without_a_content_type_to_several_declared_is_unsupported() {
+    fn a_body_without_a_content_type_to_several_declared_goes_as_the_first_listed() {
         let mut several = version_store();
+        several.request_media = &["text/plain", "application/json"];
+        assert_eq!(
+            Some("text/plain".to_owned()),
+            body_type(&several, &[], b"{}")
+        );
         several.request_media = &["application/json", "text/plain"];
-        let refused = held(&several, None, &HeaderMap::new(), b"{}");
+        assert_eq!(
+            Some("application/json".to_owned()),
+            body_type(&several, &[], b"{}")
+        );
+        let lines = [("content-type", "text/plain")];
+        assert_eq!(
+            Some("text/plain".to_owned()),
+            body_type(&several, &lines, b"{}"),
+            "a Content-Type the client sends still names the listed value"
+        );
+    }
+
+    #[test]
+    fn every_operation_declaring_several_body_media_types_lists_canonical_json_first() {
+        use openehr_its::rest::generated::{admin, definition, demographic, ehr, query, system};
+        /// One route table: `(method, path, operation_id)` per operation.
+        type Routes = &'static [(&'static str, &'static str, &'static str)];
+        /// One request-media table, index-aligned with its route table.
+        type Media = &'static [&'static [&'static str]];
+        let groups: [(&str, Routes, Media); 6] = [
+            ("admin", admin::ROUTES, admin::ROUTE_REQUEST_MEDIA),
+            (
+                "definition",
+                definition::ROUTES,
+                definition::ROUTE_REQUEST_MEDIA,
+            ),
+            (
+                "demographic",
+                demographic::ROUTES,
+                demographic::ROUTE_REQUEST_MEDIA,
+            ),
+            ("ehr", ehr::ROUTES, ehr::ROUTE_REQUEST_MEDIA),
+            ("query", query::ROUTES, query::ROUTE_REQUEST_MEDIA),
+            ("system", system::ROUTES, system::ROUTE_REQUEST_MEDIA),
+        ];
+        let mut several = 0_usize;
+        for (group, routes, media) in groups {
+            assert_eq!(
+                routes.len(),
+                media.len(),
+                "{group}: one media row per route"
+            );
+            for ((method, template, operation_id), listed) in routes.iter().zip(media.iter()) {
+                if listed.len() > 1 {
+                    several += 1;
+                    assert_eq!(
+                        Some(&"application/json"),
+                        listed.first(),
+                        "{group} {operation_id} ({method} {template}) lists {listed:?}: a body sent \
+                         without a Content-Type goes as the first listed, which must be the canonical JSON"
+                    );
+                }
+            }
+        }
+        assert_ne!(
+            0, several,
+            "the route tables declare no operation with several media types"
+        );
+    }
+
+    #[test]
+    fn a_content_type_declared_without_a_body_is_held_to_its_parameter() {
+        let versioned = operation(
+            &Method::GET,
+            &format!("{EHR}/versioned_composition/8849182c-82ad-4088-a07f-48ead4180515"),
+        );
+        assert!(versioned.request_media.is_empty(), "the GET takes no body");
+        assert_eq!(
+            Some("application/xml".to_owned()),
+            sent(
+                &versioned,
+                &[("content-type", "Application/XML")],
+                "content-type"
+            )
+        );
+        let refused = held(
+            &versioned,
+            None,
+            &headers(&[("content-type", "text/plain")]),
+            &[],
+        );
         assert!(
-            matches!(refused, Err(Refusal::UnsupportedMediaType { accepted }) if accepted.len() == 2),
+            matches!(refused, Err(Refusal::UnsupportedMediaType { .. })),
             "{refused:?}"
         );
     }
