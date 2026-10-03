@@ -1,0 +1,99 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The edge mode (CP-17 inbound half): a proxy authenticates the caller and
+//! signs an assertion, which the gateway verifies as it verifies a token and
+//! records; a bearer token alone admits no one.
+#![allow(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+
+use std::collections::BTreeSet;
+use std::error::Error;
+
+use axum::body::Body;
+use ferrofed_server::auth::Refusal;
+use ferrofed_server::config::auth::{
+    AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
+};
+use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrofed_testkit::issuer::{Claims, Issuer};
+use http::{HeaderName, Request};
+
+use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};
+use crate::support::{self, AUDIENCE, Logs};
+
+/// The header the edge's assertion travels in.
+const HEADER: &str = "ferrofed-edge-assertion";
+
+/// The edge's issuer identifier.
+const EDGE: &str = "https://edge.example.test";
+
+/// `[auth]` in the edge mode, trusting `edge`.
+fn at_the_edge(edge: &Issuer) -> AuthSettings {
+    AuthSettings {
+        mode: AuthMode::Edge(HeaderName::from_static(HEADER)),
+        audience: Some(AUDIENCE.to_owned()),
+        issuers: vec![IssuerSettings {
+            issuer: EDGE.to_owned(),
+            verification: Verification::KeySet(KeySource::Set(edge.jwks())),
+            backend_clients: BTreeSet::new(),
+            demographic_clients: BTreeSet::new(),
+        }],
+        ..AuthSettings::default()
+    }
+}
+
+/// The query carrying `assertion` in the edge's header.
+fn asserted(assertion: &str) -> Result<Request<Body>, Box<dyn Error>> {
+    let mut request = query()?;
+    request.headers_mut().insert(HEADER, assertion.parse()?);
+    Ok(request)
+}
+
+/// CP-17, inbound half: the edge's assertion admits the caller, and the
+/// gateway records the identity the edge asserted.
+// conformance: CP-17
+#[tokio::test]
+async fn an_assertion_of_the_edge_admits_and_is_recorded() -> TestResult {
+    let edge = Issuer::new(EDGE)?;
+    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let mut claims = Claims::new(EDGE, AUDIENCE);
+    claims.sub = String::from("synthetic-clinician-at-the-edge");
+    let logs = Logs::default();
+    let capture = subscriber(Rendering::Json, "info", false, logs.clone())?;
+    let guard = tracing::subscriber::set_default(capture);
+    assert_admitted(&gateway, asserted(&edge.mint(&claims)?)?).await?;
+    drop(guard);
+    let text = logs.text();
+    assert!(
+        text.lines()
+            .any(|line| line.contains("edge-identity-asserted")
+                && line.contains("synthetic-clinician-at-the-edge")
+                && line.contains(EDGE)),
+        "the asserted identity is recorded: {text}"
+    );
+    Ok(())
+}
+
+/// CP-17, inbound half: in the edge mode a bearer token alone is a `401`,
+/// even one a trusted issuer signed.
+// conformance: CP-17
+#[tokio::test]
+async fn a_bearer_token_alone_is_401_at_the_edge() -> TestResult {
+    let edge = Issuer::new(EDGE)?;
+    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let token = edge.mint(&Claims::new(EDGE, AUDIENCE))?;
+    assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Missing).await
+}
+
+/// CP-17, inbound half: an assertion another issuer signed is a `401`.
+// conformance: CP-17
+#[tokio::test]
+async fn an_assertion_of_another_issuer_is_401() -> TestResult {
+    let edge = Issuer::new(EDGE)?;
+    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let token = support::token()?;
+    assert_refused(&gateway, asserted(&token)?, Refusal::Issuer).await
+}

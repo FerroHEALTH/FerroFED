@@ -127,7 +127,7 @@ fn a_facade_query_over_a_real_socket_leaves_the_sentinel_in_no_log_line_of_any_c
                     }
                 },
             ));
-            let client = reqwest::Client::new();
+            let client = support::authenticated_client()?;
             let mut statuses = Vec::new();
             for request in queries()? {
                 let (parts, body) = request.into_parts();

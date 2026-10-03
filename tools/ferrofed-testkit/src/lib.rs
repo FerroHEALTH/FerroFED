@@ -14,6 +14,8 @@
 //!   journal the tests read;
 //! - [`leak`]: the track 10 oracle over that journal, which searches every
 //!   carrier for an identifier and its fragments, raw and percent-decoded;
+//! - [`issuer`]: a test issuer that mints RFC 9068 access tokens and serves
+//!   its key set (#80);
 //! - [`mock`]: the wiremock server every suite stands its nodes up with,
 //!   dropped outside the test's runtime;
 //! - [`oauth`]: the harness OAuth 2.0 token endpoint, which verifies the
@@ -32,6 +34,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod containers;
+pub mod issuer;
 pub mod leak;
 pub mod mock;
 pub mod oauth;

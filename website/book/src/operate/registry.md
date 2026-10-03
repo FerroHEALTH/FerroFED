@@ -199,11 +199,11 @@ selection with no localizer refuses to boot, and so do
 The specification lets a query's resolution leave a binding behind for the
 client session: which member holds which `ehr_id`, so a follow-up on a path
 `ehr_id` reaches the right node (§12.5.1 step 2). A session needs a client
-identity, and the gateway authenticates no client yet, so no request has a
-session and no binding is held. The routing step answers once
-client authentication lands, planned for v0.0.8
-([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)); until then the
-`ehr_id` index below carries what a resolution teaches.
+identity. The gateway verifies every caller
+([Client authentication](authentication.md)), and keeping bindings per
+verified caller is planned
+([#412](https://github.com/FerroHEALTH/FerroFED/issues/412)), so no binding
+is held yet, and the `ehr_id` index below carries what a resolution teaches.
 
 The lifetime a binding will have is already a setting, checked at boot:
 

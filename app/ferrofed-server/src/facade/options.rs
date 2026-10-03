@@ -92,14 +92,15 @@ pub enum DescribeError {
 /// `OPTIONS {base}/`: the self-description of the running federation
 /// (§7a.2, N30).
 ///
-/// Without a federation the gateway federates nothing and answers as the
-/// unserved ITS-REST surface does.
+/// Only a caller the gateway authenticated reaches it ([`crate::auth`]): the
+/// endpoint list is subject to the gateway's normal authentication (§7a.2,
+/// §13.1). Without a federation the gateway federates nothing and answers as
+/// the unserved ITS-REST surface does.
 pub async fn options_root(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, request_id);
     };
-    // TODO(#80): answer 401 to a caller the gateway has not authenticated (§7a.2, §13).
     match describe(&federation, state.definitions().is_some()) {
         Ok(body) => (
             StatusCode::OK,
@@ -311,7 +312,7 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
     };
     Ok(ItsRestAreas {
         query: query.to_owned(),
-        // TODO(#80): name the session's resolution binding among the owner steps once client sessions exist.
+        // TODO(#412): name the session's resolution binding among the owner steps once client sessions exist.
         ehr: "routed: a new EHR, POST {base}/v1/ehr or PUT {base}/v1/ehr/{ehr_id}, goes \
               only to the one endpoint the targeting headers name, and a PUT is refused \
               when another member holds its ehr_id; every other request under \

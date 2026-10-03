@@ -46,7 +46,7 @@ const PERSONS: &str = "/v1/demographic/person";
 const PARTY: &str = "6a1e7b1c-4d0f-4c3e-9a8e-5f2b1d0c9e7a::cdr-b.example.org::1";
 
 /// The client's own credential, which no node ever sees.
-const CLIENT_TOKEN: &str = "synthetic-client-token";
+use crate::support::CLIENT_TOKEN;
 
 /// A synthetic PERSON, spaced and encoded as a re-serialisation would not
 /// keep it, carrying a synthetic identifier under the example arc.
@@ -143,7 +143,7 @@ async fn with_the_setting_a_party_read_reaches_only_that_node_byte_identical() -
     fields.insert("x-patient", PATIENT.parse()?);
     fields.insert(
         header::AUTHORIZATION,
-        format!("Bearer {CLIENT_TOKEN}").parse()?,
+        format!("Bearer {}", *CLIENT_TOKEN).parse()?,
     );
     let (status, headers, body) =
         exchange(over(dir.path(), (&a, &b), ROUTED_TO_B)?, request).await?;
@@ -167,7 +167,7 @@ async fn with_the_setting_a_party_read_reaches_only_that_node_byte_identical() -
     assert!(asked(&a).await?.is_empty(), "node A is never asked");
     let composed = wire(&b).await?;
     assert!(!composed.contains(PATIENT), "N33: {composed}");
-    assert!(!composed.contains(CLIENT_TOKEN), "N33: {composed}");
+    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {composed}");
     assert!(
         !composed.contains_ignoring_ascii_case("openehr-federation"),
         "the federation's own headers stay at the gateway: {composed}"

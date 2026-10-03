@@ -45,7 +45,7 @@ const TEMPLATE: &str = "synthetic.vital_signs.v1";
 const QUERY: &str = "org.example::synthetic_compositions";
 
 /// The client's own credential, which no node ever sees.
-const CLIENT_TOKEN: &str = "synthetic-client-token";
+use crate::support::CLIENT_TOKEN;
 
 /// A synthetic operational template, spaced and encoded as a re-serialisation
 /// would not keep it.
@@ -149,7 +149,7 @@ async fn a_template_upload_with_a_target_reaches_only_that_node_byte_identical()
         fields.insert("x-patient", PATIENT.parse()?);
         fields.insert(
             header::AUTHORIZATION,
-            format!("Bearer {CLIENT_TOKEN}").parse()?,
+            format!("Bearer {}", *CLIENT_TOKEN).parse()?,
         );
         fields.insert(header::COOKIE, format!("patient={PATIENT}").parse()?);
         let (status, headers, _) = exchange(over(dir.path(), &a, &b)?, request).await?;
@@ -172,7 +172,7 @@ async fn a_template_upload_with_a_target_reaches_only_that_node_byte_identical()
         );
         let composed = wire(&b).await?;
         assert!(!composed.contains(PATIENT), "N33: {composed}");
-        assert!(!composed.contains(CLIENT_TOKEN), "N33: {composed}");
+        assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {composed}");
         assert!(
             !composed.contains_ignoring_ascii_case("openehr-federation"),
             "the federation's own headers stay at the gateway: {composed}"
@@ -342,7 +342,7 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
     let request = Request::get(format!("{ADL14}?{query}"))
         .header(ENDPOINT, ENDPOINT_A)
         .header(header::ACCEPT, "application/json")
-        .header(header::AUTHORIZATION, format!("Bearer {CLIENT_TOKEN}"))
+        .header(header::AUTHORIZATION, format!("Bearer {}", *CLIENT_TOKEN))
         .header("x-patient", PATIENT)
         .header(header::FORWARDED, format!("for={PATIENT}"))
         .body(Body::empty())?;
@@ -359,7 +359,10 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
     );
     let composed = wire(&a).await?;
     assert!(!composed.contains(PATIENT), "§5.4.1, N33: {composed}");
-    assert!(!composed.contains(CLIENT_TOKEN), "§5.4.1, N33: {composed}");
+    assert!(
+        !composed.contains(CLIENT_TOKEN.as_str()),
+        "§5.4.1, N33: {composed}"
+    );
     assert!(!composed.contains_ignoring_ascii_case("openehr-federation"));
     assert!(asked(&b).await?.is_empty());
     for undeclared in [format!("patient={PATIENT}"), format!("ehr_id={EHR_A}")] {

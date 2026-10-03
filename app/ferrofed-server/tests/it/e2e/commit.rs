@@ -15,6 +15,7 @@ use ferrofed_testkit::seed::{self, EhrSeed, SeedPlan};
 use http::{Request, StatusCode, header};
 
 use crate::e2e::{EHR_A, PATIENT, TestResult, composition_carrying, gateway};
+use crate::support::CLIENT_TOKEN;
 
 /// A request of `verb` to `uri` naming node A in the endpoint header.
 fn routed_to_a(verb: http::Method, uri: &str, body: Body) -> Result<Request<Body>, http::Error> {
@@ -23,7 +24,7 @@ fn routed_to_a(verb: http::Method, uri: &str, body: Body) -> Result<Request<Body
         .uri(uri)
         .header("openEHR-federation-endpoint", "node-a-pub")
         .header(header::CONTENT_TYPE, "application/json")
-        .header(header::AUTHORIZATION, "Bearer synthetic-client-token")
+        .header(header::AUTHORIZATION, format!("Bearer {}", *CLIENT_TOKEN))
         .body(body)
 }
 
@@ -74,7 +75,7 @@ fn assert_landed_as_sent(nodes: &containers::TwoNodes, sent: &str) -> TestResult
             "no identifier outside the body (N33)"
         );
         assert!(
-            !outside_the_body(capture, b"synthetic-client-token"),
+            !outside_the_body(capture, CLIENT_TOKEN.as_bytes()),
             "the client's credential stays at the gateway"
         );
         assert!(
@@ -181,7 +182,7 @@ fn versioned_at(
         .header("openEHR-federation-endpoint", endpoint)
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::IF_MATCH, format!("\"{preceding}\""))
-        .header(header::AUTHORIZATION, "Bearer synthetic-client-token")
+        .header(header::AUTHORIZATION, format!("Bearer {}", *CLIENT_TOKEN))
         .body(body)
 }
 

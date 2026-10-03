@@ -101,9 +101,12 @@ release, and every issue in it names the sections it answers.
 
 v0.0.8, security and the bindings (§13 to §15, Annex A, Annex B):
 
-- client authentication at the gateway
-  ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), and the
-  client's identity conveyed on every request to a node
+- client authentication at the gateway, built: RFC 9068 access tokens by key
+  set or introspection, SMART on openEHR scopes per route, the purpose of
+  use, and an edge mode
+  ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80),
+  [Client authentication](../operate/authentication.md)); the client's
+  identity conveyed on every request to a node
   ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82));
 - OAuth 2.0 client credentials with an RFC 7523 signed JWT assertion to each
   node, and the gateway's JWKS published

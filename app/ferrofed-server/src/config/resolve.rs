@@ -62,6 +62,8 @@ impl Config {
     /// minutes ([`Error::AssertionLifetime`]), an overlap window shorter than
     /// that lifetime plus the nodes' cache time ([`Error::RotationOverlap`]),
     /// and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
+    /// `[auth]` is refused as
+    /// [`Auth::resolve`](crate::config::auth::Auth::resolve) refuses it.
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -138,6 +140,7 @@ impl Config {
                 request_timeout,
                 shutdown_timeout,
                 body_limit: self.server.body_limit_bytes,
+                auth: self.auth.resolve()?,
             },
             telemetry: TelemetrySettings {
                 format: self.telemetry.format,

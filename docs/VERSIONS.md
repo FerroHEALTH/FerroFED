@@ -91,7 +91,8 @@ moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
 pin is the latest version on crates.io, 0.0.81 since 2026-10-03.
 `openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
 family pin with its default features off, so only the grammar is compiled:
-the onward grant (#81) writes and checks the scope it requests with it.
+the onward grant (#81) writes and checks the scope it requests with it, and client
+authentication (#80) reads every caller's scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|

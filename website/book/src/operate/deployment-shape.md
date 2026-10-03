@@ -28,7 +28,7 @@ governs this: our own design.
 | Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm ITI-83 ([Identity resolution](identity.md)) |
 | Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every member's cross-reference | none, where every member is a candidate (`ask-all`), or IHE XCPD ITI-55 under `node_selection = "localized"` ([XCPD localization](identity.md#xcpd-localization-xcpd)) |
 | Addressing | resolves each community to its CDR base URLs | the registry document, in TOML or as FHIR `Organization` and `Endpoint` resources ([The registry](registry.md)); reading it from an mCSD directory is planned for v0.0.8 ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)) |
-| Authentication and authorization | authenticates the client, and the gateway to each node | outbound credentials per endpoint, a bearer token, basic credentials or OAuth 2.0 client credentials with an RFC 7523 assertion; no client authentication yet ([below](#authentication)) |
+| Authentication and authorization | authenticates the client, and the gateway to each node | client authentication by RFC 9068 access tokens from the issuers you trust, or an explicit edge mode ([Client authentication](authentication.md)); outbound credentials per endpoint, a bearer token, basic credentials or OAuth 2.0 client credentials with an RFC 7523 assertion ([below](#authentication)) |
 
 The specification references the internals of each service out (§2.2): how
 an MPI matches identities, how a locator decides where data is, and the
@@ -38,13 +38,16 @@ one.
 
 ## Authentication
 
-FerroFED authenticates no client today. Its listener speaks plain HTTP and
-answers every caller, `OPTIONS {base}/` included, so run it where only the
-clients you trust can reach it: inside a closed network, or behind a reverse
-proxy that terminates TLS and authenticates each client. The gateway never
-forwards a client's `Authorization` header to a node. With no client
-identity, no request belongs to a session, so the per-session resolution
-bindings of §12.5.1 are never held ([The registry](registry.md#resolution-bindings)).
+Every client authenticates to the gateway (§13.1, N25): a request to the
+ITS-REST surface, and `OPTIONS {base}/`, carries an RFC 9068 access token
+from an issuer you trust, with a SMART on openEHR scope for the operation and
+a purpose of use, or, in the explicit edge mode, an assertion your proxy
+signed. A request without one is refused before any node is asked
+([Client authentication](authentication.md)). The listener speaks plain HTTP,
+so terminate TLS in front of it. The gateway never forwards a client's
+`Authorization` header to a node. Requests do not yet belong to a client
+session, so the per-session resolution bindings of §12.5.1 are never held
+([The registry](registry.md#resolution-bindings)).
 
 Toward the nodes, the gateway authenticates with credentials you configure
 per endpoint ([Configuration](configuration.md#the-file)):
@@ -63,13 +66,12 @@ location. The gateway serves the set at `{base}/.well-known/jwks.json`
 without client authentication, and declares its location as
 `federation.auth.jwks_uri` in `OPTIONS {base}/`
 ([Signing keys and the JWK Set](configuration.md#signing-keys-and-the-jwk-set)).
-Keep that route reachable from every node's authorization server, also once
-client authentication guards the rest of the surface. A PIX Manager takes a
+Keep that route reachable from every node's authorization server; client
+authentication guards the rest of the surface and never this route. A PIX Manager takes a
 bearer token or a user and password, or none where the transport
 authenticates the gateway ([Identity resolution](identity.md)).
 
-Planned for v0.0.8 (§13): client authentication at the gateway
-([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)) and the client's
+Planned for v0.0.8 (§13): the client's
 identity conveyed on every request to a node
 ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)).
 

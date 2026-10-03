@@ -185,7 +185,7 @@ fn locate<'a>(
     started: Instant,
 ) -> Result<owner::Located<'a>, Unlocated> {
     let (snapshot, index) = (federation.snapshot(), federation.index());
-    // TODO(#80): the authenticated client session the resolution bindings belong to.
+    // TODO(#412): the authenticated client session the resolution bindings belong to.
     let session: Option<SessionKey> = None;
     let held = session.as_ref().map(|session| owner::Held {
         bindings: federation.bindings(),

@@ -54,9 +54,9 @@ the gateway:
   registry reload on `SIGHUP`, health probes, and metrics for Prometheus or
   an OpenTelemetry collector.
 
-It authenticates no client yet: client authentication is planned for v0.0.8
-([What FerroFED claims](evaluate/what-ferrofed-claims.md)). Each page says
-what is built and names the issue of what is planned.
+Every client authenticates with an access token from an issuer you trust
+([Client authentication](operate/authentication.md)). Each page says what is
+built and names the issue of what is planned.
 
 ## How this book is organised
 

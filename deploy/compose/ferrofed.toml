@@ -47,6 +47,36 @@ overall_timeout_ms = 25000
 # such a query is refused with a 400.
 # default_namespace = "urn:oid:2.999.1"
 
+# Client authentication: every caller presents an RFC 9068 access token from
+# an issuer listed here, with a SMART on openEHR scope for the operation and a
+# purpose of use. A gateway that federates refuses to start without an issuer.
+# https://ferrofed.eu/docs/operate/authentication.html
+[auth]
+# EDIT: the audience your issuers name this gateway by in `aud`.
+audience = "https://gateway.example.org/fed"
+# The clock skew allowed on exp and nbf, at most 300 seconds.
+clock_skew_s = 60
+# A token with no purpose of use is refused (§13.4). Set false only with the
+# reason recorded in your deployment's security decisions.
+# [auth.purpose_of_use]
+# required = true
+
+# EDIT: an authorization server your callers get their tokens from. Verify
+# its tokens by its JWK Set (jwks_uri, or jwks_file for keys handed over out
+# of band), or by RFC 7662 introspection.
+[[auth.issuer]]
+issuer = "https://idp.example.org"
+jwks_uri = "https://idp.example.org/jwks"
+# The client_ids whose system/aql-* grant is honoured.
+# backend_clients = ["example-reporting-service"]
+# The client_ids admitted to the DEMOGRAPHIC API.
+# demographic_clients = []
+#
+# Introspection instead of jwks_uri:
+# introspection_endpoint = "https://idp.example.org/introspect"
+# client_id = "ferrofed"
+# client_secret_file = "/run/secrets/ferrofed/introspection-secret"
+
 # The identity service: an IHE PIXm PIX Manager.
 # https://ferrofed.eu/docs/operate/identity.html
 [[pixm.manager]]

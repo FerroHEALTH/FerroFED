@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The quickstart issuer's key pair and key set, written by
+# scripts/quickstart/token.sh on its first run: development keys, never
+# committed.
+*
+!.gitignore

@@ -183,6 +183,16 @@ pub enum Code {
     /// an EHR for it (N27a, §13.2.1). The body names the endpoints, never the
     /// subject.
     ConsentDenied,
+    /// The request carries no access token this gateway accepts (§13.1, N25).
+    Unauthenticated,
+    /// No scope the access token grants covers the operation (RFC 6750 §3.1).
+    ScopeInsufficient,
+    /// The access token carries no purpose of use, which is required (§13.4).
+    PurposeOfUseRequired,
+    /// The issuer's key set or introspection endpoint cannot be had (§13.1).
+    AuthenticationUnavailable,
+    /// No caller is admitted to the operation: an admin or an unknown one.
+    OperationRefused,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -198,7 +208,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 42] = [
+    pub const GATEWAY: [Self; 47] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -241,6 +251,11 @@ impl Code {
         Self::StoredQueryFanOutUnsupported,
         Self::StoredQueryReadOnly,
         Self::ConsentDenied,
+        Self::Unauthenticated,
+        Self::ScopeInsufficient,
+        Self::PurposeOfUseRequired,
+        Self::AuthenticationUnavailable,
+        Self::OperationRefused,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -299,6 +314,11 @@ impl Code {
             Self::StoredQueryFanOutUnsupported => "stored-query-fan-out-unsupported",
             Self::StoredQueryReadOnly => "stored-query-read-only",
             Self::ConsentDenied => "consent-denied",
+            Self::Unauthenticated => "unauthenticated",
+            Self::ScopeInsufficient => "scope-insufficient",
+            Self::PurposeOfUseRequired => "purpose-of-use-required",
+            Self::AuthenticationUnavailable => "authentication-unavailable",
+            Self::OperationRefused => "operation-refused",
         }
     }
 
@@ -348,12 +368,21 @@ impl Code {
             Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StoredQueryReadOnly => StatusCode::METHOD_NOT_ALLOWED,
             Self::ConsentDenied => StatusCode::FORBIDDEN,
+            Self::Unauthenticated => StatusCode::UNAUTHORIZED,
+            Self::ScopeInsufficient | Self::PurposeOfUseRequired | Self::OperationRefused => {
+                StatusCode::FORBIDDEN
+            }
+            Self::AuthenticationUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
     /// The fixed `message` of a failure that has no more to say than its
     /// code.
     #[must_use]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one arm per code: the table of every fixed message"
+    )]
     pub fn message(self) -> &'static str {
         match self {
             Self::BodyInvalid => "the request body is not the ITS-REST request this route takes",
@@ -453,6 +482,11 @@ impl Code {
             Self::ConsentDenied => {
                 "the consent pre-filter does not permit asking the members that might hold this subject's EHR, and no other member holds one (N27a)"
             }
+            Self::Unauthenticated => "no access token this gateway accepts (§13.1, N25)",
+            Self::ScopeInsufficient => "no scope of the access token grants this operation",
+            Self::PurposeOfUseRequired => "the access token declares no purpose of use (§13.4)",
+            Self::AuthenticationUnavailable => "the access token cannot be verified now (§13.1)",
+            Self::OperationRefused => "this gateway admits no caller to this operation",
         }
     }
 }
@@ -554,6 +588,11 @@ mod tests {
             Code::StoredQueryFanOutUnsupported => Some(39),
             Code::StoredQueryReadOnly => Some(40),
             Code::ConsentDenied => Some(41),
+            Code::Unauthenticated => Some(42),
+            Code::ScopeInsufficient => Some(43),
+            Code::PurposeOfUseRequired => Some(44),
+            Code::AuthenticationUnavailable => Some(45),
+            Code::OperationRefused => Some(46),
         }
     }
 
@@ -643,6 +682,14 @@ mod tests {
             (Code::StoredQueryFanOutUnsupported, StatusCode::BAD_REQUEST),
             (Code::StoredQueryReadOnly, StatusCode::METHOD_NOT_ALLOWED),
             (Code::ConsentDenied, StatusCode::FORBIDDEN),
+            (Code::Unauthenticated, StatusCode::UNAUTHORIZED),
+            (Code::ScopeInsufficient, StatusCode::FORBIDDEN),
+            (Code::PurposeOfUseRequired, StatusCode::FORBIDDEN),
+            (
+                Code::AuthenticationUnavailable,
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (Code::OperationRefused, StatusCode::FORBIDDEN),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

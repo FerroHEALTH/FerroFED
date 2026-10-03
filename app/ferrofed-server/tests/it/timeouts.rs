@@ -494,9 +494,11 @@ fn configured(
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
+    let mut server = settings.server.clone();
+    server.auth = crate::support::auth();
     Ok(ferrofed_server::router(
         Arc::new(AppState::with_federation(federation)),
-        &settings.server,
+        &server,
     ))
 }
 

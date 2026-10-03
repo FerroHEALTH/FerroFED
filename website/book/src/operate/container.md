@@ -276,11 +276,16 @@ patient.
 
 ### A federated query
 
-Ask for the compositions of the patient every node knows:
+Ask for the compositions of the patient every node knows. Every request
+carries an access token: `scripts/quickstart/token.sh` generates a
+development issuer's key pair with `openssl` on its first run, writes its key
+set where the gateway reads it, and prints a token valid for an hour
+([The quickstart issuer](authentication.md#the-quickstart-issuer)):
 
 ```sh
 curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H 'Content-Type: application/json' -d @- <<'EOF'
+  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H 'Content-Type: application/json' -d 13152 <<'EOF'
 {"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF
 ```
@@ -310,7 +315,8 @@ attributes beside the data (§8, §9.4):
 
 ```sh
 curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H 'Content-Type: application/json' -d @- <<'EOF'
+  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H 'Content-Type: application/json' -d 14601 <<'EOF'
 {"q": "SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition FROM ENDPOINT p [\"node-c-query\"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF
 ```

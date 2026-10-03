@@ -13,7 +13,6 @@ use ferrofed_server::request_log::UNMATCHED;
 use ferrofed_server::telemetry::{Rendering, subscriber};
 use http::{Request, StatusCode};
 use std::error::Error as StdError;
-use tower::ServiceExt as _;
 
 /// Sends every request in `requests` through `app` under a capturing JSON
 /// subscriber at `filter`, and returns what was logged.
@@ -30,7 +29,7 @@ pub(crate) fn logged(
     tracing::subscriber::with_default(capture, || {
         runtime.block_on(async {
             for request in requests {
-                app.clone().oneshot(request).await?;
+                support::send(app.clone(), request).await?;
             }
             Ok::<(), Box<dyn StdError>>(())
         })

@@ -64,20 +64,20 @@ flowchart TB
     gw -->|"definitions"| store[("redb, PostgreSQL<br/>or files")]
     gw -->|"serves"| admin["Admin listener<br/>/metrics, /admin"]
     prom["Prometheus"] -->|"scrapes"| admin
-    gw -.->|"v0.0.8"| planned["Callers' JWKS (#80)<br/>XCPD localizer (#85)<br/>Mitz consent service (#87)"]:::planned
+    gw -.->|"v0.0.8"| planned["XCPD localizer (#85)<br/>Mitz consent service (#87)"]:::planned
 ```
 
-- **The proxy** terminates TLS and, until client authentication lands
-  ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), authenticates
-  each caller ([Authentication](../operate/deployment-shape.md#authentication)).
+- **The proxy** terminates TLS. The gateway authenticates each caller
+  itself, against the callers' issuers, or verifies the assertion of a proxy
+  in the explicit edge mode
+  ([Client authentication](../operate/authentication.md)).
 - **The configuration** is your reviewed files. The registry reloads on
   `SIGHUP` with no restart, and every credential is a file named by a
   `_file` key ([Configuration](../operate/configuration.md)).
 - **The admin listener** is a second listener for your operators, off unless
   `[metrics] listen` is set and on loopback unless you allow otherwise
   ([Metrics](../operate/metrics.md)).
-- **The planned services** are client authentication against the callers'
-  issuers ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), XCPD
+- **The planned services** are XCPD
   localization ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85))
   and the Mitz consent pre-filter of the Dutch binding
   ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)). The

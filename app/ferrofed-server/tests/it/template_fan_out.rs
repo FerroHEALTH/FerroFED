@@ -50,7 +50,7 @@ const ADL2: &str = "/v1/definition/template/adl2";
 const TEMPLATE: &str = "synthetic.fan_out.v1";
 
 /// The client's own credential, which no node ever sees.
-const CLIENT_TOKEN: &str = "synthetic-client-token-fan-out";
+use crate::support::CLIENT_TOKEN;
 
 /// A body an accepting node answers with, which the answer never copies.
 const ACCEPTED_BODY: &str = "SYNTHETIC-ACCEPTED-BODY-41fd";
@@ -128,7 +128,7 @@ fn request(
     let mut request = Request::builder()
         .method(verb.clone())
         .uri(at)
-        .header(header::AUTHORIZATION, format!("Bearer {CLIENT_TOKEN}"))
+        .header(header::AUTHORIZATION, format!("Bearer {}", *CLIENT_TOKEN))
         .header("x-patient", PATIENT);
     if let Some(target) = target {
         request = request.header(ENDPOINT, target);
@@ -212,7 +212,7 @@ async fn uploaded_once(server: &Server, at: &str, sent: &str) -> TestResult {
     assert_eq!(sent.as_bytes(), only.body.as_slice(), "byte-identical");
     let composed = wire(server).await?;
     assert!(!composed.contains(PATIENT), "N33: {at}");
-    assert!(!composed.contains(CLIENT_TOKEN), "N33: {at}");
+    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {at}");
     Ok(())
 }
 

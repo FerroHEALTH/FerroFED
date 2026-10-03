@@ -112,7 +112,7 @@ async fn an_unmodified_client_given_only_the_base_url_reads_and_writes_at_a_pref
             let _signalled = stopped.await;
         },
     ));
-    let client = reqwest::Client::new();
+    let client = crate::support::authenticated_client()?;
 
     let options = client
         .request(reqwest::Method::OPTIONS, format!("{base}/"))

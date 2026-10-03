@@ -25,6 +25,18 @@ overall_timeout_ms = 25000
 # reference flow, Variant B).
 node_selection = "ask-all"
 
+# Every caller authenticates (§13.1, N25). The quickstart trusts one
+# development issuer, whose key set scripts/quickstart/token.sh writes on its
+# first run into docker/quickstart/issuer/, which compose.yaml mounts here:
+# development keys, NOT for anything real. The gateway reads the set when a
+# token first needs it, so the key can be made after `docker compose up`.
+[auth]
+audience = "ferrofed-quickstart"
+
+[[auth.issuer]]
+issuer = "ferrofed-quickstart-issuer"
+jwks_file = "/etc/ferrofed/issuer/jwks.json"
+
 [credentials."node-a-query"]
 user = "ferroehr"
 password = "ferroehr"

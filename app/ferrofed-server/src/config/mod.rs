@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use crate::config::error::Error;
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
+pub mod auth;
 pub mod error;
 mod load;
 mod resolve;
@@ -87,6 +88,8 @@ pub struct Config {
     /// assertion of every OAuth 2.0 grant to a node and which the gateway
     /// publishes as a JWK Set (§13.1, N25).
     pub signing: Option<Signing>,
+    /// How a caller authenticates to the gateway (`[auth]`, §13.1, N25).
+    pub auth: auth::Auth,
 }
 
 impl Default for Config {
@@ -104,6 +107,7 @@ impl Default for Config {
             stored_queries: stored_queries::StoredQueries::default(),
             metrics: Metrics::default(),
             signing: None,
+            auth: auth::Auth::default(),
         }
     }
 }

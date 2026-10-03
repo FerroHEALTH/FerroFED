@@ -8,19 +8,21 @@
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, KeySource, Verification};
 use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::error::{CODE_MEMBER, REQUEST_ID_MEMBER};
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::issuer::{Claims, Issuer, IssuerError};
 use ferrofed_testkit::mock::Server;
-use http::{HeaderMap, Request, Response, StatusCode};
+use http::{HeaderMap, Request, Response, StatusCode, header};
 use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
 use openehr_its::rest::generated::common::Error;
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
 use std::io::{self, Write};
 use std::num::TryFromIntError;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 use std::time::Duration;
 use tower::ServiceExt as _;
 use tracing_subscriber::fmt::MakeWriter;
@@ -115,6 +117,77 @@ pub(crate) fn request_lines(text: &str) -> Result<Vec<LogLine>, serde_json::Erro
         .collect())
 }
 
+/// The issuer identifier of the suite's test issuer.
+pub(crate) const ISSUER: &str = "https://issuer.example.test";
+
+/// The audience the gateway under test is known by at the test issuer.
+pub(crate) const AUDIENCE: &str = "urn:example:ferrofed-under-test";
+
+/// The suite's test issuer, its key generated once per test process.
+#[expect(
+    clippy::expect_used,
+    reason = "a test process that cannot generate a key pair cannot test anything"
+)]
+static TEST_ISSUER: LazyLock<Issuer> =
+    LazyLock::new(|| Issuer::new(ISSUER).expect("a test key pair should generate"));
+
+/// Returns the suite's test issuer, which every test gateway trusts.
+pub(crate) fn issuer() -> &'static Issuer {
+    &TEST_ISSUER
+}
+
+/// Returns the claims of a token the test gateway admits for every
+/// operation: every scope and the purpose of use `TREAT`.
+pub(crate) fn claims() -> Claims {
+    Claims::new(ISSUER, AUDIENCE)
+}
+
+/// Returns a fresh token with the default [`claims`].
+pub(crate) fn token() -> Result<String, IssuerError> {
+    issuer().mint(&claims())
+}
+
+/// A default token minted once per test process: the client credential a
+/// test sends explicitly and then searches for at the node, where it must
+/// never arrive (§13.1).
+#[expect(
+    clippy::expect_used,
+    reason = "a test process whose issuer cannot sign cannot test anything"
+)]
+pub(crate) static CLIENT_TOKEN: LazyLock<String> =
+    LazyLock::new(|| token().expect("the test issuer should sign"));
+
+/// Returns the `Authorization` value carrying a fresh default [`token`].
+pub(crate) fn bearer() -> Result<String, IssuerError> {
+    Ok(format!("Bearer {}", token()?))
+}
+
+/// Returns the `[auth]` of every test gateway: the test issuer is trusted,
+/// its key set handed over with the configuration, and the default client is
+/// a demographic client.
+pub(crate) fn auth() -> AuthSettings {
+    AuthSettings {
+        audience: Some(AUDIENCE.to_owned()),
+        issuers: vec![IssuerSettings {
+            issuer: ISSUER.to_owned(),
+            verification: Verification::KeySet(KeySource::Set(issuer().jwks())),
+            backend_clients: BTreeSet::new(),
+            demographic_clients: BTreeSet::from([claims().client_id]),
+        }],
+        ..AuthSettings::default()
+    }
+}
+
+/// Returns the `[auth]` of [`auth`] as configuration text, the key set
+/// inline.
+pub(crate) fn auth_toml() -> Result<String, IssuerError> {
+    Ok(format!(
+        "\n[auth]\naudience = \"{AUDIENCE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\njwks = '{}'\ndemographic_clients = [\"{}\"]\n",
+        issuer().jwks_json()?,
+        claims().client_id
+    ))
+}
+
 /// Returns server settings a test drives the middleware with.
 pub(crate) fn settings() -> ServerSettings {
     ServerSettings {
@@ -123,6 +196,7 @@ pub(crate) fn settings() -> ServerSettings {
         request_timeout: Duration::from_secs(5),
         shutdown_timeout: Duration::from_secs(5),
         body_limit: 1024,
+        auth: auth(),
     }
 }
 
@@ -137,7 +211,35 @@ pub(crate) fn app() -> Router {
 }
 
 /// Sends `request` through `app` and returns the whole response.
+///
+/// A request that carries no `Authorization` field is sent with a fresh
+/// default [`token`], so every test reaches past client authentication
+/// unless it sets the field itself.
 pub(crate) async fn send(
+    app: Router,
+    mut request: Request<Body>,
+) -> Result<Response<Body>, Box<dyn StdError>> {
+    if !request.headers().contains_key(header::AUTHORIZATION) {
+        request
+            .headers_mut()
+            .insert(header::AUTHORIZATION, bearer()?.parse()?);
+    }
+    send_as_is(app, request).await
+}
+
+/// Returns an HTTP client that sends a fresh default [`token`] with every
+/// request that carries no `Authorization` field of its own, for the tests
+/// that drive a real socket.
+pub(crate) fn authenticated_client() -> Result<reqwest::Client, Box<dyn StdError>> {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::AUTHORIZATION, bearer()?.parse()?);
+    Ok(reqwest::Client::builder()
+        .default_headers(headers)
+        .build()?)
+}
+
+/// Sends `request` through `app` as it is, with no credential added.
+pub(crate) async fn send_as_is(
     app: Router,
     request: Request<Body>,
 ) -> Result<Response<Body>, Box<dyn StdError>> {

@@ -19,10 +19,14 @@ fn rendered(code: ExitCode) -> String {
     format!("{code:?}")
 }
 
-/// Runs the real binary with `args` and a configuration file holding `toml`.
+/// Runs the real binary with `args` and a configuration file holding `toml`,
+/// with the suite's `[auth]` added when `toml` names none.
 pub(crate) fn binary(args: &[&str], toml: &str) -> Result<Output, Box<dyn StdError>> {
     let mut file = tempfile::NamedTempFile::new()?;
     file.write_all(toml.as_bytes())?;
+    if !toml.contains("[auth") {
+        file.write_all(crate::support::auth_toml()?.as_bytes())?;
+    }
     let output = Command::new(env!("CARGO_BIN_EXE_ferrofed"))
         .args(args)
         .arg("--config")
