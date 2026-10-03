@@ -17,3 +17,4 @@ mod forward;
 mod gate;
 mod masking;
 mod pins;
+mod probe;

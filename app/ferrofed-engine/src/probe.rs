@@ -46,9 +46,11 @@ pub enum Answer {
     Erred(StatusCode),
     /// The probe got no answer of the member's: it timed out, could not
     /// reach the member, was refused the onward credentials, or was never
-    /// sent.
+    /// sent, its deadline passed before it left included
+    /// ([`ForwardError::Expired`]).
     Failed(ForwardError),
-    /// The overall budget ran out before the member answered (§11.5).
+    /// The probe was sent and the overall budget ran out before the member
+    /// answered (§11.5).
     Abandoned,
 }
 
@@ -189,6 +191,7 @@ where
     let path = probe.path();
     let mut tasks = JoinSet::new();
     let asked_at = Instant::now();
+    let until = tokio::time::Instant::from_std(probe.overall);
     for (index, client) in asked.into_iter().enumerate() {
         // NOTE: no specification governs this: our own design; the probe is the gateway's own read, so
         // a client value that does not fit its operation's declared kind is left out, never refused.
@@ -202,31 +205,32 @@ where
         let options = options.clone();
         tasks.spawn(async move {
             let started = Instant::now();
-            let forwarded = match request {
-                Ok(request) => client.forward_held(request, &options).await,
-                Err(refused) => Err(refused),
+            let forwarded = async {
+                match request {
+                    Ok(request) => client.forward_held(request, &options).await,
+                    Err(refused) => Err(refused),
+                }
             };
-            (index, forwarded, started.elapsed())
+            // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a probe
+            // the budget overtook before it left ends `Expired`, never abandoned.
+            let answer = match tokio::time::timeout_at(until, forwarded).await {
+                Ok(forwarded) => classified(forwarded),
+                Err(_elapsed) => Answer::Abandoned,
+            };
+            (
+                index,
+                Probed {
+                    answer,
+                    latency: started.elapsed(),
+                },
+            )
         });
     }
     let mut answers: Vec<Option<Probed>> = endpoints.iter().map(|_| None).collect();
-    let until = tokio::time::Instant::from_std(probe.overall);
-    loop {
-        match tokio::time::timeout_at(until, tasks.join_next()).await {
-            Ok(Some(joined)) => {
-                let (index, forwarded, latency) = joined?;
-                if let Some(slot) = answers.get_mut(index) {
-                    *slot = Some(Probed {
-                        answer: classified(forwarded),
-                        latency,
-                    });
-                }
-            }
-            Ok(None) => break,
-            Err(_elapsed) => {
-                tasks.abort_all();
-                break;
-            }
+    while let Some(joined) = tasks.join_next().await {
+        let (index, probed) = joined?;
+        if let Some(slot) = answers.get_mut(index) {
+            *slot = Some(probed);
         }
     }
     let abandoned_after = asked_at.elapsed();

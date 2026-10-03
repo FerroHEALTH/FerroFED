@@ -89,13 +89,13 @@ histogram's `_count` equals the counter summed over `outcome`. A request
 that never left the gateway is in neither: a member that was
 `not-resolved`, `excluded` or `not-localized`, and a request the gateway
 could not send, for want of a client or a credential, or because the
-identifier-hygiene gate withheld it. A federated query or a stored-query
-call whose deadline passed before the request left is not counted either; a
-routed request, a probe or a template upload cannot tell that case from a
-node that did not answer in time, and counts it `time-out`. §11.1 has no
-status for a request the gateway could not send, so a member record in
-`meta.federation` still reports that member `offline`; the series do not
-count it.
+identifier-hygiene gate withheld it. §11.1 has no status for a request the
+gateway could not send, so a member record in `meta.federation` still
+reports that member `offline`; the series do not count it. A request whose
+deadline passed before it left is not counted either, in any of the six
+calls, because the node was never asked. The client still sees the budget
+run out: a `time-out` in the member record, or a `504` (`node-timeout`) for
+a routed request or a probe.
 
 | Call | Requests counted | `outcome` read from | Time recorded |
 |---|---|---|---|

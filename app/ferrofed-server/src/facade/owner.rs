@@ -493,7 +493,8 @@ pub enum Silence {
     /// It answered a status that is neither a success nor `404`.
     Erred(StatusCode),
     /// It did not answer before its deadline, or before the overall budget
-    /// ran out.
+    /// ran out, or the deadline passed before the probe was sent: whether
+    /// it holds the EHR is unknown (§11.5).
     TimedOut,
     /// It could not be reached.
     Unreachable,
@@ -546,7 +547,10 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>) -> Settled {
             }
             Answer::Absent => continue,
             Answer::Erred(status) => Silence::Erred(status),
-            Answer::Abandoned | Answer::Failed(ForwardError::TimeOut { .. }) => Silence::TimedOut,
+            Answer::Abandoned
+            | Answer::Failed(ForwardError::TimeOut { .. } | ForwardError::Expired { .. }) => {
+                Silence::TimedOut
+            }
             Answer::Failed(ForwardError::Unreachable { .. }) => Silence::Unreachable,
             Answer::Failed(ForwardError::Refused { .. }) => Silence::Refused,
             Answer::Failed(failure) => Silence::Unsent(failure),

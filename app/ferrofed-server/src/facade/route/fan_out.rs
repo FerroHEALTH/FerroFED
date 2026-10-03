@@ -200,7 +200,7 @@ pub(crate) enum Asked<R> {
     Ended(R),
     /// The gateway holds no client for the member, so nothing was sent.
     Unsent,
-    /// The overall budget ran out before the call ended (§11.5).
+    /// The call was under way when the overall budget ran out (§11.5).
     Abandoned,
 }
 
@@ -224,6 +224,7 @@ where
     R: Send + 'static,
 {
     let options = DispatchOptions::new(budget.per_node()).with_request_id(outbound);
+    let until = tokio::time::Instant::from_std(budget.overall());
     let mut tasks = JoinSet::new();
     let mut sent: Vec<Option<(Asked<R>, u64)>> = targets.iter().map(|_| None).collect();
     let fanned = Instant::now();
@@ -242,29 +243,28 @@ where
         let asked = call(client, options.clone());
         tasks.spawn(async move {
             let started = Instant::now();
-            let answer = asked.await;
-            (index, answer, elapsed_ms(started))
+            // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a
+            // request the budget overtook before it left ends unsent, never abandoned.
+            let asked = match tokio::time::timeout_at(until, asked).await {
+                Ok(answer) => Asked::Ended(answer),
+                Err(_elapsed) => Asked::Abandoned,
+            };
+            (index, asked, elapsed_ms(started))
         });
     }
-    let until = tokio::time::Instant::from_std(budget.overall());
-    loop {
-        match tokio::time::timeout_at(until, tasks.join_next()).await {
-            Ok(Some(Ok((index, answer, latency_ms)))) => {
+    while let Some(joined) = tasks.join_next().await {
+        match joined {
+            Ok((index, asked, latency_ms)) => {
                 if let Some(slot) = sent.get_mut(index) {
-                    *slot = Some((Asked::Ended(answer), latency_ms));
+                    *slot = Some((asked, latency_ms));
                 }
             }
-            Ok(Some(Err(joined))) => {
+            Err(joined) => {
                 tracing::error!(
                     error = %joined,
                     request_id = logged,
                     "a fan-out task did not finish"
                 );
-            }
-            Ok(None) => break,
-            Err(_elapsed) => {
-                tasks.abort_all();
-                break;
             }
         }
     }
@@ -422,6 +422,13 @@ fn outcome(
         Err(ForwardError::TimeOut { .. }) => Outcome::TimeOut {
             latency_ms,
             error: error("no answer before the deadline".to_owned()),
+        },
+        Err(ForwardError::Expired { .. }) => Outcome::TimeOut {
+            latency_ms,
+            error: error(
+                "no answer before the deadline, which passed before the request was sent"
+                    .to_owned(),
+            ),
         },
         Err(ForwardError::Unreachable { .. }) => Outcome::Offline {
             latency_ms,

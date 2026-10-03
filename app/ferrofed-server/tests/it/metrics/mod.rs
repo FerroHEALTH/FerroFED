@@ -16,6 +16,7 @@ mod hygiene;
 mod incidents;
 mod nodes;
 mod reload;
+mod unsent;
 
 use std::collections::BTreeMap;
 use std::error::Error;

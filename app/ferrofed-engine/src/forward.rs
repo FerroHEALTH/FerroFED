@@ -160,7 +160,18 @@ pub enum ForwardError {
         #[source]
         source: Box<ClientError>,
     },
-    /// The node did not answer before the deadline (§11.2).
+    /// The deadline passed before the request left the gateway, so nothing
+    /// was sent and the node was never asked (§11.5).
+    #[error("the deadline for endpoint {endpoint} passed before the request was sent")]
+    Expired {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// What the client runtime reported.
+        #[source]
+        source: Box<ClientError>,
+    },
+    /// The node was sent the request and did not answer before the deadline
+    /// (§11.2).
     #[error("endpoint {endpoint} did not answer before the deadline")]
     TimeOut {
         /// The endpoint.
@@ -322,7 +333,8 @@ impl<T: Transport> NodeClient<T> {
     ///
     /// Returns [`ForwardError::Withheld`] with nothing sent,
     /// [`ForwardError::Credentials`] and [`ForwardError::Compose`] when the
-    /// request could not leave, [`ForwardError::TimeOut`] and
+    /// request could not leave, [`ForwardError::Expired`] when the deadline
+    /// passed before it left, [`ForwardError::TimeOut`] and
     /// [`ForwardError::Unreachable`] when the node gave no answer, and
     /// [`ForwardError::Refused`] when it answered `401`.
     pub async fn forward_held(
@@ -443,11 +455,17 @@ impl<T: Transport> NodeClient<T> {
     }
 
     /// The error for a forwarded request that reached no answer.
+    ///
+    /// `Client::forward` sends once and raises `DeadlineElapsed` only before
+    /// the request is handed to the transport, so it is a request never sent.
     fn unanswered(&self, error: ClientError) -> ForwardError {
         let endpoint = self.endpoint().clone();
         match error {
-            ClientError::DeadlineElapsed { .. }
-            | ClientError::Transport {
+            ClientError::DeadlineElapsed { .. } => ForwardError::Expired {
+                endpoint,
+                source: Box::new(error),
+            },
+            ClientError::Transport {
                 source: TransportError::Timeout { .. },
                 ..
             } => ForwardError::TimeOut {

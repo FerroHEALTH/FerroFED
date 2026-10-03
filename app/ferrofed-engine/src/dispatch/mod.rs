@@ -241,10 +241,9 @@ pub enum Contact {
 impl Contact {
     /// Returns what a forwarded request's outcome showed of the node.
     ///
-    /// A refusal of the gateway's onward credentials is the node's answer; a
-    /// deadline that passed before the request left is indistinguishable here
-    /// from one that passed while the node was silent, and reads as
-    /// [`Contact::Silent`].
+    /// A refusal of the gateway's onward credentials is the node's answer,
+    /// and a deadline that passed before the request left is
+    /// [`Contact::Unsent`], as every other failure on the gateway's side is.
     #[must_use]
     pub fn of_forwarded(outcome: &Result<Forwarded, ForwardError>) -> Self {
         match outcome {
@@ -261,6 +260,7 @@ impl Contact {
             ForwardError::Refused { status, .. } => Self::Answered(*status),
             ForwardError::TimeOut { .. } | ForwardError::Unreachable { .. } => Self::Silent,
             ForwardError::QueryParameter(_)
+            | ForwardError::Expired { .. }
             | ForwardError::Value(_)
             | ForwardError::Withheld { .. }
             | ForwardError::Credentials { .. }
