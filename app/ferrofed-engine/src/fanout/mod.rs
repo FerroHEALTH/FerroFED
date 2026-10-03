@@ -84,6 +84,11 @@ pub const TIMEOUT_POLICY: &str = "abandon-and-mark";
 /// design, since the specification names none).
 pub const LOCALIZATION_MEMBER: &str = "localization";
 
+/// The `meta.federation` member that carries the failure of the consent
+/// pre-filter, as `consent.error` (N27a; it mirrors `localization.error` of
+/// §14.1, and no specification names it: our own design).
+pub const CONSENT_MEMBER: &str = "consent";
+
 /// The completion strategy a request runs under (§11.4, N37).
 ///
 /// Both apply to reads only; a write goes to one node and succeeds or fails
@@ -190,7 +195,7 @@ pub struct Plan {
     recombination: Option<Recombination>,
     dedup: DedupMode,
     attributes: Vec<EndpointAttribute>,
-    localization: Option<ErrorDetail>,
+    unavailable: BTreeMap<&'static str, ErrorDetail>,
 }
 
 impl Plan {
@@ -264,7 +269,16 @@ impl Plan {
     /// fail-closed neither `complete` nor the status can carry it (§14.1).
     #[must_use]
     pub fn localization_failed(mut self, error: ErrorDetail) -> Self {
-        self.localization = Some(error);
+        self.unavailable.insert(LOCALIZATION_MEMBER, error);
+        self
+    }
+
+    /// This plan reporting that the consent pre-filter did not answer, as
+    /// `meta.federation.consent.error` on the answer: every candidate was asked
+    /// (N27), so neither `complete` nor the status changes.
+    #[must_use]
+    pub fn consent_unavailable(mut self, error: ErrorDetail) -> Self {
+        self.unavailable.insert(CONSENT_MEMBER, error);
         self
     }
 
@@ -640,7 +654,7 @@ where
         recombination,
         dedup,
         attributes,
-        localization,
+        unavailable,
     } = plan;
     if recombination.is_some() && completion == Completion::BestEffort {
         return Err(FanOutError::PartialAggregate);
@@ -699,8 +713,8 @@ where
         attributes: &attributes,
     };
     let mut answer = answer::answer(snapshot, records, shaping, budget, completion)?;
-    if let Some(error) = localization {
-        answer::report_localization(&mut answer.federation, error)?;
+    for (member, error) in unavailable {
+        answer::report_unavailable(&mut answer.federation, member, error)?;
     }
     answer.contacts = contacts;
     Ok(answer)

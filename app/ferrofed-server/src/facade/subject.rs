@@ -16,13 +16,18 @@
 //!
 //! The targeting headers select the one endpoint the subject is resolved at
 //! (§8.4, §7a.1); without them, every member with an active endpoint is a
-//! candidate. The resolution settles the answer:
+//! candidate. The consent pre-filter is asked about the candidates first,
+//! as a federated query asks it: a member it denies is never resolved or
+//! contacted, and one it does not deny is left to its node (N27a, N27). The resolution settles the answer:
 //!
 //! - one member knows the subject: its EHR, forwarded once;
 //! - several members know it: `409` listing their endpoints, because the
 //!   gateway never chooses by where the patient resolved (§12.5.2);
 //! - the cross-reference could not answer for a member: `424`, because that
 //!   member may hold the EHR too (§11.2, §11.5);
+//! - the consent pre-filter denied every member that might hold it, and no
+//!   other member knows it: `403 consent-denied` naming the denied endpoints
+//!   (N27a; no specification governs the answer: our own design);
 //! - no member knows it: `404`, the operation's own answer for a subject with
 //!   no EHR (ITS-REST 1.1.0 `404_EHR_subject`, §11.2).
 //!
@@ -52,6 +57,7 @@ use openehr_its::rest::runtime::ApiError;
 use secrecy::SecretString;
 
 use crate::error::{self, Code};
+use crate::facade::consent;
 use crate::facade::owner::{self, Listed};
 use crate::facade::provenance::Provenance;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
@@ -99,7 +105,20 @@ pub(crate) async fn serve(
         Ok(candidates) => candidates,
         Err(unserved) => return unserved.respond(request_id, &logged),
     };
-    let resolved = resolve(federation, candidates, &subject.patient, budget.overall()).await;
+    let members: Vec<NodeId> = candidates
+        .iter()
+        .map(|endpoint| endpoint.node().clone())
+        .collect();
+    let consented =
+        consent::prefilter(federation, &subject.patient, &members, budget.overall()).await;
+    let (denied, candidates): (Vec<&Endpoint>, Vec<&Endpoint>) = candidates
+        .into_iter()
+        .partition(|endpoint| consented.denied.contains(endpoint.node()));
+    let mut resolved = resolve(federation, candidates, &subject.patient, budget.overall()).await;
+    resolved.denied = denied
+        .iter()
+        .map(|endpoint| endpoint.id().clone())
+        .collect();
     learn(federation, &resolved.holders, started);
     let (endpoint, ehr_id) = match resolved.settled() {
         Ok(owner) => owner,
@@ -209,6 +228,9 @@ struct Resolved<'a> {
     holders: Vec<(&'a Endpoint, EhrId)>,
     /// The candidates the cross-reference could not answer for.
     silent: Vec<EndpointId>,
+    /// The candidates the consent pre-filter denied, never resolved or
+    /// contacted (N27a).
+    denied: Vec<EndpointId>,
 }
 
 impl<'a> Resolved<'a> {
@@ -216,16 +238,20 @@ impl<'a> Resolved<'a> {
     ///
     /// Two holders are a `409` whatever the others answered. Otherwise a
     /// candidate the cross-reference could not answer for may hold it too,
-    /// so neither one holder nor none is an answer then (§11.5).
+    /// so neither one holder nor none is an answer then (§11.5). A candidate
+    /// the consent pre-filter denied was never asked, so with no holder among
+    /// the others the answer names the denial and never claims no EHR exists
+    /// (N27a); with one holder among them, that holder answers.
     ///
     /// # Errors
     ///
-    /// Returns [`Unserved::Several`], [`Unserved::Unresolved`] or
-    /// [`Unserved::Nowhere`].
+    /// Returns [`Unserved::Several`], [`Unserved::Unresolved`],
+    /// [`Unserved::ConsentDenied`] or [`Unserved::Nowhere`].
     fn settled(self) -> Result<(&'a Endpoint, EhrId), Unserved> {
         let Self {
             mut holders,
             silent,
+            denied,
         } = self;
         if holders.len() > 1 {
             // NOTE: §12.5.2: the gateway never breaks a tie by where the patient
@@ -238,6 +264,9 @@ impl<'a> Resolved<'a> {
         }
         if !silent.is_empty() {
             return Err(Unserved::Unresolved(silent));
+        }
+        if holders.is_empty() && !denied.is_empty() {
+            return Err(Unserved::ConsentDenied(denied));
         }
         // NOTE: ITS-REST 1.1.0 answers 404 for a subject with no EHR; this is
         // one EHR resource, never the §11.3 result set, so §11.3's 200 does not apply.
@@ -271,6 +300,7 @@ async fn resolve<'a>(
     let mut resolved = Resolved {
         holders: Vec::new(),
         silent: Vec::new(),
+        denied: Vec::new(),
     };
     for endpoint in candidates {
         match answers.remove(endpoint.node()) {
@@ -354,6 +384,13 @@ enum Unserved {
         Listed(.0)
     )]
     Unresolved(Vec<EndpointId>),
+    /// The consent pre-filter denied these candidates, and no other one
+    /// holds the subject's EHR.
+    #[error(
+        "the consent pre-filter does not permit asking endpoints {} about this subject, and no other member holds an EHR for it (N27a, §13.2.1)",
+        Listed(.0)
+    )]
+    ConsentDenied(Vec<EndpointId>),
     /// The request's deadline cannot be represented.
     #[error("the request's deadline cannot be represented")]
     Clock,
@@ -369,6 +406,7 @@ impl Unserved {
             Self::Suspended | Self::Nowhere => Code::NoDestination,
             Self::Several(_) => Code::SubjectSeveral,
             Self::Unresolved(_) => Code::ResolutionUnavailable,
+            Self::ConsentDenied(_) => Code::ConsentDenied,
             Self::Clock => Code::Internal,
         }
     }
@@ -440,6 +478,11 @@ mod tests {
                 StatusCode::FAILED_DEPENDENCY,
             ),
             (
+                Unserved::ConsentDenied(vec![endpoint("a")]),
+                "consent-denied",
+                StatusCode::FORBIDDEN,
+            ),
+            (
                 Unserved::Clock,
                 "internal",
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -464,6 +507,7 @@ mod tests {
         let resolved = Resolved {
             holders: Vec::new(),
             silent: Vec::new(),
+            denied: Vec::new(),
         };
         assert!(matches!(resolved.settled(), Err(Unserved::Nowhere)));
     }
@@ -473,7 +517,21 @@ mod tests {
         let resolved = Resolved {
             holders: Vec::new(),
             silent: vec![endpoint("node-b-pub")],
+            denied: Vec::new(),
         };
         assert!(matches!(resolved.settled(), Err(Unserved::Unresolved(_))));
+    }
+
+    #[test]
+    fn denied_candidates_and_no_holder_is_consent_denied() {
+        let resolved = Resolved {
+            holders: Vec::new(),
+            silent: Vec::new(),
+            denied: vec![endpoint("node-b-pub")],
+        };
+        assert!(matches!(
+            resolved.settled(),
+            Err(Unserved::ConsentDenied(ref endpoints)) if endpoints == &[endpoint("node-b-pub")]
+        ));
     }
 }

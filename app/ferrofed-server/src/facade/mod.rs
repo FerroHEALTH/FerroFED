@@ -54,6 +54,7 @@
 mod answer;
 pub mod cells;
 pub mod completeness;
+mod consent;
 pub mod dedup;
 pub mod follow_up;
 pub mod intake;

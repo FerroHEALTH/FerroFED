@@ -14,7 +14,7 @@ use std::error::Error;
 use std::fmt::Write as _;
 
 use ferrofed_engine::dispatch::Contact;
-use ferrofed_engine::fanout::{Completion, FederatedAnswer, Verdict};
+use ferrofed_engine::fanout::{CONSENT_MEMBER, Completion, FederatedAnswer, Verdict};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
 use openehr_federation::outcome::{ConsentRefusal, EndpointOutcome, ErrorDetail, Outcome};
@@ -196,5 +196,45 @@ async fn an_endpoint_listing_no_code_reports_every_403_as_a_node_error() -> Test
         "the codes are per endpoint, and node A lists none"
     );
     assert_eq!(answer.status(), StatusCode::FAILED_DEPENDENCY);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_prefilter_outage_is_carried_in_meta_federation_and_changes_nothing_else() -> TestResult {
+    let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
+    let b = node(json(200, &result_set(&["b1::cdr-1.example.org::1"]))).await;
+    let snapshot = federation(&a.uri(), &b.uri())?;
+    let outage = ErrorDetail::text("the consent pre-filter could not answer: synthetic outage")?;
+    let plan = plan_for(&["node-a-pub", "node-b-pub"])?.consent_unavailable(outage);
+    let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
+    assert_eq!(
+        StatusCode::OK,
+        answer.status(),
+        "every candidate was asked (N27)"
+    );
+    assert!(answer.federation().complete(), "both nodes answered");
+    let carried = answer
+        .federation()
+        .extra()
+        .get(CONSENT_MEMBER)
+        .ok_or("meta.federation carries the pre-filter's failure")?
+        .get()
+        .to_owned();
+    assert_eq!(
+        r#"{"error":"the consent pre-filter could not answer: synthetic outage"}"#,
+        carried
+    );
+    validated_body(answer)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_prefilter_that_answered_leaves_no_consent_member() -> TestResult {
+    let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
+    let b = node(json(200, &result_set(&["b1::cdr-1.example.org::1"]))).await;
+    let snapshot = federation(&a.uri(), &b.uri())?;
+    let plan = plan_for(&["node-a-pub", "node-b-pub"])?;
+    let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
+    assert!(answer.federation().extra().get(CONSENT_MEMBER).is_none());
     Ok(())
 }
