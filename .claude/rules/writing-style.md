@@ -61,7 +61,7 @@ release contents are decided during development. Describe what is built and
 what is planned as build order.
 
 Say plainly which parts are built and which are planned, and name what
-decides an open question. "Follow-up routing is planned for v0.0.5 (#61)" is
+decides an open question. "Client authentication is planned for v0.0.8 (#80)" is
 honest; a confident description of an unbuilt feature or an undecided design
 is not.
 
