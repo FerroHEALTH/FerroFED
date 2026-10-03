@@ -173,8 +173,8 @@ so.
   worked around here.
 - **A defect in a published specification is recorded as a comment on the
   standing upstream-reports issue (#212)** (`issue-workflow.md` § Outbound), with
-  what the specification says, what this implementation does, and the
-  resolution an upstream would need, in the format of `issue-workflow.md`
+  what the specification says, the problem, and a proposed resolution with its
+  rationale, never how FerroFED behaves, in the format of `issue-workflow.md`
   § Upstream report format, so the owner can file it upstream as it stands
   under that upstream's contributing rules. That issue is the record; no issue
   asks anyone to file it. Do not encode a workaround with no record.

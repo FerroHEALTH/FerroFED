@@ -136,8 +136,8 @@ Labels carry what the platform has no field for. Bootstrap them once with
   upstream-reports issue (#212). A defect, contradiction, or silence in a
   published specification is a comment on that issue, never an issue of its
   own (owner, 2026-10-02). The comment opens with a one-line title in bold, then
-  a plain summary, what the specification says (with citations), what this
-  implementation does, and the resolution an upstream would need. The issue is
+  a plain summary, what the specification says (with citations), the problem
+  it causes, and the resolution proposed, with its rationale. The issue is
   the record. The owner reports the comments upstream at the end, so every
   comment is written to be filed as it stands under that upstream's own
   contributing rules (§ Upstream report format below); no owner-action issue
@@ -166,15 +166,29 @@ Each report, and each numbered item of a comment that bundles several, says:
   **CP-14**, with a deep link to the rendered page and its anchor
   (`…/requirements.html#n7`, `#cp-14`), and a schema by file and JSON
   pointer. Quote the text that is wrong, short.
-- **What FerroFED does,** with the in-repo issue that holds the decision.
-- **Resolution:** the change the upstream would need. For a pull-request
+- **The problem:** what goes wrong for an implementer or a client reading the
+  text as it stands: a contradiction, a gap a conforming gateway can fill two
+  incompatible ways, or a requirement that cannot be met.
+- **Proposed resolution:** the change that makes sense for the specification
+  and its implementers in general, stated on its own merits.
+- **Rationale:** why that resolution is the right one, argued from the
+  specification's own text, its other requirements, and the standards it binds.
+
+A report never describes how FerroFED behaves, never names a FerroFED issue,
+pull request, file or decision, and never argues from FerroFED's choice (owner,
+2026-10-03): the upstream reads the proposal and its reasons, not one
+implementation's workaround. FerroFED's own decision for the gap is recorded
+in the code's `// NOTE:`, `docs/architecture.md` and the issue that made it.
+
+- **The resolution's form:** For a pull-request
   report to the Federation Tier specification it names the AsciiDoc pages
   under `modules/ROOT/pages/` to edit (never an exported rendering), puts any
   schema change in the same change as its prose, never tightens a schema
   beyond what the prose says (the prose is fixed first), never adds a
   federation constraint inside `$defs/itsRest`, and notes that
   `tools/check-refs.sh`, `tools/traceability.sh` and `tools/check-schemas.sh`
-  must pass. Contributions there are CC0.
+  must pass. Contributions there are CC0. Where the wording is short and clear,
+  the report proposes it.
 
 Comment ids and item numbers are cited from the code and from
 `conformance/obligations.tsv`, so a report is corrected by editing its

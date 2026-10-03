@@ -43,3 +43,11 @@ format: upstream and form (issue or PR) named per item, the pinned version, §,
 the schema change in the same change, no schema tightened beyond the prose,
 nothing inside `$defs/itsRest`, and the three `tools/` checks. A report is
 corrected by editing its comment in place, keeping its ids and numbering.
+
+Later on 2026-10-03 the owner added: "we should never suggest how we did it for
+FerroFED … just suggest a solution that of course makes sense", because the
+upstream does not care how FerroFED behaves, only what the report proposes and
+why. So a report states the specification's text, the problem it causes, a
+proposed resolution and its rationale, and never mentions FerroFED's behaviour,
+issues, files or decisions. FerroFED's own choice lives in the code's
+`// NOTE:`, `docs/architecture.md` and its issue.
