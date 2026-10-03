@@ -193,8 +193,9 @@ pub enum Error {
         #[source]
         source: IdError,
     },
-    /// A credentials section names both a bearer token and a user.
-    #[error("{section} names both a bearer token and a user; set one scheme")]
+    /// A credentials section names more than one scheme: a bearer token, a
+    /// basic user, an OAuth 2.0 grant.
+    #[error("{section} names more than one credentials scheme; set one")]
     Scheme {
         /// The credentials section.
         section: String,
@@ -230,6 +231,79 @@ pub enum Error {
         /// What the node client reported, which quotes nothing.
         #[source]
         source: InvalidCredentials,
+    },
+    /// A signing key cannot be used: it is no ES384 private key in PKCS#8
+    /// PEM, or the previous key is the current one.
+    #[error("{key} is not a usable signing key")]
+    SigningKey {
+        /// The key the file was named by.
+        key: String,
+        /// Why the key is refused; it quotes no part of the key.
+        #[source]
+        source: ferrofed_engine::onward::keys::KeyError,
+    },
+    /// `signing.assertion_lifetime_s` is zero or longer than the five minutes
+    /// a client assertion may live.
+    #[error(
+        "signing.assertion_lifetime_s is {seconds}; a client assertion lives 1 to {max} seconds"
+    )]
+    AssertionLifetime {
+        /// The lifetime given.
+        seconds: u64,
+        /// The longest lifetime allowed.
+        max: u64,
+    },
+    /// The rotation overlap is shorter than an assertion's lifetime plus the
+    /// time a node caches the JWK Set, so a node could meet an assertion signed
+    /// by a key the set no longer publishes.
+    #[error(
+        "signing.rotation_overlap_s ({overlap_s}) must be at least signing.assertion_lifetime_s ({lifetime_s}) plus signing.node_jwks_cache_s ({cache_s})"
+    )]
+    RotationOverlap {
+        /// The overlap window.
+        overlap_s: u64,
+        /// The assertion lifetime.
+        lifetime_s: u64,
+        /// How long a node caches the JWK Set.
+        cache_s: u64,
+    },
+    /// A URL that must be absolute `http` or `https` is not.
+    #[error("{key} must be an http or https URL with no user name or password")]
+    HttpUrl {
+        /// The key that holds it.
+        key: String,
+    },
+    /// An OAuth 2.0 grant cannot be built from its section.
+    #[error("{section} is not a usable OAuth 2.0 client-credentials grant")]
+    Grant {
+        /// The section.
+        section: String,
+        /// What the grant refused.
+        #[source]
+        source: ferrofed_engine::onward::GrantError,
+    },
+    /// A scope is not one the gateway may request onward.
+    #[error("{key} is not a SMART on openEHR system scope")]
+    Scope {
+        /// The key that holds it.
+        key: String,
+        /// What the scope grammar refused.
+        #[source]
+        source: ferrofed_engine::onward::ScopeError,
+    },
+    /// An OAuth 2.0 grant is configured, but no signing key signs its client
+    /// assertion.
+    #[error("{section} needs [signing], whose key signs its client assertion (RFC 7523 §2.2)")]
+    GrantWithoutSigning {
+        /// The section.
+        section: String,
+    },
+    /// A credentials section that takes a bearer token or basic credentials
+    /// names an OAuth 2.0 grant.
+    #[error("{section} takes a bearer token or basic credentials, not an oauth2 grant")]
+    GrantNotHere {
+        /// The section.
+        section: String,
     },
     /// The `[dev]` table does not have the shape of `[[dev.crossref]]` rows.
     ///

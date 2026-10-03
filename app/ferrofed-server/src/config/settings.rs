@@ -7,9 +7,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
+use ferrofed_engine::onward::Grant;
+use ferrofed_engine::onward::keys::KeyRing;
 use ferrofed_identity::dev::Profile;
 use ferrofed_identity::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
@@ -17,6 +20,7 @@ use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
+use openehr_federation::object::Uri;
 
 use crate::base_path::BasePath;
 use crate::config::stored_queries::Store;
@@ -48,6 +52,20 @@ pub struct Settings {
     pub stored_queries: Option<Store>,
     /// The metrics surface.
     pub metrics: MetricsSettings,
+    /// The gateway's signing keys and where they are published, when
+    /// `[signing]` is set (§13.1, N25).
+    pub signing: Option<SigningSettings>,
+}
+
+/// The gateway's signing keys, resolved.
+#[derive(Debug, Clone)]
+pub struct SigningSettings {
+    /// The current key and, while its window lasts, the previous one.
+    pub keys: Arc<KeyRing>,
+    /// The absolute URL `OPTIONS {base}/` declares for the JWK Set.
+    pub jwks_uri: Uri,
+    /// How long a client assertion is valid.
+    pub assertion_lifetime: Duration,
 }
 
 /// The PIXm resolver, resolved.
@@ -171,6 +189,9 @@ pub enum Scheme {
         /// The password.
         password: Secret,
     },
+    /// An OAuth 2.0 client-credentials grant with a JWT client assertion
+    /// (RFC 6749 §4.4, RFC 7523 §2.2).
+    OAuth2(Box<Grant>),
 }
 
 impl Settings {

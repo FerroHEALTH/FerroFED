@@ -297,7 +297,25 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         pixm: fresh.pixm,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
+        signing: boot.signing.clone(),
     }
+}
+
+/// Whether `fresh` names other signing keys, another JWK Set location or
+/// another assertion lifetime than the process started with; the keys are
+/// compared by `kid`, never by their material.
+fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
+    let shape = |settings: &Settings| {
+        settings.signing.as_ref().map(|signing| {
+            (
+                signing.keys.current().kid().to_owned(),
+                signing.keys.retiring().map(|key| key.kid().to_owned()),
+                signing.jwks_uri.as_str().to_owned(),
+                signing.assertion_lifetime,
+            )
+        })
+    };
+    shape(boot) != shape(fresh)
 }
 
 /// The keys outside [`RELOADABLE`] whose value in `fresh` differs from the
@@ -306,6 +324,7 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
     let (was, now) = (&boot.federation, &fresh.federation);
     [
         ("profile", boot.profile != fresh.profile),
+        ("signing", signing_changed(boot, fresh)),
         ("server.listen", boot.server.listen != fresh.server.listen),
         (
             "server.base_path",
@@ -413,7 +432,8 @@ fn federation_class(error: &FederationError) -> &'static str {
         FederationError::DemographicWithoutRegistry
         | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",
         FederationError::Describe(_) => "self-description",
-        FederationError::Clients(SetupError::UnknownEndpoint { .. }) => "credentials",
+        FederationError::Clients(SetupError::UnknownEndpoint { .. })
+        | FederationError::Grant { .. } => "credentials",
         FederationError::Clients(_) => "node-clients",
         FederationError::Transport(_) => "http-client",
     }

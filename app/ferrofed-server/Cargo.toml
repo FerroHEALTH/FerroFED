@@ -84,6 +84,8 @@ uuid.workspace = true
 async-trait.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
+# The JWK Set the gateway publishes, read as the onward tests verify it (#81).
+jsonwebtoken.workspace = true
 wiremock.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util"] }

@@ -62,6 +62,7 @@ use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, Method, Uri};
 use openehr_base::prelude::ObjectVersionId;
+use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::error::{self, Code};
@@ -389,6 +390,7 @@ pub(crate) fn failed(
         ForwardError::TimeOut { .. } | ForwardError::Expired { .. } => Code::NodeTimeout,
         ForwardError::Unreachable { .. } => Code::NodeUnreachable,
         ForwardError::Refused { .. } => Code::NodeRefused,
+        ForwardError::Credentials { .. } => Code::NodeError,
         _ => Code::Internal,
     };
     if code.status().is_server_error() {
@@ -399,7 +401,15 @@ pub(crate) fn failed(
             "the routed request failed"
         );
     }
-    provenance.stamp(error::response(code, failure.to_string(), request_id))
+    let message = match failure {
+        ForwardError::Credentials {
+            endpoint,
+            error: ErrorDetail::Text(text),
+            ..
+        } => format!("endpoint {endpoint}: {text}"),
+        other => other.to_string(),
+    };
+    provenance.stamp(error::response(code, message, request_id))
 }
 
 #[cfg(test)]

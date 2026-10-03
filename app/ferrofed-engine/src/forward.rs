@@ -30,11 +30,13 @@
 use std::fmt;
 
 use crate::declared::{self, Refusal};
+use crate::dispatch::reported;
 use crate::dispatch::{DispatchOptions, NodeClient};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
 use ferrofed_registry::id::EndpointId;
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
 use http::{HeaderMap, HeaderName, Method, StatusCode};
+use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::client::{
     ClientError, ErrorBody, Request, Transport, TransportError, path_segment,
 };
@@ -142,11 +144,16 @@ pub enum ForwardError {
         /// The part of the request that carried it; never the value.
         part: Part,
     },
-    /// The credentials provider produced no credential for the onward grant.
-    #[error("no credential could be obtained for endpoint {endpoint}")]
+    /// No onward credential could be obtained for the endpoint, so nothing
+    /// was sent (§13.1, N25).
+    #[error("no onward credential could be obtained for endpoint {endpoint}")]
     Credentials {
         /// The endpoint.
         endpoint: EndpointId,
+        /// The `error` the endpoint is reported with: a fixed sentence and,
+        /// when the token endpoint refused with one, its registered RFC 6749
+        /// §5.2 code ([`reported::unauthenticated`]).
+        error: ErrorDetail,
         /// What the client runtime reported.
         #[source]
         source: Box<ClientError>,
@@ -384,7 +391,7 @@ impl<T: Transport> NodeClient<T> {
                     body: answer.into_body(),
                 })
             }
-            Err(error) => Err(self.unanswered(error)),
+            Err(error) => Err(self.unanswered(error, options)),
         }
     }
 
@@ -458,7 +465,7 @@ impl<T: Transport> NodeClient<T> {
     ///
     /// `Client::forward` sends once and raises `DeadlineElapsed` only before
     /// the request is handed to the transport, so it is a request never sent.
-    fn unanswered(&self, error: ClientError) -> ForwardError {
+    fn unanswered(&self, error: ClientError, options: &DispatchOptions) -> ForwardError {
         let endpoint = self.endpoint().clone();
         match error {
             ClientError::DeadlineElapsed { .. } => ForwardError::Expired {
@@ -476,7 +483,8 @@ impl<T: Transport> NodeClient<T> {
                 endpoint,
                 source: Box::new(error),
             },
-            ClientError::Credentials { .. } => ForwardError::Credentials {
+            ClientError::Credentials { ref source, .. } => ForwardError::Credentials {
+                error: reported::unauthenticated(source, &endpoint, options.request_id()),
                 endpoint,
                 source: Box::new(error),
             },

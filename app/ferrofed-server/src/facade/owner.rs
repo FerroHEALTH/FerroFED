@@ -500,6 +500,9 @@ pub enum Silence {
     Unreachable,
     /// It refused the gateway's onward credentials.
     Refused,
+    /// No onward credential could be obtained for it, so it was sent
+    /// nothing (§13.1, N25).
+    Unauthenticated,
     /// The probe was never sent, for a reason on the gateway's side.
     Unsent(ForwardError),
 }
@@ -509,7 +512,7 @@ impl Silence {
     #[must_use]
     pub fn code(&self) -> Code {
         match self {
-            Self::Erred(_) => Code::NodeError,
+            Self::Erred(_) | Self::Unauthenticated => Code::NodeError,
             Self::TimedOut => Code::NodeTimeout,
             Self::Unreachable => Code::NodeUnreachable,
             Self::Refused => Code::NodeRefused,
@@ -525,6 +528,9 @@ impl fmt::Display for Silence {
             Self::TimedOut => f.write_str("timed out"),
             Self::Unreachable => f.write_str("could not be reached"),
             Self::Refused => f.write_str("refused the onward credentials"),
+            Self::Unauthenticated => {
+                f.write_str("was sent nothing: no onward credential could be obtained")
+            }
             Self::Unsent(_) => f.write_str("was not sent the probe"),
         }
     }
@@ -553,6 +559,7 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>) -> Settled {
             }
             Answer::Failed(ForwardError::Unreachable { .. }) => Silence::Unreachable,
             Answer::Failed(ForwardError::Refused { .. }) => Silence::Refused,
+            Answer::Failed(ForwardError::Credentials { .. }) => Silence::Unauthenticated,
             Answer::Failed(failure) => Silence::Unsent(failure),
         };
         silent.push((endpoint, silence));

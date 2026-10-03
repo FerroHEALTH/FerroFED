@@ -447,6 +447,7 @@ fn outcome(
                     .to_owned(),
             ),
         },
+        Err(ForwardError::Credentials { error, .. }) => Outcome::NodeError { latency_ms, error },
         Err(ForwardError::Unreachable { .. }) => Outcome::Offline {
             latency_ms,
             error: error("the node could not be reached".to_owned()),

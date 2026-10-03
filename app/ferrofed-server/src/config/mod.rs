@@ -79,6 +79,10 @@ pub struct Config {
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
     /// push, both off by default.
     pub metrics: Metrics,
+    /// The gateway's signing keys (`[signing]`), which sign the client
+    /// assertion of every OAuth 2.0 grant to a node and which the gateway
+    /// publishes as a JWK Set (§13.1, N25).
+    pub signing: Option<Signing>,
 }
 
 impl Default for Config {
@@ -94,6 +98,7 @@ impl Default for Config {
             pixm: None,
             stored_queries: stored_queries::StoredQueries::default(),
             metrics: Metrics::default(),
+            signing: None,
         }
     }
 }
@@ -444,7 +449,8 @@ pub struct Metrics {
     pub otlp_endpoint: Option<SecretUrl>,
 }
 
-/// The credentials one endpoint expects.
+/// The credentials one endpoint expects: a bearer token, basic credentials,
+/// or an OAuth 2.0 grant.
 ///
 /// Every secret is reachable inline or through its `_file` sibling; setting
 /// both is a boot error, and so is naming two schemes. An inline secret is a
@@ -462,4 +468,99 @@ pub struct Credentials {
     pub password: Option<Secret>,
     /// A file holding the password, read at boot.
     pub password_file: Option<PathBuf>,
+    /// An OAuth 2.0 client-credentials grant at the node's token endpoint
+    /// (`[credentials."<endpoint id>".oauth2]`), the default onward mechanism
+    /// of §13.1 (N25).
+    pub oauth2: Option<OAuth2>,
+}
+
+/// An OAuth 2.0 grant at one node's token endpoint.
+///
+/// The gateway authenticates with a JWT client assertion signed by the
+/// `[signing]` key (RFC 7523 §2.2), and every token is requested with
+/// `scope`. No field has a default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct OAuth2 {
+    /// The grant: `client_credentials` (RFC 6749 §4.4).
+    pub grant: Option<GrantKind>,
+    /// How the gateway authenticates at the token endpoint:
+    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2).
+    pub client_auth: Option<ClientAuth>,
+    /// The token endpoint, an `http` or `https` URL with no userinfo; it is
+    /// also the `aud` of every client assertion (RFC 7523 §3).
+    pub token_endpoint: Option<SecretUrl>,
+    /// The client the node's authorization server registered the gateway
+    /// as, the `iss` and `sub` of every client assertion (RFC 7523 §3).
+    pub client_id: String,
+    /// The scope every token is requested with, space-delimited (RFC 6749
+    /// §3.3), each a SMART on openEHR resource scope of the `system`
+    /// compartment, such as `system/aql-*.s`.
+    pub scope: String,
+    /// The target service the token is for (RFC 8707 §2), when the
+    /// authorization server takes one.
+    pub resource: Option<String>,
+    /// The audience the token is asked for, when the authorization server
+    /// takes one.
+    pub audience: Option<String>,
+}
+
+/// The OAuth 2.0 grant the gateway uses at a node's token endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum GrantKind {
+    /// The client-credentials grant (RFC 6749 §4.4).
+    ClientCredentials,
+}
+
+/// How the gateway authenticates at a node's token endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ClientAuth {
+    /// A JWT client assertion signed with the gateway's key (RFC 7523 §2.2,
+    /// RFC 7521 §4.2).
+    PrivateKeyJwt,
+}
+
+/// The gateway's signing keys and their publication (§13.1, N25).
+///
+/// The current key signs every client assertion. The previous key, during a
+/// rotation, is published beside it for `rotation_overlap_s` from the start
+/// of the process and never signs. Both are ES384 (P-384) private keys in
+/// PKCS#8 PEM, read from files at boot. The JWK Set is served at
+/// `{base}/.well-known/jwks.json`, and `jwks_uri` is the absolute URL the
+/// `OPTIONS {base}/` body declares for it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Signing {
+    /// The file holding the current key.
+    pub key_file: Option<PathBuf>,
+    /// The file holding the previous key, during a rotation.
+    pub previous_key_file: Option<PathBuf>,
+    /// The absolute URL nodes fetch the JWK Set from: the gateway's own
+    /// `{base}/.well-known/jwks.json` at its public address, or wherever the
+    /// deployment publishes the keys (§13.1).
+    pub jwks_uri: Option<String>,
+    /// How long a client assertion is valid, in seconds: at most 300.
+    pub assertion_lifetime_s: u64,
+    /// How long the nodes cache the JWK Set, in seconds.
+    pub node_jwks_cache_s: u64,
+    /// How long the previous key stays published, in seconds: at least
+    /// `assertion_lifetime_s` plus `node_jwks_cache_s`.
+    pub rotation_overlap_s: u64,
+}
+
+impl Default for Signing {
+    fn default() -> Self {
+        Self {
+            key_file: None,
+            previous_key_file: None,
+            jwks_uri: None,
+            assertion_lifetime_s: 300,
+            node_jwks_cache_s: 3600,
+            rotation_overlap_s: 3900,
+        }
+    }
 }

@@ -35,7 +35,7 @@ use openehr_federation::headers;
 use openehr_federation::id::EndpointId;
 use openehr_federation::object::Extra;
 use openehr_federation::options::{
-    Aggregates, AqlBehaviour, Completeness, DedupDefault, DedupModes, DedupPolicy,
+    Aggregates, AqlBehaviour, AuthDescription, Completeness, DedupDefault, DedupModes, DedupPolicy,
     DefinitionBehaviour, DemographicSupport, GatewayDescription, ItsRestAreas, Localization,
     MemberEndpoint, MembershipStatus, OptIn, OptionsRoot, Paging, SpecVersion, TimeoutPolicy,
 };
@@ -158,8 +158,12 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
             .with_stored_query_registry(registry)?
             .with_stored_query_fan_out(registry && federation.fans_out_stored_queries())?,
         localization: localization(federation.localization())?,
-        // TODO(#81): declare auth.jwks_uri once the gateway publishes its JWKS (§13.1).
-        auth: None,
+        // NOTE: §13.1 jwks-discovery, N25, N30: the JWK Set location is declared
+        // whenever keys are configured, and the member is absent otherwise.
+        auth: federation.signing().map(|signing| AuthDescription {
+            jwks_uri: Some(signing.jwks_uri.clone()),
+            extra: Extra::new(),
+        }),
         its_rest: its_rest(federation, registry)?,
         extra: consent(federation)?,
     };

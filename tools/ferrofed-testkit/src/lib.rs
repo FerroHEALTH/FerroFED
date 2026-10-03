@@ -16,6 +16,9 @@
 //!   carrier for an identifier and its fragments, raw and percent-decoded;
 //! - [`mock`]: the wiremock server every suite stands its nodes up with,
 //!   dropped outside the test's runtime;
+//! - [`oauth`]: the harness OAuth 2.0 token endpoint, which verifies the
+//!   gateway's client assertion against its published JWK Set and issues
+//!   the token a mock node then requires (#81);
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
 //!   what an ITI-104 feed delivered (#47);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
@@ -31,6 +34,7 @@
 pub mod containers;
 pub mod leak;
 pub mod mock;
+pub mod oauth;
 pub mod pix;
 pub mod proxy;
 pub mod seed;

@@ -38,8 +38,10 @@ openehr-base = "0.0.81"
 openehr-rm = "0.0.81"
 openehr-query = { version = "0.0.81", features = ["federation"] }
 openehr-its = { version = "0.0.81", default-features = false }
-# TODO(#80): add openehr-sdt to the family when client authentication reads
-# the SMART on openEHR scopes with it.
+# The SMART on openEHR scope grammar alone, with no default feature: the
+# scope an onward token is requested with is written and checked with it
+# (#81).
+openehr-sdt = { version = "0.0.81", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
@@ -69,6 +71,12 @@ rust_decimal = { version = "1.43.0", default-features = false, features = ["std"
 # The configuration file format, parsed into the server's Config tree.
 toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "display", "serde"] }
 secrecy = "0.10.3"
+# The onward grant (#81): the ES384 client assertion of RFC 7523 §2.2 is
+# signed with it, and its JWK and RFC 7638 thumbprint name the published key.
+# aws_lc_rs is its one crypto backend, the provider rustls already builds on;
+# enabling a second backend makes it refuse to pick one. Verified against
+# crates.io on 2026-10-03.
+jsonwebtoken = { version = "11.1.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
 http = "1.5.0"
 # The media types and ranges of Accept and Content-Type on a routed request
 # (#261; RFC 9110 §8.3, §12.5.1).
@@ -141,6 +149,13 @@ proptest = "1.11.0"
 # YAML the result-set schema's ITS-REST subset is held to; a pure-Rust,
 # maintained serde YAML reader. Verified against crates.io on 2026-10-03.
 serde-saphyr = { version = "1.3.0", default-features = false, features = ["deserialize"] }
+# Test-only for the onward grant (#81): the testkit generates each synthetic
+# ES384 signing key at run time with the crypto library rustls and
+# jsonwebtoken already build on, so no private key is ever committed, and
+# writes it as PEM with the major version jsonwebtoken reads. Verified against
+# crates.io on 2026-10-03.
+aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-sys"] }
+pem = { version = "3.0.6", default-features = false, features = ["std"] }
 
 # The reliability bar (no specification governs it: our own design). Groups sit
 # at priority -1 so every named lint below overrides its group.

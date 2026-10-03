@@ -52,9 +52,8 @@ confidence-threshold = 0.9
 # The project's own crates are BUSL-1.1 (LICENSE). The openEHR model crates
 # join this list as each is first depended on: openehr-query is BUSL-1.1,
 # openehr-its is Apache-2.0, and openehr-term, under openehr-rm, is Apache-2.0
-# with the CC-BY-SA-3.0 terminology data it redistributes.
-# TODO(#80): add the BUSL-1.1 exception for openehr-sdt when client
-# authentication first depends on it.
+# with the CC-BY-SA-3.0 terminology data it redistributes; openehr-sdt is
+# BUSL-1.1.
 exceptions = [
   { allow = ["BUSL-1.1"], crate = "openehr-federation" },
   { allow = ["BUSL-1.1"], crate = "ihe-iti" },
@@ -66,6 +65,8 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
   # The AQL front end the federated query parses and prints with (#38).
   { allow = ["BUSL-1.1"], crate = "openehr-query" },
+  # The SMART on openEHR scope grammar the onward grant requests with (#81).
+  { allow = ["BUSL-1.1"], crate = "openehr-sdt" },
   # The openEHR terminology data openehr-term redistributes (through
   # openehr-its's json layer) is CC-BY-SA-3.0; the crate's code is Apache-2.0.
   # The share-alike terms cover that data, which FerroFED redistributes

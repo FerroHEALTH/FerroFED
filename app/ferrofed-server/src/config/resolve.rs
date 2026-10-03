@@ -19,10 +19,10 @@ use openehr_federation::id::FederationId;
 
 use crate::base_path::BasePath;
 use crate::config::error::Error;
-use crate::config::secrets::resolve_credentials;
+use crate::config::secrets::{resolve_credentials, resolve_signing};
 use crate::config::settings::{
     FederationSettings, LocalizationSettings, MetricsSettings, PixManagerSettings, PixmSettings,
-    ServerSettings, Settings, TelemetrySettings,
+    Scheme, ServerSettings, Settings, TelemetrySettings,
 };
 use crate::config::{
     COMBINING_MARGIN_MS, Config, Federation, Localization, Metrics, NodeSelection, OffsetPaging,
@@ -53,7 +53,15 @@ impl Config {
     /// metrics surface refuses a remote listener without `metrics.allow_remote`
     /// ([`Error::MetricsRemote`]), a listener on `server.listen`
     /// ([`Error::MetricsShared`]) and a collector that is no `http://` URL
-    /// ([`Error::OtlpScheme`]).
+    /// ([`Error::OtlpScheme`]). An OAuth 2.0 grant refuses a missing key, a
+    /// scope outside the SMART on openEHR `system` grammar ([`Error::Scope`]),
+    /// an unusable endpoint or resource ([`Error::Grant`]), a PIX Manager
+    /// section ([`Error::GrantNotHere`]) and a missing `[signing]`
+    /// ([`Error::GrantWithoutSigning`]); `[signing]` refuses a key that is no
+    /// ES384 key ([`Error::SigningKey`]), an assertion lifetime past five
+    /// minutes ([`Error::AssertionLifetime`]), an overlap window shorter than
+    /// that lifetime plus the nodes' cache time ([`Error::RotationOverlap`]),
+    /// and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -93,6 +101,19 @@ impl Config {
             let scheme = resolve_credentials(&format!("credentials.{endpoint}"), section)?;
             credentials.insert(id, scheme);
         }
+        let signing = self.signing.as_ref().map(resolve_signing).transpose()?;
+        // NOTE: §13.1, N25: the client assertion of every grant is signed with the
+        // gateway's key, so a grant without one is refused at load.
+        if signing.is_none()
+            && let Some(endpoint) = credentials
+                .iter()
+                .find(|(_, scheme)| matches!(scheme, Scheme::OAuth2(_)))
+                .map(|(endpoint, _)| endpoint)
+        {
+            return Err(Error::GrantWithoutSigning {
+                section: format!("credentials.{endpoint}.oauth2"),
+            });
+        }
         let federation = self.resolve_federation(request_timeout)?;
         let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
         let stored_queries = stored_queries::resolve(self)?;
@@ -129,6 +150,7 @@ impl Config {
             pixm,
             stored_queries,
             metrics,
+            signing,
         })
     }
 
@@ -242,11 +264,15 @@ fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
                 section: format!("{key}.credentials"),
             });
         }
+        let section = format!("{key}.credentials");
         let credentials = manager
             .credentials
             .as_ref()
-            .map(|section| resolve_credentials(&format!("{key}.credentials"), section))
+            .map(|credentials| resolve_credentials(&section, credentials))
             .transpose()?;
+        if matches!(credentials, Some(Scheme::OAuth2(_))) {
+            return Err(Error::GrantNotHere { section });
+        }
         managers.push(PixManagerSettings {
             url: manager.url.clone(),
             members: manager.members.clone(),

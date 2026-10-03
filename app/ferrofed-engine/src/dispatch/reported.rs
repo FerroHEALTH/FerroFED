@@ -14,12 +14,15 @@
 //! reaches the answer (§5.4.1, N33). The HTTP client's reason for an
 //! `offline` or `time-out` node is held to the same rule.
 
+use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 use openehr_federation::outcome::ErrorDetail;
-use openehr_its::rest::client::ErrorBody;
+use openehr_its::rest::client::{CredentialsError, ErrorBody};
 
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
+use crate::onward::token::TokenError;
+use crate::outbound_id::OutboundId;
 
 /// The longest excerpt of a node's own message an `error` carries, in
 /// characters.
@@ -67,6 +70,60 @@ pub(crate) fn followed_by(lead: String, reason: &str, withheld: &Withheld) -> Er
         Excerpt::Withheld => ErrorDetail::Text(format!("{lead}: {MASK}")),
         Excerpt::Empty => ErrorDetail::Text(lead),
     }
+}
+
+/// The `error` of a node the gateway could not authenticate to: no onward
+/// credential could be obtained, so nothing was sent to it (§13.1, N25).
+///
+/// The `error` is [`UNAUTHENTICATED`], followed by the token endpoint's
+/// `error` code when it refused with one RFC 6749 §5.2 registers, and nothing
+/// else: the provider's account names the gateway's own token endpoint,
+/// client and network, which the caller is not told. That account is logged
+/// whole at `warn` with `endpoint` and `request_id`.
+#[must_use]
+pub fn unauthenticated(
+    source: &CredentialsError,
+    endpoint: &EndpointId,
+    request_id: Option<&OutboundId>,
+) -> ErrorDetail {
+    let cause = std::error::Error::source(source);
+    let account = match cause {
+        Some(cause) => chain(cause),
+        None => source.to_string(),
+    };
+    tracing::warn!(
+        endpoint = %endpoint,
+        request_id = request_id.map(ToString::to_string),
+        error = %account,
+        "no onward credential could be obtained, so nothing was sent to the node"
+    );
+    let code = cause
+        .and_then(|cause| cause.downcast_ref::<TokenError>())
+        .and_then(TokenError::code);
+    match code {
+        Some(code) => ErrorDetail::Text(format!(
+            "{UNAUTHENTICATED}: the token endpoint refused with {}",
+            code.as_str()
+        )),
+        None => ErrorDetail::Text(UNAUTHENTICATED.to_owned()),
+    }
+}
+
+/// The fixed text of the `error` of a node no onward credential could be
+/// obtained for.
+pub const UNAUTHENTICATED: &str = "no onward credential could be obtained, so nothing was sent";
+
+/// `error` and its causes, joined, so the reason a request failed is kept
+/// whole, never only its outermost text.
+pub(crate) fn chain(error: &(dyn std::error::Error + 'static)) -> String {
+    let mut out = error.to_string();
+    let mut next = error.source();
+    while let Some(cause) = next {
+        out.push_str(": ");
+        out.push_str(&cause.to_string());
+        next = cause.source();
+    }
+    out
 }
 
 /// What may be copied of a node's text `said`: at most [`MESSAGE_LIMIT`]

@@ -17,10 +17,10 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::dispatch::reported::MESSAGE_LIMIT;
+use ferrofed_engine::dispatch::reported::{MESSAGE_LIMIT, UNAUTHENTICATED};
 use ferrofed_engine::dispatch::{
-    DispatchError, DispatchOptions, NodeClient, NodeClients, NodeQuery, NodeReply,
-    REQUEST_ID_HEADER, SetupError, SharedCredentials,
+    DispatchOptions, NodeClient, NodeClients, NodeQuery, NodeReply, REQUEST_ID_HEADER, SetupError,
+    SharedCredentials,
 };
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::hygiene::mask::MASK;
@@ -465,18 +465,22 @@ impl CredentialsProvider for NoCredential {
     }
 }
 
+/// An onward credential that cannot be obtained fails the node as
+/// `node-error` carrying the provider's account, and sends nothing: the
+/// gateway never dispatches unauthenticated (§13.1, N25, §11.1).
+// conformance: CP-17
 #[tokio::test]
-async fn a_missing_credential_is_a_dispatch_error_and_sends_nothing() -> TestResult {
+async fn a_missing_credential_is_a_node_error_and_sends_nothing() -> TestResult {
     let server = node_answering("/openehr", json(200, EMPTY_RESULT_SET)).await;
     let client = client_at(&format!("{}/openehr", server.uri()))?
         .with_credentials_provider(Arc::new(NoCredential));
-    let failed = client
+    let reply = client
         .query(&NodeQuery::new(NODE_AQL), &within(Duration::from_secs(5))?)
-        .await;
-    assert!(
-        matches!(failed, Err(DispatchError::Credentials { .. })),
-        "{failed:?}"
-    );
+        .await?;
+    assert_eq!(EndpointStatus::NodeError, reply.status());
+    assert!(!reply.contact().sent(), "{:?}", reply.contact());
+    let text = error_text(&reply)?;
+    assert_eq!(UNAUTHENTICATED, text, "the provider account is not shown");
     assert!(received(&server).await?.is_empty());
     Ok(())
 }

@@ -19,7 +19,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use ferrofed_engine::dispatch::{NodeClients, SetupError, SharedCredentials};
+use ferrofed_engine::dispatch::{NodeClients, SetupError};
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
 use ferrofed_identity::consent::ConsentPrefilter;
@@ -39,9 +39,9 @@ use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::id::FederationId;
-use openehr_its::rest::client::{Credentials, ReqwestTransport};
+use openehr_its::rest::client::ReqwestTransport;
 
-use crate::config::settings::{PixmSettings, Scheme, Settings};
+use crate::config::settings::{PixmSettings, Scheme, Settings, SigningSettings};
 use crate::config::{NodeSelection, RegistryFormat};
 use crate::facade::options::{self, DescribeError};
 use crate::health::dependencies::Dependencies;
@@ -65,6 +65,7 @@ pub struct Federation {
     requests: NodeRequests,
     template_fan_out: bool,
     stored_query_fan_out: bool,
+    signing: Option<SigningSettings>,
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -192,6 +193,13 @@ pub enum FederationError {
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]
     Localization(#[source] localization::LocalizationError),
+    /// An OAuth 2.0 grant that cannot be used: one in a PIX Manager's
+    /// credentials, or a node's with no `[signing]` key (§13.1, N25).
+    #[error("{section} names an oauth2 grant it cannot use: only a node takes one, with [signing]")]
+    Grant {
+        /// The credentials section.
+        section: String,
+    },
     /// The node clients could not be built.
     #[error("the node clients could not be built")]
     Clients(#[source] SetupError),
@@ -328,11 +336,11 @@ impl Federation {
         };
         let localization = localization::policy(&settings.federation, selection, development)
             .map_err(FederationError::Localization)?;
-        let credentials = onward_credentials(settings);
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.
         let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
+        let credentials = crate::onward::onward_credentials(settings, &transport)?;
         let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)
             .map_err(FederationError::Clients)?;
         let mut context = Context::new(targeting(selection))
@@ -365,6 +373,7 @@ impl Federation {
             requests,
             template_fan_out: settings.federation.fan_out_template_upload,
             stored_query_fan_out: settings.federation.fan_out_stored_queries,
+            signing: settings.signing.clone(),
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -409,6 +418,7 @@ impl Federation {
             requests,
             template_fan_out: crate::config::Federation::default().fan_out_template_upload,
             stored_query_fan_out: crate::config::Federation::default().fan_out_stored_queries,
+            signing: None,
         }
     }
 
@@ -418,6 +428,14 @@ impl Federation {
     pub fn with_consent_prefilter(mut self, prefilter: Arc<dyn ConsentPrefilter>) -> Self {
         self.consent = Some(prefilter);
         self
+    }
+
+    /// The gateway's signing keys and where they are published, when
+    /// `[signing]` is set: the JWK Set `{base}/.well-known/jwks.json` serves,
+    /// and the `auth.jwks_uri` `OPTIONS {base}/` declares (§13.1, N25, N30).
+    #[must_use]
+    pub fn signing(&self) -> Option<&SigningSettings> {
+        self.signing.as_ref()
     }
 
     /// This federation, offering best-effort completion when `offered` is
@@ -741,6 +759,11 @@ fn pixm_resolver(
                 user: user.clone(),
                 password: password.to_secret_string(),
             },
+            Some(Scheme::OAuth2(_)) => {
+                return Err(FederationError::Grant {
+                    section: format!("pixm.manager[{index}].credentials"),
+                });
+            }
         };
         managers.push(ManagerConfig {
             base: manager.url.clone(),
@@ -757,24 +780,6 @@ fn pixm_resolver(
     let resolver =
         PixmResolver::from_config(managers, namespaces, snapshot).map_err(FederationError::Pixm)?;
     Ok(Arc::new(resolver))
-}
-
-/// The onward credentials of each endpoint that has a `[credentials]`
-/// section, as the node clients send them.
-fn onward_credentials(settings: &Settings) -> BTreeMap<EndpointId, SharedCredentials> {
-    let mut credentials = BTreeMap::new();
-    for (endpoint, scheme) in &settings.credentials {
-        let onward = match scheme {
-            Scheme::Bearer(token) => Credentials::Bearer(token.to_secret_string()),
-            Scheme::Basic { user, password } => Credentials::Basic {
-                user: user.clone(),
-                password: password.to_secret_string(),
-            },
-        };
-        let shared: SharedCredentials = Arc::new(onward);
-        credentials.insert(endpoint.clone(), shared);
-    }
-    credentials
 }
 
 /// The rewrite's targeting for an undirected query under the declared node
