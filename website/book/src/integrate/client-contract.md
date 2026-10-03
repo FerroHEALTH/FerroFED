@@ -290,6 +290,53 @@ answer, `POST`, `PUT` and `DELETE` included, names the acting endpoint in
 node's own URL or path, so following it bypasses the gateway; send the
 follow-up to the gateway with the version uid instead.
 
+### Writing a new version
+
+A versioned write amends a version that exists: an update of a composition,
+of the `EHR_STATUS` or of the directory, a delete of the directory, each
+naming the version it amends in `If-Match`, and a delete of a composition,
+naming it in the path. It goes to the CDR that controls that version, the one
+whose `system_id` equals the version's `creating_system_id`, and to no other
+node (§12.4, §12a.1, N23). Writing at a node that holds only an imported copy
+would fork the object (§10.3).
+
+The gateway routes the write by its path `ehr_id`, in the order above, and
+never by ask-all (§12a.1, N41). It then checks that node against the version:
+the registry must map the version's `creating_system_id` to it, as the
+node's own `system_id` or as a `[[creating_system]]` mapping the operator
+registered. A mapping the gateway learned from answers never counts, because
+a node that holds versions of a system need not have created them. The
+outcomes:
+
+- The path node controls the version: the write goes there once, as you sent
+  it, and the node's answer comes back with its `ETag` and `Location`.
+- Another member controls it, or no member is known to: the write is a `409`
+  (`controlling-system-unreachable`), and no node is sent it. The message
+  names the controlling node and its endpoint where the registry knows them.
+  The path `ehr_id` belongs to the node it routes to, so the gateway cannot
+  send the write to the controlling node instead; send it there under that
+  node's own `ehr_id` for the patient.
+- The write names no single version: `If-Match` is absent, repeated, a list,
+  `*`, a weak tag, unquoted, or no `OBJECT_VERSION_ID`, or a composition
+  delete's path is no `OBJECT_VERSION_ID`. That is a `400`
+  (`preceding-version-invalid`), and nothing is sent.
+
+A `CONTRIBUTION` names the versions it amends only in its body, which the
+gateway never reads, so it is routed by its path `ehr_id` alone.
+
+### Creating an EHR
+
+A new EHR has no owner yet, so neither a binding nor the index can name its
+node, and nothing is probed for it. `POST {base}/v1/ehr` and
+`PUT {base}/v1/ehr/{ehr_id}` go only to the one endpoint you name in
+`openEHR-federation-endpoint` or `openEHR-federation-organisation` (§12.4,
+N23). Without a header the request is a `400` (`target-required`); headers
+that select several endpoints are a `400` (`endpoint-several`), because an
+EHR is created at one node only (§2.3). The body, its `EHR_STATUS` subject
+included, reaches that node byte for byte, and the node's `Location` and
+`ETag` come back unmodified. A composition or a directory created inside an
+existing EHR is routed by its path `ehr_id` like any other request under it.
+
 ## Stored queries
 
 A deployment that sets `[stored_queries]` offers the federated stored-query

@@ -166,6 +166,10 @@ impl LearnedMap {
     /// Routes a `creating_system_id`: a member's own `system_id`, then a
     /// registered mapping, then a learned one (N21, §12.3 step 1).
     ///
+    /// A versioned write takes its controlling CDR from the first two alone,
+    /// [`RegistrySnapshot::registered_route`]: a learned route shows where
+    /// versions are held, never who controls them (§10.3, §12a.1, N23).
+    ///
     /// # Errors
     ///
     /// [`CreatingSystemMiss::Conflicted`] when only a withdrawn learned
@@ -176,7 +180,6 @@ impl LearnedMap {
         snapshot: &RegistrySnapshot,
         creating_system_id: &SystemId,
     ) -> Result<CreatingSystemRoute, CreatingSystemMiss> {
-        // TODO(#65): the versioned-write router calls this for the controlling CDR (§12.4, N23).
         if let Some(route) = snapshot.registered_route(creating_system_id) {
             return Ok(route);
         }

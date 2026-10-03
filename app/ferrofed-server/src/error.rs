@@ -57,8 +57,9 @@ pub enum Code {
     NoDestination,
     /// The `ehr_id` is claimed by more than one node (§12.5.2, N42).
     EhrIdCollision,
-    /// No reachable node is the controlling system of a versioned write
-    /// (§10.3, N36).
+    /// The node a versioned write's path `ehr_id` routes to is not the
+    /// controlling system of the version it amends, and no other node is sent
+    /// it (§10.3, §12a.1, N23, N36).
     ControllingSystemUnreachable,
     /// The gateway failed on its own side (§11.2).
     Internal,
@@ -74,8 +75,10 @@ pub enum Code {
     /// header names an organisation the registry does not know, or the
     /// header names none (§8.1, §8.4.1, N20).
     OrganisationUnknown,
-    /// A write to an EHR resource names no node, and no held binding or
-    /// `ehr_id` index entry routes it to exactly one (§12.5.1, N41).
+    /// A write names no node: a write to an EHR resource that no held
+    /// binding or `ehr_id` index entry routes to exactly one (§12.5.1, N41),
+    /// or the creation of an EHR, which only the targeting headers route
+    /// (§12.4, N23).
     TargetRequired,
     /// The targeting headers of a request routed to a single node select
     /// more than one endpoint (§7a.1, §12.4).
@@ -126,6 +129,11 @@ pub enum Code {
     StoredQueryHeld,
     /// The registry holds no stored query at the name and version (§12.7).
     StoredQueryUnknown,
+    /// A versioned write names the version it amends by no single
+    /// `OBJECT_VERSION_ID`: none, several, or one that is malformed, in
+    /// `If-Match` or in the path of a `DELETE`, so its controlling CDR cannot
+    /// be found (§12.4, N23).
+    PrecedingVersionInvalid,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -141,7 +149,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 31] = [
+    pub const GATEWAY: [Self; 32] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -173,6 +181,7 @@ impl Code {
         Self::SubjectLiteral,
         Self::StoredQueryHeld,
         Self::StoredQueryUnknown,
+        Self::PrecedingVersionInvalid,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -220,6 +229,7 @@ impl Code {
             Self::SubjectLiteral => "subject-literal",
             Self::StoredQueryHeld => "stored-query-held",
             Self::StoredQueryUnknown => "stored-query-unknown",
+            Self::PrecedingVersionInvalid => "preceding-version-invalid",
         }
     }
 
@@ -246,7 +256,8 @@ impl Code {
             | Self::QueryVersionInvalid
             | Self::QueryVersionRequired
             | Self::QueryTypeUnsupported
-            | Self::SubjectLiteral => StatusCode::BAD_REQUEST,
+            | Self::SubjectLiteral
+            | Self::PrecedingVersionInvalid => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
                 StatusCode::NOT_FOUND
             }
@@ -291,7 +302,7 @@ impl Code {
                 "the organisation directive or header names an organisation the registry does not know (§8.4.1)"
             }
             Self::TargetRequired => {
-                "a write to an EHR resource that no header, binding or index routes to one node names its node in the openEHR-federation-endpoint header (§12.5.1, N41)"
+                "a write that no binding or index routes to one node, and the creation of an EHR, names its node in the openEHR-federation-endpoint header (§12.4, §12.5.1, N23, N41)"
             }
             Self::EndpointSeveral => {
                 "a request routed to one node selects exactly one endpoint through its targeting headers (§7a.1)"
@@ -328,6 +339,9 @@ impl Code {
             }
             Self::StoredQueryUnknown => {
                 "the registry holds no stored query at this name and version"
+            }
+            Self::PrecedingVersionInvalid => {
+                "a versioned write names the version it amends as one quoted OBJECT_VERSION_ID in If-Match, or in the path of a DELETE, so its controlling CDR can be found (§12.4, N23)"
             }
         }
     }
@@ -419,6 +433,7 @@ mod tests {
             Code::SubjectLiteral => Some(28),
             Code::StoredQueryHeld => Some(29),
             Code::StoredQueryUnknown => Some(30),
+            Code::PrecedingVersionInvalid => Some(31),
         }
     }
 
@@ -494,6 +509,7 @@ mod tests {
             (Code::SubjectLiteral, StatusCode::BAD_REQUEST),
             (Code::StoredQueryHeld, StatusCode::CONFLICT),
             (Code::StoredQueryUnknown, StatusCode::NOT_FOUND),
+            (Code::PrecedingVersionInvalid, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

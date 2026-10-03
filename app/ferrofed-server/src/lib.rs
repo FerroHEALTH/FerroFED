@@ -12,7 +12,8 @@
 //!
 //! The ITS-REST façade serves the federated query, `POST /v1/query/aql`
 //! ([`facade`], §7), and routes every request to an EHR resource under a
-//! path `ehr_id` to one node ([`facade::route`], §7a.1); every other path
+//! path `ehr_id`, and the creation of an EHR, to one node
+//! ([`facade::route`], §7a.1, §12.4); every other path
 //! under `/v1/` answers `501` until its issue lands.
 #![doc(test(attr(deny(warnings))))]
 
@@ -285,12 +286,12 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 /// Every path no route serves.
 ///
 /// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface: a
-/// request to an EHR resource under a path `ehr_id` is routed to one node
-/// ([`facade::route`]; §7a.1), `OPTIONS` names the methods the gateway
-/// serves for the path ([`facade::options::allow`]; §7a.2), and every other
-/// path answers `501` (§7a.1, N32), because a `404` would claim the resource
-/// does not exist. Every other
-/// path answers `404`. No answer of the gateway's own echoes the path.
+/// request to an EHR resource under a path `ehr_id`, and the creation of an
+/// EHR, is routed to one node ([`facade::route`]; §7a.1, §12.4), `OPTIONS`
+/// names the methods the gateway serves for the path
+/// ([`facade::options::allow`]; §7a.2), and every other path answers `501`
+/// (§7a.1, N32), because a `404` would claim the resource does not exist.
+/// Every other path answers `404`. No answer of the gateway's own echoes the path.
 ///
 /// A routed request reaches its node under the request's [`OutboundId`],
 /// never the client's `x-request-id` (§5.4.1, N33).

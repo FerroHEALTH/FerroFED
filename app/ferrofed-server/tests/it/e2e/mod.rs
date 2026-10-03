@@ -14,8 +14,9 @@
 //!
 //! A commit routed to one node lands there byte-identical, its
 //! `DV_IDENTIFIER` included, with the node's `Location` and `ETag` and the
-//! acting endpoint's headers on the answer (§7a.3, N22, N31, track 10), in
-//! [`commit`].
+//! acting endpoint's headers on the answer (§7a.3, N22, N31, track 10), and a
+//! versioned write reaches only the node that controls its version (§12.4,
+//! N23), in [`commit`].
 //!
 //! A directed query adds each node's ENDPOINT attributes to its rows and
 //! sends the directive to no node (§9.4, N12), in [`attributes`].

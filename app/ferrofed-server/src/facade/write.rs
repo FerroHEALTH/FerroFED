@@ -1,0 +1,342 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! Writes routed to one node: a versioned write only to the CDR that controls
+//! the version it amends, and a new EHR only to an explicitly chosen node
+//! (§12.4, §12a.1, N23).
+//!
+//! [`Write::of`] names what an ITS-REST operation writes, from its
+//! `operationId`:
+//!
+//! - a **versioned write** amends an existing version, which it names in
+//!   `If-Match` (`composition_update`, `ehr_status_update`,
+//!   `directory_update`, `directory_delete`) or in its path
+//!   (`composition_delete`);
+//! - a **new EHR** (`ehr_create`, `ehr_create_with_id`) has no owner yet, so
+//!   only the targeting headers name its node (§12.4, §8.4);
+//! - every other operation, a read or a create inside an existing EHR
+//!   included, goes where its path `ehr_id` routes it (§12.5.1, N41).
+//!
+//! A versioned write is EHR-scoped, so it goes to the node its path `ehr_id`
+//! routes to, by the explicit target, a held binding or the `ehr_id` index,
+//! and never by the ask-all probe (§12a.1 `route-ehr`, N41). [`controlled`]
+//! then holds that node to `route-write`: the registry must route the
+//! preceding version's `creating_system_id` to it, as the member's own
+//! `system_id` or a registered `[[creating_system]]` mapping (§12a.1, N21,
+//! N23). A learned route never shows control, because a holder of a version
+//! need not have created it (§10.2, §10.3). A node that does not control the
+//! version is never sent the write, and no other node is either: the path
+//! `ehr_id` is that node's own, so no other node can take the request
+//! unchanged (N22, N42a), and the write is refused `409` naming the
+//! controlling node where the registry knows it (§10.3 `copy-write-reject`).
+//! No value of the request is quoted back.
+
+use std::fmt;
+
+use ferrofed_registry::creating_system::CreatingSystemRoute;
+use ferrofed_registry::id::{EndpointId, NodeId, SystemId};
+use ferrofed_registry::snapshot::RegistrySnapshot;
+use http::{HeaderMap, header};
+use openehr_base::prelude::ObjectVersionId;
+use openehr_its::rest::routes::RouteMatch;
+
+use crate::error::Code;
+use crate::facade::owner;
+
+/// The path parameter a `DELETE` of a composition names the version it
+/// amends in (ITS-REST 1.1.0 EHR API, `composition_delete`).
+const PRECEDING_PARAM: &str = "uid_based_id";
+
+/// What an ITS-REST operation routed to one node writes (§12.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Write {
+    /// A write that amends an existing version, named where [`Preceding`]
+    /// says.
+    Versioned(Preceding),
+    /// The creation of an EHR, which only the targeting headers route.
+    NewEhr,
+    /// A read, or a write that is neither: it goes where its path `ehr_id`
+    /// routes it.
+    Routed,
+}
+
+/// Where a versioned write names the version it amends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Preceding {
+    /// In `If-Match`, as one quoted `OBJECT_VERSION_ID`.
+    IfMatch,
+    /// In the path, as the `uid_based_id` segment.
+    Path,
+}
+
+impl Write {
+    /// What the operation `matched` writes, by its ITS-REST `operationId`.
+    ///
+    /// ITS-REST 1.1.0 names the preceding version of a `PUT` and of a
+    /// directory `DELETE` in `If-Match`, and of a composition `DELETE` in
+    /// the path.
+    #[must_use]
+    pub fn of(matched: &RouteMatch) -> Self {
+        match matched.operation_id {
+            "composition_update" | "ehr_status_update" | "directory_update"
+            | "directory_delete" => Self::Versioned(Preceding::IfMatch),
+            "composition_delete" => Self::Versioned(Preceding::Path),
+            "ehr_create" | "ehr_create_with_id" => Self::NewEhr,
+            _ => Self::Routed,
+        }
+    }
+}
+
+/// Whether `matched` is the creation of an EHR with no `ehr_id` in its path,
+/// `POST {base}/v1/ehr`, routed only by the targeting headers (§12.4).
+#[must_use]
+pub fn creates_ehr(matched: &RouteMatch) -> bool {
+    matched.operation_id == "ehr_create"
+}
+
+/// Why a versioned write routed to `at` is refused before anything is sent.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum Refused {
+    /// The write names no single preceding version.
+    #[error(transparent)]
+    Preceding(#[from] PrecedingInvalid),
+    /// The node the write routes to does not control the preceding version.
+    #[error(transparent)]
+    NotControlling(#[from] NotControlling),
+}
+
+impl Refused {
+    /// The stable code the error body names.
+    #[must_use]
+    pub fn code(&self) -> Code {
+        match self {
+            Self::Preceding(_) => Code::PrecedingVersionInvalid,
+            Self::NotControlling(_) => Code::ControllingSystemUnreachable,
+        }
+    }
+}
+
+/// Why a versioned write names no single preceding version (§12.4, N23).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PrecedingInvalid {
+    /// `If-Match` is absent.
+    #[error(
+        "the versioned write carries no If-Match, so the version it amends, and its controlling CDR, are unknown (§12.4, N23)"
+    )]
+    Missing,
+    /// `If-Match` names more than one entity tag, or is repeated.
+    #[error(
+        "If-Match names more than one version, and a versioned write amends exactly one (§12.4, N23)"
+    )]
+    Several,
+    /// The version named is no quoted `OBJECT_VERSION_ID`.
+    #[error(
+        "the version the write amends is not one OBJECT_VERSION_ID, quoted in If-Match or written in the path of a DELETE, so its controlling CDR cannot be found (§12.4, N23)"
+    )]
+    Malformed,
+}
+
+/// Why the node a versioned write routes to may not take it (§10.3, §12a.1,
+/// N23).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum NotControlling {
+    /// The registry routes the preceding version's `creating_system_id` to
+    /// another node.
+    #[error(
+        "the version this write amends is controlled by node {controller}{}, and the request's ehr_id routes it to node {at}, which does not control it; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)",
+        Through(.endpoint.as_ref())
+    )]
+    Elsewhere {
+        /// The controlling node.
+        controller: NodeId,
+        /// The endpoint the controlling node is reached through, where it
+        /// has an active one.
+        endpoint: Option<EndpointId>,
+        /// The node the path `ehr_id` routes to.
+        at: NodeId,
+    },
+    /// The registry routes the preceding version's `creating_system_id` to no
+    /// node: it is no member's `system_id` and no registered mapping's.
+    #[error(
+        "the version this write amends was created by a system that is no member's system_id and no registered creating_system mapping, so no member is known to control it, and the request's ehr_id routes it to node {at}, which does not; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)"
+    )]
+    Unregistered {
+        /// The node the path `ehr_id` routes to.
+        at: NodeId,
+    },
+}
+
+/// Holds a versioned write that its path `ehr_id` routes to `at` to the rule
+/// of §12a.1 `route-write`: `at` controls the version it amends (N23).
+///
+/// # Errors
+///
+/// [`Refused::Preceding`] when the write names no single preceding version,
+/// and [`Refused::NotControlling`] when the registry routes the preceding
+/// version's `creating_system_id` to another node, or to none.
+pub fn controlled(
+    snapshot: &RegistrySnapshot,
+    preceding: Preceding,
+    (matched, headers): (&RouteMatch, &HeaderMap),
+    at: &NodeId,
+) -> Result<(), Refused> {
+    let version = match preceding {
+        Preceding::IfMatch => if_match(headers)?,
+        Preceding::Path => in_path(matched)?,
+    };
+    // NOTE: §12a.1, a creating_system_id that is no openEHR uid is no member's
+    // system_id, so it names no controlling CDR, the unregistered answer.
+    let route = SystemId::creating_system_id_of(&version)
+        .ok()
+        .and_then(|creating_system_id| snapshot.registered_route(&creating_system_id));
+    match route {
+        Some(route) if route.node() == at => Ok(()),
+        Some(route) => Err(NotControlling::Elsewhere {
+            endpoint: through(snapshot, &route),
+            controller: route.node().clone(),
+            at: at.clone(),
+        }
+        .into()),
+        None => Err(NotControlling::Unregistered { at: at.clone() }.into()),
+    }
+}
+
+/// The endpoint the controlling node of `route` is named by: the mapped
+/// endpoint, or for a member, the endpoint it is asked through.
+fn through(snapshot: &RegistrySnapshot, route: &CreatingSystemRoute) -> Option<EndpointId> {
+    route.endpoint().cloned().or_else(|| {
+        owner::reached_through(snapshot, route.node()).map(|endpoint| endpoint.id().clone())
+    })
+}
+
+/// The version `If-Match` names: exactly one field line holding one quoted
+/// `OBJECT_VERSION_ID` (ITS-REST 1.1.0 overview, `If-Match`).
+///
+/// ITS-REST gives the value as a `version_uid` enclosed in double quotes, so
+/// a weak tag, `*`, and an unquoted value name no version.
+fn if_match(headers: &HeaderMap) -> Result<ObjectVersionId, PrecedingInvalid> {
+    let mut lines = headers.get_all(header::IF_MATCH).iter();
+    let (Some(line), None) = (lines.next(), lines.next()) else {
+        return Err(if headers.contains_key(header::IF_MATCH) {
+            PrecedingInvalid::Several
+        } else {
+            PrecedingInvalid::Missing
+        });
+    };
+    let text = line
+        .to_str()
+        .map_err(|_opaque| PrecedingInvalid::Malformed)?;
+    let tag = text
+        .trim()
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .ok_or(PrecedingInvalid::Malformed)?;
+    if tag.contains('"') {
+        return Err(PrecedingInvalid::Several);
+    }
+    ObjectVersionId::new(tag).map_err(|_malformed| PrecedingInvalid::Malformed)
+}
+
+/// The version the path of a composition `DELETE` names (ITS-REST 1.1.0 EHR
+/// API: "the `uid_based_id` MUST be in a form of an `OBJECT_VERSION_ID`").
+fn in_path(matched: &RouteMatch) -> Result<ObjectVersionId, PrecedingInvalid> {
+    let decoded = matched
+        .path_param(PRECEDING_PARAM)
+        .and_then(|param| param.decoded().ok())
+        .ok_or(PrecedingInvalid::Malformed)?;
+    ObjectVersionId::new(decoded.as_str()).map_err(|_malformed| PrecedingInvalid::Malformed)
+}
+
+/// ` (endpoint e)` for a named endpoint, nothing otherwise.
+struct Through<'a>(Option<&'a EndpointId>);
+
+impl fmt::Display for Through<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(endpoint) => write!(f, " (endpoint {endpoint})"),
+            None => Ok(()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Preceding, PrecedingInvalid, Write, if_match};
+    use http::{HeaderMap, HeaderValue, Method, header};
+    use openehr_its::rest::routes::{Lookup, lookup};
+
+    const VERSION: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
+
+    fn write(method: &Method, path: &str) -> Option<Write> {
+        match lookup(method, path) {
+            Lookup::Matched(matched) => Some(Write::of(&matched)),
+            Lookup::MethodNotAllowed { .. } | Lookup::NotFound => None,
+        }
+    }
+
+    fn with_if_match(values: &[&'static str]) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        for value in values {
+            headers.append(header::IF_MATCH, HeaderValue::from_static(value));
+        }
+        headers
+    }
+
+    #[test]
+    fn each_versioned_write_names_where_it_carries_its_preceding_version() {
+        let if_match = Some(Write::Versioned(Preceding::IfMatch));
+        assert_eq!(if_match, write(&Method::PUT, "/ehr/7d44/composition/u"));
+        assert_eq!(if_match, write(&Method::PUT, "/ehr/7d44/ehr_status"));
+        assert_eq!(if_match, write(&Method::PUT, "/ehr/7d44/directory"));
+        assert_eq!(if_match, write(&Method::DELETE, "/ehr/7d44/directory"));
+        assert_eq!(
+            Some(Write::Versioned(Preceding::Path)),
+            write(&Method::DELETE, "/ehr/7d44/composition/u::s::1")
+        );
+    }
+
+    #[test]
+    fn creating_an_ehr_is_a_new_ehr_and_everything_else_is_routed() {
+        assert_eq!(Some(Write::NewEhr), write(&Method::POST, "/ehr"));
+        assert_eq!(Some(Write::NewEhr), write(&Method::PUT, "/ehr/7d44"));
+        for (method, path) in [
+            (Method::POST, "/ehr/7d44/composition"),
+            (Method::POST, "/ehr/7d44/directory"),
+            (Method::POST, "/ehr/7d44/contribution"),
+            (Method::GET, "/ehr/7d44/composition/u::s::1"),
+            (Method::PUT, "/ehr/7d44/composition/u::s::1/tags"),
+        ] {
+            assert_eq!(Some(Write::Routed), write(&method, path), "{method} {path}");
+        }
+    }
+
+    #[test]
+    fn if_match_names_one_quoted_object_version_id() {
+        let quoted = format!("\"{VERSION}\"");
+        let mut headers = HeaderMap::new();
+        headers.insert(header::IF_MATCH, HeaderValue::from_str(&quoted).unwrap());
+        assert_eq!(VERSION, if_match(&headers).unwrap().value());
+    }
+
+    #[test]
+    fn anything_but_one_quoted_object_version_id_names_no_preceding_version() {
+        assert_eq!(Err(PrecedingInvalid::Missing), if_match(&HeaderMap::new()));
+        for (values, refused) in [
+            (
+                vec!["\"a::b::1\"", "\"a::b::2\""],
+                PrecedingInvalid::Several,
+            ),
+            (vec!["\"a::b::1\", \"a::b::2\""], PrecedingInvalid::Several),
+            (vec!["*"], PrecedingInvalid::Malformed),
+            (vec!["W/\"a::b::1\""], PrecedingInvalid::Malformed),
+            (vec!["a::b::1"], PrecedingInvalid::Malformed),
+            (vec!["\"not a version\""], PrecedingInvalid::Malformed),
+        ] {
+            assert_eq!(
+                Err(refused),
+                if_match(&with_if_match(&values)).map(|_| ()),
+                "{values:?}"
+            );
+        }
+    }
+}

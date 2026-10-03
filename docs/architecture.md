@@ -371,10 +371,18 @@ never skipping a step that answers (N41); several claimants are a `409` and an
 integrity incident, never a choice (N42). A read of a `VERSION` under a path
 `ehr_id` routes by that `ehr_id` in the same order, never by its
 `creating_system_id` (decision A46): every ITS-REST version read is
-EHR-scoped, so the order of §12.3 routes none of them. A
-versioned write goes only to the controlling CDR and a new object only to an
-explicit target, and a write that cannot be routed exactly is a `400` (N23,
-N41). The answer is forwarded once, byte-identical, and no uid is rewritten.
+EHR-scoped, so the order of §12.3 routes none of them. A versioned write is
+EHR-scoped too: it routes by its path `ehr_id` in the same order, never by
+ask-all, and is sent only when the registry routes the preceding version's
+`creating_system_id` to that same node, as the member's own `system_id` or a
+registered mapping, never a learned one (§12a.1 `route-write`, N23). When the
+two name different nodes, or the registry names none, the write is a `409`
+and no node is sent it, because the path `ehr_id` cannot be rewritten for the
+controlling node (N22) and a commit at a holder would fork the object (§10.3
+`copy-write-reject`). A write naming no single preceding version is a `400`.
+A new EHR goes only to the endpoint the targeting headers name, and a write
+no step routes is a `400` (N23, N41). The answer is forwarded once,
+byte-identical, and no uid is rewritten.
 
 ```mermaid
 flowchart TD
@@ -391,13 +399,15 @@ flowchart TD
     s4 -->|one claimant| one
     s4 -->|none| r404["404"]
     s4 -->|several claimants| r409["409 listing the claimants, integrity incident (N42)"]
-    kind -->|"versioned write, §12.4"| w1{"controlling node: system_id equals creating_system_id?"}
-    w1 -->|exactly one| one
-    w1 -->|otherwise| r400
-    kind -->|"new object, §12.4"| n1{"explicit target: directive, header or path?"}
-    n1 -->|yes| one
+    one --> vw{"versioned write, §12.4?"}
+    vw -->|no| pass
+    vw -->|yes| w1{"registry routes the preceding version's creating_system_id here (member system_id or registered mapping)?"}
+    w1 -->|yes| pass
+    w1 -->|another node or none| w409["409, sent to no node (§10.3)"]
+    kind -->|"new EHR, §12.4"| n1{"targeting headers name one endpoint?"}
+    n1 -->|yes| pass
     n1 -->|no| r400
-    one --> pass["forward once, byte-identical; uids never rewritten (N22)"]
+    pass["forward once, byte-identical; uids never rewritten (N22)"]
 ```
 
 **`GET {base}/v1/ehr?subject_id=`.** `ehr_get_by_subject` carries a patient

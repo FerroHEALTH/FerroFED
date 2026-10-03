@@ -425,6 +425,7 @@ async fn options_on_a_sub_path_names_the_methods_served_there() -> TestResult {
     let app = gateway(dir.path(), &node.uri(), "", "")?;
     for (uri, expected) in [
         ("/v1/query/aql", "POST, OPTIONS"),
+        ("/v1/ehr", "POST, OPTIONS"),
         ("/v1/ehr/7d44", "GET, PUT, OPTIONS"),
         ("/v1/ehr/7d44/composition", "POST, OPTIONS"),
         (
@@ -454,7 +455,6 @@ async fn options_on_a_path_the_gateway_does_not_serve_is_not_implemented() -> Te
     for uri in [
         "/v1/demographic/agent/u::s::1",
         "/v1/definition/template/adl1.4",
-        "/v1/ehr",
         "/v1/",
     ] {
         let (status, text) = call(app.clone(), options(uri)?).await?;
