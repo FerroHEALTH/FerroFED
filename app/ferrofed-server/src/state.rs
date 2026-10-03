@@ -12,7 +12,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::settings::Settings;
 use crate::config::stored_queries::{Backend, Store};
-use crate::config::transport::{self, CleartextError, CredentialSite};
+use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::federation::{Federation, FederationError, read_registry};
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
@@ -152,7 +152,7 @@ impl AppState {
     /// # Errors
     /// Returns the [`StateError`] [`AppState::build`] would return for the
     /// federation, the transport of a credential, or the definition files.
-    pub fn check(settings: &Settings) -> Result<Vec<CredentialSite>, StateError> {
+    pub fn check(settings: &Settings) -> Result<Vec<ProtectedSite>, StateError> {
         let federation = Federation::load(settings)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
         if let (Some(store @ Store::Files(_)), Some(federation)) =

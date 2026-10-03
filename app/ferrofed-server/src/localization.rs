@@ -18,7 +18,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::dev::StaticResolver;
+use ferrofed_identity::dev::{Profile, StaticResolver};
 use ferrofed_identity::localizer::{Localizer, OnFailure};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::xcpd::{
@@ -214,7 +214,10 @@ pub fn policy(
                 }
             });
             let (localizer, mode): (Arc<dyn Localizer>, _) = match (&settings.xcpd, development) {
-                (Some(xcpd), _) => (Arc::new(xcpd_localizer(xcpd, snapshot)?), XCPD),
+                (Some(xcpd), _) => (
+                    Arc::new(xcpd_localizer(xcpd, settings.profile, snapshot)?),
+                    XCPD,
+                ),
                 (None, Some(development)) => (development, DEVELOPMENT_STATIC),
                 (None, None) => return Err(LocalizationError::NoLocalizer),
             };
@@ -228,9 +231,11 @@ pub fn policy(
     }
 }
 
-/// The XCPD localizer `xcpd` describes over the members of `snapshot`.
+/// The XCPD localizer `xcpd` describes over the members of `snapshot`, which
+/// admits an `http` gateway only when `profile` is development.
 fn xcpd_localizer(
     xcpd: &XcpdSettings,
+    profile: Profile,
     snapshot: &RegistrySnapshot,
 ) -> Result<XcpdLocalizer, LocalizationError> {
     let assertion = xcpd
@@ -274,7 +279,7 @@ fn xcpd_localizer(
             .collect(),
         communities,
         namespaces,
-        transport: if xcpd.development {
+        transport: if profile == Profile::Development {
             Transport::UnencryptedForDevelopment
         } else {
             Transport::Encrypted

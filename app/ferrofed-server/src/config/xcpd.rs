@@ -23,8 +23,9 @@
 //!
 //! A gateway URL is `https` unless the configuration is marked
 //! `profile = "development"`: the request carries the patient identifier and
-//! the XUA assertion (ITI TF-1 §27.4.1). No specification governs the shape
-//! of the table: our own design.
+//! the XUA assertion (ITI TF-1 §27.4.1), so it is held to the
+//! protected-payload policy of [`transport`]. No specification governs the
+//! shape of the table: our own design.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -34,9 +35,9 @@ use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
-use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::secrets::secret;
+use crate::config::{Config, transport};
 
 /// The XCPD localizer, as the configuration writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -129,9 +130,6 @@ pub struct XcpdSettings {
     pub client_identity: Option<Secret>,
     /// The PEM trust roots.
     pub trust_roots: Option<String>,
-    /// Whether an `http` gateway is admitted: only under the development
-    /// profile.
-    pub development: bool,
     /// Where the audit messages go.
     pub audit: AuditDestination,
 }
@@ -145,7 +143,6 @@ impl fmt::Debug for XcpdSettings {
             .field("assertion", &self.assertion.is_some())
             .field("client_identity", &self.client_identity.is_some())
             .field("trust_roots", &self.trust_roots.is_some())
-            .field("development", &self.development)
             .field("audit", &self.audit)
             .finish_non_exhaustive()
     }
@@ -158,10 +155,10 @@ impl fmt::Debug for XcpdSettings {
 /// [`Error::Missing`] for no registry document, no `sender_device`, no
 /// `audit` or no
 /// gateway, [`Error::Url`]
-/// for a gateway URL that does not parse, [`Error::Insecure`] for an `http`
-/// gateway outside the development profile, [`Error::AuditOff`] for
-/// `audit = "off"` outside it, and the errors of a secret or a
-/// file that cannot be read.
+/// for a gateway URL that does not parse, [`Error::Cleartext`] for a gateway
+/// URL that is not `https` outside the development profile,
+/// [`Error::AuditOff`] for `audit = "off"` outside it, and the errors of a
+/// secret or a file that cannot be read.
 pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
     let Some(xcpd) = &config.xcpd else {
         return Ok(None);
@@ -199,17 +196,26 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         }
         Some(destination) => destination,
     };
+    let assertion_key = if xcpd.assertion_file.is_some() {
+        "xcpd.assertion_file"
+    } else {
+        "xcpd.assertion"
+    };
+    let carried =
+        (xcpd.assertion.is_some() || xcpd.assertion_file.is_some()).then_some(assertion_key);
     for (index, gateway) in xcpd.gateway.iter().enumerate() {
-        let key = format!("xcpd.gateway[{index}].url");
-        let url = url::Url::parse(gateway.url.expose()).map_err(|source| Error::Url {
-            key: key.clone(),
+        let key = format!("xcpd.gateway[{index}]");
+        url::Url::parse(gateway.url.expose()).map_err(|source| Error::Url {
+            key: format!("{key}.url"),
             source,
         })?;
         // NOTE: ITI TF-1 §27.4.1: the request carries the identifier and the XUA
-        // assertion, so it travels over TLS outside a development configuration.
-        if url.scheme() != "https" && !development {
-            return Err(Error::Insecure { key });
-        }
+        // assertion; a site admitted under development is reported by transport::check.
+        transport::protected_payload(
+            config.profile,
+            gateway.url.expose(),
+            transport::identity_site(&key, carried),
+        )?;
     }
     let assertion = secret(
         "xcpd.assertion",
@@ -238,15 +244,10 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         gateways: xcpd.gateway.clone(),
         communities: xcpd.communities.clone(),
         namespaces: xcpd.namespaces.clone(),
-        assertion_key: if xcpd.assertion_file.is_some() {
-            "xcpd.assertion_file"
-        } else {
-            "xcpd.assertion"
-        },
+        assertion_key,
         assertion,
         client_identity,
         trust_roots,
-        development,
         audit,
     }))
 }

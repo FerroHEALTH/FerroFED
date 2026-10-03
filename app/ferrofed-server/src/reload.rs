@@ -17,10 +17,12 @@
 //! entries and resolution bindings naming a member that left are dropped.
 //! A configuration that does not load leaves the running registry in place.
 //!
-//! The sections in [`RELOADABLE`] take effect on a reload. Every other
-//! setting is compared with the value the process started with, and a
-//! change is logged as needing a restart while the rest of the reload
-//! applies. No specification governs this: our own design.
+//! The sections in [`RELOADABLE`] take effect on a reload. A changed
+//! `profile` refuses the reload, so every decision the development profile
+//! admits reads the profile the process started with. Every other setting is
+//! compared with the value the process started with, and a change is logged
+//! as needing a restart while the rest of the reload applies. No
+//! specification governs this: our own design.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -32,7 +34,7 @@ use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 
 use crate::config::settings::Settings;
-use crate::config::transport::{self, CleartextError, CredentialSite};
+use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{FederationError, Reconciled};
 use crate::metrics::ReloadResult;
@@ -75,7 +77,7 @@ pub struct Applied {
     pub needs_restart: Vec<&'static str>,
     /// The credentials that travel over plain `http`, which only the
     /// development profile allows ([`transport::check`]).
-    pub cleartext: Vec<CredentialSite>,
+    pub cleartext: Vec<ProtectedSite>,
 }
 
 /// A reload that was refused, leaving the running registry in place.
@@ -100,9 +102,14 @@ pub enum ReloadError {
     /// `registry.document` was set or unset since the process started.
     #[error("registry.document was set or unset, which takes a restart")]
     RegistryPresence,
-    /// A credential would travel over a URL that is not `https`, outside the
-    /// development profile the process started with.
-    #[error("a credential would travel in cleartext")]
+    /// `profile` differs from the profile the process started with. Every
+    /// decision the development profile admits reads the boot profile, so a
+    /// change takes a restart.
+    #[error("profile was changed, which takes a restart")]
+    Profile,
+    /// A credential or a patient identifier would travel over a URL that is
+    /// not `https`, outside the development profile the process started with.
+    #[error("a credential or a patient identifier would travel in cleartext")]
     Cleartext(#[source] CleartextError),
 }
 
@@ -114,7 +121,8 @@ impl ReloadError {
             Self::Config(_) => "configuration",
             Self::Federation { source, .. } => federation_class(source),
             Self::RegistryPresence => "registry-presence",
-            Self::Cleartext(_) => "cleartext-credential",
+            Self::Profile => "profile",
+            Self::Cleartext(_) => "cleartext",
         }
     }
 
@@ -123,7 +131,7 @@ impl ReloadError {
     pub fn document(&self) -> Option<&std::path::Path> {
         match self {
             Self::Federation { document, .. } => document.as_deref(),
-            Self::Config(_) | Self::RegistryPresence | Self::Cleartext(_) => None,
+            Self::Config(_) | Self::RegistryPresence | Self::Profile | Self::Cleartext(_) => None,
         }
     }
 }
@@ -165,6 +173,11 @@ impl Reloader {
             .map_err(ReloadError::Config)?;
         if fresh.registry_document.is_some() != self.boot.registry_document.is_some() {
             return Err(ReloadError::RegistryPresence);
+        }
+        // NOTE: no specification governs this: our own design; a reload under
+        // another profile could admit what only development allows, so it is refused.
+        if fresh.profile != self.boot.profile {
+            return Err(ReloadError::Profile);
         }
         let needs_restart = needs_restart(&self.boot, &fresh);
         let effective = effective(&self.boot, fresh);
@@ -338,7 +351,6 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
 fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
     let (was, now) = (&boot.federation, &fresh.federation);
     [
-        ("profile", boot.profile != fresh.profile),
         ("signing", signing_changed(boot, fresh)),
         ("server.listen", boot.server.listen != fresh.server.listen),
         (

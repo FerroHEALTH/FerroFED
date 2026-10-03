@@ -257,7 +257,7 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
 )]
-fn config_checked(cleartext: &[config::transport::CredentialSite]) -> ExitCode {
+fn config_checked(cleartext: &[config::transport::ProtectedSite]) -> ExitCode {
     config::transport::print_warnings(cleartext);
     println!("ferrofed: the configuration is valid");
     ExitCode::SUCCESS

@@ -24,7 +24,7 @@ use ferrofed_server::banner::{Deployment, render};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::Store;
-use ferrofed_server::config::transport::{self, CleartextError, CredentialSite};
+use ferrofed_server::config::transport::{self, CleartextError, ProtectedSite};
 use ferrofed_server::federation::read_registry;
 use ferrofed_server::reload::{ReloadError, Reloader};
 use ferrofed_server::state::{AppState, StateError};
@@ -110,17 +110,32 @@ fn resolved(dir: &Path, profile: &str, a: &str, tables: &str) -> Result<Settings
     Ok(Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?)
 }
 
-/// The site `url_key` sends `credential` to.
-fn site(url_key: &str, credential: &str) -> CredentialSite {
-    CredentialSite {
+/// The site `url_key` sends `payload` to.
+fn site(url_key: &str, payload: &str) -> ProtectedSite {
+    ProtectedSite {
         url_key: url_key.to_owned(),
-        credential: credential.to_owned(),
+        payload: payload.to_owned(),
     }
+}
+
+/// The site of PIX Manager 0 with its credentials.
+fn pix_site() -> ProtectedSite {
+    site(
+        "pixm.manager[0].url",
+        "pixm.manager[0].credentials and patient identifiers",
+    )
+}
+
+/// A PIX Manager at `url` with no credentials, resolving node A and node B.
+fn bare_pix(url: &str) -> String {
+    format!(
+        "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
+    )
 }
 
 /// Asserts that `config check` and the boot both refuse `settings` on `site`,
 /// and that the refusal carries no secret.
-fn refused_on(settings: &Settings, site: &CredentialSite) -> TestResult {
+fn refused_on(settings: &Settings, site: &ProtectedSite) -> TestResult {
     let expected = CleartextError { site: site.clone() };
     match AppState::check(settings) {
         Err(StateError::Cleartext(refused)) => {
@@ -133,7 +148,7 @@ fn refused_on(settings: &Settings, site: &CredentialSite) -> TestResult {
             assert_eq!(expected, refused, "the boot names the site");
             let text = refused.to_string();
             assert!(text.contains(&site.url_key), "{text}");
-            assert!(text.contains(&site.credential), "{text}");
+            assert!(text.contains(&site.payload), "{text}");
             assert!(!text.contains(SECRET), "{text}");
             assert!(!text.contains("example.org"), "{text}");
         }
@@ -143,7 +158,7 @@ fn refused_on(settings: &Settings, site: &CredentialSite) -> TestResult {
 }
 
 /// Asserts that `config check` passes `settings` and reports exactly `sites`.
-fn reported(settings: &Settings, sites: &[CredentialSite]) -> TestResult {
+fn reported(settings: &Settings, sites: &[ProtectedSite]) -> TestResult {
     assert_eq!(
         sites,
         AppState::check(settings)?.as_slice(),
@@ -193,10 +208,24 @@ fn a_pix_manager_with_credentials_over_plain_http_is_refused_outside_development
     let dir = tempfile::tempdir()?;
     let tables = pix("http://pix.example.org/fhir/");
     let settings = resolved(dir.path(), "production", HTTPS_A, &tables)?;
-    refused_on(
-        &settings,
-        &site("pixm.manager[0].url", "pixm.manager[0].credentials"),
-    )
+    refused_on(&settings, &pix_site())
+}
+
+#[test]
+fn a_pix_manager_without_credentials_still_carries_identifiers_and_needs_https() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let identifiers = site(
+        "pixm.manager[0].url",
+        "the patient identifiers asked of pixm.manager[0]",
+    );
+    let http = bare_pix("http://pix.example.org/fhir/");
+    let settings = resolved(dir.path(), "production", HTTPS_A, &http)?;
+    refused_on(&settings, &identifiers)?;
+    let settings = resolved(dir.path(), "development", HTTPS_A, &http)?;
+    reported(&settings, &[identifiers])?;
+    let https = bare_pix("https://pix.example.org/fhir/");
+    let settings = resolved(dir.path(), "production", HTTPS_A, &https)?;
+    reported(&settings, &[])
 }
 
 #[test]
@@ -221,7 +250,7 @@ fn an_otlp_endpoint_carrying_userinfo_is_refused_outside_development() -> TestRe
 /// XUA assertion; `[xcpd]` itself refuses `http` outside development.
 fn xcpd(url: &str) -> String {
     format!(
-        "[xcpd]\nsender_device = \"2.999.40.1\"\nassertion = \"{SECRET}\"\n\n\
+        "[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\nassertion = \"{SECRET}\"\n\n\
          [[xcpd.gateway]]\nurl = \"{url}\"\ndevice = \"2.999.50.1\"\n\n\
          [xcpd.communities]\n\"2.999.50\" = \"node-a\"\n\"2.999.60\" = \"node-b\"\n"
     )
@@ -237,7 +266,10 @@ fn an_xcpd_gateway_the_assertion_reaches_over_http_is_named_under_development() 
         &xcpd("http://xcpd.example.org/rg"),
     )?;
     assert_eq!(
-        vec![site("xcpd.gateway[0].url", "xcpd.assertion")],
+        vec![site(
+            "xcpd.gateway[0].url",
+            "xcpd.assertion and patient identifiers"
+        )],
         transport::check(&settings, None)?
     );
     let settings = resolved(
@@ -247,8 +279,19 @@ fn an_xcpd_gateway_the_assertion_reaches_over_http_is_named_under_development() 
         &xcpd("https://xcpd.example.org/rg"),
     )?;
     assert_eq!(
-        Vec::<CredentialSite>::new(),
+        Vec::<ProtectedSite>::new(),
         transport::check(&settings, None)?
+    );
+    let bare =
+        xcpd("http://xcpd.example.org/rg").replace(&format!("assertion = \"{SECRET}\"\n"), "");
+    let settings = resolved(dir.path(), "development", HTTPS_A, &bare)?;
+    assert_eq!(
+        vec![site(
+            "xcpd.gateway[0].url",
+            "the patient identifiers asked of xcpd.gateway[0]"
+        )],
+        transport::check(&settings, None)?,
+        "a gateway is sent the patient identifier with or without an assertion"
     );
     Ok(())
 }
@@ -270,7 +313,7 @@ fn every_site_starts_under_development_and_is_reported() -> TestResult {
                 "credentials.node-a-pub.oauth2.token_endpoint",
                 "credentials.node-a-pub.oauth2",
             ),
-            site("pixm.manager[0].url", "pixm.manager[0].credentials"),
+            pix_site(),
         ],
     )?;
     let otlp = format!(
@@ -379,9 +422,6 @@ fn a_plain_http_url_no_credential_is_sent_to_starts_outside_development() -> Tes
     let settings = resolved(dir.path(), "production", HTTP_A, "")?;
     reported(&settings, &[])?;
     AppState::build(&settings)?;
-    let pix = "[[pixm.manager]]\nurl = \"http://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n";
-    let settings = resolved(dir.path(), "production", HTTP_A, pix)?;
-    reported(&settings, &[])?;
     let otlp = "[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n";
     let settings = Config::from_sources(Some(otlp), &BTreeMap::new())?.resolve()?;
     reported(&settings, &[])
@@ -438,10 +478,15 @@ struct Gateway {
 
 impl Gateway {
     fn start(profile: &str) -> Result<Self, Box<dyn Error>> {
+        Self::start_with(|document| configuration(profile, document, &bearer()))
+    }
+
+    /// Starts over the configuration `text` writes for the registry document.
+    fn start_with(text: impl Fn(&Path) -> String) -> Result<Self, Box<dyn Error>> {
         let dir = tempfile::tempdir()?;
         let document = document(dir.path(), HTTPS_A)?;
         let config = dir.path().join("ferrofed.toml");
-        std::fs::write(&config, configuration(profile, &document, &bearer()))?;
+        std::fs::write(&config, text(&document))?;
         let settings = Config::load(Some(&config))?.resolve()?;
         let state = Arc::new(AppState::build(&settings)?);
         let reloader = Reloader::new(Some(config.clone()), settings, Arc::clone(&state));
@@ -473,7 +518,7 @@ fn a_reload_that_sends_a_credential_over_plain_http_is_refused() -> TestResult {
         return Err(format!("a cleartext refusal: {refused:?}").into());
     };
     assert_eq!(site(ENDPOINT_URL, SECTION), cause.site);
-    assert_eq!("cleartext-credential", refused.class());
+    assert_eq!("cleartext", refused.class());
     let after = gateway
         .state
         .federation()
@@ -500,12 +545,113 @@ fn a_reload_cannot_switch_to_development_to_send_a_credential_in_cleartext() -> 
         .reload()
         .err()
         .ok_or("the profile the process started with decides")?;
-    assert!(matches!(refused, ReloadError::Cleartext(_)), "{refused:?}");
+    assert!(matches!(refused, ReloadError::Profile), "{refused:?}");
     let after = gateway
         .state
         .federation()
         .ok_or("a registry is configured")?;
     assert!(Arc::ptr_eq(&running, &after), "the running registry stays");
+    Ok(())
+}
+
+/// A gateway under `profile` localized by one XCPD responding gateway at
+/// `url`, which carries no assertion, over the registry `document`.
+fn xcpd_configuration(profile: &str, document: &Path, url: &str) -> String {
+    let document = toml::Value::String(document.display().to_string());
+    format!(
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n\
+         [federation]\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n\
+         [xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\n\n\
+         [[xcpd.gateway]]\nurl = \"{url}\"\ndevice = \"2.999.50.1\"\n\n\
+         [xcpd.communities]\n\"2.999.50\" = \"node-a\"\n\"2.999.60\" = \"node-b\"\n"
+    )
+}
+
+#[test]
+fn a_reload_never_admits_an_xcpd_gateway_over_plain_http() -> TestResult {
+    let gateway = Gateway::start_with(|document| {
+        xcpd_configuration("production", document, "https://xcpd.example.org/rg")
+    })?;
+    let running = gateway
+        .state
+        .federation()
+        .ok_or("a registry is configured")?;
+    for profile in ["production", "development"] {
+        std::fs::write(
+            &gateway.config,
+            xcpd_configuration(profile, &gateway.document, "http://xcpd.example.org/rg"),
+        )?;
+        let refused = gateway
+            .reloader
+            .reload()
+            .err()
+            .ok_or_else(|| format!("an http gateway in a {profile} file is refused"))?;
+        match (profile, &refused) {
+            ("production", ReloadError::Config(cause)) => {
+                let mut text = String::new();
+                let mut next: Option<&dyn Error> = Some(cause);
+                while let Some(error) = next {
+                    text.push_str(&error.to_string());
+                    next = error.source();
+                }
+                assert!(text.contains("xcpd.gateway[0].url"), "{text}");
+            }
+            ("development", ReloadError::Profile) => {}
+            _ => {
+                return Err(format!("{profile}: refused for the wrong reason: {refused:?}").into());
+            }
+        }
+        let after = gateway
+            .state
+            .federation()
+            .ok_or("a registry is configured")?;
+        assert!(Arc::ptr_eq(&running, &after), "the running registry stays");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_reload_that_changes_the_profile_is_refused_logged_and_counted() -> TestResult {
+    for (boot, file) in [("production", "development"), ("development", "production")] {
+        let gateway = Gateway::start(boot)?;
+        let running = gateway
+            .state
+            .federation()
+            .ok_or("a registry is configured")?;
+        std::fs::write(
+            &gateway.config,
+            configuration(file, &gateway.document, &bearer()),
+        )?;
+
+        let logs = Logs::default();
+        let capture = subscriber(Rendering::Json, "info", false, logs.clone())?;
+        let reloaded = tracing::subscriber::with_default(capture, || gateway.reloader.reload());
+        let Err(refused) = reloaded else {
+            return Err(format!("{boot} to {file} is refused, as a restart decides it").into());
+        };
+        assert!(matches!(refused, ReloadError::Profile), "{refused:?}");
+        assert_eq!("profile", refused.class());
+        let after = gateway
+            .state
+            .federation()
+            .ok_or("a registry is configured")?;
+        assert!(Arc::ptr_eq(&running, &after), "the running registry stays");
+        let text = logs.text();
+        assert!(
+            text.lines()
+                .any(|line| line.contains("\"ERROR\"") && line.contains("\"profile\"")),
+            "{text}"
+        );
+        let metrics = gateway.state.metrics().render()?;
+        assert!(
+            metrics.lines().any(|line| {
+                line.starts_with("ferrofed_registry_reloads_total")
+                    && line.contains("result=\"refused\"")
+                    && line.ends_with(" 1")
+            }),
+            "{metrics}"
+        );
+    }
     Ok(())
 }
 
