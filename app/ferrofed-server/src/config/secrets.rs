@@ -8,6 +8,7 @@ use std::path::Path;
 
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use secrecy::SecretString;
+use secrecy::zeroize::Zeroizing;
 
 use crate::config::Credentials;
 use crate::config::error::{BasicFault, Error};
@@ -21,12 +22,12 @@ pub(super) fn resolve_credentials(
 ) -> Result<Scheme, Error> {
     let token = secret(
         &format!("{section}.bearer_token"),
-        credentials.bearer_token.as_deref(),
+        credentials.bearer_token.as_ref(),
         credentials.bearer_token_file.as_deref(),
     )?;
     let password = secret(
         &format!("{section}.password"),
-        credentials.password.as_deref(),
+        credentials.password.as_ref(),
         credentials.password_file.as_deref(),
     )?;
     match (token, credentials.user.as_deref(), password) {
@@ -39,13 +40,13 @@ pub(super) fn resolve_credentials(
                 "bearer_token",
                 credentials.bearer_token_file.is_some(),
             );
-            openehr_its::rest::client::Credentials::bearer(token.clone())
+            openehr_its::rest::client::Credentials::bearer(token.to_secret_string())
                 .header_value()
                 .map_err(|source| Error::Authorization { key, source })?;
             Ok(Scheme::Bearer(token))
         }
         (None, Some(user), Some(password)) => {
-            openehr_its::rest::client::Credentials::basic(user, password.clone())
+            openehr_its::rest::client::Credentials::basic(user, password.to_secret_string())
                 .header_value()
                 .map_err(|source| {
                     basic_refusal(section, credentials.password_file.is_some(), source)
@@ -107,32 +108,44 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
     }
 }
 
-/// Returns the secret `key` names, inline or from its `_file` sibling.
-pub(super) fn secret(
+/// Returns the secret `key` names, inline or from its `_file` sibling, as
+/// the redacting type `T` that holds it.
+pub(super) fn secret<T>(
     key: &str,
-    inline: Option<&str>,
+    inline: Option<&T>,
     file: Option<&Path>,
-) -> Result<Option<SecretString>, Error> {
+) -> Result<Option<T>, Error>
+where
+    T: Clone + From<SecretString>,
+{
     match (inline, file) {
         (Some(_), Some(_)) => Err(Error::Conflict {
             key: key.to_owned(),
         }),
-        (Some(value), None) => Ok(Some(SecretString::from(value))),
+        (Some(value), None) => Ok(Some(value.clone())),
         (None, Some(path)) => {
-            let text = std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: format!("{key}_file"),
-                path: path.to_path_buf(),
-                source,
-            })?;
-            let value = text.trim();
-            if value.is_empty() {
-                return Err(Error::EmptySecret {
-                    key: format!("{key}_file"),
-                    path: path.to_path_buf(),
-                });
-            }
-            Ok(Some(SecretString::from(value)))
+            read_secret(&format!("{key}_file"), path).map(|value| Some(T::from(value)))
         }
         (None, None) => Ok(None),
     }
+}
+
+/// Reads the secret file `path`, trimmed and refused when empty, into a
+/// [`SecretString`]; the text read is zeroed once the trimmed value is taken.
+fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
+    let text = std::fs::read_to_string(path)
+        .map(Zeroizing::new)
+        .map_err(|source| Error::Secret {
+            key: key.to_owned(),
+            path: path.to_path_buf(),
+            source,
+        })?;
+    let value = text.trim();
+    if value.is_empty() {
+        return Err(Error::EmptySecret {
+            key: key.to_owned(),
+            path: path.to_path_buf(),
+        });
+    }
+    Ok(SecretString::from(value))
 }

@@ -137,6 +137,15 @@ pub enum Error {
         #[source]
         source: url::ParseError,
     },
+    /// A URL carries a user name or a password in its userinfo, where the
+    /// credentials belong in their own section.
+    #[error("{key} carries a user name or password; set them in {section} instead")]
+    UrlCredentials {
+        /// The key that holds the URL.
+        key: String,
+        /// The section the credentials belong in.
+        section: String,
+    },
     /// A socket address does not parse.
     #[error("{key} is not a socket address")]
     Listen {

@@ -9,7 +9,6 @@ use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrofed_server::telemetry::Format;
 use openehr_federation::aql::OffsetStrategy;
-use secrecy::ExposeSecret;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::num::NonZeroU32;
@@ -34,13 +33,13 @@ fn a_file_states_every_section_and_the_resolver_reads_it() -> Result<(), Box<dyn
     assert_eq!(Format::Json, settings.telemetry.format);
     assert_eq!("debug", settings.telemetry.filter);
     match settings.credentials.get(&EndpointId::new("hospital-a")?) {
-        Some(Scheme::Bearer(token)) => assert_eq!("synthetic-token", token.expose_secret()),
+        Some(Scheme::Bearer(token)) => assert_eq!("synthetic-token", token.expose()),
         other => return Err(format!("hospital-a is a bearer scheme: {other:?}").into()),
     }
     match settings.credentials.get(&EndpointId::new("clinic-b")?) {
         Some(Scheme::Basic { user, password }) => {
             assert_eq!("gateway", user);
-            assert_eq!("synthetic-password", password.expose_secret());
+            assert_eq!("synthetic-password", password.expose());
         }
         other => return Err(format!("clinic-b is a basic scheme: {other:?}").into()),
     }

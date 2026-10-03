@@ -146,7 +146,7 @@ impl Metrics {
             .map(|endpoint| {
                 opentelemetry_otlp::MetricExporter::builder()
                     .with_tonic()
-                    .with_endpoint(endpoint.as_str())
+                    .with_endpoint(endpoint.expose())
                     .with_temporality(Temporality::Cumulative)
                     .build()
                     .map(|exporter| PeriodicReader::builder(exporter).build())

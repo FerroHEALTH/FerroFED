@@ -10,6 +10,7 @@
 //! specification governs the configuration: our own design.
 
 use ferrofed_identity::dev::{DevTable, Profile};
+use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -113,8 +114,9 @@ pub struct Pixm {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PixManager {
-    /// The Manager's FHIR base URL.
-    pub url: String,
+    /// The Manager's FHIR base URL, which no rendering shows with its
+    /// userinfo.
+    pub url: SecretUrl,
     /// Each member this Manager resolves, mapped to its `ehr_id` domain: the
     /// assigning authority whose identifiers are that member's `ehr_id`s
     /// (Annex A.1).
@@ -403,24 +405,25 @@ pub struct Metrics {
     pub allow_remote: bool,
     /// The `http://` URL of an OTLP collector the metrics are pushed to over
     /// gRPC. Unset, nothing is pushed.
-    pub otlp_endpoint: Option<String>,
+    pub otlp_endpoint: Option<SecretUrl>,
 }
 
 /// The credentials one endpoint expects.
 ///
 /// Every secret is reachable inline or through its `_file` sibling; setting
-/// both is a boot error, and so is naming two schemes.
+/// both is a boot error, and so is naming two schemes. An inline secret is a
+/// [`Secret`], which no rendering shows.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Credentials {
     /// An RFC 6750 bearer token.
-    pub bearer_token: Option<String>,
+    pub bearer_token: Option<Secret>,
     /// A file holding the bearer token, read at boot.
     pub bearer_token_file: Option<PathBuf>,
     /// The user name of RFC 7617 basic authentication.
     pub user: Option<String>,
     /// The password of RFC 7617 basic authentication.
-    pub password: Option<String>,
+    pub password: Option<Secret>,
     /// A file holding the password, read at boot.
     pub password_file: Option<PathBuf>,
 }

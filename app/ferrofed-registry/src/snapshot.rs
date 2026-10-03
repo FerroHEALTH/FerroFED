@@ -547,7 +547,7 @@ fn endpoints(
                 organisation: doc.managing_organisation,
             });
         }
-        let url = match base_url(&doc.url) {
+        let url = match base_url(doc.url.expose()) {
             Ok(url) => url,
             Err(fault) => {
                 return Err(LoadError::EndpointUrl {

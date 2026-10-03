@@ -19,10 +19,10 @@ use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
+use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
 use openehr_its::rest::client::InvalidCredentials;
 use secrecy::SecretString;
-use url::Url;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -74,7 +74,7 @@ fn namespaces() -> BTreeMap<IdentifierNamespace, String> {
 
 fn manager(server: &Server, auth: PixAuth, pairs: &[(&str, &str)]) -> ManagerConfig {
     ManagerConfig {
-        base: Url::parse(&format!("{}/fhir/", server.uri())).expect("the stub base"),
+        base: SecretUrl::new(format!("{}/fhir/", server.uri())),
         auth,
         members: members(pairs),
     }
@@ -363,7 +363,7 @@ async fn the_bearer_credential_travels_to_the_manager() {
 fn every_member_must_have_exactly_one_domain() {
     let server_uri = "http://127.0.0.1:9";
     let config = |pairs: &[(&str, &str)]| ManagerConfig {
-        base: Url::parse(&format!("{server_uri}/fhir/")).expect("a base"),
+        base: SecretUrl::new(format!("{server_uri}/fhir/")),
         auth: PixAuth::None,
         members: members(pairs),
     };
@@ -401,7 +401,7 @@ fn every_member_must_have_exactly_one_domain() {
 fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
     let refused = |auth| {
         let config = ManagerConfig {
-            base: Url::parse("http://127.0.0.1:9/fhir/").expect("a base"),
+            base: SecretUrl::new("http://127.0.0.1:9/fhir/"),
             auth,
             members: members(&[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)]),
         };

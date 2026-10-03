@@ -141,6 +141,19 @@ environment. The credentials are read and checked at boot and again on each
 [reload](registry.md#reloading-the-registry), and the node client of an endpoint with a
 credentials section sends them on every request to that endpoint.
 
+The gateway never prints a secret. A bearer token or a password, inline, from
+the environment or from a `_file` sibling, shows as `***` wherever the
+configuration is rendered: a debug log line, a panic message, a test failure.
+A URL that may carry a credential, such as the stored-query store's
+`url` or `metrics.otlp_endpoint`, shows with its userinfo and its query
+replaced: `postgres://***@db.example.org:5432/ferrofed?***`. A libpq
+key/value connection string shows as `***` whole. The value itself is sent
+unchanged.
+
+A PIX Manager's `url` carries no credential: one with a user name or a
+password in it is refused naming the key, as an endpoint URL in the registry
+document is. Its credentials go in `[pixm.manager.credentials]`.
+
 ## The environment
 
 Any key can be set or overridden with `FERROFED__<SECTION>__<KEY>`, upper or
