@@ -322,6 +322,16 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- A node's error in `meta.federation.endpoints[]` follows one rule on every
+  path that reports a member: a federated query, the fan-out template upload
+  and the stored-query distribution and drift check (#343; §9.5, §11.1,
+  §12.6 item 2, N40). A `node-error` carries the node's HTTP status, then
+  an excerpt of the node's own message: at most 512 characters, control
+  characters and invisible format marks turned into spaces, and the patient
+  identifier the query resolved on replaced by `[withheld]` wherever the
+  node echoed it, the whole message when the node echoed it percent-encoded
+  (§5.4.1, N33). The two fan-outs carried the node's status alone before,
+  and a query copied the node's message with no cleaning and no masking.
 - A recombined `AVG` over integers answers an integer (#309; AQL 1.1.0
   §3.9.1.5, "it will also determine the return type"). When every node's
   `SUM` is an integer, the gateway returns the integer nearest the exact

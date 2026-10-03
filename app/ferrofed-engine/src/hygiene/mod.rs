@@ -34,6 +34,9 @@
 //! undeclared query parameter is refused (§5.4.1, N33). A declared value that
 //! travels is held to the kind the operation declares for it
 //! ([`crate::declared`]).
+//!
+//! [`mask`] holds text the gateway writes but did not compose, a node's error
+//! message, to the same identifiers: each one it finds is replaced.
 
 use std::fmt;
 
@@ -42,6 +45,8 @@ use openehr_its::rest::routes::RouteMatch;
 use openehr_query::printer::escape_string;
 use secrecy::{ExposeSecret, SecretString};
 use url::Url;
+
+pub mod mask;
 
 /// The client headers a single-node route never forwards, whatever the
 /// operation declares, beside every header under

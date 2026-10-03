@@ -6,7 +6,8 @@
 //! upload naming `*` or several endpoints reaches each member independently,
 //! byte-identical, and is answered per node in the `meta.federation` shape,
 //! partial success as `207`, never as overall success, with nothing rolled
-//! back and no node's body copied into the answer. A plain upload still names
+//! back, a rejecting node's message carried after its status and no other
+//! node body copied into the answer. A plain upload still names
 //! its one node, and every other definition request still routes to one node.
 //! Every assertion on what a node received reads the node's own capture
 //! (§16, track 10).
@@ -53,7 +54,8 @@ const CLIENT_TOKEN: &str = "synthetic-client-token-fan-out";
 /// A body an accepting node answers with, which the answer never copies.
 const ACCEPTED_BODY: &str = "SYNTHETIC-ACCEPTED-BODY-41fd";
 
-/// A body a rejecting node answers with, which the answer never copies.
+/// The message a rejecting node answers with, which the answer carries after
+/// the node's status (§9.5, §11.1).
 const REJECTED_BODY: &str = "SYNTHETIC-REJECTED-BODY-9b3e";
 
 /// The third member, beside node A and node B of [`registry`].
@@ -436,7 +438,7 @@ async fn a_member_past_its_timeout_is_reported_and_the_others_keep_the_template(
 
 // conformance: CP-34
 #[tokio::test]
-async fn no_node_body_is_copied_into_the_answer() -> TestResult {
+async fn a_rejecting_nodes_message_is_carried_and_no_other_body_is() -> TestResult {
     let at = ADL14;
     let a = accepting(at).await;
     let b = rejecting(at, 400).await;
@@ -450,9 +452,24 @@ async fn no_node_body_is_copied_into_the_answer() -> TestResult {
         !text.contains(ACCEPTED_BODY),
         "an accepting node's body: {text}"
     );
-    assert!(
-        !text.contains(REJECTED_BODY),
-        "a rejecting node's body: {text}"
+    let answer: Uploaded = serde_json::from_str(&text)?;
+    let errors: Vec<(&str, Option<&ErrorDetail>)> = answer
+        .meta
+        .federation
+        .endpoints()
+        .iter()
+        .map(|outcome| (outcome.id().as_str(), outcome.outcome().error()))
+        .collect();
+    let said =
+        |status: &str| ErrorDetail::Text(format!("the node answered {status}: {REJECTED_BODY}"));
+    assert_eq!(
+        vec![
+            ("node-a-pub", None),
+            ("node-b-pub", Some(&said("400 Bad Request"))),
+            ("node-c-pub", Some(&said("500 Internal Server Error"))),
+        ],
+        errors,
+        "§9.5, §11.1: a rejecting node's status, then its own message: {text}"
     );
     assert!(
         !text.contains(TEMPLATE),

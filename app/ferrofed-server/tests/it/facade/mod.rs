@@ -318,6 +318,7 @@ pub(crate) struct Endpoint {
     pub(crate) id: String,
     pub(crate) status: String,
     pub(crate) row_count: Option<u64>,
+    pub(crate) error: Option<openehr_federation::outcome::ErrorDetail>,
 }
 
 /// Each endpoint's status, in the envelope's order.

@@ -4,8 +4,9 @@
 //! A stored-query definition at a mock node (§12.7, N44): the registry's copy
 //! sent with the generated `PUT /definition/query/{name}/{version}`, the
 //! node's copy read back with `GET` on the same path, and every answer
-//! mapped to one §11.1 status that carries the node's HTTP status and never
-//! its body (§12.6 item 2).
+//! mapped to one §11.1 status; a `node-error` carries the node's HTTP status
+//! and an excerpt of its message, and never a body that is no error (§9.5,
+//! §12.6 item 2).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -38,7 +39,9 @@ const NODE_PATH: &str = "/v1/definition/query/org.example::fanned/1.0.0";
 /// A synthetic definition.
 const AQL: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
 
-/// A body a node answers with, which no outcome copies.
+/// A body a node answers with: the message of an error status, which a
+/// `node-error` carries after the status, or a body that is no answer, which
+/// no outcome copies.
 const NODE_BODY: &str = "SYNTHETIC-NODE-BODY-91c0";
 
 /// A client of a one-endpoint federation whose endpoint is at `url`.
@@ -108,19 +111,22 @@ async fn a_stored_definition_is_active_and_the_node_receives_the_aql_as_text() -
 }
 
 #[tokio::test]
-async fn a_refused_store_is_a_node_error_with_the_status_and_no_body() -> TestResult {
-    for (status, named) in [(409, "409"), (400, "400"), (500, "500")] {
+async fn a_refused_store_is_a_node_error_with_the_status_and_the_nodes_message() -> TestResult {
+    for (status, named) in [
+        (409, "409 Conflict"),
+        (400, "400 Bad Request"),
+        (500, "500 Internal Server Error"),
+    ] {
         let body = format!(r#"{{"message":"{NODE_BODY}"}}"#);
         let server = node("PUT", status, &body).await;
         let outcome = client_at(&server.uri())?
             .store_definition(AT, AQL, &options()?)
             .await?;
         assert_eq!(EndpointStatus::NodeError, outcome.status(), "{status}");
-        let text = error_text(&outcome)?;
-        assert!(text.contains(named), "§11.2: the node's status: {text}");
-        assert!(
-            !text.contains(NODE_BODY),
-            "§12.6 item 2: no node body: {text}"
+        assert_eq!(
+            format!("the node answered {named}: {NODE_BODY}"),
+            error_text(&outcome)?,
+            "§9.5, §11.1: the node's status, then its own message"
         );
     }
     Ok(())
