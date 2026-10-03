@@ -588,6 +588,17 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   quoting it, as an endpoint URL in the registry document already is (#364).
   Its credentials go in `[pixm.manager.credentials]`. A configuration that
   put them in the URL must move them there.
+- The `Debug` output of `ihe-iti`'s types no longer prints a credential
+  (#370). `PixmClient` and `PdqmClient` derived `Debug`, so a base URL that
+  carried a user name and password showed both in clear, and the HTTP
+  client they hold showed its default headers, an `Authorization` header
+  among them. Each client now shows its URLs with the userinfo and the
+  query replaced by `***`, and leaves the HTTP client out. mCSD's
+  `DirectoryOrganization` and `DirectoryEndpoint` show their `fullUrl` and
+  the endpoint `address` the same way, and the endpoint leaves out the rest
+  of its resource, whose `header` list may hold a credential. The crate
+  carries this redaction itself and depends on nothing in FerroFED.
+  `ihe-iti` is 0.0.9.
 
 ## [0.0.6] - 2026-10-03
 
