@@ -89,18 +89,19 @@ impl Write {
     /// ITS-REST 1.1.0 names the preceding version of a `PUT` and of a
     /// directory `DELETE` in `If-Match`, of a composition `DELETE` in the
     /// path, and of each version a `CONTRIBUTION` to an EHR commits in its
-    /// body.
+    /// body. An `operationId` is unique only within its API group, so every
+    /// classified operation is matched in the EHR group alone.
     #[must_use]
     pub fn of(matched: &RouteMatch) -> Self {
-        match (matched.group, matched.operation_id) {
-            (
-                _,
-                "composition_update" | "ehr_status_update" | "directory_update"
-                | "directory_delete",
-            ) => Self::Versioned(Preceding::IfMatch),
-            (_, "composition_delete") => Self::Versioned(Preceding::Path),
-            (EHR_GROUP, "contribution_create") => Self::Versioned(Preceding::Contribution),
-            (_, "ehr_create" | "ehr_create_with_id") => Self::NewEhr,
+        if matched.group != EHR_GROUP {
+            return Self::Routed;
+        }
+        match matched.operation_id {
+            "composition_update" | "ehr_status_update" | "directory_update"
+            | "directory_delete" => Self::Versioned(Preceding::IfMatch),
+            "composition_delete" => Self::Versioned(Preceding::Path),
+            "contribution_create" => Self::Versioned(Preceding::Contribution),
+            "ehr_create" | "ehr_create_with_id" => Self::NewEhr,
             _ => Self::Routed,
         }
     }
@@ -110,7 +111,7 @@ impl Write {
 /// `POST {base}/v1/ehr`, routed only by the targeting headers (§12.4).
 #[must_use]
 pub fn creates_ehr(matched: &RouteMatch) -> bool {
-    matched.operation_id == "ehr_create"
+    matched.group == EHR_GROUP && matched.operation_id == "ehr_create"
 }
 
 /// Why a versioned write routed to `at` is refused before anything is sent.
@@ -252,8 +253,7 @@ fn controlled_at(
 /// none.
 fn amended(body: &[u8]) -> Result<Vec<ObjectVersionId>, PrecedingInvalid> {
     let text = std::str::from_utf8(body).map_err(|_not_utf8| PrecedingInvalid::Contribution)?;
-    // NOTE: §12.4, N23: openehr-its reads a CONTRIBUTION in canonical JSON only, so an
-    // XML or Simplified Formats body names no version the gateway can route, a 400.
+    // TODO(#297): a CONTRIBUTION in XML or a Simplified Format is refused 400 until openehr-its reads it.
     let contribution: NewContribution =
         json::from_canonical_json(text).map_err(|_quoted| PrecedingInvalid::Contribution)?;
     Ok(contribution
@@ -323,9 +323,9 @@ impl fmt::Display for Through<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Preceding, PrecedingInvalid, Write, if_match};
+    use super::{Preceding, PrecedingInvalid, Write, creates_ehr, if_match};
     use http::{HeaderMap, HeaderValue, Method, header};
-    use openehr_its::rest::routes::{Lookup, lookup};
+    use openehr_its::rest::routes::{Lookup, RouteMatch, lookup};
 
     const VERSION: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
@@ -374,6 +374,37 @@ mod tests {
         ] {
             assert_eq!(Some(Write::Routed), write(&method, path), "{method} {path}");
         }
+    }
+
+    #[test]
+    fn a_classified_operation_id_in_another_group_is_routed() {
+        for operation_id in [
+            "composition_update",
+            "ehr_status_update",
+            "directory_update",
+            "directory_delete",
+            "composition_delete",
+            "contribution_create",
+            "ehr_create",
+            "ehr_create_with_id",
+        ] {
+            let elsewhere = RouteMatch {
+                group: "demographic",
+                operation_id,
+                template: "/demographic/x",
+                method: Method::POST,
+                path_params: Vec::new(),
+                params: &[],
+            };
+            assert_eq!(Write::Routed, Write::of(&elsewhere), "{operation_id}");
+            assert!(!creates_ehr(&elsewhere), "{operation_id}");
+        }
+        let Lookup::Matched(demographic) = lookup(&Method::POST, "/demographic/contribution")
+        else {
+            panic!("ITS-REST defines POST /demographic/contribution");
+        };
+        assert_eq!("contribution_create", demographic.operation_id);
+        assert_eq!(Write::Routed, Write::of(&demographic));
     }
 
     #[test]
