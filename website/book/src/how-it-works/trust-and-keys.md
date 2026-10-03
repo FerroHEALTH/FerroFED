@@ -1,0 +1,149 @@
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# Trust and keys
+
+The gateway stands in two trust relationships. Callers trust it with their
+access tokens, and the nodes trust it to say who is asking. The
+specification requires both: the client authenticates to the gateway, the
+gateway authenticates onward to each node, and the client's identity
+travels with every request (§13.1, N24, N25, CP-16, CP-17).
+
+Most of this page is planned for v0.0.8: client authentication
+([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), OAuth 2.0 to
+each node with the gateway's own key
+([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)), and the caller's
+identity conveyed to each node
+([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)). The design is
+decided; the diagrams below draw it, and the next section says what runs
+today.
+
+## What runs today
+
+The gateway authenticates no caller yet, and it authenticates to each node
+with a credential you configure per endpoint.
+
+```mermaid
+flowchart TB
+    client["Client application"] -->|"HTTPS"| proxy["Your reverse proxy:<br/>TLS, caller authentication"]
+    proxy -->|"HTTP, no caller<br/>check at the gateway"| gw["FerroFED gateway"]
+    gw -->|"bearer or Basic,<br/>per endpoint"| node["Node A"]
+    gw -->|"bearer, Basic<br/>or none"| pix["PIX Manager"]
+```
+
+Run the gateway where only clients you trust reach it: in a closed network,
+or behind a reverse proxy that authenticates each caller
+([What FerroFED runs beside](../operate/deployment-shape.md#authentication)).
+A caller's `Authorization` header never reaches a node. Each credential is a
+file named by a `_file` key, sent only to its own endpoint.
+
+## Two trust relationships, planned for v0.0.8
+
+```mermaid
+flowchart TB
+    classDef planned stroke-dasharray: 6 4
+    as["Callers' authorization servers<br/>one signing key each"]:::planned
+    subgraph gwbox["FerroFED gateway"]
+        trust["Trust list<br/>of issuers"]:::planned
+        key["Gateway key pair, ES384<br/>private half: a _file secret"]:::planned
+        jwks["{base}/.well-known/jwks.json<br/>current and previous kid"]:::planned
+    end
+    subgraph nodebox["Member node A"]
+        tok["Token endpoint"]:::planned
+        cdr["CDR"]
+    end
+    as -->|"each issuer's JWKS"| trust
+    key -->|"public half"| jwks
+    jwks -->|"verifies the<br/>client assertion"| tok
+    jwks -->|"verifies openEHR-<br/>federation-client"| cdr
+    tok -->|"access token"| cdr
+```
+
+- **Callers to the gateway** ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)):
+  each calling organisation's authorization server signs its own access
+  tokens. The gateway keeps a trust list of issuers and reads each issuer's
+  JWKS, so it holds many public key sets and no caller's private key.
+- **The gateway to each node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
+  §13.1, N25, N30): the gateway has one key pair of its own. The private half
+  is a secret file; the public half is published at
+  `{base}/.well-known/jwks.json` and declared as `federation.auth.jwks_uri`
+  in `OPTIONS {base}/`, so a node finds it without an out-of-band arrangement
+  (§13.1 `jwks-discovery`). A rotation keeps the current and the previous
+  `kid` in the set for one overlap window. The gateway needs no node's key
+  for this.
+- **The identity sent to the node** ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)):
+  the `openEHR-federation-client` header is a JWS signed with the same
+  gateway key, so the node verifies it against the same JWKS.
+
+## The token flow, planned for v0.0.8
+
+```mermaid
+%%{init: {"sequence": {"actorMargin": 24}}}%%
+sequenceDiagram
+    participant AS as Caller's AS
+    participant C as Client
+    participant G as Gateway
+    participant T as Node A token<br/>endpoint
+    participant N as Node A
+    C->>AS: token request
+    AS-->>C: JWT, aud: the gateway
+    C->>G: request, Bearer<br/>(caller token)
+    G->>AS: read JWKS, cached
+    Note over G: verify alg, iss,<br/>aud, exp, scope,<br/>purpose of use
+    G->>T: client credentials,<br/>RFC 7523 assertion
+    T->>G: read the gateway JWKS
+    T-->>G: node token, cached
+    G->>N: request, Bearer (node token),<br/>openEHR-federation-client
+    N-->>G: answer
+    G-->>C: answer
+```
+
+**Checking the caller** ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)).
+The access token is a JWT (RFC 9068), checked against the issuer's JWKS,
+and every check fails closed. The issuer must be on the trust list, and the
+algorithm on an allow-list (ES256, ES384, PS256, RS256), so `none` and HMAC
+are refused (RFC 8725). The audience must name this gateway, and the token
+must not have expired. Any of those is a `401`. The scopes are read in the
+SMART on openEHR grammar with `openehr-sdt`, and a token without a scope
+that covers the operation is a `403`. A token without a purpose of use is a
+`403` too, unless your deployment declares it optional (§13.4). For a
+deployment whose proxy already authenticates callers, an edge mode is
+planned: you configure it explicitly, and the gateway records which
+identity the proxy asserted.
+
+**Authenticating to the node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
+§13.1, N25). The gateway sends the node's token endpoint an OAuth 2.0 client
+credentials request with a client assertion of RFC 7523 §2.2. The assertion
+lives 300 seconds at most, carries a unique `jti`, and names the node's
+token endpoint as its audience. The token endpoint verifies it against the
+gateway's JWKS and issues an access token. The gateway caches that token
+per node until 30 seconds before it expires, and drops it on a `401`. A
+token it cannot obtain fails that node `node-error`; the gateway never
+sends a request without one. Where a node's authorization server supports
+token exchange (RFC 8693), the issued token can carry the caller as the
+delegating subject.
+
+**Telling the node who asks** ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
+N24). Every request to a node carries `openEHR-federation-client`, a JWS
+that lives 60 seconds at most, addressed to that node's endpoint. It names
+the verified caller and its issuer, the caller's organisation, the purpose
+of use and the caller's scopes. It never carries a patient identifier
+(N33). The specification leaves end-user conveyance open (§13.1), so the
+header and its claims are FerroFED's own.
+
+## The caller's token is never forwarded
+
+The caller's token was issued for the gateway: its audience is the gateway.
+Forwarding it would hand every node a credential that unlocks every other
+member that accepts the same issuer (RFC 9700 §2.3), and a node could replay
+it at its neighbours. So the gateway authenticates to each node as itself,
+with a token the node's own authorization server issued, and conveys the
+caller as a signed statement the node can verify. It never asks a node for
+more than the caller holds: the caller's scopes are enforced at the gateway
+and conveyed, so the node applies them too (N26). Consent stays the node's
+decision either way (§13.2, N27).
+
+The §13.4 decisions a deployment must publish, such as which identity is
+verified across each boundary and who authenticates the end user, are
+planned for v0.0.8
+([#84](https://github.com/FerroHEALTH/FerroFED/issues/84), CP-39).

@@ -5,6 +5,16 @@
 
 [Introduction](introduction.md)
 
+# How it works
+
+- [Overview](how-it-works/overview.md)
+  - [A federated query, end to end](how-it-works/federated-query.md)
+  - [Where the patient identifier stops](how-it-works/identifier-hygiene.md)
+  - [Follow-ups and writes](how-it-works/follow-ups-and-writes.md)
+  - [Definitions and stored queries](how-it-works/definitions.md)
+  - [Trust and keys](how-it-works/trust-and-keys.md)
+  - [Deployment](how-it-works/deployment.md)
+
 # Evaluate
 
 - [The Federation Tier with AQL](evaluate/the-federation-tier.md)
