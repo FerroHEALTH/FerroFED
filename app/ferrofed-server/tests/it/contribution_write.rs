@@ -26,13 +26,19 @@ use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, EHR_B, PATIENT};
 use crate::path_ehr_id::{answer, holder};
-use crate::support::{asked, mount};
+use crate::support::{asked, error_body, mount, without_minted};
 use crate::versioned_write::{
     CREATED_AT_A, CREATED_BY_LEGACY, CREATED_ELSEWHERE, ENDPOINT_A, ENDPOINT_B, LEGACY_MAPPING,
     outside_bodies, over, refused_at_neither, versioned,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
+
+/// The error body `text` with the request id the gateway minted for it
+/// masked, which a search for a fragment of a version uid reads.
+fn without_request_id(text: &str) -> Result<String, Box<dyn Error>> {
+    without_minted(text, [error_body(text)?.request_id.as_str()])
+}
 
 /// A version node B created.
 const CREATED_AT_B: &str = "3f2e1d0c-9b8a-4c7d-8e6f-5a4b3c2d1e0f::cdr-b.example.org::2";
@@ -248,8 +254,9 @@ async fn a_contribution_with_one_version_another_member_controls_is_409_and_reac
                 && text.contains(ENDPOINT_B),
             "the error identifies the controlling system (§10.3): {text}"
         );
+        let searched = without_request_id(&text)?;
         assert!(
-            !text.contains(EHR_A) && !text.contains("3f2e1d0c") && !text.contains(PATIENT),
+            !text.contains(EHR_A) && !searched.contains("3f2e1d0c") && !text.contains(PATIENT),
             "no value of the request is quoted: {text}"
         );
     }
@@ -455,8 +462,9 @@ async fn a_simplified_contribution_with_one_version_another_member_controls_is_4
                 && text.contains(ENDPOINT_B),
             "{media}: the error identifies the controlling system (§10.3): {text}"
         );
+        let searched = without_request_id(&text)?;
         assert!(
-            !text.contains(EHR_A) && !text.contains("3f2e1d0c") && !text.contains(PATIENT),
+            !text.contains(EHR_A) && !searched.contains("3f2e1d0c") && !text.contains(PATIENT),
             "{media}: no value of the request is quoted: {text}"
         );
     }
@@ -539,7 +547,10 @@ async fn a_contribution_in_canonical_xml_is_never_forwarded() -> TestResult {
         text.contains("canonical XML"),
         "the refusal says which form it does not read: {text}"
     );
-    assert!(!text.contains("8849182c"), "the body is not quoted: {text}");
+    assert!(
+        !without_request_id(&text)?.contains("8849182c"),
+        "the body is not quoted: {text}"
+    );
     Ok(())
 }
 

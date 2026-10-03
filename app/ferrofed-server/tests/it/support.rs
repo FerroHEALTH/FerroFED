@@ -277,3 +277,37 @@ pub(crate) fn states(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         .map(|(endpoint, state)| ((*endpoint).to_owned(), (*state).to_owned()))
         .collect()
 }
+
+/// What a search reads in place of a request id the gateway minted.
+pub(crate) const MINTED_REQUEST_ID: &str = "<minted-request-id>";
+
+/// Whether `text` has the form the gateway mints a request id in: a version
+/// 4 UUID, hyphenated and lowercase, as `OutboundId` writes it.
+pub(crate) fn is_minted_form(text: &str) -> bool {
+    uuid::Uuid::try_parse(text).is_ok_and(|id| {
+        id.get_version() == Some(uuid::Version::Random) && id.hyphenated().to_string() == text
+    })
+}
+
+/// Returns `text` with each of `ids`, request ids the gateway minted, replaced
+/// by [`MINTED_REQUEST_ID`].
+///
+/// A search for a short hexadecimal fragment reads the result, so a random
+/// UUID cannot match it by chance.
+///
+/// # Errors
+///
+/// When an id is not in the minted form, so no other value is ever masked.
+pub(crate) fn without_minted<'a>(
+    text: &str,
+    ids: impl IntoIterator<Item = &'a str>,
+) -> Result<String, Box<dyn StdError>> {
+    let mut masked = text.to_owned();
+    for id in ids {
+        if !is_minted_form(id) {
+            return Err(format!("{id:?} is not a request id the gateway minted").into());
+        }
+        masked = masked.replace(id, MINTED_REQUEST_ID);
+    }
+    Ok(masked)
+}
