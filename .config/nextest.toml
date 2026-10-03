@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+# The nextest configuration (https://nexte.st/docs/configuration/). A test
+# that runs past its slow-timeout period is reported as slow, and one that
+# runs past terminate-after periods is killed and fails the run by name, so
+# a hang never stalls a run (https://nexte.st/docs/features/slow-tests/).
+# No specification governs the limits: our own design.
+
+[profile.default]
+# The slowest offline test waits on a 10-second timeout of its own.
+slow-timeout = { period = "30s", terminate-after = 2 }
+
+# A container-backed test pulls images and starts PostgreSQL and two
+# FerroEHR nodes, so it gets ten minutes before it is killed.
+[[profile.default.overrides]]
+filter = 'package(ferrofed-testkit) or test(/^e2e::/)'
+slow-timeout = { period = "60s", terminate-after = 10 }
+
+# The CI lanes select this profile. It repeats the default limit, and the
+# override above still applies to it.
+[profile.ci]
+slow-timeout = { period = "30s", terminate-after = 2 }

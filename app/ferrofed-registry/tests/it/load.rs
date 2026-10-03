@@ -8,7 +8,7 @@ use std::path::Path;
 
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
-use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus, RegistrySnapshot};
+use ferrofed_registry::snapshot::{ConnectionType, Endpoint, EndpointStatus, RegistrySnapshot};
 
 use crate::fixture::TWO_NODES;
 
@@ -217,4 +217,39 @@ fn a_missing_document_is_a_read_error() {
         matches!(RegistrySnapshot::read(missing), Err(LoadError::Read { .. })),
         "a missing file is LoadError::Read"
     );
+}
+
+#[test]
+fn a_member_is_asked_through_its_first_active_endpoint() -> TestResult {
+    let registry = RegistrySnapshot::from_toml_str(TWO_NODES)?;
+    let node_a: NodeId = "node-a".parse()?;
+    let node_b: NodeId = "node-b".parse()?;
+    let asked = |node: &NodeId| registry.asked_through(node).map(|e| e.id().as_str());
+    assert_eq!(
+        asked(&node_a),
+        Some("node-a-pub"),
+        "node-a-region is suspended"
+    );
+    assert_eq!(asked(&node_b), Some("node-b-pub"), "node-b's only endpoint");
+    Ok(())
+}
+
+#[test]
+fn a_member_whose_admitted_endpoints_are_all_suspended_is_asked_through_none() -> TestResult {
+    let registry = RegistrySnapshot::from_toml_str(TWO_NODES)?;
+    let node_a: NodeId = "node-a".parse()?;
+    let region: EndpointId = "node-a-region".parse()?;
+    let public: EndpointId = "node-a-pub".parse()?;
+    let suspended = registry.asked_through_among(&node_a, |endpoint| *endpoint == region);
+    assert!(
+        suspended.is_none(),
+        "the one admitted endpoint is suspended"
+    );
+    let active = registry.asked_through_among(&node_a, |endpoint| *endpoint == public);
+    assert_eq!(
+        active.map(Endpoint::id),
+        Some(&public),
+        "the admitted active endpoint"
+    );
+    Ok(())
 }

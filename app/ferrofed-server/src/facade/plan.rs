@@ -6,7 +6,8 @@
 //!
 //! Every registry member appears in the plan, so `meta.federation` reports the
 //! whole federation (§11.1, N16, CP-11). A member is asked through one
-//! endpoint: the first active one in endpoint id order. Its other active
+//! endpoint: the first active one in endpoint id order
+//! ([`RegistrySnapshot::asked_through_among`]). Its other active
 //! endpoints are `excluded`, because asking one node twice returns its rows
 //! twice; a suspended endpoint is `excluded` by operator policy (§11.1);
 //! and under a [`Selection::Directed`]
@@ -248,28 +249,22 @@ fn membership(snapshot: &RegistrySnapshot, selection: Selection<'_>) -> Membersh
     let mut asked = BTreeMap::new();
     let mut excluded = Vec::new();
     for node in snapshot.nodes() {
-        let mut endpoints: Vec<_> = snapshot.endpoints_of(node.id()).collect();
-        endpoints.sort_by(|left, right| left.id().cmp(right.id()));
-        let mut chosen: Option<EndpointId> = None;
-        for endpoint in endpoints {
-            if !selection.admits(endpoint.id()) {
-                excluded.push((endpoint.id().clone(), String::from(selection.reason())));
-                continue;
-            }
-            match (endpoint.status(), &chosen) {
-                (EndpointStatus::Suspended, _) => excluded.push((
-                    endpoint.id().clone(),
-                    String::from("suspended by the federation operator"),
-                )),
-                (EndpointStatus::Active, Some(first)) => excluded.push((
-                    endpoint.id().clone(),
-                    format!("the member is asked through endpoint {first}"),
-                )),
-                (EndpointStatus::Active, None) => chosen = Some(endpoint.id().clone()),
-            }
+        let chosen = snapshot.asked_through_among(node.id(), |endpoint| selection.admits(endpoint));
+        for endpoint in snapshot.endpoints_of(node.id()) {
+            let reason = match (selection.admits(endpoint.id()), endpoint.status(), chosen) {
+                (false, _, _) => String::from(selection.reason()),
+                (true, EndpointStatus::Suspended, _) => {
+                    String::from("suspended by the federation operator")
+                }
+                (true, EndpointStatus::Active, Some(first)) if first.id() != endpoint.id() => {
+                    format!("the member is asked through endpoint {}", first.id())
+                }
+                (true, EndpointStatus::Active, _) => continue,
+            };
+            excluded.push((endpoint.id().clone(), reason));
         }
         if let Some(endpoint) = chosen {
-            asked.insert(node.id().clone(), endpoint);
+            asked.insert(node.id().clone(), endpoint.id().clone());
         }
     }
     Membership { asked, excluded }
