@@ -361,7 +361,7 @@ jobs:
           name=lychee-x86_64-unknown-linux-gnu
           dir="$RUNNER_TEMP/lychee"
           mkdir -p "$dir"
-          curl -fsSL --retry 3 -o "$dir/$name.tar.gz" \
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$dir/$name.tar.gz" \
             "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/$name.tar.gz"
           echo "${LYCHEE_SHA256}  $dir/$name.tar.gz" | sha256sum --check --strict
           tar -xzf "$dir/$name.tar.gz" -C "$dir" --strip-components=1 "$name/lychee"

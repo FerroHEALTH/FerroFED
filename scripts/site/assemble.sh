@@ -71,9 +71,9 @@ cp -R assets/brand "$OUT/assets/"
 # that makes it useful.
 cp llms.txt "$OUT/llms.txt"
 
-if [ "${SITE_ROADMAP:-on}" = off ]; then
+if [[ "${SITE_ROADMAP:-on}" == off ]]; then
   echo "assemble: SITE_ROADMAP=off, so the roadmap block stays empty."
-elif roadmap > "$block" 2>/dev/null && [ -s "$block" ]; then
+elif roadmap > "$block" 2>/dev/null && [[ -s "$block" ]]; then
   awk -v blockfile="$block" '
     /<!-- roadmap:begin -->/ { print; while ((getline line < blockfile) > 0) print line; skip = 1; next }
     /<!-- roadmap:end -->/ { skip = 0 }

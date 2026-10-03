@@ -25,8 +25,9 @@ cd "$(dirname "$0")/../.."
 # check_html ROOT: lychee over every HTML page under the absolute path ROOT,
 # resolving a root-relative link (/docs/...) against ROOT.
 check_html() {
+  local root=$1
   lychee --offline --include-fragments --no-progress --format compact \
-    --root-dir "$1" "$1/**/*.html"
+    --root-dir "$root" "$root/**/*.html"
 }
 
 self_test() {
@@ -55,7 +56,7 @@ self_test() {
       echo "  ok: a site with a broken $case fails"
     fi
   done
-  [ "$failed" -eq 0 ] && echo "site-links self-test: OK"
+  [[ "$failed" -eq 0 ]] && echo "site-links self-test: OK"
   return "$failed"
 }
 
