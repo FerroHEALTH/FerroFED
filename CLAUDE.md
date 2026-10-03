@@ -9,8 +9,8 @@ ordinary AQL query and never learns it was federated. The gateway resolves the
 patient outside AQL, through an identifier cross-reference service, to a set of
 `{node, local ehr_id}`; it sends standard, non-federated AQL to each node,
 scoped to that node's own `ehr_id`; and it merges what comes back with each
-node's provenance. Routing follow-up reads and writes to the owning CDR is
-planned for v0.0.5 (#61 to #66). No directly identifying patient identifier
+node's provenance. It routes follow-up reads and writes to the CDR that owns
+them (§12). No directly identifying patient identifier
 travels in a dispatched query. It holds no clinical data of its own. It implements the openEHR Federation Working
 Group's *Proposal for Federation Tier with AQL* (the Federation Tier
 specification), and it reaches every node over the openEHR ITS-REST API.
@@ -18,15 +18,20 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.4
+## Status: building v0.0.7
 
-v0.0.3 is released. The Cargo workspace exists (#28) with the crate map of
-`docs/architecture.md` §11 (#106). The server shape, the wire types, the
-registry with the development cross-reference, the container, the test
-harness, the AQL façade with the hygiene gate, the completeness modes, the
-request budget and the cross-node `ORDER BY` with `LIMIT` have landed. The
-rest of each crate is built by its own issue, in milestone order; follow-up
-routing is planned for v0.0.5 (#61 to #66).
+v0.0.6 is released and carries the v0.0.4 to v0.0.6 milestones: the merged
+answer across nodes (§9 to §11), the ITS-REST surface with follow-up routing
+(§7a, §12, §12a), and targeting with the self-description (§8, §7a.2). v0.0.7
+(definitions and membership, §12.6, §12.7, §12b) is built on `main` and is cut
+next: definition requests routed to one chosen node, the template fan-out,
+the stored-query registry with its storage backends and drift repair, the
+admission check, the metrics surface, and every credential held in a type
+that never renders it. v0.0.8 is security and the bindings (client
+authentication #80, onward OAuth 2.0 #81, consent, XCPD localization, mCSD
+addressing, Annex B), and v0.0.9 the conformance program. The gateway
+authenticates no client until #80 lands. Each crate gets the rest of its
+behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
@@ -141,14 +146,19 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   configuration with `_file` secrets and per-endpoint outbound credentials,
   the console, the request log that carries no body, query text, header value
   or unmatched path, the health family over an indicator registry, the
-  `tower-http` stack and the bounded drain. The façade (#38) serves
-  `POST /v1/query/aql` over the registry document, the development
-  cross-reference and the engine, with its two `serde_json::Value` seams
-  (`facade::intake`, `facade::cells`); every other path under `/v1/` answers
-  `501`.
+  `tower-http` stack, the bounded drain and the startup banner. The façade
+  (#38) serves the federated AQL query, the stored queries the gateway holds
+  (`stored`: an embedded, a PostgreSQL and a read-only files backend), the
+  follow-up routes to the owning node, the definition routes to a chosen
+  node, and `OPTIONS {base}/`, with its two `serde_json::Value` seams
+  (`facade::intake`, `facade::cells`); an ITS-REST path it does not serve
+  answers `501`. The admin listener (`[metrics] listen`) carries the
+  OpenTelemetry metrics, exported as Prometheus and over OTLP, and the
+  stored-query drift repair.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
-  reader, and the harness of `docs/architecture.md` §13 (#39): two FerroEHR
-  nodes pinned by digest behind the `FERROFED_E2E` gate (`containers`, #155), the
+  reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
+  and the harness of `docs/architecture.md` §13 (#39): FerroEHR nodes pinned
+  by digest behind the `FERROFED_E2E` gate (`containers`, #155), the
   capturing and fault proxy in front of each node (`proxy`), and the synthetic
   seed builder that writes over ITS-REST alone inside the `urn:oid:2.999`
   example arc (`seed`) (`.claude/memory/e2e-gate.md`).

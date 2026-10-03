@@ -95,7 +95,9 @@ reports that member `offline`; the series do not count it. A request whose
 deadline passed before it left is not counted either, in any of the six
 calls, because the node was never asked. The client still sees the budget
 run out: a `time-out` in the member record, or a `504` (`node-timeout`) for
-a routed request or a probe.
+a routed request or a probe. A call the gateway fails with a `500` because
+one of its own tasks panicked counts no member at all, since a defect in
+the gateway is never a node's `time-out`.
 
 | Call | Requests counted | `outcome` read from | Time recorded |
 |---|---|---|---|

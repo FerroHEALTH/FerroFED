@@ -45,7 +45,17 @@ pub enum EhrCallError {
         /// The part of the request that carried it; never the value.
         part: Part,
     },
-    /// The node did not answer before the deadline.
+    /// The deadline passed before the request left the gateway, so nothing
+    /// was sent and the node was never asked (§11.5).
+    #[error("the deadline for endpoint {endpoint} passed before the request was sent")]
+    Expired {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// What the client runtime reported.
+        #[source]
+        source: Box<ClientError>,
+    },
+    /// The node was sent the request and did not answer before the deadline.
     #[error("endpoint {endpoint} did not answer before the deadline")]
     TimeOut {
         /// The endpoint.
@@ -81,6 +91,8 @@ pub enum EhrCallError {
     Unnamed {
         /// The endpoint.
         endpoint: EndpointId,
+        /// The node's success status, `201` or `204`.
+        status: StatusCode,
     },
     /// Any other failure: no credential, a request that could not be
     /// composed, the node refusing the credentials, a `5xx`, a status the
@@ -106,6 +118,7 @@ impl<T: Transport> NodeClient<T> {
     /// # Errors
     ///
     /// Returns [`EhrCallError::Withheld`] with nothing sent,
+    /// [`EhrCallError::Expired`] when the deadline passed before it left,
     /// [`EhrCallError::TimeOut`] and [`EhrCallError::Unreachable`] when the
     /// node gave no answer, [`EhrCallError::Rejected`] for a `400` or `409`,
     /// [`EhrCallError::Unnamed`] for a success naming no `ehr_id`, and
@@ -131,9 +144,13 @@ impl<T: Transport> NodeClient<T> {
             .ehr_create(&params, Some(status))
             .await
             .map_err(|source| self.ehr_failure(source))?;
-        let (etag, location) = match answer {
-            EhrCreateOutcome::Created { headers, .. } => (headers.etag, headers.location),
-            EhrCreateOutcome::NoContent { headers } => (headers.etag, headers.location),
+        let (status, etag, location) = match answer {
+            EhrCreateOutcome::Created { headers, .. } => {
+                (StatusCode::CREATED, headers.etag, headers.location)
+            }
+            EhrCreateOutcome::NoContent { headers } => {
+                (StatusCode::NO_CONTENT, headers.etag, headers.location)
+            }
             EhrCreateOutcome::BadRequest { body } => {
                 return Err(self.rejected(StatusCode::BAD_REQUEST, body));
             }
@@ -146,6 +163,7 @@ impl<T: Transport> NodeClient<T> {
             .or_else(|| location.as_deref().and_then(from_location))
             .ok_or_else(|| EhrCallError::Unnamed {
                 endpoint: self.endpoint().clone(),
+                status,
             })
     }
 
@@ -154,6 +172,7 @@ impl<T: Transport> NodeClient<T> {
     /// # Errors
     ///
     /// Returns [`EhrCallError::Withheld`] with nothing sent,
+    /// [`EhrCallError::Expired`] when the deadline passed before it left,
     /// [`EhrCallError::TimeOut`] and [`EhrCallError::Unreachable`] when the
     /// node gave no answer, [`EhrCallError::Rejected`] for a `404`, and
     /// [`EhrCallError::Failed`] for every other failure, a body that is not an
@@ -228,11 +247,17 @@ impl<T: Transport> NodeClient<T> {
     }
 
     /// The error for a call that reached no documented answer.
+    ///
+    /// The client makes one attempt, so `DeadlineElapsed` comes before the
+    /// request reaches the transport: a request never sent.
     fn ehr_failure(&self, error: ClientError) -> EhrCallError {
         let endpoint = self.endpoint().clone();
         match error {
-            ClientError::DeadlineElapsed { .. }
-            | ClientError::Transport {
+            ClientError::DeadlineElapsed { .. } => EhrCallError::Expired {
+                endpoint,
+                source: Box::new(error),
+            },
+            ClientError::Transport {
                 source: TransportError::Timeout { .. },
                 ..
             } => EhrCallError::TimeOut {

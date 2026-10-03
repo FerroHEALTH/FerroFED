@@ -5,7 +5,7 @@
 
 Every pull request and every push to `main` is analyzed by SonarQube Cloud
 (`.github/workflows/sonar.yml`; scope in `sonar-project.properties`; project
-`rubentalstra_FerroFED`, organization `rubentalstra`, the built-in "Sonar
+`FerroHEALTH_FerroFED`, organization `ferrohealth`, the built-in "Sonar
 way" quality gate). It exists as a second opinion beside the local gates and
 CodeQL, and it also reads the trees the Rust gates never see: shell, workflow
 YAML, and JSON.
@@ -15,6 +15,15 @@ runs Clippy itself over the workspace), and imports the lcov report the
 coverage step writes one workspace member at a time (`ci-cd.md`).
 
 It is a **second opinion**. It is not authority, and it gates no merge.
+
+After each analysis of `main`, the workflow converts the open issues to SARIF
+(`scripts/sonar/sarif.sh`) and uploads them to GitHub code scanning under the
+category `sonarqube-cloud`, so SonarQube Cloud is listed as a code-scanning
+tool beside CodeQL and Scorecard. Sonar's own code-scanning integration needs
+its Enterprise plan. Pull requests are not uploaded: a pull-request analysis
+lists only the issues the change adds, and code scanning would read every
+other alert as fixed. SonarQube Cloud decorates the pull request itself.
+Those alerts are as advisory as the dashboard.
 
 ## Precedence: a finding never outranks the sources
 

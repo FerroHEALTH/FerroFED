@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::ehr::EhrCallError;
 use crate::forward::{ForwardError, Forwarded};
 use crate::hygiene::{Part, Withheld};
 use crate::outbound_id::OutboundId;
@@ -269,6 +270,45 @@ impl Contact {
         }
     }
 
+    /// Returns what an EHR call that got no usable answer showed of the node,
+    /// by the same rule: an answer is the node's status, a deadline that
+    /// passed before the request left is [`Contact::Unsent`].
+    #[must_use]
+    pub fn of_ehr_call_error(error: &EhrCallError) -> Self {
+        match error {
+            EhrCallError::Rejected { status, .. } | EhrCallError::Unnamed { status, .. } => {
+                Self::Answered(*status)
+            }
+            EhrCallError::TimeOut { .. } | EhrCallError::Unreachable { .. } => Self::Silent,
+            EhrCallError::Withheld { .. } | EhrCallError::Expired { .. } => Self::Unsent,
+            EhrCallError::Failed { source, .. } => Self::of_client_error(source),
+        }
+    }
+
+    /// Returns what a call that ended in `error` showed of the node: the
+    /// status of an answer, [`Contact::Silent`] for a request that left with
+    /// no answer, and [`Contact::Unsent`] for one that never left.
+    #[must_use]
+    pub fn of_client_error(error: &ClientError) -> Self {
+        match error {
+            ClientError::Unauthorized { .. } => Self::Answered(StatusCode::UNAUTHORIZED),
+            ClientError::Forbidden { .. } => Self::Answered(StatusCode::FORBIDDEN),
+            ClientError::ServiceFailure { status, .. }
+            | ClientError::UndocumentedStatus { status, .. }
+            | ClientError::Body { status, .. } => Self::Answered(*status),
+            ClientError::Transport { .. } => Self::Silent,
+            ClientError::BaseUrl { .. }
+            | ClientError::DeadlineElapsed { .. }
+            | ClientError::Credentials { .. }
+            | ClientError::Build { .. }
+            | ClientError::HeaderName { .. }
+            | ClientError::InvalidCredentials { .. }
+            | ClientError::HeaderValue { .. }
+            | ClientError::UnsupportedMediaType { .. }
+            | ClientError::Serialize { .. } => Self::Unsent,
+        }
+    }
+
     /// Whether the request left the gateway.
     #[must_use]
     pub const fn sent(self) -> bool {
@@ -412,6 +452,8 @@ impl<T: Transport> NodeClient<T> {
                 endpoint: endpoint.id().clone(),
                 source: Box::new(source),
             })?
+            // NOTE: openehr-its Client::execute (docs.rs) raises DeadlineElapsed before an attempt, so
+            // with one attempt it is a request never sent, which every Contact reading here relies on.
             .with_retry(RetryPolicy {
                 max_attempts: 1,
                 ..RetryPolicy::default()
@@ -562,10 +604,41 @@ fn versioned_base(base: &Url) -> Url {
 
 #[cfg(test)]
 mod tests {
-    use super::versioned_base;
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+
+    use super::{NodeClients, versioned_base};
+    use ferrofed_registry::snapshot::RegistrySnapshot;
+    use openehr_its::rest::client::ReqwestTransport;
     use url::Url;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    fn every_node_client_makes_one_attempt() -> TestResult {
+        let snapshot = RegistrySnapshot::from_toml_str(
+            "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr-a.example.org\"\n\n[[endpoint]]\nid = \"node-a-pub\"\nnode = \"node-a\"\nurl = \"https://cdr-a.example.org/openehr\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n",
+        )?;
+        let transport = ReqwestTransport::with_timeout(Duration::from_secs(1))?;
+        let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
+        let mut built = 0_usize;
+        for client in clients.iter() {
+            built += 1;
+            assert_eq!(
+                1,
+                client.client().retry().max_attempts,
+                "a retry lets DeadlineElapsed follow a sent attempt, and Contact::of_client_error, \
+                 Contact::of_forward_error, Contact::of_ehr_call_error, the query reply's and the \
+                 stored definition's contact would all read that request as never sent"
+            );
+        }
+        assert_eq!(1, built, "the snapshot's one endpoint has a client");
+        Ok(())
+    }
 
     #[test]
     #[expect(

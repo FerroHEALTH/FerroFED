@@ -379,4 +379,7 @@ request, the gateway's `request_id`. The panic message is never written:
 the gateway replaces Rust's default panic hook, which prints it to stderr,
 so a panic writes nothing to stderr. A federated query the gateway fails with a `500` also logs "the
 federated query failed" with its error code and the same `request_id` as its
-request line.
+request line. A fan-out template upload, a stored-query distribution or
+repair, and a drift check whose task for one member panics fail the same
+way, with a `500`, and log that the fan-out could not tell what became of
+every member.

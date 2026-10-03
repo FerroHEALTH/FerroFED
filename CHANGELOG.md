@@ -503,6 +503,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- A fan-out template upload, a stored-query distribution or repair, and a
+  stored-query drift check fail with a `500` when the task for one member
+  panics (#380; no specification governs the metrics or health probes). Such
+  a task was reported as abandoned by the member: counted as a `time-out` in
+  `ferrofed_node_requests_total`, marked `down` on
+  `GET /health/dependencies`, and listed as `time-out` in `meta.federation`,
+  blaming the node for a defect in the gateway. The probe and the federated
+  query already failed this way, and none of these calls records a member
+  for a request it fails.
+- The admission check reports an EHR call whose deadline passed before it
+  left the gateway as a call never sent (#379; §11.5), where it said the
+  node did not answer before the deadline.
 - A request whose deadline passed before it left the gateway is no longer
   counted as a node `time-out` (#374; §11.5; no specification governs the
   metrics or health probes). A request routed to one node, an ask-all probe,
