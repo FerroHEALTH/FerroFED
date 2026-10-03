@@ -20,16 +20,13 @@ use std::error::Error;
 use axum::Router;
 use axum::body::Body;
 use http::{Method, Request, StatusCode, header};
+use openehr_federation::headers::ENDPOINT;
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, PATIENT, gateway, registry, wire};
-use crate::path_ehr_id::{asked, mount};
-use crate::support::{acted, error_body, exchange, field, refused_at_neither};
+use crate::support::{acted, asked, error_body, exchange, field, mount, refused_at_neither};
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// The endpoint header (§8.4).
-const ENDPOINT: &str = "openEHR-federation-endpoint";
 
 const ENDPOINT_A: &str = "node-a-pub";
 const ENDPOINT_B: &str = "node-b-pub";

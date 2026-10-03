@@ -21,15 +21,13 @@ use std::error::Error;
 
 use axum::body::Body;
 use http::{Request, StatusCode, header};
+use openehr_federation::headers::ENDPOINT;
 
 use crate::directive::{EHR_C, Nodes, directed, patient};
 use crate::facade::{Answer, EHR_A, EHR_B, PATIENT_TAIL, body, post, received, statuses, wire};
 use crate::support::{call, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// The endpoint header.
-const ENDPOINT: &str = "openEHR-federation-endpoint";
 
 /// The organisation header.
 const ORGANISATION: &str = "openEHR-federation-organisation";

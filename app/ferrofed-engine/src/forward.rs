@@ -195,6 +195,10 @@ pub enum ForwardError {
     Unrouted,
 }
 
+/// How a request's declared values are held to its operation:
+/// [`declared::held`] or [`declared::fitting`].
+type Compose = fn(&RouteMatch, Option<&str>, &HeaderMap, &[u8]) -> Result<HeaderMap, Refusal>;
+
 /// A client request held to the ITS-REST operation its method and path
 /// address, with the headers composed for the node once
 /// ([`declared::held`]).
@@ -225,6 +229,23 @@ impl HeldRequest {
     /// [`ForwardError::Value`] for a declared value that does not match its
     /// kind, or an `Accept` or `Content-Type` naming no listed media type.
     pub fn hold(request: ClientRequest) -> Result<Self, ForwardError> {
+        Self::composed(request, declared::held)
+    }
+
+    /// Holds the gateway's own `request` to the ITS-REST operation its
+    /// method and path address, leaving out a header that does not fit it
+    /// ([`declared::fitting`]); the ask-all probe is held this way.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`ForwardError`] of [`HeldRequest::hold`], never one for a
+    /// header.
+    pub fn fit(request: ClientRequest) -> Result<Self, ForwardError> {
+        Self::composed(request, declared::fitting)
+    }
+
+    /// Holds `request` to its operation, its headers composed by `compose`.
+    fn composed(request: ClientRequest, compose: Compose) -> Result<Self, ForwardError> {
         let ClientRequest {
             method,
             path,
@@ -238,7 +259,7 @@ impl HeldRequest {
         if let Some(query) = query.as_deref() {
             hygiene::forwarded_query(&operation, query)?;
         }
-        let headers = declared::held(&operation, query.as_deref(), &headers, &body)?;
+        let headers = compose(&operation, query.as_deref(), &headers, &body)?;
         Ok(Self {
             method,
             path,

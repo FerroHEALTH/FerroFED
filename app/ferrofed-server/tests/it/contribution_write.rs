@@ -24,7 +24,8 @@ use http::{Method, Request, StatusCode, header};
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, PATIENT};
-use crate::path_ehr_id::{answer, asked, holder, mount};
+use crate::path_ehr_id::{answer, holder};
+use crate::support::{asked, mount};
 use crate::versioned_write::{
     CREATED_AT_A, CREATED_BY_LEGACY, CREATED_ELSEWHERE, ENDPOINT_A, ENDPOINT_B, LEGACY_MAPPING,
     outside_bodies, over, refused_at_neither, versioned,

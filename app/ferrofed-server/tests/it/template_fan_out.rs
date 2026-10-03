@@ -26,6 +26,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use http::{Method, Request, StatusCode, header};
+use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
 use openehr_federation::meta::FederationMeta;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -33,16 +34,9 @@ use serde::Deserialize;
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::{PATIENT, registry, settings_with_room, wire};
-use crate::path_ehr_id::{asked, mount};
-use crate::support::{error_body, exchange, field};
+use crate::support::{asked, error_body, exchange, field, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// The endpoint header (§8.4).
-const ENDPOINT: &str = "openEHR-federation-endpoint";
-
-/// The system id header (§7a.3).
-const SYSTEM_ID: &str = "openEHR-federation-system-id";
 
 /// The ADL 1.4 template collection (ITS-REST Definition API).
 const ADL14: &str = "/v1/definition/template/adl1.4";

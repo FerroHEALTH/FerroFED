@@ -22,18 +22,15 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_server::EXIT_CONFIG;
 use http::{Request, StatusCode, header};
+use openehr_federation::headers::ENDPOINT;
 use openehr_federation::options::OptionsRoot;
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::{PATIENT, gateway, registry, schema, wire};
-use crate::path_ehr_id::{asked, mount};
 use crate::run::binary;
-use crate::support::{acted, call, error_body, exchange, field, refused_at_neither};
+use crate::support::{acted, asked, call, error_body, exchange, field, mount, refused_at_neither};
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// The endpoint header (§8.4).
-const ENDPOINT: &str = "openEHR-federation-endpoint";
 
 const ENDPOINT_A: &str = "node-a-pub";
 const ENDPOINT_B: &str = "node-b-pub";

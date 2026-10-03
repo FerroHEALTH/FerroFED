@@ -13,12 +13,10 @@
 use std::fmt::Write as _;
 
 use http::{Method, StatusCode};
+use openehr_federation::headers::ENDPOINT;
 use uuid::Uuid;
 
 use super::{Case, ENDPOINT_A, Expect, PATIENT, Payload, Side};
-
-/// The endpoint header (§8.4).
-const ENDPOINT: &str = "openEHR-federation-endpoint";
 
 /// The organisation header (§8.4).
 const ORGANISATION: &str = "openEHR-federation-organisation";

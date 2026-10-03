@@ -35,8 +35,8 @@ use serde::Deserialize;
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, registry};
-use crate::path_ehr_id::{answer, asked, holder, mount, over};
-use crate::support::{Logs, error_body};
+use crate::path_ehr_id::{answer, holder, over};
+use crate::support::{Logs, asked, error_body, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

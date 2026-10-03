@@ -18,16 +18,14 @@ use std::error::Error;
 
 use axum::body::Body;
 use http::{Request, StatusCode};
+use openehr_federation::headers::ENDPOINT;
 use wiremock::MockServer;
 
 use crate::facade::{EHR_A, PATIENT};
-use crate::path_ehr_id::{ENDPOINT_A, answer, asked, holder, over, probe_at, stranger};
-use crate::support::error_body;
+use crate::path_ehr_id::{ENDPOINT_A, answer, holder, over, probe_at, stranger};
+use crate::support::{asked, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// The endpoint header (§8.4).
-const ENDPOINT: &str = "openEHR-federation-endpoint";
 
 /// A version uid node A minted.
 const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";

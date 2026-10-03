@@ -83,32 +83,51 @@ pub fn held(
     headers: &HeaderMap,
     body: &[u8],
 ) -> Result<HeaderMap, Refusal> {
+    holding(operation, (query, headers, body), Strictness::Refuse)
+}
+
+/// Holds the declared values of the ask-all probe, the gateway's own request
+/// under its own `operation`, and returns the headers it sends for `headers`.
+///
+/// Each header is composed as [`held`] composes it, and one that would be
+/// refused is left out; for `Accept`, the first listed value is sent. The
+/// path, the query and the body are held as [`held`] holds them.
+///
+/// The probe's operation may list other values than the operation the client
+/// addressed, and the client's request was held to its own operation before
+/// any probe.
+///
+/// # Errors
+///
+/// Returns the [`Refusal`] of [`held`] for the path, the query or the body;
+/// never one for a header.
+pub fn fitting(
+    operation: &RouteMatch,
+    query: Option<&str>,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<HeaderMap, Refusal> {
+    holding(operation, (query, headers, body), Strictness::LeaveOut)
+}
+
+/// Holds the declared values of a request to `operation`, each header to
+/// `strictness`.
+fn holding(
+    operation: &RouteMatch,
+    (query, headers, body): (Option<&str>, &HeaderMap, &[u8]),
+    strictness: Strictness,
+) -> Result<HeaderMap, Refusal> {
     path::held(operation)?;
     if let Some(query) = query {
         query::values(operation, query)?;
     }
-    let mut sent = composed(operation, headers, Strictness::Refuse)?;
+    let mut sent = composed(operation, headers, strictness)?;
     if !sent.contains_key(CONTENT_TYPE)
         && let Some(value) = body_media_type(operation, headers, !body.is_empty())?
     {
         sent.insert(CONTENT_TYPE, value);
     }
     Ok(sent)
-}
-
-/// The headers the ask-all probe sends for `headers` under its own
-/// `operation`.
-///
-/// Each is composed as [`held`] composes it, and a header that would be
-/// refused is left out; for `Accept`, the first listed value is sent.
-///
-/// The probe is the gateway's own read under an operation of its own, whose
-/// listed values may differ from those of the operation the client
-/// addressed, and the client's request was held to its own operation before
-/// any probe.
-#[must_use]
-pub fn fitting(operation: &RouteMatch, headers: &HeaderMap) -> HeaderMap {
-    composed(operation, headers, Strictness::LeaveOut).unwrap_or_default()
 }
 
 /// Why a routed request's declared values keep it from being sent.

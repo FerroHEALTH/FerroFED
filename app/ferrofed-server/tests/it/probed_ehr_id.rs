@@ -20,10 +20,8 @@ use http::{Request, StatusCode};
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::EHR_A;
-use crate::path_ehr_id::{
-    ENDPOINT_A, TestResult, answer, asked, holder, mount, over, probe_at, stranger,
-};
-use crate::support::error_body;
+use crate::path_ehr_id::{ENDPOINT_A, TestResult, answer, holder, over, probe_at, stranger};
+use crate::support::{asked, error_body, mount};
 
 /// An `ehr_id` in ISO OID form, as a member minting OID `ehr_id`s would
 /// issue it, inside the `2.999` example arc.

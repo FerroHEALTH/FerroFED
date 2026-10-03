@@ -433,7 +433,7 @@ mod tests {
     fn the_probe_sends_what_fits_its_own_operation() {
         let probe = operation(&Method::GET, EHR);
         let sent = headers(&[("accept", "application/openehr.wt.flat+json")]);
-        let kept = fitting(&probe, &sent);
+        let kept = fitting(&probe, None, &sent, &[]).expect("the probe is held");
         assert_eq!(
             Some("application/json"),
             kept.get("accept").and_then(|value| value.to_str().ok())
