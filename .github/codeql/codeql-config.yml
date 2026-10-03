@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The CodeQL configuration of the Rust analysis in workflows/codeql.yml.
+#
+# The integration-test trees are left out. Their sinks are assertion and
+# panic messages over synthetic fixtures, which rust/cleartext-logging reads
+# as logging; the request log, the panic hook and the tracing output that
+# rule should cover live under src/. A #[cfg(test)] module under src/ stays
+# in scope, and an alert there is dismissed one at a time with its reason.
+#
+# Docs: https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning#specifying-directories-to-scan
+name: FerroFED Rust
+
+paths-ignore:
+  - "**/tests/**"

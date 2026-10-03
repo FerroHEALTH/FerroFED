@@ -14,6 +14,8 @@
 #     cleanly. `rust` is a generally-available CodeQL language (GA
 #     2025-10-14), build-mode "none", so it never contends for cargo's build
 #     tree.
+#     Its configuration, .github/codeql/codeql-config.yml, leaves out the
+#     integration-test trees, whose assertion messages are not logging.
 #
 # Code scanning must be the ADVANCED setup for this workflow to run: GitHub
 # rejects an advanced-config analysis while the CodeQL default setup is enabled
@@ -28,6 +30,7 @@ on:
     paths:
       - ".github/workflows/**"
       - ".github/actions/**"
+      - ".github/codeql/**"
       - "**/*.rs"
       - "**/Cargo.toml"
       - "Cargo.lock"
@@ -36,6 +39,7 @@ on:
     paths:
       - ".github/workflows/**"
       - ".github/actions/**"
+      - ".github/codeql/**"
       - "**/*.rs"
       - "**/Cargo.toml"
       - "Cargo.lock"
@@ -125,6 +129,7 @@ jobs:
         with:
           languages: rust
           build-mode: none
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2

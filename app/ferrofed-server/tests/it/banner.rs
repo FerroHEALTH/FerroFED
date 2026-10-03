@@ -15,6 +15,7 @@ use std::io::Write as _;
 use std::net::TcpListener;
 use std::process::Command;
 
+use ferrofed_identity::dev::Profile;
 use ferrofed_server::banner::{DEVELOPMENT_NOTICE, Deployment, Registry, WORDMARK, prints, render};
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::{FederationError, read_registry};
@@ -298,7 +299,13 @@ fn the_banner_and_the_build_share_one_read_of_the_registry() -> TestResult {
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let read = read_registry(&settings);
-    let deployment = Deployment::of(&settings, read.as_ref().map(Result::as_ref));
+    let deployment = Deployment::of(
+        settings.server.base_path.clone(),
+        settings.server.listen,
+        read.as_ref().map(Result::as_ref),
+        settings.stored_queries.is_some(),
+        settings.profile == Profile::Development,
+    );
     std::fs::remove_file(&path)?;
 
     let state = AppState::build_read(&settings, read)?;
@@ -365,7 +372,13 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let document = read_registry(&settings);
-    let deployment = Deployment::of(&settings, document.as_ref().map(Result::as_ref));
+    let deployment = Deployment::of(
+        settings.server.base_path.clone(),
+        settings.server.listen,
+        document.as_ref().map(Result::as_ref),
+        settings.stored_queries.is_some(),
+        settings.profile == Profile::Development,
+    );
     assert_eq!(
         Registry::Read {
             members: 2,
@@ -393,7 +406,13 @@ fn a_registry_document_that_does_not_load_is_named_unreadable() -> TestResult {
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let document = read_registry(&settings);
-    let deployment = Deployment::of(&settings, document.as_ref().map(Result::as_ref));
+    let deployment = Deployment::of(
+        settings.server.base_path.clone(),
+        settings.server.listen,
+        document.as_ref().map(Result::as_ref),
+        settings.stored_queries.is_some(),
+        settings.profile == Profile::Development,
+    );
     assert_eq!(Registry::Unreadable, deployment.registry);
     Ok(())
 }
