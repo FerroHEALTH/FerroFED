@@ -364,8 +364,8 @@ fn an_assertion_that_is_no_saml_assertion_refuses_to_boot_naming_its_key() -> Te
 #[test]
 fn xcpd_without_a_registry_refuses_to_boot() -> TestResult {
     let text = "[xcpd]\nsender_device = \"2.999.40.1\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n";
-    match load(text)? {
-        Err(FederationError::Localization(LocalizationError::XcpdWithoutRegistry)) => Ok(()),
+    match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
+        Err(error::Error::Missing { key }) if key == "registry.document" => Ok(()),
         other => Err(format!("refused for its missing registry: {other:?}").into()),
     }
 }

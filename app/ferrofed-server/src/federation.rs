@@ -302,10 +302,6 @@ impl Federation {
             if settings.pixm.is_some() {
                 return Err(FederationError::PixmWithoutRegistry);
             }
-            if settings.xcpd.is_some() {
-                let error = localization::LocalizationError::XcpdWithoutRegistry;
-                return Err(FederationError::Localization(error));
-            }
             if settings.federation.demographic_endpoint.is_some() {
                 return Err(FederationError::DemographicWithoutRegistry);
             }

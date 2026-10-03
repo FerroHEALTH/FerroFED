@@ -137,10 +137,6 @@ pub enum LocalizationError {
         "[xcpd] is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
     )]
     XcpdUnused,
-    /// `[xcpd]` is set but no registry document is, so it names members that
-    /// do not exist.
-    #[error("the [xcpd] localizer needs registry.document, whose members it names")]
-    XcpdWithoutRegistry,
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("{key} is not one SAML 2.0 Assertion element")]
     XcpdAssertion {

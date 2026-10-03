@@ -126,7 +126,8 @@ impl fmt::Debug for XcpdSettings {
 /// development, and every secret and file read.
 ///
 /// # Errors
-/// [`Error::Missing`] for no `sender_device` or no gateway, [`Error::Url`]
+/// [`Error::Missing`] for no registry document, no `sender_device` or no
+/// gateway, [`Error::Url`]
 /// for a gateway URL that does not parse, [`Error::Insecure`] for an `http`
 /// gateway outside the development profile, and the errors of a secret or a
 /// file that cannot be read.
@@ -134,6 +135,13 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
     let Some(xcpd) = &config.xcpd else {
         return Ok(None);
     };
+    // NOTE: no specification governs this: our own design; the community map
+    // names registry members, so it means nothing without a registry.
+    if config.registry.document.is_none() {
+        return Err(Error::Missing {
+            key: String::from("registry.document"),
+        });
+    }
     if xcpd.sender_device.is_empty() {
         return Err(Error::Missing {
             key: String::from("xcpd.sender_device"),
