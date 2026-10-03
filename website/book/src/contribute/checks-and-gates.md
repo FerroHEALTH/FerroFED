@@ -34,6 +34,7 @@ The first tier runs on every change, because it needs no Rust:
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |
 | favicon-sync | the book's favicons match the brand mark |
 | conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
+| obligations | the [obligations checklist](../evaluate/obligations.md) agrees with the vendored specification, the conformance matrix and the tests it names, and a re-pin fails until every changed page is reclassified |
 | tracker-helpers | the self-tests of the `scripts/gh` tracker helpers |
 | crate-version-guard self-test | the crate-version guard judges only what a pull request changes, against a stub repository |
 
@@ -53,6 +54,8 @@ bash scripts/checks/comment-style.sh --all
 bash scripts/checks/file-length.sh
 bash scripts/checks/favicon-sync.sh
 bash scripts/checks/conformance-matrix.sh
+bash scripts/checks/obligations.sh --self-test
+bash scripts/checks/obligations.sh
 bash scripts/checks/crate-version-guard.sh --self-test
 for helper in fields labels migrate-fields rel; do bash "scripts/gh/$helper.sh" --self-test; done
 find scripts .claude/hooks -name '*.sh' -exec shellcheck --severity=style {} +

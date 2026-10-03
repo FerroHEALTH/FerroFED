@@ -55,6 +55,23 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   incident names an `ehr_id` only when it is a bare UUID, and never a patient
   identifier. The gateway has no metrics endpoint, so the log is the record;
   the book's configuration page says what an operator sees and does.
+- The obligations checklist (#278): `conformance/obligations.tsv` holds one
+  row per normative statement of the pinned Federation Tier specification,
+  447 across its 26 pages and both JSON schemas, each with the status
+  FerroFED holds for it and the test, code, issue or #212 report behind that
+  status. 273 are tested, 52 planned, 3 built but untested (#290), 3 missing
+  (the GET forms of query execution, #287, and the provenance headers on the
+  federated AQL answer, #288), 5 deferred, and 18 are contradictions or
+  silences of the text recorded on #212; the other 93 fall on a member node
+  or the operator, or are no obligation of the gateway. The book renders the counts and every gap on a new
+  page beside the conformance matrix. A new tier-1 guard,
+  `scripts/checks/obligations.sh`, fails on an unknown status, a gap that
+  names no issue, a test that does not exist, a point or requirement the
+  matrix does not hold, a duplicated row, or a stale page, and it holds a
+  digest of each vendored page's keyword lines, so a re-pin fails until the
+  changed pages are reclassified. The comment-style guard now reads the
+  `evidence` cells of the conformance tables as it reads their `reason`
+  cells.
 
 ### Changed
 
