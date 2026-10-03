@@ -292,7 +292,7 @@ These are repository settings only the owner can change. The state on
 | Code scanning in advanced setup, with the CodeQL default setup off so `codeql.yml` is the analysis path | done |
 | Actions default `GITHUB_TOKEN` permissions read-only, and workflows cannot approve pull requests | done |
 | Auto-merge allowed, squash merges, branches deleted on merge, no merge commits | done |
-| The `SONAR_TOKEN` Actions secret, the SonarQube Cloud project `rubentalstra_FerroFED`, and Automatic Analysis off | done |
+| The `SONAR_TOKEN` Actions secret, the SonarQube Cloud project `FerroHEALTH_FerroFED` in the organization `ferrohealth`, and Automatic Analysis off | done |
 | The roadmap board ("FerroFED Roadmap") and the label bootstrap (`scripts/gh/labels.sh`) | done |
 | Pages publishes from GitHub Actions and serves `ferrofed.eu` with HTTPS enforced; the domain is a Pages setting and a verified account domain, never a `CNAME` file in the tree | pending: lands with the documentation site |
 | Registration at bestpractices.dev | done: project [15130](https://www.bestpractices.dev/projects/15130), badge in the README |
