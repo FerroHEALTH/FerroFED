@@ -65,7 +65,7 @@ bearer_token_file = "/run/secrets/pix-token"
   Manager is asked for patient identifiers, so `http` is refused naming
   `pixm.manager[N].url`, with or without credentials, unless the profile is
   `development`
-  ([What must travel over https](configuration.md#what-must-travel-over-https)). A user name or password in it refuses the configuration, naming
+  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)). A user name or password in it refuses the configuration, naming
   `pixm.manager[N].url` and never quoting it; the credentials go in
   `[pixm.manager.credentials]`, with the keys of an endpoint's
   [credentials](configuration.md#the-file): `bearer_token`, or `user` and

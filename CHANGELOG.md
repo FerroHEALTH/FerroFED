@@ -218,6 +218,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   identifier is sent to must be `https` outside the development profile,
   and a key set or introspection endpoint the gateway verifies callers
   against must be `https`, or `http` to loopback, under every profile (#402).
+- Outside the development profile, the stored-query store's PostgreSQL
+  connection string must set `sslmode=require` when it carries a password
+  to a networked host: `disable` and `prefer`, the driver's default, which
+  falls back to no TLS, are refused naming `stored_queries.url` by
+  `config check`, the start and a reload, even though the store itself
+  changes only on a restart. Under the development profile it starts and is
+  named in the banner, the log and `config check` (#416).
 
 ## [0.0.7] - 2026-10-03
 
