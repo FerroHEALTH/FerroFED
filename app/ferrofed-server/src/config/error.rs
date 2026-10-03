@@ -80,6 +80,13 @@ pub enum Error {
         /// The path it named.
         path: PathBuf,
     },
+    /// Stored-query definitions would be distributed with no stored-query
+    /// registry to distribute from (§12.7, N44).
+    #[error(
+        "federation.fan_out_stored_queries distributes the stored-query registry's definitions, \
+         and no registry is offered: set stored_queries.path, or turn the setting off (§12.7)"
+    )]
+    StoredQueryFanOutWithoutRegistry,
     /// A key a section needs is not set.
     #[error("{key} is not set, and its section needs it")]
     Missing {

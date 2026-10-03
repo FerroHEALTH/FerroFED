@@ -35,6 +35,30 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   own `409`, and an `ehr_id` nothing places is forwarded as before and,
   once created, indexed at the targeted member, where a racing create at
   another member raises the index-insert alarm of §12b.2.
+- Stored-query definition fan-out, opt-in with `[federation]
+  fan_out_stored_queries` beside the registry (#78; §12.7, N44, N43, CP-40).
+  Off by default, refused by `config check` and at start without
+  `[stored_queries]`, and declared in `OPTIONS {base}/` as
+  `definition.stored_query_fan_out`, `true` only beside the registry. Where
+  it is on, a stored-query `PUT` whose `openEHR-federation-endpoint` is `*`
+  or whose targeting headers name members is stored at the registry first,
+  then sent to each member as the registry's canonical AQL through
+  `openehr-its`'s generated client, and answered with the registry's
+  `StoredQuery` and `meta.federation` on the template fan-out's statuses:
+  `200`, `207` with `complete` false, or `424` and `504`, the registry
+  holding the definition whatever the members answered and nothing rolled
+  back. A definition carrying a `FROM ENDPOINT` or `ORGANISATION` directive
+  is refused for distribution with `400 definition-endpoint-targeted`
+  before anything is stored, and stays storable and executable federated.
+  A `GET` of a version naming members reports drift per member: `active`
+  where its copy is the same query, and `node-error` with
+  `error.code` `definition-differs` or `definition-missing` otherwise, `207`
+  unless every named member matches. An invocation always runs the
+  registry's AQL, never a member's copy. With the setting off, a registry
+  `PUT` or version `GET` carrying `openEHR-federation-endpoint` or
+  `openEHR-federation-organisation` is refused with
+  `400 stored-query-fan-out-unsupported`, storing and reading nothing,
+  where the header was ignored before.
 - The federated AQL answer carries the provenance headers (#288; §7a.3,
   N31, CP-24). `openEHR-federation-endpoint` lists the endpoints that
   contributed rows and `openEHR-federation-system-id` their nodes'

@@ -763,10 +763,85 @@ Content-Type: application/json
   `ehr_id` is dropped, and a query string the decoder refuses is a `400`
   (`body-invalid`).
 
-The gateway does not distribute definitions to the nodes, and
-`definition.stored_query_fan_out` is `false` (§12.7). Templates go to the one
-node you name ([templates and definitions](#templates-and-definitions)).
-Without the registry, `GET` and `POST {base}/v1/query/{name}` answer `501`.
+Templates go to the one node you name ([templates and
+definitions](#templates-and-definitions)). Without the registry, `GET` and
+`POST {base}/v1/query/{name}` answer `501`.
+
+### Distributing a stored query
+
+A deployment that sets `federation.fan_out_stored_queries` beside the
+registry also distributes a definition to the members you name, and
+`OPTIONS {base}/` declares `definition.stored_query_fan_out: true` (§12.7,
+N44). It is off by default, and it is never declared without the registry.
+Where the registry is offered without it, a stored-query `PUT` or a `GET` of
+a version that carries `openEHR-federation-endpoint` or
+`openEHR-federation-organisation` is a `400`
+(`stored-query-fan-out-unsupported`): nothing is stored or read, so a
+request for distribution is never answered as a plain one. Where it is
+offered:
+
+- Ask for it on the `PUT`: `openEHR-federation-endpoint: *` names every
+  active member, and a header that selects endpoints names those. A `PUT`
+  that names none is stored at the registry alone, as above. A list naming
+  a suspended endpoint, or `*` with no active member, is a `404`
+  (`no-destination`) and nothing is stored.
+- The registry stores the definition first, under every rule above. Each
+  named member is then sent the registry's copy, its canonical AQL, with
+  ITS-REST `PUT /definition/query/{name}/{version}` and `query_type=AQL`, on
+  its own. No header of yours is sent. A member that fails never removes the
+  registry's definition, and a member that accepted is never sent a
+  rollback.
+- The answer is the registry's `StoredQuery` (`name`, `type`, `version`,
+  `saved`, `q`) with `meta.federation` beside it, one `endpoints[]` entry
+  per registry member in the shape of a federated result set's (§9.5), and
+  `Location` naming the stored version. The statuses are those of the
+  [template fan-out](#fan-out-template-upload): `200` when every member you
+  named accepted, `207` with `complete: false` when some did, and `504` or
+  `424` when none did. Whatever the status, the registry holds the
+  definition. No node's body is copied into the answer.
+- A definition whose AQL carries a `FROM ENDPOINT` or `ORGANISATION`
+  directive is refused `400` (`definition-endpoint-targeted`) and nothing is
+  stored: a node cannot run a directive that names members of the
+  federation (§12.7, §8.1). Store it without naming members and it runs
+  federated, targeted by its directive.
+- An invocation always runs the registry's copy, inline, whatever a member
+  holds under the same name (§12.7).
+
+```http
+PUT {base}/v1/definition/query/org.example::compositions/1.0.0
+openEHR-federation-endpoint: *
+Content-Type: text/plain
+
+SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c
+WHERE e/ehr_status/subject/external_ref/id/value = $patient
+  AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1'
+```
+
+A member's copy can drift from the registry's: a failed distribution, a
+local `PUT` at the node, a restore, or a member admitted later (§12.7). To
+check, `GET` the version naming members in the same headers:
+
+```http
+GET {base}/v1/definition/query/org.example::compositions/1.0.0
+openEHR-federation-endpoint: *
+```
+
+- Each named member is asked for its copy of that version with ITS-REST
+  `GET /definition/query/{name}/{version}`. A `{major}` or
+  `{major}.{minor}` prefix selects the registry's version first, and the
+  members are asked for that one.
+- The answer is the registry's `StoredQuery` with `meta.federation`. A member
+  whose copy is the same query is `active`; layout and comments do not
+  count, because both sides are compared as their canonical prints. A
+  member whose copy differs is `node-error` with
+  `error.code: "definition-differs"`, and one that holds none is
+  `node-error` with `error.code: "definition-missing"`. A member that fails
+  or does not answer is reported as in the distribution. No member's copy
+  is copied into the answer.
+- The status is `200` when every member you named matches, and `207` with
+  `complete: false` otherwise. `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id` list the matching members.
+- Without a header the `GET` answers from the registry alone, as above.
 
 ## Self-description
 
@@ -787,7 +862,7 @@ says what the gateway does, not what it was once meant to do:
 | `completeness` | `default: "all-or-nothing"`; `best_effort` and, when it is offered, `opt_in` naming `openEHR-federation-completeness: partial` (§11.4, N37) |
 | `paging` | `offset_strategy: "bounded"` with the configured `max_window`, or `"reject"`; never `"cursor"`, because no cursor is offered (§11.6.2, N39) |
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
-| `definition` | `fan_out_template_upload` as `federation.fan_out_template_upload` sets it (`false` by default) and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
+| `definition` | `fan_out_template_upload` as `federation.fan_out_template_upload` sets it (`false` by default); `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise; `stored_query_fan_out` is `true` while `federation.fan_out_stored_queries` is set beside the registry and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
 | `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, naming the template upload fan-out where it is offered, with stored queries held at the gateway registry when it is offered and routed with the rest when it is not (§12.6, §12.7, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |

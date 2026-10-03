@@ -12,12 +12,12 @@
 use std::time::Instant;
 
 use axum::response::Response;
+use ferrofed_engine::forward::HeldRequest;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::HeaderMap;
-use openehr_its::rest::routes::RouteMatch;
 
-use super::{Arrived, Deadlines, Failure, answered, failed, forward, refused_carriers};
+use super::{Arrived, Deadlines, Failure, answered, failed, forward, held, unheld};
 use crate::error::{self, Code};
 use crate::facade::owner;
 use crate::facade::provenance::Provenance;
@@ -42,7 +42,7 @@ pub(super) enum Chooser<'a> {
 /// or a stored query lives at the node it was sent to, so only the client
 /// can name the node; a DEMOGRAPHIC request names the endpoint the
 /// deployment declared for it. The query string and the declared values are
-/// checked first, as on the EHR route ([`refused_carriers`]); then the
+/// held first, as on the EHR route ([`held`]); then the
 /// endpoint is [`chosen`]: nothing is probed and no node is picked
 /// implicitly. The body is forwarded byte-identical, and the node's answer,
 /// an error included, comes back as the node sent it with the acting
@@ -50,16 +50,31 @@ pub(super) enum Chooser<'a> {
 pub(super) async fn named(
     federation: &Federation,
     arrived: Arrived<'_>,
-    matched: &RouteMatch,
     area: &'static str,
     chooser: Chooser<'_>,
 ) -> Response {
     let started = Instant::now();
+    let request = match held(&arrived) {
+        Ok(request) => request,
+        Err(failure) => {
+            let logged = arrived.outbound.to_string();
+            return unheld(&failure, arrived.request_id, &logged);
+        }
+    };
+    to_named(federation, arrived, (request, started), area, chooser).await
+}
+
+/// Routes the client's `request`, already held to its operation at
+/// `started`, to the one endpoint `chooser` names, as [`named`] does.
+pub(super) async fn to_named(
+    federation: &Federation,
+    arrived: Arrived<'_>,
+    (request, started): (HeldRequest, Instant),
+    area: &'static str,
+    chooser: Chooser<'_>,
+) -> Response {
     let request_id = arrived.request_id;
     let logged = arrived.outbound.to_string();
-    if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
-        return refused;
-    }
     let snapshot = federation.snapshot();
     let endpoint = match chosen(snapshot, arrived.headers, chooser) {
         Ok(endpoint) => endpoint,
@@ -82,7 +97,8 @@ pub(super) async fn named(
         "routed to the endpoint the targeting headers name"
     );
     let provenance = Provenance::of(snapshot, endpoint);
-    match forward(federation, endpoint, &arrived, &budget, &logged).await {
+    let sent = (request, arrived.outbound);
+    match forward(federation, endpoint, sent, &budget, &logged).await {
         Ok(forwarded) => provenance.stamp(answered(forwarded)),
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),

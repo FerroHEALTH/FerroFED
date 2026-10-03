@@ -1,0 +1,259 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! A stored-query definition at a node, distributed or read back (§12.7,
+//! N44).
+//!
+//! The registry's copy is sent with the generated
+//! `definition_query_version_store_yaml` (`PUT
+//! {base}/v1/definition/query/{name}/{version}`), and the node's copy is read
+//! back with `definition_query_version_get` for the drift check. Both are
+//! composed by `openehr-its`'s `rest-client` and pass the outbound
+//! gate first (§5.4.1, N33). What the node made of the call is one §11.1
+//! status, as for a dispatched query; a failure carries the node's HTTP
+//! status and never its body, so no node text reaches the answer (§12.6
+//! item 2).
+
+use std::time::Instant;
+
+use openehr_federation::outcome::{ErrorDetail, Outcome};
+use openehr_its::rest::client::{ClientError, Transport, TransportError, path_segment};
+use openehr_its::rest::generated::definition::client::{
+    DefinitionClient, DefinitionQueryVersionGetOutcome, DefinitionQueryVersionStoreYamlOutcome,
+};
+use openehr_its::rest::generated::definition::{
+    DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
+};
+
+use super::{DispatchError, DispatchOptions, NodeClient, classify};
+use crate::hygiene::{Composed, Outbound};
+
+/// The query language a distributed definition is stored as, the ITS-REST
+/// `query_type`.
+const AQL: &str = "AQL";
+
+/// One stored-query definition at one version, as the gateway sends it to a
+/// node or asks a node for it.
+#[derive(Debug, Clone, Copy)]
+pub struct DefinitionAt<'a> {
+    /// The qualified name, `[{namespace}::]{query-name}`.
+    pub name: &'a str,
+    /// The version, `major.minor.patch`.
+    pub version: &'a str,
+}
+
+/// What a node holds at a definition's name and version.
+#[derive(Debug, Clone)]
+pub enum NodeCopy {
+    /// The node answered `200` with its copy.
+    Held {
+        /// The AQL of the node's copy.
+        aql: String,
+        /// The gateway's measurement of the request, in milliseconds.
+        latency_ms: u64,
+    },
+    /// The node answered `404`: it holds no copy.
+    Missing {
+        /// The gateway's measurement of the request, in milliseconds.
+        latency_ms: u64,
+    },
+    /// The node was asked and gave no copy; the outcome is `offline`,
+    /// `time-out` or `node-error`, always with its `error`.
+    Failed {
+        /// The endpoint outcome.
+        outcome: Outcome,
+    },
+}
+
+impl<T: Transport> NodeClient<T> {
+    /// Stores `aql` at the node as `definition` and reports what the node
+    /// made of it: `active` when it answered `200`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DispatchError`] when the request could not leave the
+    /// gateway: a withheld identifier in it, no credential, or a request the
+    /// client runtime refuses to build.
+    pub async fn store_definition(
+        &self,
+        definition: DefinitionAt<'_>,
+        aql: &str,
+        options: &DispatchOptions,
+    ) -> Result<Outcome, DispatchError> {
+        self.gate_definition(definition, aql, options)?;
+        let params = DefinitionQueryVersionStoreYamlParams {
+            qualified_query_name: definition.name.to_owned(),
+            version: definition.version.to_owned(),
+            query_type: Some(AQL.to_owned()),
+            accept: None,
+        };
+        let started = Instant::now();
+        let answer = DefinitionClient::new(self.client())
+            .with_options(self.definition_call(options)?)
+            .definition_query_version_store_yaml(&params, aql)
+            .await;
+        let latency_ms = classify::elapsed_ms(started);
+        match answer {
+            Ok(DefinitionQueryVersionStoreYamlOutcome::Ok { .. }) => {
+                Ok(Outcome::Active { latency_ms })
+            }
+            Ok(DefinitionQueryVersionStoreYamlOutcome::BadRequest { .. }) => {
+                Ok(answered(latency_ms, "400 Bad Request"))
+            }
+            Ok(DefinitionQueryVersionStoreYamlOutcome::Conflict { .. }) => {
+                Ok(answered(latency_ms, "409 Conflict"))
+            }
+            Err(error) => self.definition_failure(error, latency_ms),
+        }
+    }
+
+    /// Asks the node for its copy of `definition`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DispatchError`] when the request could not leave the
+    /// gateway: a withheld identifier in it, no credential, or a request the
+    /// client runtime refuses to build.
+    pub async fn read_definition(
+        &self,
+        definition: DefinitionAt<'_>,
+        options: &DispatchOptions,
+    ) -> Result<NodeCopy, DispatchError> {
+        self.gate_definition(definition, "", options)?;
+        let params = DefinitionQueryVersionGetParams {
+            qualified_query_name: definition.name.to_owned(),
+            version: definition.version.to_owned(),
+            accept: None,
+        };
+        let started = Instant::now();
+        let answer = DefinitionClient::new(self.client())
+            .with_options(self.definition_call(options)?)
+            .definition_query_version_get(&params)
+            .await;
+        let latency_ms = classify::elapsed_ms(started);
+        match answer {
+            Ok(DefinitionQueryVersionGetOutcome::Ok { body, .. }) => Ok(NodeCopy::Held {
+                aql: body.q,
+                latency_ms,
+            }),
+            Ok(DefinitionQueryVersionGetOutcome::NotFound { .. }) => {
+                Ok(NodeCopy::Missing { latency_ms })
+            }
+            Err(error) => self
+                .definition_failure(error, latency_ms)
+                .map(|outcome| NodeCopy::Failed { outcome }),
+        }
+    }
+
+    /// The `openehr-its` call options of `options`.
+    fn definition_call(
+        &self,
+        options: &DispatchOptions,
+    ) -> Result<openehr_its::rest::client::CallOptions, DispatchError> {
+        options
+            .call_options()
+            .map_err(|source| DispatchError::Compose {
+                endpoint: self.endpoint.clone(),
+                source: Box::new(source),
+            })
+    }
+
+    /// The outcome of a call that reached no documented answer, carrying the
+    /// node's status and never its body, or the gateway-side error when
+    /// nothing left.
+    fn definition_failure(
+        &self,
+        error: ClientError,
+        latency_ms: u64,
+    ) -> Result<Outcome, DispatchError> {
+        let failed = |message: String| ErrorDetail::Text(message);
+        match error {
+            ClientError::DeadlineElapsed { .. }
+            | ClientError::Transport {
+                source: TransportError::Timeout { .. },
+                ..
+            } => Ok(Outcome::TimeOut {
+                latency_ms,
+                error: failed("no answer before the deadline".to_owned()),
+            }),
+            ClientError::Transport {
+                source: TransportError::Send { .. },
+                ..
+            } => Ok(Outcome::Offline {
+                latency_ms,
+                error: failed("the node could not be reached".to_owned()),
+            }),
+            ClientError::Unauthorized { .. } => Ok(Outcome::NodeError {
+                latency_ms,
+                error: failed(
+                    "the node refused the gateway's onward credentials with 401 Unauthorized"
+                        .to_owned(),
+                ),
+            }),
+            ClientError::Forbidden { .. } => Ok(answered(latency_ms, "403 Forbidden")),
+            ClientError::ServiceFailure { status, .. }
+            | ClientError::UndocumentedStatus { status, .. } => {
+                Ok(answered(latency_ms, &status.to_string()))
+            }
+            ClientError::Body { status, .. } => Ok(Outcome::NodeError {
+                latency_ms,
+                error: failed(format!(
+                    "the node answered {status} with a body that is not an ITS-REST StoredQuery"
+                )),
+            }),
+            credentials @ ClientError::Credentials { .. } => Err(DispatchError::Credentials {
+                endpoint: self.endpoint.clone(),
+                source: Box::new(credentials),
+            }),
+            other => Err(DispatchError::Compose {
+                endpoint: self.endpoint.clone(),
+                source: Box::new(other),
+            }),
+        }
+    }
+
+    /// The outbound gate over a definition request: its path and the AQL it
+    /// carries (§5.4.1, N33).
+    fn gate_definition(
+        &self,
+        definition: DefinitionAt<'_>,
+        aql: &str,
+        options: &DispatchOptions,
+    ) -> Result<(), DispatchError> {
+        if options.withheld.is_empty() {
+            return Ok(());
+        }
+        let base = self.client.base();
+        let mut url = base.clone();
+        url.set_path(&format!(
+            "{}/definition/query/{}/{}",
+            base.path().trim_end_matches('/'),
+            path_segment(&definition.name),
+            path_segment(&definition.version)
+        ));
+        let headers: [(&'static str, &str); 0] = [];
+        let outbound = Outbound {
+            aql,
+            scope: None,
+            paging: &[],
+            url: &url,
+            composed: Composed::default(),
+            headers: &headers,
+        };
+        match options.withheld.found_in(&outbound) {
+            Some(part) => Err(DispatchError::Withheld {
+                endpoint: self.endpoint.clone(),
+                part,
+            }),
+            None => Ok(()),
+        }
+    }
+}
+
+/// The `node-error` of a node that answered `status`, its body not copied.
+fn answered(latency_ms: u64, status: &str) -> Outcome {
+    Outcome::NodeError {
+        latency_ms,
+        error: ErrorDetail::Text(format!("the node answered {status}")),
+    }
+}

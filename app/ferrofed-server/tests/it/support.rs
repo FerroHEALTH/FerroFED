@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Shared helpers: a capturing log writer, test settings, a test state and the
-//! typed shapes the tests read the server's JSON with.
+//! Shared helpers: a capturing log writer, test settings, a test state, the
+//! typed shapes the tests read the server's JSON with, a mock node's routes
+//! and what it was asked, and the reads of a routed answer.
 
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::error::{CODE_MEMBER, REQUEST_ID_MEMBER};
 use ferrofed_server::state::AppState;
-use http::{Request, Response, StatusCode};
+use http::{HeaderMap, Request, Response, StatusCode};
+use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
 use openehr_its::rest::generated::common::Error;
 use serde::Deserialize;
 use std::error::Error as StdError;
@@ -19,6 +21,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 use tower::ServiceExt as _;
 use tracing_subscriber::fmt::MakeWriter;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// The time a loaded host may add to any wait a test makes.
 ///
@@ -184,4 +188,66 @@ pub(crate) fn error_body(text: &str) -> Result<ErrorBody, Box<dyn StdError>> {
         code,
         request_id,
     })
+}
+
+/// The status, the headers and the body bytes `app` answers `request` with.
+pub(crate) async fn exchange(
+    app: Router,
+    request: Request<Body>,
+) -> Result<(StatusCode, HeaderMap, Vec<u8>), Box<dyn StdError>> {
+    let response = send(app, request).await?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
+    Ok((status, headers, bytes.to_vec()))
+}
+
+/// A node answering `verb` at `at` with `answer`, and `404` to the rest.
+pub(crate) async fn mount(server: &MockServer, verb: &str, at: String, answer: ResponseTemplate) {
+    Mock::given(method(verb))
+        .and(path(at))
+        .respond_with(answer)
+        .mount(server)
+        .await;
+}
+
+/// The method and path of every request `server` received, in order.
+pub(crate) async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn StdError>> {
+    Ok(server
+        .received_requests()
+        .await
+        .ok_or("recording is on")?
+        .into_iter()
+        .map(|request| (request.method.to_string(), request.url.path().to_owned()))
+        .collect())
+}
+
+/// The value of the field `name` in `headers`, when it is text.
+pub(crate) fn field<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
+    headers.get(name).and_then(|value| value.to_str().ok())
+}
+
+/// Asserts that `headers` name `endpoint` and its node's `system_id` as the
+/// ones that acted (§7a.3, N31, §9.6).
+pub(crate) fn acted(headers: &HeaderMap, endpoint: &str, system_id: &str) {
+    assert_eq!(Some(endpoint), field(headers, ENDPOINT), "N31");
+    assert_eq!(Some(system_id), field(headers, SYSTEM_ID), "§9.6");
+}
+
+/// Asserts that `request` is refused `400` with `code`, names no acting
+/// endpoint, and that neither node received anything.
+pub(crate) async fn refused_at_neither(
+    app: Router,
+    request: Request<Body>,
+    code: &str,
+    (a, b): (&MockServer, &MockServer),
+) -> Result<(), Box<dyn StdError>> {
+    let (status, headers, body) = exchange(app, request).await?;
+    let text = String::from_utf8(body)?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert_eq!(code, error_body(&text)?.code, "{text}");
+    assert_eq!(None, field(&headers, ENDPOINT), "no endpoint acted: {text}");
+    assert!(asked(a).await?.is_empty(), "node A received nothing");
+    assert!(asked(b).await?.is_empty(), "node B received nothing");
+    Ok(())
 }

@@ -40,8 +40,8 @@ use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 use crate::facade::{
     EHR_A, EHR_B, body, crossref, node_answering, patient_query, post, settings_with_room,
 };
-use crate::path_ehr_id::{answer, asked, holder, probe_at};
-use crate::support::{Logs, call, error_body};
+use crate::path_ehr_id::{answer, holder, probe_at};
+use crate::support::{Logs, asked, call, error_body};
 
 /// A version uid node A minted, held by [`holder`].
 const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";

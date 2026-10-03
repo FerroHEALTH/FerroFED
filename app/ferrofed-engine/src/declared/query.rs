@@ -1,15 +1,19 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The parameter names of a client query string, held to those its ITS-REST
-//! operation declares (§5.4.1, N33).
+//! The parameters of a client query string: their names held to those its
+//! ITS-REST operation declares, and on a routed request, the value of each
+//! declared one to its declared kind (§5.4.1, N33).
 //!
-//! Only names are read here, percent-decoded, to find the first one a rule
-//! does not admit; a parameter's value is decoded by the generated `*Params`
-//! of `openehr-its`, or forwarded as received.
+//! Names are read percent-decoded, to find the first one a rule does not
+//! admit. A value the gateway consumes is decoded by the generated
+//! `*Params` of `openehr-its`; a value a route forwards is held to its kind
+//! (`values`) and travels as received.
 
 use openehr_its::rest::routes::RouteMatch;
 
+use super::kind::fits;
+use super::{Carrier, Expected, MalformedValue};
 use crate::hygiene::{self, UnlistedParameter};
 
 /// Checks that `operation` declares every parameter of `query`, a query
@@ -46,6 +50,28 @@ pub(crate) fn admitted(
         }),
         None => Ok(()),
     }
+}
+
+/// Holds each declared parameter of `query` to its kind.
+pub(super) fn values(operation: &RouteMatch, query: &str) -> Result<(), MalformedValue> {
+    let pairs = query.split('&').filter(|pair| !pair.is_empty());
+    for (index, pair) in pairs.enumerate() {
+        let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let Some(param) = operation.query_key(&hygiene::percent_decoded(name)) else {
+            continue;
+        };
+        let list = !param.explode;
+        if !fits(&param.kind, &hygiene::percent_decoded(value), list) {
+            return Err(MalformedValue {
+                carrier: Carrier::Query {
+                    position: index.saturating_add(1),
+                    name: param.name,
+                },
+                expected: Expected::Kind(param.kind),
+            });
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

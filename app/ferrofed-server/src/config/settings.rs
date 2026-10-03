@@ -99,6 +99,11 @@ pub struct FederationSettings {
     /// Whether a template upload may fan out to several members (§12.6,
     /// N43), as `definition.fan_out_template_upload` declares it (§7a.2).
     pub fan_out_template_upload: bool,
+    /// Whether a stored-query definition may be distributed to members and
+    /// checked there for drift (§12.7, N44), as
+    /// `definition.stored_query_fan_out` declares it (§7a.2); only ever on
+    /// beside the stored-query registry.
+    pub fan_out_stored_queries: bool,
 }
 
 /// The HTTP surface, resolved.
@@ -174,6 +179,7 @@ impl Settings {
                 .as_ref()
                 .map(EndpointId::as_str),
             fan_out_template_upload = self.federation.fan_out_template_upload,
+            fan_out_stored_queries = self.federation.fan_out_stored_queries,
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             stored_query_registry = self.stored_queries.is_some(),
             credentials = endpoints.join(","),

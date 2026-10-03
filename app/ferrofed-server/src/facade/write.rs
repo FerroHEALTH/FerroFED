@@ -50,7 +50,6 @@
 
 use std::fmt;
 
-use ferrofed_engine::declared;
 use ferrofed_registry::creating_system::CreatingSystemRoute;
 use ferrofed_registry::id::{EndpointId, NodeId, SystemId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -253,8 +252,10 @@ pub enum NotControlling {
 /// Holds a versioned write that its path `ehr_id` routes to `at` to the rule
 /// of §12a.1 `route-write`: `at` controls every version it amends (N23).
 ///
-/// `(matched, headers, body)` is the request as it arrived; the body is read
-/// only for a `CONTRIBUTION`, and never changed.
+/// `(matched, headers, body)` is the request: `headers` are the ones
+/// `declared::held` composed for the node, so `If-Match` is the client's
+/// and `Content-Type` the listed media type it names, and the body is the one
+/// received, read only for a `CONTRIBUTION` and never changed.
 ///
 /// # Errors
 ///
@@ -271,7 +272,7 @@ pub fn controlled(
     let versions = match preceding {
         Preceding::IfMatch => vec![(Named::IfMatch, if_match(headers)?)],
         Preceding::Path => vec![(Named::Path, in_path(matched)?)],
-        Preceding::Contribution => amended(declared::content_type(matched, headers), body)?,
+        Preceding::Contribution => amended(media_type(headers), body)?,
     };
     versions
         .iter()
@@ -311,6 +312,16 @@ fn controlled_at(
         }
         .into()),
     }
+}
+
+/// The media type the composed `Content-Type` of `headers` names, spelled
+/// as the operation lists it, or `None` when the request sends none.
+fn media_type(headers: &HeaderMap) -> Option<&str> {
+    // NOTE: RFC 9110 §5.5, a composed Content-Type is a listed media type in
+    // visible ASCII, so a value that is not text was never composed.
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
 }
 
 /// The versions a `CONTRIBUTION` body amends, in body order: each version's
