@@ -8,6 +8,7 @@
 #     (documentation/chore/refactor/perf/test/ci); a Bug and a Feature carry
 #     none, because the native issue type already says fix or feat;
 #   * the DOMAIN labels, one per conformance surface;
+#   * the AREA labels, one per product part with its own crate;
 #   * a few workflow labels.
 # The type of an issue (Bug, Feature, Task) and its priority (Urgent, High,
 # Medium, Low) are NOT labels since 2026-10-02: they are GitHub's native issue
@@ -244,6 +245,9 @@ label spec:federation 5319e7 "The Federation Tier with AQL specification: sectio
 label spec:openEHR    006b75 "The openEHR ITS-REST and AQL wire between a client, the gateway, and a node."
 label spec:IHE        1d76db "The IHE identity and directory binding: PIXm, PDQm, XCPD, PMIR, mCSD (Annex A)."
 label spec:NL-GF      0e8a16 "The Dutch Generic Functions regional binding (Annex B)."
+
+echo "== area labels (a product part with its own crate) =="
+label viewer           e6c3a5 "The Leptos web UI (app/ferrofed-viewer)."
 
 echo "== workflow and meta labels =="
 label research         c5def5 "An investigation whose deliverable is cited evidence and a recommendation."
