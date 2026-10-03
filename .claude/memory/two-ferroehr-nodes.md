@@ -39,8 +39,11 @@ out PostgreSQL start-up under parallel e2e tests (#320).
 - Every node connects to its own database on the one FerroEHR PostgreSQL
   server (`ferroehr_a`, `ferroehr_b`, ...), owned by a role of the same name.
   `docker/postgres/20-ferrofed-node-databases.sh` runs the image's own init
-  script once per further database; never copy FerroEHR's script, and never
-  separate nodes by schema (FerroEHR fixes its schema names).
+  script once per further database, then revokes `CONNECT` on each from
+  `PUBLIC` and grants it to that node's role alone (the testkit's
+  `a_node_role_is_refused_on_another_node_database` holds it); never copy
+  FerroEHR's script, and never separate nodes by schema (FerroEHR fixes its
+  schema names).
 - The quickstart's patients live in `docker/quickstart/ferrofed.toml` as
   `[[dev.crossref]]` rows, and `scripts/quickstart/seed.sh` creates exactly
   those EHRs over ITS-REST: one patient at all four nodes, one at two, one at

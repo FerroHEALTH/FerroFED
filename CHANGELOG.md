@@ -245,7 +245,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   database per node owned by its own role; the image's init script runs once
   per node through `docker/postgres/20-ferrofed-node-databases.sh`, so the
   per-node `ferroehr-a-postgres` and `ferroehr-b-postgres` services and their
-  volumes are gone (`docker compose down -v` removes the old ones). The
+  volumes are gone (`docker compose down -v` removes the old ones). Each node
+  database admits only its own node's role: `CONNECT` is revoked from
+  `PUBLIC`, so one node's role is refused on another node's database. The
   gateway's quickstart configuration is a development profile whose static
   cross-reference maps four synthetic patients in `urn:oid:2.999.1.1`: one at
   all four nodes, one at two, one at one and one at none, and

@@ -169,9 +169,11 @@ by a login role of the same name. The image's own init script creates the
 first; `docker/postgres/20-ferrofed-node-databases.sh`, mounted beside it, runs
 that script again for the other three. A schema per node would not do:
 FerroEHR creates fixed schema names in the database it connects to, so two
-nodes in one database would share their tables. The nodes also share the
-server's group roles, so the separation is the quickstart's and no security
-boundary.
+nodes in one database would share their tables. Each database admits only its
+own node's role, because the script revokes `CONNECT` from `PUBLIC` and grants
+it to that role, so node A's role is refused on `ferroehr_b`. The nodes still
+share one server, its superuser and its cluster-wide group roles, so this is
+no production boundary.
 
 Four instances of one product: EHRbase, the second product the topology first
 used, refuses a `.` in `PARTY_REF.namespace`, which openEHR BASE admits, so its
