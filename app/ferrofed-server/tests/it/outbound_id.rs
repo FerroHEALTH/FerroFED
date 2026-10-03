@@ -30,6 +30,10 @@ type TestResult = Result<(), Box<dyn Error>>;
 /// under no real scheme, and passing no national check digit.
 const UNRESOLVED: &str = "SYNTHETIC-NATIONAL-ID-0001";
 
+/// A client id in the very form the gateway mints, a lowercase hyphenated
+/// version 4 UUID, which the node-wire scan records as its placeholder.
+const CLIENT_UUID: &str = "7d0c2b1e-4f3a-4c5b-8d6e-9f0a1b2c3d4e";
+
 /// The façade query naming [`PATIENT`] through `external_ref`.
 fn patient_query() -> String {
     format!(
@@ -103,7 +107,7 @@ fn answered_id(response: &http::Response<Body>) -> Result<String, Box<dyn Error>
 // conformance: CP-26
 #[tokio::test]
 async fn a_client_request_id_never_reaches_a_node_on_the_fan_out() -> TestResult {
-    for client_id in [UNRESOLVED, PATIENT] {
+    for client_id in [UNRESOLVED, PATIENT, CLIENT_UUID] {
         let a = node_answering("uid-at-a").await;
         let b = node_answering("uid-at-b").await;
         let dir = tempfile::tempdir()?;
