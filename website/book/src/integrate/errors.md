@@ -83,8 +83,7 @@ resources under a path `ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it
 subject, which the gateway sends as `GET {base}/v1/ehr/{ehr_id}` to the one
 member that resolves the subject, and every
 request under `{base}/v1/definition/` the stored-query registry does not
-answer itself (§12.6), except `PUT {base}/v1/definition/query/{name}/{version}`
-without the registry, which answers `501` until #298. A template-missing
+answer itself (§12.6). A template-missing
 validation failure a node reports is that node's error and passes through
 unmasked (§12.6). A request under `{base}/v1/demographic/` answers `501`
 unless the deployment declared its endpoint; then it is routed when it names
@@ -147,7 +146,7 @@ the node is reported and the query succeeds.
 | `preceding-version-invalid` | 400 | A versioned write names no single version it amends: `If-Match` is absent, repeated, a list, `*`, a weak tag or unquoted, or names no `OBJECT_VERSION_ID`; or the path of a composition `DELETE` is no `OBJECT_VERSION_ID`; or a `CONTRIBUTION` body is not one, in the representation its `Content-Type` selects (canonical JSON, or a canonical envelope whose `data` is FLAT or STRUCTURED), whose every `preceding_version_uid` is an `OBJECT_VERSION_ID`; or it is a `CONTRIBUTION` in canonical XML, which the gateway does not read yet (#308). Without that version the gateway cannot find the write's controlling CDR, so it sends nothing (ITS-REST 1.1.0 `If-Match` and `contribution_create`; §12.4, N23). |
 | `parameter-value-invalid` | 400 | A request routed to one node carries a value that is not what the ITS-REST operation declares for it: a path `version_uid` that is no `OBJECT_VERSION_ID`, a `versioned_object_uid` that is no UUID, a `version_at_time` that is no extended ISO 8601 date-time, or a `detail_level` outside its listed values. The gateway sends nothing; the message names the header, or the parameter by its position and declared name, and never quotes the value (§5.4.1, N33). |
 | `media-type-not-acceptable` | 406 | The `Accept` header of a request routed to one node admits none of the media types the ITS-REST operation answers in, as a node would answer it (RFC 9110 §12.5.1). The message lists the media types the operation offers. |
-| `media-type-unsupported` | 415 | The `Content-Type` header of a request routed to one node is not one of the media types the ITS-REST operation takes, or carries a parameter other than `charset=utf-8` (RFC 9110 §8.3). The message lists the media types the operation takes. |
+| `media-type-unsupported` | 415 | The `Content-Type` header of a request routed to one node is not one of the media types the ITS-REST operation takes, or carries a parameter other than `charset=utf-8` (RFC 9110 §8.3), or a body arrives without one for an operation whose body ITS-REST declares in several media types. The message lists the media types the operation takes. |
 | `subject-several` | 409 | The subject of `GET {base}/v1/ehr` resolves at more than one member, and no `openEHR-federation-endpoint` header names one of them. The gateway never chooses by where the patient resolved, so it sends the read to none; the message lists the endpoints and never the subject. Name the endpoint in the header to read that member's EHR (§8.4, §12.5.2). |
 | `resolution-unavailable` | 424 | The cross-reference service could not answer for a member while resolving the subject of `GET {base}/v1/ehr`, or no cross-reference service is configured. That member may hold the EHR, so the gateway answers neither its `404` nor another member's EHR; the message names the members and never the subject (§5.2, §11.2). |
 

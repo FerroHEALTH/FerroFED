@@ -213,6 +213,11 @@ async fn a_template_upload_with_a_target_reaches_only_that_node_byte_identical()
             upload.body.as_slice(),
             "{at}: byte-identical"
         );
+        assert_eq!(
+            Some(media_type(at)),
+            field(&upload.headers, "content-type"),
+            "{at}: a declared media type travels with the body"
+        );
         let composed = wire(&b).await?;
         assert!(!composed.contains(PATIENT), "N33: {composed}");
         assert!(!composed.contains(CLIENT_TOKEN), "N33: {composed}");
@@ -232,6 +237,11 @@ async fn a_definition_request_without_a_target_is_refused_and_no_node_is_asked()
     operations.push((
         Method::PUT,
         format!("/v1/definition/query/{QUERY}"),
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
+    ));
+    operations.push((
+        Method::PUT,
+        format!("/v1/definition/query/{QUERY}/1.0.0"),
         "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
     ));
     for (verb, at, sent) in operations {
@@ -448,27 +458,72 @@ async fn without_the_registry_a_stored_query_definition_is_the_named_nodes() -> 
     Ok(())
 }
 
+// conformance: CP-34
 #[tokio::test]
-async fn without_the_registry_a_versioned_stored_query_put_is_not_implemented() -> TestResult {
-    // TODO(#298): route it to the named node once openehr-its declares its Content-Type.
-    for target in [Some(ENDPOINT_A), None] {
+async fn without_the_registry_a_versioned_stored_query_put_is_the_named_nodes() -> TestResult {
+    let at = format!("/v1/definition/query/{QUERY}/1.0.0");
+    let sent = "SELECT c/uid/value\n  FROM EHR e CONTAINS COMPOSITION c -- synthétic\n";
+    for stated in [Some("text/plain"), Some("Text/Plain; charset=UTF-8"), None] {
         let a = MockServer::start().await;
+        mount(&a, "PUT", at.clone(), ResponseTemplate::new(200)).await;
         let b = MockServer::start().await;
         let dir = tempfile::tempdir()?;
-        let mut request = Request::put(format!("/v1/definition/query/{QUERY}/1.0.0"))
-            .header(header::CONTENT_TYPE, "text/plain");
-        if let Some(target) = target {
-            request = request.header(ENDPOINT, target);
+        let mut request = Request::put(&at).header(ENDPOINT, ENDPOINT_A);
+        if let Some(stated) = stated {
+            request = request.header(header::CONTENT_TYPE, stated);
         }
-        let request = request.body(Body::from("SELECT c FROM EHR e CONTAINS COMPOSITION c"))?;
+        let request = request.body(Body::from(sent))?;
         let (status, headers, body) = exchange(over(dir.path(), &a, &b)?, request).await?;
         let text = String::from_utf8(body)?;
-        assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "{target:?}: {text}");
-        assert_eq!("not-implemented", error_body(&text)?.code);
-        assert_eq!(None, field(&headers, ENDPOINT), "no endpoint acted");
-        assert!(asked(&a).await?.is_empty(), "node A received nothing");
-        assert!(asked(&b).await?.is_empty(), "node B received nothing");
+        assert_eq!(
+            StatusCode::OK,
+            status,
+            "{stated:?}: §12.7 registry-not-offered: {text}"
+        );
+        acted(&headers, ENDPOINT_A, "cdr-a.example.org");
+        let requests = a.received_requests().await.ok_or("recording is on")?;
+        let [stored] = requests.as_slice() else {
+            return Err(
+                format!("{stated:?}: one request at node A, not {}", requests.len()).into(),
+            );
+        };
+        assert_eq!(
+            sent.as_bytes(),
+            stored.body.as_slice(),
+            "{stated:?}: byte-identical"
+        );
+        assert_eq!(
+            Some("text/plain"),
+            field(&stored.headers, "content-type"),
+            "{stated:?}: the media type the operation's body is declared in"
+        );
+        assert!(
+            asked(&b).await?.is_empty(),
+            "{stated:?}: node B is never asked"
+        );
     }
+    Ok(())
+}
+
+// conformance: CP-34
+#[tokio::test]
+async fn without_the_registry_a_versioned_stored_query_put_in_another_media_type_is_refused()
+-> TestResult {
+    let a = MockServer::start().await;
+    let b = MockServer::start().await;
+    let dir = tempfile::tempdir()?;
+    let request = Request::put(format!("/v1/definition/query/{QUERY}/1.0.0"))
+        .header(ENDPOINT, ENDPOINT_A)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"q":"SELECT c FROM EHR e CONTAINS COMPOSITION c"}"#,
+        ))?;
+    let (status, _, body) = exchange(over(dir.path(), &a, &b)?, request).await?;
+    let text = String::from_utf8(body)?;
+    assert_eq!(StatusCode::UNSUPPORTED_MEDIA_TYPE, status, "{text}");
+    assert_eq!("media-type-unsupported", error_body(&text)?.code, "{text}");
+    assert!(asked(&a).await?.is_empty(), "node A received nothing");
+    assert!(asked(&b).await?.is_empty(), "node B received nothing");
     Ok(())
 }
 

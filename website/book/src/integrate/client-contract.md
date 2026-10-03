@@ -375,7 +375,10 @@ A routed request reaches the node as you sent it:
   `Content-Type` names, with a `charset=utf-8` dropped, and only the listed
   preferences of your `Prefer`. An `Accept` that admits no listed media type
   is a `406` (`media-type-not-acceptable`), and a `Content-Type` that names
-  none is a `415` (`media-type-unsupported`), as a node would answer;
+  none is a `415` (`media-type-unsupported`), as a node would answer. A body
+  never reaches a node without a `Content-Type`: when you send none, the
+  node receives the one media type ITS-REST declares the operation's body
+  in, and an operation that declares several is a `415`;
 - each path identifier and each other declared value only when it is what
   the operation declares: a `version_uid` that is an `OBJECT_VERSION_ID`, a
   `versioned_object_uid` that is a UUID, a `version_at_time` in the extended
@@ -538,13 +541,11 @@ picks a node for you and never probes for one:
   the node does not hold, or a `400` for a template it rejects, is never
   masked or rewritten (§12.6, §11.2).
 
-One operation is not routed yet. Without the registry,
-`PUT {base}/v1/definition/query/{name}/{version}` answers `501`
-(`not-implemented`), and `OPTIONS` on that path does not list `PUT`: the
-ITS-REST library the gateway forwards through declares no `Content-Type` for
-that operation, so the node would receive the query text without its media
-type (#298). The unversioned `PUT {base}/v1/definition/query/{name}` is
-routed.
+Without the registry, both stored-query `PUT`s are routed, the versioned
+`PUT {base}/v1/definition/query/{name}/{version}` included, and `OPTIONS`
+lists `PUT` on both paths. The query text reaches the node byte for byte,
+always as `text/plain`, the media type ITS-REST declares for it: send that
+`Content-Type`, or none and the gateway sets it.
 
 A malformed value of a header or query parameter the operation declares is
 refused before the target is read: a `400` (`parameter-value-invalid`), or
@@ -692,7 +693,7 @@ says what the gateway does, not what it was once meant to do:
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
 | `definition` | `fan_out_template_upload: false` and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
-| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and `PUT {base}/v1/definition/query/{name}/{version}` unsupported (`501`) when it is not (§12.6, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and routed with the rest when it is not (§12.6, §12.7, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 
 What is absent is absent on purpose:

@@ -18,6 +18,9 @@
 //! - `Accept`, `Content-Type` and `Prefer` are parsed by their own grammars
 //!   and composed as listed values, so a node receives the operation's own
 //!   spelling and never the client's text;
+//! - a body travels with a `Content-Type` the operation lists for it
+//!   (`openehr-its`'s `request_media`), the one listed media type when the
+//!   client sent none;
 //! - every other declared header matches its kind, as a query value does.
 //!
 //! A value of a structured kind carries only what its kind admits. A
@@ -57,22 +60,70 @@ const PREFER: &str = "prefer";
 /// lists `Accept` values receives the first listed one when the client sent
 /// no `Accept`, as for `*/*`.
 ///
+/// A non-empty `body` always travels with a `Content-Type` the operation
+/// lists ([`RouteMatch::request_media`]): the client's, as its listed value,
+/// or, when the client sent none, the one media type the operation's body is
+/// declared in.
+///
 /// # Errors
 ///
 /// Returns [`Refusal::Malformed`] for the first value that does not match its
 /// kind, [`Refusal::NotAcceptable`] for an `Accept` that admits no listed
 /// media type, and [`Refusal::UnsupportedMediaType`] for a `Content-Type`
-/// that names none.
+/// that names none, or for a body sent without one to an operation whose
+/// body is declared in several media types.
 pub fn held(
     operation: &RouteMatch,
     query: Option<&str>,
     headers: &HeaderMap,
+    body: &[u8],
 ) -> Result<HeaderMap, Refusal> {
     path::held(operation)?;
     if let Some(query) = query {
         query_values(operation, query)?;
     }
-    composed(operation, headers, Strictness::Refuse)
+    let mut sent = composed(operation, headers, Strictness::Refuse)?;
+    if !sent.contains_key(CONTENT_TYPE)
+        && let Some(value) = body_media_type(operation, headers, !body.is_empty())?
+    {
+        sent.insert(CONTENT_TYPE, value);
+    }
+    Ok(sent)
+}
+
+/// The `Content-Type` the route sends for the body of a request to
+/// `operation` whose `Content-Type` the operation's own parameter did not
+/// compose, or `None` when it sends none.
+///
+/// A `Content-Type` the client sent to an operation that declares a body but
+/// no `Content-Type` parameter travels as the listed media type it names.
+/// With none sent, a body travels with the one media type the operation
+/// lists; a request with no body, or to an operation that declares none,
+/// travels without one.
+fn body_media_type(
+    operation: &RouteMatch,
+    client: &HeaderMap,
+    body: bool,
+) -> Result<Option<HeaderValue>, Refusal> {
+    let accepted = operation.request_media;
+    let lines: Vec<&HeaderValue> = client.get_all(CONTENT_TYPE).iter().collect();
+    if !lines.is_empty() {
+        if accepted.is_empty() || operation.header_param(CONTENT_TYPE.as_str()).is_some() {
+            return Ok(None);
+        }
+        return negotiate::content_type(accepted, &lines)
+            .and_then(listed)
+            .map(Some)
+            .ok_or(Refusal::UnsupportedMediaType { accepted });
+    }
+    if !body {
+        return Ok(None);
+    }
+    match accepted {
+        [] => Ok(None),
+        [only] => Ok(listed(only)),
+        several => Err(Refusal::UnsupportedMediaType { accepted: several }),
+    }
 }
 
 /// The headers the ask-all probe sends for `headers` under its own
@@ -289,6 +340,8 @@ impl fmt::Display for Carrier {
 pub enum Expected {
     /// A value of the kind the parameter table states.
     Kind(ParamKind),
+    /// An openEHR `HIER_OBJECT_ID`.
+    HierObjectId,
     /// An openEHR `OBJECT_VERSION_ID`.
     ObjectVersionId,
     /// An openEHR `UID_BASED_ID`: an `OBJECT_VERSION_ID` or a
@@ -300,6 +353,7 @@ impl fmt::Display for Expected {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Kind(kind) => Described(kind).fmt(f),
+            Self::HierObjectId => f.write_str("an openEHR HIER_OBJECT_ID"),
             Self::ObjectVersionId => f.write_str("an openEHR OBJECT_VERSION_ID"),
             Self::UidBasedId => f.write_str("an openEHR OBJECT_VERSION_ID or HIER_OBJECT_ID"),
         }
@@ -390,7 +444,7 @@ mod tests {
 
     /// The value of `name` that `held` sends for `lines` under `operation`.
     fn sent(operation: &RouteMatch, lines: &[(&'static str, &str)], name: &str) -> Option<String> {
-        held(operation, None, &headers(lines))
+        held(operation, None, &headers(lines), &[])
             .expect("the headers are held")
             .get(name)
             .and_then(|value| value.to_str().ok())
@@ -415,7 +469,7 @@ mod tests {
         ] {
             let query = format!("version_at_time={value}");
             assert!(
-                held(&directory(), Some(&query), &HeaderMap::new()).is_ok(),
+                held(&directory(), Some(&query), &HeaderMap::new(), &[]).is_ok(),
                 "{value}"
             );
         }
@@ -435,7 +489,7 @@ mod tests {
             "",
         ] {
             let query = format!("path=a&version_at_time={value}");
-            let refused = held(&directory(), Some(&query), &HeaderMap::new());
+            let refused = held(&directory(), Some(&query), &HeaderMap::new(), &[]);
             let shown = refused
                 .clone()
                 .map_or_else(|refusal| refusal.to_string(), |_| String::new());
@@ -487,7 +541,12 @@ mod tests {
     // conformance: CP-26
     #[test]
     fn an_accept_that_admits_nothing_listed_is_not_acceptable() {
-        let refused = held(&directory(), None, &headers(&[("accept", "text/html")]));
+        let refused = held(
+            &directory(),
+            None,
+            &headers(&[("accept", "text/html")]),
+            &[],
+        );
         assert!(
             matches!(refused, Err(Refusal::NotAcceptable { .. })),
             "{refused:?}"
@@ -512,7 +571,7 @@ mod tests {
             "application/json; patient=4711",
             "application/json; charset=latin1",
         ] {
-            let refused = held(&create(), None, &headers(&[("content-type", value)]));
+            let refused = held(&create(), None, &headers(&[("content-type", value)]), &[]);
             assert!(
                 matches!(refused, Err(Refusal::UnsupportedMediaType { .. })),
                 "{value}: {refused:?}"
@@ -563,6 +622,83 @@ mod tests {
         );
     }
 
+    /// The versioned stored-query `PUT`, whose body is declared in
+    /// `text/plain` and which declares no `Content-Type` parameter.
+    fn version_store() -> RouteMatch {
+        operation(&Method::PUT, "/definition/query/org.example::q/1.0.0")
+    }
+
+    /// The `Content-Type` `held` sends for `lines` and `body` under
+    /// `operation`.
+    fn body_type(
+        operation: &RouteMatch,
+        lines: &[(&'static str, &str)],
+        body: &[u8],
+    ) -> Option<String> {
+        held(operation, None, &headers(lines), body)
+            .expect("the headers are held")
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned)
+    }
+
+    #[test]
+    fn a_body_sent_without_a_content_type_travels_with_the_one_declared() {
+        assert_eq!(
+            Some("text/plain".to_owned()),
+            body_type(&version_store(), &[], b"SELECT c FROM COMPOSITION c")
+        );
+        assert_eq!(
+            Some("application/json".to_owned()),
+            body_type(&create(), &[], b"{}")
+        );
+    }
+
+    #[test]
+    fn a_listed_content_type_travels_where_no_parameter_declares_it() {
+        let lines = [("content-type", "TEXT/plain; charset=utf-8")];
+        assert_eq!(
+            Some("text/plain".to_owned()),
+            body_type(&version_store(), &lines, b"SELECT c FROM COMPOSITION c")
+        );
+        let refused = held(
+            &version_store(),
+            None,
+            &headers(&[("content-type", "application/json")]),
+            b"{}",
+        );
+        assert!(
+            matches!(
+                refused,
+                Err(Refusal::UnsupportedMediaType {
+                    accepted: ["text/plain"]
+                })
+            ),
+            "{refused:?}"
+        );
+    }
+
+    #[test]
+    fn no_body_travels_without_a_content_type() {
+        assert_eq!(None, body_type(&version_store(), &[], b""));
+        assert_eq!(None, body_type(&directory(), &[], b""));
+        assert_eq!(
+            None,
+            body_type(&directory(), &[("content-type", "text/plain")], b"")
+        );
+    }
+
+    #[test]
+    fn a_body_without_a_content_type_to_several_declared_is_unsupported() {
+        let mut several = version_store();
+        several.request_media = &["application/json", "text/plain"];
+        let refused = held(&several, None, &HeaderMap::new(), b"{}");
+        assert!(
+            matches!(refused, Err(Refusal::UnsupportedMediaType { accepted }) if accepted.len() == 2),
+            "{refused:?}"
+        );
+    }
+
     // conformance: CP-26
     #[test]
     fn prefer_reaches_the_node_as_its_listed_preferences_only() {
@@ -588,9 +724,9 @@ mod tests {
     fn a_free_text_parameter_passes_unclassified() {
         let tags = operation(&Method::GET, &format!("{EHR}/tags"));
         let query = "tag_key=4711&tag_value=O%27Sentinel-4711&tag_target_path=%2Fcontent";
-        assert!(held(&tags, Some(query), &HeaderMap::new()).is_ok());
+        assert!(held(&tags, Some(query), &HeaderMap::new(), &[]).is_ok());
         let query = "path=O%27Sentinel-4711";
-        assert!(held(&directory(), Some(query), &HeaderMap::new()).is_ok());
+        assert!(held(&directory(), Some(query), &HeaderMap::new(), &[]).is_ok());
         let update = operation(
             &Method::PUT,
             &format!("{EHR}/composition/8849182c-82ad-4088-a07f-48ead4180515"),
@@ -602,7 +738,7 @@ mod tests {
     #[test]
     fn an_undeclared_or_withheld_value_is_left_to_the_gate() {
         let sent = headers(&[("x-patient", "4711"), ("authorization", "Bearer 4711")]);
-        let held = held(&directory(), Some("patient=4711"), &sent).expect("held");
+        let held = held(&directory(), Some("patient=4711"), &sent, &[]).expect("held");
         assert!(
             held.get("x-patient").is_none() && held.get("authorization").is_none(),
             "{held:?}"
