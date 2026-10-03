@@ -425,6 +425,54 @@ mod tests {
     }
 
     #[test]
+    fn every_operation_declaring_several_body_media_types_lists_canonical_json_first() {
+        use openehr_its::rest::generated::{admin, definition, demographic, ehr, query, system};
+        /// One route table: `(method, path, operation_id)` per operation.
+        type Routes = &'static [(&'static str, &'static str, &'static str)];
+        /// One request-media table, index-aligned with its route table.
+        type Media = &'static [&'static [&'static str]];
+        let groups: [(&str, Routes, Media); 6] = [
+            ("admin", admin::ROUTES, admin::ROUTE_REQUEST_MEDIA),
+            (
+                "definition",
+                definition::ROUTES,
+                definition::ROUTE_REQUEST_MEDIA,
+            ),
+            (
+                "demographic",
+                demographic::ROUTES,
+                demographic::ROUTE_REQUEST_MEDIA,
+            ),
+            ("ehr", ehr::ROUTES, ehr::ROUTE_REQUEST_MEDIA),
+            ("query", query::ROUTES, query::ROUTE_REQUEST_MEDIA),
+            ("system", system::ROUTES, system::ROUTE_REQUEST_MEDIA),
+        ];
+        let mut several = 0_usize;
+        for (group, routes, media) in groups {
+            assert_eq!(
+                routes.len(),
+                media.len(),
+                "{group}: one media row per route"
+            );
+            for ((method, template, operation_id), listed) in routes.iter().zip(media.iter()) {
+                if listed.len() > 1 {
+                    several += 1;
+                    assert_eq!(
+                        Some(&"application/json"),
+                        listed.first(),
+                        "{group} {operation_id} ({method} {template}) lists {listed:?}: a body sent \
+                         without a Content-Type goes as the first listed, which must be the canonical JSON"
+                    );
+                }
+            }
+        }
+        assert_ne!(
+            0, several,
+            "the route tables declare no operation with several media types"
+        );
+    }
+
+    #[test]
     fn a_content_type_declared_without_a_body_is_held_to_its_parameter() {
         let versioned = operation(
             &Method::GET,
