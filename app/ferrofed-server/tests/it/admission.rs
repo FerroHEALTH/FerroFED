@@ -26,9 +26,11 @@ use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::{EXIT_CONFIG, EXIT_USAGE};
 use ferrofed_testkit::unreachable;
-use serde::Deserialize;
+use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
+use openehr_its::json::from_canonical_json;
+use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use wiremock::matchers::{method, path, path_regex};
-use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+use wiremock::{Match, Mock, MockServer, Request, Respond, ResponseTemplate};
 
 use crate::facade::{crossref, registry};
 use crate::run::binary;
@@ -57,26 +59,25 @@ const DOMAIN_B: &str = "urn:oid:2.999.20";
 /// The subject of each test EHR a node created, by the `ehr_id` it issued.
 type Issued = Arc<Mutex<BTreeMap<String, String>>>;
 
-/// The `EHR_STATUS` members a test reads from a create.
-#[derive(Debug, Deserialize)]
-struct Status {
-    subject: PartySelf,
+/// Returns the subject value of the `EHR_STATUS` a create carries, read
+/// through the strict canonical reader, or `None` when the body is not an
+/// `EHR_STATUS` whose subject is a `GENERIC_ID`.
+fn subject(request: &Request) -> Option<String> {
+    let text = std::str::from_utf8(&request.body).ok()?;
+    let status: EhrStatus = from_canonical_json(text).ok()?;
+    match status.subject.external_ref?.id {
+        ObjectId::GenericId(id) => Some(id.value),
+        _ => None,
+    }
 }
 
-#[derive(Debug, Deserialize)]
-struct PartySelf {
-    external_ref: PartyRef,
-}
+/// Matches a create whose body [`subject`] can read.
+struct ReadableSubject;
 
-#[derive(Debug, Deserialize)]
-struct PartyRef {
-    namespace: String,
-    id: GenericId,
-}
-
-#[derive(Debug, Deserialize)]
-struct GenericId {
-    value: String,
+impl Match for ReadableSubject {
+    fn matches(&self, request: &Request) -> bool {
+        subject(request).is_some()
+    }
 }
 
 /// A node answering `POST /v1/ehr` with the next `ehr_id` of a list,
@@ -87,18 +88,22 @@ struct Minting {
 }
 
 impl Respond for Minting {
+    #[expect(
+        clippy::expect_used,
+        reason = "the mock is mounted behind ReadableSubject, so every request it answers has a subject"
+    )]
     fn respond(&self, request: &Request) -> ResponseTemplate {
         let mut ids = self.ids.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(id) = ids.pop_front() else {
             return ResponseTemplate::new(500);
         };
         ids.push_back(id.clone());
-        if let Ok(status) = serde_json::from_slice::<Status>(&request.body) {
-            self.issued
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(id.clone(), status.subject.external_ref.id.value);
-        }
+        let subject = subject(request)
+            .expect("the ReadableSubject matcher should admit only readable bodies");
+        self.issued
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(id.clone(), subject);
         ResponseTemplate::new(201)
             .insert_header("ETag", format!("\"{id}\"").as_str())
             .insert_header("Location", format!("{}/{id}", request.url).as_str())
@@ -127,15 +132,28 @@ impl Respond for Reading {
 }
 
 /// A node that issues `ids` in turn and reports `system_id` in every EHR.
+///
+/// A create whose body is not a readable `EHR_STATUS` falls through to a
+/// mock that expects no request, so the node fails its test when dropped.
 async fn node(ids: &[&str], system_id: &str) -> (MockServer, Issued) {
     let server = MockServer::start().await;
     let issued = Issued::default();
     Mock::given(method("POST"))
         .and(path("/v1/ehr"))
+        .and(ReadableSubject)
         .respond_with(Minting {
             ids: Mutex::new(ids.iter().map(|id| (*id).to_owned()).collect()),
             issued: Arc::clone(&issued),
         })
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/ehr"))
+        .respond_with(ResponseTemplate::new(400))
+        .with_priority(2)
+        .expect(0)
+        .named("a create whose EHR_STATUS the strict canonical reader refuses")
         .mount(&server)
         .await;
     Mock::given(method("GET"))
@@ -591,19 +609,22 @@ async fn only_synthetic_subjects_are_sent_and_the_report_prints_none() -> TestRe
         .iter()
         .filter(|request| request.method.as_str() == "POST")
     {
-        let status: Status = serde_json::from_slice(&request.body)?;
-        let subject = status.subject.external_ref;
+        let status: EhrStatus = from_canonical_json(std::str::from_utf8(&request.body)?)?;
+        let subject = status
+            .subject
+            .external_ref
+            .ok_or("the EHR_STATUS names its subject")?;
         assert!(
             subject.namespace.starts_with("urn:oid:2.999."),
             "the namespace is in the example arc: {}",
             subject.namespace
         );
         assert_eq!(NAMESPACE, subject.namespace);
-        assert!(
-            subject.id.value.starts_with(VALUE_PREFIX),
-            "a synthetic value"
-        );
-        subjects.push(subject.id.value);
+        let ObjectId::GenericId(id) = subject.id else {
+            return Err(format!("the subject is a GENERIC_ID, not {:?}", subject.id).into());
+        };
+        assert!(id.value.starts_with(VALUE_PREFIX), "a synthetic value");
+        subjects.push(id.value);
     }
     assert_eq!(3, subjects.len(), "one subject per test EHR");
     subjects.sort();

@@ -14,7 +14,10 @@ use ferrofed_testkit::seed::{
     self, CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedPlan,
 };
 use http::StatusCode;
-use serde::Deserialize;
+use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
+use openehr_its::json::from_canonical_json;
+use openehr_rm::v1_2::ehr::ehr::Ehr;
+use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -50,36 +53,8 @@ async fn read_ehr(node: &ProxiedNode, ehr_id: Uuid) -> reqwest::Result<reqwest::
         .await
 }
 
-/// The members of `GET {api}/v1/ehr/{ehr_id}` the test reads.
-#[derive(Debug, Deserialize)]
-struct Ehr {
-    system_id: Value,
-}
-
-/// The members of `GET {api}/v1/ehr/{ehr_id}/ehr_status` the test reads.
-#[derive(Debug, Deserialize)]
-struct Status {
-    subject: Subject,
-}
-
-#[derive(Debug, Deserialize)]
-struct Subject {
-    external_ref: ExternalRef,
-}
-
-#[derive(Debug, Deserialize)]
-struct ExternalRef {
-    id: Value,
-    namespace: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct Value {
-    value: String,
-}
-
 /// Reads `GET {api}/v1/{path}` through the node's proxy and decodes a
-/// successful answer.
+/// successful answer with the strict canonical JSON reader.
 async fn read_json<T: serde::de::DeserializeOwned>(
     node: &ProxiedNode,
     path: &str,
@@ -90,7 +65,7 @@ async fn read_json<T: serde::de::DeserializeOwned>(
         .send()
         .await?
         .error_for_status()?;
-    Ok(serde_json::from_slice(&answer.bytes().await?)?)
+    Ok(from_canonical_json(&answer.text().await?)?)
 }
 
 #[tokio::test]
@@ -157,18 +132,22 @@ async fn both_nodes_start_take_a_seed_and_journal_it() {
 
         let ehr: Ehr = read_json(node, &format!("ehr/{ehr_id}")).await.unwrap();
         assert_eq!(
-            ehr.system_id.value,
+            ehr.system_id.value(),
             node.node.system_id(),
             "the EHR carries the system_id of the node that created it"
         );
-        let status: Status = read_json(node, &format!("ehr/{ehr_id}/ehr_status"))
+        let status: EhrStatus = read_json(node, &format!("ehr/{ehr_id}/ehr_status"))
             .await
             .unwrap();
+        let reference = status
+            .subject
+            .external_ref
+            .expect("the seeded EHR_STATUS names its subject");
+        let ObjectId::GenericId(id) = reference.id else {
+            panic!("the seeded subject is a GENERIC_ID, not {:?}", reference.id);
+        };
         assert_eq!(
-            (
-                status.subject.external_ref.id.value,
-                status.subject.external_ref.namespace
-            ),
+            (id.value, reference.namespace),
             (patient.value(), patient.namespace()),
             "{} holds the subject in the example arc the seed wrote",
             node.node.system_id()
