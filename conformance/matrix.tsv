@@ -28,7 +28,7 @@
 # #[tokio::test] attribute, naming CP ids and tracks only:
 #   // conformance: CP-26 CP-38 track-10
 cp	actor	requirements	tracks	status	issue	reason
-CP-1	Gateway	N1	1	covered	#38	-
+CP-1	Gateway	N1	1	covered	#38	scored over two mock nodes: POST {base}/v1/query/aql and its ITS-REST GET form, and the GET forms of stored query execution with and without a version, send each node the same request and answer the same RESULT_SET; the query string is decoded by the generated openehr-its parameters, and one it refuses is a 400 that asks nobody
 CP-2	Gateway	N2,N5	1,2	covered	#35,#38	-
 CP-38	Gateway	N33	2,10	covered	#44	-
 CP-3	Gateway	N3	2	covered	#42,#43	-

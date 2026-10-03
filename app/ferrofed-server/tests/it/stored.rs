@@ -585,6 +585,30 @@ async fn a_name_a_version_or_a_query_type_outside_its_rest_is_refused() -> TestR
     Ok(())
 }
 
+#[tokio::test]
+async fn a_store_query_string_the_generated_decoder_refuses_stores_nothing() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let app = two_members(dir.path(), &a, &b)?;
+    for query in ["query_type=%FF", "query_type=AQL&query_type=AQL"] {
+        let request = Request::put(format!("/v1/definition/query/{NAME}/1.0.0?{query}"))
+            .header(header::CONTENT_TYPE, "text/plain")
+            .body(Body::from(parameterised()))?;
+        let (status, text) = call(app.clone(), request).await?;
+        assert_eq!(
+            StatusCode::BAD_REQUEST,
+            status,
+            "{query}: no UTF-8 text, or a scalar given twice (ITS-REST, RFC 3986 §2.1): {text}"
+        );
+        assert_eq!("body-invalid", error_body(&text)?.code, "{query}");
+    }
+    let (status, _) = call(app, get(&format!("{NAME}/1.0.0"))?).await?;
+    assert_eq!(StatusCode::NOT_FOUND, status, "nothing was stored");
+    assert!(received(&a).await?.is_empty() && received(&b).await?.is_empty());
+    Ok(())
+}
+
 // conformance: CP-40
 #[tokio::test]
 async fn a_failing_member_fails_the_stored_query_and_the_envelope_still_names_it() -> TestResult {
@@ -629,8 +653,8 @@ async fn options_declares_the_registry_and_the_methods_it_serves() -> TestResult
             "/v1/definition/template/adl1.4".to_owned(),
             "GET, POST, OPTIONS",
         ),
-        (format!("/v1/query/{NAME}"), "POST, OPTIONS"),
-        (format!("/v1/query/{NAME}/1.0.0"), "POST, OPTIONS"),
+        (format!("/v1/query/{NAME}"), "GET, POST, OPTIONS"),
+        (format!("/v1/query/{NAME}/1.0.0"), "GET, POST, OPTIONS"),
         (format!("/v1/definition/query/{NAME}"), "GET, PUT, OPTIONS"),
         (
             format!("/v1/definition/query/{NAME}/1.0.0"),

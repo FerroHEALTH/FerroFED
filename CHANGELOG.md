@@ -23,6 +23,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The ITS-REST `GET` forms of query execution are served (#287; N1, CP-1).
+  `GET {base}/v1/query/aql` and, where the stored-query registry is offered,
+  `GET {base}/v1/query/{name}[/{version}]` carry the request in the query
+  string: `q` (ad hoc only), `offset` and `fetch` by name, and every other pair
+  a `query_parameters` member, so a stored `GET` binds `q=…` to `$q`. The
+  generated `openehr-its` parameters decode it (FerroEHR #3540), a `+` is a
+  literal plus, and the request runs the pipeline of the `POST` form
+  unchanged: the rewrite, the outbound gate, the fan-out, the merge and the
+  completeness rules, with the same node requests and the same answer. An
+  `ehr_id` is dropped, as from a `POST` body. A query string the decoder
+  refuses is `400 body-invalid` and asks nobody; a `null` parameter is
+  `400 parameter-invalid`, as in a body. `OPTIONS` on both paths lists `GET`,
+  and the request log records neither `q` nor a parameter value.
 - The DEMOGRAPHIC area is never federated, and may be routed to one
   declared endpoint that the request names (#68, #311; §7a.1, §12.4, §12.6,
   N23, N32, N31, CP-25). By default every request under
@@ -195,6 +208,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The query string of a stored-query `PUT {base}/v1/definition/query/{name}/{version}`
+  is decoded by the generated `openehr-its` parameters (#292, FerroEHR
+  #3540), so a `+` is a literal plus. A `query_type` given twice, or a pair
+  that does not percent-decode to UTF-8 text, is now `400 body-invalid` and
+  nothing is stored; an undeclared parameter stays
+  `400 query-parameter-refused`.
 - The `openehr-*` family moves to 0.0.80 (FerroEHR #3539 to #3541, #3543), and
   `openehr-federation` to 0.0.31 with it. The fuzz crate is now held to the
   family pin by `scripts/checks/versions.sh`.

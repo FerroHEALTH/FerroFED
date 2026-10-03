@@ -224,17 +224,20 @@ pub(crate) fn in_query_string_or_header() -> Vec<Case> {
     let value = PATIENT.value();
     let namespace = PATIENT.namespace();
     let aql = format!("SELECT c/uid/value {FROM} WHERE {}", external_ref());
+    // NOTE: ITS-REST Query API, N1: the GET form is served through the POST
+    // pipeline, so the identifier it binds is consumed as in a body (§5.4.1, N33).
     let mut get = query(
         "the AQL and the identifier in a GET query string",
         "",
         &[],
-        Expect::Unsent(StatusCode::NOT_IMPLEMENTED),
+        both(),
     );
     get.method = Method::GET;
     get.uri = format!(
         "/v1/query/aql?q={}&patient={value}",
         encoded(&format!(
-            "SELECT c/uid/value {FROM} WHERE e/ehr_status/subject/external_ref/id/value = $patient"
+            "SELECT c/uid/value {FROM} WHERE e/ehr_status/subject/external_ref/id/value = $patient \
+             AND e/ehr_status/subject/external_ref/namespace = '{namespace}'"
         ))
     );
     get.body = Payload::Empty;

@@ -20,7 +20,7 @@ and a gateway is never marked down for them (section 17).
 
 | Point | Actor | Requirements | Tracks | Status | Issues | Reason |
 |---|---|---|---|---|---|---|
-| [CP-1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-1) | Gateway | N1 | 1 | covered | [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | - |
+| [CP-1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-1) | Gateway | N1 | 1 | covered | [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | scored over two mock nodes: POST {base}/v1/query/aql and its ITS-REST GET form, and the GET forms of stored query execution with and without a version, send each node the same request and answer the same RESULT_SET; the query string is decoded by the generated openehr-its parameters, and one it refuses is a 400 that asks nobody |
 | [CP-2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-2) | Gateway | N2, N5 | 1, 2 | covered | [#35](https://github.com/FerroHEALTH/FerroFED/issues/35), [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | - |
 | [CP-38](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-38) | Gateway | N33 | 2, 10 | covered | [#44](https://github.com/FerroHEALTH/FerroFED/issues/44) | - |
 | [CP-3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-3) | Gateway | N3 | 2 | covered | [#42](https://github.com/FerroHEALTH/FerroFED/issues/42), [#43](https://github.com/FerroHEALTH/FerroFED/issues/43) | - |
