@@ -109,13 +109,14 @@ pub fn fitting(
     holding(operation, (query, headers, body), Strictness::LeaveOut)
 }
 
-/// Holds the `Content-Type` the client sent with a request to `operation` to
-/// the media types the operation lists, and returns the listed media type it
-/// names, or `None` when the client sent none.
+/// Returns the listed media type the `body` of a request to `operation` is
+/// read as, or `None` for a request with no body or an operation that takes
+/// none.
 ///
-/// The value is negotiated as [`held`] negotiates it, so a request the
-/// gateway answers itself is held to the same rule as one it routes; no other
-/// header, path or query value is read.
+/// It is the `Content-Type` [`held`] sends a body with, so a request the
+/// gateway answers itself is held to the rule of one it routes: the client's
+/// `Content-Type` as the listed media type it names or, when the client sent
+/// none, the first listed. No other header, path or query value is read.
 ///
 /// # Errors
 ///
@@ -125,19 +126,9 @@ pub fn fitting(
 pub fn content_type(
     operation: &RouteMatch,
     headers: &HeaderMap,
+    body: &[u8],
 ) -> Result<Option<HeaderValue>, Refusal> {
-    let mut sent = HeaderMap::new();
-    for line in headers.get_all(CONTENT_TYPE) {
-        sent.append(CONTENT_TYPE, line.clone());
-    }
-    if sent.is_empty() {
-        return Ok(None);
-    }
-    let composed = composed(operation, &sent, Strictness::Refuse)?;
-    match composed.get(CONTENT_TYPE) {
-        Some(value) => Ok(Some(value.clone())),
-        None => body_media_type(operation, &sent, true),
-    }
+    body_media_type(operation, headers, !body.is_empty())
 }
 
 /// Holds the declared values of a request to `operation`, each header to
@@ -406,22 +397,38 @@ mod tests {
     fn the_content_type_of_a_query_post_is_held_to_its_listed_media_type() {
         for path in ["/query/aql", "/query/org::q", "/query/org::q/1.0.0"] {
             let query = operation(&Method::POST, path);
-            let named = |value: &str| content_type(&query, &headers(&[("content-type", value)]));
+            let read = |lines: &[(&'static str, &str)], body: &[u8]| {
+                content_type(&query, &headers(lines), body)
+                    .map(|sent| sent.and_then(|v| v.to_str().ok().map(str::to_owned)))
+            };
+            let json = Ok(Some("application/json".to_owned()));
             for value in ["application/json", "Application/JSON; charset=UTF-8"] {
                 assert_eq!(
-                    Ok(Some("application/json".to_owned())),
-                    named(value).map(|sent| sent.and_then(|v| v.to_str().ok().map(str::to_owned))),
+                    json,
+                    read(&[("content-type", value)], b"{}"),
                     "{path} {value}"
                 );
             }
             for value in ["text/plain", "application/xml", "application/json; q=1"] {
                 assert!(
-                    matches!(named(value), Err(Refusal::UnsupportedMediaType { .. })),
+                    matches!(
+                        read(&[("content-type", value)], b"{}"),
+                        Err(Refusal::UnsupportedMediaType { .. })
+                    ),
                     "{path} {value}"
                 );
             }
-            let other = headers(&[("accept", "text/html"), ("prefer", "4711")]);
-            assert_eq!(Ok(None), content_type(&query, &other), "{path}");
+            let other = [("accept", "text/html"), ("prefer", "4711")];
+            assert_eq!(
+                json,
+                read(&other, b"{}"),
+                "{path}: none sent reads as the first listed"
+            );
+            assert_eq!(
+                Ok(None),
+                read(&other, b""),
+                "{path}: no body is read as nothing"
+            );
         }
     }
 

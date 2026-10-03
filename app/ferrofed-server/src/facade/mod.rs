@@ -160,7 +160,7 @@ async fn federated(
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, request_id);
     };
-    if let Submitted::Body(_) = submitted {
+    if let Submitted::Body(body) = submitted {
         let logged = outbound.to_string();
         let Lookup::Matched(matched) = routes::lookup(&Method::POST, ADHOC_QUERY) else {
             tracing::error!(
@@ -170,7 +170,7 @@ async fn federated(
             return error::fixed(Code::Internal, request_id);
         };
         let ids = (request_id, logged.as_str());
-        if let Some(refused) = request::unsupported_media(&matched, headers, ids) {
+        if let Some(refused) = request::unsupported_media(&matched, (headers, body), ids) {
             return refused;
         }
     }

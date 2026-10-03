@@ -293,7 +293,9 @@ async fn store(
     let started = Instant::now();
     let logged = arrived.outbound.to_string();
     let ids = (arrived.request_id, logged.as_str());
-    if let Some(response) = request::unsupported_media(matched, arrived.headers, ids) {
+    if let Some(response) =
+        request::unsupported_media(matched, (arrived.headers, &arrived.body), ids)
+    {
         return Ok(response);
     }
     let name = name(matched)?;
@@ -428,7 +430,9 @@ async fn execute(
     if carrier == Carrier::Body {
         let logged = arrived.outbound.to_string();
         let ids = (arrived.request_id, logged.as_str());
-        if let Some(response) = request::unsupported_media(matched, arrived.headers, ids) {
+        if let Some(response) =
+            request::unsupported_media(matched, (arrived.headers, &arrived.body), ids)
+        {
             return Ok(response);
         }
     }

@@ -114,17 +114,16 @@ fn analysed(
 /// A `Content-Type` naming no media type the operation lists is a `415`
 /// (`media-type-unsupported`) naming the client's `request_id`, answered
 /// before the body is read, stored or sent anywhere (RFC 9110 §15.5.16); the
-/// gateway's `logged` id names any event. A body sent without a
-/// `Content-Type` is read as the first listed media type: `application/json`
-/// for a query `POST`, `text/plain` for a stored-query definition `PUT`.
+/// gateway's `logged` id names any event. A `body` sent without a
+/// `Content-Type` is read as the first listed media type
+/// ([`declared::content_type`]): `application/json` for a query `POST`,
+/// `text/plain` for a stored-query definition `PUT`.
 pub(crate) fn unsupported_media(
     matched: &RouteMatch,
-    headers: &HeaderMap,
+    (headers, body): (&HeaderMap, &[u8]),
     (request_id, logged): (&str, &str),
 ) -> Option<Response> {
-    // NOTE: ITS-REST 1.1.0 makes Content-Type optional with no default, and RFC 9110 §8.3
-    // names none, so our own design reads a body sent without one as the first listed.
-    declared::content_type(matched, headers)
+    declared::content_type(matched, headers, body)
         .err()
         .map(|refusal| route::declared_refused(&refusal, request_id, logged))
 }
