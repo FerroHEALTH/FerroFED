@@ -503,6 +503,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- A request whose deadline passed before it left the gateway is no longer
+  counted as a node `time-out` (#374; §11.5; no specification governs the
+  metrics or health probes). A request routed to one node, an ask-all probe,
+  a fan-out template upload, a stored-query call and a federated query member
+  the budget overtook before sending are now neither counted in
+  `ferrofed_node_requests_total` nor timed in
+  `ferrofed_node_request_duration_seconds`, and leave the member's state on
+  `GET /health/dependencies` as it was, where they counted as `time-out` and
+  set the member `down`. A fan-out whose overall budget had already run out
+  when it started reported every member as asked and silent; it now reports
+  none as asked. What the client receives is unchanged: the routed request
+  and the probe answer `504` (`node-timeout`), and the member record in
+  `meta.federation` says `time-out`.
 - `GET {base}/health/dependencies` records each member a fan-out template
   upload, a stored-query distribution or repair, or a stored-query drift
   check asked (#366; no specification governs health probes), where a member

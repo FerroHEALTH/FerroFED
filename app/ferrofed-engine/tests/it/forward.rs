@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::declared::Refusal;
-use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
+use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClient};
 use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_engine::outbound_id::OutboundId;
@@ -520,6 +520,50 @@ async fn a_401_is_the_node_refusing_the_onward_credentials() -> TestResult {
         }
         other => return Err(format!("a 401 is Refused: {other:?}").into()),
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_forward_whose_deadline_passed_before_it_left_is_expired_and_never_sent() -> TestResult {
+    let at = format!("/ehr/{EHR}");
+    let server = node("GET", &format!("/v1{at}"), ResponseTemplate::new(200)).await;
+    let passed = DispatchOptions::new(Instant::now());
+    let forwarded = client(&server.uri())?
+        .forward(request(Method::GET, &at, HeaderMap::new(), b""), &passed)
+        .await;
+    assert!(
+        matches!(&forwarded, Err(ForwardError::Expired { .. })),
+        "§11.5: the node was never asked: {forwarded:?}"
+    );
+    assert_eq!(Contact::Unsent, Contact::of_forwarded(&forwarded));
+    assert!(received(&server).await?.is_empty(), "nothing is sent");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_forward_the_node_leaves_unanswered_is_a_time_out_of_a_silent_node() -> TestResult {
+    let at = format!("/ehr/{EHR}");
+    let server = node(
+        "GET",
+        &format!("/v1{at}"),
+        ResponseTemplate::new(200).set_delay(Duration::from_secs(3)),
+    )
+    .await;
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(200))
+        .ok_or("the deadline is past the platform clock")?;
+    let forwarded = client(&server.uri())?
+        .forward(
+            request(Method::GET, &at, HeaderMap::new(), b""),
+            &DispatchOptions::new(deadline),
+        )
+        .await;
+    assert!(
+        matches!(&forwarded, Err(ForwardError::TimeOut { .. })),
+        "§11.1: sent, and no answer in time: {forwarded:?}"
+    );
+    assert_eq!(Contact::Silent, Contact::of_forwarded(&forwarded));
+    assert_eq!(1, received(&server).await?.len(), "the request left");
     Ok(())
 }
 

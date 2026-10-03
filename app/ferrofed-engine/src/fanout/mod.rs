@@ -630,6 +630,7 @@ where
         return Err(FanOutError::PartialAggregate);
     }
     let order: Vec<EndpointId> = dispatch.keys().cloned().collect();
+    let until = tokio::time::Instant::from_std(deadline);
     let mut tasks = JoinSet::new();
     for (index, (endpoint, query)) in dispatch.into_iter().enumerate() {
         let client = clients
@@ -642,23 +643,18 @@ where
         if let Some(id) = request_id {
             options = options.with_request_id(id);
         }
-        tasks.spawn(async move { (index, client.query(&query, &options).await) });
+        // NOTE: tokio::time::timeout_at (docs.rs) polls the query before the budget, so a request
+        // the budget overtook before it left ends unsent, never abandoned.
+        tasks.spawn(async move {
+            let reply = tokio::time::timeout_at(until, client.query(&query, &options)).await;
+            (index, reply)
+        });
     }
     let mut replies: Vec<Option<NodeReply>> = vec![None; order.len()];
-    let until = tokio::time::Instant::from_std(deadline);
-    loop {
-        match tokio::time::timeout_at(until, tasks.join_next()).await {
-            Ok(Some(joined)) => {
-                let (index, reply) = joined?;
-                if let Some(slot) = replies.get_mut(index) {
-                    *slot = Some(reply?);
-                }
-            }
-            Ok(None) => break,
-            Err(_elapsed) => {
-                tasks.abort_all();
-                break;
-            }
+    while let Some(joined) = tasks.join_next().await {
+        let (index, reply) = joined?;
+        if let (Ok(reply), Some(slot)) = (reply, replies.get_mut(index)) {
+            *slot = Some(reply?);
         }
     }
     let abandoned_ms = whole_ms(dispatched.elapsed());

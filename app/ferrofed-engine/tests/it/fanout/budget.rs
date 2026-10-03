@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::fanout::{Completion, FederatedAnswer, TIMEOUT_POLICY, fan_out_within};
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
@@ -219,5 +220,34 @@ async fn abandoning_one_node_never_aborts_another_in_flight() -> TestResult {
     let rows = rows_text(&answer)?;
     assert!(rows.contains("m1::cdr-1.example.org::1"), "{rows}");
     validated_body(answer)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_zero_wait_leaves_every_node_without_contact() -> TestResult {
+    let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
+    let b = node(json(200, &result_set(&["b1::cdr-1.example.org::1"]))).await;
+    let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &b.uri())])?;
+    let answer = fan_out_within(
+        &clients(&snapshot)?,
+        &snapshot,
+        plan_for(&["node-a-pub", "node-b-pub"])?,
+        budget(2_000, 5_000)?.shortened_to(Duration::ZERO),
+        Instant::now(),
+        None,
+    )
+    .await?;
+    let contacts: BTreeMap<String, Contact> = answer
+        .contacts()
+        .map(|(endpoint, contact)| (endpoint.as_str().to_owned(), contact))
+        .collect();
+    assert_eq!(
+        BTreeMap::from([
+            ("node-a-pub".to_owned(), Contact::Unsent),
+            ("node-b-pub".to_owned(), Contact::Unsent),
+        ]),
+        contacts,
+        "§11.5: the budget ran out before either request left, so neither node was asked"
+    );
     Ok(())
 }

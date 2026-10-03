@@ -115,6 +115,9 @@ impl NodeRequests {
         outcome: &Result<Forwarded, ForwardError>,
         elapsed: Duration,
     ) {
+        if !Contact::of_forwarded(outcome).sent() {
+            return;
+        }
         let status = match outcome {
             Ok(answer) => Some(answered(answer.status())),
             Err(error) => failed(error),
@@ -130,6 +133,9 @@ impl NodeRequests {
     /// An abandoned probe is a `time-out`, timed to the moment the overall
     /// budget ran out, as an abandoned fan-out request is (§11.1, §11.5).
     pub fn probed(&self, endpoint: &EndpointId, probed: &Probed) {
+        if !probed.contact().sent() {
+            return;
+        }
         let status = match &probed.answer {
             Answer::Holds(forwarded) => Some(answered(forwarded.status())),
             Answer::Absent => Some(EndpointStatus::Active),
