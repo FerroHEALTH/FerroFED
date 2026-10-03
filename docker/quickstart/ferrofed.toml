@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # The gateway configuration of the compose.yaml quickstart. It federates the
-# two nodes of registry.toml and sends each FerroEHR's quickstart Basic-auth
+# four nodes of registry.toml and sends each FerroEHR's quickstart Basic-auth
 # user: development credentials, NOT for anything real.
 #
-# No identity binding is configured, so a query that names a patient fails
-# closed with 424 (§11.4; §11.3 covers only an answered lookup, so no
-# specification governs this: our own design); a query that names no patient
-# is asked of both members (N4).
+# A development profile: the static cross-reference below resolves four
+# synthetic patients to their EHRs, and it is no identity binding (no
+# specification governs it: our own design). scripts/quickstart/seed.sh reads
+# the same rows and creates each EHR over ITS-REST, so the two never disagree.
+
+profile = "development"
 
 [registry]
 document = "/etc/ferrofed/registry.toml"
@@ -30,3 +32,62 @@ password = "ferroehr"
 [credentials."node-b-query"]
 user = "ferroehr"
 password = "ferroehr"
+
+[credentials."node-c-query"]
+user = "ferroehr"
+password = "ferroehr"
+
+[credentials."node-d-query"]
+user = "ferroehr"
+password = "ferroehr"
+
+# The synthetic patients, every identifier inside the example arc
+# urn:oid:2.999 that ITU-T X.660 reserves for examples. Each EHR's first group
+# names its node and its last group its patient.
+#
+# ffd-test-0001 has an EHR at all four nodes.
+[[dev.crossref]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0001"
+member = "node-a"
+ehr_id = "aaaaaaaa-aaaa-4aaa-8aaa-000000000001"
+
+[[dev.crossref]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0001"
+member = "node-b"
+ehr_id = "bbbbbbbb-bbbb-4bbb-8bbb-000000000001"
+
+[[dev.crossref]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0001"
+member = "node-c"
+ehr_id = "cccccccc-cccc-4ccc-8ccc-000000000001"
+
+[[dev.crossref]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0001"
+member = "node-d"
+ehr_id = "dddddddd-dddd-4ddd-8ddd-000000000001"
+
+# ffd-test-0002 has an EHR at node B and node D.
+[[dev.crossref]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0002"
+member = "node-b"
+ehr_id = "bbbbbbbb-bbbb-4bbb-8bbb-000000000002"
+
+[[dev.crossref]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0002"
+member = "node-d"
+ehr_id = "dddddddd-dddd-4ddd-8ddd-000000000002"
+
+# ffd-test-0003 has an EHR at node C alone.
+[[dev.crossref]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0003"
+member = "node-c"
+ehr_id = "cccccccc-cccc-4ccc-8ccc-000000000003"
+
+# ffd-test-0004 has an EHR at no node, so it has no row.

@@ -12,11 +12,13 @@ Landed with #39 (2026-10-01), on the FerroBRIDGE gate model; the topology
 became two FerroEHR nodes with #155 (2026-10-02, [[two-ferroehr-nodes]]). The
 harness is `tools/ferrofed-testkit`:
 
-- `containers.rs`: `ferroehr(system_id)` starts the pinned FerroEHR image on
-  its own pinned database container with `FERROEHR__SERVER__SYSTEM_ID` set,
-  and `two_nodes()` starts node A (`NODE_A_SYSTEM_ID`) and node B
-  (`NODE_B_SYSTEM_ID`) and puts a proxy in front of each. `Node::stop()` makes
-  a node offline the way an outage does.
+- `containers.rs`: `two_nodes()` starts one pinned FerroEHR PostgreSQL
+  container holding a database per node (`ferroehr_a`, `ferroehr_b`, through
+  `docker/postgres/20-ferrofed-node-databases.sh`, decision A47), then node A
+  (`NODE_A_SYSTEM_ID`) and node B (`NODE_B_SYSTEM_ID`) on the pinned FerroEHR
+  image with `FERROEHR__SERVER__SYSTEM_ID` set, and puts a proxy in front of
+  each; `ferroehr(system_id)` starts one node on a database server of its
+  own. `Node::stop()` makes a node offline the way an outage does.
 - `proxy.rs`: `CapturingProxy` journals every request (method, path, query,
   headers, body) and injects `Fault::Refuse`, `Fault::Delay` or
   `Fault::Status` per proxy, at any point in a test. Track 10 is judged on

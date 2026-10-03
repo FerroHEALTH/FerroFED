@@ -174,9 +174,10 @@ database image, which is part of the product under test (§13).
 
 ## Container images
 
-The gateway image builds on distroless static, and the quickstart runs two
-member CDRs beside it, two FerroEHR instances on the same pins, each with its
-own database and `system_id` (`docs/architecture.md` §13, decision A44). Every
+The gateway image builds on distroless static, and the quickstart runs four
+member CDRs beside it, four FerroEHR instances on the same pin, each with its
+own `system_id` and its own database on one FerroEHR PostgreSQL container
+(`docs/architecture.md` §13, decisions A44 and A47). Every
 image is pinned by tag and by the digest of its image index, resolved on
 2026-10-01. `scripts/checks/versions.sh` holds every row equal to the file
 that repeats it.
@@ -190,7 +191,7 @@ that repeats it.
 The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
 product version below as its tag default, and the guard holds the two equal.
 
-The end-to-end lane starts the same four node images through the testkit
+The end-to-end lane starts the same two node images through the testkit
 harness, behind the `FERROFED_E2E` gate (`docs/ci-cd.md`): each is a
 `PinnedImage` constant in `tools/ferrofed-testkit/src/containers.rs`, and the
 guard holds every constant equal to its row here, so the quickstart and the

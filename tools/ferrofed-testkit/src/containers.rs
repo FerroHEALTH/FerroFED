@@ -6,20 +6,27 @@
 //! A container-backed test asks [`e2e_enabled`] first and returns without
 //! touching Docker when the gate is unset, so the ordinary suite stays
 //! offline. The harness starts the two member CDRs the end-to-end lane runs
-//! against (§16): two FerroEHR instances, node A
-//! and node B, each on its own database and each stamping its own
-//! `system_id`, and [`two_nodes`] puts a [`CapturingProxy`] in front of each.
-//! Every image is pinned by tag and digest in a [`PinnedImage`] constant,
-//! which `docs/VERSIONS.md` repeats and `scripts/checks/versions.sh` compares.
+//! against (§16): two FerroEHR instances, node A and node B, each stamping its
+//! own `system_id`, on one PostgreSQL server that holds a database per node,
+//! and [`two_nodes`] puts a [`CapturingProxy`] in front of each. Every image
+//! is pinned by tag and digest in a [`PinnedImage`] constant, which
+//! `docs/VERSIONS.md` repeats and `scripts/checks/versions.sh` compares.
+//!
+//! A database per node, never a schema per node: FerroEHR creates fixed
+//! schema names in the database it connects to, so two nodes in one database
+//! would share their tables. The database server is the same init script the
+//! compose quickstart mounts, [`NODE_DATABASES_SCRIPT`].
 //!
 //! No specification governs the harness; it is FerroFED's own design.
 
 use crate::proxy::{CapturingProxy, ProxyError};
+use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use testcontainers::core::{Healthcheck, IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, GenericImage, ImageExt};
+use testcontainers::{ContainerAsync, CopyTargetOptions, GenericImage, ImageExt};
 
 /// The environment variable that admits the container-backed tests.
 pub const E2E_GATE: &str = "FERROFED_E2E";
@@ -44,6 +51,25 @@ pub const NODE_A_SYSTEM_ID: &str = "cdr-a.example.org";
 
 /// The `system_id` node B stamps into every EHR and version it creates.
 pub const NODE_B_SYSTEM_ID: &str = "cdr-b.example.org";
+
+/// The database node A connects to, which is also its login role and that
+/// role's development password.
+const NODE_A_DATABASE: &str = "ferroehr_a";
+
+/// The database node B connects to, named as [`NODE_A_DATABASE`] is.
+const NODE_B_DATABASE: &str = "ferroehr_b";
+
+/// The init script that adds a database per node to the FerroEHR PostgreSQL
+/// image, shared with the compose quickstart.
+pub const NODE_DATABASES_SCRIPT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docker/postgres/20-ferrofed-node-databases.sh"
+);
+
+/// Where the image's entrypoint finds [`NODE_DATABASES_SCRIPT`]: after the
+/// image's own `10-ferroehr-init.sh`, because the entrypoint runs the init
+/// scripts in sorted order.
+const NODE_DATABASES_TARGET: &str = "/docker-entrypoint-initdb.d/20-ferrofed-node-databases.sh";
 
 /// How long the readiness poll of a CDR waits before it gives up. A cold
 /// runner pulls both images and migrates the database first.
@@ -163,17 +189,30 @@ pub enum HarnessError {
     Proxy(#[source] ProxyError),
 }
 
-/// A started CDR with its own database, torn down when it is dropped.
+/// A started PostgreSQL server holding one database per node, on a network
+/// of its own that the nodes join.
+#[derive(Debug)]
+struct DatabaseServer {
+    /// The server's container.
+    container: ContainerAsync<GenericImage>,
+    /// The network the server and its nodes share.
+    network: String,
+    /// The container name the nodes reach the server by.
+    host: String,
+}
+
+/// A started CDR with its database, torn down when it is dropped.
 ///
-/// The two containers are fields, so dropping this value stops both.
+/// The CDR container is a field and the database server is shared with the
+/// other nodes started beside it, so the server stops with the last of them.
 #[derive(Debug)]
 pub struct Node {
     /// The `system_id` the CDR was configured with.
     system_id: &'static str,
     /// The CDR itself.
     server: ContainerAsync<GenericImage>,
-    /// The database it was started against.
-    database: ContainerAsync<GenericImage>,
+    /// The database server it was started against.
+    database: Arc<DatabaseServer>,
     /// The origin the CDR is reachable at from the host, with no path.
     origin: String,
 }
@@ -204,10 +243,11 @@ impl Node {
         &self.server
     }
 
-    /// Returns the database container the CDR was started against.
+    /// Returns the database server container the CDR was started against,
+    /// which every node started beside it shares.
     #[must_use]
     pub fn database(&self) -> &ContainerAsync<GenericImage> {
-        &self.database
+        &self.database.container
     }
 
     /// Stops the CDR container, which makes the node `offline` the way an
@@ -268,21 +308,27 @@ pub struct TwoNodes {
     pub b: ProxiedNode,
 }
 
-/// Starts both nodes concurrently and puts a proxy in front of each.
+/// Starts one database server holding a database for each node, then both
+/// nodes concurrently, and puts a proxy in front of each.
 ///
 /// # Errors
 ///
-/// Returns the first [`HarnessError`] either node reports.
+/// Returns the first [`HarnessError`] the database server or either node
+/// reports.
 pub async fn two_nodes() -> Result<TwoNodes, HarnessError> {
-    let (a, b) = tokio::try_join!(ferroehr(NODE_A_SYSTEM_ID), ferroehr(NODE_B_SYSTEM_ID))?;
+    let database = Arc::new(database_server(NODE_A_DATABASE, &[NODE_B_DATABASE]).await?);
+    let (a, b) = tokio::try_join!(
+        ferroehr_on(&database, NODE_A_DATABASE, NODE_A_SYSTEM_ID),
+        ferroehr_on(&database, NODE_B_DATABASE, NODE_B_SYSTEM_ID)
+    )?;
     Ok(TwoNodes {
         a: ProxiedNode::new(a).await?,
         b: ProxiedNode::new(b).await?,
     })
 }
 
-/// Starts FerroEHR as `system_id` on its own database and waits for its
-/// readiness endpoint.
+/// Starts FerroEHR as `system_id` on a database server of its own and waits
+/// for its readiness endpoint.
 ///
 /// Authentication and role-based authorisation are switched off, the posture
 /// the image documents for development, so the API root needs no credentials.
@@ -292,30 +338,63 @@ pub async fn two_nodes() -> Result<TwoNodes, HarnessError> {
 /// Returns [`HarnessError::Container`] when Docker refuses a container and
 /// [`HarnessError::NotReady`] when the CDR does not become ready in time.
 pub async fn ferroehr(system_id: &'static str) -> Result<Node, HarnessError> {
-    let (network, database_name) = names();
-    let database = FERROEHR_POSTGRES
+    let database = Arc::new(database_server(NODE_A_DATABASE, &[]).await?);
+    ferroehr_on(&database, NODE_A_DATABASE, system_id).await
+}
+
+/// Starts the FerroEHR PostgreSQL image with the database `first` and one
+/// more for each of `others`, each owned by a login role of the same name
+/// whose development password is that name too.
+///
+/// The image's own init script creates `first`, and
+/// [`NODE_DATABASES_SCRIPT`] runs it once more for each of `others`.
+async fn database_server(first: &str, others: &[&str]) -> Result<DatabaseServer, HarnessError> {
+    let (network, host) = names();
+    let container = FERROEHR_POSTGRES
         .image()
         .with_wait_for(WaitFor::healthcheck())
-        .with_health_check(postgres_health_check("ferroehr", "ferroehr"))
+        .with_health_check(postgres_health_check(first, first))
+        .with_copy_to(
+            CopyTargetOptions::new(NODE_DATABASES_TARGET).with_mode(0o755),
+            Path::new(NODE_DATABASES_SCRIPT),
+        )
         .with_env_var("POSTGRES_PASSWORD", "postgres")
-        .with_env_var("PG_INIT_USER", "ferroehr")
-        .with_env_var("PG_INIT_PASSWORD", "ferroehr")
-        .with_env_var("PG_INIT_DB", "ferroehr")
+        .with_env_var("PG_INIT_USER", first)
+        .with_env_var("PG_INIT_PASSWORD", first)
+        .with_env_var("PG_INIT_DB", first)
+        .with_env_var("FERROFED_NODE_DATABASES", others.join(" "))
         .with_network(network.clone())
-        .with_container_name(database_name.clone())
+        .with_container_name(host.clone())
         .start()
         .await
         .map_err(|source| HarnessError::Container {
             image: FERROEHR_POSTGRES.repository,
             source,
         })?;
+    Ok(DatabaseServer {
+        container,
+        network,
+        host,
+    })
+}
+
+/// Starts FerroEHR as `system_id` on the database `name` of `database` and
+/// waits for its readiness endpoint.
+async fn ferroehr_on(
+    database: &Arc<DatabaseServer>,
+    name: &str,
+    system_id: &'static str,
+) -> Result<Node, HarnessError> {
     let server = FERROEHR
         .image()
         .with_exposed_port(CDR_PORT.tcp())
-        .with_network(network)
+        .with_network(database.network.clone())
         .with_env_var(
             "FERROEHR__DB__URL",
-            format!("postgres://ferroehr:ferroehr@{database_name}:{POSTGRES_PORT}/ferroehr"),
+            format!(
+                "postgres://{name}:{name}@{}:{POSTGRES_PORT}/{name}",
+                database.host
+            ),
         )
         .with_env_var("FERROEHR__SERVER__SYSTEM_ID", system_id)
         .with_env_var("FERROEHR__AUTH__ENABLED", "false")
@@ -326,11 +405,11 @@ pub async fn ferroehr(system_id: &'static str) -> Result<Node, HarnessError> {
             image: FERROEHR.repository,
             source,
         })?;
-    ready(system_id, server, database).await
+    ready(system_id, server, Arc::clone(database)).await
 }
 
-/// Returns a network name and a database container name unique to this
-/// process and call.
+/// Returns a network name and a database server container name unique to
+/// this process and call.
 fn names() -> (String, String) {
     let sequence = NETWORK_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let process = std::process::id();
@@ -344,7 +423,7 @@ fn names() -> (String, String) {
 async fn ready(
     system_id: &'static str,
     server: ContainerAsync<GenericImage>,
-    database: ContainerAsync<GenericImage>,
+    database: Arc<DatabaseServer>,
 ) -> Result<Node, HarnessError> {
     let image = FERROEHR.repository;
     let host = server

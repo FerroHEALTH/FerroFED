@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# The registry document of the compose.yaml quickstart: the two member CDRs
-# the gateway federates, two FerroEHR instances as node A and node B, each
+# The registry document of the compose.yaml quickstart: the four member CDRs
+# the gateway federates, four FerroEHR instances as node A to node D, each
 # reached on the Compose network at its ITS-REST API root (the §12b.1
 # registry entry, N21; no specification governs the document format: our own
 # design). Each system_id is the one compose.yaml configures the node to
@@ -16,6 +16,14 @@ name = "Node A (FerroEHR)"
 id = "org-b"
 name = "Node B (FerroEHR)"
 
+[[organisation]]
+id = "org-c"
+name = "Node C (FerroEHR)"
+
+[[organisation]]
+id = "org-d"
+name = "Node D (FerroEHR)"
+
 [[node]]
 id = "node-a"
 organisation = "org-a"
@@ -25,6 +33,16 @@ system_id = "node-a.quickstart.local"
 id = "node-b"
 organisation = "org-b"
 system_id = "node-b.quickstart.local"
+
+[[node]]
+id = "node-c"
+organisation = "org-c"
+system_id = "node-c.quickstart.local"
+
+[[node]]
+id = "node-d"
+organisation = "org-d"
+system_id = "node-d.quickstart.local"
 
 [[endpoint]]
 id = "node-a-query"
@@ -39,3 +57,17 @@ node = "node-b"
 url = "http://ferroehr-b:8080/ferroehr/rest/openehr"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-b"
+
+[[endpoint]]
+id = "node-c-query"
+node = "node-c"
+url = "http://ferroehr-c:8080/ferroehr/rest/openehr"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-c"
+
+[[endpoint]]
+id = "node-d-query"
+node = "node-d"
+url = "http://ferroehr-d:8080/ferroehr/rest/openehr"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-d"

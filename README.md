@@ -59,34 +59,35 @@ covers the registry, the identity service and every key.
 
 ## Quickstart
 
-The gateway beside two member CDRs, two FerroEHR instances. `compose.yaml`
-runs the published image of the current release:
+The gateway beside four member CDRs, four FerroEHR instances on one
+PostgreSQL server with a database per node. `compose.yaml` runs the published
+image of the current release, and the seed script creates synthetic patients
+over each node's ITS-REST API: one at all four nodes, one at two, one at one
+and one at none.
 
 ```sh
 docker compose up --wait
-curl http://127.0.0.1:8080/health
+scripts/quickstart/seed.sh
 ```
 
-Create one EHR on each node, then send one ordinary ITS-REST query to the
-gateway:
+Then send one ordinary ITS-REST query to the gateway for the patient every
+node knows:
 
 ```sh
-curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
-  http://127.0.0.1:8081/ferroehr/rest/openehr/v1/ehr
-curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
-  http://127.0.0.1:8082/ferroehr/rest/openehr/v1/ehr
-
-curl http://127.0.0.1:8080/v1/query/aql \
-  -H 'Content-Type: application/json' \
-  -d '{"q":"SELECT e/ehr_id/value FROM EHR e"}'
+curl -s http://127.0.0.1:8080/v1/query/aql \
+  -H 'Content-Type: application/json' -d @- <<'EOF'
+{"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
+EOF
 ```
 
-The answer is one ITS-REST `RESULT_SET` with the EHR of each node in `rows`,
-and `meta.federation` reports both endpoints `active`. The quickstart
-configuration (`docker/quickstart/`) names the two nodes and binds no identity
-service, so a query that names a patient fails closed with `424`. The image,
-the ports, the development credentials and building the image from the
-release binaries are described in
+The answer is one ITS-REST `RESULT_SET` with a composition from each node in
+`rows`, and `meta.federation` reports all four endpoints `active`. Each node
+received a query scoped to its own `ehr_id`, with no patient identifier in
+it. The quickstart configuration (`docker/quickstart/`) resolves the synthetic
+patients through a static development cross-reference. A patient missing at
+some nodes, a query directed at one node, the images, the ports, the
+development credentials, the measured memory use and building the image from
+the release binaries are described in
 [the container page](https://ferrofed.eu/docs/operate/container.html).
 
 ## Licence

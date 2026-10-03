@@ -182,3 +182,34 @@ fn config_check_refuses_a_creating_system_mapping_to_an_undeclared_endpoint()
     );
     Ok(())
 }
+
+/// The compose quickstart's configuration and registry document pass `config
+/// check` together, so its four members, their credentials and the static
+/// cross-reference rows the seed script reads agree with one another.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_quickstart_configuration_passes_config_check() -> Result<(), Box<dyn StdError>> {
+    let quickstart =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docker/quickstart");
+    let output = Command::new(env!("CARGO_BIN_EXE_ferrofed"))
+        .args(["config", "check", "--config"])
+        .arg(quickstart.join("ferrofed.toml"))
+        .env_remove("FERROFED_CONFIG")
+        .env(
+            "FERROFED__REGISTRY__DOCUMENT",
+            quickstart.join("registry.toml"),
+        )
+        .output()?;
+    assert_eq!(
+        Some(0),
+        output.status.code(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("valid"), "{stdout}");
+    Ok(())
+}
