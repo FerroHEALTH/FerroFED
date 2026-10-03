@@ -25,8 +25,8 @@ use http::{Method, Request, StatusCode, header};
 use wiremock::{MockServer, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, PATIENT, body, gateway, node_answering, post, registry};
-use crate::path_ehr_id::{answer, asked, mount, probe_at};
-use crate::support::{error_body, send};
+use crate::path_ehr_id::{answer, probe_at};
+use crate::support::{asked, error_body, mount, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

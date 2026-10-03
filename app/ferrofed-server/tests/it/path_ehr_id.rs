@@ -29,14 +29,13 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::{Config, error};
 use ferrofed_server::facade::owner::{self, Held, Located, Step};
 use http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header};
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{MockServer, ResponseTemplate};
 
 use crate::declared::composition_at;
 use crate::facade::{
     EHR_A, PATIENT, body, dev_gateway, gateway, gateway_within, patient_query, post, registry, wire,
 };
-use crate::support::{SLACK, error_body, millis, send};
+use crate::support::{SLACK, asked, error_body, millis, mount, send};
 
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
@@ -237,15 +236,6 @@ fn a_member_the_registry_no_longer_holds_names_nothing() -> TestResult {
     Ok(())
 }
 
-/// A node answering `verb` at `at` with `answer`, and `404` to the rest.
-pub(crate) async fn mount(server: &MockServer, verb: &str, at: String, answer: ResponseTemplate) {
-    Mock::given(method(verb))
-        .and(path(at))
-        .respond_with(answer)
-        .mount(server)
-        .await;
-}
-
 /// A node that holds the EHR of [`EHR_A`] and the composition of
 /// [`VERSION_A`] in it.
 pub(crate) async fn holder() -> MockServer {
@@ -290,17 +280,6 @@ pub(crate) fn over(
     b: &MockServer,
 ) -> Result<Router, Box<dyn Error>> {
     gateway(dir, &registry(&a.uri(), &b.uri(), ""), "", "")
-}
-
-/// The method and path of every request `server` received, in order.
-pub(crate) async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn Error>> {
-    Ok(server
-        .received_requests()
-        .await
-        .ok_or("recording is on")?
-        .into_iter()
-        .map(|request| (request.method.to_string(), request.url.path().to_owned()))
-        .collect())
 }
 
 pub(crate) fn probe_at() -> (String, String) {

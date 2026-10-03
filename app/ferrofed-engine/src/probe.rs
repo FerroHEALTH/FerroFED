@@ -4,7 +4,9 @@
 //! The ask-all probe of §12.5.1 step 4: `GET {base}/v1/ehr/{ehr_id}` at every
 //! member, for a read whose owner no earlier routing step named.
 //!
-//! Each probe is a [`NodeClient::forward`](crate::dispatch::NodeClient::forward) of the one request, so it passes
+//! Each probe is the one request, held once per member with
+//! [`HeldRequest::fit`] and sent with
+//! [`NodeClient::forward_held`](crate::dispatch::NodeClient::forward_held), so it passes
 //! the same outbound gate as every routed request: the path carries the
 //! node-local `ehr_id` and nothing else, and of the client's headers only the
 //! ones `GET {base}/v1/ehr/{ehr_id}` declares travel, each composed for that
@@ -26,12 +28,10 @@ use std::time::Instant;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::Transport;
-use openehr_its::rest::routes::{self, Lookup};
 use tokio::task::{JoinError, JoinSet};
 
-use crate::declared;
 use crate::dispatch::{DispatchOptions, NodeClients};
-use crate::forward::{ClientRequest, ForwardError, Forwarded};
+use crate::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 use crate::outbound_id::OutboundId;
 
 /// What one member answered the probe.
@@ -159,23 +159,25 @@ where
     let deadline = probe.per_node.min(probe.overall);
     let options = DispatchOptions::new(deadline).with_request_id(probe.request_id);
     let path = probe.path();
-    // NOTE: no specification governs this: our own design; the probe is the gateway's own read, so
-    // a client value that does not fit its operation's declared kind is left out, never refused.
-    let headers = match routes::lookup(&Method::GET, &path) {
-        Lookup::Matched(operation) => declared::fitting(&operation, &probe.headers),
-        Lookup::MethodNotAllowed { .. } | Lookup::NotFound => probe.headers.clone(),
-    };
     let mut tasks = JoinSet::new();
     for (index, client) in asked.into_iter().enumerate() {
-        let request = ClientRequest {
+        // NOTE: no specification governs this: our own design; the probe is the gateway's own read, so
+        // a client value that does not fit its operation's declared kind is left out, never refused.
+        let request = HeldRequest::fit(ClientRequest {
             method: Method::GET,
             path: path.clone(),
             query: None,
-            headers: headers.clone(),
+            headers: probe.headers.clone(),
             body: Vec::new(),
-        };
+        });
         let options = options.clone();
-        tasks.spawn(async move { (index, client.forward(request, &options).await) });
+        tasks.spawn(async move {
+            let forwarded = match request {
+                Ok(request) => client.forward_held(request, &options).await,
+                Err(refused) => Err(refused),
+            };
+            (index, forwarded)
+        });
     }
     let mut answers: Vec<Option<Answer>> = endpoints.iter().map(|_| None).collect();
     let until = tokio::time::Instant::from_std(probe.overall);

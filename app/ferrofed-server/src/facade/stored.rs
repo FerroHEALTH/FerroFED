@@ -45,8 +45,9 @@ use openehr_its::rest::generated::query::{
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::error::{self, Code};
+use crate::facade::request::Submitted;
 use crate::facade::route::Arrived;
-use crate::facade::{self, Submitted, security};
+use crate::facade::{answer, security};
 use crate::federation::Federation;
 
 /// The path parameter that names the stored query.
@@ -393,7 +394,7 @@ async fn execute(
         query_parameters: members.query_parameters,
         additional_properties: BTreeMap::new(),
     };
-    let query = facade::Arrived {
+    let query = crate::facade::request::Arrived {
         headers: arrived.headers,
         request_id: arrived.request_id,
         outbound: arrived.outbound,
@@ -403,7 +404,7 @@ async fn execute(
         request,
         name: definition.name().as_str(),
     };
-    Ok(facade::answer(federation, query, submitted).await)
+    Ok(answer::answer(federation, query, submitted).await)
 }
 
 #[cfg(test)]

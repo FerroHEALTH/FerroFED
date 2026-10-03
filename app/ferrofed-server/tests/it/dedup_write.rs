@@ -33,8 +33,8 @@ use crate::dedup::{Answer, Dedup, request};
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, gateway, node_answering, registry, schema,
 };
-use crate::path_ehr_id::{answer, asked, mount};
-use crate::support::{error_body, send};
+use crate::path_ehr_id::answer;
+use crate::support::{asked, error_body, mount, send};
 use crate::versioned_write::{
     CREATED_ELSEWHERE, ENDPOINT_A, ENDPOINT_B, LEGACY_MAPPING, outside_bodies, over,
     refused_at_neither, versioned,

@@ -40,8 +40,8 @@ use crate::facade::{
     EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, body, dev_gateway, node_answering, patient_query,
     post, registry,
 };
-use crate::path_ehr_id::{answer, asked, holder, mount, over, probe_at};
-use crate::support::{Logs, error_body};
+use crate::path_ehr_id::{answer, holder, over, probe_at};
+use crate::support::{Logs, asked, error_body, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
