@@ -50,7 +50,7 @@ use openehr_its::rest::generated::query::{
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::error::{self, Code};
-use crate::facade::request::Submitted;
+use crate::facade::request::{self, Submitted};
 use crate::facade::route::Arrived;
 use crate::facade::{answer, security};
 use crate::federation::Federation;
@@ -216,7 +216,7 @@ fn query_string(matched: &RouteMatch, arrived: &Arrived<'_>) -> Result<(), Refus
     let query = arrived.uri.query();
     if let Some(query) = query {
         query::every_declared(matched, query).map_err(|unlisted| {
-            security::forward_refused(unlisted.position, &arrived.outbound.to_string());
+            security::query_parameter_refused(unlisted.position, &arrived.outbound.to_string());
             Refused::with(Code::QueryParameterRefused, &unlisted)
         })?;
     }
@@ -409,6 +409,9 @@ fn list(definitions: &Definitions, matched: &RouteMatch) -> Result<Response, Ref
 /// `GET` or `POST {base}/v1/query/{name}[/{version}]`: the stored query, run
 /// as if its AQL were submitted inline with the request's members (§12.7,
 /// N44, N1).
+///
+/// A `POST` whose `Content-Type` names no media type the operation lists is
+/// a `415`, answered before the definition is looked up.
 async fn execute(
     federation: &Federation,
     definitions: &Definitions,
@@ -416,6 +419,13 @@ async fn execute(
     arrived: Arrived<'_>,
 ) -> Result<Response, Refused> {
     let started = Instant::now();
+    if carrier == Carrier::Body {
+        let logged = arrived.outbound.to_string();
+        let ids = (arrived.request_id, logged.as_str());
+        if let Some(response) = request::unsupported_media(matched, arrived.headers, ids) {
+            return Ok(response);
+        }
+    }
     let name = name(matched)?;
     let pattern = pattern(matched)?;
     let definition = definitions
@@ -429,7 +439,7 @@ async fn execute(
         query_parameters: members.query_parameters,
         additional_properties: BTreeMap::new(),
     };
-    let query = crate::facade::request::Arrived {
+    let query = request::Arrived {
         headers: arrived.headers,
         request_id: arrived.request_id,
         outbound: arrived.outbound,

@@ -53,6 +53,14 @@ A client that wants to pin a query to named systems can do so in the AQL,
 with `FROM ENDPOINT …` or `ORGANISATION …`, or beside it, with a request
 header (§8).
 
+The body is the ITS-REST `AdhocQueryExecute` in JSON, the one media type
+ITS-REST lists for the operation. Send `Content-Type: application/json`, with
+`charset=utf-8` if you like, or none, and the body is read as JSON. Any other
+`Content-Type` is a `415` (`media-type-unsupported`), and no node is asked
+(RFC 9110 §15.5.16). ITS-REST makes the header optional and names no default,
+so reading a body without one as the listed media type is the gateway's own
+choice.
+
 ### The GET form
 
 ITS-REST also defines the ad hoc query as a `GET`, with the members of the
@@ -752,6 +760,9 @@ Content-Type: application/json
   that selects other endpoints is a `400` (`targeting-conflict`).
 - A parameter you do not bind, or bind and the query does not use, is a `400`
   (`parameters`) naming it, never its value.
+- The `Query` body is JSON, under the same `Content-Type` rule as an inline
+  query: `application/json` or none, and any other is a `415`
+  (`media-type-unsupported`) that asks no node.
 - The answer is the ordinary federated `RESULT_SET`, with `name` naming the
   gateway's stored query and `q` its stored text (§9.1, §12.7). No node
   receives your patient identifier, and no node receives the stored query by

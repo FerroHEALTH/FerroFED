@@ -75,15 +75,20 @@ pub(super) fn fan_out(error: &FanOutError, request_id: &str) {
     }
 }
 
-/// A routed request was refused for a query parameter the route does not
-/// forward, named by its position and never by its name or value (§5.4.3).
-pub(super) fn forward_refused(position: usize, request_id: &str) {
+/// A request was refused for a query parameter its ITS-REST operation does
+/// not admit at the gateway, named by its position and never by its name or
+/// value (§5.4.3).
+///
+/// A routed request admits only the parameters its operation declares and the
+/// route forwards, and a request the gateway answers itself, such as a
+/// stored-query definition `PUT`, only those its operation declares.
+pub(super) fn query_parameter_refused(position: usize, request_id: &str) {
     tracing::warn!(
         target: TARGET,
         event = "query-parameter-refused",
         position,
         request_id,
-        "a routed request carried a query parameter that is never forwarded, and was refused"
+        "a request carried a query parameter the gateway does not admit for its operation, and was refused"
     );
 }
 

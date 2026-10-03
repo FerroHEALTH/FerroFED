@@ -148,6 +148,9 @@ pub async fn query_aql_get(
 
 /// Runs `submitted` over the configured federation, or answers `501` when
 /// none is configured.
+///
+/// A `POST` body is read only under a `Content-Type` the operation lists, and
+/// is otherwise a `415` no node is asked for ([`request::unsupported_media`]).
 async fn federated(
     state: &AppState,
     (headers, outbound, started): (&HeaderMap, OutboundId, Instant),
@@ -157,6 +160,20 @@ async fn federated(
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, request_id);
     };
+    if let Submitted::Body(_) = submitted {
+        let logged = outbound.to_string();
+        let Lookup::Matched(matched) = routes::lookup(&Method::POST, ADHOC_QUERY) else {
+            tracing::error!(
+                request_id = logged,
+                "openehr-its declares no POST {ADHOC_QUERY}"
+            );
+            return error::fixed(Code::Internal, request_id);
+        };
+        let ids = (request_id, logged.as_str());
+        if let Some(refused) = request::unsupported_media(&matched, headers, ids) {
+            return refused;
+        }
+    }
     let arrived = Arrived {
         headers,
         request_id,

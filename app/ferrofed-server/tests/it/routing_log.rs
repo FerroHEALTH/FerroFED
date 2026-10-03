@@ -105,7 +105,9 @@ fn no_event_of_a_routed_request_names_the_clients_id() -> TestResult {
     )?;
     logged_under_the_gateways_id(
         &text,
-        &["a routed request carried a query parameter that is never forwarded, and was refused"],
+        &[
+            "a request carried a query parameter the gateway does not admit for its operation, and was refused",
+        ],
     )?;
 
     // A targeted node that cannot be reached.

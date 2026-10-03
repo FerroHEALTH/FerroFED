@@ -243,7 +243,7 @@ fn unheld(failure: &ForwardError, request_id: &str, logged: &str) -> Response {
 fn refused(failure: &ForwardError, request_id: &str, logged: &str) -> Option<Response> {
     match failure {
         ForwardError::QueryParameter(unlisted) => {
-            security::forward_refused(unlisted.position, logged);
+            security::query_parameter_refused(unlisted.position, logged);
             Some(error::response(
                 Code::QueryParameterRefused,
                 failure.to_string(),
