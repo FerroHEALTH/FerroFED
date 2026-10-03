@@ -153,9 +153,10 @@ Each report, and each numbered item of a comment that bundles several, says:
 - **Upstream:** the project it goes to, by repository or specification:
   `syntaric/openehr-federation-spec` for the Federation Tier text and its two
   schemas, openEHR ITS-REST or AQL for those specifications, the IHE profile
-  for a bound profile, or the named implementation (a node product, the
-  reference implementation). A bundle whose items go to different upstreams
-  names it per item.
+  for a bound profile, or the reference implementation. Nothing is reported to
+  a node product such as EHRbase (owner, 2026-10-03): a node's defect is
+  recorded in the decision it forced, and only a specification's part of it is
+  a report. A bundle whose items go to different upstreams names it per item.
 - **Form:** an issue (a question, objection or silence) or a pull request (a
   concrete text change).
 - **Against:** the pinned version and commit (today v0.9.0, `7162d0c`).
