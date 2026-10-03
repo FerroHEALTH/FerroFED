@@ -165,14 +165,19 @@ The provenance headers name only the members that accepted (§7a.3).
 | `media-type-unsupported` | 415 | The `Content-Type` header of a request routed to one node is not one of the media types the ITS-REST operation takes, or carries a parameter other than `charset=utf-8` (RFC 9110 §8.3), or a body arrives without one for an operation whose body ITS-REST declares in several media types. The message lists the media types the operation takes. |
 | `subject-several` | 409 | The subject of `GET {base}/v1/ehr` resolves at more than one member, and no `openEHR-federation-endpoint` header names one of them. The gateway never chooses by where the patient resolved, so it sends the read to none; the message lists the endpoints and never the subject. Name the endpoint in the header to read that member's EHR (§8.4, §12.5.2). |
 | `resolution-unavailable` | 424 | The cross-reference service could not answer for a member while resolving the subject of `GET {base}/v1/ehr`, or no cross-reference service is configured. That member may hold the EHR, so the gateway answers neither its `404` nor another member's EHR; the message names the members and never the subject (§5.2, §11.2). |
+| `ehr-id-held` | 409 | `PUT {base}/v1/ehr/{ehr_id}` names one member in `openEHR-federation-endpoint` while your session's resolution bindings or the gateway's `ehr_id` index already place that `ehr_id` at another member. Creating it would put one `ehr_id` at two members, the collision of §12.5.2, so the gateway sends the create to no node. The message names the holding endpoints and the one you named, and never quotes the `ehr_id`. When the member you named is the one that holds it, the create is sent there and that node answers its own `409` (ITS-REST 1.1.0 `ehr_create_with_id`; §12.4, §12.5.2, N23, N42). |
 
-The gateway answers `409` with four codes, and none of them sends anything
+The gateway answers `409` with five codes, and none of them sends anything
 to a node:
 
 - `ehr-id-collision`: two members claim one `ehr_id`, on a read or a write.
   The gateway also raises an integrity incident for the federation operator,
   because two nodes holding one `ehr_id` is a defect in the federation
   (§12.5.2, N42).
+- `ehr-id-held`: a new EHR would take an `ehr_id` another member already
+  holds. The refusal keeps the collision from arising, so it raises no
+  integrity incident; the gateway logs a warning naming the endpoints
+  (§12.4, §12.5.2).
 - `controlling-system-unreachable`: a versioned write would be committed at
   a node other than its controlling CDR, which would fork the object (§10.3,
   N23).
