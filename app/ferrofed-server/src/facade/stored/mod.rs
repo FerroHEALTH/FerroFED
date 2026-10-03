@@ -30,7 +30,9 @@
 //!
 //! Where the deployment offers it, a `PUT` naming members in its targeting
 //! headers is also distributed to them, and a `GET` of a version naming them
-//! reports per member whether its copy matches (`distribution`).
+//! reports per member whether its copy matches (`distribution`). The
+//! operator sends a held version again to members that miss it through the
+//! admin listener (`distribute_held`), never through a `PUT`.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -39,6 +41,7 @@ use std::time::Instant;
 use axum::Json;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::declared::query;
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::definition::store::{Definitions, Insertion};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition, VersionPattern};
 use http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -55,8 +58,11 @@ use openehr_its::rest::routes::RouteMatch;
 use crate::error::{self, Code};
 use crate::facade::request::{self, Submitted};
 use crate::facade::route::Arrived;
+use crate::facade::stored::distribution::Registry;
 use crate::facade::{answer, security};
 use crate::federation::Federation;
+use crate::request_id;
+use crate::state::AppState;
 
 mod distribution;
 
@@ -69,6 +75,14 @@ const VERSION_PARAM: &str = "version";
 /// The message of a query string the generated parameters refuse.
 const QUERY_STRING_INVALID: &str =
     "the query string is not the one the ITS-REST operation declares";
+
+/// The message of a held version's distribution that carries a body.
+const HELD_TAKES_NO_BODY: &str =
+    "the distribution of a held version takes no body: it sends the registry's copy";
+
+/// The message of a held version's distribution that names no member.
+const HELD_NAMES_MEMBERS: &str = "the distribution of a held version names its members in the \
+     openEHR-federation-endpoint or openEHR-federation-organisation header";
 
 /// The query language the registry stores, the ITS-REST `query_type`
 /// default.
@@ -187,7 +201,7 @@ fn read_only(request_id: &str) -> Response {
 async fn refreshed(
     definitions: &Arc<Definitions>,
     name: Option<&QueryName>,
-    arrived: &Arrived<'_>,
+    outbound: &OutboundId,
 ) -> Result<(), Refused> {
     if !definitions.is_shared() {
         return Ok(());
@@ -206,7 +220,7 @@ async fn refreshed(
         Ok(Err(failure)) => {
             tracing::error!(
                 error = crate::chain(&failure),
-                request_id = %arrived.outbound,
+                request_id = %outbound,
                 "the stored-query store could not be read"
             );
             Err(Refused::fixed(Code::Internal))
@@ -214,7 +228,7 @@ async fn refreshed(
         Err(failure) => {
             tracing::error!(
                 error = %failure,
-                request_id = %arrived.outbound,
+                request_id = %outbound,
                 "the stored-query read did not complete"
             );
             Err(Refused::fixed(Code::Internal))
@@ -401,7 +415,8 @@ async fn store(
     match inserted {
         Ok(Ok(Insertion::Stored)) => match distributed {
             Some(selected) => {
-                distribution::distribute(federation, &copy, &selected, (arrived, started)).await
+                let sent = (Registry::Stored, &selected);
+                distribution::distribute(federation, &copy, sent, (arrived.outbound, started)).await
             }
             None => stored_answer(version),
         },
@@ -423,6 +438,81 @@ async fn store(
             Err(Refused::fixed(Code::Internal))
         }
     }
+}
+
+/// The operator's action on the admin listener that sends the registry's
+/// held copy of `name` at `version` again to the members the targeting
+/// `headers` name, and changes nothing at the registry (§12.7
+/// stored-query-drift).
+///
+/// The answer has the shape and statuses of a first distribution, with
+/// `meta.registry` saying `held` ([`distribution::distribute`]). The action
+/// takes no `body`. It is refused, before any node is asked, with:
+///
+/// - `405` (`stored-query-read-only`) and an empty `Allow` at a read-only
+///   registry, whose copies its operator publishes (RFC 9110 §10.2.1);
+/// - `400` for a name or a version outside ITS-REST's forms, a body, a
+///   deployment that offers no distribution, a request naming no member
+///   (`target-required`), and a definition carrying a `FROM ENDPOINT` or
+///   `ORGANISATION` directive (§12.7 fanout-endpoint-targeted-refused);
+/// - `404` for a version the registry does not hold, or no registry.
+// NOTE: no specification governs this: our own design; §12.7 gives drift repair no
+// request, and a second PUT is refused, so the repair is an operator action.
+pub(crate) async fn distribute_held(
+    state: &AppState,
+    (name, version): (&str, &str),
+    (headers, body): (&HeaderMap, &[u8]),
+) -> Response {
+    let request_id = request_id::of(headers).unwrap_or_default();
+    let Some(definitions) = state.definitions() else {
+        return error::fixed(Code::StoredQueryUnknown, request_id);
+    };
+    if definitions.is_read_only() {
+        let mut response = error::fixed(Code::StoredQueryReadOnly, request_id);
+        response
+            .headers_mut()
+            .insert(header::ALLOW, HeaderValue::from_static(""));
+        return response;
+    }
+    let Some(federation) = state.federation() else {
+        return error::fixed(Code::NotImplemented, request_id);
+    };
+    let at = (name, version);
+    redistributed(&federation, definitions, at, (headers, body))
+        .await
+        .unwrap_or_else(|refused| refused.respond(request_id))
+}
+
+/// The distribution [`distribute_held`] answers, or its refusal.
+async fn redistributed(
+    federation: &Federation,
+    definitions: &Arc<Definitions>,
+    (name, version): (&str, &str),
+    (headers, body): (&HeaderMap, &[u8]),
+) -> Result<Response, Refused> {
+    let started = Instant::now();
+    let outbound = OutboundId::mint();
+    let logged = outbound.to_string();
+    if !body.is_empty() {
+        return Err(Refused::with(Code::BodyInvalid, &HELD_TAKES_NO_BODY));
+    }
+    let name =
+        QueryName::new(name).map_err(|refused| Refused::with(Code::QueryNameInvalid, &refused))?;
+    let version = version
+        .parse::<QueryVersion>()
+        .map_err(|refused| Refused::with(Code::QueryVersionInvalid, &refused))?;
+    if !federation.fans_out_stored_queries() {
+        return Err(Refused::fixed(Code::StoredQueryFanOutUnsupported));
+    }
+    let selected = distribution::requested(federation, headers)?
+        .ok_or_else(|| Refused::with(Code::TargetRequired, &HELD_NAMES_MEMBERS))?;
+    refreshed(definitions, Some(&name), &outbound).await?;
+    let held = definitions
+        .find(&name, Some(&VersionPattern::Exact(version)))
+        .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;
+    distribution::distributable(held.aql(), &logged)?;
+    let sent = (Registry::Held, &selected);
+    distribution::distribute(federation, &held, sent, (outbound, started)).await
 }
 
 /// The `200` of a stored definition, with `Location` relative to the request
@@ -460,7 +550,7 @@ async fn read(
     let name = name(matched)?;
     let pattern = pattern(matched)?;
     let checked = distribution::requested(federation, arrived.headers)?;
-    refreshed(definitions, Some(&name), arrived).await?;
+    refreshed(definitions, Some(&name), &arrived.outbound).await?;
     let definition = definitions
         .find(&name, pattern.as_ref())
         .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;
@@ -485,7 +575,7 @@ async fn list(
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-' | ':'))
         })
         .ok_or_else(|| Refused::fixed(Code::QueryNameInvalid))?;
-    refreshed(definitions, None, arrived).await?;
+    refreshed(definitions, None, &arrived.outbound).await?;
     let listed: Vec<StoredQuery> = definitions
         .list(&pattern)
         .iter()
@@ -518,7 +608,7 @@ async fn execute(
     }
     let name = name(matched)?;
     let pattern = pattern(matched)?;
-    refreshed(definitions, Some(&name), &arrived).await?;
+    refreshed(definitions, Some(&name), &arrived.outbound).await?;
     let definition = definitions
         .find(&name, pattern.as_ref())
         .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;

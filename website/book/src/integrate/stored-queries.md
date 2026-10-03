@@ -33,7 +33,9 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
 - A stored version is immutable. A second `PUT` to a name and version the
   registry holds is a `409` (`stored-query-held`), the held text stands, and
   so does the refusal after the gateway restarts. Store a change as a new
-  version (§12.7, N44).
+  version (§12.7, N44). This holds for every second `PUT`, the same query
+  naming members included; a member that misses a version is sent it by the
+  operator ([repairing drift](#repairing-drift)).
 - The gateway analyses the text as it analyses a query you send, with every
   `$parameter` standing in for a value you will bind. A text it would refuse
   whatever you bind is refused now, `400` with the same code a query would
@@ -131,7 +133,8 @@ offered:
 - The answer is the registry's `StoredQuery` (`name`, `type`, `version`,
   `saved`, `q`) with `meta.federation` beside it, one `endpoints[]` entry
   per registry member in the shape of a federated result set's (§9.5), and
-  `Location` naming the stored version. The statuses are those of the
+  `Location` naming the stored version, and `meta.registry: "stored"` says
+  the request stored it. The statuses are those of the
   [template fan-out](templates-and-demographics.md#fan-out-template-upload): `200` when every member you
   named accepted, `207` with `complete: false` when some did, and `504` or
   `424` when none did. Whatever the status, the registry holds the
@@ -182,3 +185,34 @@ openEHR-federation-endpoint: *
   `complete: false` otherwise. `openEHR-federation-endpoint` and
   `openEHR-federation-system-id` list the matching members.
 - Without a header the `GET` answers from the registry alone, as above.
+
+### Repairing drift
+
+A member that missed a distribution, or was admitted after it, does not get
+the version through the ITS-REST surface: every second `PUT` of a held
+version is a `409` (§12.7). The specification gives drift repair no
+request, so the gateway offers it to its operator alone, on the
+[admin listener](../operate/metrics.md) beside the metrics. Where
+`[metrics] listen` is unset, the action does not exist. Run the drift check
+above to find the members, then name them in the same targeting headers:
+
+```http
+POST /admin/stored-queries/org.example::compositions/1.0.0/distribute
+openEHR-federation-endpoint: node-c-pub
+```
+
+- The request carries no body. Each named member is sent the registry's
+  held copy of that exact version, as in a first distribution, and the
+  registry's copy, its `saved` time included, does not change.
+- The answer has the shape and the statuses of a first distribution (`200`,
+  `207` with `complete: false`, `504` or `424`), and `meta.registry:
+  "held"` says the registry held the version and stored nothing.
+- It is refused before any node is asked: `404` (`stored-query-unknown`)
+  for a version the registry does not hold; `400` for a request naming no
+  member (`target-required`), a body (`body-invalid`), a deployment without
+  `federation.fan_out_stored_queries` (`stored-query-fan-out-unsupported`),
+  or a definition carrying a `FROM ENDPOINT` or `ORGANISATION` directive
+  (`definition-endpoint-targeted`).
+- A read-only registry answers it `405` (`stored-query-read-only`) with an
+  empty `Allow`: its operator publishes the definitions, and the gateway
+  distributes none of them (RFC 9110 §10.2.1).

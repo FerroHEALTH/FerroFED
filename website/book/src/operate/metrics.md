@@ -24,7 +24,9 @@ allow_remote = false          # true lets listen name a non-loopback address
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; unset, nothing is pushed
 ```
 
-The admin listener serves `GET /metrics` and nothing else, answers every
+The admin listener serves `GET /metrics` and the operator's
+[stored-query distribution](../integrate/stored-queries.md#repairing-drift)
+(`POST /admin/stored-queries/{name}/{version}/distribute`), answers every
 other path `404`, and never sits under the base path. It has no
 authentication, and it is never the gateway's own listener, so no client of
 the federation reaches it. `serve` and `config check` refuse:

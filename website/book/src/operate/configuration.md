@@ -122,7 +122,7 @@ filter = "info,hyper=warn,tower=warn,h2=warn"
 
 # The metrics surface, off by default; see Metrics.
 [metrics]
-listen = "127.0.0.1:9464"     # the admin listener serving GET /metrics; loopback unless allow_remote
+listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
 
 # Outbound credentials, one section per endpoint id. Each section names one

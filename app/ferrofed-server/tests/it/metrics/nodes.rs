@@ -14,10 +14,10 @@ use std::error::Error;
 use std::time::Duration;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
-use wiremock::MockServer;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -76,8 +76,8 @@ managing_organisation = "org-b"
 }
 
 /// A node answering the query only after [`SILENCE`].
-async fn node_silent() -> MockServer {
-    let server = MockServer::start().await;
+async fn node_silent() -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(ResponseTemplate::new(200).set_delay(SILENCE))
