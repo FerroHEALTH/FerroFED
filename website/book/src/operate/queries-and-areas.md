@@ -138,8 +138,39 @@ The list is named in the startup log line.
 ## Stored queries
 
 The gateway can hold stored queries itself, the federated stored-query
-registry of §12.7 (N44). Name the file it keeps them in, and the registry is
-offered:
+registry of §12.7 (N44). Setting `[stored_queries]` offers the registry, over
+one of three backends that `backend` names:
+
+| `backend` | Where the definitions live | For |
+|---|---|---|
+| `redb`, the default | the embedded store file `path` names | one gateway process |
+| `postgres` | one PostgreSQL database, at the connection string `url` or `url_file` holds | several replicas behind one address |
+| `files` | read-only, one file per definition under the directory `path` names | instances that share definitions with no database |
+
+What holds for every backend:
+
+- A stored version must outlive the process, because clients invoke it by
+  name after a restart, and a second `PUT` refused before a restart is
+  refused after it too (§12.7, N44).
+- The store holds each definition's name, version, the instant it was stored
+  and its AQL, and nothing else. A definition names its patient through a
+  `$parameter`, never a literal, and the values a client binds when it
+  invokes a query are never written, so no patient identifier reaches the
+  store (§5.4.1, N33).
+- The registry needs the federation that runs its queries, so
+  `[stored_queries]` without `registry.document` refuses the configuration,
+  naming `registry.document`. A key the chosen backend does not read, such
+  as `url` beside `backend = "redb"`, refuses it too, naming the key.
+- `OPTIONS {base}/` declares `definition.stored_query_registry: true` while
+  the registry is offered, whatever the backend, and `false` without it;
+  without it a stored-query definition request goes to the one node the
+  targeting headers name, both `PUT`s included, and `GET` and
+  `POST /v1/query/{name}` answer `501`.
+- The startup banner and the startup log line name the backend, and never
+  its path or connection string. Changing `[stored_queries]` needs a
+  restart.
+
+### One gateway: `redb`
 
 ```toml
 [stored_queries]
@@ -147,24 +178,76 @@ path = "/var/lib/ferrofed/stored-queries.redb"
 ```
 
 - The file is an embedded `redb` store, created at boot when it does not
-  exist. Put it on a persistent volume: a stored version must outlive the
-  process, because clients invoke it by name after a restart, and a second
-  `PUT` refused before a restart is refused after it too.
+  exist. Put it on a persistent volume.
 - One gateway process opens the file at a time. A second process pointed at
-  the same file refuses to start, so run one gateway per file.
-- The file holds each definition's name, version, the instant it was stored
-  and its AQL, and nothing else. A definition names its patient through a
-  `$parameter`, never a literal, and the values a client binds when it
-  invokes a query are never written, so no patient identifier reaches the
-  file (§5.4.1, N33).
-- The registry needs the federation that runs its queries, so setting
-  `stored_queries.path` without `registry.document` refuses the
-  configuration, naming `registry.document`.
-- `OPTIONS {base}/` declares `definition.stored_query_registry: true` while
-  the path is set, and `false` without it; without it a stored-query
-  definition request goes to the one node the targeting headers name, both
-  `PUT`s included, and `GET` and `POST /v1/query/{name}` answer `501`.
-  Whether the registry is offered is named in the startup log line.
+  the same file refuses to start, so run one gateway per file. Several
+  replicas need the `postgres` backend.
+
+### Several replicas: `postgres`
+
+```toml
+[stored_queries]
+backend = "postgres"
+url_file = "/run/secrets/ferrofed-stored-queries-url"
+```
+
+- The backend is built into the binary only with the `postgres` feature of
+  `ferrofed-server` (`cargo build --release --features postgres`), so a
+  single gateway carries no PostgreSQL client. A binary built without it
+  refuses `backend = "postgres"` at `config check` and at start.
+- The connection string is a secret, a URL
+  (`postgres://ferrofed:…@db.example.org:5432/ferrofed?sslmode=require`) or
+  libpq key/value pairs. Give it as `url_file`, a file read at boot and
+  trimmed, or as `url`, never both. A string that does not parse is refused
+  naming the key, never quoting the string. The backend is tested against
+  PostgreSQL 18.6.
+- TLS uses rustls with the platform's trusted roots, as the gateway's calls
+  to the members do, and always verifies the server's certificate.
+  `sslmode=require` refuses a server without TLS; the default, `prefer`,
+  falls back to a connection without it, so set `require` in production.
+- At start, and each time it reconnects, the gateway creates the schema
+  `ferrofed` and the table `ferrofed.stored_query_definition` when they are
+  absent, one replica at a time. The role needs `CREATE` on the database to
+  make the schema, or a `ferrofed` schema made for it on which it holds
+  `CREATE` and `USAGE`. A database that cannot be reached within ten seconds
+  refuses the start.
+- Every replica shares the table, whose primary key is the name and the
+  version. Two replicas that store the same new version at once store exactly
+  one: one `PUT` answers `200` and the other `409` (`stored-query-held`), and
+  both replicas then hold the winner's text. A read or an invocation reads the
+  table again before it answers, so a version one replica stored is served by
+  every other. A database that fails a request answers it `500` and names
+  nothing in the body; the log names the failure.
+- `config check` checks that the connection string parses, and does not
+  connect.
+
+### Read-only: `files`
+
+```toml
+[stored_queries]
+backend = "files"
+path = "/etc/ferrofed/stored-queries"
+```
+
+- Each definition is one file, `{path}/{qualified_query_name}/{version}.aql`,
+  mirroring its ITS-REST path, holding the AQL as UTF-8 text:
+  `/etc/ferrofed/stored-queries/org.example::patient_compositions/1.0.0.aql`.
+  A name and a version each have one spelling, so the layout holds one file
+  per name and version.
+- The gateway loads every file at start and admits each as a `PUT` would: a
+  definition that is not a federated query, or that names its patient by a
+  literal, is refused. It holds the canonical print, and reports the file's
+  modification time as the instant it was stored.
+- Anything else in the directory refuses the start: a file at the top level,
+  a directory that is no qualified query name, a file that is not
+  `major.minor.patch.aql`, a nested directory, text that is not UTF-8, or an
+  unreadable entry. The refusal names the file and never quotes its content.
+  `config check` loads the directory the same way.
+- A `PUT` answers `405` (`stored-query-read-only`) with `Allow: GET,
+  OPTIONS`, and `OPTIONS` on a definition path lists no `PUT`. To add or
+  change a definition, add its file and restart. Distributing definitions
+  needs a `PUT`, so `federation.fan_out_stored_queries` beside this backend
+  refuses the configuration.
 
 The [client contract](../integrate/stored-queries.md) says how
 a client stores and invokes a query.
@@ -185,8 +268,9 @@ path = "/var/lib/ferrofed/stored-queries.redb"
 ```
 
 - Distribution is a facility of the registry. Setting
-  `fan_out_stored_queries` without `stored_queries.path` refuses the
-  configuration, at `config check` and at start.
+  `fan_out_stored_queries` without `[stored_queries]`, or beside the
+  read-only `files` backend, refuses the configuration, at `config check`
+  and at start.
 - Only a stored-query `PUT` that asks for it is distributed, with
   `openEHR-federation-endpoint: *` (every active member) or headers that
   name members. The registry stores the definition first; each named member

@@ -13,7 +13,10 @@
 //! façade query before it is held, and one that names its patient by a
 //! literal is refused, so no patient identifier is held at rest (§5.4.1,
 //! N33). A second `PUT` of a held name and version is a `409`, and the held
-//! text stands (§12.7, N44; ITS-REST `409_StoredQuery_version`).
+//! text stands (§12.7, N44; ITS-REST `409_StoredQuery_version`). A read-only
+//! registry answers a `PUT` with `405`, and over a store several replicas
+//! share, each read and invocation reads the store again first, so every
+//! replica answers what any of them stored.
 //!
 //! `GET` and `POST {base}/v1/query/{name}[/{version}]` expand the definition
 //! with the client's `offset`, `fetch` and `query_parameters`, from the query
@@ -121,6 +124,23 @@ pub(crate) fn serves(matched: &RouteMatch) -> bool {
     operation(matched).is_some()
 }
 
+/// Whether a registry that is `read_only` serves `matched` with anything but
+/// a `405`: every operation it answers, less the stores of a read-only one.
+pub(crate) fn accepts(matched: &RouteMatch, read_only: bool) -> bool {
+    operation(matched).is_some_and(|operation| !(read_only && operation.stores()))
+}
+
+impl Operation {
+    /// Whether the operation stores a definition.
+    fn stores(self) -> bool {
+        matches!(self, Self::Store | Self::StoreUnversioned)
+    }
+}
+
+/// The methods a read-only registry serves on a definition path, which a
+/// `PUT` there names in `Allow` (RFC 9110 §15.5.6).
+const READ_ONLY_ALLOW: &str = "GET, OPTIONS";
+
 /// Answers `arrived` when it addresses the registry, or hands it back.
 ///
 /// # Errors
@@ -136,16 +156,70 @@ pub(crate) async fn serve<'a>(
         return Err(arrived);
     };
     let request_id = arrived.request_id;
+    if operation.stores() && definitions.is_read_only() {
+        return Ok(read_only(request_id));
+    }
     let answered = match operation {
         Operation::Store => store(federation, definitions, matched, &arrived).await,
         Operation::StoreUnversioned => Err(Refused::fixed(Code::QueryVersionRequired)),
         Operation::Read => read(federation, definitions, matched, &arrived).await,
-        Operation::List => list(definitions, matched),
+        Operation::List => list(definitions, matched, &arrived).await,
         Operation::Execute(carrier) => {
             execute(federation, definitions, (matched, carrier), arrived).await
         }
     };
     Ok(answered.unwrap_or_else(|refused| refused.respond(request_id)))
+}
+
+/// The `405` of a `PUT` at a read-only registry, with `Allow` naming the
+/// methods it serves there (§12.7; RFC 9110 §15.5.6).
+fn read_only(request_id: &str) -> Response {
+    let mut response = error::fixed(Code::StoredQueryReadOnly, request_id);
+    response
+        .headers_mut()
+        .insert(header::ALLOW, HeaderValue::from_static(READ_ONLY_ALLOW));
+    response
+}
+
+/// Reads the store again before the view answers, when other processes
+/// share it: every version of `name`, or with no name every definition, so
+/// each replica answers what any of them stored (§12.7, N44).
+async fn refreshed(
+    definitions: &Arc<Definitions>,
+    name: Option<&QueryName>,
+    arrived: &Arrived<'_>,
+) -> Result<(), Refused> {
+    if !definitions.is_shared() {
+        return Ok(());
+    }
+    let held = Arc::clone(definitions);
+    let name = name.cloned();
+    // NOTE: no specification governs this: our own design; the read waits on
+    // the database, so it runs where a blocking call may wait.
+    let read = tokio::task::spawn_blocking(move || match name {
+        Some(name) => held.refresh_named(&name),
+        None => held.refresh(),
+    })
+    .await;
+    match read {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(failure)) => {
+            tracing::error!(
+                error = crate::chain(&failure),
+                request_id = %arrived.outbound,
+                "the stored-query store could not be read"
+            );
+            Err(Refused::fixed(Code::Internal))
+        }
+        Err(failure) => {
+            tracing::error!(
+                error = %failure,
+                request_id = %arrived.outbound,
+                "the stored-query read did not complete"
+            );
+            Err(Refused::fixed(Code::Internal))
+        }
+    }
 }
 
 /// A registry request refused before anything is stored or dispatched.
@@ -379,13 +453,14 @@ fn its_rest(definition: &StoredDefinition) -> StoredQuery {
 /// it ([`distribution::drift`]).
 async fn read(
     federation: &Federation,
-    definitions: &Definitions,
+    definitions: &Arc<Definitions>,
     matched: &RouteMatch,
     arrived: &Arrived<'_>,
 ) -> Result<Response, Refused> {
     let name = name(matched)?;
     let pattern = pattern(matched)?;
     let checked = distribution::requested(federation, arrived.headers)?;
+    refreshed(definitions, Some(&name), arrived).await?;
     let definition = definitions
         .find(&name, pattern.as_ref())
         .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;
@@ -398,7 +473,11 @@ async fn read(
 /// `GET {base}/v1/definition/query/{name}`: every version of every
 /// definition whose name starts with the segment (ITS-REST Definition API,
 /// `definition_query_list`).
-fn list(definitions: &Definitions, matched: &RouteMatch) -> Result<Response, Refused> {
+async fn list(
+    definitions: &Arc<Definitions>,
+    matched: &RouteMatch,
+    arrived: &Arrived<'_>,
+) -> Result<Response, Refused> {
     let pattern = segment(matched, NAME_PARAM)
         .filter(|pattern| {
             pattern
@@ -406,6 +485,7 @@ fn list(definitions: &Definitions, matched: &RouteMatch) -> Result<Response, Ref
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-' | ':'))
         })
         .ok_or_else(|| Refused::fixed(Code::QueryNameInvalid))?;
+    refreshed(definitions, None, arrived).await?;
     let listed: Vec<StoredQuery> = definitions
         .list(&pattern)
         .iter()
@@ -422,7 +502,7 @@ fn list(definitions: &Definitions, matched: &RouteMatch) -> Result<Response, Ref
 /// a `415`, answered before the definition is looked up.
 async fn execute(
     federation: &Federation,
-    definitions: &Definitions,
+    definitions: &Arc<Definitions>,
     (matched, carrier): (&RouteMatch, Carrier),
     arrived: Arrived<'_>,
 ) -> Result<Response, Refused> {
@@ -438,6 +518,7 @@ async fn execute(
     }
     let name = name(matched)?;
     let pattern = pattern(matched)?;
+    refreshed(definitions, Some(&name), &arrived).await?;
     let definition = definitions
         .find(&name, pattern.as_ref())
         .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;

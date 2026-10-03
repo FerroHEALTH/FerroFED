@@ -175,6 +175,9 @@ pub enum Code {
     /// targeting header, asking for distribution or a drift report, which
     /// this gateway does not offer; nothing is stored or read (§12.7, N44).
     StoredQueryFanOutUnsupported,
+    /// A stored-query `PUT` at a read-only registry, whose definitions are
+    /// loaded from files at start; nothing is stored (§12.7, N44).
+    StoredQueryReadOnly,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -190,7 +193,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 40] = [
+    pub const GATEWAY: [Self; 41] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -231,6 +234,7 @@ impl Code {
         Self::EhrIdHeld,
         Self::DefinitionEndpointTargeted,
         Self::StoredQueryFanOutUnsupported,
+        Self::StoredQueryReadOnly,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -287,6 +291,7 @@ impl Code {
             Self::EhrIdHeld => "ehr-id-held",
             Self::DefinitionEndpointTargeted => "definition-endpoint-targeted",
             Self::StoredQueryFanOutUnsupported => "stored-query-fan-out-unsupported",
+            Self::StoredQueryReadOnly => "stored-query-read-only",
         }
     }
 
@@ -334,6 +339,7 @@ impl Code {
             }
             Self::MediaTypeNotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::StoredQueryReadOnly => StatusCode::METHOD_NOT_ALLOWED,
         }
     }
 
@@ -432,6 +438,9 @@ impl Code {
             }
             Self::StoredQueryFanOutUnsupported => {
                 "this gateway does not distribute stored-query definitions to members or report their copies, and definition.stored_query_fan_out is false: nothing was stored or read; send the request without openEHR-federation-endpoint or openEHR-federation-organisation (§12.7, N44)"
+            }
+            Self::StoredQueryReadOnly => {
+                "this gateway's stored-query registry is read-only: its definitions are loaded from files when it starts, so nothing was stored; read or run a definition it holds (§12.7, N44)"
             }
         }
     }
@@ -532,6 +541,7 @@ mod tests {
             Code::EhrIdHeld => Some(37),
             Code::DefinitionEndpointTargeted => Some(38),
             Code::StoredQueryFanOutUnsupported => Some(39),
+            Code::StoredQueryReadOnly => Some(40),
         }
     }
 
@@ -619,6 +629,7 @@ mod tests {
             (Code::EhrIdHeld, StatusCode::CONFLICT),
             (Code::DefinitionEndpointTargeted, StatusCode::BAD_REQUEST),
             (Code::StoredQueryFanOutUnsupported, StatusCode::BAD_REQUEST),
+            (Code::StoredQueryReadOnly, StatusCode::METHOD_NOT_ALLOWED),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

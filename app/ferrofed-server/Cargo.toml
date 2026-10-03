@@ -22,6 +22,17 @@ path = "src/lib.rs"
 name = "ferrofed"
 path = "src/main.rs"
 
+[features]
+# The PostgreSQL backend of the stored-query registry, for several replicas
+# sharing one store (#268). Off by default, so a single gateway carries no
+# PostgreSQL client (no specification governs this: our own design).
+postgres = [
+  "dep:tokio-postgres",
+  "dep:tokio-postgres-rustls",
+  "dep:rustls",
+  "dep:rustls-platform-verifier",
+]
+
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
@@ -58,6 +69,10 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+tokio-postgres = { workspace = true, optional = true }
+tokio-postgres-rustls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-platform-verifier = { workspace = true, optional = true }
 toml.workspace = true
 tower-http.workspace = true
 tracing.workspace = true

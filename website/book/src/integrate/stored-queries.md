@@ -48,6 +48,14 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
 - The answer is `200` with `Location` naming the stored version, as a
   reference relative to the request URL, because the gateway does not know
   the base URL its clients use (§4.1).
+- A deployment may run the registry read-only, its definitions published by
+  its operator. Every `PUT` there is a `405` (`stored-query-read-only`) with
+  `Allow: GET, OPTIONS`, and `OPTIONS` on the path lists no `PUT`; reading
+  and running the definitions it holds work as below.
+- Behind several replicas sharing one registry, a version one replica
+  stored is read and run at every other, and of two `PUT`s of the same new
+  version at once exactly one is stored; the other is a `409`
+  (`stored-query-held`).
 
 The gateway holds the canonical print of the parsed query, so a comment or
 any other text the parser drops is not kept, and `GET` returns the query in

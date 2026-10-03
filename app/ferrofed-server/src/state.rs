@@ -7,15 +7,16 @@
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
-use ferrofed_registry::definition::store::{Definitions, StoreError};
+use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreError};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::settings::Settings;
+use crate::config::stored_queries::{Backend, Store};
 use crate::federation::{Federation, FederationError, read_registry};
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
 use crate::metrics::{Metrics, MetricsError};
-use crate::stored::RedbStore;
+use crate::stored;
 
 /// The state the router is built over.
 ///
@@ -48,10 +49,16 @@ pub enum StateError {
     #[error(transparent)]
     Federation(#[from] FederationError),
     /// The stored-query registry's store cannot be opened or read.
-    #[error("the stored-query store {} could not be opened", path.display())]
+    #[error(
+        "the {backend} stored-query store{} could not be opened",
+        path.as_ref().map(|path| format!(" {}", path.display())).unwrap_or_default()
+    )]
     StoredQueries {
-        /// The store file `stored_queries.path` names.
-        path: PathBuf,
+        /// The backend `stored_queries.backend` names.
+        backend: Backend,
+        /// The file or directory `stored_queries.path` names, for a backend
+        /// that reads one; a connection string is never named.
+        path: Option<PathBuf>,
         /// What the store reported.
         #[source]
         source: StoreError,
@@ -98,18 +105,7 @@ impl AppState {
         let metrics = Arc::new(Metrics::new(&settings.metrics)?);
         let federation = Federation::load_read(settings, document)?
             .map(|federation| federation.metered(metrics.nodes()));
-        let definitions = settings
-            .stored_queries
-            .as_deref()
-            .map(|path| {
-                RedbStore::open(path)
-                    .and_then(|store| Definitions::open(Box::new(store)))
-                    .map_err(|source| StateError::StoredQueries {
-                        path: path.to_path_buf(),
-                        source,
-                    })
-            })
-            .transpose()?;
+        let definitions = definitions(settings, federation.as_ref())?;
         let mut built: Vec<Arc<dyn HealthIndicator>> = vec![Arc::new(Built("configuration"))];
         if federation.is_some() {
             built.push(Arc::new(Built("registry")));
@@ -125,6 +121,24 @@ impl AppState {
             definitions: definitions.map(Arc::new),
             metrics,
         })
+    }
+
+    /// Checks what `settings` describe without serving: the federation
+    /// builds, and a read-only stored-query directory loads. A shared or
+    /// embedded store is not opened, so the check reaches no database and
+    /// takes no file lock.
+    ///
+    /// # Errors
+    /// Returns the [`StateError`] [`AppState::build`] would return for the
+    /// federation or the definition files.
+    pub fn check(settings: &Settings) -> Result<(), StateError> {
+        let federation = Federation::load(settings)?;
+        if let (Some(store @ Store::Files(_)), Some(federation)) =
+            (&settings.stored_queries, federation.as_ref())
+        {
+            opened(store, federation)?;
+        }
+        Ok(())
     }
 
     /// Returns a booting state with `health` as its registry and no
@@ -202,5 +216,40 @@ impl AppState {
     #[must_use]
     pub fn definitions(&self) -> Option<&Arc<Definitions>> {
         self.definitions.as_ref()
+    }
+}
+
+/// The stored-query registry `settings` offer, over `federation`, which
+/// executes its queries and admits the definitions a read-only directory
+/// holds.
+fn definitions(
+    settings: &Settings,
+    federation: Option<&Federation>,
+) -> Result<Option<Definitions>, StateError> {
+    // NOTE: no specification governs this: our own design; configuration
+    // refuses a registry without a registry document, so both are set together.
+    let (Some(store), Some(federation)) = (settings.stored_queries.as_ref(), federation) else {
+        return Ok(None);
+    };
+    Definitions::open(opened(store, federation)?)
+        .map(Some)
+        .map_err(|source| refused(store, source))
+}
+
+/// The store `store` names, opened.
+fn opened(store: &Store, federation: &Federation) -> Result<Box<dyn DefinitionStore>, StateError> {
+    stored::open(store, federation.context()).map_err(|source| refused(store, source))
+}
+
+/// The refusal to open `store`, for `source`.
+fn refused(store: &Store, source: StoreError) -> StateError {
+    let path = match store {
+        Store::Redb(path) | Store::Files(path) => Some(path.clone()),
+        Store::Postgres(_) => None,
+    };
+    StateError::StoredQueries {
+        backend: store.backend(),
+        path,
+        source,
     }
 }

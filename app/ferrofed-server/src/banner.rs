@@ -20,6 +20,7 @@ use std::net::SocketAddr;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::base_path::BasePath;
+use crate::config::stored_queries::Backend;
 use crate::federation::FederationError;
 use crate::telemetry::{Format, Rendering};
 
@@ -77,8 +78,9 @@ pub struct Deployment {
     pub listen: SocketAddr,
     /// The registry document.
     pub registry: Registry,
-    /// Whether the stored-query registry is offered (§12.7).
-    pub stored_queries: bool,
+    /// The backend of the stored-query registry, when it is offered
+    /// (§12.7).
+    pub stored_queries: Option<Backend>,
     /// Whether the configuration declares the development profile.
     pub development: bool,
 }
@@ -86,9 +88,9 @@ pub struct Deployment {
 impl Deployment {
     /// Returns the deployment the gateway serves under `base_path` on
     /// `listen`, with the registry `document`
-    /// [`read_registry`](crate::federation::read_registry) read, whether
-    /// `stored_queries` are offered, and whether the profile is
-    /// `development`.
+    /// [`read_registry`](crate::federation::read_registry) read, the backend
+    /// of the `stored_queries` registry when it is offered, and whether the
+    /// profile is `development`.
     ///
     /// The boot builds the gateway over the same read, so the counts are
     /// those of the registry it serves.
@@ -97,7 +99,7 @@ impl Deployment {
         base_path: BasePath,
         listen: SocketAddr,
         document: Option<Result<&RegistrySnapshot, &FederationError>>,
-        stored_queries: bool,
+        stored_queries: Option<Backend>,
         development: bool,
     ) -> Self {
         // NOTE: no specification governs this: our own design; the banner takes
@@ -167,15 +169,13 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
         Registry::Unreadable => "does not load; the log says why".to_owned(),
     };
     line(&mut out, "Registry", &registry);
-    line(
-        &mut out,
-        "Stored queries",
-        if deployment.stored_queries {
-            "on"
-        } else {
-            "off"
-        },
-    );
+    let stored_queries = match deployment.stored_queries {
+        None => "off",
+        Some(Backend::Redb) => "on, redb",
+        Some(Backend::Postgres) => "on, postgres",
+        Some(Backend::Files) => "on, files, read-only",
+    };
+    line(&mut out, "Stored queries", stored_queries);
     if deployment.development {
         // The same words with and without colour, because colour is the first
         // thing a scraped log loses.

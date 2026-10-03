@@ -239,3 +239,136 @@ fn a_list_names_every_version_of_every_name_the_pattern_starts() -> TestResult {
     assert!(definitions.list("none").is_empty());
     Ok(())
 }
+
+/// [`Memory`] as several processes would share it.
+#[derive(Debug, Clone, Default)]
+struct Shared(Memory);
+
+impl DefinitionStore for Shared {
+    fn insert_if_absent(&self, definition: &StoredDefinition) -> Result<Insertion, StoreError> {
+        self.0.insert_if_absent(definition)
+    }
+
+    fn load(&self) -> Result<Vec<StoredDefinition>, StoreError> {
+        self.0.load()
+    }
+
+    fn is_shared(&self) -> bool {
+        true
+    }
+}
+
+/// A store that holds what it opened with and refuses every insert.
+#[derive(Debug, Clone, Default)]
+struct ReadOnly(Vec<StoredDefinition>);
+
+impl DefinitionStore for ReadOnly {
+    fn insert_if_absent(&self, _definition: &StoredDefinition) -> Result<Insertion, StoreError> {
+        Err(StoreError::ReadOnly)
+    }
+
+    fn load(&self) -> Result<Vec<StoredDefinition>, StoreError> {
+        Ok(self.0.clone())
+    }
+
+    fn is_read_only(&self) -> bool {
+        true
+    }
+}
+
+#[test]
+fn a_view_over_a_shared_store_learns_another_writers_versions_on_a_refresh() -> TestResult {
+    let shared = Shared::default();
+    let here = Definitions::open(Box::new(shared.clone()))?;
+    let there = Definitions::open(Box::new(shared))?;
+    assert!(here.is_shared());
+    let name: QueryName = "ns::q".parse()?;
+    assert_eq!(
+        Insertion::Stored,
+        there.insert(definition("ns::q", "1.1.0", "SELECT 2")?)?
+    );
+    assert_eq!(None, here.find(&name, None), "not read yet");
+    here.refresh_named(&name)?;
+    let found = here.find(&name, None).ok_or("learned")?;
+    assert_eq!("SELECT 2", found.aql());
+    assert_eq!(
+        Insertion::Held,
+        here.insert(definition("ns::q", "1.1.0", "SELECT 3")?)?,
+        "§12.7, N44: the store refuses a version another writer holds"
+    );
+    assert_eq!(
+        Insertion::Stored,
+        there.insert(definition("other", "1.0.0", "SELECT 4")?)?
+    );
+    here.refresh()?;
+    assert_eq!(2, here.len(), "a whole refresh learns every name");
+    Ok(())
+}
+
+#[test]
+fn a_refresh_never_replaces_a_held_version() -> TestResult {
+    let shared = Shared::default();
+    let view = Definitions::open(Box::new(shared.clone()))?;
+    let held = definition("q", "1.0.0", "SELECT 1")?;
+    assert_eq!(Insertion::Stored, view.insert(held.clone())?);
+    let altered = definition("q", "1.0.0", "SELECT 9")?;
+    *shared
+        .0
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .first_mut()
+        .ok_or("one row")? = altered;
+    view.refresh()?;
+    let found = view.find(&"q".parse()?, None).ok_or("held")?;
+    assert_eq!(
+        &held,
+        found.as_ref(),
+        "§12.7, N44: a held version is immutable"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_store_that_is_not_shared_is_not_read_again() -> TestResult {
+    let memory = Memory::default();
+    let view = Definitions::open(Box::new(memory.clone()))?;
+    assert!(!view.is_shared());
+    assert_eq!(
+        Insertion::Stored,
+        memory.insert_if_absent(&definition("q", "1.0.0", "SELECT 1")?)?
+    );
+    view.refresh()?;
+    view.refresh_named(&"q".parse()?)?;
+    assert!(view.is_empty(), "one process holds the store");
+    Ok(())
+}
+
+#[test]
+fn a_read_only_store_serves_what_it_holds_and_refuses_an_insert() -> TestResult {
+    let held = definition("q", "1.0.0", "SELECT 1")?;
+    let view = Definitions::open(Box::new(ReadOnly(vec![held.clone()])))?;
+    assert!(view.is_read_only());
+    let refused = view.insert(definition("q", "2.0.0", "SELECT 2")?);
+    assert!(matches!(refused, Err(StoreError::ReadOnly)), "{refused:?}");
+    assert_eq!(1, view.len(), "nothing is added");
+    let found = view.find(&"q".parse()?, None).ok_or("held")?;
+    assert_eq!(&held, found.as_ref());
+    Ok(())
+}
+
+#[test]
+fn a_named_load_keeps_the_versions_of_that_name_alone() -> TestResult {
+    let memory = Memory::default();
+    for (name, version) in [("a", "1.0.0"), ("b", "1.0.0"), ("a", "2.0.0")] {
+        let inserted = memory.insert_if_absent(&definition(name, version, "SELECT 1")?)?;
+        assert_eq!(Insertion::Stored, inserted);
+    }
+    let versions: Vec<String> = memory
+        .load_named(&"a".parse()?)?
+        .iter()
+        .map(|found| found.version().to_string())
+        .collect();
+    assert_eq!(vec!["1.0.0", "2.0.0"], versions);
+    Ok(())
+}

@@ -325,7 +325,9 @@ fn member(
 /// §9.3.7, §10.2.1). The gateway answers itself: no node is asked, so nothing is dispatched.
 #[must_use]
 pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
-    let registry = state.definitions().is_some();
+    let registry = state
+        .definitions()
+        .map(|definitions| definitions.is_read_only());
     let served = state
         .federation()
         .and_then(|federation| served(path, registry, federation.demographic_endpoint().is_some()));
@@ -358,11 +360,12 @@ pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
 /// A definition resource takes every method ITS-REST declares for it, each
 /// routed to the one node the targeting headers name (§12.6). Where the
 /// stored-query `registry` is offered, a stored query takes `GET` and
-/// `POST`, and a stored-query definition `GET` and `PUT` at the gateway
-/// (§12.7). Where a `demographic` endpoint is configured, a DEMOGRAPHIC
+/// `POST`, and a stored-query definition `GET` and `PUT` at the gateway, or
+/// `GET` alone where the registry is read-only, its `Some(true)` (§12.7).
+/// Where a `demographic` endpoint is configured, a DEMOGRAPHIC
 /// resource takes every method
 /// ITS-REST declares for it, each routed to that endpoint (§7a.1, N32).
-fn served(path: &str, registry: bool, demographic: bool) -> Option<Vec<Method>> {
+fn served(path: &str, registry: Option<bool>, demographic: bool) -> Option<Vec<Method>> {
     let query = QUERY_AQL.strip_prefix(crate::ITS_REST_PREFIX.trim_end_matches('/'));
     let mut methods = if query == Some(path) {
         vec![Method::GET, Method::POST]
@@ -375,17 +378,20 @@ fn served(path: &str, registry: bool, demographic: bool) -> Option<Vec<Method>> 
         allowed
             .into_iter()
             .filter_map(|name| Method::from_bytes(name.as_bytes()).ok())
-            .filter(|method| {
-                matches!(
-                    routes::lookup(method, path),
-                    Lookup::Matched(matched)
-                        if route::in_ehr_area(&matched)
+            .filter(|method| match routes::lookup(method, path) {
+                Lookup::Matched(matched) => match registry {
+                    Some(read_only) if stored::serves(&matched) => {
+                        stored::accepts(&matched, read_only)
+                    }
+                    Some(_) | None => {
+                        route::in_ehr_area(&matched)
                             || write::creates_ehr(&matched)
                             || route::in_definition_area(&matched)
                             || subject::serves(&matched)
-                            || (registry && stored::serves(&matched))
                             || (demographic && route::in_demographic_area(&matched))
-                )
+                    }
+                },
+                Lookup::MethodNotAllowed { .. } | Lookup::NotFound => false,
             })
             .collect()
     };

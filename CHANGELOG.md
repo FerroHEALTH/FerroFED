@@ -41,6 +41,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   The book's operate section has a Metrics page listing every metric and its
   labels. The integrity incident webhook the architecture named is removed
   from the design: alert on the counter.
+- The stored-query registry runs on one of three backends, chosen with
+  `[stored_queries] backend` (#268; §12.7, N44, CP-40). `redb`, the default,
+  is the embedded file for one gateway, as before. `postgres`, behind the
+  `ferrofed-server` cargo feature of the same name and off by default, keeps
+  the definitions in one PostgreSQL database every replica shares: the
+  primary key on the name and version with `INSERT … ON CONFLICT DO NOTHING`
+  stores exactly one of two racing `PUT`s of a new version, the other is a
+  `409` (`stored-query-held`), and a read or an invocation reads the store
+  again first, so every replica serves what any of them stored. Its
+  connection string is a secret, `url` or `url_file`, TLS is rustls with the
+  platform's roots, and the schema `ferrofed` and its table are created when
+  absent. `files` is read-only: one file per
+  `{qualified_query_name}/{version}.aql`, loaded and admitted at start; a
+  `PUT` is a `405` with the new code `stored-query-read-only` and `Allow:
+  GET, OPTIONS`, `OPTIONS` lists no `PUT`, and a malformed file refuses the
+  start and `config check`, naming the file and never its content. The
+  startup banner and log line name the backend kind and never its path or
+  connection string.
+
 - `PUT {base}/v1/ehr/{ehr_id}` is checked against what the gateway already
   knows of the `ehr_id` before anything is sent (#289; §12.4, §12.5.2, N23,
   N42, CP-15; ITS-REST 1.1.0 `ehr_create_with_id`). When a resolution

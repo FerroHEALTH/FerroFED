@@ -40,10 +40,12 @@ impl Config {
     /// ([`Error::Listen`], [`Error::BasePath`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::DemographicEndpoint`], [`Error::Missing`],
     /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]),
-    /// each naming the key that carries the fault, and
-    /// [`Error::StoredQueryFanOutWithoutRegistry`] when definitions would be
-    /// distributed with no registry to distribute from. The metrics surface
-    /// refuses a remote listener without `metrics.allow_remote`
+    /// each naming the key that carries the fault, the stored-query store
+    /// errors of [`stored_queries::resolve`], and
+    /// [`Error::StoredQueryFanOutWithoutRegistry`] and
+    /// [`Error::StoredQueryFanOutReadOnly`] when definitions would be
+    /// distributed with no registry, or no `PUT`, to distribute from. The
+    /// metrics surface refuses a remote listener without `metrics.allow_remote`
     /// ([`Error::MetricsRemote`]), a listener on `server.listen`
     /// ([`Error::MetricsShared`]) and a collector that is no `http://` URL
     /// ([`Error::OtlpScheme`]).
@@ -92,8 +94,14 @@ impl Config {
         let metrics = resolve_metrics(&self.metrics, listen)?;
         // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
         // of the registry and is never offered without it.
-        if federation.fan_out_stored_queries && stored_queries.is_none() {
-            return Err(Error::StoredQueryFanOutWithoutRegistry);
+        if federation.fan_out_stored_queries {
+            match stored_queries.as_ref().map(stored_queries::Store::backend) {
+                None => return Err(Error::StoredQueryFanOutWithoutRegistry),
+                Some(stored_queries::Backend::Files) => {
+                    return Err(Error::StoredQueryFanOutReadOnly);
+                }
+                Some(_) => {}
+            }
         }
         Ok(Settings {
             profile: self.profile,

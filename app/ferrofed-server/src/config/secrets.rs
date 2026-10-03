@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The credentials of one endpoint, with every `_file` sibling read at boot.
+//! The credentials of one endpoint, and every other secret, with every
+//! `_file` sibling read at boot.
 
 use std::path::Path;
 
@@ -107,7 +108,7 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
 }
 
 /// Returns the secret `key` names, inline or from its `_file` sibling.
-fn secret(
+pub(super) fn secret(
     key: &str,
     inline: Option<&str>,
     file: Option<&Path>,

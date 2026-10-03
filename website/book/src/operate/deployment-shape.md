@@ -43,10 +43,33 @@ authoritative for (§12.7). The specification is silent on storage, so this is
 FerroFED's own design: the registry is a reviewed TOML document, loaded at boot
 into an immutable snapshot, and the resolution bindings of each client session
 are held in memory with a bounded lifetime. The stored-query registry is the
-one durable store: an embedded `redb` file at the path
-[`[stored_queries]`](queries-and-areas.md#stored-queries) names, opened by one
-gateway process at a time, holding parameterised AQL and never a patient
-identifier.
+one durable store, holding parameterised AQL and never a patient identifier,
+over the backend [`[stored_queries]`](queries-and-areas.md#stored-queries)
+names: an embedded `redb` file for one gateway process, a shared PostgreSQL
+database for several replicas, or read-only definition files.
+
+## Running several replicas
+
+Several gateway replicas behind one address share nothing in memory: each
+holds its own resolution bindings, `ehr_id` index and learned routes, and a
+miss on one replica costs a probe or an explicit target, never a wrong route.
+The stored-query registry is the exception, because a stored version must be
+the same on every replica and a second `PUT` of it refused on every replica
+(§12.7, N44):
+
+- A `redb` file is opened by one process at a time, so replicas cannot share
+  one, and a file per replica would let two replicas each accept a different
+  first `PUT` of the same name and version. Run the registry on the
+  [`postgres` backend](queries-and-areas.md#several-replicas-postgres): every
+  replica uses one database, a version one replica stores is served by all
+  of them, and two replicas storing the same new version at once store
+  exactly one.
+- Replicas that only serve definitions an operator publishes can use the
+  [read-only `files` backend](queries-and-areas.md#read-only-files) instead,
+  each loading the same directory, with no database. A `PUT` is then refused
+  `405` on every replica.
+- Without `[stored_queries]` no replica offers the registry, and the
+  replicas need no shared state at all.
 
 ## Failure behaviour you should know before you run it
 
