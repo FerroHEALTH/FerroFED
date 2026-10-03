@@ -56,7 +56,8 @@
 - [PR body licence checkbox](pr-body-licence-checkbox.md): every PR body from
   the template with the licensing box ticked
 - [Upstream reports stay here](upstream-reports-stay-here.md): one standing
-  issue (#212), one comment per report; nothing is filed on external trackers
+  issue (#212), one comment per report, written to the upstream's contributing
+  rules so the owner can report it back at the end
 - [Upstream reports carry no milestone](upstream-reports-no-milestone.md): the
   in-repo decision is a separate, milestoned issue
 - [Subagent reports go to a file](subagent-reports-to-file.md): a long agent

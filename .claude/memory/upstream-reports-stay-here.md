@@ -1,6 +1,6 @@
 ---
 name: upstream-reports-stay-here
-description: "Upstream reports are comments on the one standing upstream-reports issue (#212), never issues of their own; that issue is the record and stays in this tracker; nothing is filed on an external specification tracker; owner 2026-09-13 (FerroBRIDGE) and 2026-10-02"
+description: "Upstream reports are comments on the one standing upstream-reports issue (#212), never issues of their own; the owner reports them upstream at the end, so each is written to that upstream's contributing rules; owner 2026-09-13 (FerroBRIDGE), 2026-10-02 and 2026-10-03"
 metadata:
   type: feedback
 ---
@@ -32,3 +32,14 @@ checklist item or sentence that asks anyone to file them externally. Prose
 says "recorded as an upstream report on #212". While the
 specification is a release candidate these reports matter more, since the 1.0
 text may resolve them ([[spec-pin-0-9-0-rc]]).
+
+On 2026-10-03 the owner added: the reports are reported back upstream at the
+end, and "you must adhere to the contributing rules" of the upstream
+(https://github.com/syntaric/openehr-federation-spec/blob/main/CONTRIBUTING.md),
+"otherwise you need to rewrite all reports so they are conformant". Every
+comment therefore follows `.claude/rules/issue-workflow.md` § Upstream report
+format: upstream and form (issue or PR) named per item, the pinned version, §,
+**N#** and **CP-#** citations with anchors, and for a PR the AsciiDoc pages,
+the schema change in the same change, no schema tightened beyond the prose,
+nothing inside `$defs/itsRest`, and the three `tools/` checks. A report is
+corrected by editing its comment in place, keeping its ids and numbering.
