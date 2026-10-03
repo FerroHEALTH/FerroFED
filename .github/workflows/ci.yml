@@ -262,6 +262,25 @@ jobs:
           persist-credentials: false
       - run: bash scripts/checks/conformance-matrix.sh
 
+  # The obligations guard: the checklist of every normative statement of the
+  # pinned specification, its rows against the vendored text, the matrix and
+  # the tests they name, and the rendered book page against the checklist.
+  # Its self-test proves each refusal and each near miss.
+  obligations:
+    name: obligations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/obligations.sh --self-test
+          bash scripts/checks/obligations.sh
+
   # The e2e placement guard: a test that checks the FERROFED_E2E gate lives in
   # an e2e module, the one place the e2e job's filter selects, and that job
   # still runs that filter across the workspace. Its self-test proves each
@@ -630,6 +649,7 @@ jobs:
       - versions
       - favicon-sync
       - conformance-matrix
+      - obligations
       - e2e-placement
       - tracker-helpers
       - crate-version-guard-self-test
