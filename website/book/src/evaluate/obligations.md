@@ -19,10 +19,10 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 294 | 292 | a test asserts it |
+| tested | 295 | 293 | a test asserts it |
 | built-untested | 1 | 1 | the code does it and no test asserts it yet |
 | planned | 36 | 33 | not built yet; an open issue holds the work |
-| missing | 1 | 1 | not built, found missing by the audit; an issue holds the work |
+| missing | 0 | 0 | not built, found missing by the audit; an issue holds the work |
 | deferred | 5 | 4 | not built, by a decision of the owner |
 | new-gap | 8 | 7 | the text contradicts itself or is silent, found by the audit and reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) |
 | contradiction | 10 | 9 | the text contradicts itself, reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) before the audit |
@@ -37,9 +37,7 @@ statement where the text disagrees with itself, by status.
 
 ### Missing
 
-| Statement | Actor | Keyword | Requirement | Point | Statement text | Evidence |
-|---|---|---|---|---|---|---|
-| [rest-facade#write-headers.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/rest-facade.html#write-headers) | Gateway | SHOULD | N31 | CP-24 | These headers SHOULD also be set on federated AQL responses, listing the endpoints that contributed | the federated AQL answer sets neither header: only app/ferrofed-server/src/facade/route.rs (routed answers) inserts headers::ENDPOINT and headers::SYSTEM_ID; [#288](https://github.com/FerroHEALTH/FerroFED/issues/288) |
+None.
 
 ### Built, not yet tested
 

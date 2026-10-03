@@ -51,7 +51,7 @@ pub(crate) fn directed(directive: &str) -> String {
 /// Three members: node A of `org-a`, node B of `org-b`, and node C, operated
 /// by `org-a`, whose endpoint `org-a` manages; and `org-c`, which manages
 /// none.
-fn members(a: &str, b: &str, c: &str) -> String {
+pub(crate) fn members(a: &str, b: &str, c: &str) -> String {
     registry(
         a,
         b,

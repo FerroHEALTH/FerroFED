@@ -17,9 +17,10 @@ use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::HeaderMap;
 use openehr_its::rest::routes::RouteMatch;
 
-use super::{Arrived, Deadlines, Failure, Provenance, answered, failed, forward, refused_carriers};
+use super::{Arrived, Deadlines, Failure, answered, failed, forward, refused_carriers};
 use crate::error::{self, Code};
 use crate::facade::owner;
+use crate::facade::provenance::Provenance;
 use crate::federation::Federation;
 
 /// Which endpoints the targeting headers of a request without an owner may

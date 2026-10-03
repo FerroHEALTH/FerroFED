@@ -235,6 +235,36 @@ Read whether an answer is complete from `meta.federation.complete`, never
 from the status code; the gateway emits no FHIR `OperationOutcome`, because
 its answer is an ITS-REST `RESULT_SET` (§11.4, N17).
 
+The answer also names who answered in two response headers (§7a.3, N31):
+`openEHR-federation-endpoint` carries registry endpoint identifiers and
+`openEHR-federation-system-id` the `system_id`s of their nodes, position for
+position, each as a comma-separated list in the form of the targeting header
+(§8.4):
+
+```http
+HTTP/1.1 200 OK
+openEHR-federation-endpoint: node_1, node_3
+openEHR-federation-system-id: cdr1.example.org, cdr3.example.org
+```
+
+- A query the gateway sent to a single node names that node whatever it
+  answered, zero rows, a `424` or a `504` included (N31). That is a query you
+  directed at one endpoint, with the header or `FROM ENDPOINT`, a query whose
+  patient resolves at one member alone, and a query scoped to one `ehr_id`,
+  which names the node it was routed to. A query that asked no node, because
+  the patient is `not-resolved` wherever it was looked for, carries neither
+  header.
+- An answer from several nodes lists the endpoints that contributed rows, in registry
+  order. An endpoint contributed when it answered `active` with a
+  `row_count` above 0, the count §9.5 takes before `DISTINCT`, dedup and
+  `LIMIT`. An endpoint that answered no rows, failed, timed out, or was
+  skipped, `excluded` or `not-resolved` is not listed, and an answer that
+  fails (`424`, `504`) lists none.
+- `meta.federation.endpoints[]` stays the record of every endpoint and its
+  status (§11.1); the headers are a convenience. No specification fixes the
+  list form, so FerroFED uses the form of the targeting header.
+- The headers carry registry identifiers and nothing your request sent.
+
 A request that fails answers the status §11.2 names and a stable code; the
 [errors and status codes](errors.md) page lists every one.
 
