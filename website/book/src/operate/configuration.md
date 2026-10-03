@@ -79,11 +79,18 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
 ```
 
 The `Registry` line counts the members and endpoints of the registry
-document. It reads `none` when no document is set, and says the document does
-not load when it cannot be read, in which case the boot stops on the next
-lines with the reason. The development notice prints only under
+document. The gateway reads the document once, before the banner, and serves
+that same read, so the counts are those of the registry it serves. The line
+reads `none` when no document is set, and says the document does not load
+when it cannot be read, in which case the boot stops on the next lines with
+the reason. The development notice prints only under
 `profile = "development"`, in red on a terminal with colour and in the same
 words without it.
+
+Colour follows the terminal, and an explicit `format = "pretty"` keeps it
+into a pipe. A `NO_COLOR` environment variable that is set and not empty
+switches colour off in both the banner and the log, whatever the format
+(<https://no-color.org>).
 
 The banner prints only when the log renders as `pretty`: with
 `telemetry.format = "pretty"`, or with `auto` when stdout is a terminal. With

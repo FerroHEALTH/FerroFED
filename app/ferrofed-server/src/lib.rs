@@ -145,38 +145,54 @@ where
         Command::Admission {
             command: AdmissionCommand::Check { endpoint, count },
         } => admission_command(&settings, &endpoint, count),
-        Command::Serve => {
-            let stdout_is_terminal = std::io::stdout().is_terminal();
-            let format = settings.telemetry.format;
-            if banner::prints(format, stdout_is_terminal) {
-                banner::print(
-                    &banner::Deployment::of(&settings),
-                    format.colour(stdout_is_terminal),
-                );
-            }
-            if let Err(error) = telemetry::init(
-                settings.telemetry.format,
-                &settings.telemetry.filter,
-                stdout_is_terminal,
-            ) {
-                eprintln!("ferrofed: cannot start: {}", chain(&error));
-                return ExitCode::from(EXIT_CONFIG);
-            }
-            panic::install_hook();
-            let state = match AppState::build(&settings) {
-                Ok(state) => Arc::new(state),
-                Err(error) => {
-                    tracing::error!(error = chain(&error), "cannot start");
-                    return ExitCode::from(EXIT_CONFIG);
-                }
-            };
-            match serve_command(settings, state, cli.config) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(error) => {
-                    tracing::error!(error = format!("{error:#}"), "cannot serve");
-                    ExitCode::FAILURE
-                }
-            }
+        Command::Serve => serve_job(settings, cli.config),
+    }
+}
+
+/// Runs `serve`: the banner on a terminal, the subscriber, the state, and
+/// the server, until the process is asked to stop.
+///
+/// The registry document is read once, before the banner, and the state is
+/// built over that read after the subscriber starts, so the banner describes
+/// the registry the gateway serves and the build still logs.
+#[expect(
+    clippy::print_stderr,
+    reason = "a refused log filter is reported before any log subscriber exists"
+)]
+fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
+    let stdout_is_terminal = std::io::stdout().is_terminal();
+    let no_color = std::env::var_os("NO_COLOR");
+    let format = settings.telemetry.format;
+    let document = federation::read_registry(&settings);
+    if banner::prints(format, stdout_is_terminal) {
+        let described = document.as_ref().map(Result::as_ref);
+        banner::print(
+            &banner::Deployment::of(&settings, described),
+            format.colour(stdout_is_terminal, no_color.as_deref()),
+        );
+    }
+    if let Err(error) = telemetry::init(
+        format,
+        &settings.telemetry.filter,
+        stdout_is_terminal,
+        no_color.as_deref(),
+    ) {
+        eprintln!("ferrofed: cannot start: {}", chain(&error));
+        return ExitCode::from(EXIT_CONFIG);
+    }
+    panic::install_hook();
+    let state = match AppState::build_read(&settings, document) {
+        Ok(state) => Arc::new(state),
+        Err(error) => {
+            tracing::error!(error = chain(&error), "cannot start");
+            return ExitCode::from(EXIT_CONFIG);
+        }
+    };
+    match serve_command(settings, state, config) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!(error = format!("{error:#}"), "cannot serve");
+            ExitCode::FAILURE
         }
     }
 }

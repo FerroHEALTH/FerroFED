@@ -8,9 +8,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
 use ferrofed_registry::definition::store::{Definitions, StoreError};
+use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::settings::Settings;
-use crate::federation::{Federation, FederationError};
+use crate::federation::{Federation, FederationError, read_registry};
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
 use crate::stored::RedbStore;
@@ -66,8 +67,24 @@ impl AppState {
     /// Returns a [`StateError`] when the federation `settings` describe
     /// cannot be built, or the stored-query store cannot be opened or read.
     pub fn build(settings: &Settings) -> Result<Self, StateError> {
+        Self::build_read(settings, read_registry(settings))
+    }
+
+    /// Returns the state `settings` describe, over `document`, the registry
+    /// document [`read_registry`] read from the same settings.
+    ///
+    /// The boot reads the document once, before the startup banner, and
+    /// builds over that read here ([`Federation::load_read`]).
+    ///
+    /// # Errors
+    /// Returns the [`StateError`] [`AppState::build`] returns, the read's own
+    /// error included.
+    pub fn build_read(
+        settings: &Settings,
+        document: Option<Result<RegistrySnapshot, FederationError>>,
+    ) -> Result<Self, StateError> {
         settings.log_summary();
-        let federation = Federation::load(settings)?;
+        let federation = Federation::load_read(settings, document)?;
         let definitions = settings
             .stored_queries
             .as_deref()

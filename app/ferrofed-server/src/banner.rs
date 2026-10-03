@@ -18,9 +18,11 @@ use std::fmt::Write as _;
 use std::net::SocketAddr;
 
 use ferrofed_identity::dev::Profile;
+use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::base_path::BasePath;
 use crate::config::settings::Settings;
+use crate::federation::FederationError;
 use crate::telemetry::{Format, Rendering};
 
 /// The `FerroFED` wordmark in the `FIGlet` "standard" font.
@@ -84,25 +86,25 @@ pub struct Deployment {
 }
 
 impl Deployment {
-    /// Returns the deployment `settings` describe.
+    /// Returns the deployment `settings` describe, with the registry
+    /// `document` [`read_registry`](crate::federation::read_registry) read from them.
     ///
-    /// The registry document is read for its counts, exactly as the boot
-    /// reads it, and nothing else is built.
+    /// The boot builds the gateway over the same read, so the counts are
+    /// those of the registry it serves.
     #[must_use]
-    pub fn of(settings: &Settings) -> Self {
-        let registry = match &settings.registry_document {
+    pub fn of(
+        settings: &Settings,
+        document: Option<Result<&RegistrySnapshot, &FederationError>>,
+    ) -> Self {
+        let registry = match document {
             None => Registry::Unset,
-            Some(path) => {
-                match crate::federation::read_registry(path, settings.registry_format) {
-                    Ok(snapshot) => Registry::Read {
-                        members: snapshot.nodes().count(),
-                        endpoints: snapshot.endpoints().count(),
-                    },
-                    // NOTE: no specification governs this: our own design; the boot
-                    // reads the document again and stops on the typed error.
-                    Err(_) => Registry::Unreadable,
-                }
-            }
+            Some(Ok(snapshot)) => Registry::Read {
+                members: snapshot.nodes().count(),
+                endpoints: snapshot.endpoints().count(),
+            },
+            // NOTE: no specification governs this: our own design; the build over
+            // this same read stops the boot on the typed error the banner omits.
+            Some(Err(_)) => Registry::Unreadable,
         };
         Self {
             base_path: settings.server.base_path.clone(),

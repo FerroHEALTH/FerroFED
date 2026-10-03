@@ -10,10 +10,15 @@
 
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::ffi::OsStr;
+use std::io::Write as _;
 use std::net::TcpListener;
+use std::process::Command;
 
 use ferrofed_server::banner::{DEVELOPMENT_NOTICE, Deployment, Registry, WORDMARK, prints, render};
 use ferrofed_server::config::Config;
+use ferrofed_server::federation::{FederationError, read_registry};
+use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::telemetry::Format;
 
 use crate::facade::{NAMESPACE, PATIENT, registry};
@@ -182,11 +187,156 @@ fn the_banner_prints_only_before_the_terminal_rendering() {
 
 #[test]
 fn colour_follows_the_terminal_unless_pretty_is_asked_for() {
-    assert!(Format::Auto.colour(true));
-    assert!(!Format::Auto.colour(false));
-    assert!(Format::Pretty.colour(false));
-    assert!(Format::Json.colour(true));
-    assert!(!Format::Json.colour(false));
+    for unset in [None, Some(OsStr::new(""))] {
+        assert!(Format::Auto.colour(true, unset));
+        assert!(!Format::Auto.colour(false, unset));
+        assert!(Format::Pretty.colour(false, unset));
+        assert!(Format::Json.colour(true, unset));
+        assert!(!Format::Json.colour(false, unset));
+    }
+}
+
+/// A `NO_COLOR` that is set and not empty switches colour off, whatever its
+/// value, the format and the terminal (<https://no-color.org>).
+#[test]
+fn no_color_switches_colour_off_whatever_the_format_and_the_terminal() {
+    for value in ["1", "0", "false"] {
+        for format in [Format::Auto, Format::Json, Format::Pretty] {
+            for stdout_is_terminal in [false, true] {
+                assert!(
+                    !format.colour(stdout_is_terminal, Some(OsStr::new(value))),
+                    "NO_COLOR={value} {format:?} terminal={stdout_is_terminal}"
+                );
+            }
+        }
+    }
+}
+
+/// Runs `serve` on a taken address with `format = "pretty"`, the development
+/// profile, and `NO_COLOR` set to `no_color`, and returns its stdout.
+fn served_with_no_color(no_color: &str) -> Result<String, Box<dyn Error>> {
+    let taken = TcpListener::bind("127.0.0.1:0")?;
+    let listen = taken.local_addr()?;
+    let mut file = tempfile::NamedTempFile::new()?;
+    write!(
+        file,
+        "profile = \"development\"\n\n[server]\nlisten = \"{listen}\"\n\n[telemetry]\nformat = \"pretty\"\n"
+    )?;
+    let output = Command::new(env!("CARGO_BIN_EXE_ferrofed"))
+        .args(["serve", "--config"])
+        .arg(file.path())
+        .env_remove("FERROFED_CONFIG")
+        .env("NO_COLOR", no_color)
+        .output()?;
+    drop(taken);
+    assert_eq!(Some(1), output.status.code(), "the address is taken");
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+#[test]
+fn no_color_prints_the_banner_and_its_notice_without_colour() -> TestResult {
+    let stdout = served_with_no_color("1")?;
+    let banner = stdout
+        .split_once("  Stored queries")
+        .map(|(_, rest)| rest)
+        .ok_or("the banner prints")?;
+    let notice: String = banner
+        .lines()
+        .take_while(|line| !line.starts_with(|c: char| c.is_ascii_digit()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let words = notice.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(words.contains(DEVELOPMENT_NOTICE), "{stdout}");
+    assert!(
+        !notice.contains('\x1b'),
+        "no colour in the banner: {stdout}"
+    );
+
+    let coloured = served_with_no_color("")?;
+    assert!(
+        coloured.contains("\x1b[1;31m"),
+        "an empty NO_COLOR leaves the notice red: {coloured}"
+    );
+    Ok(())
+}
+
+#[test]
+fn no_color_writes_the_pretty_log_without_colour() -> TestResult {
+    let stdout = served_with_no_color("1")?;
+    let log = stdout
+        .split_once("patient data.")
+        .map(|(_, rest)| rest)
+        .ok_or("the banner prints before the log")?;
+    assert!(log.contains("cannot serve"), "the log follows: {stdout}");
+    assert!(!log.contains('\x1b'), "no colour in the log: {stdout}");
+
+    let coloured = served_with_no_color("")?;
+    let log = coloured
+        .split_once("patient data.")
+        .map(|(_, rest)| rest)
+        .ok_or("the banner prints before the log")?;
+    assert!(
+        log.contains('\x1b'),
+        "an empty NO_COLOR leaves an explicit pretty log coloured: {coloured}"
+    );
+    Ok(())
+}
+
+/// The banner and the gateway share one read of the registry document: a
+/// document removed after the read still builds the state the banner counted.
+#[test]
+fn the_banner_and_the_build_share_one_read_of_the_registry() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("registry.toml");
+    std::fs::write(
+        &path,
+        registry("http://127.0.0.1:9/a", "http://127.0.0.1:9/b", ""),
+    )?;
+    let document = toml::Value::String(path.display().to_string());
+    let text = format!(
+        "[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
+    );
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    let read = read_registry(&settings);
+    let deployment = Deployment::of(&settings, read.as_ref().map(Result::as_ref));
+    std::fs::remove_file(&path)?;
+
+    let state = AppState::build_read(&settings, read)?;
+    let federation = state.federation().ok_or("the gateway federates")?;
+    assert_eq!(
+        Registry::Read {
+            members: federation.snapshot().nodes().count(),
+            endpoints: federation.snapshot().endpoints().count(),
+        },
+        deployment.registry,
+        "the banner counts the registry the gateway serves"
+    );
+    assert!(
+        AppState::build(&settings).is_err(),
+        "a second read would find no document"
+    );
+    Ok(())
+}
+
+/// A registry document that does not load stops the build over the same read
+/// on the typed error a fresh boot reports.
+#[test]
+fn a_failed_read_stops_the_build_on_the_same_typed_error() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let document = toml::Value::String(dir.path().join("absent.toml").display().to_string());
+    let text = format!(
+        "[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
+    );
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    let read = read_registry(&settings);
+    assert!(matches!(read, Some(Err(FederationError::Registry { .. }))));
+    let Err(StateError::Federation(FederationError::Registry { path, .. })) =
+        AppState::build_read(&settings, read)
+    else {
+        return Err("the build stops on the registry error".into());
+    };
+    assert_eq!(dir.path().join("absent.toml"), path);
+    Ok(())
 }
 
 /// A configuration carrying a credential, a password, a PIX Manager token and
@@ -214,7 +364,8 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
          [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
-    let deployment = Deployment::of(&settings);
+    let document = read_registry(&settings);
+    let deployment = Deployment::of(&settings, document.as_ref().map(Result::as_ref));
     assert_eq!(
         Registry::Read {
             members: 2,
@@ -241,7 +392,9 @@ fn a_registry_document_that_does_not_load_is_named_unreadable() -> TestResult {
         "[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
-    assert_eq!(Registry::Unreadable, Deployment::of(&settings).registry);
+    let document = read_registry(&settings);
+    let deployment = Deployment::of(&settings, document.as_ref().map(Result::as_ref));
+    assert_eq!(Registry::Unreadable, deployment.registry);
     Ok(())
 }
 

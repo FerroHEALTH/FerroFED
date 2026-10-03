@@ -51,7 +51,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   repository, the Federation Tier, ITS-REST, AQL and `openehr-*` releases it
   serves, then the base path, the listen address, the member and endpoint
   counts of the registry document, and whether the stored-query registry is
-  offered. Under `profile = "development"` a red notice, in plain words where
+  offered. The document is read once, before the banner, and the gateway is
+  built over that same read, so the banner counts the registry it serves.
+  Under `profile = "development"` a red notice, in plain words where
   there is no colour, says the deployment must not hold or reach real
   patient data. The banner prints only before the `pretty` rendering, so a
   log collector reading JSON never receives it, and `config check`,
@@ -59,6 +61,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   credential, a URL, a header value or request data. Each pin comes from the
   crate constant `scripts/checks/versions.sh` holds to `docs/VERSIONS.md`,
   and the `openehr-*` family version is a new constant the guard checks.
+- The console honours `NO_COLOR` (#330, <https://no-color.org>): set and not
+  empty, it switches colour off in the `pretty` log and the startup banner,
+  whatever the format and the terminal.
 - The ITS-REST `GET` forms of query execution are served (#287; N1, CP-1).
   `GET {base}/v1/query/aql` and, where the stored-query registry is offered,
   `GET {base}/v1/query/{name}[/{version}]` carry the request in the query

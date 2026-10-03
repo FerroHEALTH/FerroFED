@@ -206,7 +206,24 @@ impl Federation {
     /// `federation.demographic_endpoint` that names no endpoint of the
     /// registry, and an HTTP client that cannot be built.
     pub fn load(settings: &Settings) -> Result<Option<Self>, FederationError> {
-        Self::assemble(settings, None)
+        Self::assemble(settings, read_registry(settings), None)
+    }
+
+    /// Builds the federation `settings` describe over `document`, the
+    /// registry document [`read_registry`] read from the same settings.
+    ///
+    /// The boot reads the document once, describes it in the startup banner,
+    /// and builds over it here, so the gateway serves the document the banner
+    /// described. The checks are [`Federation::load`]'s, in the same order.
+    ///
+    /// # Errors
+    /// Returns the [`FederationError`] [`Federation::load`] returns, the
+    /// read's own error included.
+    pub fn load_read(
+        settings: &Settings,
+        document: Option<Result<RegistrySnapshot, FederationError>>,
+    ) -> Result<Option<Self>, FederationError> {
+        Self::assemble(settings, document, None)
     }
 
     /// Builds the federation `settings` describe after a registry reload,
@@ -222,7 +239,11 @@ impl Federation {
     /// Returns the [`FederationError`] [`Federation::load`] returns for the
     /// same settings.
     pub fn reloaded(&self, settings: &Settings) -> Result<Option<Self>, FederationError> {
-        Self::assemble(settings, Some(Arc::clone(&self.observed)))
+        Self::assemble(
+            settings,
+            read_registry(settings),
+            Some(Arc::clone(&self.observed)),
+        )
     }
 
     /// Holds what the process learned to this federation's snapshot, after a
@@ -242,12 +263,14 @@ impl Federation {
         }
     }
 
-    /// Builds the federation, over `observed` when a reload carries it over.
+    /// Builds the federation over `document`, and over `observed` when a
+    /// reload carries it over.
     fn assemble(
         settings: &Settings,
+        document: Option<Result<RegistrySnapshot, FederationError>>,
         observed: Option<Arc<Observed>>,
     ) -> Result<Option<Self>, FederationError> {
-        let Some(path) = &settings.registry_document else {
+        let Some(document) = document else {
             if settings.dev.is_some() {
                 return Err(FederationError::DevWithoutRegistry);
             }
@@ -265,7 +288,7 @@ impl Federation {
         let Some(id) = settings.federation.id.clone() else {
             return Err(FederationError::IdUndeclared);
         };
-        let snapshot = read_registry(path, settings.registry_format)?;
+        let snapshot = document?;
         if let Some(endpoint) = &settings.federation.demographic_endpoint
             && snapshot.endpoint(endpoint).is_none()
         {
@@ -533,18 +556,20 @@ impl std::fmt::Debug for Federation {
     }
 }
 
+/// Reads and checks the registry document `settings` name, or returns `None`
+/// when they name none.
+///
+/// The read fails with [`FederationError::Registry`] or
+/// [`FederationError::FhirRegistry`] for a document that cannot be read or
+/// refuses to load; [`Federation::load_read`] stops on that error.
+#[must_use]
+pub fn read_registry(settings: &Settings) -> Option<Result<RegistrySnapshot, FederationError>> {
+    let path = settings.registry_document.as_deref()?;
+    Some(read_document(path, settings.registry_format))
+}
+
 /// Reads the registry document at `path`, written in `format`.
-///
-/// The document is read and checked as [`Federation::load`] reads it, and
-/// nothing else is built.
-///
-/// # Errors
-/// Returns [`FederationError::Registry`] or [`FederationError::FhirRegistry`]
-/// for a document that cannot be read or refuses to load.
-pub fn read_registry(
-    path: &Path,
-    format: RegistryFormat,
-) -> Result<RegistrySnapshot, FederationError> {
+fn read_document(path: &Path, format: RegistryFormat) -> Result<RegistrySnapshot, FederationError> {
     match format {
         RegistryFormat::Toml => {
             RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
