@@ -21,8 +21,9 @@ use std::time::Instant;
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
+use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError, OnFailure};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
-use ferrofed_identity::resolver::{Resolution, Resolver};
+use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::{EndpointStatus, RegistrySnapshot};
 use openehr_federation::aql::subject::Subject;
@@ -31,7 +32,9 @@ use openehr_federation::error::WireError;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use secrecy::SecretString;
 
+use crate::federation::Federation;
 use crate::health::dependencies::Observed;
+use crate::localization::LocalizationPolicy;
 
 /// The plan of one query, and where each façade column of a node row comes
 /// from.
@@ -125,45 +128,94 @@ struct Membership {
     asked: BTreeMap<NodeId, EndpointId>,
     /// The endpoints that are never asked, with why.
     excluded: Vec<(EndpointId, String)>,
+    /// The other active endpoints of a member asked through one endpoint,
+    /// each with its member and why it is not asked.
+    alternates: Vec<(NodeId, EndpointId, String)>,
 }
 
-/// The plan of a query that names a patient (§5.2, N3, N6).
+/// The plan of a query that names a patient (§5.2, §14.1, N3, N4, N6).
 ///
-/// The patient is resolved at every member that has an active endpoint, before
-/// `deadline`. A member that knows the patient is asked its node query; one
-/// that does not is `not-resolved`, which fails nothing (N6); one the
-/// resolver could not answer for is `not-resolved` with the resolver's error,
-/// which fails the query (§11.3 covers only an answered lookup; no
-/// specification governs this: our own design). Without a resolver, every
-/// such member is the last case: the gateway fails closed.
+/// An undirected query in a deployment with a localizer asks it first which
+/// members might hold the patient's data, within the localizer's budget: a
+/// member it does not name is `not-localized` and never asked (§11.1). A
+/// localizer that does not answer leaves no candidate, every member
+/// `not-localized` with its error and the error in `meta.federation`, unless
+/// the deployment declared `ask-all`, under which every member is a
+/// candidate (§14.1, N4). A directed query is never localized, since the
+/// directive selects its node set (§8).
+///
+/// The patient is then resolved at every candidate before `deadline`. A
+/// member that knows the patient is asked its node query; one that does not
+/// is `not-resolved`, which fails nothing (N6); one the resolver could not
+/// answer for is `not-resolved` with the resolver's error, which fails the
+/// query (§11.3 covers only an answered lookup; no specification governs
+/// this: our own design). Without a resolver, every candidate is the last
+/// case: the gateway fails closed.
 ///
 /// # Errors
 /// Returns a [`TargetsError`] when the subject is not a patient reference or
 /// a status cannot be described.
 pub async fn patient(
-    snapshot: &RegistrySnapshot,
+    federation: &Federation,
     selection: Selection<'_>,
-    resolver: Option<&dyn Resolver>,
     query: &PatientQuery,
     deadline: Instant,
 ) -> Result<Targets, TargetsError> {
-    let membership = membership(snapshot, selection);
+    let resolver = federation.resolver();
+    let membership = membership(federation.snapshot(), selection);
     // NOTE: §5.4.1, the identifier resolution consumes is withheld from every
     // request the plan sends, the outbound gate's second layer.
     let withheld = Withheld::new([SecretString::from(query.subject().value())]);
     let mut plan = exclude(Plan::new().withholding(withheld), &membership.excluded)?;
     let members: Vec<NodeId> = membership.asked.keys().cloned().collect();
-    let resolutions = match resolver {
-        Some(resolver) if !members.is_empty() => {
-            let patient = patient_ref(query.subject())?;
-            resolver.resolve(&patient, &members, deadline).await
-        }
-        Some(_) | None => BTreeMap::new(),
+    // NOTE: §8, a directive selects the node set by itself, so only an undirected query is localized.
+    let localizer = match selection {
+        Selection::Undirected => federation.localization().localizer(),
+        Selection::Directed(_) | Selection::Owner(_) => None,
     };
+    let patient = if !members.is_empty() && (localizer.is_some() || resolver.is_some()) {
+        Some(patient_ref(query.subject())?)
+    } else {
+        None
+    };
+    let located = match (localizer, &patient) {
+        (Some(localizer), Some(patient)) => {
+            let policy = federation.localization();
+            localize(policy, localizer, patient, &members, deadline).await?
+        }
+        _ => Localized::everyone(),
+    };
+    for (member, endpoint, reason) in membership.alternates {
+        let outcome = if located.admits(&member) {
+            Outcome::Excluded {
+                error: Some(detail(&reason)?),
+            }
+        } else {
+            located.not_localized()
+        };
+        plan = settle(plan, endpoint, outcome)?;
+    }
+    let candidates: Vec<NodeId> = members
+        .into_iter()
+        .filter(|member| located.admits(member))
+        .collect();
+    let resolutions = match (resolver, &patient) {
+        (Some(resolver), Some(patient)) if !candidates.is_empty() => {
+            resolver.resolve(patient, &candidates, deadline).await
+        }
+        _ => BTreeMap::new(),
+    };
+    if let Some(failure) = located.failure.clone() {
+        plan = plan.localization_failed(failure);
+    }
     let mut sources = None;
     let mut resolution_failed = false;
     let mut bound = Vec::new();
     for (member, endpoint) in membership.asked {
+        if !located.admits(&member) {
+            plan = settle(plan, endpoint, located.not_localized())?;
+            continue;
+        }
         match resolutions.get(&member) {
             Some(Resolution::Resolved(ehr_id)) => {
                 let node = query.for_node(ehr_id.hier_object_id());
@@ -226,6 +278,10 @@ pub fn unscoped(
 ) -> Result<Targets, TargetsError> {
     let membership = membership(snapshot, selection);
     let mut plan = exclude(Plan::new(), &membership.excluded)?;
+    for (_, endpoint, reason) in membership.alternates {
+        let error = Some(detail(&reason)?);
+        plan = settle(plan, endpoint, Outcome::Excluded { error })?;
+    }
     let node = query.node_query();
     for endpoint in membership.asked.into_values() {
         plan = plan
@@ -248,6 +304,7 @@ pub fn unscoped(
 fn membership(snapshot: &RegistrySnapshot, selection: Selection<'_>) -> Membership {
     let mut asked = BTreeMap::new();
     let mut excluded = Vec::new();
+    let mut alternates = Vec::new();
     for node in snapshot.nodes() {
         let chosen = snapshot.asked_through_among(node.id(), |endpoint| selection.admits(endpoint));
         for endpoint in snapshot.endpoints_of(node.id()) {
@@ -257,7 +314,9 @@ fn membership(snapshot: &RegistrySnapshot, selection: Selection<'_>) -> Membersh
                     String::from("suspended by the federation operator")
                 }
                 (true, EndpointStatus::Active, Some(first)) if first.id() != endpoint.id() => {
-                    format!("the member is asked through endpoint {}", first.id())
+                    let reason = format!("the member is asked through endpoint {}", first.id());
+                    alternates.push((node.id().clone(), endpoint.id().clone(), reason));
+                    continue;
                 }
                 (true, EndpointStatus::Active, _) => continue,
             };
@@ -267,7 +326,106 @@ fn membership(snapshot: &RegistrySnapshot, selection: Selection<'_>) -> Membersh
             asked.insert(node.id().clone(), endpoint.id().clone());
         }
     }
-    Membership { asked, excluded }
+    Membership {
+        asked,
+        excluded,
+        alternates,
+    }
+}
+
+/// What localization left of the members asked (§14.1).
+struct Localized {
+    /// The members localization named, or `None` when every member is a
+    /// candidate.
+    candidates: Option<BTreeSet<NodeId>>,
+    /// The error every member it did not name carries: the localizer's
+    /// failure, under fail-closed.
+    error: Option<ErrorDetail>,
+    /// The localizer's failure, carried in `meta.federation` too.
+    failure: Option<ErrorDetail>,
+}
+
+impl Localized {
+    /// Every member a candidate: no localizer, or one that is not consulted.
+    fn everyone() -> Self {
+        Self {
+            candidates: None,
+            error: None,
+            failure: None,
+        }
+    }
+
+    /// No member a candidate, each carrying `error` when there is one.
+    fn nobody(error: Option<ErrorDetail>) -> Self {
+        Self {
+            candidates: Some(BTreeSet::new()),
+            failure: error.clone(),
+            error,
+        }
+    }
+
+    /// Whether `member` is a candidate.
+    fn admits(&self, member: &NodeId) -> bool {
+        self.candidates
+            .as_ref()
+            .is_none_or(|candidates| candidates.contains(member))
+    }
+
+    /// The status of a member that is not a candidate (§11.1).
+    fn not_localized(&self) -> Outcome {
+        Outcome::NotLocalized {
+            error: self.error.clone(),
+        }
+    }
+}
+
+/// Asks `localizer` which of `members` might hold `patient`'s data, within
+/// the budget `policy` gives it and before `deadline` (§14.1, N4).
+///
+/// A localizer still silent at the end of its budget did not answer, and the
+/// failure policy applies as to any other failure.
+async fn localize(
+    policy: &LocalizationPolicy,
+    localizer: &dyn Localizer,
+    patient: &PatientRef,
+    members: &[NodeId],
+    deadline: Instant,
+) -> Result<Localized, TargetsError> {
+    let until = Instant::now()
+        .checked_add(policy.timeout())
+        .map_or(deadline, |at| at.min(deadline));
+    let answer = tokio::time::timeout_at(
+        tokio::time::Instant::from_std(until),
+        localizer.localize(patient, members, until),
+    )
+    .await
+    .unwrap_or(Localization::Unavailable(LocalizerError::DeadlineExceeded));
+    match answer {
+        Localization::NotConfigured => Ok(Localized::everyone()),
+        Localization::Candidates(named) => Ok(Localized {
+            candidates: Some(named),
+            error: None,
+            failure: None,
+        }),
+        Localization::NoRecords => Ok(Localized::nobody(None)),
+        Localization::Unavailable(error) => {
+            let cause = crate::chain(&error);
+            tracing::warn!(
+                error = %cause,
+                on_failure = %policy.on_failure(),
+                "the localizer did not answer"
+            );
+            let failure = detail(&format!("the localizer could not answer: {cause}"))?;
+            Ok(match policy.on_failure() {
+                OnFailure::Closed => Localized::nobody(Some(failure)),
+                OnFailure::AskAll => Localized {
+                    candidates: None,
+                    error: None,
+                    failure: Some(failure),
+                },
+            })
+        }
+    }
 }
 
 /// `plan` with every endpoint of `excluded` settled as `excluded`.

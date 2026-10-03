@@ -21,10 +21,13 @@ use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::{
-    FederationSettings, MetricsSettings, PixManagerSettings, PixmSettings, ServerSettings,
-    Settings, TelemetrySettings,
+    FederationSettings, LocalizationSettings, MetricsSettings, PixManagerSettings, PixmSettings,
+    ServerSettings, Settings, TelemetrySettings,
 };
-use crate::config::{COMBINING_MARGIN_MS, Config, Metrics, OffsetPaging, Pixm, stored_queries};
+use crate::config::{
+    COMBINING_MARGIN_MS, Config, Federation, Localization, Metrics, NodeSelection, OffsetPaging,
+    Pixm, stored_queries,
+};
 
 impl Config {
     /// Resolves this tree into the settings the run path holds.
@@ -40,7 +43,8 @@ impl Config {
     /// carry, and the value errors
     /// ([`Error::Listen`], [`Error::BasePath`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::DemographicEndpoint`], [`Error::Missing`],
-    /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]),
+    /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`],
+    /// [`Error::LocalizationBudget`], [`Error::Url`]),
     /// each naming the key that carries the fault, the stored-query store
     /// errors of [`stored_queries::resolve`], and
     /// [`Error::StoredQueryFanOutWithoutRegistry`] and
@@ -185,7 +189,19 @@ impl Config {
             OffsetPaging::Reject => OffsetStrategy::Reject,
             OffsetPaging::Bounded => OffsetStrategy::Bounded { max_window },
         };
+        let localization = match (
+            &self.federation.localization,
+            self.federation.node_selection,
+        ) {
+            (Some(section), _) => Some(resolve_localization(section, &self.federation)?),
+            (None, Some(NodeSelection::Localized)) => Some(resolve_localization(
+                &Localization::default(),
+                &self.federation,
+            )?),
+            (None, _) => None,
+        };
         Ok(FederationSettings {
+            localization,
             id,
             budget,
             default_namespace: self.federation.default_namespace.clone(),
@@ -299,4 +315,23 @@ fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
         });
     }
     Ok(Duration::from_millis(millis))
+}
+
+/// Resolves `[federation.localization]`: a positive budget that ends before
+/// the overall one, of which it is a part (§11.5, §14.1).
+fn resolve_localization(
+    section: &Localization,
+    federation: &Federation,
+) -> Result<LocalizationSettings, Error> {
+    let timeout = positive_ms("federation.localization.timeout_ms", section.timeout_ms)?;
+    if section.timeout_ms >= federation.overall_timeout_ms {
+        return Err(Error::LocalizationBudget {
+            timeout_ms: section.timeout_ms,
+            overall_ms: federation.overall_timeout_ms,
+        });
+    }
+    Ok(LocalizationSettings {
+        on_failure: section.on_failure,
+        timeout,
+    })
 }

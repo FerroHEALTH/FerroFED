@@ -18,6 +18,7 @@ mod budget;
 mod decision;
 mod dedup;
 mod distinct;
+mod localization;
 mod order;
 
 use std::collections::BTreeMap;

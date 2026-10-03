@@ -5,11 +5,13 @@
 //! development profile, resolving only the rows it holds, and never showing a
 //! patient identifier value.
 
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
 use ferrofed_identity::dev::{DevCrossRefError, Profile, StaticResolver};
+use ferrofed_identity::localizer::{Localization, Localizer};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, NodeId};
@@ -210,4 +212,36 @@ fn no_rendering_shows_a_patient_identifier_value() -> TestResult {
         assert!(!rendered.contains(PATIENT_VALUE), "no value in {rendered}");
     }
     Ok(())
+}
+
+#[test]
+fn as_a_localizer_it_names_the_asked_members_that_hold_a_row() -> TestResult {
+    let localizer = enabled(&[("node-a", EHR_A)])?;
+    let answer = ready(localizer.localize(
+        &patient("2.999.1", PATIENT_VALUE)?,
+        &members(&["node-a", "node-b"])?,
+        Instant::now(),
+    ));
+    let node_a: NodeId = "node-a".parse()?;
+    match answer {
+        Localization::Candidates(named) => {
+            assert_eq!(BTreeSet::from([node_a]), named, "only node-a holds a row");
+            Ok(())
+        }
+        other => Err(format!("a candidate set (N4, §14.1): {other:?}").into()),
+    }
+}
+
+#[test]
+fn as_a_localizer_it_finds_no_records_for_a_patient_with_no_row() -> TestResult {
+    let localizer = enabled(&[("node-a", EHR_A)])?;
+    let answer = ready(localizer.localize(
+        &patient("2.999.2", PATIENT_VALUE)?,
+        &members(&["node-a", "node-b"])?,
+        Instant::now(),
+    ));
+    match answer {
+        Localization::NoRecords => Ok(()),
+        other => Err(format!("no member holds the patient's data: {other:?}").into()),
+    }
 }

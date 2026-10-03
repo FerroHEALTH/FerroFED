@@ -10,6 +10,7 @@
 //! specification governs the configuration: our own design.
 
 use ferrofed_identity::dev::{DevTable, Profile};
+use ferrofed_identity::localizer::OnFailure;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
@@ -180,6 +181,10 @@ pub struct Federation {
     /// How the node set of an undirected patient query is chosen (§4.3, N4).
     /// It has no default: a federating gateway declares it.
     pub node_selection: Option<NodeSelection>,
+    /// The localizer's failure policy and budget
+    /// (`[federation.localization]`, §14.1), set only under
+    /// `node_selection = "localized"`.
+    pub localization: Option<Localization>,
     /// Whether the gateway offers best-effort completion (§11.4, N37). A
     /// request opts into it with `openEHR-federation-completeness: partial`;
     /// all-or-nothing stays the default, and a gateway that does not offer
@@ -273,6 +278,36 @@ pub enum NodeSelection {
     /// cross-reference decides, and a member that does not know the patient is
     /// `not-resolved` (§4.3 Variant B, N4 last sentence, N6).
     AskAll,
+    /// A localizer derives the node set from the patient: a member it does
+    /// not name is `not-localized` and never asked, and an undirected query
+    /// that names no patient is refused, since no node set is defined (N4,
+    /// N10, §14.1).
+    Localized,
+}
+
+/// The localizer's failure policy and budget, `[federation.localization]`
+/// (§14.1).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Localization {
+    /// What the gateway does when the localizer does not answer: `closed`,
+    /// the default, dispatches to no member and reports every member
+    /// `not-localized` with the error; `ask-all` asks every member instead.
+    /// `OPTIONS {base}/` declares it as `localization.on_failure` (§14.1,
+    /// N30).
+    pub on_failure: OnFailure,
+    /// How long the localizer may take, a part of the overall budget it must
+    /// end before (§11.5); zero is refused.
+    pub timeout_ms: u64,
+}
+
+impl Default for Localization {
+    fn default() -> Self {
+        Self {
+            on_failure: OnFailure::Closed,
+            timeout_ms: 5_000,
+        }
+    }
 }
 
 impl Default for Federation {
@@ -285,6 +320,7 @@ impl Default for Federation {
             binding_ttl_ms: 900_000,
             ehr_index_capacity: 100_000,
             node_selection: None,
+            localization: None,
             best_effort: true,
             offset_strategy: OffsetPaging::Bounded,
             max_offset_window: 1000,
