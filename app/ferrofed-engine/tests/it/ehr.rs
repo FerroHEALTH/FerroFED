@@ -5,7 +5,8 @@
 //! gateway asks for `Prefer: return=minimal`, and a node that answers with
 //! the full representation anyway is read through the typed `201_EHR` body of
 //! `openehr-its` (ITS-REST 1.1.0 EHR API, `ehr_create`), the `ehr_id` still
-//! taken from `ETag`.
+//! taken from `ETag`. A call the deadline overtook before it left is told
+//! from one the node left unanswered (§11.5).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -14,7 +15,7 @@
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
+use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClient};
 use ferrofed_engine::ehr::EhrCallError;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mock::Server;
@@ -100,5 +101,52 @@ async fn a_201_body_that_is_no_ehr_fails_the_create() -> TestResult {
         matches!(created, Err(EhrCallError::Failed { .. })),
         "{created:?}"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_create_whose_deadline_passed_before_it_left_is_expired_and_never_sent() -> TestResult {
+    let server = Server::start().await;
+    let client = client_at(&format!("{}/openehr", server.uri()))?;
+    let status: EhrStatus = from_canonical_json(EHR_STATUS)?;
+    let created = client
+        .create_ehr(&status, &DispatchOptions::new(Instant::now()))
+        .await;
+    let Err(error) = created else {
+        return Err(format!("an expired create succeeded: {created:?}").into());
+    };
+    assert!(
+        matches!(error, EhrCallError::Expired { .. }),
+        "§11.5: the node was never asked: {error:?}"
+    );
+    assert_eq!(Contact::Unsent, Contact::of_ehr_call_error(&error));
+    let received = server.received_requests().await.ok_or("recording is on")?;
+    assert!(received.is_empty(), "nothing is sent");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_read_the_node_leaves_unanswered_is_a_time_out_of_a_silent_node() -> TestResult {
+    let server = Server::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/openehr/v1/ehr/{EHR_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(3)))
+        .mount(&server)
+        .await;
+    let client = client_at(&format!("{}/openehr", server.uri()))?;
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(200))
+        .ok_or("the deadline is past the platform clock")?;
+    let read = client
+        .read_ehr(EHR_ID, &DispatchOptions::new(deadline))
+        .await;
+    let Err(error) = read else {
+        return Err("a silent node answered".into());
+    };
+    assert!(
+        matches!(error, EhrCallError::TimeOut { .. }),
+        "§11.1: sent, and no answer in time: {error:?}"
+    );
+    assert_eq!(Contact::Silent, Contact::of_ehr_call_error(&error));
     Ok(())
 }

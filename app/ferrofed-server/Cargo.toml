@@ -81,6 +81,7 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 wiremock.workspace = true

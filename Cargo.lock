@@ -1069,6 +1069,7 @@ name = "ferrofed-server"
 version = "0.0.6"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "clap",
  "ferrofed-engine",
