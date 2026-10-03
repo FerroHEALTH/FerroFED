@@ -187,12 +187,12 @@ written, and `OPTIONS {base}/` declares the policy either way. A localizer
 that answers that no member holds the patient's data leaves every member
 `not-localized` with no error.
 
-The localizer today is the [development cross-reference](identity.md), under
-`profile = "development"`: it names the members its `[dev]` rows map the
-patient at. The IHE XCPD binding is planned for v0.0.8
-([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)). The localized
-selection with no localizer refuses to boot, and so does
-`[federation.localization]` under `ask-all`.
+The localizer is the IHE XCPD binding when `[xcpd]` is set
+([XCPD localization](identity.md#xcpd-localization-xcpd)), and otherwise the
+[development cross-reference](identity.md), under `profile = "development"`,
+which names the members its `[dev]` rows map the patient at. The localized
+selection with no localizer refuses to boot, and so do
+`[federation.localization]` and `[xcpd]` under `ask-all`.
 
 ## Resolution bindings
 
@@ -264,7 +264,7 @@ the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
 gateway reloads on the signal only and never watches the file, so write the
 new document completely, then send the signal.
 
-Four sections take effect on a reload:
+Five sections take effect on a reload:
 
 | Reloaded | Needs a restart |
 |---|---|
@@ -272,6 +272,7 @@ Four sections take effect on a reload:
 | `[credentials]` | `[server]` |
 | `[dev]` | `[telemetry]` and `[metrics]` |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
+| `[xcpd]` | |
 
 `federation.demographic_endpoint` keeps its running value until a restart,
 and the document must still declare it: a reload whose document drops that
@@ -317,6 +318,7 @@ the same file to see the fault. The classes are:
 | `credentials` | a `[credentials]` section names an endpoint the document does not declare |
 | `demographic-endpoint` | `federation.demographic_endpoint` names an endpoint the new document does not declare |
 | `dev-cross-reference`, `pixm`, `resolvers` | the resolver refuses the new members, or both resolvers are set |
+| `localization` | the localizer refuses the new members, or the node selection has none |
 | `node-clients`, `http-client`, `self-description` | the node clients or the `OPTIONS {base}/` body cannot be built |
 | `registry-presence` | `registry.document` was set or unset, which takes a restart |
 

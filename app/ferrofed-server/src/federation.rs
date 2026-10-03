@@ -334,7 +334,7 @@ impl Federation {
             }
             (None, Some(pixm)) => Some(pixm_resolver(pixm, &snapshot)?),
         };
-        let localization = localization::policy(&settings.federation, selection, development)
+        let localization = localization::policy(settings, selection, development, &snapshot)
             .map_err(FederationError::Localization)?;
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.

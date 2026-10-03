@@ -27,6 +27,7 @@ mod resolve;
 mod secrets;
 pub mod settings;
 pub mod stored_queries;
+pub mod xcpd;
 
 /// The prefix of every environment override.
 ///
@@ -74,6 +75,9 @@ pub struct Config {
     /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
     /// `ehr_id` domain there (#43).
     pub pixm: Option<Pixm>,
+    /// The XCPD localizer (`[xcpd]`): the responding gateways and the
+    /// community each member serves (Annex A.3, #85).
+    pub xcpd: Option<xcpd::Xcpd>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
@@ -96,6 +100,7 @@ impl Default for Config {
             credentials: BTreeMap::new(),
             dev: None,
             pixm: None,
+            xcpd: None,
             stored_queries: stored_queries::StoredQueries::default(),
             metrics: Metrics::default(),
             signing: None,

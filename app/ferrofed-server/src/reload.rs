@@ -39,9 +39,9 @@ use crate::state::AppState;
 /// The configuration sections a reload applies.
 ///
 /// `registry` is the registry document, its path and its form, `credentials`
-/// the outbound credentials of each endpoint, and `dev` and `pixm` the
-/// resolver, which names the members.
-pub const RELOADABLE: [&str; 4] = ["registry", "credentials", "dev", "pixm"];
+/// the outbound credentials of each endpoint, `dev` and `pixm` the
+/// resolver, and `xcpd` the localizer, both of which name the members.
+pub const RELOADABLE: [&str; 5] = ["registry", "credentials", "dev", "pixm", "xcpd"];
 
 /// Reloads the registry the server started with.
 ///
@@ -295,6 +295,7 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         credentials: fresh.credentials,
         dev: fresh.dev,
         pixm: fresh.pixm,
+        xcpd: fresh.xcpd,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),

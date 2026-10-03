@@ -26,7 +26,7 @@ governs this: our own design.
 |---|---|---|
 | Member CDRs | answer standard AQL scoped to one `ehr_id`, and the reads and writes routed to them | openEHR ITS-REST 1.1.0, over each node's own base URL |
 | Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm ITI-83 ([Identity resolution](identity.md)) |
-| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every member's cross-reference | none: every member is a candidate (`ask-all`); IHE XCPD is planned for v0.0.8 ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) |
+| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every member's cross-reference | none, where every member is a candidate (`ask-all`), or IHE XCPD ITI-55 under `node_selection = "localized"` ([XCPD localization](identity.md#xcpd-localization-xcpd)) |
 | Addressing | resolves each community to its CDR base URLs | the registry document, in TOML or as FHIR `Organization` and `Endpoint` resources ([The registry](registry.md)); reading it from an mCSD directory is planned for v0.0.8 ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)) |
 | Authentication and authorization | authenticates the client, and the gateway to each node | outbound credentials per endpoint, a bearer token, basic credentials or OAuth 2.0 client credentials with an RFC 7523 assertion; no client authentication yet ([below](#authentication)) |
 

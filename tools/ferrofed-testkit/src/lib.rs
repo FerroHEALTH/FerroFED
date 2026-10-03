@@ -25,10 +25,10 @@
 //!   reach, the unreachable node of a test;
 //! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
 //!   feeds the PIX Manager over ITI-104, and names patients only inside the
-//!   `urn:oid:2.999` example arc.
+//!   `urn:oid:2.999` example arc;
+//! - [`xcpd`]: a stub XCPD Responding Gateway answering ITI-55 (#85).
 //!
-//! The other identity fakes (the localizer, the consent pre-filter) arrive
-//! with the issues that first need them.
+//! The consent pre-filter fake arrives with the issue that first needs it.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod containers;
@@ -39,6 +39,7 @@ pub mod pix;
 pub mod proxy;
 pub mod seed;
 pub mod unreachable;
+pub mod xcpd;
 
 use std::fmt;
 use std::path::PathBuf;

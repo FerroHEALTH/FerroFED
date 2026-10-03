@@ -189,8 +189,94 @@ localizer: it names the members that hold a row for the patient, and every
 other member is `not-localized`
 ([Node selection](registry.md#node-selection)).
 
-Two further bindings of the specification are planned for v0.0.8: IHE XCPD
-for localization, failing closed when the localizer does not answer
-([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)), and PMIR
-notifications of a merge or split
+## XCPD localization: `[xcpd]`
+
+The `[xcpd]` table makes the gateway an IHE XCPD Initiating Gateway, the
+specification's proposed localization binding (N4, §14.1, Annex A.3). Under
+`federation.node_selection = "localized"`, each undirected patient query
+first asks every configured Responding Gateway, by the patient's identifier
+alone, which communities hold the patient (ITI-55 Cross Gateway Patient
+Discovery, ITI TF-2 §3.55, Revision 20.1). The members serving those
+communities are the candidates; every other member is `not-localized` and is
+not asked. A match is a candidate to ask, never a release decision: each
+node still enforces consent (§14.3).
+
+```toml
+profile = "production"
+
+[federation]
+node_selection = "localized"
+
+[federation.localization]
+on_failure = "closed"   # the default (§14.1)
+timeout_ms = 5000
+
+[xcpd]
+sender_device = "2.999.40.1"           # the gateway's device OID
+home_community = "2.999.40"            # optional: the gateway's own community
+assertion_file = "/run/secrets/xua.xml"            # optional
+client_identity_file = "/run/secrets/xcpd-client.pem"
+trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"  # optional
+
+[[xcpd.gateway]]
+url = "https://xcpd.region.example.org/RespondingGateway"
+device = "2.999.50.1"                  # the receiver device OID
+# community = "2.999.50"               # optional: ask for this community only
+
+[xcpd.communities]                     # every member needs one
+"2.999.50" = "node-a"
+"urn:oid:2.999.60" = "node-b"
+
+[xcpd.namespaces]                      # only for a namespace that is no OID
+"region-mrn" = "2.999.1"
+```
+
+The request names the patient by the shared identifier mode of ITI-55:
+one `LivingSubjectId` whose `root` is the assigning authority and whose
+`extension` is the value, with no name, birth date or other demographics.
+A namespace that is an OID, dotted or as `urn:oid:`, is the assigning
+authority; any other needs an entry in `[xcpd.namespaces]`. A namespace with
+no mapping fails the query closed.
+
+What a deployment must provide:
+
+- **The device OIDs** of the gateway (`sender_device`) and of each
+  responding gateway (`device`). ITI TF-2 Appendix O requires an ISO OID for
+  each, and every identifier here is refused at boot unless it is one.
+- **The community map.** Every registry member must be served by a
+  community, or boot is refused, since no discovery could ever name it. A
+  community a gateway answers that the map does not name belongs to no
+  member and adds no candidate.
+- **TLS.** Every XCPD actor is an ATNA Secure Node or Secure Application
+  (ITI TF-1 Table 27.1.3-1), so a gateway URL must be `https`;
+  `client_identity` (or `client_identity_file`) holds the PEM client
+  certificate chain and private key for mutual TLS, and `trust_roots_file`
+  adds the network's roots to the platform's. A plain `http` URL is refused
+  at boot, naming its key, unless the configuration is
+  `profile = "development"`.
+- **The XUA assertion, where the network requires one.** ITI-55 requires
+  none, but many networks require a SAML 2.0 assertion (IHE XUA, ITI-40).
+  The gateway signs nothing: your identity provider or security token
+  service issues and signs the assertion, and the gateway sends its bytes
+  unchanged in a WS-Security header, so its signature still verifies.
+  `assertion` (or `assertion_file`) must hold exactly one
+  `saml2:Assertion` element that declares every namespace prefix it uses;
+  anything else is refused at boot. An assertion expires: replace the file
+  before its `NotOnOrAfter` and [reload](registry.md#reloading-the-registry).
+
+The discovery fails closed as a whole. One responding gateway that faults,
+answers an error (Case 5 of §3.55.4.2.3), asks for demographics (Case 3),
+answers outside ITI-55, or stays silent past `timeout_ms` leaves every member
+`not-localized` with the error, and the query asks no node; a community
+behind that gateway might hold the patient. `on_failure = "ask-all"` asks
+every member instead ([Node selection](registry.md#node-selection)).
+`OPTIONS {base}/` declares `localization.mode` as `"xcpd"`.
+
+FerroFED sends the synchronous exchange only, with an immediate response: it
+claims neither the Asynchronous Web Services Exchange nor the Deferred
+Response option (ITI TF-1 §27.2), and it caches no correlation between
+queries. `[xcpd]` takes effect on a reload, and under
+`node_selection = "ask-all"` it refuses the configuration.
+
+PMIR notifications of a merge or split are planned for v0.0.8
 ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147)).

@@ -1111,15 +1111,18 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "fhir-types",
  "http",
+ "jiff",
+ "quick-xml",
  "reqwest",
  "secrecy",
  "serde_json",
  "thiserror",
  "url",
+ "uuid",
 ]
 
 [[package]]
