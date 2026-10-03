@@ -138,11 +138,46 @@ Labels carry what the platform has no field for. Bootstrap them once with
   own (owner, 2026-10-02). The comment opens with a one-line title in bold, then
   a plain summary, what the specification says (with citations), what this
   implementation does, and the resolution an upstream would need. The issue is
-  the record and stays here: nothing is filed on an external tracker, and no
-  owner-action issue for filing is ever created. It never carries a milestone
-  and stays open; a report the upstream resolves gets a follow-up comment, and
-  the in-repo decision a report forces is its own, milestoned issue that links
-  to the comment.
+  the record. The owner reports the comments upstream at the end, so every
+  comment is written to be filed as it stands under that upstream's own
+  contributing rules (§ Upstream report format below); no owner-action issue
+  for filing is ever created. It never carries a milestone and stays open; a
+  report the upstream resolves gets a follow-up comment, and the in-repo
+  decision a report forces is its own, milestoned issue that links to the
+  comment.
+
+### Upstream report format
+
+Each report, and each numbered item of a comment that bundles several, says:
+
+- **Upstream:** the project it goes to, by repository or specification:
+  `syntaric/openehr-federation-spec` for the Federation Tier text and its two
+  schemas, openEHR ITS-REST or AQL for those specifications, the IHE profile
+  for a bound profile, or the named implementation (a node product, the
+  reference implementation). A bundle whose items go to different upstreams
+  names it per item.
+- **Form:** an issue (a question, objection or silence) or a pull request (a
+  concrete text change).
+- **Against:** the pinned version and commit (today v0.9.0, `7162d0c`).
+- **Citations** in the upstream's own form. For the Federation Tier
+  specification (its `CONTRIBUTING.md`, "How to reference the spec"):
+  sections by § number, requirements as **N7**, conformance points as
+  **CP-14**, with a deep link to the rendered page and its anchor
+  (`…/requirements.html#n7`, `#cp-14`), and a schema by file and JSON
+  pointer. Quote the text that is wrong, short.
+- **What FerroFED does,** with the in-repo issue that holds the decision.
+- **Resolution:** the change the upstream would need. For a pull-request
+  report to the Federation Tier specification it names the AsciiDoc pages
+  under `modules/ROOT/pages/` to edit (never an exported rendering), puts any
+  schema change in the same change as its prose, never tightens a schema
+  beyond what the prose says (the prose is fixed first), never adds a
+  federation constraint inside `$defs/itsRest`, and notes that
+  `tools/check-refs.sh`, `tools/traceability.sh` and `tools/check-schemas.sh`
+  must pass. Contributions there are CC0.
+
+Comment ids and item numbers are cited from the code and from
+`conformance/obligations.tsv`, so a report is corrected by editing its
+comment in place, keeping its numbering, never by deleting and re-posting it.
 
 The organisation also defines `Start date` and `Target date` issue fields;
 this repository leaves both empty, because the milestone is the release spine

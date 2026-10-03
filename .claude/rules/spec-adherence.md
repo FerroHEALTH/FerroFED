@@ -174,9 +174,10 @@ so.
 - **A defect in a published specification is recorded as a comment on the
   standing upstream-reports issue (#212)** (`issue-workflow.md` § Outbound), with
   what the specification says, what this implementation does, and the
-  resolution an upstream would need. That issue is the record and stays in this
-  tracker; nothing is filed on an external tracker, and no issue asks anyone to
-  do so. Do not encode a workaround with no record.
+  resolution an upstream would need, in the format of `issue-workflow.md`
+  § Upstream report format, so the owner can file it upstream as it stands
+  under that upstream's contributing rules. That issue is the record; no issue
+  asks anyone to file it. Do not encode a workaround with no record.
 - Subagents doing spec-facing work must be handed the relevant sections, N and
   CP numbers or URLs in their prompt, and reviewers verify claims against them.
 
