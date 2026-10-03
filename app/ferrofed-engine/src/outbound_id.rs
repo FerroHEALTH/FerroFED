@@ -39,9 +39,16 @@
 //! | `Host`, `Content-Length` | the endpoint's authority, the body length | the HTTP engine, from the registry URL and the client's body |
 //! | `Accept-Encoding` | the codings the engine decodes | the HTTP engine, from its compression features |
 //!
-//! Every other client header is stripped, the federation's own included. No
-//! specification governs the correlation header itself: our own design, under
-//! the name every proxy already uses.
+//! Every other client header is stripped, the federation's own included.
+//!
+//! A stored-query definition sent to a node or read back from one
+//! (`{base}/v1/definition/query/{name}/{version}`, §12.7) carries the headers
+//! of `POST {base}/v1/query/aql` above, its `Content-Type` `text/plain` for the
+//! AQL text of a `PUT`, and none from the client request
+//! ([`crate::dispatch::definition`]).
+//!
+//! No specification governs the correlation header itself: our own design,
+//! under the name every proxy already uses.
 //!
 //! The outbound gate does not search the minted id for a withheld identifier
 //! ([`crate::hygiene`]): it carries no client input, and a short all-hex

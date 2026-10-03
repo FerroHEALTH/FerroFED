@@ -166,6 +166,10 @@ pub enum Code {
     /// `ehr_create_with_id`). The body names the endpoints, never the
     /// `ehr_id`.
     EhrIdHeld,
+    /// A stored-query definition whose AQL carries a `FROM ENDPOINT` or
+    /// `ORGANISATION` directive is asked to be distributed to members, which
+    /// cannot execute it; nothing is stored (§12.7, §8.1, N44).
+    DefinitionEndpointTargeted,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -181,7 +185,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 38] = [
+    pub const GATEWAY: [Self; 39] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -220,6 +224,7 @@ impl Code {
         Self::SubjectSeveral,
         Self::ResolutionUnavailable,
         Self::EhrIdHeld,
+        Self::DefinitionEndpointTargeted,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -274,6 +279,7 @@ impl Code {
             Self::SubjectSeveral => "subject-several",
             Self::ResolutionUnavailable => "resolution-unavailable",
             Self::EhrIdHeld => "ehr-id-held",
+            Self::DefinitionEndpointTargeted => "definition-endpoint-targeted",
         }
     }
 
@@ -302,7 +308,8 @@ impl Code {
             | Self::QueryTypeUnsupported
             | Self::SubjectLiteral
             | Self::PrecedingVersionInvalid
-            | Self::ParameterValueInvalid => StatusCode::BAD_REQUEST,
+            | Self::ParameterValueInvalid
+            | Self::DefinitionEndpointTargeted => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
                 StatusCode::NOT_FOUND
             }
@@ -412,6 +419,9 @@ impl Code {
             Self::EhrIdHeld => {
                 "the ehr_id is already held at another member, so no EHR is created under it at the endpoint named (§12.4, §12.5.2)"
             }
+            Self::DefinitionEndpointTargeted => {
+                "a stored query whose AQL carries a FROM ENDPOINT or ORGANISATION directive is never distributed: a node cannot execute it. Nothing was stored; store it without naming members in the targeting headers, and it runs federated (§12.7, §8.1, N44)"
+            }
         }
     }
 }
@@ -509,6 +519,7 @@ mod tests {
             Code::SubjectSeveral => Some(35),
             Code::ResolutionUnavailable => Some(36),
             Code::EhrIdHeld => Some(37),
+            Code::DefinitionEndpointTargeted => Some(38),
         }
     }
 
@@ -594,6 +605,7 @@ mod tests {
             (Code::SubjectSeveral, StatusCode::CONFLICT),
             (Code::ResolutionUnavailable, StatusCode::FAILED_DEPENDENCY),
             (Code::EhrIdHeld, StatusCode::CONFLICT),
+            (Code::DefinitionEndpointTargeted, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

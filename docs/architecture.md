@@ -338,7 +338,7 @@ tables, split by what each area needs (decision A11):
 | `query` | 6 (ad hoc and stored, GET and POST) | FerroFED handlers over the generated DTOs, matched by `routes::lookup`; fan-out under sections 3 and 9. They answer `424`/`504` with `meta.federation` (N37), which `ApiError` and the typed answers cannot express, and which belong in no ITS-REST crate |
 | `ehr` | 33 | single-node and byte-identical: `routes::lookup` names the operation from the method and path without reading the body, the routing of §12 picks the node, and `Client::forward` sends it once, unclassified and unretried |
 | `definition/template` | 9 | single-node to an explicitly chosen node, as `ehr` (§12.6, N43); where `federation.fan_out_template_upload` is set, a template upload naming `*` or several endpoints fans out to each, `Client::forward` per member, answered per node with `meta.federation` and never rolled back (§12.6 `template-fanout`, #76) |
-| `definition/query` | 4 | the generated router over the gateway-held registry when N44 is on; single-node raw otherwise |
+| `definition/query` | 4 | the generated router over the gateway-held registry when N44 is on; single-node raw otherwise; where `federation.fan_out_stored_queries` is set beside the registry, a `PUT` naming `*` or members is also distributed to each and a `GET` naming them reports drift per member (§12.7, #78) |
 | `admin` | 2 | single-node raw, explicit target only |
 | `demographic` | 41 | the generated router with every method at its `501` default (§7a.1, N32) |
 | `system` | `OPTIONS {base}/v1/` | ITS-REST's own body through the typed System trait (N1) |
@@ -1214,6 +1214,7 @@ close on those tests.
 | async | not built; `respond-async` ignored, tested | #59 | absent |
 | stored-query registry | offered, `redb` by default | #77 | `definition.stored_query_registry: true` |
 | template fan-out upload | opt-in by configuration, off by default; a partial success is `207` | #76 | `definition.fan_out_template_upload` |
+| stored-query definition fan-out | opt-in by configuration, off by default, refused without the registry; a `PUT` naming members is stored first and then distributed on the template terms; `FROM ENDPOINT` refused for it; a `GET` naming members reports drift per member as `node-error` with a code | #78 | `definition.stored_query_fan_out`, `true` only beside the registry |
 
 **Invariants**, each a `proptest` property over generated node result sets:
 

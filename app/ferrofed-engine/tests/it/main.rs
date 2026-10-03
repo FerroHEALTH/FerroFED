@@ -8,6 +8,7 @@
 //! single-node forwarding (§7a.3, N22, N31, N33).
 
 mod architecture;
+mod definition;
 mod dispatch;
 mod fanout;
 mod forward;

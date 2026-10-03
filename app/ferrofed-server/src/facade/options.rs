@@ -137,10 +137,11 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
                 .collect(),
             extra: Extra::new(),
         },
-        // TODO(#78): declare stored_query_fan_out true once definitions fan out to the nodes.
+        // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is declared only
+        // beside the registry it distributes from.
         definition: DefinitionBehaviour::new(federation.fans_out_template_upload())
             .with_stored_query_registry(registry)?
-            .with_stored_query_fan_out(false)?,
+            .with_stored_query_fan_out(registry && federation.fans_out_stored_queries())?,
         // NOTE: §14.1, fail-closed is the default and the gateway offers no
         // fail-open, so `closed` holds for any localizer it is configured with.
         localization: Localization {
@@ -219,7 +220,18 @@ fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
 /// routed to the one `demographic` endpoint the deployment declared, which
 /// each request names (§7a.1, §12.4, §12.6, N23, N32).
 fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, DescribeError> {
-    let (query, routed) = if registry {
+    let (query, routed) = if registry && federation.fans_out_stored_queries() {
+        (
+            "federated: GET and POST {base}/v1/query/aql and GET and POST \
+             {base}/v1/query/{name}[/{version}] fan out",
+            "routed-single-node: a template request under {base}/v1/definition/template/ goes \
+             to the one endpoint the targeting headers name, never merged; \
+             stored queries at the gateway registry, which runs its own copy; \
+             a stored-query PUT naming * or endpoints in the targeting headers is also \
+             distributed to each, reported per node and never rolled back, and a GET of a \
+             version naming them reports per node whether its copy matches",
+        )
+    } else if registry {
         (
             "federated: GET and POST {base}/v1/query/aql and GET and POST \
              {base}/v1/query/{name}[/{version}] fan out",

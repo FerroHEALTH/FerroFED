@@ -4,10 +4,12 @@
 //! Node dispatch: one ITS-REST client per registry endpoint, and the mapping
 //! from what a node answered to exactly one §11.1 endpoint status (N16, N40).
 //!
-//! Every request to a node is the generated `query_execute_adhoc_query_body`
-//! (`POST {base}/v1/query/aql`) of `openehr-its`'s `rest-client`, so the
-//! request line, the headers and the body are composed by that runtime and
-//! nowhere in FerroFED (no specification governs this: our own design). This
+//! Every query to a node is the generated `query_execute_adhoc_query_body`
+//! (`POST {base}/v1/query/aql`) of `openehr-its`'s `rest-client`, and every
+//! stored-query definition sent to or read from a node is a generated call
+//! too ([`definition`]), so the request line, the headers and the body are
+//! composed by that runtime and nowhere in FerroFED (no specification governs
+//! this: our own design). This
 //! module adds the per-endpoint client, the call's deadline and the gateway's
 //! [`OutboundId`], and the classification of the answer. Every header a node
 //! request carries is listed in [`crate::outbound_id`]:
@@ -46,6 +48,7 @@ use openehr_its::rest::generated::query::{
 use url::Url;
 
 mod classify;
+pub mod definition;
 mod gate;
 
 /// The API version segment ITS-REST 1.1.0 puts every path under

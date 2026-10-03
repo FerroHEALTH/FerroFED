@@ -22,7 +22,12 @@
 //! submitted the text inline: the targeting headers, the completion and dedup
 //! modes and the budget apply unchanged, and the answer carries ITS-REST's
 //! `name` naming the gateway's definition (§12.7, N44). Without a version,
-//! the highest one is run (ITS-REST Query API).
+//! the highest one is run (ITS-REST Query API). The registry's own AQL is
+//! always the one run, never a member's copy (§12.7 stored-query-drift).
+//!
+//! Where the deployment offers it, a `PUT` naming members in its targeting
+//! headers is also distributed to them, and a `GET` of a version naming them
+//! reports per member whether its copy matches (`distribution`).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -49,6 +54,8 @@ use crate::facade::request::Submitted;
 use crate::facade::route::Arrived;
 use crate::facade::{answer, security};
 use crate::federation::Federation;
+
+mod distribution;
 
 /// The path parameter that names the stored query.
 const NAME_PARAM: &str = "qualified_query_name";
@@ -132,7 +139,7 @@ pub(crate) async fn serve<'a>(
     let answered = match operation {
         Operation::Store => store(federation, definitions, matched, &arrived).await,
         Operation::StoreUnversioned => Err(Refused::fixed(Code::QueryVersionRequired)),
-        Operation::Read => read(definitions, matched),
+        Operation::Read => read(federation, definitions, matched, &arrived).await,
         Operation::List => list(definitions, matched),
         Operation::Execute(carrier) => {
             execute(federation, definitions, (matched, carrier), arrived).await
@@ -269,12 +276,19 @@ fn members(
 /// `200` with `Location` naming it, as a reference relative to the request
 /// (RFC 9110 §10.2.2), because the gateway does not know its public base URL
 /// (§4.1, N28).
+///
+/// A request naming members for distribution is refused before anything is
+/// stored when its targeting cannot be answered, or when the definition
+/// carries a `FROM ENDPOINT` or `ORGANISATION` directive (§12.7
+/// fanout-endpoint-targeted-refused); otherwise the definition is stored and
+/// then distributed ([`distribution::distribute`]).
 async fn store(
     federation: &Federation,
     definitions: &Arc<Definitions>,
     matched: &RouteMatch,
     arrived: &Arrived<'_>,
 ) -> Result<Response, Refused> {
+    let started = Instant::now();
     let logged = arrived.outbound.to_string();
     let name = name(matched)?;
     let version = segment(matched, VERSION_PARAM)
@@ -282,6 +296,7 @@ async fn store(
         .parse::<QueryVersion>()
         .map_err(|refused| Refused::with(Code::QueryVersionInvalid, &refused))?;
     query_string(matched, arrived)?;
+    let distributed = distribution::requested(federation, arrived.headers)?;
     let text =
         std::str::from_utf8(&arrived.body).map_err(|_text| Refused::fixed(Code::BodyInvalid))?;
     let admitted = Definition::admit(text, federation.context()).map_err(|refusal| {
@@ -292,13 +307,22 @@ async fn store(
         security::definition_refused(at.as_ref(), &logged);
         return Err(Refused::fixed(Code::SubjectLiteral));
     }
+    if distributed.is_some() {
+        distribution::distributable(admitted.aql(), &logged)?;
+    }
     let stored = StoredDefinition::new(name, version, admitted.aql().to_owned(), Timestamp::now());
+    let copy = stored.clone();
     let held = Arc::clone(definitions);
     // NOTE: no specification governs this: our own design; the insert commits
     // to disk, so it runs where a blocking call may wait.
     let inserted = tokio::task::spawn_blocking(move || held.insert(stored)).await;
     match inserted {
-        Ok(Ok(Insertion::Stored)) => stored_answer(version),
+        Ok(Ok(Insertion::Stored)) => match distributed {
+            Some(selected) => {
+                distribution::distribute(federation, &copy, &selected, (arrived, started)).await
+            }
+            None => stored_answer(version),
+        },
         Ok(Ok(Insertion::Held)) => Err(Refused::fixed(Code::StoredQueryHeld)),
         Ok(Err(failure)) => {
             tracing::error!(
@@ -342,14 +366,25 @@ fn its_rest(definition: &StoredDefinition) -> StoredQuery {
 }
 
 /// `GET {base}/v1/definition/query/{name}/{version}`: the definition the
-/// version selects, or `404` (ITS-REST Definition API).
-fn read(definitions: &Definitions, matched: &RouteMatch) -> Result<Response, Refused> {
+/// version selects, or `404` (ITS-REST Definition API), with a per-member
+/// drift report where the request names members and the deployment offers
+/// it ([`distribution::drift`]).
+async fn read(
+    federation: &Federation,
+    definitions: &Definitions,
+    matched: &RouteMatch,
+    arrived: &Arrived<'_>,
+) -> Result<Response, Refused> {
     let name = name(matched)?;
     let pattern = pattern(matched)?;
+    let checked = distribution::requested(federation, arrived.headers)?;
     let definition = definitions
         .find(&name, pattern.as_ref())
         .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;
-    Ok((StatusCode::OK, Json(its_rest(&definition))).into_response())
+    match checked {
+        Some(selected) => distribution::drift(federation, &definition, &selected, arrived).await,
+        None => Ok((StatusCode::OK, Json(its_rest(&definition))).into_response()),
+    }
 }
 
 /// `GET {base}/v1/definition/query/{name}`: every version of every

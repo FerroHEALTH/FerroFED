@@ -472,6 +472,44 @@ path = "/var/lib/ferrofed/stored-queries.redb"
 The [client contract](../integrate/client-contract.md#stored-queries) says how
 a client stores and invokes a query.
 
+### Distributing stored queries to the members
+
+The registry runs its own copy of every definition, so no member needs one.
+A deployment that wants each definition at the members too, for a node that
+runs it by name locally or for an audit at the point of execution, can have
+the registry distribute it (§12.7):
+
+```toml
+[federation]
+fan_out_stored_queries = true   # off by default
+
+[stored_queries]
+path = "/var/lib/ferrofed/stored-queries.redb"
+```
+
+- Distribution is a facility of the registry. Setting
+  `fan_out_stored_queries` without `stored_queries.path` refuses the
+  configuration, at `config check` and at start.
+- Only a stored-query `PUT` that asks for it is distributed, with
+  `openEHR-federation-endpoint: *` (every active member) or headers that
+  name members. The registry stores the definition first; each named member
+  is then sent the registry's copy independently, within the request's
+  budget, and nothing is rolled back. A `PUT` naming no member stores at the
+  registry alone.
+- A definition that carries a `FROM ENDPOINT` or `ORGANISATION` directive is
+  refused for distribution, because no node can run it. Store it without the
+  header, and it runs federated.
+- A `GET` of a stored version that names members reports, per member,
+  whether its copy matches the registry's. An invocation always runs the
+  registry's copy, never a member's.
+- `OPTIONS {base}/` declares the setting as `definition.stored_query_fan_out`,
+  `true` only while the registry is offered. The setting is named in the
+  startup log line, and changing it needs a restart.
+
+The [client
+contract](../integrate/client-contract.md#distributing-a-stored-query) gives
+the answers.
+
 ## The DEMOGRAPHIC area
 
 The gateway never federates the openEHR DEMOGRAPHIC API (§7a.1, N32): the
@@ -671,7 +709,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |
-| `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; a template upload naming `*` or several endpoints fanned out to each when `federation.fan_out_template_upload` is set; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, routed like every other definition request; `501` when no registry is configured |
+| `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; a template upload naming `*` or several endpoints fanned out to each when `federation.fan_out_template_upload` is set; stored-query definitions held at the gateway when `[stored_queries]` is set, and distributed to the members a `PUT` names when `federation.fan_out_stored_queries` is set beside it; without `[stored_queries]`, routed like every other definition request; `501` when no registry is configured |
 | `{base}/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
 | any other path under `{base}/v1/` | `501` |
 | any other path | `404` |

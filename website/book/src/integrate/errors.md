@@ -124,6 +124,20 @@ registry member, as in a federated result set (§9.5):
 
 The provenance headers name only the members that accepted (§7a.3).
 
+## A distributed stored query
+
+Where the deployment distributes stored-query definitions, a `PUT` naming
+members is answered on the statuses of the table above, and the definition is
+stored at the registry first whatever they are (§12.7, N44). The body is the
+registry's `StoredQuery` with `meta.federation` beside it, so even a `424` or
+a `504` names the definition the registry holds.
+
+A `GET` of a version naming members reports drift: `200` when every named
+member's copy matches, and `207` otherwise. A member whose copy differs, or
+that holds none, is `node-error` with an `error` object whose `code` is
+`definition-differs` or `definition-missing`. §11.1 has no status for drift,
+and its set is closed, so the code says which.
+
 ## Gateway codes
 
 | Code | Status | When |
@@ -143,7 +157,7 @@ The provenance headers name only the members that accepted (§7a.3).
 | `endpoint-unknown` | 400 | The `FROM ENDPOINT` directive or the `openEHR-federation-endpoint` header names an identifier that is not an endpoint of the registry, or the header names no identifier at all (§8.4.1, N19). This holds on every request the header applies to: a query, and a request routed to one node. The message names the directive or the header, points at the identifier by its place in the list, and never quotes it. |
 | `organisation-unknown` | 400 | The `ORGANISATION` directive or the `openEHR-federation-organisation` header names an identifier that is not an organisation of the registry, or the header names no identifier at all (§8.1, §8.4.1, N20). The message points at the identifier by its place in the list and never quotes it. |
 | `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and neither a resolution binding of the session nor the gateway's `ehr_id` index names exactly one; the gateway never finds a write's destination by trial, so nothing is probed (§12.5.1, N41). The creation of an EHR, `POST {base}/v1/ehr` or `PUT {base}/v1/ehr/{ehr_id}`, always names its node in the header, because a new EHR has no owner for a binding or the index to name (§12.4, N23). So does every request under `{base}/v1/definition/` the stored-query registry does not answer: a template lives at the node it was sent to, and the gateway never picks one for you (§12.6, N43). |
-| `endpoint-several` | 400 | A request routed to one node selects more than one endpoint through `openEHR-federation-endpoint` or `openEHR-federation-organisation` (§7a.1, §12.4). A definition request is never fanned out, so a `*` there is an unknown endpoint (`endpoint-unknown`) and two named endpoints are this error (§12.6, N43), except a template upload where fan-out template upload is offered ([above](#a-fan-out-template-upload)); so is a DEMOGRAPHIC request naming two (§7a.1, N32). |
+| `endpoint-several` | 400 | A request routed to one node selects more than one endpoint through `openEHR-federation-endpoint` or `openEHR-federation-organisation` (§7a.1, §12.4). A definition request is never fanned out, so a `*` there is an unknown endpoint (`endpoint-unknown`) and two named endpoints are this error (§12.6, N43), except a template upload where fan-out template upload is offered ([above](#a-fan-out-template-upload)), and a stored-query `PUT` or version `GET` where definition fan-out is offered beside the registry ([above](#a-distributed-stored-query)); so is a DEMOGRAPHIC request naming two (§7a.1, N32). |
 | `query-parameter-refused` | 400 | A request routed to one node carries a query parameter the ITS-REST operation it addresses does not declare, or `subject_id` or `subject_namespace` anywhere but on `GET {base}/v1/ehr`, where the gateway consumes both as resolution input. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
 | `node-timeout` | 504 | The node a request was routed to, or a member the ask-all probe asked, did not answer in time (§11.2, §11.5). A member that did not answer may hold the `ehr_id`, so the probe names no owner; the message names that member. |
 | `node-unreachable` | 504 | The node a request was routed to, or a member the ask-all probe asked, could not be reached (§11.2). |
@@ -166,6 +180,7 @@ The provenance headers name only the members that accepted (§7a.3).
 | `subject-several` | 409 | The subject of `GET {base}/v1/ehr` resolves at more than one member, and no `openEHR-federation-endpoint` header names one of them. The gateway never chooses by where the patient resolved, so it sends the read to none; the message lists the endpoints and never the subject. Name the endpoint in the header to read that member's EHR (§8.4, §12.5.2). |
 | `resolution-unavailable` | 424 | The cross-reference service could not answer for a member while resolving the subject of `GET {base}/v1/ehr`, or no cross-reference service is configured. That member may hold the EHR, so the gateway answers neither its `404` nor another member's EHR; the message names the members and never the subject (§5.2, §11.2). |
 | `ehr-id-held` | 409 | `PUT {base}/v1/ehr/{ehr_id}` names one member in `openEHR-federation-endpoint` while your session's resolution bindings or the gateway's `ehr_id` index already place that `ehr_id` at another member. Creating it would put one `ehr_id` at two members, the collision of §12.5.2, so the gateway sends the create to no node. The message names the holding endpoints and the one you named, and never quotes the `ehr_id`. When the member you named is the one that holds it, the create is sent there and that node answers its own `409` (ITS-REST 1.1.0 `ehr_create_with_id`; §12.4, §12.5.2, N23, N42). |
+| `definition-endpoint-targeted` | 400 | A stored-query `PUT` names members to distribute the definition to, and its AQL carries a `FROM ENDPOINT` or `ORGANISATION` directive. The directive names members of the federation, which a node cannot run, so the gateway distributes nothing and stores nothing; store it without naming members and it runs federated (§12.7, §8.1, N44). |
 
 The gateway answers `409` with five codes, and none of them sends anything
 to a node:

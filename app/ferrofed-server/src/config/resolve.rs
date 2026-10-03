@@ -40,7 +40,9 @@ impl Config {
     /// ([`Error::Listen`], [`Error::BasePath`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::DemographicEndpoint`], [`Error::Missing`],
     /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]),
-    /// each naming the key that carries the fault.
+    /// each naming the key that carries the fault, and
+    /// [`Error::StoredQueryFanOutWithoutRegistry`] when definitions would be
+    /// distributed with no registry to distribute from.
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -82,6 +84,12 @@ impl Config {
         }
         let federation = self.resolve_federation(request_timeout)?;
         let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
+        let stored_queries = stored_queries::resolve(self)?;
+        // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
+        // of the registry and is never offered without it.
+        if federation.fan_out_stored_queries && stored_queries.is_none() {
+            return Err(Error::StoredQueryFanOutWithoutRegistry);
+        }
         Ok(Settings {
             profile: self.profile,
             server: ServerSettings {
@@ -101,7 +109,7 @@ impl Config {
             credentials,
             dev: self.dev.clone(),
             pixm,
-            stored_queries: stored_queries::resolve(self)?,
+            stored_queries,
         })
     }
 
@@ -180,6 +188,7 @@ impl Config {
                 .collect(),
             demographic_endpoint,
             fan_out_template_upload: self.federation.fan_out_template_upload,
+            fan_out_stored_queries: self.federation.fan_out_stored_queries,
         })
     }
 }
