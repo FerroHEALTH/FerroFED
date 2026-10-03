@@ -12,6 +12,7 @@
 //! federation and the ITS-REST surface stays unserved.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -24,6 +25,7 @@ use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::Resolver;
+use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -41,6 +43,7 @@ pub struct Federation {
     clients: NodeClients<ReqwestTransport>,
     resolver: Option<Arc<dyn Resolver>>,
     bindings: ResolutionBindings,
+    index: EhrIndex,
     context: Context,
     budget: Budget,
     best_effort: bool,
@@ -201,6 +204,7 @@ impl Federation {
             clients,
             resolver,
             bindings: ResolutionBindings::new(settings.federation.binding_ttl),
+            index: ehr_index(settings.federation.ehr_index_capacity),
             context,
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
@@ -226,6 +230,7 @@ impl Federation {
             bindings: ResolutionBindings::new(std::time::Duration::from_millis(
                 crate::config::Federation::default().binding_ttl_ms,
             )),
+            index: ehr_index(default_index_capacity()),
             context,
             budget,
             best_effort: crate::config::Federation::default().best_effort,
@@ -244,6 +249,13 @@ impl Federation {
     #[must_use]
     pub fn bindings(&self) -> &ResolutionBindings {
         &self.bindings
+    }
+
+    /// The `ehr_id` to node index every request of this process shares
+    /// (§12.5.1 step 3).
+    #[must_use]
+    pub fn index(&self) -> &EhrIndex {
+        &self.index
     }
 
     /// The PMIR hook (track 8, provisional): a merge or split at the identity
@@ -342,6 +354,23 @@ impl std::fmt::Debug for Federation {
             )
             .finish_non_exhaustive()
     }
+}
+
+/// An empty `ehr_id` index of `capacity` entries.
+fn ehr_index(capacity: NonZeroU32) -> EhrIndex {
+    // NOTE: no specification governs this: our own design; a capacity past
+    // `usize` is bounded by `usize`, which only a platform under 32 bits reaches.
+    EhrIndex::new(NonZeroUsize::try_from(capacity).unwrap_or(NonZeroUsize::MAX))
+}
+
+/// The configuration's default `ehr_id` index capacity.
+#[expect(
+    clippy::expect_used,
+    reason = "the default capacity is a positive literal in the Federation Default impl"
+)]
+fn default_index_capacity() -> NonZeroU32 {
+    NonZeroU32::new(crate::config::Federation::default().ehr_index_capacity)
+        .expect("the default ehr_id index capacity should be positive")
 }
 
 /// The PIXm resolver `[pixm]` describes over the members of `snapshot`.

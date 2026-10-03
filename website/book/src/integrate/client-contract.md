@@ -186,19 +186,46 @@ or write sent to the gateway is routed to that CDR (§7.2, §12). A new object
 is always created on one node the client names; creation across nodes is
 refused (§2.3, N23).
 
-Today you name the node of a request to `{base}/v1/ehr/{ehr_id}/…` yourself,
-in the `openEHR-federation-endpoint` header, with the `endpoint_id` the
-result row carried (§12.5.1 step 1, §8.4), or in the
-`openEHR-federation-organisation` header, when the organisation manages that
-one endpoint. Together the headers select exactly one registry endpoint: an
-unknown identifier, several endpoints or two headers that disagree are a
-`400`, and an organisation that manages no endpoint is a `404`
-(`no-destination`). A query parameter such as `?endpoint=` names no node
-here either; it is one the operation does not declare, so it is a `400`
-(`query-parameter-refused`) and nothing is sent. A write that names
-none is a `400` with the code `target-required`, because the gateway never
-finds a write's destination by trial (§12.5.1, N41). A read that names none
-answers `501` until the gateway can find the node by itself.
+An `ehr_id` carries no system component, so a request to
+`{base}/v1/ehr/{ehr_id}/…` does not say on its face which node holds the EHR
+(§12.5). The `ehr_id` in the path must be an openEHR `HIER_OBJECT_ID`; any
+other value is a `400` (`ehr-id-invalid`) and nothing is routed. The gateway
+then finds the node in this order, and takes no later step once one names
+exactly one node (§12.5.1, N41):
+
+1. The targeting headers. Name the node yourself in the
+   `openEHR-federation-endpoint` header, with the `endpoint_id` the result
+   row carried (§8.4), or in the `openEHR-federation-organisation` header,
+   when the organisation manages that one endpoint. This is the recommended
+   way. Together the headers select exactly one registry endpoint: an unknown
+   identifier, several endpoints or two headers that disagree are a `400`,
+   and an organisation that manages no endpoint is a `404`
+   (`no-destination`). A query parameter such as `?endpoint=` names no node
+   here either; it is one the operation does not declare, so it is a `400`
+   (`query-parameter-refused`) and nothing is sent.
+2. A resolution binding of your client session: the node your earlier query
+   resolved that `ehr_id` at. Bindings belong to an authenticated session, so
+   this step answers once client authentication lands; until then it never
+   does.
+3. The gateway's `ehr_id` index, which it learns from resolutions and from
+   the nodes' successful answers.
+4. For a read only, an ask-all probe: the gateway sends
+   `GET {base}/v1/ehr/{ehr_id}` to every member at once, within its per-node
+   timeout and overall budget (§11.5). The one member that answers with the
+   EHR, while every other member answers `404`, gets your read; a read of
+   the EHR itself is answered from that probe. When every member answers
+   `404`, the read is a `404` (`no-destination`). When two members hold the
+   `ehr_id`, the read is a `409` (`ehr-id-collision`) that lists them, and
+   neither is read (§12.5.2, N42). When a member does not answer in time,
+   cannot be reached, or answers an error, the owner is unknown and the read
+   fails: `504` (`node-timeout`, `node-unreachable`) or `424`
+   (`node-error`, `node-refused`), naming the member.
+
+A binding or an index entry that names two members names none, and the
+gateway never picks one of them: a read goes to the ask-all probe, which
+answers the `409`. A write that none of the first three steps routes is a `400`
+with the code `target-required`, and nothing is probed, because the gateway
+never finds a write's destination by trial (§12.5.1, N41).
 
 A routed request reaches the node as you sent it:
 

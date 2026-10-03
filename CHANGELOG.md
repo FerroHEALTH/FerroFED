@@ -22,6 +22,30 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Added
 
+- Routing a path `ehr_id` in the order of §12.5.1 (#62; §12.5, N41,
+  CP-33). A request to `{base}/v1/ehr/{ehr_id}` or below it goes to the node
+  the targeting headers name, then the node a resolution binding of the
+  client session names, then the node the new `ehr_id` index names, and for
+  a read only, the one member an ask-all probe finds. The probe sends
+  `GET {base}/v1/ehr/{ehr_id}` to every member at once within the per-node
+  timeout and the overall budget (§11.5); a read of the EHR itself is
+  answered from the owner's probe answer. A read no member holds is
+  `404 no-destination`, one two members hold is `409 ehr-id-collision`
+  listing the claimants, and one a member did not answer for is `504`
+  (`node-timeout`, `node-unreachable`) or `424` (`node-refused`, and the new
+  code `node-error`), naming the member: a member that gave no answer may
+  hold the `ehr_id`, so the owner is unknown. A read that names no node no
+  longer answers `501`. A write none of the first three steps routes stays
+  `400 target-required`, and nothing is probed. A step that names two
+  members names none, and no later step picks one of them. The path
+  `ehr_id` must be an openEHR `HIER_OBJECT_ID`, and any other value is `400`
+  with the new code
+  `ehr-id-invalid` before any routing. The index learns from resolutions and
+  from members' successful answers, holds `ehr_id`s and member ids only, in
+  memory, and forgets the least recently used `ehr_id` past
+  `federation.ehr_index_capacity` (default 100000; 0 is refused). Session
+  bindings answer once client authentication lands (#80); the integrity
+  incident of a collision is #63.
 - ENDPOINT attributes in rows (#72; §9.2, §9.3, §9.4, N12, N17, N18,
   CP-35, CP-37). A directed query that selects `p/id` or `p/endpoint_id`,
   `p/organisation` or `p/organization_id`, `p/system_id` or `p/url` through
@@ -639,6 +663,13 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Security
 
+- A request routed to one node no longer logs the client's `X-Request-Id`
+  (#62; §5.4.1, §5.4.3, N33, CP-26). The security events of a refused query
+  parameter or a withheld request, and the failure events of the routed path
+  and the ask-all probe, named the client's own id, free text that can carry
+  a patient identifier. Every event of the routed path now names the
+  gateway's own id, the one its request line records; the client's id stays
+  in the response and its error body only.
 - A client's `X-Request-Id` no longer reaches any node (#217; §5.4.1, N33,
   CP-26). A legal client value was sent to every node of the fan-out as it
   came, so a patient identifier written into it passed the outbound gate,

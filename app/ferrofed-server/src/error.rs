@@ -74,8 +74,8 @@ pub enum Code {
     /// header names an organisation the registry does not know, or the
     /// header names none (§8.1, §8.4.1, N20).
     OrganisationUnknown,
-    /// A write to an EHR resource names no node, and nothing else routes it
-    /// (§12.5.1, N41).
+    /// A write to an EHR resource names no node, and no held binding or
+    /// `ehr_id` index entry routes it to exactly one (§12.5.1, N41).
     TargetRequired,
     /// The targeting headers of a request routed to a single node select
     /// more than one endpoint (§7a.1, §12.4).
@@ -95,6 +95,13 @@ pub enum Code {
     /// header or the two headers, select different node sets (§8.4.1, N35).
     /// The body names both sets.
     TargetingConflict,
+    /// The `ehr_id` in a request path is not an openEHR `HIER_OBJECT_ID`
+    /// (§12.5).
+    EhrIdInvalid,
+    /// A node answered with an error, so the request cannot be completed
+    /// (§11.2): a member answered the ask-all probe of a path `ehr_id` with
+    /// neither a success nor `404` (§12.5.1).
+    NodeError,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -110,7 +117,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 21] = [
+    pub const GATEWAY: [Self; 23] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -132,6 +139,8 @@ impl Code {
         Self::NodeUnreachable,
         Self::NodeRefused,
         Self::TargetingConflict,
+        Self::EhrIdInvalid,
+        Self::NodeError,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -169,6 +178,8 @@ impl Code {
             Self::NodeUnreachable => "node-unreachable",
             Self::NodeRefused => "node-refused",
             Self::TargetingConflict => "targeting-conflict",
+            Self::EhrIdInvalid => "ehr-id-invalid",
+            Self::NodeError => "node-error",
         }
     }
 
@@ -188,13 +199,14 @@ impl Code {
             | Self::TargetRequired
             | Self::EndpointSeveral
             | Self::QueryParameterRefused
-            | Self::TargetingConflict => StatusCode::BAD_REQUEST,
+            | Self::TargetingConflict
+            | Self::EhrIdInvalid => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound => StatusCode::NOT_FOUND,
             Self::EhrIdCollision | Self::ControllingSystemUnreachable => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
-            Self::NodeRefused => StatusCode::FAILED_DEPENDENCY,
+            Self::NodeRefused | Self::NodeError => StatusCode::FAILED_DEPENDENCY,
         }
     }
 
@@ -229,7 +241,7 @@ impl Code {
                 "the organisation directive or header names an organisation the registry does not know (§8.4.1)"
             }
             Self::TargetRequired => {
-                "a write to an EHR resource names its node in the openEHR-federation-endpoint header (§12.5.1, N41)"
+                "a write to an EHR resource that no header, binding or index routes to one node names its node in the openEHR-federation-endpoint header (§12.5.1, N41)"
             }
             Self::EndpointSeveral => {
                 "a request routed to one node selects exactly one endpoint through its targeting headers (§7a.1)"
@@ -243,6 +255,8 @@ impl Code {
             Self::TargetingConflict => {
                 "the request's targeting mechanisms select different node sets (§8.4.1, N35)"
             }
+            Self::EhrIdInvalid => "the ehr_id in the path is not an openEHR HIER_OBJECT_ID (§12.5)",
+            Self::NodeError => "a node answered with an error (§11.2)",
         }
     }
 }
@@ -323,6 +337,8 @@ mod tests {
             Code::NodeUnreachable => Some(18),
             Code::NodeRefused => Some(19),
             Code::TargetingConflict => Some(20),
+            Code::EhrIdInvalid => Some(21),
+            Code::NodeError => Some(22),
         }
     }
 
@@ -388,6 +404,8 @@ mod tests {
             (Code::NodeUnreachable, StatusCode::GATEWAY_TIMEOUT),
             (Code::NodeRefused, StatusCode::FAILED_DEPENDENCY),
             (Code::TargetingConflict, StatusCode::BAD_REQUEST),
+            (Code::EhrIdInvalid, StatusCode::BAD_REQUEST),
+            (Code::NodeError, StatusCode::FAILED_DEPENDENCY),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

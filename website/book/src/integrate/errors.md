@@ -104,25 +104,28 @@ the node is reported and the query succeeds.
 | `dedup-invalid` | 400 | The `openEHR-federation-dedup` header is repeated, or names neither `none` nor `version-identity` (§10, §7a.2). |
 | `parameter-invalid` | 400 | A query parameter is `null`, an array, an object, or an integer outside 64 bits. |
 | `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). |
-| `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope, or the `ORGANISATION` directive or the `openEHR-federation-organisation` header names only organisations that manage no endpoint (§11.2, §11.3). |
-| `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node; the gateway never chooses between them (§12.5.2, N42). |
+| `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope, or the `ORGANISATION` directive or the `openEHR-federation-organisation` header names only organisations that manage no endpoint (§11.2, §11.3). It also answers a read of an EHR resource that nothing routes when every member the ask-all probe asked answered `404` (§12.5.1). |
+| `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node: the ask-all probe of a read found it at two members or more. The message lists the claiming endpoints, and the gateway never chooses between them and reads neither (§12.5.2, N42). |
 | `controlling-system-unreachable` | 409 | A versioned write's controlling system is not reachable, and the gateway never writes to a copy (§10.3, N36). |
 | `internal` | 500 | The gateway failed on its own side. The operator's log records the failure under the gateway's request id. |
 | `not-found` | 404 | The path is outside every surface the gateway serves. |
-| `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32). A read of an EHR resource that names no node in `openEHR-federation-endpoint` answers it too, until the gateway can find the node by itself (§12.5.1). |
+| `not-implemented` | 501 | The path is an ITS-REST area the gateway does not expose (§7a.1, N32). |
 | `endpoint-unknown` | 400 | The `FROM ENDPOINT` directive or the `openEHR-federation-endpoint` header names an identifier that is not an endpoint of the registry, or the header names no identifier at all (§8.4.1, N19). This holds on every request the header applies to: a query, and a request routed to one node. The message names the directive or the header, points at the identifier by its place in the list, and never quotes it. |
 | `organisation-unknown` | 400 | The `ORGANISATION` directive or the `openEHR-federation-organisation` header names an identifier that is not an organisation of the registry, or the header names no identifier at all (§8.1, §8.4.1, N20). The message points at the identifier by its place in the list and never quotes it. |
-| `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and nothing else routes it; the gateway never finds a write's destination by trial (§12.5.1, N41). |
+| `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and neither a resolution binding of the session nor the gateway's `ehr_id` index names exactly one; the gateway never finds a write's destination by trial, so nothing is probed (§12.5.1, N41). |
 | `endpoint-several` | 400 | A request routed to one node selects more than one endpoint through `openEHR-federation-endpoint` or `openEHR-federation-organisation` (§7a.1, §12.4). |
 | `query-parameter-refused` | 400 | A request routed to one node carries a query parameter the ITS-REST operation it addresses does not declare, or `subject_id` or `subject_namespace`. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
-| `node-timeout` | 504 | The node a request was routed to did not answer in time (§11.2). |
-| `node-unreachable` | 504 | The node a request was routed to could not be reached (§11.2). |
-| `node-refused` | 424 | The node a request was routed to refused the gateway's onward credentials (§11.2). |
+| `node-timeout` | 504 | The node a request was routed to, or a member the ask-all probe asked, did not answer in time (§11.2, §11.5). A member that did not answer may hold the `ehr_id`, so the probe names no owner; the message names that member. |
+| `node-unreachable` | 504 | The node a request was routed to, or a member the ask-all probe asked, could not be reached (§11.2). |
+| `node-refused` | 424 | The node a request was routed to, or a member the ask-all probe asked, refused the gateway's onward credentials (§11.2). |
 | `targeting-conflict` | 400 | The request names its node set twice, and the two sets differ: the AQL directive and a targeting header, or the endpoint header and the organisation header. The gateway never merges them and never picks one (§8.4.1, N35). The message names both sets by the registry endpoints each selects; every identifier in it is one the registry already holds. Two mechanisms that select the same set are accepted. |
+| `ehr-id-invalid` | 400 | The `ehr_id` in the request path is not an openEHR `HIER_OBJECT_ID`, so it names no EHR and the request is not routed (§12.5). The message never quotes the path. |
+| `node-error` | 424 | A member the ask-all probe asked answered with neither a success nor `404`, so whether it holds the `ehr_id` is unknown and the read is not served (§11.2, §12.5.1). The message names the member and its status. |
 
-The two `409` codes belong to follow-up routing (§12), which is planned build
-order; the codes are fixed now, so a client can handle them before they
-occur.
+The two `409` codes belong to follow-up routing (§12). `ehr-id-collision`
+answers a read today; the integrity incident it also raises for the operator,
+and `controlling-system-unreachable`, are planned build order. The codes are
+fixed now, so a client can handle them before they occur.
 
 ## Query refusals
 
