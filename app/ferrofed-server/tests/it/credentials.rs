@@ -10,10 +10,14 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::io::Write as _;
 
+use ferrofed_registry::error::IdError;
+use ferrofed_registry::id::{EndpointId, MAX_ID_LEN};
 use ferrofed_server::EXIT_CONFIG;
+use ferrofed_server::config::Config;
 use http::StatusCode;
 
 use crate::facade::{body, gateway, node_answering, post, registry};
@@ -91,6 +95,56 @@ fn a_secret_file_holding_a_control_character_refuses_to_boot() -> TestResult {
         "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"clinic-b\"]\nuser = \"gateway\"\npassword_file = {path}\n"
     );
     refuses_naming(&toml, "credentials.clinic-b.password_file")
+}
+
+/// A credentials key is held to the registry's endpoint id rule whether or
+/// not a registry is configured, and the refusal names the key.
+#[test]
+fn a_credentials_key_follows_the_registry_endpoint_id_rule() -> TestResult {
+    let too_long = "a".repeat(MAX_ID_LEN + 1);
+    for key in [
+        "",
+        "node a",
+        "-node",
+        "node:a",
+        "n\u{e9}",
+        too_long.as_str(),
+    ] {
+        let toml = format!("[credentials.\"{key}\"]\nbearer_token = \"t\"\n");
+        let Err(error) = Config::from_sources(Some(&toml), &BTreeMap::new())?.resolve() else {
+            return Err(format!("{key:?} was accepted").into());
+        };
+        assert!(
+            matches!(
+                &error,
+                ferrofed_server::config::error::Error::EndpointId {
+                    key: given,
+                    source: IdError::Empty { .. }
+                        | IdError::Malformed { .. }
+                        | IdError::TooLong { .. },
+                } if given == key
+            ),
+            "{key:?}: {error:?}"
+        );
+    }
+    let output = binary(
+        &["config", "check"],
+        "[credentials.\"node:a\"]\nbearer_token = \"t\"\n",
+    )?;
+    assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("node:a"), "names the key: {stderr}");
+
+    let longest = "a".repeat(MAX_ID_LEN);
+    for key in ["hospital-a.query", "node_a", "9b", longest.as_str()] {
+        let toml = format!("[credentials.\"{key}\"]\nbearer_token = \"t\"\n");
+        let settings = Config::from_sources(Some(&toml), &BTreeMap::new())?.resolve()?;
+        assert!(
+            settings.credentials.contains_key(&EndpointId::new(key)?),
+            "{key:?} is an endpoint id"
+        );
+    }
+    Ok(())
 }
 
 #[tokio::test]

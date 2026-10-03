@@ -6,9 +6,10 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use ferrofed_registry::error::IdError;
 use openehr_its::rest::client::InvalidCredentials;
 
-use crate::config::{ENV_PREFIX, MAX_ENDPOINT_ID_LENGTH};
+use crate::config::ENV_PREFIX;
 
 /// A configuration the server refuses to start on.
 #[derive(Debug, thiserror::Error)]
@@ -117,12 +118,13 @@ pub enum Error {
         source: tracing_subscriber::filter::ParseError,
     },
     /// A credentials section is keyed by something that is not an endpoint id.
-    #[error(
-        "credentials.{key:?} is not an endpoint id: one to {MAX_ENDPOINT_ID_LENGTH} printable ASCII characters with no space"
-    )]
+    #[error("credentials.{key:?} is not an endpoint id")]
     EndpointId {
         /// The key that was given.
         key: String,
+        /// What the registry's endpoint id rule reported.
+        #[source]
+        source: IdError,
     },
     /// A credentials section names both a bearer token and a user.
     #[error("{section} names both a bearer token and a user; set one scheme")]

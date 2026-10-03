@@ -58,6 +58,7 @@ under the pins below.
 | `versions` | `scripts/checks/versions.sh --self-test`, then `scripts/checks/versions.sh`: the pin matrix against every file that repeats a pin and each specification row against the crate constant it names, the landing page's release string against the newest `CHANGELOG.md` release, the book's pin table against the rows it names, the vendored provenance stamps and the SPDX licence claims |
 | `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
 | `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, the conformance matrix against the vendored specification, the test markers against the matrix, the rendered book page against the matrix, and the README conformance badges under `conformance/badges/` against the matrix and the AQL golden pass list (`docs/architecture.md` section 12) |
+| `e2e-placement` | `scripts/checks/e2e-placement.sh --self-test`, then `scripts/checks/e2e-placement.sh`: every Rust file that checks the `FERROFED_E2E` gate sits in an `e2e` module of its crate's test binary, and the `e2e (containers)` job still sets the gate and selects `test(/^e2e::/)` across the workspace |
 | `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh`, `migrate-fields.sh` and `rel.sh`, each driven against a stub `gh` on `PATH` |
 | `crate-version-guard-self-test` | `scripts/checks/crate-version-guard.sh --self-test`, the guard over a stub repository whose `main` bumped a crate after the branch forked: an untouched crate passes, and packaged content changed without a bump fails |
 
@@ -89,12 +90,14 @@ every change since.
 checks the `FERROFED_E2E` gate first and returns early without it, so the
 `test` job stays offline and fast; this job sets `FERROFED_E2E=1` and runs the
 container tests (the whole `tools/ferrofed-testkit` suite and the `e2e` module
-of `app/ferrofed-server`) against the digest-pinned images of
+of every other crate's test binary) against the digest-pinned images of
 `docs/VERSIONS.md` §Container images: two FerroEHR instances as the two nodes,
 each behind the testkit's capturing and fault proxy (`docs/architecture.md`
-§13). It feeds `conclusion` like every other lane. Locally:
-`FERROFED_E2E=1 cargo nextest run -p ferrofed-testkit -p ferrofed-server -E
-'test(/^e2e::/)'` with Docker running.
+§13). It feeds `conclusion` like every other lane. The tier-1
+`e2e-placement` guard keeps every gated test inside an `e2e` module, so the
+filter selects it. Locally: `FERROFED_E2E=1 cargo nextest run --locked
+--workspace -E 'package(ferrofed-testkit) or test(/^e2e::/)'` with Docker
+running.
 
 `features (cargo-hack)` lints every feature of the three published crates on
 its own: `cargo hack clippy --each-feature --all-targets` over

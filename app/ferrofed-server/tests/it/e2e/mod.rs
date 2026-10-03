@@ -17,6 +17,9 @@
 //! acting endpoint's headers on the answer (§7a.3, N22, N31, track 10), in
 //! [`commit`].
 //!
+//! A directed query adds each node's ENDPOINT attributes to its rows and
+//! sends the directive to no node (§9.4, N12), in [`attributes`].
+//!
 //! Track 10, the adversarial identifier-leakage suite, runs against the same
 //! two nodes in [`track10`].
 #![allow(
@@ -42,6 +45,7 @@ use uuid::Uuid;
 
 use crate::support::settings;
 
+mod attributes;
 mod commit;
 mod crossref;
 mod pixm;

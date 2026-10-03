@@ -4,6 +4,7 @@
 //! The configuration contract: the file, the environment over it, the `_file`
 //! secrets, and every refusal.
 
+use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::error::{BasicFault, Error};
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
@@ -73,11 +74,11 @@ fn a_file_states_every_section_and_the_resolver_reads_it() -> Result<(), Box<dyn
     assert_eq!(4096, settings.server.body_limit);
     assert_eq!(Format::Json, settings.telemetry.format);
     assert_eq!("debug", settings.telemetry.filter);
-    match settings.credentials.get("hospital-a") {
+    match settings.credentials.get(&EndpointId::new("hospital-a")?) {
         Some(Scheme::Bearer(token)) => assert_eq!("synthetic-token", token.expose_secret()),
         other => return Err(format!("hospital-a is a bearer scheme: {other:?}").into()),
     }
-    match settings.credentials.get("clinic-b") {
+    match settings.credentials.get(&EndpointId::new("clinic-b")?) {
         Some(Scheme::Basic { user, password }) => {
             assert_eq!("gateway", user);
             assert_eq!("synthetic-password", password.expose_secret());
@@ -249,7 +250,10 @@ fn an_environment_override_adds_a_credentials_section_with_no_file() -> Result<(
     )?
     .resolve()?;
     assert!(
-        matches!(settings.credentials.get("node_a"), Some(Scheme::Bearer(_))),
+        matches!(
+            settings.credentials.get(&EndpointId::new("node_a")?),
+            Some(Scheme::Bearer(_))
+        ),
         "node_a should resolve to a bearer scheme"
     );
     Ok(())
@@ -267,7 +271,7 @@ fn a_secret_is_read_from_its_file_sibling_and_trimmed() -> Result<(), Box<dyn St
         file.path()
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
-    match settings.credentials.get("hospital-a") {
+    match settings.credentials.get(&EndpointId::new("hospital-a")?) {
         Some(Scheme::Bearer(token)) => assert_eq!("synthetic-from-file", token.expose_secret()),
         other => return Err(format!("a bearer scheme: {other:?}").into()),
     }
@@ -569,7 +573,10 @@ fn a_bearer_token_that_is_no_b64token_is_refused_by_its_key() -> Result<(), Box<
     )?
     .resolve()?;
     assert!(
-        matches!(accepted.credentials.get("a"), Some(Scheme::Bearer(_))),
+        matches!(
+            accepted.credentials.get(&EndpointId::new("a")?),
+            Some(Scheme::Bearer(_))
+        ),
         "every b64token character and its padding is accepted"
     );
     Ok(())
