@@ -25,11 +25,12 @@ use axum::body::Body;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, body, crossref, node_answering, patient_query, received, registry,
@@ -59,8 +60,7 @@ fn wait_preference() -> String {
 
 /// Node A answering at once and node B silent one slack past [`WAIT`], behind
 /// a configured budget long enough to wait for node B.
-async fn shortened() -> Result<(MockServer, MockServer, tempfile::TempDir, Router), Box<dyn Error>>
-{
+async fn shortened() -> Result<(Server, Server, tempfile::TempDir, Router), Box<dyn Error>> {
     let a = node_answering("uid-at-a").await;
     let b = node_after("uid-at-b", WAIT + SLACK).await;
     let dir = tempfile::tempdir()?;
@@ -70,8 +70,8 @@ async fn shortened() -> Result<(MockServer, MockServer, tempfile::TempDir, Route
 }
 
 /// A node answering one row holding `uid` after `delay`.
-async fn node_after(uid: &str, delay: Duration) -> MockServer {
-    let server = MockServer::start().await;
+async fn node_after(uid: &str, delay: Duration) -> Server {
+    let server = Server::start().await;
     let answer = format!(
         r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["{uid}"]]}}"##
     );
@@ -92,8 +92,8 @@ async fn node_after(uid: &str, delay: Duration) -> MockServer {
 /// offered.
 fn gateway(
     dir: &Path,
-    a: &MockServer,
-    b: &MockServer,
+    a: &Server,
+    b: &Server,
     per_node_ms: u64,
     overall_ms: u64,
 ) -> Result<Router, Box<dyn Error>> {
@@ -480,8 +480,8 @@ async fn respond_async_beside_a_shorter_wait_still_shortens_the_budget() -> Test
 /// `server` and `federation` are the keys of those tables.
 fn configured(
     dir: &Path,
-    a: &MockServer,
-    b: &MockServer,
+    a: &Server,
+    b: &Server,
     server: &str,
     federation: &str,
 ) -> Result<Router, Box<dyn Error>> {

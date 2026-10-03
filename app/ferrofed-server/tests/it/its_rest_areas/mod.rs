@@ -33,15 +33,16 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use openehr_federation::headers::ENDPOINT;
 use openehr_federation::options::OptionsRoot;
 use tempfile::TempDir;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{NAMESPACE, crossref, node_answering, registry, schema, settings_with_room};
 use crate::path_ehr_id::answer;
-use crate::support::{asked, call, error_body, mount, release};
+use crate::support::{asked, call, error_body, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -148,22 +149,11 @@ impl Outcome {
 
 /// A gateway in one mode over node A and node B, with the directory its
 /// state lives in.
-///
-/// Its drop hands both nodes to [`release`]: a test that never waits on a
-/// node spends its runtime budget across the modes before it drops them.
 struct Setup {
     app: Router,
-    /// Node A and node B, until the drop releases them.
-    nodes: Option<(MockServer, MockServer)>,
+    a: Server,
+    b: Server,
     _dir: TempDir,
-}
-
-impl Drop for Setup {
-    fn drop(&mut self) {
-        if let Some(nodes) = self.nodes.take() {
-            release(nodes);
-        }
-    }
 }
 
 impl Setup {
@@ -189,7 +179,8 @@ impl Setup {
             ferrofed_server::router(Arc::new(AppState::build(&settings)?), &settings_with_room());
         Ok(Self {
             app,
-            nodes: Some((a, b)),
+            a,
+            b,
             _dir: dir,
         })
     }
@@ -205,15 +196,14 @@ impl Setup {
 
     /// Sends `request` and reads what it did.
     async fn send(&self, request: Request<Body>) -> Result<Outcome, Box<dyn Error>> {
-        let (a, b) = self.nodes.as_ref().ok_or("the nodes live until the drop")?;
-        let before = (asked(a).await?.len(), asked(b).await?.len());
+        let before = (asked(&self.a).await?.len(), asked(&self.b).await?.len());
         let (status, acting, text) = answer(self.app.clone(), request).await?;
         Ok(Outcome {
             status,
             acting,
             text,
-            a: asked(a).await?.into_iter().skip(before.0).collect(),
-            b: asked(b).await?.into_iter().skip(before.1).collect(),
+            a: asked(&self.a).await?.into_iter().skip(before.0).collect(),
+            b: asked(&self.b).await?.into_iter().skip(before.1).collect(),
         })
     }
 }
@@ -223,7 +213,7 @@ impl Setup {
 /// members `rows` name.
 fn settings_text(
     dir: &Path,
-    (a, b): (&MockServer, &MockServer),
+    (a, b): (&Server, &Server),
     mode: Mode,
     rows: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {

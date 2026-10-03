@@ -26,13 +26,14 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
 use openehr_federation::meta::FederationMeta;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use serde::Deserialize;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{PATIENT, registry, settings_with_room, wire};
 use crate::support::{asked, error_body, exchange, field, mount};
@@ -70,7 +71,7 @@ system_id = "cdr-c.example.org"
 "#;
 
 /// The registry of node A, node B and node C at `a`, `b` and `c`.
-fn three(a: &MockServer, b: &MockServer, c: &MockServer) -> String {
+fn three(a: &Server, b: &Server, c: &Server) -> String {
     let endpoint = format!(
         r#"{THIRD}
 [[endpoint]]
@@ -103,7 +104,7 @@ fn gateway(dir: &Path, registry: &str, federation: &str) -> Result<Router, Box<d
 }
 
 /// The gateway over the three nodes with template fan-out offered.
-fn offered(dir: &Path, nodes: [&MockServer; 3]) -> Result<Router, Box<dyn Error>> {
+fn offered(dir: &Path, nodes: [&Server; 3]) -> Result<Router, Box<dyn Error>> {
     let [a, b, c] = nodes;
     gateway(dir, &three(a, b, c), "fan_out_template_upload = true")
 }
@@ -149,8 +150,8 @@ fn upload(at: &str, target: Option<&str>) -> Result<Request<Body>, http::Error> 
 }
 
 /// A node that accepts a template upload to `at` with `201`.
-async fn accepting(at: &str) -> MockServer {
-    let server = MockServer::start().await;
+async fn accepting(at: &str) -> Server {
+    let server = Server::start().await;
     let created = format!("{}{at}/{TEMPLATE}", server.uri());
     mount(
         &server,
@@ -166,8 +167,8 @@ async fn accepting(at: &str) -> MockServer {
 
 /// A node that rejects a template upload to `at` with `status` and its own
 /// error body.
-async fn rejecting(at: &str, status: u16) -> MockServer {
-    let server = MockServer::start().await;
+async fn rejecting(at: &str, status: u16) -> Server {
+    let server = Server::start().await;
     let body = format!(r#"{{"message":"{REJECTED_BODY}"}}"#);
     mount(
         &server,
@@ -201,7 +202,7 @@ fn reported(meta: &FederationMeta) -> Vec<(String, EndpointStatus)> {
 
 /// Asserts that `server` received exactly one upload to `at`, carrying
 /// `sent` byte for byte, and nothing else: nothing was rolled back.
-async fn uploaded_once(server: &MockServer, at: &str, sent: &str) -> TestResult {
+async fn uploaded_once(server: &Server, at: &str, sent: &str) -> TestResult {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let [only] = requests.as_slice() else {
         return Err(format!("one request, not {}", requests.len()).into());
@@ -221,7 +222,7 @@ async fn refused(
     app: Router,
     request: Request<Body>,
     code: &str,
-    nodes: [&MockServer; 3],
+    nodes: [&Server; 3],
 ) -> TestResult {
     let (status, headers, body) = exchange(app, request).await?;
     let text = String::from_utf8(body)?;
@@ -408,7 +409,7 @@ async fn a_member_past_its_timeout_is_reported_and_the_others_keep_the_template(
     let at = ADL14;
     let a = accepting(at).await;
     let b = accepting(at).await;
-    let c = MockServer::start().await;
+    let c = Server::start().await;
     mount(
         &c,
         "POST",

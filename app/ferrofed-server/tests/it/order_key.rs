@@ -15,11 +15,12 @@
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_rm::v1_2::data_types::text::dv_text::DvText;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+use wiremock::{Mock, Request, Respond, ResponseTemplate};
 
 use crate::facade::{body, gateway, post, received, registry, schema};
 use crate::support::{call, error_body};
@@ -55,8 +56,8 @@ impl Respond for TextNode {
     }
 }
 
-async fn text_node(held: &[Named]) -> MockServer {
-    let server = MockServer::start().await;
+async fn text_node(held: &[Named]) -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(TextNode {

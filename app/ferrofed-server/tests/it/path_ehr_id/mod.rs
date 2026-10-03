@@ -27,8 +27,9 @@ use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::incident::Detection;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::facade::owner::{Located, Step};
+use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, HeaderValue, Request, StatusCode};
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, gateway, registry};
 use crate::support::{error_body, mount, send};
@@ -98,8 +99,8 @@ pub(crate) fn collision(located: &Located<'_>) -> Option<(Vec<String>, Detection
 
 /// A node that holds the EHR of [`EHR_A`] and the composition of
 /// [`VERSION_A`] in it.
-pub(crate) async fn holder() -> MockServer {
-    let server = MockServer::start().await;
+pub(crate) async fn holder() -> Server {
+    let server = Server::start().await;
     mount(
         &server,
         "GET",
@@ -129,15 +130,15 @@ pub(crate) async fn holder() -> MockServer {
 }
 
 /// A node that holds no EHR at all: it answers `404` to everything.
-pub(crate) async fn stranger() -> MockServer {
-    MockServer::start().await
+pub(crate) async fn stranger() -> Server {
+    Server::start().await
 }
 
 /// The gateway over node A at `a` and node B at `b`.
 pub(crate) fn over(
     dir: &std::path::Path,
-    a: &MockServer,
-    b: &MockServer,
+    a: &Server,
+    b: &Server,
 ) -> Result<Router, Box<dyn Error>> {
     gateway(dir, &registry(&a.uri(), &b.uri(), ""), "", "")
 }
@@ -167,8 +168,8 @@ pub(crate) async fn answer(
 /// and `b`, and every request each node received.
 async fn refused_with(
     request: Request<Body>,
-    b: MockServer,
-) -> Result<(StatusCode, String, String, MockServer, MockServer), Box<dyn Error>> {
+    b: Server,
+) -> Result<(StatusCode, String, String, Server, Server), Box<dyn Error>> {
     let a = holder().await;
     let dir = tempfile::tempdir()?;
     let (status, acting, text) = answer(over(dir.path(), &a, &b)?, request).await?;

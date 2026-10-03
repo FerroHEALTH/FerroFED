@@ -18,12 +18,13 @@ use std::time::{Duration, Instant};
 use ferrofed_engine::dispatch::definition::{DefinitionAt, NodeCopy};
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::ReqwestTransport;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -67,8 +68,8 @@ fn options() -> Result<DispatchOptions, Box<dyn Error>> {
 
 /// A node answering `verb` at the definition's path with `status` and
 /// `body`.
-async fn node(verb: &str, status: u16, body: &str) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(verb: &str, status: u16, body: &str) -> Server {
+    let server = Server::start().await;
     Mock::given(method(verb))
         .and(path(NODE_PATH))
         .respond_with(

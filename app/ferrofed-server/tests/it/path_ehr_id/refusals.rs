@@ -6,8 +6,9 @@
 use std::time::Instant;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode};
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::declared::composition_at;
 use crate::facade::{EHR_A, gateway_within, registry};
@@ -73,7 +74,7 @@ async fn a_member_that_does_not_answer_the_probe_in_time_leaves_the_owner_unknow
     let per_node = SLACK;
     let abandoned_by = per_node + SLACK;
     let overall = abandoned_by + SLACK;
-    let slow = MockServer::start().await;
+    let slow = Server::start().await;
     mount(
         &slow,
         "GET",
@@ -123,7 +124,7 @@ async fn a_member_that_does_not_answer_the_probe_in_time_leaves_the_owner_unknow
 // conformance: CP-33
 #[tokio::test]
 async fn a_member_answering_the_probe_with_an_error_leaves_the_owner_unknown() -> TestResult {
-    let failing = MockServer::start().await;
+    let failing = Server::start().await;
     mount(
         &failing,
         "GET",

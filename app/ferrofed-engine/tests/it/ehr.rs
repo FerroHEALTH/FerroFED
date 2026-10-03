@@ -17,11 +17,12 @@ use std::time::{Duration, Instant};
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
 use ferrofed_engine::ehr::EhrCallError;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::mock::Server;
 use openehr_its::json::from_canonical_json;
 use openehr_its::rest::client::ReqwestTransport;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use wiremock::matchers::{header, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -63,8 +64,8 @@ fn options() -> Result<DispatchOptions, Box<dyn Error>> {
 
 /// A node that answers a `return=minimal` create with `201`, the `ehr_id` in
 /// `ETag`, and `body` as `application/json`.
-async fn node_answering(body: String) -> MockServer {
-    let server = MockServer::start().await;
+async fn node_answering(body: String) -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/openehr/v1/ehr"))
         .and(header("prefer", "return=minimal"))

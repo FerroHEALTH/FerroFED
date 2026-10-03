@@ -18,11 +18,12 @@ use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::mock::Server;
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_its::rest::client::ReqwestTransport;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -61,8 +62,8 @@ fn options() -> Result<DispatchOptions, Box<dyn Error>> {
     Ok(DispatchOptions::new(deadline).with_withheld(Arc::new(withheld())))
 }
 
-async fn node() -> MockServer {
-    let server = MockServer::start().await;
+async fn node() -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(
@@ -74,7 +75,7 @@ async fn node() -> MockServer {
     server
 }
 
-async fn requests_at(server: &MockServer) -> Result<usize, Box<dyn Error>> {
+async fn requests_at(server: &Server) -> Result<usize, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await

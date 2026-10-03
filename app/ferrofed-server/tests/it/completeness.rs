@@ -23,9 +23,9 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
-use wiremock::MockServer;
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, body, crossref, node_answering, node_failing, patient_query, received,
@@ -40,8 +40,8 @@ type TestResult = Result<(), Box<dyn Error>>;
 /// `resolving` is `false`.
 fn gateway(
     dir: &Path,
-    a: &MockServer,
-    b: &MockServer,
+    a: &Server,
+    b: &Server,
     offered: bool,
     resolving: bool,
 ) -> Result<Router, Box<dyn Error>> {
@@ -81,7 +81,7 @@ fn refusal(text: &str) -> Result<ErrorBody, Box<dyn Error>> {
 }
 
 /// Asserts that neither node received a request.
-async fn nobody_asked(a: &MockServer, b: &MockServer) -> TestResult {
+async fn nobody_asked(a: &Server, b: &Server) -> TestResult {
     for server in [a, b] {
         assert!(
             received(server).await?.is_empty(),

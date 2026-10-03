@@ -7,11 +7,11 @@ use std::sync::PoisonError;
 
 use ferrofed_server::admission::report::{Condition, Verdict};
 use ferrofed_server::admission::subject::{NAMESPACE, VALUE_PREFIX};
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
 use openehr_its::json::from_canonical_json;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
-use wiremock::MockServer;
 
 use crate::facade::registry;
 
@@ -104,7 +104,7 @@ async fn a_federation_with_no_cross_reference_fails_the_exchange() -> TestResult
 #[tokio::test]
 async fn only_synthetic_subjects_are_sent_and_the_report_prints_none() -> TestResult {
     let (a, issued) = node(&V4, SYSTEM_A).await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let report = check_a(&dev_federation(dir.path(), &a.uri(), &b.uri())?).await?;
 

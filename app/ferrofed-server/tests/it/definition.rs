@@ -19,9 +19,10 @@ use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use openehr_federation::headers::ENDPOINT;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, EHR_B, PATIENT, gateway, registry, wire};
 use crate::support::{acted, asked, error_body, exchange, field, mount, refused_at_neither};
@@ -55,7 +56,7 @@ fn template() -> String {
 }
 
 /// The gateway over node A and node B, with no stored-query registry.
-fn over(dir: &std::path::Path, a: &MockServer, b: &MockServer) -> Result<Router, Box<dyn Error>> {
+fn over(dir: &std::path::Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {
     gateway(dir, &registry(&a.uri(), &b.uri(), ""), "", "")
 }
 
@@ -130,7 +131,7 @@ fn every_operation() -> Vec<(Method, String, String)> {
 async fn a_template_upload_with_a_target_reaches_only_that_node_byte_identical() -> TestResult {
     for at in [ADL14, ADL2] {
         let created = format!("https://cdr-b.example.org/openehr{at}/{TEMPLATE}");
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         mount(
             &b,
             "POST",
@@ -140,7 +141,7 @@ async fn a_template_upload_with_a_target_reaches_only_that_node_byte_identical()
                 .insert_header("ETag", format!("\"{TEMPLATE}\"").as_str()),
         )
         .await;
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         let dir = tempfile::tempdir()?;
         let sent = template();
         let mut request = definition(&Method::POST, at, Some(ENDPOINT_B), &sent)?;
@@ -196,8 +197,8 @@ async fn a_definition_request_without_a_target_is_refused_and_no_node_is_asked()
         "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
     ));
     for (verb, at, sent) in operations {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         refused_at_neither(
             over(dir.path(), &a, &b)?,
@@ -223,8 +224,8 @@ async fn a_star_an_unknown_endpoint_and_several_endpoints_are_refused() -> TestR
             ("node-a-pub, node-b-pub", "endpoint-several"),
             ("node-a-pub,node-b-pub", "endpoint-several"),
         ] {
-            let a = MockServer::start().await;
-            let b = MockServer::start().await;
+            let a = Server::start().await;
+            let b = Server::start().await;
             let dir = tempfile::tempdir()?;
             refused_at_neither(
                 over(dir.path(), &a, &b)?,
@@ -243,8 +244,8 @@ async fn a_star_an_unknown_endpoint_and_several_endpoints_are_refused() -> TestR
 async fn a_template_list_is_the_one_named_nodes_answer_and_never_a_union() -> TestResult {
     let at_a = format!(r#"[{{"template_id":"{TEMPLATE}","concept":"at A"}}]"#);
     let at_b = r#"[{"template_id":"synthetic.other.v1","concept":"at B"}]"#;
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     for (server, listed) in [(&a, at_a.as_str()), (&b, at_b)] {
         mount(
             server,
@@ -297,8 +298,8 @@ async fn a_nodes_own_error_passes_through_as_the_node_sent_it() -> TestResult {
         (Method::POST, ADL14.to_owned(), template(), 400, rejected),
         (Method::POST, ADL2.to_owned(), template(), 409, exists),
     ] {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         mount(
             &b,
             verb.as_str(),
@@ -327,7 +328,7 @@ async fn a_nodes_own_error_passes_through_as_the_node_sent_it() -> TestResult {
 // conformance: CP-34 CP-26
 #[tokio::test]
 async fn a_definition_request_carries_only_what_its_operation_declares() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(
         &a,
         "GET",
@@ -335,7 +336,7 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
         ResponseTemplate::new(200).set_body_raw(b"[]".to_vec(), "application/json"),
     )
     .await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let query = format!("template_id={TEMPLATE}&offset=0&fetch=10");
     let request = Request::get(format!("{ADL14}?{query}"))
@@ -362,8 +363,8 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
     assert!(!composed.contains_ignoring_ascii_case("openehr-federation"));
     assert!(asked(&b).await?.is_empty());
     for undeclared in [format!("patient={PATIENT}"), format!("ehr_id={EHR_A}")] {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let request = Request::get(format!("{ADL14}?{undeclared}"))
             .header(ENDPOINT, ENDPOINT_A)
@@ -383,9 +384,9 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
 #[tokio::test]
 async fn without_the_registry_a_stored_query_definition_is_the_named_nodes() -> TestResult {
     let at = format!("/v1/definition/query/{QUERY}");
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(&a, "PUT", at.clone(), ResponseTemplate::new(200)).await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let sent = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c\n";
     let request = Request::put(&at)
@@ -415,9 +416,9 @@ async fn without_the_registry_a_versioned_stored_query_put_is_the_named_nodes() 
     let at = format!("/v1/definition/query/{QUERY}/1.0.0");
     let sent = "SELECT c/uid/value\n  FROM EHR e CONTAINS COMPOSITION c -- synthétic\n";
     for stated in [Some("text/plain"), Some("Text/Plain; charset=UTF-8"), None] {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         mount(&a, "PUT", at.clone(), ResponseTemplate::new(200)).await;
-        let b = MockServer::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let mut request = Request::put(&at).header(ENDPOINT, ENDPOINT_A);
         if let Some(stated) = stated {
@@ -460,8 +461,8 @@ async fn without_the_registry_a_versioned_stored_query_put_is_the_named_nodes() 
 #[tokio::test]
 async fn without_the_registry_a_versioned_stored_query_put_in_another_media_type_is_refused()
 -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let request = Request::put(format!("/v1/definition/query/{QUERY}/1.0.0"))
         .header(ENDPOINT, ENDPOINT_A)
@@ -511,8 +512,8 @@ async fn a_malformed_declared_value_is_refused_before_the_missing_target() -> Te
     ];
     for (request, refused, code) in cases {
         let at = request.uri().to_string();
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let (status, _, body) = exchange(over(dir.path(), &a, &b)?, request).await?;
         let text = String::from_utf8(body)?;
@@ -528,7 +529,7 @@ async fn a_malformed_declared_value_is_refused_before_the_missing_target() -> Te
 #[tokio::test]
 async fn the_registry_keeps_its_stored_queries_and_templates_still_route_to_one_node() -> TestResult
 {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(
         &a,
         "GET",
@@ -536,7 +537,7 @@ async fn the_registry_keeps_its_stored_queries_and_templates_still_route_to_one_
         ResponseTemplate::new(200).set_body_raw(b"[]".to_vec(), "application/json"),
     )
     .await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = crate::stored::gateway(
         dir.path(),

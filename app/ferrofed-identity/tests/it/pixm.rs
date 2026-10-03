@@ -19,11 +19,12 @@ use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
+use ferrofed_testkit::mock::Server;
 use openehr_its::rest::client::InvalidCredentials;
 use secrecy::SecretString;
 use url::Url;
 use wiremock::matchers::{header, method, path, query_param};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::support::registry;
 
@@ -71,7 +72,7 @@ fn namespaces() -> BTreeMap<IdentifierNamespace, String> {
     )])
 }
 
-fn manager(server: &MockServer, auth: PixAuth, pairs: &[(&str, &str)]) -> ManagerConfig {
+fn manager(server: &Server, auth: PixAuth, pairs: &[(&str, &str)]) -> ManagerConfig {
     ManagerConfig {
         base: Url::parse(&format!("{}/fhir/", server.uri())).expect("the stub base"),
         auth,
@@ -80,7 +81,7 @@ fn manager(server: &MockServer, auth: PixAuth, pairs: &[(&str, &str)]) -> Manage
 }
 
 /// The resolver over one stub Manager serving both members.
-fn resolver(server: &MockServer) -> PixmResolver {
+fn resolver(server: &Server) -> PixmResolver {
     PixmResolver::from_config(
         vec![manager(
             server,
@@ -109,8 +110,8 @@ fn parameters(identifiers: &[(&str, &str)]) -> String {
     )
 }
 
-async fn stub(status: u16, body: impl Into<String>) -> MockServer {
-    let server = MockServer::start().await;
+async fn stub(status: u16, body: impl Into<String>) -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(OPERATION))
         .respond_with(
@@ -241,7 +242,7 @@ async fn an_outage_is_unavailable_and_says_nothing_of_the_patient() {
 
 #[tokio::test]
 async fn a_manager_slower_than_the_deadline_is_unavailable() {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(OPERATION))
         .respond_with(
@@ -325,7 +326,7 @@ async fn a_namespace_with_no_pix_domain_asks_nobody() {
 
 #[tokio::test]
 async fn the_bearer_credential_travels_to_the_manager() {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(OPERATION))
         .and(header("authorization", "Bearer synthetic-pix-token"))

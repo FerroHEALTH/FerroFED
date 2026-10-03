@@ -14,6 +14,8 @@
 //!   journal the tests read;
 //! - [`leak`]: the track 10 oracle over that journal, which searches every
 //!   carrier for an identifier and its fragments, raw and percent-decoded;
+//! - [`mock`]: the wiremock server every suite stands its nodes up with,
+//!   dropped outside the test's runtime;
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
 //!   what an ITI-104 feed delivered (#47);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
@@ -28,6 +30,7 @@
 
 pub mod containers;
 pub mod leak;
+pub mod mock;
 pub mod pix;
 pub mod proxy;
 pub mod seed;

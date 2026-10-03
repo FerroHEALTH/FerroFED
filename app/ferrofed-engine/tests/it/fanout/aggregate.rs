@@ -12,10 +12,10 @@ use std::time::Duration;
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Completion, FanOutError, Plan, Verdict, fan_out};
 use ferrofed_registry::id::EndpointId;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::aggregate::{Recombination, Recombine};
 use openehr_federation::status::EndpointStatus;
-use wiremock::MockServer;
 
 use super::{
     SLACK_MS, TestResult, budget, clients, federation, json, node, rows_text, run, statuses,
@@ -25,7 +25,7 @@ use super::{
 const NODE_AQL: &str = "SELECT COUNT(*), SUM(o/data[at0001]/value/magnitude), COUNT(o/data[at0001]/value/magnitude) FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'";
 
 /// A node answering the one row `row`, a JSON array, after `delay`.
-async fn aggregate_node(row: &str, delay: Duration) -> MockServer {
+async fn aggregate_node(row: &str, delay: Duration) -> Server {
     let body = format!(
         r##"{{"q":"node","columns":[{{"name":"#0"}},{{"name":"#1"}},{{"name":"#2"}}],"rows":[{row}]}}"##
     );

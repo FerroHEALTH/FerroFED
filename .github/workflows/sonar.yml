@@ -68,11 +68,14 @@ jobs:
       # the workspace grows. --no-report accumulates the profiles, the report
       # step merges them into the single file Sonar imports. --no-tests=pass
       # keeps a member with no tests from failing the run, the same flag the
-      # ci.yml test lane uses.
+      # ci.yml test lane uses. NEXTEST_PROFILE selects the ci nextest profile
+      # the test lane runs, since cargo-llvm-cov reads --profile as a cargo
+      # build profile.
       - name: Instrumented tests to lcov, one package at a time
         if: ${{ hashFiles('Cargo.toml') != '' }}
         env:
           CARGO_BUILD_JOBS: "2"
+          NEXTEST_PROFILE: ci
         run: |
           set -euo pipefail
           cargo llvm-cov clean --workspace

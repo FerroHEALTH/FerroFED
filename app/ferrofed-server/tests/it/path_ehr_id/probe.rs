@@ -4,8 +4,9 @@
 //! The ask-all probe over HTTP, what it teaches the index, and what it never carries.
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, PATIENT, body, dev_gateway, patient_query, post, wire};
 use crate::support::{asked, mount};
@@ -136,7 +137,7 @@ async fn the_index_never_overrides_an_explicit_target() -> TestResult {
 #[tokio::test]
 async fn a_resolution_teaches_the_index_and_a_follow_up_goes_to_the_resolving_member() -> TestResult
 {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     mount(
         &a,
         "POST",

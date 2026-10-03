@@ -16,11 +16,11 @@ use std::time::Duration;
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Completion, FederatedAnswer, Plan, Verdict};
 use ferrofed_registry::id::EndpointId;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::order::{Direction, ResultOrder, SortKey};
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail};
 use openehr_federation::status::EndpointStatus;
-use wiremock::MockServer;
 
 use super::{TestResult, budget, federation, json, node, rows_text, run, validated_body};
 
@@ -29,7 +29,7 @@ use super::{TestResult, budget, federation, json, node, rows_text, run, validate
 const NODE_AQL: &str = "SELECT c/context/start_time/value, c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398' ORDER BY c/context/start_time/value ASC, c/uid/value ASC LIMIT 2";
 
 /// A mock node answering `(key, uid)` rows after `delay`.
-async fn ordered_node(rows: &[(i64, &str)], delay: Duration) -> MockServer {
+async fn ordered_node(rows: &[(i64, &str)], delay: Duration) -> Server {
     let rows: Vec<String> = rows
         .iter()
         .map(|(key, uid)| format!("[{key},\"{uid}\"]"))

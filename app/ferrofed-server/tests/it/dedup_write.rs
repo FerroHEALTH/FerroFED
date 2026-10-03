@@ -24,10 +24,11 @@
 use std::error::Error;
 
 use axum::Router;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::proxy::{CapturingProxy, Fault};
 use http::{HeaderMap, Method, StatusCode};
 use tempfile::TempDir;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::dedup::{Answer, Dedup, request};
 use crate::facade::{
@@ -93,8 +94,8 @@ fn queried() -> (String, String) {
 struct Scenario {
     app: Router,
     owner: CapturingProxy,
-    a: MockServer,
-    b: MockServer,
+    a: Server,
+    b: Server,
     _dir: TempDir,
 }
 
@@ -331,8 +332,8 @@ async fn every_refusal_names_the_controlling_system_and_quotes_nothing_of_the_re
         ),
     ];
     for (version, extra, named, unquoted) in cases {
-        let a = MockServer::start().await;
-        let b = MockServer::start().await;
+        let a = Server::start().await;
+        let b = Server::start().await;
         let dir = tempfile::tempdir()?;
         let write = versioned(
             &Method::PUT,

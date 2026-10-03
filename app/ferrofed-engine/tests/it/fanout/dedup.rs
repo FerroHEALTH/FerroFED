@@ -14,12 +14,12 @@ use std::time::Duration;
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{FederatedAnswer, Plan};
 use ferrofed_registry::id::EndpointId;
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::order::ResultOrder;
 use openehr_federation::outcome::EndpointOutcome;
 use openehr_federation::status::EndpointStatus;
-use wiremock::MockServer;
 
 use super::{SLACK_MS, TestResult, budget, federation, json, node, rows_text, run, validated_body};
 
@@ -35,7 +35,7 @@ const IMPORTED: &str = "8849a2f0-1d3c-4e5f-9a7b-000000000001::cdr-1.example.org:
 const LOCAL: &str = "8849a2f0-1d3c-4e5f-9a7b-000000000002::cdr-0.example.org::1";
 
 /// A mock node answering two-column rows `(uid, label)`.
-async fn versions(rows: &[(&str, &str)]) -> MockServer {
+async fn versions(rows: &[(&str, &str)]) -> Server {
     let rows: Vec<String> = rows
         .iter()
         .map(|(uid, label)| format!("[\"{uid}\",\"{label}\"]"))
@@ -69,7 +69,7 @@ fn dedup_member(answer: FederatedAnswer) -> Result<String, Box<dyn Error>> {
     Ok(rest.get(..=end).ok_or("in bounds")?.to_owned())
 }
 
-async fn scenario() -> Result<(MockServer, MockServer), Box<dyn Error>> {
+async fn scenario() -> Result<(Server, Server), Box<dyn Error>> {
     let a = versions(&[(IMPORTED, "imported"), (LOCAL, "local")]).await;
     let b = versions(&[(IMPORTED, "original")]).await;
     Ok((a, b))

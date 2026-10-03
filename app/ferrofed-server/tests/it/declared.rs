@@ -17,9 +17,9 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use openehr_federation::headers::ENDPOINT;
-use wiremock::MockServer;
 
 use crate::facade::{EHR_A, PATIENT};
 use crate::path_ehr_id::{ENDPOINT_A, answer, holder, over, probe_at, stranger};
@@ -45,7 +45,7 @@ pub(crate) fn composition_at(verb: &http::Method, version: &str) -> String {
 }
 
 /// The query string of every request `server` received, in order.
-async fn queries(server: &MockServer) -> Result<Vec<Option<String>>, Box<dyn Error>> {
+async fn queries(server: &Server) -> Result<Vec<Option<String>>, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await

@@ -9,9 +9,9 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::fanout::{Completion, FederatedAnswer, TIMEOUT_POLICY, fan_out_within};
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
-use wiremock::MockServer;
 
 use super::{
     SLACK_MS, TestResult, budget, clients, federation, json, node, plan_for, result_set, rows_text,
@@ -19,7 +19,7 @@ use super::{
 };
 
 /// A node answering one row after `delay_ms`.
-async fn slow_node(uid: &str, delay_ms: u64) -> MockServer {
+async fn slow_node(uid: &str, delay_ms: u64) -> Server {
     node(json(200, &result_set(&[uid])).set_delay(Duration::from_millis(delay_ms))).await
 }
 

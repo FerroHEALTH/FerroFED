@@ -39,13 +39,15 @@ tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
 # The harness PIX Manager's query-string decoding.
 url.workspace = true
 uuid.workspace = true
+# The mock server every suite stands its nodes and services up with, held so
+# its drop runs off the runtime.
+wiremock.workspace = true
 
 [dev-dependencies]
 # The PIXm client the harness PIX Manager is held to (#42).
 ihe-iti = { workspace = true, features = ["pixm"] }
 secrecy.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync"] }
-wiremock.workspace = true
 
 [lints]
 workspace = true

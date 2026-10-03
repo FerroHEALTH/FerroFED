@@ -21,10 +21,11 @@ use std::path::Path;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::{HeaderMap, Request, StatusCode, header};
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, crossref, gateway, registry, wire,
@@ -52,8 +53,8 @@ fn ehr(system: &str, ehr_id: &str) -> String {
 }
 
 /// A node answering `GET /v1/ehr/{ehr_id}` with its `EHR` and an `ETag`.
-async fn node(system: &str, ehr_id: &str) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(system: &str, ehr_id: &str) -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(format!("/v1/ehr/{ehr_id}")))
         .respond_with(
@@ -68,8 +69,8 @@ async fn node(system: &str, ehr_id: &str) -> MockServer {
 
 /// A node answering `GET /v1/ehr/{ehr_id}` with `404`, as a CDR answers an
 /// `ehr_id` it does not hold.
-async fn node_not_holding(ehr_id: &str) -> MockServer {
-    let server = MockServer::start().await;
+async fn node_not_holding(ehr_id: &str) -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(format!("/v1/ehr/{ehr_id}")))
         .respond_with(ResponseTemplate::new(404).set_body_raw(
@@ -114,8 +115,8 @@ fn pix_gateway(dir: &Path, a: &str, b: &str, pix: &str) -> Result<Router, Box<dy
 }
 
 /// A PIX Manager that fails every ITI-83 call with `500`.
-async fn failing_manager() -> MockServer {
-    let server = MockServer::start().await;
+async fn failing_manager() -> Server {
+    let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(PIX_OPERATION))
         .respond_with(
@@ -157,7 +158,7 @@ async fn answer(
 }
 
 /// How many requests `server` received.
-async fn asked(server: &MockServer) -> Result<usize, Box<dyn Error>> {
+async fn asked(server: &Server) -> Result<usize, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await
@@ -168,7 +169,7 @@ async fn asked(server: &MockServer) -> Result<usize, Box<dyn Error>> {
 /// Asserts that `server` received exactly one request, `GET` of the node's
 /// own EHR under `ehr_id` with no query string, and that its capture holds
 /// neither the subject nor its namespace (§5.4.1, N33).
-async fn asked_by_ehr_id_alone(server: &MockServer, ehr_id: &str) -> TestResult {
+async fn asked_by_ehr_id_alone(server: &Server, ehr_id: &str) -> TestResult {
     let requests = server.received_requests().await.ok_or("recording is on")?;
     let [sent] = requests.as_slice() else {
         return Err(format!("the node is asked exactly once: {requests:?}").into());
@@ -258,7 +259,7 @@ async fn short_subject(
         EHR_A.contains(SHORT),
         "the fixture places the value in the ehr_id"
     );
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     Mock::given(method("GET"))
         .and(path(format!("{base}/v1/ehr/{EHR_A}")))
         .respond_with(

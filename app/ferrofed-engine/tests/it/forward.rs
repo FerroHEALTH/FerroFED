@@ -23,11 +23,12 @@ use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::ReqwestTransport;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -68,8 +69,8 @@ fn patient() -> Withheld {
     Withheld::new([SecretString::from(PATIENT)])
 }
 
-async fn node(verb: &str, at: &str, answer: ResponseTemplate) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(verb: &str, at: &str, answer: ResponseTemplate) -> Server {
+    let server = Server::start().await;
     Mock::given(method(verb))
         .and(path(at))
         .respond_with(answer)
@@ -88,7 +89,7 @@ fn request(verb: Method, at: &str, headers: HeaderMap, body: &[u8]) -> ClientReq
     }
 }
 
-async fn received(server: &MockServer) -> Result<Vec<wiremock::Request>, Box<dyn Error>> {
+async fn received(server: &Server) -> Result<Vec<wiremock::Request>, Box<dyn Error>> {
     Ok(server.received_requests().await.ok_or("recording is on")?)
 }
 
@@ -157,7 +158,7 @@ async fn a_header_the_operation_declares_travels_and_one_it_does_not_is_stripped
     // NOTE: ITS-REST EHR API, PUT composition addresses the versioned_object_uid (format uuid) and
     // names the preceding version in If-Match, so the path carries the object id, not the version.
     let at = format!("/ehr/{EHR}/composition/8849182c-82ad-4088-a07f-48ead4180515");
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     for verb in ["PUT", "GET"] {
         Mock::given(method(verb))
             .and(path(format!("/v1{at}")))
@@ -198,7 +199,7 @@ async fn a_header_the_operation_declares_travels_and_one_it_does_not_is_stripped
 // conformance: CP-26
 #[tokio::test]
 async fn a_query_parameter_the_operation_does_not_declare_is_refused_unsent() -> TestResult {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     let at = format!("/ehr/{EHR}/composition");
     let mut commit = request(Method::POST, &at, HeaderMap::new(), b"{}");
     commit.query = Some("version_at_time=2026-01-01T00:00:00Z".to_owned());
@@ -218,7 +219,7 @@ async fn a_query_parameter_the_operation_does_not_declare_is_refused_unsent() ->
 
 #[tokio::test]
 async fn a_request_that_names_no_operation_is_never_sent() -> TestResult {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     let unrouted = request(Method::PATCH, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
     let refused = client(&server.uri())?
         .forward(unrouted, &options(Withheld::none())?)
@@ -234,7 +235,7 @@ async fn a_request_that_names_no_operation_is_never_sent() -> TestResult {
 // conformance: CP-26
 #[tokio::test]
 async fn a_withheld_identifier_in_the_path_or_a_forwarded_header_is_never_sent() -> TestResult {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     let client = client(&server.uri())?;
     let in_path = request(
         Method::GET,
@@ -315,7 +316,7 @@ async fn an_identifier_inside_the_composed_ehr_id_is_forwarded() -> TestResult {
 // conformance: CP-26
 #[tokio::test]
 async fn a_withheld_value_in_the_registry_path_is_never_forwarded() -> TestResult {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     let read = request(Method::GET, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
     let refused = client(&format!("{}/cdr-{SHORT}", server.uri()))?
         .forward(read, &short_options(true)?)
@@ -337,7 +338,7 @@ async fn a_withheld_value_in_the_registry_path_is_never_forwarded() -> TestResul
 // conformance: CP-26
 #[tokio::test]
 async fn the_same_identifier_in_a_part_the_client_wrote_is_still_withheld() -> TestResult {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     let client = client(&server.uri())?;
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -462,7 +463,7 @@ const NO_DIGIT_EHR: &str = "abcdefab-cdef-abcd-efab-cdefabcdefab";
 #[tokio::test]
 async fn a_withheld_value_in_a_client_header_is_refused_though_the_registry_authority_holds_it()
 -> TestResult {
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     let port = server.address().port().to_string();
     assert!(server.uri().contains(&port), "the port is in the authority");
     let mut headers = HeaderMap::new();

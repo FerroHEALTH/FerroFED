@@ -8,9 +8,10 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use ferrofed_registry::id::{EndpointId, NodeId};
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
+use wiremock::Mock;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer};
 
 use crate::facade::{EHR_A, EHR_B, crossref, node_answering};
 
@@ -123,7 +124,7 @@ async fn credentials_for_an_endpoint_the_document_dropped_refuse_the_reload() ->
 async fn a_request_in_flight_finishes_on_the_registry_it_started_with() -> TestResult {
     let (arrived, mut arrival) = tokio::sync::mpsc::unbounded_channel();
     let (release, held) = mpsc::channel();
-    let old = MockServer::start().await;
+    let old = Server::start().await;
     let answer = String::from(
         r##"{"q":"node","columns":[{"name":"#0","path":"c/uid/value"}],"rows":[["uid-old::cdr-a.example.org::1"]]}"##,
     );

@@ -10,6 +10,7 @@ use axum::body::Body;
 use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::error::{CODE_MEMBER, REQUEST_ID_MEMBER};
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, Request, Response, StatusCode};
 use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
 use openehr_its::rest::generated::common::Error;
@@ -22,7 +23,7 @@ use std::time::Duration;
 use tower::ServiceExt as _;
 use tracing_subscriber::fmt::MakeWriter;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 /// The time a loaded host may add to any wait a test makes.
 ///
@@ -203,7 +204,7 @@ pub(crate) async fn exchange(
 }
 
 /// A node answering `verb` at `at` with `answer`, and `404` to the rest.
-pub(crate) async fn mount(server: &MockServer, verb: &str, at: String, answer: ResponseTemplate) {
+pub(crate) async fn mount(server: &Server, verb: &str, at: String, answer: ResponseTemplate) {
     Mock::given(method(verb))
         .and(path(at))
         .respond_with(answer)
@@ -211,26 +212,8 @@ pub(crate) async fn mount(server: &MockServer, verb: &str, at: String, answer: R
         .await;
 }
 
-/// Drops `servers` on a thread of their own, outside the test's runtime, and
-/// re-raises a panic their drop raised.
-///
-/// Dropping a `MockServer` verifies its mocks through
-/// `futures::executor::block_on`, which takes a `tokio` lock. Inside a
-/// `tokio` task whose cooperative budget is spent, that lock answers
-/// `Pending` and leaves its wake-up to the runtime the drop is blocking, so
-/// the thread parks for good
-/// (<https://docs.rs/tokio/latest/tokio/task/coop/index.html>). A thread
-/// outside the runtime has no budget to spend.
-pub(crate) fn release<T: Send + 'static>(servers: T) {
-    if let Err(panic) = std::thread::spawn(move || drop(servers)).join()
-        && !std::thread::panicking()
-    {
-        std::panic::resume_unwind(panic);
-    }
-}
-
 /// The method and path of every request `server` received, in order.
-pub(crate) async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn StdError>> {
+pub(crate) async fn asked(server: &Server) -> Result<Vec<(String, String)>, Box<dyn StdError>> {
     Ok(server
         .received_requests()
         .await
@@ -258,7 +241,7 @@ pub(crate) async fn refused_at_neither(
     app: Router,
     request: Request<Body>,
     code: &str,
-    (a, b): (&MockServer, &MockServer),
+    (a, b): (&Server, &Server),
 ) -> Result<(), Box<dyn StdError>> {
     let (status, headers, body) = exchange(app, request).await?;
     let text = String::from_utf8(body)?;

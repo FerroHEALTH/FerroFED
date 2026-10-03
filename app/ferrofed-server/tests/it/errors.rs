@@ -29,11 +29,12 @@ use ferrofed_server::config::Config;
 use ferrofed_server::error::Code;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, node_answering,
@@ -88,8 +89,8 @@ fn post(body: String, completeness: Option<&str>) -> Result<Request<Body>, http:
 }
 
 /// A node answering one row after `delay`.
-async fn node_after(delay: Duration) -> MockServer {
-    let server = MockServer::start().await;
+async fn node_after(delay: Duration) -> Server {
+    let server = Server::start().await;
     let answer =
         r##"{"q":"node","columns":[{"name":"#0","path":"c/uid/value"}],"rows":[["uid-late"]]}"##;
     Mock::given(method("POST"))

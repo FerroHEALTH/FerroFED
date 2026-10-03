@@ -21,10 +21,11 @@ use std::error::Error;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::EXIT_CONFIG;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::ENDPOINT;
 use openehr_federation::options::OptionsRoot;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{PATIENT, gateway, registry, schema, wire};
 use crate::run::binary;
@@ -57,7 +58,7 @@ fn person() -> String {
 /// `[federation]` table.
 fn over(
     dir: &std::path::Path,
-    (a, b): (&MockServer, &MockServer),
+    (a, b): (&Server, &Server),
     federation: &str,
 ) -> Result<Router, Box<dyn Error>> {
     gateway(dir, &registry(&a.uri(), &b.uri(), ""), "", federation)
@@ -88,8 +89,8 @@ fn create(target: Option<&str>) -> Result<Request<Body>, http::Error> {
 }
 
 /// Node B holding [`PARTY`], answering a read with `answered`.
-async fn holder(answered: &str) -> MockServer {
-    let b = MockServer::start().await;
+async fn holder(answered: &str) -> Server {
+    let b = Server::start().await;
     mount(
         &b,
         "GET",
@@ -115,7 +116,7 @@ async fn declared(app: Router) -> Result<String, Box<dyn Error>> {
 // conformance: CP-25
 #[tokio::test]
 async fn by_default_a_read_and_a_create_are_501_and_no_node_is_asked() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let b = holder(&person()).await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), (&a, &b), "")?;
@@ -134,7 +135,7 @@ async fn by_default_a_read_and_a_create_are_501_and_no_node_is_asked() -> TestRe
 #[tokio::test]
 async fn with_the_setting_a_party_read_reaches_only_that_node_byte_identical() -> TestResult {
     let answered = format!("{{ \"uid\" : {{\"value\": \"{PARTY}\"}},\n  \"_type\": \"PERSON\" }}");
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let b = holder(&answered).await;
     let dir = tempfile::tempdir()?;
     let mut request = read(Some(ENDPOINT_B))?;
@@ -178,7 +179,7 @@ async fn with_the_setting_a_party_read_reaches_only_that_node_byte_identical() -
 #[tokio::test]
 async fn with_the_setting_a_create_body_is_forwarded_unchanged() -> TestResult {
     let created = format!("https://cdr-b.example.org/openehr{PERSONS}/{PARTY}");
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     mount(
         &b,
         "POST",
@@ -188,7 +189,7 @@ async fn with_the_setting_a_create_body_is_forwarded_unchanged() -> TestResult {
             .insert_header("ETag", format!("\"{PARTY}\"").as_str()),
     )
     .await;
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let dir = tempfile::tempdir()?;
     let (status, headers, _) = exchange(
         over(dir.path(), (&a, &b), ROUTED_TO_B)?,
@@ -223,7 +224,7 @@ async fn with_the_setting_a_create_body_is_forwarded_unchanged() -> TestResult {
 // conformance: CP-25
 #[tokio::test]
 async fn a_header_naming_the_declared_endpoint_is_accepted() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let b = holder(&person()).await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), (&a, &b), ROUTED_TO_B)?;
@@ -239,7 +240,7 @@ async fn a_header_naming_the_declared_endpoint_is_accepted() -> TestResult {
 async fn with_the_setting_a_request_naming_no_endpoint_is_refused_and_no_node_is_asked()
 -> TestResult {
     for request in [read(None)?, create(None)?] {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         let b = holder(&person()).await;
         let dir = tempfile::tempdir()?;
         refused_at_neither(
@@ -262,7 +263,7 @@ async fn a_header_naming_another_endpoint_several_or_a_star_is_refused() -> Test
         ("*", "endpoint-unknown"),
         ("node-x-pub", "endpoint-unknown"),
     ] {
-        let a = MockServer::start().await;
+        let a = Server::start().await;
         let b = holder(&person()).await;
         let dir = tempfile::tempdir()?;
         refused_at_neither(
@@ -279,7 +280,7 @@ async fn a_header_naming_another_endpoint_several_or_a_star_is_refused() -> Test
 // conformance: CP-25
 #[tokio::test]
 async fn the_conflict_names_both_endpoints() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let b = holder(&person()).await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), (&a, &b), ROUTED_TO_B)?;
@@ -294,7 +295,7 @@ async fn the_conflict_names_both_endpoints() -> TestResult {
 // conformance: CP-25
 #[tokio::test]
 async fn with_the_setting_a_path_naming_no_its_rest_operation_is_still_501() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let b = holder(&person()).await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), (&a, &b), ROUTED_TO_B)?;
@@ -309,7 +310,7 @@ async fn with_the_setting_a_path_naming_no_its_rest_operation_is_still_501() -> 
 // conformance: CP-25
 #[tokio::test]
 async fn options_declares_each_mode_and_the_behaviour_matches_it() -> TestResult {
-    let a = MockServer::start().await;
+    let a = Server::start().await;
     let b = holder(&person()).await;
     let dir = tempfile::tempdir()?;
     let unsupported = declared(over(dir.path(), (&a, &b), "")?).await?;
@@ -341,8 +342,8 @@ async fn options_declares_each_mode_and_the_behaviour_matches_it() -> TestResult
 // conformance: CP-25
 #[tokio::test]
 async fn options_on_a_party_names_its_methods_only_when_routed() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let at = format!("{PERSONS}/{PARTY}");
     let (status, _) = call(

@@ -30,9 +30,10 @@ use ferrofed_registry::incident::{Detection, TARGET};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::facade::owner::{self, Held, HeldElsewhere};
 use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use serde::Deserialize;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, EHR_B, registry};
 use crate::path_ehr_id::{answer, holder, over};
@@ -133,7 +134,7 @@ fn refused_held_at(answered: &Answered, holder: &str, at: &str, ehr_id: &str) ->
 async fn a_create_at_b_of_an_ehr_id_the_index_holds_at_a_is_refused_and_sends_nothing() -> TestResult
 {
     let a = holder().await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b)?;
     let (answers, logs) = captured(
@@ -250,7 +251,7 @@ async fn a_create_at_the_member_holding_the_ehr_id_is_forwarded_for_its_own_409(
         ResponseTemplate::new(409),
     )
     .await;
-    let b = MockServer::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b)?;
     let (answers, logs) = captured(
@@ -284,8 +285,8 @@ async fn a_create_at_the_member_holding_the_ehr_id_is_forwarded_for_its_own_409(
 // conformance: CP-15 CP-33
 #[tokio::test]
 async fn an_unknown_ehr_id_is_created_where_named_and_then_indexed_there() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     mount(
         &b,
         "PUT",
@@ -338,8 +339,8 @@ async fn an_unknown_ehr_id_is_created_where_named_and_then_indexed_there() -> Te
 #[tokio::test]
 async fn two_creates_racing_for_one_ehr_id_at_two_members_raise_the_index_insert_alarm()
 -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     for server in [&a, &b] {
         mount(
             server,

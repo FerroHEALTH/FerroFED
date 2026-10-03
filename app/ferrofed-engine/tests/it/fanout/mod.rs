@@ -30,11 +30,12 @@ use ferrofed_engine::fanout::{Budget, FederatedAnswer, Plan, fan_out};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::mock::Server;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::ReqwestTransport;
 use openehr_its::rest::generated::query::ResultSetColumn;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -67,8 +68,8 @@ fn json(status: u16, body: &str) -> ResponseTemplate {
 }
 
 /// A mock node answering `POST /v1/query/aql` with `answer`.
-async fn node(answer: ResponseTemplate) -> MockServer {
-    let server = MockServer::start().await;
+async fn node(answer: ResponseTemplate) -> Server {
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(answer)

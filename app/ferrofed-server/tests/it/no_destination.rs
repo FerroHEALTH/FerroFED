@@ -12,8 +12,8 @@
 
 use std::error::Error;
 
+use ferrofed_testkit::mock::Server;
 use http::StatusCode;
-use wiremock::MockServer;
 
 use crate::facade::{
     Answer, EHR_A, body, crossref, gateway, node_answering, patient_query, post, received,
@@ -25,7 +25,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 /// The registry document of node A and node B with both endpoints suspended
 /// by the operator.
-fn suspended(a: &MockServer, b: &MockServer) -> String {
+fn suspended(a: &Server, b: &Server) -> String {
     registry(&a.uri(), &b.uri(), "").replace(
         "connection_type = \"openehr-rest-query\"\n",
         "connection_type = \"openehr-rest-query\"\nstatus = \"suspended\"\n",

@@ -15,11 +15,12 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, body, crossref, gateway, node_failing, post, received,
@@ -42,11 +43,11 @@ fn query() -> String {
 }
 
 /// A node answering the dispatched `COUNT(*), SUM(x), COUNT(x)` with `row`.
-async fn node(row: &str) -> MockServer {
+async fn node(row: &str) -> Server {
     let answer = format!(
         r##"{{"q":"node","columns":[{{"name":"#0"}},{{"name":"#1"}},{{"name":"#2"}}],"rows":[{row}]}}"##
     );
-    let server = MockServer::start().await;
+    let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/query/aql"))
         .respond_with(
@@ -61,8 +62,8 @@ async fn node(row: &str) -> MockServer {
 /// `[federation]` keys `federation`.
 fn federation(
     dir: &tempfile::TempDir,
-    a: &MockServer,
-    b: &MockServer,
+    a: &Server,
+    b: &Server,
     federation: &str,
 ) -> Result<axum::Router, Box<dyn Error>> {
     let tables = format!(

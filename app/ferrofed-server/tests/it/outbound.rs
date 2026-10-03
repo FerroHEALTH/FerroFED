@@ -11,6 +11,7 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 
 use crate::facade::{
@@ -56,7 +57,7 @@ fn carriers() -> Vec<(&'static str, String)> {
 
 /// Asserts that `server` was asked once, keyed on `own`, with no trace of the
 /// patient identifier anywhere in what it received.
-async fn asked_by_ehr_id_alone(server: &wiremock::MockServer, own: &str, case: &str) -> TestResult {
+async fn asked_by_ehr_id_alone(server: &Server, own: &str, case: &str) -> TestResult {
     let bodies = received(server).await?;
     assert_eq!(1, bodies.len(), "{case}: each node is asked once");
     let sent = bodies.first().ok_or("one request")?;
