@@ -247,12 +247,14 @@ openEHR-federation-endpoint: node_1, node_3
 openEHR-federation-system-id: cdr1.example.org, cdr3.example.org
 ```
 
-- A query you directed at one endpoint, with the header or `FROM ENDPOINT`,
-  went to a single node, so both headers name that node whatever it
-  answered, a `424` or a `504` included. A query scoped to one `ehr_id` names
-  the node it was routed to. When the node was never asked, because the
-  patient is `not-resolved` there, the answer carries neither header.
-- Any other answer lists the endpoints that contributed rows, in registry
+- A query the gateway sent to a single node names that node whatever it
+  answered, zero rows, a `424` or a `504` included (N31). That is a query you
+  directed at one endpoint, with the header or `FROM ENDPOINT`, a query whose
+  patient resolves at one member alone, and a query scoped to one `ehr_id`,
+  which names the node it was routed to. A query that asked no node, because
+  the patient is `not-resolved` wherever it was looked for, carries neither
+  header.
+- An answer from several nodes lists the endpoints that contributed rows, in registry
   order. An endpoint contributed when it answered `active` with a
   `row_count` above 0, the count §9.5 takes before `DISTINCT`, dedup and
   `LIMIT`. An endpoint that answered no rows, failed, timed out, or was

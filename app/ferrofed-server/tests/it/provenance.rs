@@ -4,8 +4,9 @@
 //! The provenance headers on the federated AQL answer, against three mock
 //! nodes (§7a.3, §9.6, §11.1; N31, N33; CP-24).
 //!
-//! A query directed at one endpoint was dispatched to a single node, so its
-//! answer names that endpoint in `openEHR-federation-endpoint` and the node's
+//! A query dispatched to a single node, because it was directed at one
+//! endpoint or the patient resolves at one member alone, answers naming
+//! that endpoint in `openEHR-federation-endpoint` and the node's
 //! `system_id` in `openEHR-federation-system-id`, whatever the node answered,
 //! and only when the node was asked (N31). A fan-out answer lists the
 //! endpoints that contributed rows, and their `system_id`s, in registry
@@ -184,6 +185,46 @@ async fn a_directed_query_names_the_node_that_failed_it_once_the_node_was_asked(
         "N31: the request was dispatched to node B alone, whatever it answered"
     );
     assert_eq!(vec!["cdr-b.example.org"], run.values(SYSTEM_ID)?);
+    Ok(())
+}
+
+// conformance: CP-24
+#[tokio::test]
+async fn an_undirected_query_the_patient_resolves_for_at_one_member_names_it() -> TestResult {
+    for (outcome, status) in [
+        ("zero rows", StatusCode::OK),
+        ("a node error", StatusCode::FAILED_DEPENDENCY),
+    ] {
+        let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+        let b = if status == StatusCode::OK {
+            node_empty().await
+        } else {
+            node_failing(500).await
+        };
+        let c = node_answering("uid-at-c::cdr-c.example.org::1").await;
+        let dir = tempfile::tempdir()?;
+        let app = three(dir.path(), (&a, &b, &c), &[("node-b", EHR_B)])?;
+        let run = answered(app, with(&undirected(), &[])?).await?;
+        assert_eq!(status, run.status, "{outcome}: §11.4");
+        assert_eq!(
+            [0, 1, 0],
+            [
+                received(&a).await?.len(),
+                received(&b).await?.len(),
+                received(&c).await?.len(),
+            ]
+        );
+        assert_eq!(
+            vec!["node-b-pub"],
+            run.values(ENDPOINT)?,
+            "{outcome}: N31, the request was dispatched to node B alone"
+        );
+        assert_eq!(
+            vec!["cdr-b.example.org"],
+            run.values(SYSTEM_ID)?,
+            "{outcome}: N31, §9.6"
+        );
+    }
     Ok(())
 }
 

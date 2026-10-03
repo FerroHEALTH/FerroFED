@@ -321,12 +321,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
-- A query directed at one endpoint, by the `openEHR-federation-endpoint`
-  header or `FROM ENDPOINT`, answers with `openEHR-federation-endpoint` and
-  `openEHR-federation-system-id` naming that endpoint and its node's
-  `system_id`, as N31 requires of a request dispatched to a single node
-  (#319; §7a.3, CP-24). A `424` or `504` from that node carries them too; a
-  query that asked no node, the patient `not-resolved` there, carries
+- A query dispatched to a single node, directed at one endpoint by the
+  `openEHR-federation-endpoint` header or `FROM ENDPOINT`, or undirected with
+  the patient resolving at one member alone, answers with
+  `openEHR-federation-endpoint` and `openEHR-federation-system-id` naming that
+  endpoint and its node's `system_id`, as N31 requires of a request
+  dispatched to a single node (#319; §7a.3, CP-24). Zero rows, a `424` or a
+  `504` from that node carries them too; a query that asked no node carries
   neither.
 - A request routed by its target alone (`POST {base}/v1/ehr` and a definition
   request) checks its declared header and query values before its target, as

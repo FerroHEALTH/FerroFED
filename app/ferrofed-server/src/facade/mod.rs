@@ -596,7 +596,7 @@ async fn federate(
     if let Some(recombination) = analysis.recombination() {
         plan = plan.recombining(recombination.clone());
     }
-    let dispatch = Dispatch::of(routed, named.as_ref(), &plan);
+    let dispatch = Dispatch::of(routed, &plan);
     let answer = fan_out_within(
         federation.clients(),
         federation.snapshot(),

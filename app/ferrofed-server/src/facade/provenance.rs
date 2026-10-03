@@ -13,8 +13,6 @@
 //! endpoint ids and openEHR `system_id`s alone, never a value the request
 //! carried (§5.4.1, N33).
 
-use std::collections::BTreeSet;
-
 use axum::response::Response;
 use ferrofed_engine::fanout::Plan;
 use ferrofed_registry::id::EndpointId;
@@ -122,32 +120,32 @@ pub(crate) enum Dispatch<'a> {
     /// A query scoped to one `ehr_id`, routed to the one member that owns it
     /// (N29, §12.5.1).
     Routed(&'a Endpoint),
-    /// A query directed at exactly one endpoint, and dispatched to it.
+    /// A query `plan` dispatches to exactly one endpoint, whether a directive
+    /// or a header named it or the patient resolves at that member alone.
     Single(EndpointId),
-    /// Every other query: a fan-out, or a directed query that asked no node.
+    /// A query dispatched to several endpoints, or to none.
     Federated,
 }
 
 impl<'a> Dispatch<'a> {
-    /// Where a query goes that was `routed` by its `ehr_id`, or directed at
-    /// the endpoints `named`, and is dispatched under `plan`.
+    /// Where a query goes that was `routed` by its `ehr_id`, or is
+    /// dispatched under `plan`.
     ///
-    /// A query directed at one endpoint that `plan` asks nothing, because
-    /// the patient is `not-resolved` there or resolution failed, went to no
-    /// node, so it is [`Dispatch::Federated`] and lists who contributed rows.
-    pub(crate) fn of(
-        routed: Option<Owner<'a>>,
-        named: Option<&BTreeSet<EndpointId>>,
-        plan: &Plan,
-    ) -> Self {
+    /// A query `plan` asks no endpoint, because the patient is
+    /// `not-resolved` everywhere it was asked for or resolution failed, went
+    /// to no node, so it is [`Dispatch::Federated`] and lists who contributed
+    /// rows: nobody.
+    pub(crate) fn of(routed: Option<Owner<'a>>, plan: &Plan) -> Self {
         if let Some(owner) = routed {
             return Self::Routed(owner.endpoint);
         }
-        named
-            .filter(|named| named.len() == 1)
-            .and_then(BTreeSet::first)
-            .and_then(|endpoint| plan.dispatched().find(|dispatched| *dispatched == endpoint))
-            .map_or(Self::Federated, |endpoint| Self::Single(endpoint.clone()))
+        // NOTE: N31, §7a.3: every request "routed or dispatched to a single node"
+        // names it, so one dispatched endpoint is a single node however chosen.
+        let mut dispatched = plan.dispatched();
+        match (dispatched.next(), dispatched.next()) {
+            (Some(endpoint), None) => Self::Single(endpoint.clone()),
+            _ => Self::Federated,
+        }
     }
 
     /// The provenance of the answer, with the status `status` and the
