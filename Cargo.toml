@@ -132,6 +132,11 @@ rustls-platform-verifier = "0.7.1"
 # mCSD Organization and Endpoint (#74); the testkit's Manager adds `resources`
 # for the ITI-104 Patient (#47).
 fhir-types = { version = "0.1.107", default-features = false }
+# The XML reader and writer of the XCPD ITI-55 SOAP 1.2 and HL7 v3 messages
+# (#85), behind crates/ihe-iti's `xcpd` feature; the version fhir-types already
+# locks, so the feature adds no crate to the graph. Verified against crates.io
+# on 2026-10-03.
+quick-xml = { version = "0.42.0", default-features = false }
 # The test harness (#39; no specification governs it: our own design): the
 # container runner behind the FERROFED_E2E gate, the in-process stub nodes,
 # and the HTTP server half the capturing and fault proxy is built on.
