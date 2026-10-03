@@ -366,7 +366,8 @@ fn not_controlled(
     (request_id, logged): (&str, &str),
 ) -> Response {
     if let write::Refused::NotControlling(_) = refused {
-        // TODO(#66): score this refusal for a write from a de-duplicated row whose owner is down (§10.3, CP-29).
+        // NOTE: §10.3 copy-write-reject, CP-29: the controlling node is never asked, so a
+        // write from a de-duplicated row is refused alike whether its owner is up or down.
         tracing::warn!(
             endpoint = %endpoint.id(),
             code = refused.code().as_str(),

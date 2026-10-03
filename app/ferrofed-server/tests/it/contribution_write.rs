@@ -201,7 +201,9 @@ async fn a_contribution_with_one_version_another_member_controls_is_409_and_reac
         )
         .await?;
         assert!(
-            text.contains("node-b") && text.contains(ENDPOINT_B),
+            text.contains("cdr-b.example.org")
+                && text.contains("node-b")
+                && text.contains(ENDPOINT_B),
             "the error identifies the controlling system (§10.3): {text}"
         );
         assert!(
@@ -239,6 +241,10 @@ async fn a_contribution_amending_a_version_no_member_is_known_to_control_is_409(
     assert!(
         !text.contains("external.example.org"),
         "the client's creating_system_id is not quoted: {text}"
+    );
+    assert!(
+        text.contains("the preceding_version_uid of version 2 of the CONTRIBUTION"),
+        "the error points at the controlling system it cannot quote (§10.3): {text}"
     );
     Ok(())
 }

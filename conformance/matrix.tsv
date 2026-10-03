@@ -57,7 +57,7 @@ CP-25	Gateway	N32	9	covered	#68,#311	scored over two mock nodes in both modes: b
 CP-26	Gateway	N33	10	covered	#45,#90,#217	-
 CP-27	Node	N34	10	node-profile	#93	a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design
 CP-28	Gateway	N35	3	covered	#70,#71,#77	the stored-query clause is scored on a query stored at the gateway and invoked by name, targeted by the header and by the directive with the same answer, and refused 400 when the two select different node sets (section 8.4, section 12.7)
-CP-29	Gateway	N36	5,6	planned	#56,#66	-
+CP-29	Gateway	N36	5,6	covered	#56,#66	scored over two mock nodes with node A behind the capturing proxy: a version node A created and node B holds as an import is one row under version-identity, read from node A with node B suppressed in meta.federation.dedup; a write against it through node B's ehr_id, routed by the ehr_id index or the targeting header, is refused 409 naming the creating_system_id and node A's endpoint whether node A refuses connections or answers, node B is sent nothing and node A is never tried; a write through node A's own ehr_id reaches node A alone and its answer names node A and no copy
 CP-30	Gateway	N37	4	covered	#37,#50	-
 CP-31	Gateway	N38,N40	4	covered	#49,#51	-
 CP-32	Gateway	N39,N14,N9	5	covered	#52,#53,#54,#55,#157,#187	-

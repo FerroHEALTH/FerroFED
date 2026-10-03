@@ -254,7 +254,9 @@ async fn a_write_its_path_node_does_not_control_is_refused_409_and_reaches_no_no
         )
         .await?;
         assert!(
-            text.contains("node-a") && text.contains(ENDPOINT_A),
+            text.contains("cdr-a.example.org")
+                && text.contains("node-a")
+                && text.contains(ENDPOINT_A),
             "the error identifies the controlling system (§10.3): {text}"
         );
         assert!(
@@ -288,6 +290,12 @@ async fn a_write_of_a_version_no_member_is_known_to_control_is_refused_409() -> 
     assert!(
         !text.contains("external.example.org"),
         "the client's creating_system_id is not quoted: {text}"
+    );
+    assert!(
+        error_body(&text)?
+            .message
+            .contains("the version If-Match names"),
+        "the error points at the controlling system it cannot quote (§10.3): {text}"
     );
     Ok(())
 }

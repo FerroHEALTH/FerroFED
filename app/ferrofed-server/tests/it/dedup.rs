@@ -35,7 +35,7 @@ const IMPORTED: &str = "8849a2f0-1d3c-4e5f-9a7b-000000000001::cdr-b.example.org:
 
 /// `POST /v1/query/aql` with `aql` and the dedup header set to each of
 /// `values`.
-fn request(aql: &str, values: &[&str]) -> Result<Request<Body>, Box<dyn Error>> {
+pub(crate) fn request(aql: &str, values: &[&str]) -> Result<Request<Body>, Box<dyn Error>> {
     let mut builder =
         Request::post("/v1/query/aql").header(header::CONTENT_TYPE, "application/json");
     for value in values {
@@ -45,26 +45,26 @@ fn request(aql: &str, values: &[&str]) -> Result<Request<Body>, Box<dyn Error>> 
 }
 
 #[derive(Debug, Deserialize)]
-struct Answer {
-    rows: Vec<Vec<String>>,
-    meta: Meta,
+pub(crate) struct Answer {
+    pub(crate) rows: Vec<Vec<String>>,
+    pub(crate) meta: Meta,
 }
 
 #[derive(Debug, Deserialize)]
-struct Meta {
-    federation: Federation,
+pub(crate) struct Meta {
+    pub(crate) federation: Federation,
 }
 
 #[derive(Debug, Deserialize)]
-struct Federation {
-    dedup: Dedup,
+pub(crate) struct Federation {
+    pub(crate) dedup: Dedup,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
-struct Dedup {
-    mode: String,
-    suppressed_rows: Option<u64>,
-    suppressed_endpoints: Option<Vec<String>>,
+pub(crate) struct Dedup {
+    pub(crate) mode: String,
+    pub(crate) suppressed_rows: Option<u64>,
+    pub(crate) suppressed_endpoints: Option<Vec<String>>,
 }
 
 /// The answer to `request` from a gateway over two nodes that both hold the
@@ -120,8 +120,8 @@ async fn none_is_accepted_explicitly() -> TestResult {
 
 /// Covers the visibility half of CP-29 (§10.2, §10.3): the suppressed
 /// copies stay visible in `meta.federation.dedup`; its write-routing half is
-/// #66.
-// conformance: CP-9
+/// in [`crate::dedup_write`].
+// conformance: CP-9 CP-29
 #[tokio::test]
 async fn under_version_identity_one_row_comes_back_and_the_copy_is_named() -> TestResult {
     let (status, answer) = imported(&["version-identity"]).await?;
