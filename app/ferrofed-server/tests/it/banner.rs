@@ -18,6 +18,7 @@ use std::process::Command;
 use ferrofed_identity::dev::Profile;
 use ferrofed_server::banner::{DEVELOPMENT_NOTICE, Deployment, Registry, WORDMARK, prints, render};
 use ferrofed_server::config::Config;
+use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::federation::{FederationError, read_registry};
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::telemetry::Format;
@@ -40,7 +41,7 @@ fn deployment() -> Result<Deployment, Box<dyn Error>> {
             members: 2,
             endpoints: 3,
         },
-        stored_queries: true,
+        stored_queries: Some(Backend::Redb),
         development: false,
     })
 }
@@ -94,11 +95,24 @@ fn the_deployment_lines_name_the_base_the_address_the_registry_and_the_store() -
         Some("2 members, 3 endpoints"),
         value_of(&banner, "Registry")
     );
-    assert_eq!(Some("on"), value_of(&banner, "Stored queries"));
+    assert_eq!(Some("on, redb"), value_of(&banner, "Stored queries"));
+    for (backend, shown) in [
+        (Backend::Postgres, "on, postgres"),
+        (Backend::Files, "on, files, read-only"),
+    ] {
+        let mut stored = deployment()?;
+        stored.stored_queries = Some(backend);
+        let banner = render("9.9.9", &stored, false);
+        assert_eq!(
+            Some(shown),
+            value_of(&banner, "Stored queries"),
+            "the backend kind, never its location"
+        );
+    }
 
     let mut bare = deployment()?;
     bare.registry = Registry::Unset;
-    bare.stored_queries = false;
+    bare.stored_queries = None;
     let banner = render("9.9.9", &bare, false);
     assert_eq!(
         Some("none, the gateway federates nothing"),
@@ -303,7 +317,7 @@ fn the_banner_and_the_build_share_one_read_of_the_registry() -> TestResult {
         settings.server.base_path.clone(),
         settings.server.listen,
         read.as_ref().map(Result::as_ref),
-        settings.stored_queries.is_some(),
+        settings.stored_queries.as_ref().map(Store::backend),
         settings.profile == Profile::Development,
     );
     std::fs::remove_file(&path)?;
@@ -376,7 +390,7 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
         settings.server.base_path.clone(),
         settings.server.listen,
         document.as_ref().map(Result::as_ref),
-        settings.stored_queries.is_some(),
+        settings.stored_queries.as_ref().map(Store::backend),
         settings.profile == Profile::Development,
     );
     assert_eq!(
@@ -410,7 +424,7 @@ fn a_registry_document_that_does_not_load_is_named_unreadable() -> TestResult {
         settings.server.base_path.clone(),
         settings.server.listen,
         document.as_ref().map(Result::as_ref),
-        settings.stored_queries.is_some(),
+        settings.stored_queries.as_ref().map(Store::backend),
         settings.profile == Profile::Development,
     );
     assert_eq!(Registry::Unreadable, deployment.registry);

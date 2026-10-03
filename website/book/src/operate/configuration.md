@@ -28,10 +28,11 @@ ferrofed healthcheck --config /etc/ferrofed/ferrofed.toml
 
 `--config` names the file; without it the file is the one `FERROFED_CONFIG`
 names, and without that every default stands. `config check` reads and
-resolves the configuration exactly as `serve` would, secrets included, prints
-one line and exits, so a deployment pipeline can test a file without binding a
-socket. `ferrofed admission check --endpoint <id>` checks one member against
-the admission conditions ([Admitting a node](admission.md)).
+resolves the configuration exactly as `serve` would, secrets included, loads
+a read-only stored-query directory, prints one line and exits, so a deployment
+pipeline can test a file without binding a socket. It opens no store file and
+connects to no database. `ferrofed admission check --endpoint <id>` checks
+one member against the admission conditions ([Admitting a node](admission.md)).
 `healthcheck` asks the gateway running on this host for its readiness: it
 connects to the port of `server.listen` (on `127.0.0.1` or `[::1]` when the
 address is a wildcard, and on the address itself otherwise), prints one line,

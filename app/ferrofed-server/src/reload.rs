@@ -368,8 +368,12 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             was.demographic_endpoint != now.demographic_endpoint,
         ),
         (
-            "stored_queries.path",
-            boot.stored_queries != fresh.stored_queries,
+            "stored_queries",
+            match (&boot.stored_queries, &fresh.stored_queries) {
+                (Some(was), Some(now)) => !was.same_as(now),
+                (None, None) => false,
+                (Some(_), None) | (None, Some(_)) => true,
+            },
         ),
         (
             "metrics.listen",

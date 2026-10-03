@@ -15,7 +15,9 @@
 //! A database per node, never a schema per node: FerroEHR creates fixed
 //! schema names in the database it connects to, so two nodes in one database
 //! would share their tables. The database server is the same init script the
-//! compose quickstart mounts, [`NODE_DATABASES_SCRIPT`].
+//! compose quickstart mounts, [`NODE_DATABASES_SCRIPT`]. [`postgres`] starts
+//! the same server alone, its port published to the host, for the gateway's
+//! own PostgreSQL store, a database per use.
 //!
 //! No specification governs the harness; it is FerroFED's own design.
 
@@ -342,6 +344,66 @@ pub async fn ferroehr(system_id: &'static str) -> Result<Node, HarnessError> {
     ferroehr_on(&database, NODE_A_DATABASE, system_id).await
 }
 
+/// A started PostgreSQL server the host reaches, holding one database per
+/// name it was started with, torn down when it is dropped.
+#[derive(Debug)]
+pub struct Postgres {
+    /// The server.
+    server: DatabaseServer,
+    /// The host the server's port is published on.
+    host: String,
+    /// The published port.
+    port: u16,
+}
+
+impl Postgres {
+    /// Returns the connection URL of the database `name`, as its own login
+    /// role, with TLS off: the harness server has no certificate.
+    #[must_use]
+    pub fn url(&self, name: &str) -> String {
+        format!(
+            "postgres://{name}:{name}@{}:{}/{name}?sslmode=disable",
+            self.host, self.port
+        )
+    }
+
+    /// Returns the server's container.
+    #[must_use]
+    pub fn container(&self) -> &ContainerAsync<GenericImage> {
+        &self.server.container
+    }
+}
+
+/// Starts one PostgreSQL server the host reaches, holding a database per
+/// name.
+///
+/// It holds the database `first` and one more for each of `others`, each
+/// owned by a login role of the same name whose development password is
+/// that name too. The server is the FerroEHR database image the nodes run, built on
+/// PostgreSQL 18.6, so a test of FerroFED's own PostgreSQL use runs on the
+/// release `docs/VERSIONS.md` pins, one database per use.
+///
+/// # Errors
+///
+/// Returns [`HarnessError::Container`] when Docker refuses the container or
+/// its port.
+pub async fn postgres(first: &str, others: &[&str]) -> Result<Postgres, HarnessError> {
+    let server = database_server(first, others).await?;
+    let image = FERROEHR_POSTGRES.repository;
+    let host = server
+        .container
+        .get_host()
+        .await
+        .map_err(|source| HarnessError::Container { image, source })?
+        .to_string();
+    let port = server
+        .container
+        .get_host_port_ipv4(POSTGRES_PORT.tcp())
+        .await
+        .map_err(|source| HarnessError::Container { image, source })?;
+    Ok(Postgres { server, host, port })
+}
+
 /// Starts the FerroEHR PostgreSQL image with the database `first` and one
 /// more for each of `others`, each owned by a login role of the same name
 /// whose development password is that name too.
@@ -352,6 +414,7 @@ async fn database_server(first: &str, others: &[&str]) -> Result<DatabaseServer,
     let (network, host) = names();
     let container = FERROEHR_POSTGRES
         .image()
+        .with_exposed_port(POSTGRES_PORT.tcp())
         .with_wait_for(WaitFor::healthcheck())
         .with_health_check(postgres_health_check(first, first))
         .with_copy_to(

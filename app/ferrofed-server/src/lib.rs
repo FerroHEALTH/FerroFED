@@ -148,8 +148,8 @@ where
         Command::Healthcheck => healthcheck_command(&settings),
         Command::Config {
             command: ConfigCommand::Check,
-        } => match Federation::load(&settings) {
-            Ok(_) => config_checked(),
+        } => match AppState::check(&settings) {
+            Ok(()) => config_checked(),
             Err(error) => {
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 ExitCode::from(EXIT_CONFIG)
@@ -184,7 +184,10 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
                 settings.server.base_path.clone(),
                 settings.server.listen,
                 described,
-                settings.stored_queries.is_some(),
+                settings
+                    .stored_queries
+                    .as_ref()
+                    .map(config::stored_queries::Store::backend),
                 settings.profile == Profile::Development,
             ),
             format.colour(stdout_is_terminal, no_color.as_deref()),

@@ -501,9 +501,10 @@ jobs:
         with:
           tool: cargo-nextest
       # The testkit's whole suite, and every other crate's container tests
-      # alone, since the test job already runs the rest offline.
+      # alone, since the test job already runs the rest offline. Every
+      # feature is on, so the PostgreSQL store's tests run too.
       - run: >-
-          cargo nextest run --profile ci --locked --workspace
+          cargo nextest run --profile ci --locked --workspace --all-features
           -E 'package(ferrofed-testkit) or test(/^e2e::/)'
           --no-tests=pass
 

@@ -878,19 +878,38 @@ interface:
   transaction, so a second `PUT` of a held pair fails atomically, which is the
   immutability rule with no race. `redb` is the family's embedded store
   (FerroBRIDGE's identity store, FerroTERM's concept store);
-- **PostgreSQL 18** (an optional feature, where several gateway replicas
-  run): the same interface, with a `UNIQUE (name, version)` constraint as the
-  race guard. A `redb` file is opened by one process at a time, so each replica
-  would hold its own copy: a version registered on one replica would be unknown
-  to the next, and two replicas could each accept a different first `PUT` of
-  the same name and version, which breaks the immutability rule. One shared
-  database makes a registered version visible to every replica and makes the
-  refusal hold across them;
-- **read-only**: definitions loaded from files and `PUT` answered `405`, so
-  several instances share definitions with no shared database.
+- **PostgreSQL 18** (the server's `postgres` cargo feature, off by default,
+  where several gateway replicas run; built with #268): the same interface,
+  with the primary key `(name, version)` of `ferrofed.stored_query_definition`
+  as the race guard. The insert is `INSERT … ON CONFLICT DO NOTHING`, and the
+  affected-row count says stored or held, so two replicas inserting one pair
+  at once store exactly one. A `redb` file is opened by one process at a time,
+  so each replica would hold its own copy: a version registered on one replica
+  would be unknown to the next, and two replicas could each accept a different
+  first `PUT` of the same name and version, which breaks the immutability
+  rule. One shared database makes a registered version visible to every
+  replica and makes the refusal hold across them. The client is
+  `tokio-postgres` on a thread and runtime of the store's own, because the
+  trait is called where a thread may block, with rustls and the platform's
+  roots for TLS. The schema and table are created when absent at each
+  connect, under an advisory lock. The connection string is a `_file`
+  secret, and only the backend kind reaches the banner and the log;
+- **read-only** (`backend = "files"`, #268): definitions loaded at start from
+  one file per `{qualified_query_name}/{version}.aql`, each admitted as a
+  `PUT` admits its body, and every `PUT` answered `405` with `Allow: GET,
+  OPTIONS`, so several instances share definitions with no shared database.
+  A malformed directory refuses the start and `config check`, naming the
+  file. The registry is still declared in `OPTIONS {base}/`, and definition
+  fan-out is refused beside it, since no `PUT` stores anything to
+  distribute.
 
 Reads go through an in-memory cache of immutable versions, which never needs
-invalidating. A stored query whose subject is a literal is refused; the
+invalidating. Over a store several processes share
+(`DefinitionStore::is_shared`), a read and a name expansion first read that
+name's rows again and add what the cache lacks, so every replica selects the
+same version; nothing the cache holds is replaced. That read happens once,
+before any node is contacted, and a failure answers `500` (#268). A stored
+query whose subject is a literal is refused; the
 subject is always a `$parameter`. SQLite is not a candidate: `rusqlite` links C
 `libsqlite3`, and the family is pure Rust.
 
@@ -906,7 +925,8 @@ does. The
 storage implementations live in `app/ferrofed-server`. No specification
 governs this: our own design.
 `DefinitionStore` is reached only from the definition routes and the
-name-expansion step, which reads the cache. The reference implementation states
+name-expansion step, which reads the cache, and over a shared store reads the
+one name's rows first, before the fan-out starts. The reference implementation states
 the same invariant and breaks it: its identity pipeline reads and writes the
 binding table on the request thread.
 
