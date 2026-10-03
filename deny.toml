@@ -65,7 +65,8 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
   # The AQL front end the federated query parses and prints with (#38).
   { allow = ["BUSL-1.1"], crate = "openehr-query" },
-  # The SMART on openEHR scope grammar the onward grant requests with (#81).
+  # The SMART on openEHR scope grammar the onward grant requests with (#81)
+  # and every caller's scopes are read with (#80).
   { allow = ["BUSL-1.1"], crate = "openehr-sdt" },
   # The openEHR terminology data openehr-term redistributes (through
   # openehr-its's json layer) is CC-BY-SA-3.0; the crate's code is Apache-2.0.

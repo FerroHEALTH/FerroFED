@@ -17,6 +17,7 @@ use openehr_federation::headers::ENDPOINT;
 use uuid::Uuid;
 
 use super::{Case, ENDPOINT_A, Expect, PATIENT, Payload, Side};
+use crate::support::CLIENT_TOKEN;
 
 /// The organisation header (§8.4).
 const ORGANISATION: &str = "openEHR-federation-organisation";
@@ -263,10 +264,16 @@ pub(crate) fn in_query_string_or_header() -> Vec<Case> {
             both(),
         ),
         query(
-            "Authorization",
+            "Authorization, the caller's own token",
+            &aql,
+            &[("authorization", format!("Bearer {}", *CLIENT_TOKEN))],
+            both(),
+        ),
+        query(
+            "Authorization, the identifier as the credential",
             &aql,
             &[("authorization", format!("Bearer {value}"))],
-            both(),
+            Expect::Unsent(StatusCode::UNAUTHORIZED),
         ),
         query(
             "Prefer",
@@ -351,14 +358,20 @@ pub(crate) fn on_the_route(ehr_a: Uuid) -> Vec<Case> {
     let ehr = format!("/v1/ehr/{ehr_a}");
     vec![
         routed(
-            "X-Request-Id, a free-form header and Authorization",
+            "X-Request-Id, a free-form header and the caller's own token",
             ehr.clone(),
             &[
                 ("x-request-id", value.clone()),
                 ("x-patient", value.clone()),
-                ("authorization", format!("Bearer {value}")),
+                ("authorization", format!("Bearer {}", *CLIENT_TOKEN)),
             ],
             Expect::Routed(StatusCode::OK),
+        ),
+        routed(
+            "Authorization, the identifier as the credential",
+            ehr.clone(),
+            &[("authorization", format!("Bearer {value}"))],
+            Expect::Unsent(StatusCode::UNAUTHORIZED),
         ),
         routed(
             "an undeclared query parameter",

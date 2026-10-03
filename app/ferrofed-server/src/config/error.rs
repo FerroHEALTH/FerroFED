@@ -128,6 +128,14 @@ pub enum Error {
         /// The key that carries no value.
         key: String,
     },
+    /// `[auth]` is refused: the key and why, never a value it holds.
+    #[error("{key} {fault}")]
+    Auth {
+        /// The key that carries the fault.
+        key: String,
+        /// Why it is refused.
+        fault: crate::config::auth::AuthFault,
+    },
     /// A URL does not parse.
     #[error("{key} is not a URL")]
     Url {

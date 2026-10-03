@@ -343,10 +343,9 @@ of a stored query, is never copied.
 `OPTIONS {base}/` returns what the gateway does and which members stand
 behind it, as JSON that validates against the specification's
 `options-root.schema.json` (§7a.2, N30). It needs no patient identifier and
-carries none. The gateway authenticates no client yet, so it answers any
-caller; with client authentication, planned for v0.0.8
-([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), it answers only
-an authenticated one (§7a.2, §13). Every value comes from the running
+carries none. It answers only an authenticated caller, and `401` to any other
+(§7a.2, §13; [Client authentication](../operate/authentication.md)); the
+caller needs no scope and no purpose of use for it. Every value comes from the running
 configuration, so the body says what the gateway does today:
 
 | Member | What FerroFED declares |

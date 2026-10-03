@@ -48,6 +48,11 @@ openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["aql"] }
 openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true
+# The SMART on openEHR scope grammar every caller's `scope` claim is read with
+# (#80; ITS-REST SMART on openEHR, master08).
+openehr-sdt.workspace = true
+# The RFC 7519 verification of every caller's access token (#80).
+jsonwebtoken.workspace = true
 # The metrics surface (#281): one MeterProvider, the Prometheus pull reader on
 # the admin listener and the optional OTLP push.
 opentelemetry.workspace = true
@@ -68,7 +73,7 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync", "fs"] }
 tokio-postgres = { workspace = true, optional = true }
 tokio-postgres-rustls = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }

@@ -23,6 +23,7 @@ use openehr_federation::id::FederationId;
 use openehr_federation::object::Uri;
 
 use crate::base_path::BasePath;
+use crate::config::auth::AuthSettings;
 use crate::config::stored_queries::Store;
 use crate::config::{DevSection, NodeSelection, RegistryFormat};
 use crate::telemetry::Format;
@@ -153,6 +154,9 @@ pub struct ServerSettings {
     pub shutdown_timeout: Duration,
     /// The largest request body the server reads before answering `413`.
     pub body_limit: usize,
+    /// Who may call the ITS-REST surface and `OPTIONS {base}/`, from
+    /// `[auth]` (§13.1, N25).
+    pub auth: AuthSettings,
 }
 
 /// The console, resolved.
@@ -235,6 +239,9 @@ impl Settings {
             metrics_listen = self.metrics.listen.map(|address| address.to_string()),
             metrics_otlp_push = self.metrics.otlp_endpoint.is_some(),
             credentials = endpoints.join(","),
+            auth_issuers = self.server.auth.issuers.len(),
+            auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
+            purpose_of_use_required = self.server.auth.purpose_required,
             "configuration resolved"
         );
     }

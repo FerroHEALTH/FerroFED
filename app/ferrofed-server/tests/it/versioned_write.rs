@@ -51,7 +51,7 @@ pub(crate) const CREATED_BY_LEGACY: &str =
 pub(crate) const LEGACY_MAPPING: &str = "\n[[creating_system]]\ncreating_system_id = \"legacy-a.example.org\"\nendpoint = \"node-a-pub\"\n";
 
 /// The client's own credential, which no node ever sees.
-const CLIENT_TOKEN: &str = "synthetic-client-token";
+use crate::support::CLIENT_TOKEN;
 
 /// The gateway over node A and node B, with the registry `extra` appended.
 pub(crate) fn over(
@@ -430,7 +430,7 @@ async fn a_versioned_write_lands_byte_identical_and_carries_no_identifier_outsid
     let fields = request.headers_mut();
     fields.insert(
         header::AUTHORIZATION,
-        format!("Bearer {CLIENT_TOKEN}").parse()?,
+        format!("Bearer {}", *CLIENT_TOKEN).parse()?,
     );
     fields.insert("x-patient", PATIENT.parse()?);
     fields.insert("x-request-id", format!("req-{PATIENT}").parse()?);
@@ -462,7 +462,7 @@ async fn a_versioned_write_lands_byte_identical_and_carries_no_identifier_outsid
     );
     let composed = outside_bodies(&a).await?;
     assert!(!composed.contains(PATIENT), "N33: {composed}");
-    assert!(!composed.contains(CLIENT_TOKEN), "{composed}");
+    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "{composed}");
     assert!(
         !composed.to_ascii_lowercase().contains("openehr-federation"),
         "{composed}"

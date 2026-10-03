@@ -45,6 +45,7 @@ compile_error!(
 
 pub mod admin;
 pub mod admission;
+pub mod auth;
 pub mod banner;
 pub mod base_path;
 pub mod body;
@@ -118,7 +119,7 @@ pub const ITS_REST_PREFIX: &str = "/v1/";
 ///
 /// The family moves in lockstep, so one version names every member the
 /// workspace pins (`openehr-query`, `openehr-its`, `openehr-base`,
-/// `openehr-rm`).
+/// `openehr-rm`, `openehr-sdt`).
 pub const OPENEHR_FAMILY: &str = "0.0.81";
 
 /// Runs the binary with `args` and returns the process exit code.
@@ -155,7 +156,9 @@ where
         Command::Healthcheck => healthcheck_command(&settings),
         Command::Config {
             command: ConfigCommand::Check,
-        } => match AppState::check(&settings) {
+        } => match AppState::check(&settings)
+            .and_then(|()| state::admits_callers(&settings, settings.registry_document.is_some()))
+        {
             Ok(()) => config_checked(),
             Err(error) => {
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
@@ -222,6 +225,10 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     };
     // NOTE: no specification governs this: our own design; the OTLP push is a
     // tonic client, which is built inside the runtime it will run on.
+    if let Err(error) = state::admits_callers(&settings, settings.registry_document.is_some()) {
+        tracing::error!(error = chain(&error), "cannot start");
+        return ExitCode::from(EXIT_CONFIG);
+    }
     let entered = runtime.enter();
     let state = match AppState::build_read(&settings, document) {
         Ok(state) => Arc::new(state),
@@ -496,7 +503,14 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
             .nest(base, surface)
             .fallback(outside_the_base)
     };
-    with_middleware(routes.with_state(state), server)
+    let guard = Arc::new(auth::Guard::new(
+        auth::Gate::new(&server.auth),
+        server.base_path.clone(),
+    ));
+    let guarded = routes
+        .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(guard, auth::guard));
+    with_middleware(guarded, server)
 }
 
 /// `GET` and `OPTIONS` of `{base}/` (§7a.2).

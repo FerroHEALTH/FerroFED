@@ -105,8 +105,36 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `kid`, and declares the configured location as `federation.auth.jwks_uri` in
   `OPTIONS {base}/` (§13.1, N30).
 
+- Client authentication at the gateway (§13.1, N25, CP-17 inbound half,
+  #80). A request to the ITS-REST surface and `OPTIONS {base}/` carries an
+  RFC 9068 access token from an issuer on the `[[auth.issuer]]` trust list,
+  verified against the issuer's JWK Set (fetched from `jwks_uri`, read from
+  `jwks_file`, or given inline as `jwks`) or by RFC 7662 introspection. The
+  key set is cached, refetched once for a key it does not hold and at most
+  once per `auth.key_set_refetch_s`. Scopes are read in the SMART on openEHR
+  grammar with `openehr-sdt`, and one table maps every ITS-REST operation to
+  what it requires. A purpose of use, in the IHE IUA extension or RFC 9396
+  `authorization_details`, is required unless
+  `auth.purpose_of_use.required = false` (§13.4). The verified caller rides
+  in the request's extensions. An explicit edge mode verifies a proxy's
+  signed assertion in a configured header and logs the identity it asserted.
+  New codes: `unauthenticated` (401), `scope-insufficient`,
+  `purpose-of-use-required` and `operation-refused` (403), and
+  `authentication-unavailable` (503). The book has a new page, Client
+  authentication.
+- `scripts/quickstart/token.sh` mints the token the quickstart gateway
+  accepts, from a development issuer whose key pair it generates with
+  `openssl` on its first run; the quickstart and the release example
+  configuration carry an `[auth]` section.
+- The testkit's test issuer: key pairs generated per run, its JWK Set served
+  from a mock server, and tokens minted with chosen claims.
+
 ### Changed
 
+- The ADMIN API under `{base}/v1/admin/` answers `403` (`operation-refused`)
+  to every caller, where it answered `501`.
+- A gateway that federates and trusts no issuer refuses to start, and
+  `config check` refuses its configuration, with exit code 78.
 - An onward credential that cannot be obtained fails that node as
   `node-error` with nothing sent to it, on the federated query, the
   definition fan-out and a routed request (`424 node-error`), where it was a
@@ -123,6 +151,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   the token go nowhere.
 - A token endpoint URL with a user name, a password, a query or a fragment is
   refused at load, so no secret can ride in it into a log.
+- No request reaches a node, a cross-reference service or a store before its
+  caller is verified. A token signed with `none` or an HMAC, of another
+  `typ` than `at+jwt`, from an untrusted issuer, for another audience, or
+  outside its validity window is refused, and an issuer that cannot be asked
+  fails closed with `503`. A `patient/` scope admits nothing, because the
+  gateway cannot bind it to the token's patient context, and a
+  `system/aql-*` scope counts only for a listed backend client. The
+  DEMOGRAPHIC API admits only the clients an issuer lists in
+  `demographic_clients`. The client's token is never forwarded to a node.
 
 ## [0.0.7] - 2026-10-03
 

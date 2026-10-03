@@ -44,13 +44,14 @@ shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and
 holds stored queries itself.
 
-It authenticates no client yet, so run it only where the clients you trust
-can reach it, for example behind a proxy that authenticates them. Client
-authentication and OAuth 2.0 to each node are planned for v0.0.8
-([#80](https://github.com/FerroHEALTH/FerroFED/issues/80),
-[#81](https://github.com/FerroHEALTH/FerroFED/issues/81)). Toward the nodes,
+Every client authenticates with an RFC 9068 access token from an issuer you
+trust, carrying a SMART on openEHR scope for the operation and a purpose of
+use, or through a proxy in the explicit edge mode
+([client authentication](https://ferrofed.eu/docs/operate/authentication.html)).
+OAuth 2.0 to each node is planned for v0.0.8
+([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)). Toward the nodes,
 the gateway sends a bearer token, or a user and password, that you configure
-per endpoint. The
+per endpoint, and never the client's own token. The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
 lists what each release shipped and what is planned.
 
@@ -84,11 +85,14 @@ scripts/quickstart/seed.sh
 ```
 
 Then send one ordinary ITS-REST query to the gateway for the patient every
-node knows:
+node knows. `scripts/quickstart/token.sh` mints the access token the
+quickstart gateway accepts, from a development issuer whose key pair it
+generates with `openssl` on its first run:
 
 ```sh
 curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H 'Content-Type: application/json' -d @- <<'EOF'
+  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H 'Content-Type: application/json' -d 5820 <<'EOF'
 {"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF
 ```

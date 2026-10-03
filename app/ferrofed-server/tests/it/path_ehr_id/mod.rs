@@ -44,7 +44,7 @@ const ENDPOINT_B: &str = "node-b-pub";
 const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 /// The client's own credential, which no node ever sees.
-const CLIENT_TOKEN: &str = "synthetic-client-token";
+use crate::support::CLIENT_TOKEN;
 
 /// The registry of node A and node B, at addresses nothing listens on.
 fn snapshot() -> Result<RegistrySnapshot, Box<dyn Error>> {

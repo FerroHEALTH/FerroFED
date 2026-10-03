@@ -31,7 +31,7 @@ use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, crossref, gateway, registry, wire,
 };
 use crate::request_log::logged;
-use crate::support::{error_body, request_lines, send};
+use crate::support::{CLIENT_TOKEN, error_body, request_lines, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -132,13 +132,14 @@ fn by_subject() -> String {
     format!("/v1/ehr?subject_id={PATIENT}&subject_namespace={NAMESPACE}")
 }
 
-/// `GET` of `uri`, carrying the patient in every client header a node must
-/// never see, and naming `target` in `openEHR-federation-endpoint`.
+/// `GET` of `uri`, carrying the patient in a client header a node must never
+/// see and the client credential no node may receive, and naming `target` in
+/// `openEHR-federation-endpoint`.
 fn get(uri: &str, target: Option<&str>) -> Result<Request<Body>, http::Error> {
     let mut request = Request::get(uri)
         .header(header::ACCEPT, "application/json")
         .header("x-patient", PATIENT)
-        .header(header::AUTHORIZATION, format!("Bearer {PATIENT}"));
+        .header(header::AUTHORIZATION, format!("Bearer {}", *CLIENT_TOKEN));
     if let Some(target) = target {
         request = request.header("openEHR-federation-endpoint", target);
     }
@@ -189,6 +190,7 @@ async fn asked_by_ehr_id_alone(server: &Server, ehr_id: &str) -> TestResult {
         NAMESPACE,
         "subject_id",
         "subject_namespace",
+        CLIENT_TOKEN.as_str(),
     ] {
         assert!(
             !captured.contains_ignoring_ascii_case(needle),

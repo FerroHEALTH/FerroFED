@@ -72,7 +72,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `openehr-query` | 0.0.81 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |
 | `openehr-its` | 0.0.81 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543) |
 | `openehr-base`, `openehr-rm` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison and, from 0.0.79, the attribute model with the BASE primitives, the `Ordered` marker and the `OBJECT_REF` targets (FerroEHR #3537) |
-| `openehr-sdt` | not a dependency yet; joins the lockstep line with client authentication (#80) | the SMART on openEHR scope grammar |
+| `openehr-sdt` | 0.0.81, the same lockstep line, joined with client authentication (#80) | the SMART on openEHR scope grammar |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
 | `fhir-types` | 0.1.107 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
@@ -106,7 +106,7 @@ gateway.
 | `openehr-its` (`rest`, `json`) | the `AdhocQueryExecute`, `ResultSet`, `ResultSetMetadata` and `ResultSetColumn` DTOs, with `ResultSetMetadata.additional_properties` as the extension point `meta.federation` occupies (N17), and canonical JSON of the RM |
 | `openehr-base` | `ObjectVersionId` (`object_id()`, `creating_system_id()`, `version_tree_id()`), `HierObjectId` for `ehr_id`, the lexical rule for `system_id`, and `PartialOrd` on the ISO 8601 types |
 | `openehr-rm` | `DV_ORDERED`'s `less_than` and `is_strictly_comparable_to`, for cross-node ordering of data values |
-| `openehr-sdt` (`smart_scopes`) | `SmartScope::parse` and `parse_all` for the SMART on openEHR scope grammar (section 7); not a dependency until client authentication (#80) first reads scopes with it |
+| `openehr-sdt` (`smart_scopes`) | `SmartScope::parse` and `parse_all` for the SMART on openEHR scope grammar (section 7), read by client authentication (#80) |
 
 The research found eight gaps between these crates and what an intermediary
 needs, filed as FerroEHR #3505 to #3512, and the work found a ninth (#3513, a
@@ -678,12 +678,42 @@ introspection. Validation fails closed:
 - a token with no scope covering the operation is `403`.
 
 Scopes are read with `openehr_sdt::smart_scopes::SmartScope::parse_all`, never
-a FerroFED parser; `openehr-sdt` joins the workspace with this work (#80). A query needs an `aql-…` search scope in the `patient/`,
-`user/` or `system/` compartment, and a routed follow-up needs the matching
-`composition-` or `template-` permission. A scope `SmartScope::parse` maps to
-`Other` grants nothing. A wildcard `system/aql-*` grant is honoured only for
-backend clients the deployment lists, because it "would grant access to all
-registered and ad-hoc AQL queries system-wide" (ITS-REST `master08-scopes`).
+a FerroFED parser; `openehr-sdt` joined the workspace with this work (#80). A
+query needs an `aql-…` search scope in the `user/` or `system/` compartment,
+and a routed follow-up needs the matching `composition-` or `template-`
+permission; one table in `ferrofed-server` (`auth::permission::TABLE`) maps
+every ITS-REST operation to what it requires, and an operation it does not
+list is refused. Where the gateway cannot see the resource (an ad hoc query,
+a composition whose template only the node knows, an upload), only a `*` or
+`**` pattern covers it. A scope `SmartScope::parse` maps to `Other` grants
+nothing. A wildcard `system/aql-*` grant is honoured only for backend clients
+the deployment lists, because it "would grant access to all registered and
+ad-hoc AQL queries system-wide" (ITS-REST `master08-scopes`). Three further
+rules are FerroFED's own design, decided with #80 after a security review:
+
+- **`patient/` grants nothing at the gateway.** SMART on openEHR confines a
+  patient grant to the token's launch context, an `ehrId` at one platform
+  (master07 §Context Selection); no claim the specifications define names the
+  patient as the identifier and namespace the gateway resolves, so the
+  gateway cannot prove a request stays inside the context, on a query, on
+  `GET {base}/v1/ehr?subject_id=` or on a route addressed by `ehr_id`. Until
+  a patient-context claim in the resolved form is chosen, the grant admits
+  nothing.
+- **The DEMOGRAPHIC API admits only listed clients.** The grammar defines no
+  demographic family, so each issuer entry lists its `demographic_clients`,
+  empty by default, and no scope grants the area.
+- **The ADMIN API, and any operation the table does not list, is refused
+  `403` to every caller**, before a credential is read. The EHR's other
+  resources (`EHR`, `EHR_STATUS`, `DIRECTORY`, `CONTRIBUTION`) have no family
+  either and are held to `composition-*` with the operation's permission.
+
+**The edge mode** (#80). A deployment that authenticates at a proxy sets
+`auth.mode = "edge"`: the proxy signs an RFC 9068 assertion for the gateway
+in a configured header, verified against the edge's key set exactly as a
+token is, and the gateway logs the identity it asserted. A header trusted for
+the address it came from was rejected: a forwarded header "cannot be relied
+upon to be correct", and a list of trusted proxy addresses leaves it open to
+anyone "with access to the network" (RFC 7239 §8.1).
 Sender-constrained tokens (RFC 8705, RFC 9449) can be required per deployment
 and are off by default. Mutual TLS protects the transport and is never an
 organisation's identity (§13.4; the VWS memo, §B.4a.2).
@@ -1453,7 +1483,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
 | `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`; reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`) | any storage implementation (#40), the server |
-| `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, authentication (`openehr-sdt` scopes and `jsonwebtoken`, both joining with #80), telemetry, health, the storage implementations, wiring | everything | is never depended on |
+| `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), telemetry, health, the storage implementations, wiring | everything | is never depended on |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
 
 `ihe-iti` and `nl-generic-functions` know nothing of FerroFED. The adapters in

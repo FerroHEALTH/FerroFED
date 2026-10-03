@@ -188,7 +188,7 @@ async fn neither_the_probe_nor_the_routed_read_carries_an_identifier_or_the_clie
     let fields = request.headers_mut();
     fields.insert(
         header::AUTHORIZATION,
-        format!("Bearer {CLIENT_TOKEN}").parse()?,
+        format!("Bearer {}", *CLIENT_TOKEN).parse()?,
     );
     fields.insert("x-patient", PATIENT.parse()?);
     fields.insert(header::COOKIE, format!("patient={PATIENT}").parse()?);
@@ -203,7 +203,7 @@ async fn neither_the_probe_nor_the_routed_read_carries_an_identifier_or_the_clie
             "no identifier reaches a member (N33): {captured:?}"
         );
         assert!(
-            !captured.contains(CLIENT_TOKEN),
+            !captured.contains(CLIENT_TOKEN.as_str()),
             "the client's credential reaches no member: {captured:?}"
         );
         assert!(

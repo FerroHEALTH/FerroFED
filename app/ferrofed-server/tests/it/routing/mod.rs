@@ -44,7 +44,7 @@ const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org
 const ONWARD_TOKEN: &str = "synthetic-onward-token";
 
 /// The client's own credential, which no node ever sees.
-const CLIENT_TOKEN: &str = "synthetic-client-token";
+use crate::support::CLIENT_TOKEN;
 
 /// A `COMPOSITION` carrying the patient's identifier as a `DV_IDENTIFIER` in
 /// its content, written with spacing and member order a re-serialisation
@@ -100,7 +100,7 @@ fn to_a(verb: Method, uri: &str, body: Body) -> Result<Request<Body>, http::Erro
         .method(verb)
         .uri(uri)
         .header("openEHR-federation-endpoint", ENDPOINT_A)
-        .header(header::AUTHORIZATION, format!("Bearer {CLIENT_TOKEN}"))
+        .header(header::AUTHORIZATION, format!("Bearer {}", *CLIENT_TOKEN))
         .body(body)
 }
 

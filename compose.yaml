@@ -8,6 +8,7 @@
 #   docker compose up --wait
 #   scripts/quickstart/seed.sh
 #   curl http://127.0.0.1:8080/health
+#   curl -H "Authorization: Bearer $(scripts/quickstart/token.sh)" ...
 #
 # THE GATEWAY IMAGE. The service runs the published
 # ghcr.io/ferrohealth/ferrofed image, which only the release lane builds
@@ -109,6 +110,9 @@ services:
     volumes:
       - ./docker/quickstart/ferrofed.toml:/etc/ferrofed/ferrofed.toml:ro
       - ./docker/quickstart/registry.toml:/etc/ferrofed/registry.toml:ro
+      # The quickstart issuer's key set, which scripts/quickstart/token.sh
+      # writes on its first run (docker/quickstart/ferrofed.toml, [auth]).
+      - ./docker/quickstart/issuer:/etc/ferrofed/issuer:ro
     # The gateway writes nothing: no cache, no scratch file, and every secret is
     # read once at boot. So the root filesystem is read-only with no tmpfs
     # beside it.

@@ -66,6 +66,12 @@ pub enum StateError {
     /// The metrics surface cannot be built.
     #[error(transparent)]
     Metrics(#[from] MetricsError),
+    /// The gateway federates, and `[auth]` trusts no issuer, so no caller
+    /// could ever be admitted (§13.1, N25).
+    #[error(
+        "the gateway federates, and [auth] names no [[auth.issuer]]: every caller authenticates (§13.1, N25)"
+    )]
+    NoIssuer,
 }
 
 impl AppState {
@@ -217,6 +223,19 @@ impl AppState {
     pub fn definitions(&self) -> Option<&Arc<Definitions>> {
         self.definitions.as_ref()
     }
+}
+
+/// Refuses a federating gateway whose `[auth]` trusts no issuer, which would
+/// refuse every caller (§13.1, N25).
+///
+/// # Errors
+/// Returns [`StateError::NoIssuer`] when `federates` and no issuer is
+/// trusted.
+pub fn admits_callers(settings: &Settings, federates: bool) -> Result<(), StateError> {
+    if federates && settings.server.auth.issuers.is_empty() {
+        return Err(StateError::NoIssuer);
+    }
+    Ok(())
 }
 
 /// The stored-query registry `settings` offer, over `federation`, which

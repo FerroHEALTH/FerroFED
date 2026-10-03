@@ -31,6 +31,7 @@
 - [Configuration](operate/configuration.md)
   - [The registry](operate/registry.md)
   - [Identity resolution](operate/identity.md)
+  - [Client authentication](operate/authentication.md)
   - [Queries and API areas](operate/queries-and-areas.md)
 - [Admitting a node](operate/admission.md)
 - [Health probes](operate/health.md)

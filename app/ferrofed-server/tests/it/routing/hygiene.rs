@@ -44,7 +44,7 @@ async fn an_identifier_in_a_client_header_never_reaches_the_node_nor_does_its_au
         "the identifier reaches no part of the request: {all}"
     );
     assert!(
-        !all.contains(CLIENT_TOKEN),
+        !all.contains(CLIENT_TOKEN.as_str()),
         "the client's credential never reaches a node: {all}"
     );
     assert!(
