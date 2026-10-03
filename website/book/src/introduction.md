@@ -25,7 +25,7 @@ and the gateway is built against it one milestone at a time. The
 [latest release](https://github.com/FerroHEALTH/FerroFED/releases/latest)
 ships the `ferrofed` binary for Linux and the image
 `ghcr.io/ferrohealth/ferrofed`, both signed, and
-[the container page](operate/container.md) runs it beside two member CDRs.
+[the container page](operate/container.md) runs it beside four member CDRs.
 
 v0.0.3 serves the federated query, `POST /v1/query/aql`, over the members of a
 registry. It resolves the patient outside AQL through an IHE PIXm PIX Manager,
