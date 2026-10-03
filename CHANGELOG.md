@@ -21,6 +21,33 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+### Added
+
+- Integrity incidents for an `ehr_id` two members claim (#63; §12.5.2,
+  §12b.2, N42, CP-33). A request whose `ehr_id` the session's resolution
+  bindings, the `ehr_id` index or the ask-all probe finds at two members or
+  more is refused `409 ehr-id-collision` listing the claiming endpoints, and
+  the gateway logs one `EhrIdCollision` incident: an `ERROR` line under the
+  new log target `ferrofed::integrity` with the `ehr_id`, the routing step
+  that found the claimants (`detection`) and the claimants' endpoint ids.
+  When the index learns an `ehr_id` it already holds at another member, it
+  raises the index-insert alarm of §12b.2 once, an `IndexInsertCollision`
+  incident naming the members, keeps both and routes neither; a held
+  collision lasts until the entry is forgotten or the gateway restarts. An
+  incident names an `ehr_id` only when it is a bare UUID, and never a patient
+  identifier. The gateway has no metrics endpoint, so the log is the record;
+  the book's configuration page says what an operator sees and does.
+
+### Changed
+
+- An `ehr_id` that the session's resolution bindings or the `ehr_id` index
+  hold at two members is now refused `409 ehr-id-collision` listing the
+  claimants, on a write as on a read (#63; §12.5.2, N42). A read no longer
+  goes on to the ask-all probe, and a write is no longer `400
+  target-required`. Naming the node in `openEHR-federation-endpoint` still
+  routes the request to it (§12.5.1 step 1, N41). The integrity incidents of
+  the `creating_system_id` map are logged under `ferrofed::integrity` too.
+
 ## [0.0.6] - 2026-10-03
 
 The v0.0.4, v0.0.5 and v0.0.6 milestones in one release (no v0.0.4 or v0.0.5

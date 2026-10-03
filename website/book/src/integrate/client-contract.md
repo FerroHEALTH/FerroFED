@@ -254,9 +254,11 @@ exactly one node (§12.5.1, N41):
    three steps only: name its node in the endpoint header, and the gateway
    forwards it to that node alone.
 
-A binding or an index entry that names two members names none, and the
-gateway never picks one of them: a read goes to the ask-all probe, which
-answers the `409`. A write that none of the first three steps routes is a `400`
+A binding or an index entry that names two members is a collision, and the
+gateway never picks one of them: the request, a read or a write, is a `409`
+(`ehr-id-collision`) that lists them, nothing is probed, and neither member
+is sent it (§12.5.2, N42). The explicit target of step 1 still routes such an
+`ehr_id` to the node you name. A write that none of the first three steps routes is a `400`
 with the code `target-required`, and nothing is probed, because the gateway
 never finds a write's destination by trial (§12.5.1, N41).
 

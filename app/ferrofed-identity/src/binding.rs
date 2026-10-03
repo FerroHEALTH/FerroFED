@@ -40,8 +40,9 @@ pub enum Bound {
     None,
     /// Exactly one member holds it (§12.5.1 step 2).
     One(NodeId),
-    /// Several members resolved the same `ehr_id`: step 2 does not yield an
-    /// unambiguous answer, so routing moves to the next step (N41, N42).
+    /// Several members resolved the same `ehr_id`, in `node_id` order: they
+    /// are claimants of one `ehr_id`, a collision no later step may settle by
+    /// picking one of them (§12.5.2, N42).
     Several(Vec<NodeId>),
 }
 

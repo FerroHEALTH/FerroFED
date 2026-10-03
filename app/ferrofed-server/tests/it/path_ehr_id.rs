@@ -24,6 +24,7 @@ use axum::body::Body;
 use ferrofed_identity::binding::{ResolutionBindings, SessionKey};
 use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::id::{EhrId, NodeId};
+use ferrofed_registry::incident::Detection;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::{Config, error};
 use ferrofed_server::facade::owner::{self, Held, Located, Step};
@@ -76,10 +77,26 @@ fn targeting(endpoint: &'static str) -> HeaderMap {
 }
 
 /// The endpoint and the step `located` names, or `None` for no owner.
-fn named(located: Located<'_>) -> Option<(String, Step)> {
+fn named(located: &Located<'_>) -> Option<(String, Step)> {
     match located {
-        Located::At { endpoint, step } => Some((endpoint.id().as_str().to_owned(), step)),
-        Located::Unreachable { .. } | Located::Unknown => None,
+        Located::At { endpoint, step } => Some((endpoint.id().as_str().to_owned(), *step)),
+        Located::Unreachable { .. } | Located::Collision(_) | Located::Unknown => None,
+    }
+}
+
+/// The claiming endpoints and the step `located` names, or `None` for no
+/// collision.
+pub(crate) fn collision(located: &Located<'_>) -> Option<(Vec<String>, Detection)> {
+    match located {
+        Located::Collision(claimed) => Some((
+            claimed
+                .claimants
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect(),
+            claimed.detection,
+        )),
+        Located::At { .. } | Located::Unreachable { .. } | Located::Unknown => None,
     }
 }
 
@@ -107,7 +124,7 @@ fn the_explicit_target_wins_over_a_binding_and_the_index() -> TestResult {
     )?;
     assert_eq!(
         Some((ENDPOINT_A.to_owned(), Step::Target)),
-        named(located),
+        named(&located),
         "step 1 answers, so no later step is taken (§12.5.1, N41)"
     );
     Ok(())
@@ -131,7 +148,7 @@ fn a_held_binding_wins_over_the_index() -> TestResult {
     let located = owner::located(&snapshot, &HeaderMap::new(), Some(held), &index, &ehr()?)?;
     assert_eq!(
         Some((ENDPOINT_A.to_owned(), Step::Binding)),
-        named(located),
+        named(&located),
         "step 2 answers before step 3 (§12.5.1, N41)"
     );
     Ok(())
@@ -159,7 +176,7 @@ fn the_index_answers_when_no_target_and_no_binding_does() -> TestResult {
     let located = owner::located(&snapshot, &HeaderMap::new(), Some(held), &index, &ehr()?)?;
     assert_eq!(
         Some((ENDPOINT_B.to_owned(), Step::Index)),
-        named(located),
+        named(&located),
         "another session's binding is never routed on (§12.5.1 step 2), so step 3 answers"
     );
     Ok(())
@@ -185,17 +202,27 @@ fn a_step_naming_two_members_names_no_owner_and_no_later_step_picks_one() -> Tes
         now,
     };
     let located = owner::located(&snapshot, &HeaderMap::new(), Some(held), &index, &ehr()?)?;
-    assert!(
-        named(located).is_none(),
+    assert_eq!(
+        Some((
+            vec![ENDPOINT_A.to_owned(), ENDPOINT_B.to_owned()],
+            Detection::Binding
+        )),
+        collision(&located),
         "two bound members are a collision, and the index never picks one of them (§12.5.2, N42)"
     );
+    assert!(named(&located).is_none());
     index.learn(&ehr()?, &node("node-a")?);
     index.learn(&ehr()?, &node("node-b")?);
     let located = owner::located(&snapshot, &HeaderMap::new(), None, &index, &ehr()?)?;
-    assert!(
-        named(located).is_none(),
+    assert_eq!(
+        Some((
+            vec![ENDPOINT_A.to_owned(), ENDPOINT_B.to_owned()],
+            Detection::Index
+        )),
+        collision(&located),
         "two indexed members are never narrowed to one (§12.5.2, N42)"
     );
+    assert!(named(&located).is_none());
     Ok(())
 }
 
@@ -205,7 +232,7 @@ fn a_member_the_registry_no_longer_holds_names_nothing() -> TestResult {
     let index = EhrIndex::new(NonZeroUsize::MIN);
     index.learn(&ehr()?, &node("node-gone")?);
     let located = owner::located(&snapshot, &HeaderMap::new(), None, &index, &ehr()?)?;
-    assert!(named(located).is_none());
+    assert!(named(&located).is_none());
     Ok(())
 }
 

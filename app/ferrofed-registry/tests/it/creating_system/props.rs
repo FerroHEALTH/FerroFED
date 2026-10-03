@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 use ferrofed_registry::creating_system::{CreatingSystemRoute, LearnedMap, Sighting};
 use ferrofed_registry::error::CreatingSystemMiss;
+use ferrofed_registry::id::SystemId;
 use proptest::prelude::*;
 
 use super::{LEGACY, endpoint, registered, system, version};
@@ -51,7 +52,10 @@ proptest! {
                 .map_err(fail)?;
             if let Sighting::Conflict(incident) = &sighting {
                 *incidents.entry(id).or_default() += 1;
-                prop_assert_eq!(incident.creating_system_id().as_str(), *id);
+                prop_assert_eq!(
+                    incident.creating_system_id().map(SystemId::as_str),
+                    Some(*id)
+                );
             }
             if snapshot.registered_route(&system(id).map_err(fail)?).is_some() {
                 prop_assert!(matches!(sighting, Sighting::Known(_)), "{id}: {sighting:?}");
