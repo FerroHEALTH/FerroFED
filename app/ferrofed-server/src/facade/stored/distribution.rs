@@ -37,6 +37,10 @@
 //! registry's: the answer is the registry's `StoredQuery` with
 //! `meta.federation`, `active` where the copy matches (§12.7
 //! stored-query-drift). No node's text is copied into it.
+//!
+//! Each member's state is recorded on `GET /health/dependencies`: a
+//! distribution reads it from the §11.1 status, and a drift check reads a
+//! copy held or missing as an answer, whether or not it matches.
 
 use std::collections::BTreeSet;
 use std::time::Instant;
@@ -63,10 +67,13 @@ use serde::Serialize;
 use super::{Refused, its_rest};
 use crate::error::Code;
 use crate::facade::provenance::Provenance;
-use crate::facade::route::fan_out::{self, answer_status, each, not_sent, record_meta, settled};
+use crate::facade::route::fan_out::{
+    self, answer_status, each, not_sent, observed, record_meta, settled,
+};
 use crate::facade::route::{Arrived, Deadlines};
 use crate::facade::security;
 use crate::federation::Federation;
+use crate::health::dependencies::Observed;
 use ferrofed_engine::outbound_id::OutboundId;
 
 /// The `code` of a member whose copy differs from the registry's.
@@ -218,6 +225,12 @@ pub(super) async fn distribute(
     .await;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
+        // NOTE: no specification governs this: our own design; a stored
+        // definition's §11.1 status is read as a fan-out query's is.
+        observed(federation, endpoint.id(), &sent, |stored| match stored {
+            Ok(outcome) => Observed::of_status(outcome.status()),
+            Err(_unsent) => None,
+        });
         let outcome = settled(sent, latency_ms, |stored, latency_ms| {
             stored.unwrap_or_else(|failure| unsent(endpoint, &failure, latency_ms, &logged))
         });
@@ -281,6 +294,10 @@ pub(super) async fn drift(
     .await;
     let mut outcomes = Vec::with_capacity(targets.len());
     for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
+        observed(federation, endpoint.id(), &sent, |copy| match copy {
+            Ok(copy) => Observed::of_copy(copy),
+            Err(_unsent) => None,
+        });
         let outcome = settled(sent, latency_ms, |copy, latency_ms| match copy {
             Ok(copy) => compared(definition.aql(), copy),
             Err(failure) => unsent(endpoint, &failure, latency_ms, &logged),

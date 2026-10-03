@@ -292,13 +292,17 @@ pub(crate) async fn ask_all<'a>(
             );
             internal()
         })?;
-    for (endpoint, answer) in &answers {
-        if let Answer::Failed(ForwardError::Withheld { part, .. }) = answer {
+    for (endpoint, probed) in &answers {
+        if let Answer::Failed(ForwardError::Withheld { part, .. }) = &probed.answer {
             security::forward_withheld(endpoint, *part, logged);
         }
-        federation.dependencies().probed(endpoint, answer);
-        federation.requests().probed(endpoint, answer);
+        federation.dependencies().probed(endpoint, &probed.answer);
+        federation.requests().probed(endpoint, probed);
     }
+    let answers = answers
+        .into_iter()
+        .map(|(endpoint, probed)| (endpoint, probed.answer))
+        .collect();
     let (endpoint, answer) = match owner::settled(answers) {
         owner::Settled::Owner { endpoint, answer } => (endpoint, answer),
         owner::Settled::Failed(unsettled) => {

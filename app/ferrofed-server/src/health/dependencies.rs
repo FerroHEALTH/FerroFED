@@ -16,6 +16,7 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use ferrofed_engine::dispatch::definition::NodeCopy;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::probe::Answer;
 use ferrofed_identity::resolver::Resolution;
@@ -79,6 +80,27 @@ impl Observed {
             ForwardError::TimeOut { .. } | ForwardError::Unreachable { .. } => Some(Self::Down),
             ForwardError::Refused { .. } => Some(Self::Failing),
             _ => None,
+        }
+    }
+
+    /// Returns what a forwarded request's outcome says of the node, or `None`
+    /// when the gateway sent nothing.
+    #[must_use]
+    pub fn of_forwarded(outcome: &Result<Forwarded, ForwardError>) -> Option<Self> {
+        match outcome {
+            Ok(answer) => Some(Self::of_answer(answer.status())),
+            Err(error) => Self::of_forward_error(error),
+        }
+    }
+
+    /// Returns what a drift check's read of a member's copy says of the
+    /// member: a copy held or missing is an answer, and a read that got none
+    /// is read from its §11.1 status.
+    #[must_use]
+    pub fn of_copy(copy: &NodeCopy) -> Option<Self> {
+        match copy {
+            NodeCopy::Held { .. } | NodeCopy::Missing { .. } => Some(Self::Up),
+            NodeCopy::Failed { outcome } => Self::of_status(outcome.status()),
         }
     }
 
@@ -160,11 +182,7 @@ impl Dependencies {
     /// Records what a request forwarded to `endpoint` showed of it, when the
     /// gateway sent one.
     pub fn forwarded(&self, endpoint: &EndpointId, outcome: &Result<Forwarded, ForwardError>) {
-        let observed = match outcome {
-            Ok(answer) => Some(Observed::of_answer(answer.status())),
-            Err(error) => Observed::of_forward_error(error),
-        };
-        if let Some(observed) = observed {
+        if let Some(observed) = Observed::of_forwarded(outcome) {
             self.endpoint(endpoint, observed);
         }
     }
@@ -236,8 +254,10 @@ pub struct Report {
 #[cfg(test)]
 mod tests {
     use super::{Dependencies, Observed};
+    use ferrofed_engine::dispatch::definition::NodeCopy;
     use ferrofed_registry::id::EndpointId;
     use http::StatusCode;
+    use openehr_federation::outcome::{ErrorDetail, Outcome};
     use openehr_federation::status::EndpointStatus;
 
     #[test]
@@ -301,5 +321,43 @@ mod tests {
             Observed::Failing,
             Observed::of_answer(StatusCode::BAD_GATEWAY)
         );
+    }
+
+    #[test]
+    fn a_copy_held_or_missing_is_an_answer_whether_or_not_it_matches() {
+        let held = NodeCopy::Held {
+            aql: "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
+            latency_ms: 3,
+        };
+        assert_eq!(Some(Observed::Up), Observed::of_copy(&held));
+        let missing = NodeCopy::Missing { latency_ms: 3 };
+        assert_eq!(Some(Observed::Up), Observed::of_copy(&missing));
+        let error = || ErrorDetail::Text("synthetic".to_owned());
+        for (outcome, observed) in [
+            (
+                Outcome::NodeError {
+                    latency_ms: 3,
+                    error: error(),
+                },
+                Observed::Failing,
+            ),
+            (
+                Outcome::TimeOut {
+                    latency_ms: 3,
+                    error: error(),
+                },
+                Observed::Down,
+            ),
+            (
+                Outcome::Offline {
+                    latency_ms: 3,
+                    error: error(),
+                },
+                Observed::Down,
+            ),
+        ] {
+            let failed = NodeCopy::Failed { outcome };
+            assert_eq!(Some(observed), Observed::of_copy(&failed), "{failed:?}");
+        }
     }
 }

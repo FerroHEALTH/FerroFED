@@ -36,7 +36,7 @@ use serde::Deserialize;
 use wiremock::ResponseTemplate;
 
 use crate::facade::{PATIENT, registry, settings_with_room, wire};
-use crate::support::{asked, error_body, exchange, field, mount};
+use crate::support::{asked, error_body, exchange, field, mount, observed, states};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -583,6 +583,74 @@ async fn a_star_beside_an_organisation_naming_fewer_members_is_a_conflict() -> T
         [&a, &b, &c],
     )
     .await
+}
+
+#[tokio::test]
+async fn a_fan_out_upload_records_each_members_state_on_the_dependencies() -> TestResult {
+    let at = ADL14;
+    let a = accepting(at).await;
+    let b = rejecting(at, 500).await;
+    let c = Server::start().await;
+    let late = ResponseTemplate::new(201).set_delay(std::time::Duration::from_millis(2500));
+    mount(&c, "POST", at.to_owned(), late).await;
+    let dir = tempfile::tempdir()?;
+    let app = offered(dir.path(), [&a, &b, &c])?;
+    assert_eq!(
+        states(&[
+            ("node-a-pub", "unknown"),
+            ("node-b-pub", "unknown"),
+            ("node-c-pub", "unknown"),
+        ]),
+        observed(&app).await?,
+        "nothing asked yet"
+    );
+    let (status, _, body) = exchange(app.clone(), upload(at, Some("*"))?).await?;
+    assert_eq!(
+        StatusCode::MULTI_STATUS,
+        status,
+        "{}",
+        String::from_utf8(body)?
+    );
+    assert_eq!(
+        states(&[
+            ("node-a-pub", "up"),
+            ("node-b-pub", "failing"),
+            ("node-c-pub", "down"),
+        ]),
+        observed(&app).await?,
+        "each member as the upload found it"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_member_rejecting_the_upload_answered_and_one_not_named_is_not_observed() -> TestResult {
+    let at = ADL2;
+    let (a, b, c) = (
+        rejecting(at, 422).await,
+        rejecting(at, 503).await,
+        accepting(at).await,
+    );
+    let dir = tempfile::tempdir()?;
+    let app = offered(dir.path(), [&a, &b, &c])?;
+    let (status, _, body) =
+        exchange(app.clone(), upload(at, Some("node-a-pub, node-b-pub"))?).await?;
+    assert_eq!(
+        StatusCode::FAILED_DEPENDENCY,
+        status,
+        "{}",
+        String::from_utf8(body)?
+    );
+    assert_eq!(
+        states(&[
+            ("node-a-pub", "up"),
+            ("node-b-pub", "failing"),
+            ("node-c-pub", "unknown"),
+        ]),
+        observed(&app).await?,
+        "a client error is an answer, a server error a failure, and node C was not asked"
+    );
+    Ok(())
 }
 
 /// Validation of the answer's `meta.federation` against the vendored

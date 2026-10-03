@@ -3,8 +3,8 @@
 
 //! The node request counter and duration histogram: one count per request
 //! sent to a member, by registry endpoint and the §11.1 outcome the
-//! per-endpoint report gives it, and one duration per measured request
-//! (§9.5, §11.1).
+//! per-endpoint report gives it, and one duration per request counted,
+//! the ask-all probe included (§9.5, §11.1, §12.5.1).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -26,7 +26,7 @@ use crate::facade::{
 };
 use crate::metrics::{Metered, count, value};
 use crate::path_ehr_id::{holder, stranger};
-use crate::support::call;
+use crate::support::{SLACK, call, millis};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -156,7 +156,7 @@ async fn a_fan_out_counts_and_times_each_member_by_its_outcome() -> TestResult {
 }
 
 #[tokio::test]
-async fn a_routed_read_counts_the_probe_of_each_member_and_the_timed_read() -> TestResult {
+async fn a_routed_read_counts_and_times_the_probe_of_each_member_and_the_read() -> TestResult {
     let a = holder().await;
     let b = stranger().await;
     let dir = tempfile::tempdir()?;
@@ -191,14 +191,67 @@ async fn a_routed_read_counts_the_probe_of_each_member_and_the_timed_read() -> T
         "a member that holds no such EHR answered the probe: {samples:?}"
     );
     assert_eq!(
-        Some("1".to_owned()),
+        Some("2".to_owned()),
         count(&samples, DURATION_COUNT, &[("endpoint", "node-a-pub")]),
-        "the read is timed and the probe is not"
+        "the probe and the read are each timed"
     );
     assert_eq!(
-        None,
+        Some("1".to_owned()),
         count(&samples, DURATION_COUNT, &[("endpoint", "node-b-pub")]),
-        "a probe carries no measurement"
+        "a probe carries its latency"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_probe_past_its_deadline_is_a_time_out_timed_to_the_deadline() -> TestResult {
+    let bound = Duration::from_millis(PER_NODE_MS) + SLACK;
+    let a = holder().await;
+    let b = Server::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/ehr/{EHR_A}")))
+        .respond_with(ResponseTemplate::new(404).set_delay(bound + SLACK))
+        .mount(&b)
+        .await;
+    let dir = tempfile::tempdir()?;
+    let gateway = Metered::start(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        ("", ""),
+        (PER_NODE_MS, millis(bound)?),
+    )?;
+    let read = Request::get(format!("/v1/ehr/{EHR_A}")).body(Body::empty())?;
+    let (status, text) = call(gateway.app.clone(), read).await?;
+    assert_eq!(
+        StatusCode::GATEWAY_TIMEOUT,
+        status,
+        "§11.5: a silent member may hold the EHR: {text}"
+    );
+
+    let samples = gateway.scraped()?;
+    assert_eq!(
+        Some("1".to_owned()),
+        count(
+            &samples,
+            REQUESTS,
+            &[("endpoint", "node-b-pub"), ("outcome", "time-out")]
+        ),
+        "{samples:?}"
+    );
+    assert_eq!(
+        Some("1".to_owned()),
+        count(&samples, DURATION_COUNT, &[("endpoint", "node-b-pub")]),
+        "the late probe is timed"
+    );
+    let waited =
+        value(&samples, DURATION_SUM, &[("endpoint", "node-b-pub")]).ok_or("node B is timed")?;
+    assert!(
+        waited >= Duration::from_millis(PER_NODE_MS).as_secs_f64() * 0.5,
+        "the late probe is timed to its deadline: {waited}"
+    );
+    assert!(
+        waited < bound.as_secs_f64(),
+        "the probe is never waited on past its deadline: {waited}"
     );
     Ok(())
 }

@@ -23,7 +23,7 @@
 //! the `ehr_id`, and the caller must read it as unknown, never as absent
 //! (§11.5: a `time-out` means unknown, never no data).
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderMap, Method, StatusCode};
@@ -50,6 +50,18 @@ pub enum Answer {
     Failed(ForwardError),
     /// The overall budget ran out before the member answered (§11.5).
     Abandoned,
+}
+
+/// What one member answered the probe, and how long the gateway waited for
+/// it.
+#[derive(Debug)]
+pub struct Probed {
+    /// What the member answered.
+    pub answer: Answer,
+    /// The gateway's measurement of the probe: from sending it to the
+    /// member's answer or failure, or, for an [`Answer::Abandoned`] probe,
+    /// to the moment the overall budget ran out.
+    pub latency: Duration,
 }
 
 /// A probe that could not be run.
@@ -131,7 +143,7 @@ impl Probe {
 }
 
 /// Asks every endpoint of `endpoints` for the EHR `probe` names, at once,
-/// and returns each answer in the order of `endpoints`.
+/// and returns each answer with its latency, in the order of `endpoints`.
 ///
 /// # Errors
 ///
@@ -142,7 +154,7 @@ pub async fn ask_all<T>(
     clients: &NodeClients<T>,
     endpoints: &[EndpointId],
     probe: &Probe,
-) -> Result<Vec<(EndpointId, Answer)>, ProbeError>
+) -> Result<Vec<(EndpointId, Probed)>, ProbeError>
 where
     T: Transport + Clone + 'static,
 {
@@ -160,6 +172,7 @@ where
     let options = DispatchOptions::new(deadline).with_request_id(probe.request_id);
     let path = probe.path();
     let mut tasks = JoinSet::new();
+    let asked_at = Instant::now();
     for (index, client) in asked.into_iter().enumerate() {
         // NOTE: no specification governs this: our own design; the probe is the gateway's own read, so
         // a client value that does not fit its operation's declared kind is left out, never refused.
@@ -172,21 +185,25 @@ where
         });
         let options = options.clone();
         tasks.spawn(async move {
+            let started = Instant::now();
             let forwarded = match request {
                 Ok(request) => client.forward_held(request, &options).await,
                 Err(refused) => Err(refused),
             };
-            (index, forwarded)
+            (index, forwarded, started.elapsed())
         });
     }
-    let mut answers: Vec<Option<Answer>> = endpoints.iter().map(|_| None).collect();
+    let mut answers: Vec<Option<Probed>> = endpoints.iter().map(|_| None).collect();
     let until = tokio::time::Instant::from_std(probe.overall);
     loop {
         match tokio::time::timeout_at(until, tasks.join_next()).await {
             Ok(Some(joined)) => {
-                let (index, forwarded) = joined?;
+                let (index, forwarded, latency) = joined?;
                 if let Some(slot) = answers.get_mut(index) {
-                    *slot = Some(classified(forwarded));
+                    *slot = Some(Probed {
+                        answer: classified(forwarded),
+                        latency,
+                    });
                 }
             }
             Ok(None) => break,
@@ -196,11 +213,18 @@ where
             }
         }
     }
+    let abandoned_after = asked_at.elapsed();
     Ok(endpoints
         .iter()
         .cloned()
         .zip(answers)
-        .map(|(endpoint, answer)| (endpoint, answer.unwrap_or(Answer::Abandoned)))
+        .map(|(endpoint, probed)| {
+            let probed = probed.unwrap_or(Probed {
+                answer: Answer::Abandoned,
+                latency: abandoned_after,
+            });
+            (endpoint, probed)
+        })
         .collect())
 }
 

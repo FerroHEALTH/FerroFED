@@ -70,7 +70,11 @@ Each state is the one the last request the gateway made for a client
 observed: `up` (it answered), `failing` (it answered with a failure), `down`
 (unreachable, or no answer in time), or `unknown` (no request has reached it
 since the registry was loaded or reloaded). The gateway sends no request of its
-own to find out. `resolver` is absent when no resolver is configured. The body
+own to find out. Every call that sends a request to a member updates it: a
+federated query, a request routed to one node, the ask-all probe, a fan-out
+template upload, and a stored-query distribution or drift check. A drift
+check that finds a member's copy different or missing records the member
+`up`, because it answered. A resolution updates `resolver`. `resolver` is absent when no resolver is configured. The body
 names endpoint ids and states only, never a URL, a credential or a body.
 
 ## Kubernetes

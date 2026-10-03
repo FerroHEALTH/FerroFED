@@ -3,7 +3,8 @@
 
 //! Shared helpers: a capturing log writer, test settings, a test state, the
 //! typed shapes the tests read the server's JSON with, a mock node's routes
-//! and what it was asked, and the reads of a routed answer.
+//! and what it was asked, the reads of a routed answer, and the dependency
+//! report.
 
 use axum::Router;
 use axum::body::Body;
@@ -15,6 +16,7 @@ use http::{HeaderMap, Request, Response, StatusCode};
 use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
 use openehr_its::rest::generated::common::Error;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::io::{self, Write};
 use std::num::TryFromIntError;
@@ -251,4 +253,27 @@ pub(crate) async fn refused_at_neither(
     assert!(asked(a).await?.is_empty(), "node A received nothing");
     assert!(asked(b).await?.is_empty(), "node B received nothing");
     Ok(())
+}
+
+/// The state `GET /health/dependencies` of `app` reports of each member
+/// endpoint, by endpoint id.
+pub(crate) async fn observed(app: &Router) -> Result<BTreeMap<String, String>, Box<dyn StdError>> {
+    #[derive(Deserialize)]
+    struct Report {
+        endpoints: BTreeMap<String, String>,
+    }
+    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let (status, text) = call(app.clone(), request).await?;
+    if status != StatusCode::OK {
+        return Err(format!("the dependency report answered {status}: {text}").into());
+    }
+    Ok(serde_json::from_str::<Report>(&text)?.endpoints)
+}
+
+/// The `(endpoint, state)` pairs `pairs` as [`observed`] returns them.
+pub(crate) fn states(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+    pairs
+        .iter()
+        .map(|(endpoint, state)| ((*endpoint).to_owned(), (*state).to_owned()))
+        .collect()
 }
