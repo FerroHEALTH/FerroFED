@@ -21,6 +21,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+### Added
+
+- `federation.node_selection = "localized"`: an undirected patient query gets
+  its node set from a localizer (N4, N10, §14.1). A member the localizer does
+  not name is reported `not-localized` and never asked. A localizer that fails
+  or stays silent past `federation.localization.timeout_ms` fails closed: no
+  member is asked, every member is `not-localized` with the localizer's error,
+  and `meta.federation.localization.error` carries it too.
+  `federation.localization.on_failure = "ask-all"` widens to every member
+  instead, and `OPTIONS {base}/` declares the policy, the binding as
+  `localization.mode` and the budget as `timeout.localization_ms`. A directed
+  query is never localized (§8). The development cross-reference serves as
+  the localizer under `profile = "development"`; the IHE XCPD binding follows
+  (#85).
+
 ## [0.0.7] - 2026-10-03
 
 The v0.0.7 milestone, definitions and membership (§12.6, §12.7, §12b). A

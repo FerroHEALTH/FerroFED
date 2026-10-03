@@ -135,10 +135,47 @@ node_selection = "ask-all"
 specification's reference flow, Variant B; N4). Every active member is a
 candidate: the gateway asks every member's cross-reference where the patient
 is, dispatches the query only to the members that return an `ehr_id`, and
-reports the others as `not-resolved` without failing the query. It is the only
-selection the gateway offers until a localizer binding lands; a localizer that
-does not answer then fails closed, which is a different rule. The selection is
-named in the startup log line.
+reports the others as `not-resolved` without failing the query. The selection
+is named in the startup log line.
+
+`localized` derives the node set from a localizer (N4, N10, §14.1):
+
+```toml
+[federation]
+node_selection = "localized"
+
+[federation.localization]
+on_failure = "closed"   # the default; "ask-all" widens on failure
+timeout_ms = 5000       # the default; below overall_timeout_ms, 0 is refused
+```
+
+For an undirected patient query, the gateway first asks the localizer which
+members might hold the patient's data. A member it does not name is reported
+`not-localized` and is never asked, and `complete` stays `true`, because that
+member was never in scope. The cross-reference then resolves the patient at
+the named members only. A directed query (the `FROM ENDPOINT` directive or the
+targeting headers) is never localized: the directive selects its node set
+(§8). A query that names no patient is refused with a `400` under this
+selection, because localization is keyed on the patient and no node set is
+defined (N4).
+
+When the localizer does not answer within `timeout_ms`, or fails, the gateway
+fails closed: it asks no member, reports every member `not-localized` with the
+localizer's error, and carries the same error as
+`meta.federation.localization.error`, so an outage never reads as a patient
+with no data (§14.1). The status stays `200` and `complete` stays `true`,
+since no member in scope failed. `on_failure = "ask-all"` asks every member
+instead, still with the error in `meta.federation`; it holds only where it is
+written, and `OPTIONS {base}/` declares the policy either way. A localizer
+that answers that no member holds the patient's data leaves every member
+`not-localized` with no error.
+
+The localizer today is the [development cross-reference](identity.md), under
+`profile = "development"`: it names the members its `[dev]` rows map the
+patient at. The IHE XCPD binding is planned for v0.0.8
+([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)). The localized
+selection with no localizer refuses to boot, and so does
+`[federation.localization]` under `ask-all`.
 
 ## Resolution bindings
 
