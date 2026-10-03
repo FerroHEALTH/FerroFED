@@ -374,6 +374,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The README, the landing page and the book are rewritten against what the
+  gateway does on `main` (#363; no specification governs the website). The
+  book's claims page lists what v0.0.3, v0.0.6 and v0.0.7 carry and what
+  v0.0.8 and v0.0.9 plan, by issue; the operate pages state that the gateway
+  authenticates no client yet and which onward credentials it sends, that no
+  session-scoped resolution binding is held until client authentication
+  (#80), and that a node's consent refusal is reported `node-error` until
+  #83. Two pages are new: Identity resolution, covering `[pixm]`, `[dev]`,
+  `profile` and `federation.default_namespace`, and Health probes, moved out
+  of the container page. `Prefer: wait` is documented beside the budgets.
+  The landing page's quickstart runs the four-node compose stack with its
+  seed script, and its cards name what each release shipped.
 - The ask-all probe is timed (#366; no specification governs metrics): each
   member's probe now carries its latency, so
   `ferrofed_node_request_duration_seconds` times it beside its count in

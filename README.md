@@ -23,47 +23,60 @@
 
 An openEHR federation gateway, in pure Rust: where else the record is.
 
-A record held by another organisation is out of reach today. FerroFED is a transparent ITS-REST intermediary: a client sends it an ordinary AQL query and never learns it was federated. The gateway resolves the patient first, through the index, so no directly identifying identifier travels in a query; then it sends standard AQL to each node, the local FerroEHR or a remote CDR, scoped to that node's own EHR id, and merges what comes back with each node's provenance. It holds no clinical data of its own. It follows the openEHR Federation Working Group's Federation Tier with AQL proposal.
+A record held by another organisation is out of reach today. FerroFED is a
+transparent ITS-REST intermediary in front of several openEHR CDRs: a client
+sends it an ordinary AQL query and never learns it was federated. The gateway
+resolves the patient outside the query, through an identifier
+cross-reference service, so no directly identifying identifier travels to a
+node. It sends each node standard AQL scoped to that node's own `ehr_id`, and
+merges the answers with each node's provenance. It holds no clinical data of
+its own.
 
-FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family. The family
-page shows where it sits among the eight and what calls what. The design of
-record is [`docs/architecture.md`](docs/architecture.md), and the tracker is
-the record of the build: each milestone is a release, and the open issues are
-the worklist. The site is <https://ferrofed.eu/>, with the documentation under
-[`/docs/`](https://ferrofed.eu/docs/).
+FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family. The
+documentation is at <https://ferrofed.eu/docs/>, and the design of record is
+[`docs/architecture.md`](docs/architecture.md).
 
-## Install
+## Status
 
-Every release on the
-[releases page](https://github.com/FerroHEALTH/FerroFED/releases/latest) ships
-the `ferrofed` binary for x86_64 and aarch64 Linux, on glibc and on musl, each
-tarball with its checksum, SLSA provenance and SBOMs. The image
-`ghcr.io/ferrohealth/ferrofed` carries the musl binary for `linux/amd64` and
-`linux/arm64`, tagged with the release version and `latest`. Verify what you
-download before you run it:
+FerroFED is at v0.0.7 on its 0.0.x line, where each milestone is a release.
+The gateway serves the federated query with the patient resolved outside AQL,
+shapes the merged rows as one CDR would, routes follow-up reads and writes to
+the node that owns them, sends definition requests to the node you name, and
+holds stored queries itself.
 
-```sh
-gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
-  --repo FerroHEALTH/FerroFED \
-  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-build.yml
-gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
-  --repo FerroHEALTH/FerroFED \
-  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
-```
+It authenticates no client yet, so run it only where the clients you trust
+can reach it, for example behind a proxy that authenticates them. Client
+authentication and OAuth 2.0 to each node are planned for v0.0.8
+([#80](https://github.com/FerroHEALTH/FerroFED/issues/80),
+[#81](https://github.com/FerroHEALTH/FerroFED/issues/81)). Toward the nodes,
+the gateway sends a bearer token, or a user and password, that you configure
+per endpoint. The
+[claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
+lists what each release shipped and what is planned.
 
-`ferrofed serve --config ferrofed.toml` runs the gateway, and
-`ferrofed config check --config ferrofed.toml` reports whether it would start
-on that file. The
-[configuration chapter](https://ferrofed.eu/docs/operate/configuration.html)
-and its two sub-pages cover the registry, the identity service and every key.
+## What it implements
+
+- The openEHR Federation Working Group's
+  [Federation Tier with AQL](https://syntaric.github.io/openehr-federation-spec/)
+  specification, release candidate v0.9.0 at commit `7162d0c`. The
+  [conformance matrix](https://ferrofed.eu/docs/evaluate/conformance.html)
+  and the
+  [obligations checklist](https://ferrofed.eu/docs/evaluate/obligations.html)
+  say which points and statements a test holds.
+- openEHR ITS-REST 1.1.0 on both faces, and openEHR AQL 1.1.0, through the
+  published `openehr-*` crates.
+- IHE PIXm ITI-83 for identity resolution. The `ihe-iti` crate also carries
+  the PDQm ITI-78 client, and the mCSD resource reader the FHIR form of the
+  registry uses. XCPD localization, mCSD addressing, PMIR and the Dutch
+  Generic Functions are planned for v0.0.8.
 
 ## Quickstart
 
-The gateway beside four member CDRs, four FerroEHR instances on one
-PostgreSQL server with a database per node. `compose.yaml` runs the published
-image of the current release, and the seed script creates synthetic patients
-over each node's ITS-REST API: one at all four nodes, one at two, one at one
-and one at none.
+The gateway beside four member CDRs: four FerroEHR instances on one
+PostgreSQL server, with a database per node. `compose.yaml` runs the
+published image of the product version, and the seed script creates
+synthetic patients over each node's ITS-REST API: one at all four nodes, one
+at two, one at one and one at none.
 
 ```sh
 docker compose up --wait
@@ -83,12 +96,47 @@ EOF
 The answer is one ITS-REST `RESULT_SET` with a composition from each node in
 `rows`, and `meta.federation` reports all four endpoints `active`. Each node
 received a query scoped to its own `ehr_id`, with no patient identifier in
-it. The quickstart configuration (`docker/quickstart/`) resolves the synthetic
-patients through a static development cross-reference. A patient missing at
-some nodes, a query directed at one node, the images, the ports, the
-development credentials, the measured memory use and building the image from
-the release binaries are described in
-[the container page](https://ferrofed.eu/docs/operate/container.html).
+it. The quickstart resolves its synthetic patients through a static
+development cross-reference, and its credentials are development values.
+[The container page](https://ferrofed.eu/docs/operate/container.html) walks
+through a patient missing at some nodes, a query directed at one node, the
+ports and the measured memory use.
+
+## Install
+
+Every release on the
+[releases page](https://github.com/FerroHEALTH/FerroFED/releases/latest)
+ships the `ferrofed` binary for x86_64 and aarch64 Linux, on glibc and on
+musl, each tarball with its checksum, SLSA provenance and SBOMs. The image
+`ghcr.io/ferrohealth/ferrofed` carries the musl binary for `linux/amd64` and
+`linux/arm64`. Verify what you download before you run it:
+
+```sh
+gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
+  --repo FerroHEALTH/FerroFED \
+  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-build.yml
+gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
+  --repo FerroHEALTH/FerroFED \
+  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
+```
+
+`ferrofed serve --config ferrofed.toml` runs the gateway, and
+`ferrofed config check --config ferrofed.toml` reports whether it would start
+on that file. The
+[configuration chapter](https://ferrofed.eu/docs/operate/configuration.html)
+covers every key, the registry and the identity service.
+
+## Documentation
+
+- [Evaluate](https://ferrofed.eu/docs/evaluate/the-federation-tier.html):
+  the specification, what FerroFED claims, conformance, versions and the
+  licence.
+- [Operate](https://ferrofed.eu/docs/operate/deployment-shape.html):
+  deployment, the container, configuration, admission, health and metrics.
+- [Integrate](https://ferrofed.eu/docs/integrate/client-contract.html): what
+  a client sends and gets back, and every error code.
+- [Contribute](https://ferrofed.eu/docs/contribute/how-the-work-is-organised.html):
+  the tracker and the checks, beside [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

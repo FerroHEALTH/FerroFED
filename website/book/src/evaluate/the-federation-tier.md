@@ -70,11 +70,15 @@ flowchart LR
 - **Consent stays at the node.** A node enforces consent before it releases
   data; a gateway pre-filter is optional and never replaces that check (§1,
   N27).
-- **Follow-up reads and writes go to the owning CDR**, routed on
-  `creating_system_id` (§12).
-- **Some things are refused, not approximated:** federated demographics,
-  object creation across nodes, cross-node `OFFSET` paging and undirected
-  aggregates (§2.3, §3.2).
+- **Follow-up reads and writes go to the owning CDR.** The registry maps each
+  `creating_system_id` to its CDR, and a versioned write goes only to the CDR
+  that created the version (§12.2, §12.4, N21, N23). A request under a path
+  `ehr_id` is routed to the node that holds that EHR (§12.5).
+- **Transparency is bounded.** Where a gateway cannot behave as one
+  repository (federated demographics, object creation across nodes, `OFFSET`
+  paging, undirected aggregates), it says so in `OPTIONS` or refuses the
+  request, and never returns an approximation the client cannot detect
+  (§3.2). A new object is created at one node the client names (§2.3, N23).
 
 The specification closes with a consolidated list of numbered conformance
 points (§17) and a Connectathon-style test approach (§16).

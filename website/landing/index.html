@@ -89,31 +89,32 @@
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">Run it</span>
-          <h2>The gateway and two member CDRs, in one command</h2>
+          <h2>The gateway and four member CDRs, in one command</h2>
           <p>
-            The repository's quickstart starts the published image beside two
-            FerroEHR nodes, each with its own database and system id. Create
-            one EHR on each, then send the gateway one ordinary ITS-REST query.
+            The repository's quickstart starts the published image beside four
+            FerroEHR nodes, each with its own database and system id on one
+            PostgreSQL server. A seed script creates synthetic patients over
+            each node's ITS-REST API, and you send the gateway one ordinary
+            ITS-REST query.
           </p>
         </div>
         <pre class="cmd"><code>git clone https://github.com/FerroHEALTH/FerroFED.git
 cd FerroFED
 docker compose up --wait
+scripts/quickstart/seed.sh
 
-curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
-  http://127.0.0.1:8081/ferroehr/rest/openehr/v1/ehr
-curl -u ferroehr:ferroehr -X POST -H 'Prefer: return=minimal' \
-  http://127.0.0.1:8082/ferroehr/rest/openehr/v1/ehr
-
-curl http://127.0.0.1:8080/v1/query/aql \
-  -H 'Content-Type: application/json' \
-  -d '{"q":"SELECT e/ehr_id/value FROM EHR e"}'</code></pre>
+curl -s http://127.0.0.1:8080/v1/query/aql \
+  -H 'Content-Type: application/json' -d @- &lt;&lt;'EOF'
+{"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
+EOF</code></pre>
         <div class="prose">
           <p>
-            The answer is one ITS-REST result set with the EHR of each node in
-            its rows, and <code>meta.federation</code> reports both endpoints
-            <code>active</code>. The quickstart credentials are development
-            values for a laptop.
+            The answer is one ITS-REST result set with a composition from each
+            node in its rows, and <code>meta.federation</code> reports all four
+            endpoints <code>active</code>. Each node received a query scoped
+            to its own EHR id, with no patient identifier in it. The patients
+            are synthetic, resolved through a static development table, and
+            the credentials are development values for a laptop.
           </p>
           <p>
             To run the binary on its own, download a tarball from the
@@ -122,7 +123,9 @@ curl http://127.0.0.1:8080/v1/query/aql \
             start it. <a href="./docs/operate/container.html">The container
             page</a> covers the image, the ports and the verification, and
             <a href="./docs/operate/configuration.html">the configuration
-            page</a> covers the registry and the identity service.
+            page</a> covers the registry and the identity service. The gateway
+            authenticates no client yet, so keep it where only trusted clients
+            reach it; client authentication is planned for v0.0.8.
           </p>
         </div>
       </div>
@@ -131,11 +134,11 @@ curl http://127.0.0.1:8080/v1/query/aql \
     <section id="properties">
       <div class="wrap">
         <div class="section-head">
-          <span class="eyebrow">What the specification asks</span>
-          <h2>Four properties a federation gateway has to keep</h2>
+          <span class="eyebrow">What it does</span>
+          <h2>What the gateway does, release by release</h2>
           <p>
             FerroFED follows the openEHR Federation Working Group's Federation
-            Tier with AQL specification. Each of these is a normative
+            Tier with AQL specification, and each card answers a normative
             requirement there. The
             <a href="./docs/evaluate/conformance.html">conformance matrix</a>
             shows which points a test scores today.
@@ -147,10 +150,10 @@ curl http://127.0.0.1:8080/v1/query/aql \
             <span class="tag">In v0.0.3</span>
             <h3>Transparent to the client</h3>
             <p>
-              <code>POST /v1/query/aql</code> takes a conformant openEHR query
-              with no federation syntax and answers one ordinary ITS-REST
-              result set, with the federation's additions in one metadata
-              member that names every endpoint.
+              <code>/v1/query/aql</code> takes a conformant openEHR query with
+              no federation syntax and answers one ordinary ITS-REST result
+              set, with the federation's additions in one metadata member that
+              names every endpoint.
             </p>
           </article>
 
@@ -166,13 +169,34 @@ curl http://127.0.0.1:8080/v1/query/aql \
           </article>
 
           <article class="card">
-            <span class="tag">In v0.0.3</span>
+            <span class="tag">In v0.0.6</span>
             <h3>Never a silent partial answer</h3>
             <p>
               Every node in scope is reported with a status. When a node that
-              was asked does not answer, the default is to fail the query.
-              A client that asks for flagged partial rows gets them, every
-              missing node named.
+              was asked does not answer in its time budget, the default is to
+              fail the query. A client that asks for flagged partial rows gets
+              them, every missing node named.
+            </p>
+          </article>
+
+          <article class="card">
+            <span class="tag">In v0.0.6</span>
+            <h3>Merged as one CDR would</h3>
+            <p>
+              <code>ORDER BY</code> with <code>LIMIT</code>, bounded
+              <code>OFFSET</code> pages, <code>DISTINCT</code> and the
+              aggregates are applied across nodes, and a copied version can be
+              kept once. What cannot be exact is refused with a reason.
+            </p>
+          </article>
+
+          <article class="card">
+            <span class="tag">In v0.0.6</span>
+            <h3>Directed and self-describing</h3>
+            <p>
+              A client names nodes in the AQL or in a header and can select
+              each row's endpoint as a column. <code>OPTIONS /</code> says what
+              the gateway does and which members stand behind it.
             </p>
           </article>
 
@@ -180,12 +204,32 @@ curl http://127.0.0.1:8080/v1/query/aql \
             <span class="tag">In v0.0.6</span>
             <h3>Follow-ups reach the right node</h3>
             <p>
-              A read after the query, under <code>/v1/ehr/{ehr_id}</code>,
-              goes to the one node that holds that EHR: the node the client
-              names, else the one the gateway learned, else the one it finds.
-              A versioned write to the CDR that created the record is the work
-              of the
-              <a href="https://github.com/FerroHEALTH/FerroFED/milestone/7" rel="noopener">v0.0.7 milestone</a>.
+              A request under <code>/v1/ehr/{ehr_id}</code> goes to the one
+              node that holds that EHR: the node the client names, else the one
+              the gateway learned, else the one it finds. Two nodes claiming
+              one EHR id are refused, never guessed between.
+            </p>
+          </article>
+
+          <article class="card">
+            <span class="tag">Next: v0.0.7</span>
+            <h3>Writes and definitions reach their owner</h3>
+            <p>
+              A versioned write goes only to the CDR that created the version.
+              A template goes to the node you name, or to several on request,
+              and stored queries live at the gateway as immutable versions it
+              can distribute to the members.
+            </p>
+          </article>
+
+          <article class="card">
+            <span class="tag">Next: v0.0.7</span>
+            <h3>Ready to operate</h3>
+            <p>
+              A check to run before you admit a node, a registry reload on
+              <code>SIGHUP</code>, health probes, Prometheus and OpenTelemetry
+              metrics, and a stored-query store on a file, PostgreSQL or a
+              read-only directory.
             </p>
           </article>
 
@@ -213,6 +257,7 @@ curl http://127.0.0.1:8080/v1/query/aql \
               <li><a href="./docs/evaluate/the-federation-tier.html">The Federation Tier with AQL</a></li>
               <li><a href="./docs/evaluate/what-ferrofed-claims.html">What FerroFED claims</a></li>
               <li><a href="./docs/evaluate/conformance.html">Conformance matrix</a></li>
+              <li><a href="./docs/evaluate/obligations.html">Obligations checklist</a></li>
               <li><a href="./docs/evaluate/versions.html">Pinned versions</a></li>
             </ul>
           </article>
@@ -226,9 +271,10 @@ curl http://127.0.0.1:8080/v1/query/aql \
               failure behaviour to know before you run it.
             </p>
             <ul>
+              <li><a href="./docs/operate/deployment-shape.html">What FerroFED runs beside</a></li>
               <li><a href="./docs/operate/container.html">The container image and the quickstart</a></li>
               <li><a href="./docs/operate/configuration.html">Configuration</a></li>
-              <li><a href="./docs/operate/deployment-shape.html">What FerroFED runs beside</a></li>
+              <li><a href="./docs/operate/admission.html">Admitting a node</a></li>
             </ul>
           </article>
 
@@ -241,6 +287,8 @@ curl http://127.0.0.1:8080/v1/query/aql \
             </p>
             <ul>
               <li><a href="./docs/integrate/client-contract.html">The client contract</a></li>
+              <li><a href="./docs/integrate/follow-ups.html">Follow-ups</a></li>
+              <li><a href="./docs/integrate/stored-queries.html">Stored queries</a></li>
               <li><a href="./docs/integrate/errors.html">Errors and status codes</a></li>
             </ul>
           </article>
@@ -273,12 +321,14 @@ curl http://127.0.0.1:8080/v1/query/aql \
           <h2>Where the project is</h2>
           <p>
             v0.0.6 is the current release. It answers one federated AQL query
-            over many nodes with the patient resolved outside AQL, routes a
-            request to one node, targets nodes by directive or header, and
-            describes itself at <code>OPTIONS /</code>. The
-            tracker's milestones are the roadmap; every issue carries its
-            acceptance criteria, and a release is cut when its milestone has
-            no open issue left.
+            over many nodes with the patient resolved outside AQL, merges the
+            rows as one CDR would, routes a request to one node, targets nodes
+            by directive or header, and describes itself at
+            <code>OPTIONS /</code>. v0.0.7, definitions and membership, is
+            built on <code>main</code>; v0.0.8 brings client authentication
+            and the security bindings. The tracker's milestones are the
+            roadmap; every issue carries its acceptance criteria, and a
+            release is cut when its milestone has no open issue left.
           </p>
           <!-- roadmap:begin -->
           <!-- roadmap:end -->

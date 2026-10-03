@@ -22,11 +22,11 @@ governs this: our own design.
 
 | Role | What it does | Binding |
 |---|---|---|
-| Member CDRs | answer standard AQL scoped to one `ehr_id`, and the follow-up reads and writes routed to them | openEHR ITS-REST 1.1.0, in v0.0.3 for the query; follow-up routing planned ([#61](https://github.com/FerroHEALTH/FerroFED/issues/61), [#64](https://github.com/FerroHEALTH/FerroFED/issues/64)) |
-| Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm ITI-83, in v0.0.3 |
-| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every known node | ask-all in v0.0.3; IHE XCPD planned ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) |
-| Addressing | resolves each community to its cross-reference service and CDR base URLs | the registry document in v0.0.3; IHE mCSD planned ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)) |
-| Authentication and authorization | authenticates the client, and the gateway to each node | per-endpoint credentials to each node in v0.0.3; the §13 profiles planned ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80), [#81](https://github.com/FerroHEALTH/FerroFED/issues/81)) |
+| Member CDRs | answer standard AQL scoped to one `ehr_id`, and the reads and writes routed to them | openEHR ITS-REST 1.1.0, over each node's own base URL |
+| Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm ITI-83 ([Identity resolution](identity.md)) |
+| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every member's cross-reference | none: every member is a candidate (`ask-all`); IHE XCPD is planned for v0.0.8 ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) |
+| Addressing | resolves each community to its CDR base URLs | the registry document, in TOML or as FHIR `Organization` and `Endpoint` resources ([The registry](registry.md)); reading it from an mCSD directory is planned for v0.0.8 ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)) |
+| Authentication and authorization | authenticates the client, and the gateway to each node | outbound credentials per endpoint; no client authentication yet ([below](#authentication)) |
 
 The specification references the internals of each service out (§2.2): how
 an MPI matches identities, how a locator decides where data is, and the
@@ -34,15 +34,41 @@ transport trust framework all belong to their own profiles. A region may
 supply its own realisation; Annex B describes the Dutch Generic Functions as
 one.
 
+## Authentication
+
+FerroFED authenticates no client today. Its listener speaks plain HTTP and
+answers every caller, `OPTIONS {base}/` included, so run it where only the
+clients you trust can reach it: inside a closed network, or behind a reverse
+proxy that terminates TLS and authenticates each client. The gateway never
+forwards a client's `Authorization` header to a node. With no client
+identity, no request belongs to a session, so the per-session resolution
+bindings of §12.5.1 are never held ([The registry](registry.md#resolution-bindings)).
+
+Toward the nodes, the gateway authenticates with credentials you configure
+per endpoint: an RFC 6750 bearer token, or an RFC 7617 user and password,
+each inline or read from a file ([Configuration](configuration.md#the-file)).
+It sends them on every request to that endpoint, and to nothing else. A PIX
+Manager takes the same two kinds, or none where the transport authenticates
+the gateway ([Identity resolution](identity.md)).
+
+Planned for v0.0.8 (§13): client authentication at the gateway
+([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), the client's
+identity conveyed on every request to a node
+([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)), and OAuth 2.0
+client credentials with an RFC 7523 signed JWT assertion to each node, with
+the gateway's JWKS published
+([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)).
+
 ## What the gateway keeps
 
 The gateway holds no clinical data. It keeps the registry of organisations,
 endpoints and the `system_id` mapping that routing depends on (§3.1, N21), and,
 if the deployment offers it, the federated stored-query definitions it is
 authoritative for (§12.7). The specification is silent on storage, so this is
-FerroFED's own design: the registry is a reviewed TOML document, loaded at boot
-into an immutable snapshot, and the resolution bindings of each client session
-are held in memory with a bounded lifetime. The stored-query registry is the
+FerroFED's own design: the registry is a reviewed document, loaded at boot
+and on each reload into an immutable snapshot, and the `ehr_id` index and the
+learned `creating_system_id` routes are held in memory, bounded, and lost on a
+restart. The stored-query registry is the
 one durable store, holding parameterised AQL and never a patient identifier,
 over the backend [`[stored_queries]`](queries-and-areas.md#stored-queries)
 names: an embedded `redb` file for one gateway process, a shared PostgreSQL
@@ -51,7 +77,7 @@ database for several replicas, or read-only definition files.
 ## Running several replicas
 
 Several gateway replicas behind one address share nothing in memory: each
-holds its own resolution bindings, `ehr_id` index and learned routes, and a
+holds its own `ehr_id` index and learned routes, and a
 miss on one replica costs a probe or an explicit target, never a wrong route.
 The stored-query registry is the exception, because a stored version must be
 the same on every replica and a second `PUT` of it refused on every replica
@@ -78,6 +104,9 @@ the same on every replica and a second `PUT` of it refused on every replica
   explicitly (§11.4).
 - Every response, a failing one included, reports each node in scope with a
   status such as `active`, `offline`, `time-out` or `not-resolved` (§11.1).
-- Consent is enforced by each node before it releases data. A node's refusal
-  is reported; the gateway never treats its own pre-filter as the only gate
-  (N27).
+- Consent is enforced by each node before it releases data (N27). The
+  gateway has no consent pre-filter, and it does not yet tell a node's
+  consent refusal from any other error, so the refusal is reported
+  `node-error`. The optional Step-1 pre-filter and the `consent-denied`
+  report are planned for v0.0.8
+  ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)).
