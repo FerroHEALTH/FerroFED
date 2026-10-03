@@ -8,6 +8,16 @@ The binary serves the federated query over a registry of member CDRs
 gateway needs around it, taken from the roles the specification names, and
 says which binding FerroFED ships for each role and which is planned.
 
+## Supported platforms
+
+FerroFED runs on Unix only. The server drains on `SIGTERM` and `SIGINT` and
+reloads its registry on `SIGHUP`, and both use Unix signals. Every release
+binary is Linux, for `x86_64` and `aarch64` on glibc and on musl, and the
+container image is Linux ([The release binaries](container.md#the-release-binaries)).
+Nothing is built or tested for Windows: building the server crate for a
+non-Unix target stops at a compile error that says so. No specification
+governs this: our own design.
+
 ## The services a gateway consumes
 
 | Role | What it does | Binding |

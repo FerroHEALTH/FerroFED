@@ -667,7 +667,8 @@ the same file to see the fault. The classes are:
 | `node-clients`, `http-client`, `self-description` | the node clients or the `OPTIONS {base}/` body cannot be built |
 | `registry-presence` | `registry.document` was set or unset, which takes a restart |
 
-Reloading is built on Unix only; the container image is Linux. The gateway
+Reloading uses a Unix signal, and FerroFED runs on Unix only
+([Supported platforms](deployment-shape.md#supported-platforms)). The gateway
 has no metrics endpoint yet, so the log lines are the record of each reload.
 
 ## The base path
