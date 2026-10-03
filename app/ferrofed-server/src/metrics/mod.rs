@@ -63,6 +63,11 @@ pub const NODE_REQUEST_DURATION: &str = "ferrofed.node.request.duration";
 /// `unavailable`); Prometheus `ferrofed_consent_prefilter_requests_total`.
 pub const CONSENT_PREFILTER_REQUESTS: &str = "ferrofed.consent.prefilter.requests";
 
+/// The calls to the localizer, by `outcome` (`candidates`, `no-records`,
+/// `not-configured`, `unavailable` or `audit-failed`); Prometheus
+/// `ferrofed_localizer_requests_total`.
+pub const LOCALIZER_REQUESTS: &str = "ferrofed.localizer.requests";
+
 /// The registry reloads, by `result`; Prometheus
 /// `ferrofed_registry_reloads_total`.
 pub const REGISTRY_RELOADS: &str = "ferrofed.registry.reloads";

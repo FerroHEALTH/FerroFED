@@ -91,8 +91,13 @@ fn config(
         )?;
     }
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[xcpd]\nsender_device = \"2.999.40.1\"\n{extra}\n{gateway_tables}\n[xcpd.communities]\n{communities}\n{rows}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[xcpd]\nsender_device = \"2.999.40.1\"\n{audit}{extra}\n{gateway_tables}\n[xcpd.communities]\n{communities}\n{rows}",
         document = toml::Value::String(document.display().to_string()),
+        audit = if extra.contains("audit =") {
+            ""
+        } else {
+            "audit = \"log\"\n"
+        },
     ))
 }
 
@@ -363,9 +368,119 @@ fn an_assertion_that_is_no_saml_assertion_refuses_to_boot_naming_its_key() -> Te
 
 #[test]
 fn xcpd_without_a_registry_refuses_to_boot() -> TestResult {
-    let text = "[xcpd]\nsender_device = \"2.999.40.1\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n";
+    let text = "[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n";
     match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
         Err(error::Error::Missing { key }) if key == "registry.document" => Ok(()),
         other => Err(format!("refused for its missing registry: {other:?}").into()),
     }
+}
+
+/// The configuration text over three unreachable members and one `https`
+/// gateway, under `profile`, with the `[xcpd]` keys `extra`.
+fn unreachable_config(dir: &Path, profile: &str, extra: &str) -> Result<String, Box<dyn Error>> {
+    config(
+        dir,
+        [
+            "https://a.example.org",
+            "https://b.example.org",
+            "https://c.example.org",
+        ],
+        &["https://xcpd.example.org/RespondingGateway".to_owned()],
+        profile,
+        extra,
+    )
+}
+
+#[test]
+fn xcpd_without_an_audit_destination_refuses_to_boot() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let text = unreachable_config(dir.path(), "development", "audit = \"log\"")?
+        .replace("audit = \"log\"", "");
+    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+        Err(error::Error::Missing { key }) if key == "xcpd.audit" => Ok(()),
+        other => Err(format!("the audit destination is declared (§3.55.5.1): {other:?}").into()),
+    }
+}
+
+#[test]
+fn audit_off_outside_development_refuses_to_boot() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let text = unreachable_config(dir.path(), "production", "audit = \"off\"")?
+        .split("\n[[dev.crossref]]")
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+        Err(error::Error::AuditOff { key }) if key == "xcpd.audit" => Ok(()),
+        other => Err(format!("no ITI-55 audit outside development: {other:?}").into()),
+    }
+}
+
+#[tokio::test]
+async fn options_declares_where_the_audit_messages_go() -> TestResult {
+    for audit in ["log", "off"] {
+        let dir = tempfile::tempdir()?;
+        let text = unreachable_config(dir.path(), "development", &format!("audit = \"{audit}\""))?;
+        let request = Request::options("/").body(Body::empty())?;
+        let (status, body) = call(gateway(&text)?, request).await?;
+        assert_eq!(StatusCode::OK, status, "{body}");
+        let options: OptionsRoot = serde_json::from_str(&body)?;
+        assert_eq!(
+            Some(format!("\"{audit}\"").as_str()),
+            options
+                .federation
+                .localization
+                .extra
+                .get("audit")
+                .map(serde_json::value::RawValue::get)
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn each_discovery_writes_an_audit_event_without_the_identifier() -> TestResult {
+    let servers = members().await;
+    let [a, b, c] = urls(&servers);
+    let holding = RespondingGateway::answering(Answer::Holds(vec![Community::new(
+        COMMUNITIES[0],
+        "2.999.50.2",
+        "PID-SYNTH-A",
+    )]))
+    .await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(&config(
+        dir.path(),
+        [&a, &b, &c],
+        &[holding.endpoint()],
+        "development",
+        "",
+    )?)?;
+    let logs = crate::support::Logs::default();
+    let capture = ferrofed_server::telemetry::subscriber(
+        ferrofed_server::telemetry::Rendering::Json,
+        "info",
+        false,
+        logs.clone(),
+    )?;
+    let guard = tracing::subscriber::set_default(capture);
+    let (status, _) = call(app, post(body(&patient_query())?)?).await?;
+    drop(guard);
+    assert_eq!(StatusCode::OK, status);
+
+    let text = logs.text();
+    let audit: Vec<&str> = text
+        .lines()
+        .filter(|line| line.contains(ferrofed_identity::xcpd::AUDIT_TARGET))
+        .collect();
+    assert_eq!(1, audit.len(), "one audit event per exchange: {text}");
+    for expected in [
+        "\"event_id\":\"110112\"",
+        "\"event_type\":\"ITI-55\"",
+        "\"event_outcome\":\"0\"",
+    ] {
+        assert!(audit[0].contains(expected), "{expected} in {}", audit[0]);
+    }
+    assert!(!text.contains(PATIENT), "no identifier in the log: {text}");
+    Ok(())
 }

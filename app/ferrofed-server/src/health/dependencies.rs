@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The last state the gateway observed of each member endpoint, of the
-//! resolver and of the consent pre-filter, which `GET /health/dependencies`
-//! reports.
+//! resolver, of the consent pre-filter and of the localizer, which
+//! `GET /health/dependencies` reports.
 //!
 //! Nothing here sends a request: the states come from the requests the
 //! gateway already makes for its clients, so a dependency nobody has asked
 //! since boot is [`Observed::Unknown`]. The record holds one slot per
-//! endpoint of the registry snapshot, one for the resolver and one for the
-//! consent pre-filter, fixed when
+//! endpoint of the registry snapshot, and one each for the resolver, the
+//! consent pre-filter and the localizer, fixed when
 //! the federation is built, so it never grows. A dependency's state never
 //! gates readiness: under §11 a node outage is reported per query, and
 //! readiness that followed it would turn one CDR outage into a total
@@ -24,6 +24,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use ferrofed_engine::dispatch::Contact;
 use ferrofed_identity::consent::ConsentDecision;
+use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use serde::Serialize;
@@ -105,6 +106,25 @@ impl Observed {
         }
     }
 
+    /// Returns what a localizer's answer says of its service, by the rule the
+    /// members follow: an answer, or a failure answered below `500`, is
+    /// [`Observed::Up`], a `5xx` is [`Observed::Failing`], and no answer is
+    /// [`Observed::Down`]; an exchange that could not be audited is
+    /// [`Observed::Failing`]; `None` when no localizer was asked.
+    #[must_use]
+    pub fn of_localization(localization: &Localization) -> Option<Self> {
+        match localization {
+            Localization::NotConfigured => None,
+            Localization::Candidates(_) | Localization::NoRecords => Some(Self::Up),
+            // NOTE: no specification governs this: our own design; an exchange the
+            // gateway could not audit is a failure of the localization path itself.
+            Localization::Unavailable(LocalizerError::AuditFailed(_)) => Some(Self::Failing),
+            Localization::Unavailable(error) => {
+                Some(error.status().map_or(Self::Down, Self::of_answer))
+            }
+        }
+    }
+
     /// Returns what a resolution says of the resolver: down when it could not
     /// answer for some member, up when it answered for each, and `None` when
     /// it was not asked.
@@ -133,6 +153,8 @@ pub struct Dependencies {
     resolver: Option<AtomicU8>,
     /// The consent pre-filter's slot, when one is configured.
     consent: Option<AtomicU8>,
+    /// The localizer's slot, when one is configured.
+    localizer: Option<AtomicU8>,
 }
 
 impl Dependencies {
@@ -147,6 +169,7 @@ impl Dependencies {
                 .collect(),
             resolver: resolver.then(|| AtomicU8::new(Observed::Unknown.code())),
             consent: None,
+            localizer: None,
         }
     }
 
@@ -155,6 +178,14 @@ impl Dependencies {
     #[must_use]
     pub fn with_consent(mut self, configured: bool) -> Self {
         self.consent = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
+        self
+    }
+
+    /// Returns this record with a slot for the localizer when `configured` is
+    /// `true`, its state [`Observed::Unknown`].
+    #[must_use]
+    pub fn with_localizer(mut self, configured: bool) -> Self {
+        self.localizer = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
         self
     }
 
@@ -191,6 +222,14 @@ impl Dependencies {
         }
     }
 
+    /// Records `observed` as the localizer's last state, when one is
+    /// configured.
+    pub fn localizer(&self, observed: Observed) {
+        if let Some(slot) = &self.localizer {
+            slot.store(observed.code(), Ordering::Relaxed);
+        }
+    }
+
     /// Returns the report `GET /health/dependencies` answers with.
     #[must_use]
     pub fn report(&self) -> Report {
@@ -213,6 +252,10 @@ impl Dependencies {
                 .consent
                 .as_ref()
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
+            localizer: self
+                .localizer
+                .as_ref()
+                .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
         }
     }
 }
@@ -230,6 +273,9 @@ pub struct Report {
     /// configured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consent: Option<Observed>,
+    /// The localizer's state, absent when no localizer is configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub localizer: Option<Observed>,
 }
 
 #[cfg(test)]

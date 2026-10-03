@@ -293,6 +293,16 @@ endpoint in `openEHR-federation-endpoint` and its `system_id` in
 - **The cross-reference cannot answer** for a member: a `424`
   (`resolution-unavailable`), never a `404`, because that member may hold the
   EHR.
+- **A localizer is configured** (`node_selection = "localized"`): the read
+  names the patient and no node, so it is localized as an undirected query
+  is (N4, §5.2, §14.1). The subject is resolved only at the members the
+  localizer names, and every other member learns nothing of the request. A
+  localizer that answers that no member holds the patient leaves the `404`.
+  A localizer that does not answer is a `424`
+  (`localization-unavailable`) with no member asked, under the default
+  fail-closed policy; under `on_failure = "ask-all"` every member is a
+  candidate. A read with `openEHR-federation-endpoint` is never localized
+  (§8).
 - **The consent pre-filter denies a member:** the subject is never resolved
   there and the member is sent nothing, as on a federated query (N27a). If
   no other member holds the subject, the answer is a `403`

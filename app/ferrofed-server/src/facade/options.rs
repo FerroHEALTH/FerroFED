@@ -61,6 +61,10 @@ pub const MAX_WINDOW: &str = "max_window";
 /// The `localization` member that names the configured localizer's binding.
 pub const LOCALIZATION_MODE: &str = "mode";
 
+/// The `localization` member that names where the localizer's audit messages
+/// go: `log`, or `off` in a development deployment.
+pub const LOCALIZATION_AUDIT: &str = "audit";
+
 /// The `timeout` member that carries the localizer's budget, in
 /// milliseconds.
 pub const LOCALIZATION_MS: &str = "localization_ms";
@@ -208,13 +212,18 @@ fn fans_out(targeting: Targeting) -> bool {
 /// The `localization` member: what the gateway does when its localizer does
 /// not answer, `closed` by default and `ask-all` only where the deployment
 /// declared it (§14.1, N4, N30), and, with a localizer configured, which
-/// binding it is as `mode`.
+/// binding it is as `mode`, with where its audit messages go as `audit`.
 fn localization(policy: &LocalizationPolicy) -> Result<Localization, DescribeError> {
     let mut extra = Extra::new();
     if let Some(mode) = policy.mode() {
         // NOTE: §14.1 asks only for `on_failure`, and the schema leaves the object
         // open: our own design, `mode` names the binding a client is localized by.
         extra.insert_serialized(LOCALIZATION_MODE, mode)?;
+    }
+    if let Some(audit) = policy.audit() {
+        // NOTE: ITI TF-2 §3.55.5.1: where a localizer records its audit messages is
+        // declared, so a deployment that turned them off says so.
+        extra.insert_serialized(LOCALIZATION_AUDIT, audit)?;
     }
     Ok(Localization {
         on_failure: policy.on_failure().as_str().to_owned(),
