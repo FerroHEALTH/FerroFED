@@ -1,6 +1,6 @@
 ---
 name: spec-pin-0-9-0-rc
-description: "The Federation Tier specification is vendored at v0.9.0 (release candidate, commit 7162d0c, 2026-09-28) with the reference implementation at 92aff3c; the 1.0 release is expected the week of 2026-10-08 and the re-pin is its own v0.0.1 issue; owner 2026-10-01"
+description: "The Federation Tier specification is vendored at v0.9.0 (release candidate, commit 7162d0c, 2026-09-28) with the reference implementation at 92aff3c; the 1.0 release is expected the week of 2026-10-08 and the re-pin is its own issue (#17), unscheduled until 1.0 is out; owner 2026-10-01"
 metadata:
   type: project
 ---
