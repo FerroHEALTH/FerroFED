@@ -52,7 +52,7 @@ name: ferrofed
 
 services:
   ferrofed:
-    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.3}
+    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.6}
     build:
       context: .
       dockerfile: docker/Dockerfile
