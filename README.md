@@ -54,8 +54,8 @@ gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
 `ferrofed serve --config ferrofed.toml` runs the gateway, and
 `ferrofed config check --config ferrofed.toml` reports whether it would start
 on that file. The
-[configuration page](https://ferrofed.eu/docs/operate/configuration.html)
-covers the registry, the identity service and every key.
+[configuration chapter](https://ferrofed.eu/docs/operate/configuration.html)
+and its two sub-pages cover the registry, the identity service and every key.
 
 ## Quickstart
 

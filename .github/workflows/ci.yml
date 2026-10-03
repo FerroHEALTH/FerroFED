@@ -225,9 +225,9 @@ jobs:
           bash scripts/checks/comment-style.sh --self-test
           bash scripts/checks/comment-style.sh --all
 
-  # The file-length guard: a hand-written Rust file stays under 1000 lines and
-  # a listed breach may not grow (no specification governs this: our own
-  # design). It passes on a tree with no .rs file.
+  # The file-length guard: a hand-written Rust file or book page stays under
+  # 1000 lines and a listed breach may not grow (no specification governs
+  # this: our own design). It passes on a tree with no .rs file.
   file-length:
     name: file-length
     runs-on: ubuntu-latest

@@ -1,0 +1,299 @@
+<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# The registry
+
+This page covers the registry document and its FHIR form, the federation id,
+node selection, the state the gateway learns (resolution bindings and the
+`ehr_id` index), reloading the document, and integrity incidents.
+
+## The registry document
+
+`registry.document` names a second TOML file: the federation's members as
+the operator admitted them. It declares each `[[organisation]]`, each
+`[[node]]` with its openEHR `system_id`, and each `[[endpoint]]` with its base
+URL, connection type and managing organisation. An unknown key, a dangling
+reference or a duplicate id refuses the whole document.
+
+The document is also the follow-up routing table (N21). A follow-up for a
+version is routed on the `creating_system_id` inside its uid (§12.2). A
+member's own `system_id` routes to that member without being written down.
+A CDR can hold versions another system created, because an imported
+composition keeps its original uid. Map every other `creating_system_id` you
+know of to the endpoint that answers for it with a `[[creating_system]]`
+entry:
+
+```toml
+[[creating_system]]
+creating_system_id = "legacy-a.example.org"   # the middle segment of the uid
+endpoint = "hospital-a"                       # an endpoint id this document declares
+```
+
+`config check` refuses, naming the `creating_system_id`, a mapping that names
+an endpoint the document does not declare, a `creating_system_id` mapped
+twice, and a mapping of a member's own `system_id`. Two spellings that differ
+only in ASCII case are one `creating_system_id`.
+
+## The registry document in FHIR form
+
+The specification recommends the FHIR `Endpoint` and `Organization` resources
+for the registry (N19). Set `registry.format = "fhir"` and `registry.document`
+names a FHIR R4 JSON `Bundle` of type `collection` or `searchset` instead,
+holding only `Organization` and `Endpoint` resources: the shape an mCSD
+directory delivers (§15.1). The default, `registry.format = "toml"`, is the
+native form above.
+
+```toml
+[registry]
+document = "/etc/ferrofed/registry.json"
+format = "fhir"
+```
+
+The form loads into the same members as the native form, and the gateway
+routes over it identically. FHIR has no place for a node or an openEHR
+`system_id`, and a resource's logical id belongs to the server that holds it,
+so FerroFED carries the registry's ids as identifiers in its own systems (no
+specification governs these systems; they are FerroFED's design):
+
+| FHIR element | Registry fact |
+|---|---|
+| `Organization.identifier` with system `https://ferrofed.eu/fhir/sid/organisation-id` | the organisation id, exactly one |
+| `Organization.name` | the organisation's display name |
+| `Organization.endpoint` | the endpoints whose node the organisation operates |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/endpoint-id` | the stable endpoint id used in directives (N19), exactly one |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/node-id` | the node the endpoint belongs to, exactly one |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/system-id` | that node's openEHR `system_id`, exactly one |
+| `Endpoint.identifier` with system `https://ferrofed.eu/fhir/sid/creating-system-id` | each further `creating_system_id` the endpoint answers for (N21), zero or more |
+| `Endpoint.connectionType` | `openehr-rest-query` in `https://ferrofed.eu/fhir/CodeSystem/connection-type` |
+| `Endpoint.managingOrganization` | the one managing organisation (N20) |
+| `Endpoint.status` | `active`, or `suspended` for an endpoint taken out of service |
+| `Endpoint.address` | the ITS-REST base URL |
+
+An endpoint for the openEHR Query API never carries `hl7-fhir-rest` (§15.2).
+No openEHR or HL7 code for it is registered yet, so FerroFED binds the one
+code N19 names, `openehr-rest-query`, in a code system of its own. The mCSD
+4.0.0 `Endpoint` profile binds `connectionType` to the HL7 endpoint connection
+types extensibly, so a code from another system is admitted where the value
+set has none for the purpose.
+
+References resolve inside the Bundle as FHIR R4 §2.36.4.1 resolves them: a
+relative `Organization/org-a` against the root of a REST `fullUrl` such as
+`https://registry.example.org/fhir/Endpoint/node-a-pub`, and an absolute
+reference, a `urn:uuid:` included, against an entry's `fullUrl`. Give every
+entry a `fullUrl`. Other elements (`payloadType`, `period`, `header` and the
+rest) are not read. A node's `product`, `version` and node identifiers have
+no place in this form; a registry that needs them uses the native form.
+
+`config check` refuses the document with the configuration exit code, naming
+the resource, when:
+
+- an endpoint's `connectionType` is `hl7-fhir-rest`, carries no system (an
+  informal string), or is any other system and code (N19, §15.2). CP-20 is
+  an operator point, and this check is how the gateway helps the operator
+  meet it;
+- an endpoint has no `managingOrganization`, or one that names no
+  `Organization` of the Bundle (N20);
+- an endpoint is listed by no organisation, or by two;
+- an organisation or an endpoint has no id in its system or more than one, or
+  an id repeats;
+- the endpoints of one node disagree on its `system_id` or its operator;
+- an endpoint's status is neither `active` nor `suspended`, or an organisation
+  is marked inactive;
+- a resource carries a `modifierExtension`, which FerroFED does not read;
+- anything the native form refuses: a duplicate `system_id`, an unusable base
+  URL, or a `creating_system_id` that is a member's own.
+
+Reading the members from an mCSD directory itself, and keeping them in step,
+follows with its own issue (#86).
+
+## Federation id
+
+A gateway that federates names its federation, and refuses to boot without
+the name:
+
+```toml
+[federation]
+id = "rso-example"
+```
+
+The id is `federation.id` of the `OPTIONS {base}/` self-description (§7a.2,
+N30). It has no default, because it is the deployment's to choose, and an
+empty id is refused. It is named in the startup log line.
+
+## Node selection
+
+A gateway that federates (`registry.document` is set) declares how an
+undirected patient query finds its nodes, and refuses to boot without the
+declaration:
+
+```toml
+[federation]
+node_selection = "ask-all"
+```
+
+`ask-all` is the selection for a deployment with no localization service (the
+specification's reference flow, Variant B; N4). Every active member is a
+candidate: the gateway asks every member's cross-reference where the patient
+is, dispatches the query only to the members that return an `ehr_id`, and
+reports the others as `not-resolved` without failing the query. It is the only
+selection the gateway offers until a localizer binding lands; a localizer that
+does not answer then fails closed, which is a different rule. The selection is
+named in the startup log line.
+
+## Resolution bindings
+
+A query that resolves a patient leaves a binding behind for the client
+session: which member holds which `ehr_id`, so a follow-up on a path `ehr_id`
+reaches the right node. A binding holds no patient identifier, lives in memory
+only, and expires after a lifetime you set:
+
+```toml
+[federation]
+binding_ttl_ms = 900000   # 15 minutes, the default; 0 is refused
+```
+
+The lifetime is a correctness bound. An identity merge or split at the
+identity source can make a binding stale, and a binding never outlives its
+lifetime, so set it no longer than you would accept a follow-up being routed
+on a superseded identity. The gateway also has a hook that drops the affected
+bindings the moment a PMIR subscription reports a merge or split. No
+subscription is built yet, so the lifetime is the bound in practice; the
+specification marks this lifecycle track provisional.
+
+## The `ehr_id` index
+
+The gateway also keeps an index of which member holds which `ehr_id`, shared
+by every client. It learns an entry when a resolution finds the patient's
+`ehr_id` at a member, and when a member answers a request under that `ehr_id`
+with a success. A follow-up on a path `ehr_id` that names no node and has no
+binding is routed by the index before the gateway falls back to asking every
+member (§12.5.1). The index holds `ehr_id`s and member ids only, lives in
+memory, and forgets the least recently used `ehr_id` once it is full:
+
+```toml
+[federation]
+ehr_index_capacity = 100000   # ehr_ids held, the default; 0 is refused
+```
+
+A forgotten or never-learned entry costs a later request one fallback step,
+never a wrong route: a read then asks every member, and a write is refused
+until the client names its node. An `ehr_id` seen at two members is held at
+both, the index raises the index-insert alarm of §12b.2 once (an
+`IndexInsertCollision` incident, see [Integrity incidents](#integrity-incidents)),
+and from then on it routes neither: a request for that `ehr_id` that names
+no node is refused `409` (`ehr-id-collision`). A held collision has no expiry
+of its own, because nothing the gateway observes shows that a node was
+remedied. It lasts until the entry is forgotten as least recently used or the
+gateway restarts; after that, a read probes every member again, and a
+collision that still stands is found and reported again.
+
+## Reloading the registry
+
+Send `SIGHUP` to a running `ferrofed serve` to apply a changed registry
+document without a restart:
+
+```text
+kill -HUP <pid of ferrofed>
+docker kill --signal HUP <container>
+```
+
+The gateway reads the configuration again from where it read it at start:
+the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
+`FERROFED__` environment over it. It checks the result exactly as `serve` and
+`config check` do at start, secrets and `_file` siblings included. The
+gateway reloads on the signal only and never watches the file, so write the
+new document completely, then send the signal.
+
+Four sections take effect on a reload:
+
+| Reloaded | Needs a restart |
+|---|---|
+| `[registry]`: the document's contents, its path and its `format` | `profile` |
+| `[credentials]` | `[server]` |
+| `[dev]` | `[telemetry]` |
+| `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
+
+`federation.demographic_endpoint` keeps its running value until a restart,
+and the document must still declare it: a reload whose document drops that
+endpoint is refused (`demographic-endpoint`, below).
+
+A valid configuration replaces the running registry at once. A request that
+started before the reload finishes on the registry it started with, nodes
+and credentials included; every request that starts after it uses the new
+one. An added endpoint gets its node client and its credentials, and a
+removed endpoint is never called again. What the gateway has learned stays,
+held to the new document:
+
+- a learned `creating_system_id` route the new document maps to another node
+  is withdrawn and raises a `RegisteredCreatingSystemConflict` incident (see
+  [Integrity incidents](#integrity-incidents)), and stays withdrawn;
+- every `ehr_id` index entry and resolution binding that names a member the
+  document no longer holds is dropped. An entry that names such a member
+  beside others is dropped whole, so a collision is never narrowed to the
+  member that remains; a later read asks every member again. An entry a
+  request already running learns after the reload, naming a member that
+  left, is dropped the first time a request looks it up, with the same
+  effect: a read asks every member, and a write without a target header is
+  refused `400` (`target-required`).
+
+The reload logs `registry reloaded` at `INFO` with `members` (how many the
+registry now holds), `endpoints_added`, `endpoints_removed`,
+`members_removed`, `incidents`, `index_dropped` and `bindings_dropped`. A
+changed setting outside the four sections is logged at `WARN` under
+`settings`, by key (`server.listen`, `federation.binding_ttl_ms`), and keeps
+its running value until a restart; the rest of the reload applies.
+
+A configuration that does not load is refused, and the running registry
+stays. The gateway logs `registry reload refused` at `ERROR` with the failure
+`class`, the `config` file and the registry `document`, and never a value of
+either file, a credential or a header. Run `ferrofed config check` against
+the same file to see the fault. The classes are:
+
+| `class` | The fault |
+|---|---|
+| `configuration` | the configuration file does not read or resolve |
+| `registry-unreadable` | the registry document cannot be read |
+| `registry-invalid` | the registry document breaks a registry rule |
+| `credentials` | a `[credentials]` section names an endpoint the document does not declare |
+| `demographic-endpoint` | `federation.demographic_endpoint` names an endpoint the new document does not declare |
+| `dev-cross-reference`, `pixm`, `resolvers` | the resolver refuses the new members, or both resolvers are set |
+| `node-clients`, `http-client`, `self-description` | the node clients or the `OPTIONS {base}/` body cannot be built |
+| `registry-presence` | `registry.document` was set or unset, which takes a restart |
+
+Reloading uses a Unix signal, and FerroFED runs on Unix only
+([Supported platforms](deployment-shape.md#supported-platforms)). The gateway
+has no metrics endpoint yet, so the log lines are the record of each reload.
+
+## Integrity incidents
+
+A federation integrity defect is reported to you, the federation operator, as
+an incident: one `ERROR` line under the log target `ferrofed::integrity`,
+written once when the gateway detects the defect (§12.5.2, §12b.2, N42). The
+line carries a stable `kind`, the routing ids involved and a message, and
+never a request body, a header value or a patient identifier. These kinds
+reach the log today:
+
+| `kind` | When | Fields |
+|---|---|---|
+| `EhrIdCollision` | A request addressed an `ehr_id` that two members or more claim, and was refused `409` (`ehr-id-collision`). One line per refused request. | `ehr_id`, `detection` (`binding`, `index` or `ask-all`: the routing step that found the claimants), `claimants` (their endpoint ids) |
+| `IndexInsertCollision` | The `ehr_id` index learned an `ehr_id` it already held at another member: the index-insert alarm of §12b.2. One line when the second claimant is learned, and one more for each further claimant. | `ehr_id`, `claimants` (the member node ids) |
+| `LearnedCreatingSystemConflict` | A `creating_system_id` the registry document does not map was seen at two nodes, so the route learned for it is withdrawn and neither node is routed on (§12.2, N21). One line when the route is withdrawn. | `creating_system_id`, `first_endpoint_id`, `second_endpoint_id` |
+| `RegisteredCreatingSystemConflict` | A route learned for a `creating_system_id` names another node than the registry document maps it to, seen in an answer or found when the registry is reloaded (see [Reloading the registry](#reloading-the-registry)). The learned route is withdrawn and the document's mapping is used. One line when the route is withdrawn. | `creating_system_id`, `node_id` (the node the document maps it to), `endpoint_id` (the endpoint the learned route named) |
+
+The `ehr_id` is node-local and names no patient (§5.2), so the line names it
+when it is a bare UUID. Any other form could be a patient identifier a client
+wrote in a path, so the line then leaves the `ehr_id` field out.
+
+Two nodes holding one `ehr_id` breaks the identifier-integrity conditions of
+§12b.2, which admission should have checked, so the remedy is at the node.
+The `claimants` name the members that hold the `ehr_id`. Have the node that
+issued or adopted it in error fix it, then restart the gateway, which forgets
+the collision the index holds (the index also forgets it when the entry is
+the least recently used one past the index capacity). Until then, requests
+that name no node are refused, and a client can still reach one of the
+members by naming its endpoint in the `openEHR-federation-endpoint` header.
+
+The gateway has no metrics endpoint, so the log is the record: count the
+incidents by filtering the target `ferrofed::integrity` and grouping on
+`kind` in your log pipeline. The request line of a refused request carries
+its `409` and its `request_id`; the incident line does not name the request.

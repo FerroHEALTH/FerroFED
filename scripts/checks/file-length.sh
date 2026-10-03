@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: BUSL-1.1
 # File-length guard: a hand-written Rust file is at most $HARD lines, and a
 # file over $SOFT lines is split into a module folder before it grows further.
+# A Markdown page of the book under website/book/src/ is held to the same
+# limits and the same allow-list, and splits into pages of its chapter.
 #
 # Generated files (a `@generated` banner on the first line) and vendored trees
 # are outside the rule. A file listed in scripts/checks/file-length-allow.txt
@@ -12,7 +14,8 @@
 # is reported as a warning, never a failure.
 #
 # Usage:
-#   scripts/checks/file-length.sh            check every tracked .rs file
+#   scripts/checks/file-length.sh            check every tracked .rs file and
+#                                            every tracked book page
 #   scripts/checks/file-length.sh --files F…  check the named files
 #   scripts/checks/file-length.sh --record    rewrite the allow-list from the
 #                                            current breaches (a split removes
@@ -42,7 +45,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$mode" != files ]; then
-  while IFS= read -r f; do files+=("$f"); done < <(git ls-files -- '*.rs' ':(glob,exclude)**/vendor/**')
+  while IFS= read -r f; do files+=("$f"); done < <(git ls-files -- '*.rs' 'website/book/src/*.md' ':(glob,exclude)**/vendor/**')
 fi
 
 # A template under a generator's src/templates/ is the text of one generated
@@ -50,6 +53,15 @@ fi
 hand_written() {
   case "$1" in */vendor/*|*/src/templates/*) return 1 ;; esac
   ! head -n1 "$1" | grep -q '@generated'
+}
+
+# How a file over the limit splits: a Rust file into a module folder, a book
+# page into pages of its chapter.
+split_hint() {
+  case "$1" in
+  *.md) printf 'pages of its chapter in SUMMARY.md' ;;
+  *) printf 'a module folder' ;;
+  esac
 }
 
 # The allow-list entry of a path, as "<lines> <tag>", or nothing (bash 3.2 has
@@ -93,7 +105,7 @@ for f in ${files[@]+"${files[@]}"}; do
     continue
   fi
   if [ "$n" -gt "$HARD" ]; then
-    note "FAIL $f: $n lines, over the hard limit of $HARD; split it into a module folder"
+    note "FAIL $f: $n lines, over the hard limit of $HARD; split it into $(split_hint "$f")"
     fail=1
   elif [ "$n" -gt "$SOFT" ]; then
     note "warn $f: $n lines, over $SOFT; split it before it grows"
@@ -123,6 +135,6 @@ if [ "$mode" = record ]; then
 fi
 
 if [ "$fail" -eq 0 ]; then
-  note "OK: no hand-written .rs file over $HARD lines outside the allow-list ($warn over $SOFT unlisted)"
+  note "OK: no hand-written .rs file or book page over $HARD lines outside the allow-list ($warn over $SOFT unlisted)"
 fi
 exit "$fail"
