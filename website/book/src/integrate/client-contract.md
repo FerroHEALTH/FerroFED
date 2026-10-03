@@ -53,6 +53,14 @@ A client that wants to pin a query to named systems can do so in the AQL,
 with `FROM ENDPOINT …` or `ORGANISATION …`, or beside it, with a request
 header (§8).
 
+The body is the ITS-REST `AdhocQueryExecute` in JSON, the one media type
+ITS-REST lists for the operation. Send `Content-Type: application/json`, with
+`charset=utf-8` if you like, or none, and the body is read as JSON. Any other
+`Content-Type` is a `415` (`media-type-unsupported`), and no node is asked
+(RFC 9110 §15.5.16). ITS-REST makes the header optional and names no default,
+so reading a body without one as the listed media type is the gateway's own
+choice.
+
 ### The GET form
 
 ITS-REST also defines the ad hoc query as a `GET`, with the members of the
@@ -701,7 +709,10 @@ WHERE e/ehr_status/subject/external_ref/id/value = $patient
 - The name is `[{namespace}::]{query-name}` over `a-z`, `A-Z`, `0-9`, `_`, `.`
   and `-`, and the query name is never `aql` (ITS-REST). The version is
   `major.minor.patch` (ITS-REST's semver path segment, §12.7). Anything else
-  is a `400` (`query-name-invalid`, `query-version-invalid`). A `PUT` with no
+  is a `400` (`query-name-invalid`, `query-version-invalid`). The body is
+  `text/plain`: send that `Content-Type`, with `charset=utf-8` if you like,
+  or none. Any other is a `415` (`media-type-unsupported`), and nothing is
+  stored. A `PUT` with no
   version is a `400` (`query-version-required`), because the registry stores
   only at a version. `query_type`, when sent, is `AQL` in any case.
 - A stored version is immutable. A second `PUT` to a name and version the
@@ -752,6 +763,9 @@ Content-Type: application/json
   that selects other endpoints is a `400` (`targeting-conflict`).
 - A parameter you do not bind, or bind and the query does not use, is a `400`
   (`parameters`) naming it, never its value.
+- The `Query` body is JSON, under the same `Content-Type` rule as an inline
+  query: `application/json` or none, and any other is a `415`
+  (`media-type-unsupported`) that asks no node.
 - The answer is the ordinary federated `RESULT_SET`, with `name` naming the
   gateway's stored query and `q` its stored text (§9.1, §12.7). No node
   receives your patient identifier, and no node receives the stored query by

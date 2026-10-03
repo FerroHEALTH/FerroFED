@@ -45,7 +45,7 @@ const BASES: [&str; 2] = ["/", "/fed/openehr"];
 const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 /// `path` under `base`.
-fn under(base: &str, path: &str) -> String {
+pub(crate) fn under(base: &str, path: &str) -> String {
     if base == "/" {
         path.to_owned()
     } else {
@@ -55,7 +55,7 @@ fn under(base: &str, path: &str) -> String {
 
 /// The development gateway over node A at `a` and node B at `b`, mounted at
 /// `base` through `[server] base_path`, resolving the patient at both.
-fn gateway_at(
+pub(crate) fn gateway_at(
     dir: &std::path::Path,
     base: &str,
     a: &str,

@@ -379,7 +379,7 @@ impl Unserved {
     fn respond(self, request_id: &str, logged: &str) -> Response {
         let code = self.code();
         match &self {
-            Self::Undeclared { position } => security::forward_refused(*position, logged),
+            Self::Undeclared { position } => security::query_parameter_refused(*position, logged),
             Self::Unresolved(_) | Self::Clock => tracing::error!(
                 code = code.as_str(),
                 error = %self,

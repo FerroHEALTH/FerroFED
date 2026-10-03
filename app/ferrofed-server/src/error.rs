@@ -148,9 +148,10 @@ pub enum Code {
     /// of the media types the ITS-REST operation answers in (RFC 9110
     /// §12.5.1).
     MediaTypeNotAcceptable,
-    /// The `Content-Type` header of a request routed to a single node names
-    /// none of the media types the ITS-REST operation takes, or a parameter
-    /// other than a `utf-8` charset (RFC 9110 §8.3).
+    /// The `Content-Type` header of a request routed to a single node, or of
+    /// a request the gateway answers itself, names none of the media types
+    /// the ITS-REST operation takes, or a parameter other than a `utf-8`
+    /// charset (RFC 9110 §8.3, §15.5.16).
     MediaTypeUnsupported,
     /// The subject of `GET {base}/v1/ehr` resolves at more than one member,
     /// and no targeting header names one of them: the gateway never chooses
