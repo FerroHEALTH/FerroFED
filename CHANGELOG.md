@@ -16,9 +16,29 @@ an entry under **[Unreleased]** in the same PR. Cutting a release renames
 The architecture is `docs/architecture.md`, the output of the research
 program on the v0.0.1 milestone. Releases on the 0.0.x line started with the
 repository, its gates, its documentation and the server shape in 0.0.1; the
-federated query and identity resolution shipped in 0.0.3.
+federated query and identity resolution shipped in 0.0.3; cross-node result
+shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
+
+## [0.0.6] - 2026-10-03
+
+The v0.0.4, v0.0.5 and v0.0.6 milestones in one release (no v0.0.4 or v0.0.5
+tag was cut). The federated query now shapes its answer across nodes the way
+a single CDR would: `ORDER BY` with `LIMIT` re-applied at the Tier, bounded
+`OFFSET` pages, `DISTINCT`, decomposable aggregates and opt-in
+version-identity dedup, each refused with a reason where it cannot be exact.
+Every failure carries its §11.2 status and a stable error code. A request
+under `{base}/v1/ehr/{ehr_id}` is routed to the one node that holds that EHR,
+byte-identical, and every answer teaches the gateway which system created
+each version. A client names nodes through the `FROM ENDPOINT` /
+`ORGANISATION` directive or the targeting headers and selects their ENDPOINT
+attributes, the registry also loads as FHIR `Endpoint` and `Organization`
+resources, stored queries are held at the gateway as immutable versions, and
+`OPTIONS {base}/` declares all of it. The identifier-hygiene property is now
+held by the track 10 leakage suite against both nodes: no client-chosen
+request id, targeting header or path segment carries a patient identifier to
+a node or into the log.
 
 ### Added
 
@@ -1202,7 +1222,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.3...v0.0.6
 [0.0.3]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.3
 [0.0.2-rc.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.2-rc.1
 [0.0.1]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1-rc.1...v0.0.1

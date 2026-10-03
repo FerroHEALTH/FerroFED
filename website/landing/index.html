@@ -63,7 +63,7 @@
     <section class="hero">
       <div class="wrap">
         <img class="hero-logo" src="./assets/brand/ferrofed-icon.svg" alt="FerroFED" width="88" height="88">
-        <p class="status" role="note">v0.0.3 released. Linux binaries and a container image, signed.</p>
+        <p class="status" role="note">v0.0.6 released. Linux binaries and a container image, signed.</p>
         <h1>Where else the record is.</h1>
         <p class="sub">
           FerroFED is an openEHR federation gateway. A client sends it an
@@ -171,19 +171,21 @@ curl http://127.0.0.1:8080/v1/query/aql \
             <p>
               Every node in scope is reported with a status. When a node that
               was asked does not answer, the default is to fail the query.
-              Flagged partial rows for a client that asks for them are on
-              <code>main</code> for the next release.
+              A client that asks for flagged partial rows gets them, every
+              missing node named.
             </p>
           </article>
 
           <article class="card">
-            <span class="tag">Planned</span>
-            <h3>Follow-ups go to the owner</h3>
+            <span class="tag">In v0.0.6</span>
+            <h3>Follow-ups reach the right node</h3>
             <p>
-              A read or a write after the query is routed to the CDR that
-              created the record, on its system id. This is the work of the
-              <a href="https://github.com/FerroHEALTH/FerroFED/milestone/5" rel="noopener">v0.0.5 milestone</a>.
-              Consent stays with each node, enforced before it releases data.
+              A read after the query, under <code>/v1/ehr/{ehr_id}</code>,
+              goes to the one node that holds that EHR: the node the client
+              names, else the one the gateway learned, else the one it finds.
+              A versioned write to the CDR that created the record is the work
+              of the
+              <a href="https://github.com/FerroHEALTH/FerroFED/milestone/7" rel="noopener">v0.0.7 milestone</a>.
             </p>
           </article>
 
@@ -270,8 +272,10 @@ curl http://127.0.0.1:8080/v1/query/aql \
         <div class="status-panel">
           <h2>Where the project is</h2>
           <p>
-            v0.0.3 is the current release. It carries the first federated
-            query over two nodes and the patient resolved outside AQL. The
+            v0.0.6 is the current release. It answers one federated AQL query
+            over many nodes with the patient resolved outside AQL, routes a
+            request to one node, targets nodes by directive or header, and
+            describes itself at <code>OPTIONS /</code>. The
             tracker's milestones are the roadmap; every issue carries its
             acceptance criteria, and a release is cut when its milestone has
             no open issue left.
