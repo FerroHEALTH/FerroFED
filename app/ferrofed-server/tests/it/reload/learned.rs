@@ -17,9 +17,11 @@ use ferrofed_server::telemetry::{Rendering, subscriber};
 use http::{HeaderMap, StatusCode};
 use openehr_base::prelude::ObjectVersionId;
 
-use crate::facade::{EHR_A, EHR_B, crossref, node_answering};
+use ferrofed_server::auth::caller::{Caller, Stated, VerifiedBy};
+
+use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, node_answering};
 use crate::path_ehr_id::{answer, probe_at};
-use crate::support::{Logs, asked, error_body};
+use crate::support::{Logs, asked, claims, error_body};
 
 use super::{
     Gateway, LEGACY, TestResult, VERSION_A, indexed_at_a_departed_member, member,
@@ -223,6 +225,62 @@ async fn a_write_never_routes_on_an_entry_naming_a_departed_claimant() -> TestRe
         Indexed::None,
         gateway.federation()?.index().lookup(&EHR_A.parse()?),
         "the stale entry is dropped"
+    );
+    Ok(())
+}
+
+/// The session of the default test caller, as the gateway keys its
+/// resolution bindings.
+fn default_session() -> SessionKey {
+    let claims = claims();
+    Caller::new(
+        Stated {
+            issuer: claims.iss,
+            subject: claims.sub,
+            client_id: claims.client_id,
+            organisation: None,
+            granted: String::new(),
+            purposes: Vec::new(),
+        },
+        VerifiedBy::Signature,
+    )
+    .session()
+}
+
+#[tokio::test]
+async fn a_consent_denial_drops_the_callers_binding_and_no_signal_keeps_it() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-b::cdr-b.example.org::1").await;
+    let members = member("a", &a.uri()) + &member("b", &b.uri());
+    let rows = crossref(&[("node-a", EHR_A)]);
+    let gateway = Gateway::start(&members, "", &rows)?;
+    let (session, ehr_a) = (default_session(), EHR_A.parse()?);
+
+    let (status, text) = gateway.ask().await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        Bound::One("node-a".parse()?),
+        gateway
+            .federation()?
+            .bindings()
+            .lookup(&session, Instant::now(), &ehr_a),
+        "the caller's query binds the member that resolved (§12.5.1 step 2), with no consent signal at all"
+    );
+
+    let denied = format!(
+        "{rows}\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\n"
+    );
+    gateway.write_config("", &denied)?;
+    gateway.reloader.reload()?;
+    let (status, text) = gateway.ask().await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        Bound::None,
+        gateway
+            .federation()?
+            .bindings()
+            .lookup(&session, Instant::now(), &ehr_a),
+        "a consent denial drops the binding naming the denied member (N27a)"
     );
     Ok(())
 }

@@ -23,6 +23,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The resolution bindings of §12.5.1 step 2 are kept per verified caller,
+  the token's issuer, subject and client together. A federated query and a
+  read of an EHR by subject record where each `ehr_id` resolved, and a
+  routed request by the same caller is routed by them before the `ehr_id`
+  index; another caller never sees them. A consent denial drops the
+  caller's bindings naming the denied member (N27a). They live in memory for
+  `federation.binding_ttl_ms` and number at most `federation.binding_capacity`
+  (100000 by default), and `OPTIONS {base}/` names the step in
+  `its_rest.ehr` (#412).
 - The consent pre-filter applies to the read of an EHR by subject as it does
   to a federated query (#399; N27a, §13.2.1). A member it denies is never
   resolved and never sent a request. When it denies every member that might

@@ -9,6 +9,7 @@
 //! never anything about a patient: an IHE IUA `person_id` claim is never read
 //! (§5.4.1, N33).
 
+use ferrofed_identity::binding::SessionKey;
 use openehr_sdt::smart_scopes::SmartScope;
 
 /// A caller the gateway verified.
@@ -116,6 +117,22 @@ impl Caller {
     pub const fn verified_by(&self) -> VerifiedBy {
         self.verified_by
     }
+
+    /// Returns the session the caller's resolution bindings belong to
+    /// (§12.5.1 step 2): its issuer, subject and client together, so another
+    /// caller, or the same subject through another client, never shares it.
+    #[must_use]
+    pub fn session(&self) -> SessionKey {
+        // NOTE: no specification governs this: our own design; each part is
+        // length-prefixed, so no two callers' parts run together into one key.
+        let mut key = String::new();
+        for part in [&self.issuer, &self.subject, &self.client_id] {
+            key.push_str(&part.len().to_string());
+            key.push(':');
+            key.push_str(part);
+        }
+        SessionKey::new(key)
+    }
 }
 
 /// How the gateway verified a caller.
@@ -152,4 +169,54 @@ pub struct PurposeOfUse {
     pub system: Option<String>,
     /// The code.
     pub code: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Caller, Stated, VerifiedBy};
+
+    fn caller(issuer: &str, subject: &str, client_id: &str) -> Caller {
+        Caller::new(
+            Stated {
+                issuer: issuer.to_owned(),
+                subject: subject.to_owned(),
+                client_id: client_id.to_owned(),
+                organisation: None,
+                granted: String::from("system/aql-*.s"),
+                purposes: Vec::new(),
+            },
+            VerifiedBy::Signature,
+        )
+    }
+
+    #[test]
+    fn one_caller_keeps_one_session_whatever_its_scopes_or_verification() {
+        let mut other = caller("https://issuer.example.test", "clinician-1", "app");
+        other.granted = String::from("system/composition-*.r");
+        other.verified_by = VerifiedBy::Introspection;
+        assert_eq!(
+            caller("https://issuer.example.test", "clinician-1", "app").session(),
+            other.session()
+        );
+    }
+
+    #[test]
+    fn another_issuer_subject_or_client_is_another_session() {
+        let one = caller("https://issuer.example.test", "clinician-1", "app").session();
+        for other in [
+            caller("https://other.example.test", "clinician-1", "app"),
+            caller("https://issuer.example.test", "clinician-2", "app"),
+            caller("https://issuer.example.test", "clinician-1", "other-app"),
+        ] {
+            assert_ne!(one, other.session());
+        }
+    }
+
+    #[test]
+    fn parts_that_run_together_alike_are_still_two_sessions() {
+        assert_ne!(
+            caller("ab", "c", "d").session(),
+            caller("a", "bc", "d").session()
+        );
+    }
 }

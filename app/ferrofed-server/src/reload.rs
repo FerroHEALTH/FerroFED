@@ -391,6 +391,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             was.binding_ttl != now.binding_ttl,
         ),
         (
+            "federation.binding_capacity",
+            was.binding_capacity != now.binding_capacity,
+        ),
+        (
             "federation.ehr_index_capacity",
             was.ehr_index_capacity != now.ehr_index_capacity,
         ),

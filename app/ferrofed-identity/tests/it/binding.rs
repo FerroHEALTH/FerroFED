@@ -10,6 +10,7 @@
     reason = "fixture builders fail the test they serve on an impossible value"
 )]
 
+use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
 use ferrofed_identity::binding::{Bound, IdentityChange, ResolutionBindings, SessionKey};
@@ -17,6 +18,7 @@ use ferrofed_registry::id::{EhrId, NodeId};
 
 const EHR_A: &str = "2222aaaa-2222-4222-8222-222222222222";
 const EHR_B: &str = "3333bbbb-3333-4333-8333-333333333333";
+const EHR_C: &str = "4444cccc-4444-4444-8444-444444444444";
 
 fn node(id: &str) -> NodeId {
     NodeId::new(id).expect("a node id")
@@ -308,5 +310,71 @@ fn an_identity_change_naming_no_bound_ehr_id_drops_nothing() {
     assert_eq!(
         Bound::One(node("node-a")),
         bindings.lookup(&session, now, &ehr(EHR_A))
+    );
+}
+
+#[test]
+fn a_full_store_drops_the_other_session_that_expires_soonest() {
+    let capacity = NonZeroUsize::new(2).expect("two is not zero");
+    let bindings = ResolutionBindings::new(Duration::from_secs(60)).with_capacity(capacity);
+    let (older, newer, current) = (
+        SessionKey::new("session-older"),
+        SessionKey::new("session-newer"),
+        SessionKey::new("session-current"),
+    );
+    let start = Instant::now();
+    bindings.record(&older, start, [(&node("node-a"), &ehr(EHR_A))]);
+    let later = start + Duration::from_secs(1);
+    bindings.record(&newer, later, [(&node("node-b"), &ehr(EHR_B))]);
+    bindings.record(&current, later, [(&node("node-a"), &ehr(EHR_C))]);
+    assert_eq!(
+        2,
+        bindings.len(),
+        "the store never holds more than its capacity"
+    );
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&older, later, &ehr(EHR_A)),
+        "the session that expires soonest makes room"
+    );
+    assert_eq!(
+        Bound::One(node("node-b")),
+        bindings.lookup(&newer, later, &ehr(EHR_B))
+    );
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&current, later, &ehr(EHR_C))
+    );
+}
+
+#[test]
+fn a_session_alone_past_the_capacity_keeps_what_fits_and_holds_no_more() {
+    let capacity = NonZeroUsize::new(1).expect("one is not zero");
+    let bindings = ResolutionBindings::new(Duration::from_secs(60)).with_capacity(capacity);
+    let session = SessionKey::new("session-1");
+    let now = Instant::now();
+    bindings.record(
+        &session,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_B)),
+        ],
+    );
+    assert_eq!(1, bindings.len());
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&session, now, &ehr(EHR_A))
+    );
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&session, now, &ehr(EHR_B)),
+        "a binding that does not fit is not held"
+    );
+    bindings.record(&session, now, [(&node("node-c"), &ehr(EHR_A))]);
+    assert_eq!(
+        Bound::Several(vec![node("node-a"), node("node-c")]),
+        bindings.lookup(&session, now, &ehr(EHR_A)),
+        "a second claimant of a held ehr_id adds no binding, so it is kept (§12.5.2)"
     );
 }

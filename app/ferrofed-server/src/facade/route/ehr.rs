@@ -76,7 +76,8 @@ pub(super) async fn route(
         Err(failure) => return unheld(&failure, request_id, &logged),
     };
     let snapshot = federation.snapshot();
-    let located = match locate(federation, arrived.headers, write, &ehr_id, started) {
+    let asked = (arrived.headers, arrived.session);
+    let located = match locate(federation, asked, write, &ehr_id, started) {
         Ok(located) => located,
         Err(Unlocated::Untargeted(untargeted)) => {
             return error::response(untargeted.code(), untargeted.to_string(), request_id);
@@ -167,7 +168,9 @@ pub(super) async fn route(
 }
 
 /// What the first three steps of §12.5.1 say about the owner of `ehr_id`
-/// for a request that writes `write`, read at `started` (N41).
+/// for a request that writes `write`, read at `started` (N41), with the
+/// request's headers and the verified caller's `session`, whose resolution
+/// bindings are step 2.
 ///
 /// A new EHR has no owner for a binding or the index to name, so only the
 /// targeting headers route it (§12.4, §8.4, N23), and only while neither
@@ -179,15 +182,13 @@ pub(super) async fn route(
 /// registry holds (§8.4.1), or another member holds a new EHR's `ehr_id`.
 fn locate<'a>(
     federation: &'a Federation,
-    headers: &HeaderMap,
+    (headers, session): (&HeaderMap, Option<&SessionKey>),
     write: Write,
     ehr_id: &EhrId,
     started: Instant,
 ) -> Result<owner::Located<'a>, Unlocated> {
     let (snapshot, index) = (federation.snapshot(), federation.index());
-    // TODO(#412): the authenticated client session the resolution bindings belong to.
-    let session: Option<SessionKey> = None;
-    let held = session.as_ref().map(|session| owner::Held {
+    let held = session.map(|session| owner::Held {
         bindings: federation.bindings(),
         session,
         now: started,

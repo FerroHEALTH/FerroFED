@@ -30,12 +30,8 @@ async fn the_ehr_declaration_states_how_a_path_ehr_id_finds_its_owner() -> TestR
         let declared = setup.declared().await?.federation.its_rest.ehr;
         states(
             &declared,
-            "every other request under {base}/v1/ehr/{ehr_id} goes to the one node that owns the ehr_id, found by the targeting headers, the ehr_id index, then for a read an ask-all probe",
+            "every other request under {base}/v1/ehr/{ehr_id} goes to the one node that owns the ehr_id, found by the targeting headers, the resolution bindings the same verified caller's queries recorded, held in memory for federation.binding_ttl_ms, the ehr_id index, then for a read an ask-all probe",
             mode,
-        );
-        assert!(
-            !declared.contains("binding"),
-            "§12.5.1 step 2 applies to no request while there is no client session: {declared}"
         );
 
         states(&declared, "then for a read an ask-all probe", mode);

@@ -321,12 +321,15 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
     };
     Ok(ItsRestAreas {
         query: query.to_owned(),
-        // TODO(#412): name the session's resolution binding among the owner steps once client sessions exist.
+        // NOTE: §7a.2 describes each area's behaviour in `its_rest`, so the
+        // §12.5.1 step 2 binding is named with whose it is and how long it lives.
         ehr: "routed: a new EHR, POST {base}/v1/ehr or PUT {base}/v1/ehr/{ehr_id}, goes \
               only to the one endpoint the targeting headers name, and a PUT is refused \
               when another member holds its ehr_id; every other request under \
               {base}/v1/ehr/{ehr_id} goes to the one node that owns the ehr_id, found by \
-              the targeting headers, the ehr_id index, then for a read an ask-all probe; \
+              the targeting headers, the resolution bindings the same verified caller's \
+              queries recorded, held in memory for federation.binding_ttl_ms, the ehr_id \
+              index, then for a read an ask-all probe; \
               a versioned write only when that node controls the version it amends; \
               GET {base}/v1/ehr?subject_id= resolves the subject and goes to the one \
               member that holds it, by its ehr_id"

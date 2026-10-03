@@ -103,6 +103,8 @@ pub struct FederationSettings {
     pub default_namespace: Option<String>,
     /// How long the resolution bindings of a client session live.
     pub binding_ttl: Duration,
+    /// How many `ehr_id` bindings the resolution bindings hold together.
+    pub binding_capacity: NonZeroU32,
     /// How many `ehr_id`s the `ehr_id` to node index holds.
     pub ehr_index_capacity: NonZeroU32,
     /// How the node set of an undirected patient query is chosen, as

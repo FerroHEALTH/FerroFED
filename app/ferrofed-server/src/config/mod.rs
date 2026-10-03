@@ -190,6 +190,9 @@ pub struct Federation {
     /// step 2): a correctness bound, past which a binding is
     /// never routed on.
     pub binding_ttl_ms: u64,
+    /// How many `ehr_id` bindings the resolution bindings of every caller
+    /// hold together (§12.5.1 step 2); zero is refused.
+    pub binding_capacity: u32,
     /// How many `ehr_id`s the `ehr_id` to node index holds (§12.5.1 step 3)
     /// before it forgets the least recently used; zero is refused.
     pub ehr_index_capacity: u32,
@@ -333,6 +336,7 @@ impl Default for Federation {
             overall_timeout_ms: 25_000,
             default_namespace: None,
             binding_ttl_ms: 900_000,
+            binding_capacity: 100_000,
             ehr_index_capacity: 100_000,
             node_selection: None,
             localization: None,

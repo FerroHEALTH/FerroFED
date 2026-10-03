@@ -162,6 +162,14 @@ pub(crate) fn bearer() -> Result<String, IssuerError> {
     Ok(format!("Bearer {}", token()?))
 }
 
+/// Returns the `Authorization` value of another verified caller: the default
+/// [`claims`] with `subject` as `sub`.
+pub(crate) fn bearer_as(subject: &str) -> Result<String, IssuerError> {
+    let mut claims = claims();
+    subject.clone_into(&mut claims.sub);
+    Ok(format!("Bearer {}", issuer().mint(&claims)?))
+}
+
 /// Returns the `[auth]` of every test gateway: the test issuer is trusted,
 /// its key set handed over with the configuration, and the default client is
 /// a demographic client.

@@ -81,9 +81,11 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::Response;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, Method, Uri};
 use openehr_its::rest::routes::{self, Lookup};
 
+use crate::auth::caller::Caller;
 use crate::error::{self, Code};
 use crate::facade::request::{Arrived, Submitted};
 use crate::request_id;
@@ -101,21 +103,33 @@ const ADHOC_QUERY: &str = "/query/aql";
 /// Without a federation, the gateway federates nothing and answers as the
 /// unserved ITS-REST surface does. Every node the query reaches receives the
 /// request's [`OutboundId`], never the client's `x-request-id` (§5.4.1, N33);
-/// the client's id names the request only in the answer.
+/// the client's id names the request only in the answer. The resolution
+/// bindings the query records belong to the verified caller (§12.5.1 step
+/// 2).
 pub async fn query_aql(
     State(state): State<Arc<AppState>>,
     outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<Caller>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
     let started = Instant::now();
     let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
+    let session = session(caller);
     federated(
         &state,
-        (&headers, outbound, started),
+        (&headers, outbound, started, session.as_ref()),
         Submitted::Body(&body),
     )
     .await
+}
+
+/// The session of the verified `caller`, which the resolution bindings
+/// belong to (§12.5.1 step 2); `None` when the request carries no verified
+/// caller, so no binding is recorded or read.
+#[must_use]
+pub fn session(caller: Option<Extension<Caller>>) -> Option<SessionKey> {
+    caller.map(|Extension(caller)| caller.session())
 }
 
 /// `GET {base}/v1/query/aql`: the federated ad hoc query, its members in the
@@ -128,11 +142,13 @@ pub async fn query_aql(
 pub async fn query_aql_get(
     State(state): State<Arc<AppState>>,
     outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<Caller>>,
     uri: Uri,
     headers: HeaderMap,
 ) -> Response {
     let started = Instant::now();
     let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
+    let session = session(caller);
     let Lookup::Matched(matched) = routes::lookup(&Method::GET, ADHOC_QUERY) else {
         tracing::error!(
             request_id = %outbound,
@@ -145,7 +161,8 @@ pub async fn query_aql_get(
         matched: &matched,
         query: uri.query(),
     };
-    federated(&state, (&headers, outbound, started), submitted).await
+    let arrived = (&headers, outbound, started, session.as_ref());
+    federated(&state, arrived, submitted).await
 }
 
 /// Runs `submitted` over the configured federation, or answers `501` when
@@ -155,7 +172,7 @@ pub async fn query_aql_get(
 /// is otherwise a `415` no node is asked for ([`request::unsupported_media`]).
 async fn federated(
     state: &AppState,
-    (headers, outbound, started): (&HeaderMap, OutboundId, Instant),
+    (headers, outbound, started, session): (&HeaderMap, OutboundId, Instant, Option<&SessionKey>),
     submitted: Submitted<'_>,
 ) -> Response {
     let request_id = request_id::of(headers).unwrap_or_default();
@@ -181,6 +198,7 @@ async fn federated(
         request_id,
         outbound,
         started,
+        session,
     };
     answer::answer(&federation, arrived, submitted).await
 }

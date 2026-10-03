@@ -197,6 +197,10 @@ impl Config {
             key: String::from("federation.id"),
         })?;
         let binding_ttl = positive_ms("federation.binding_ttl_ms", self.federation.binding_ttl_ms)?;
+        let binding_capacity =
+            NonZeroU32::new(self.federation.binding_capacity).ok_or_else(|| Error::Zero {
+                key: String::from("federation.binding_capacity"),
+            })?;
         let ehr_index_capacity =
             NonZeroU32::new(self.federation.ehr_index_capacity).ok_or_else(|| Error::Zero {
                 key: String::from("federation.ehr_index_capacity"),
@@ -233,6 +237,7 @@ impl Config {
             budget,
             default_namespace: self.federation.default_namespace.clone(),
             binding_ttl,
+            binding_capacity,
             ehr_index_capacity,
             node_selection: self.federation.node_selection,
             best_effort: self.federation.best_effort,

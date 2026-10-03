@@ -18,6 +18,7 @@ use axum::response::Response;
 use ferrofed_engine::declared;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::EndpointId;
 use http::HeaderMap;
 use openehr_federation::aql::directive::FacadeQuery;
@@ -41,6 +42,9 @@ pub(crate) struct Arrived<'a> {
     pub(crate) outbound: OutboundId,
     /// When the request arrived, the instant the overall budget runs from.
     pub(crate) started: Instant,
+    /// The verified caller's session, which the resolution bindings belong
+    /// to (§12.5.1 step 2); `None` when no caller was verified.
+    pub(crate) session: Option<&'a SessionKey>,
 }
 
 /// What a federated query request submits.

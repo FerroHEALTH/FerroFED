@@ -8,11 +8,13 @@
 //! The bindings belong to the client session (§12.5.1 step 2; their storage
 //! is our own design, since no specification governs it): held in memory,
 //! keyed by the session and by the `ehr_id`, never by the patient identifier,
-//! and dropped when the session's time-to-live passes. Nothing is written to disk and
-//! nothing derived from a patient identifier is kept.
+//! dropped when the session's time-to-live passes, and bounded in number.
+//! Nothing is written to disk and nothing derived from a patient identifier
+//! is kept.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::num::NonZeroUsize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -67,27 +69,50 @@ struct Session {
     by_ehr: BTreeMap<EhrId, BTreeSet<NodeId>>,
 }
 
+/// How many `ehr_id` bindings, over every session, [`ResolutionBindings::new`]
+/// holds.
+pub const DEFAULT_CAPACITY: NonZeroUsize = match NonZeroUsize::new(100_000) {
+    Some(capacity) => capacity,
+    None => NonZeroUsize::MIN,
+};
+
 /// The resolution bindings of every live session.
 ///
 /// `Debug` reports how many sessions are held and none of their bindings.
 pub struct ResolutionBindings {
     ttl: Duration,
+    capacity: NonZeroUsize,
     sessions: Mutex<BTreeMap<SessionKey, Session>>,
 }
 
 impl ResolutionBindings {
     /// Bindings that live `ttl` past the resolution that recorded them, a
-    /// correctness bound: a binding older than it is never routed on.
+    /// correctness bound: a binding older than it is never routed on. At most
+    /// [`DEFAULT_CAPACITY`] `ehr_id` bindings are held.
     #[must_use]
     pub fn new(ttl: Duration) -> Self {
         Self {
             ttl,
+            capacity: DEFAULT_CAPACITY,
             sessions: Mutex::new(BTreeMap::new()),
         }
     }
 
+    /// These bindings, holding at most `capacity` `ehr_id` bindings over every
+    /// session.
+    ///
+    /// A recording that would pass it first drops the other sessions that
+    /// expire soonest, whole; a binding that still does not fit is not held,
+    /// which costs a later follow-up one step of §12.5.1, never a misroute.
+    #[must_use]
+    pub fn with_capacity(mut self, capacity: NonZeroUsize) -> Self {
+        self.capacity = capacity;
+        self
+    }
+
     /// Records the `{node, ehr_id}` pairs a resolution of `session` produced
-    /// at `now`, and renews the session's time-to-live.
+    /// at `now`, and renews the session's time-to-live, within the capacity
+    /// ([`ResolutionBindings::with_capacity`]).
     pub fn record<'a>(
         &self,
         session: &SessionKey,
@@ -99,17 +124,39 @@ impl ResolutionBindings {
         };
         let mut sessions = self.lock();
         sessions.retain(|_, held| held.expires > now);
-        let held = sessions.entry(session.clone()).or_insert_with(|| Session {
-            expires,
-            by_ehr: BTreeMap::new(),
-        });
-        held.expires = expires;
         for (node, ehr_id) in pairs {
-            held.by_ehr
+            let known = sessions
+                .get(session)
+                .is_some_and(|held| held.by_ehr.contains_key(ehr_id));
+            if !known && !make_room(&mut sessions, session, self.capacity) {
+                continue;
+            }
+            sessions
+                .entry(session.clone())
+                .or_insert_with(|| Session {
+                    expires,
+                    by_ehr: BTreeMap::new(),
+                })
+                .by_ehr
                 .entry(ehr_id.clone())
                 .or_default()
                 .insert(node.clone());
         }
+        if let Some(held) = sessions.get_mut(session) {
+            held.expires = expires;
+        }
+    }
+
+    /// How many `ehr_id` bindings are held over every session.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        held(&self.lock())
+    }
+
+    /// Whether no binding is held.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// What the live bindings of `session` say about `ehr_id` at `now`.
@@ -261,10 +308,38 @@ impl ResolutionBindings {
     }
 }
 
+/// How many `ehr_id` bindings `sessions` hold.
+fn held(sessions: &BTreeMap<SessionKey, Session>) -> usize {
+    sessions.values().map(|held| held.by_ehr.len()).sum()
+}
+
+/// Makes room in `sessions` for one more binding of `session` within
+/// `capacity`, dropping the other sessions that expire soonest, whole, and
+/// returns whether there is room.
+fn make_room(
+    sessions: &mut BTreeMap<SessionKey, Session>,
+    session: &SessionKey,
+    capacity: NonZeroUsize,
+) -> bool {
+    while held(sessions) >= capacity.get() {
+        let soonest = sessions
+            .iter()
+            .filter(|(key, _)| *key != session)
+            .min_by_key(|(_, held)| held.expires)
+            .map(|(key, _)| key.clone());
+        let Some(soonest) = soonest else {
+            return false;
+        };
+        sessions.remove(&soonest);
+    }
+    true
+}
+
 impl fmt::Debug for ResolutionBindings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ResolutionBindings")
             .field("ttl", &self.ttl)
+            .field("capacity", &self.capacity)
             .field("sessions", &self.lock().len())
             .finish()
     }

@@ -625,6 +625,7 @@ async fn execute(
         request_id: arrived.request_id,
         outbound: arrived.outbound,
         started,
+        session: arrived.session,
     };
     let submitted = Submitted::Stored {
         request,

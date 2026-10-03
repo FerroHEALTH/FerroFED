@@ -43,9 +43,8 @@ pub(crate) async fn answer(
         request_id,
         outbound,
         started,
+        session,
     } = arrived;
-    // TODO(#412): the authenticated client session the resolution bindings belong to.
-    let session: Option<SessionKey> = None;
     let completion = match completeness::of(headers, federation.best_effort()) {
         Ok(completion) => completion,
         Err(error) => return Failure::Completeness(error).respond(request_id, outbound),
@@ -69,7 +68,7 @@ pub(crate) async fn answer(
         budget,
         started,
         outbound,
-        session: session.as_ref(),
+        session,
     };
     match federate(federation, query).await {
         Ok((status, mut result_set, provenance)) => {

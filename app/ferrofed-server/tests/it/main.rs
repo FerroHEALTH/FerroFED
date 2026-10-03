@@ -9,6 +9,7 @@ mod ask_all;
 mod auth;
 mod banner;
 mod base_url;
+mod caller_bindings;
 mod completeness;
 mod config;
 mod consent;

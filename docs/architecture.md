@@ -674,8 +674,9 @@ domain with two identifiers, a value that is not an `ehr_id`, a namespace with
 no mapping, a timeout and any other failure are `Unavailable`, which fails the
 query `424` (decision A17). No specification governs the namespace mapping or
 the coverage rule: our own design. Each resolution's `{node, ehr_id}` set is
-recorded as the session's resolution bindings (decision A20) once a client
-session exists (#80); follow-up routing reads them (#62).
+recorded as the session's resolution bindings (decision A20), the session
+being the verified caller's issuer, subject and client (#412); follow-up
+routing reads them (#62).
 
 ## 7. The security handoff
 
@@ -850,7 +851,7 @@ silent on storage, so this section is FerroFED's own).
 | Organisations, nodes, endpoints, node identifiers, configured `system_id` | the operator, at admission (§12b.1) | a reviewed bootstrap document, loaded into an immutable snapshot |
 | Observed `creating_system_id` to node (N21) | learned from result rows and routed answers | an in-memory map behind one lock every request shares, as the `ehr_id` index is, written once each answer is settled (#64) |
 | The `ehr_id` to node index (§12.5.1 step 3) | learned from resolution and probes | a bounded in-memory LRU |
-| Resolution bindings (§12.5.1 step 2) | per client session | in memory, keyed by the session (decision A20) |
+| Resolution bindings (§12.5.1 step 2) | per verified caller | in memory, keyed by the caller's session, bounded by a TTL and a capacity (decision A20) |
 | Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log and a counter |
 | Stored-query definitions (N44) | a client `PUT` | the one durable store, behind `DefinitionStore` |
 | Outbound credentials | the operator | `_file` secrets per endpoint |

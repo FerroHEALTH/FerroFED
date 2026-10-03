@@ -39,7 +39,7 @@
 //! index (§12.5.1 step 3). No answer and no log line names the subject: an
 //! error body names endpoints and query parameter positions only (§5.4.3).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -142,7 +142,8 @@ pub(crate) async fn serve(
         .iter()
         .map(|endpoint| endpoint.id().clone())
         .collect();
-    learn(federation, &resolved.holders, started);
+    let session = arrived.session.map(|session| (session, &consented.denied));
+    learn(federation, &resolved.holders, session, started);
     let (endpoint, ehr_id) = match resolved.settled() {
         Ok(owner) => owner,
         Err(unserved) => return unserved.respond(request_id, &logged),
@@ -339,13 +340,20 @@ async fn resolve<'a>(
     resolved
 }
 
-/// Teaches the `ehr_id` index, and the session's resolution bindings, every
-/// `{node, ehr_id}` pair `holders` names, as a federated query's resolution
-/// does (§12.5.1 steps 2 and 3).
-fn learn(federation: &Federation, holders: &[(&Endpoint, EhrId)], now: Instant) {
-    // TODO(#412): the authenticated client session the resolution bindings belong to.
-    let session: Option<SessionKey> = None;
-    if let Some(session) = &session {
+/// Teaches the `ehr_id` index, and the verified caller's resolution
+/// bindings, every `{node, ehr_id}` pair `holders` names, as a federated
+/// query's resolution does (§12.5.1 steps 2 and 3).
+///
+/// With a `session`, the bindings it holds that name a member the consent
+/// pre-filter denied are dropped first (N27a), as a query's are.
+fn learn(
+    federation: &Federation,
+    holders: &[(&Endpoint, EhrId)],
+    session: Option<(&SessionKey, &BTreeSet<NodeId>)>,
+    now: Instant,
+) {
+    if let Some((session, denied)) = session {
+        federation.bindings().forget_denied(session, denied);
         federation.bindings().record(
             session,
             now,

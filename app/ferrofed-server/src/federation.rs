@@ -77,12 +77,12 @@ struct Observed {
 }
 
 impl Observed {
-    /// Nothing learned yet: bindings that live `ttl`, and an `ehr_id` index
-    /// of `capacity` entries.
-    fn new(ttl: std::time::Duration, capacity: NonZeroU32) -> Self {
+    /// Nothing learned yet: `bindings`, and an `ehr_id` index of `capacity`
+    /// entries.
+    fn new(bindings: ResolutionBindings, capacity: NonZeroU32) -> Self {
         Self {
-            bindings: ResolutionBindings::new(ttl),
-            index: ehr_index(capacity),
+            bindings,
+            index: EhrIndex::new(widened(capacity)),
             learned: Mutex::new(LearnedMap::new()),
         }
     }
@@ -363,9 +363,11 @@ impl Federation {
             localization,
             consent,
             observed: observed.unwrap_or_else(|| {
+                let federation = &settings.federation;
                 Arc::new(Observed::new(
-                    settings.federation.binding_ttl,
-                    settings.federation.ehr_index_capacity,
+                    ResolutionBindings::new(federation.binding_ttl)
+                        .with_capacity(widened(federation.binding_capacity)),
+                    federation.ehr_index_capacity,
                 ))
             }),
             context,
@@ -408,9 +410,9 @@ impl Federation {
             localization: LocalizationPolicy::none(),
             consent: None,
             observed: Arc::new(Observed::new(
-                std::time::Duration::from_millis(
+                ResolutionBindings::new(std::time::Duration::from_millis(
                     crate::config::Federation::default().binding_ttl_ms,
-                ),
+                )),
                 default_index_capacity(),
             )),
             context,
@@ -702,11 +704,11 @@ fn read_document(path: &Path, format: RegistryFormat) -> Result<RegistrySnapshot
     }
 }
 
-/// An empty `ehr_id` index of `capacity` entries.
-fn ehr_index(capacity: NonZeroU32) -> EhrIndex {
+/// The configured `capacity` as a count of held entries.
+fn widened(capacity: NonZeroU32) -> NonZeroUsize {
     // NOTE: no specification governs this: our own design; a capacity past
     // `usize` is bounded by `usize`, which only a platform under 32 bits reaches.
-    EhrIndex::new(NonZeroUsize::try_from(capacity).unwrap_or(NonZeroUsize::MAX))
+    NonZeroUsize::try_from(capacity).unwrap_or(NonZeroUsize::MAX)
 }
 
 /// The configuration's default `ehr_id` index capacity.

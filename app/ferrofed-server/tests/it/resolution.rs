@@ -441,6 +441,20 @@ fn a_configured_binding_lifetime_is_the_one_resolved() -> TestResult {
 }
 
 #[test]
+fn a_binding_capacity_is_configured_and_zero_refuses_to_boot() -> TestResult {
+    let text = "[federation]\nbinding_capacity = 250\n";
+    let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
+    if settings.federation.binding_capacity.get() != 250 {
+        return Err("the configured capacity, not the default".into());
+    }
+    let text = "[federation]\nbinding_capacity = 0\n";
+    match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
+        Err(error::Error::Zero { key }) if key == "federation.binding_capacity" => Ok(()),
+        other => Err(format!("refused naming the key: {other:?}").into()),
+    }
+}
+
+#[test]
 fn a_zero_binding_lifetime_refuses_to_boot() -> TestResult {
     let text = "[federation]\nbinding_ttl_ms = 0\n";
     match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
