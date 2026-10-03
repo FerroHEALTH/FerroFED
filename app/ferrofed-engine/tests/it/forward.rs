@@ -416,6 +416,86 @@ async fn a_withheld_identifier_in_the_body_of_a_commit_is_sent_unchanged() -> Te
     Ok(())
 }
 
+// conformance: CP-26
+#[tokio::test]
+async fn the_host_a_node_receives_is_the_registry_authority_never_the_client_host() -> TestResult {
+    let at = format!("/ehr/{EHR}");
+    let server = node("GET", &format!("/v1{at}"), ResponseTemplate::new(200)).await;
+    let mut headers = HeaderMap::new();
+    headers.insert("host", format!("cdr-{PATIENT}.example.org").parse()?);
+    let answer = client(&server.uri())?
+        .forward(
+            request(Method::GET, &at, headers, b""),
+            &options(patient())?,
+        )
+        .await?;
+    assert_eq!(StatusCode::OK, answer.status());
+    let requests = received(&server).await?;
+    let [sent] = requests.as_slice() else {
+        return Err(format!("expected one request, got {}", requests.len()).into());
+    };
+    let hosts: Vec<&[u8]> = sent
+        .headers
+        .get_all("host")
+        .iter()
+        .map(http::HeaderValue::as_bytes)
+        .collect();
+    assert_eq!(
+        vec![server.address().to_string().as_bytes()],
+        hosts,
+        "§5.4.1, N33: Host is written from the registry's endpoint URL"
+    );
+    assert!(
+        sent.headers
+            .values()
+            .all(|value| !String::from_utf8_lossy(value.as_bytes()).contains(PATIENT)),
+        "the client's Host never travels"
+    );
+    Ok(())
+}
+
+/// A node-local `ehr_id` with no digit in it, so a port number cannot occur
+/// in a path that holds it.
+const NO_DIGIT_EHR: &str = "abcdefab-cdef-abcd-efab-cdefabcdefab";
+
+// conformance: CP-26
+#[tokio::test]
+async fn a_withheld_value_in_a_client_header_is_refused_though_the_registry_authority_holds_it()
+-> TestResult {
+    let server = MockServer::start().await;
+    let port = server.address().port().to_string();
+    assert!(server.uri().contains(&port), "the port is in the authority");
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "openehr-audit-details",
+        format!("committer.id={port}").parse()?,
+    );
+    let commit = request(
+        Method::POST,
+        &format!("/ehr/{NO_DIGIT_EHR}/composition"),
+        headers,
+        b"",
+    );
+    let refused = client(&server.uri())?
+        .forward(
+            commit,
+            &options(Withheld::new([SecretString::from(port.as_str())]))?,
+        )
+        .await;
+    assert!(
+        matches!(
+            &refused,
+            Err(ForwardError::Withheld {
+                part: Part::Header("openehr-audit-details"),
+                ..
+            })
+        ),
+        "§5.4.1, N33: the unread authority and Host leave every header searched: {refused:?}"
+    );
+    assert!(received(&server).await?.is_empty(), "nothing is sent");
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_401_is_the_node_refusing_the_onward_credentials() -> TestResult {
     let at = format!("/ehr/{EHR}");

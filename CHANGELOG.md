@@ -292,6 +292,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- A recombined `AVG` over integers answers an integer (#309; AQL 1.1.0
+  §3.9.1.5, "it will also determine the return type"). When every node's
+  `SUM` is an integer, the gateway returns the integer nearest the exact
+  quotient of the federation's sum and count, a tie going to the even one,
+  so `5 / 2` is `2` and `7 / 2` is `4`; it rounds once, after adding every
+  node's sum and count, never per node. AQL states no rounding rule, so the
+  rounding is FerroFED's own. When a node's `SUM` is a real, `AVG` is the
+  decimal mean written as the nearest JSON number, as before.
+  `openehr-federation` is 0.0.33.
 - The compose quickstart runs four FerroEHR nodes, `ferroehr-a` to
   `ferroehr-d` on ports 8081 to 8084, each with its own `system_id` (#322).
   They share one FerroEHR PostgreSQL container, `ferroehr-postgres`, with a

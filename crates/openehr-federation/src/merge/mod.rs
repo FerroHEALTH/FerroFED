@@ -489,8 +489,13 @@ pub fn merge(mut nodes: Vec<NodeAnswer>, order: &ResultOrder) -> Merged {
 /// complete date-times only; and `AVG` the sum of the node sums over the sum of
 /// the node counts, or `NULL` when no node counted a value, nulls ignored
 /// throughout as AQL ignores them (AQL 1.1.0 §Aggregate functions). Integers
-/// add exactly, and reals add in decimal arithmetic. The mean is the decimal
-/// quotient to 28 significant digits, written as the nearest JSON number.
+/// add exactly, and reals add in decimal arithmetic. The input type of `AVG`
+/// determines its return type (AQL 1.1.0 §3.9.1.5), and reaches the gateway
+/// as the type of the node sums (§3.9.1.4): when every node sum is an integer,
+/// the mean is the integer nearest the exact quotient, a tie going to the even
+/// one, rounded once over the federation's sum and count and never per node;
+/// when a node sum is a real, it is the decimal quotient to 28 significant
+/// digits, written as the nearest JSON number.
 ///
 /// A node whose answer cannot take part in an exactly correct value is
 /// refused, and then no row is returned at all: a recombination over some of
