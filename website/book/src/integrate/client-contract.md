@@ -27,6 +27,8 @@ reads and writes routed to one node; [templates, definitions and
 demographics](templates-and-demographics.md); and [stored
 queries](stored-queries.md).
 
+See how it works: [a federated query, end to end](../how-it-works/federated-query.md).
+
 ## The base URL
 
 Every path in the client contract is relative to `{base}`, the base URL the

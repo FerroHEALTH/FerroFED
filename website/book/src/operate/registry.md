@@ -7,6 +7,8 @@ This page covers the registry document and its FHIR form, the federation id,
 node selection, the state the gateway learns (resolution bindings and the
 `ehr_id` index), reloading the document, and integrity incidents.
 
+See how it works: [follow-ups and writes](../how-it-works/follow-ups-and-writes.md), routed with what the registry holds.
+
 ## The registry document
 
 `registry.document` names a second TOML file: the federation's members as

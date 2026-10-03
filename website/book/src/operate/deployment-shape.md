@@ -8,6 +8,8 @@ The binary serves the federated query over a registry of member CDRs
 gateway needs around it, taken from the roles the specification names, and
 says which binding FerroFED ships for each role and which is planned.
 
+See how it works: [deployment](../how-it-works/deployment.md) and [trust and keys](../how-it-works/trust-and-keys.md).
+
 ## Supported platforms
 
 FerroFED runs on Unix only. The server drains on `SIGTERM` and `SIGINT` and

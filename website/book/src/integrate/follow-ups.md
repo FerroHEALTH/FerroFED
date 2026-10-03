@@ -8,6 +8,8 @@ carries the `creating_system_id` of the CDR that created it (§12.2). A new
 object is always created on one node the client names; creation across
 nodes is refused (§2.3, N23).
 
+See how it works: [follow-ups and writes](../how-it-works/follow-ups-and-writes.md).
+
 ## Reading one version
 
 A read whose path names one version, such as

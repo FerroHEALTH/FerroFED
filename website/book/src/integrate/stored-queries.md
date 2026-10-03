@@ -106,6 +106,8 @@ Templates go to the one node you name ([templates and
 definitions](templates-and-demographics.md#templates-and-definitions)). Without the registry, `GET` and
 `POST {base}/v1/query/{name}` answer `501`.
 
+See how it works: [definitions and stored queries](../how-it-works/definitions.md).
+
 ## Distributing a stored query
 
 A deployment that sets `federation.fan_out_stored_queries` beside the

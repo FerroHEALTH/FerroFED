@@ -18,6 +18,8 @@ FerroFED implements the openEHR Federation Working Group's
 specification, release candidate v0.9.0, and reaches every node over openEHR
 ITS-REST 1.1.0.
 
+See how it works: [the gateway in diagrams](how-it-works/overview.md).
+
 ## What it does today
 
 The [latest release](https://github.com/FerroHEALTH/FerroFED/releases/latest)
@@ -58,8 +60,9 @@ what is built and names the issue of what is planned.
 
 ## How this book is organised
 
-The four parts follow what you came to do.
+The five parts follow what you came to do.
 
+- **How it works:** the gateway in diagrams, one question per page.
 - **Evaluate:** whether FerroFED fits your problem. What the Federation Tier
   is, what FerroFED claims and what is planned, the conformance matrix and
   the obligations checklist, the version pins and the licence.
