@@ -168,10 +168,13 @@ impl SecretUrl {
 
 /// Returns `url` with its userinfo and its query replaced by [`REDACTED`].
 ///
-/// The authority runs from after `://` to the first `/`, `?` or `#`, and the
-/// userinfo is everything in it before its last `@`, since a host holds no
-/// `@` (RFC 3986 §3.2). The text is never decoded, so it is redacted as
-/// written.
+/// The userinfo is everything after `://` up to an `@`, since a host holds no
+/// `@` (RFC 3986 §3.2). When the text parses as a URL (the WHATWG URL
+/// Standard, as `url` and every client built on it read it), the authority
+/// ends at its first `/`, `?` or `#`, so an `@` after it is in the path
+/// or the query and shows as written. When it does not parse, the userinfo
+/// runs to its last `@`, so a password holding a `/`, a `?` or a `#` is still
+/// found. The text is never decoded, so it is redacted as written.
 fn redact(url: &str) -> String {
     if url.is_empty() {
         return String::new();
@@ -179,23 +182,32 @@ fn redact(url: &str) -> String {
     let Some((scheme, rest)) = url.split_once("://") else {
         return REDACTED.to_owned();
     };
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let (authority, tail) = rest.split_at_checked(end).unwrap_or((rest, ""));
-    let host = match authority.rfind('@') {
-        Some(at) => format!("{REDACTED}@{}", authority.get(at + 1..).unwrap_or_default()),
-        None => authority.to_owned(),
+    let at = if url::Url::parse(url).is_ok() {
+        let authority = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        rest.get(..authority).and_then(|text| text.rfind('@'))
+    } else {
+        rest.rfind('@')
     };
-    let tail = match tail.split_once('?') {
-        Some((path, query)) => {
+    let (userinfo, rest) = match at {
+        Some(at) => (
+            format!("{REDACTED}@"),
+            rest.get(at + 1..).unwrap_or_default(),
+        ),
+        None => (String::new(), rest),
+    };
+    let end = rest.find(['?', '#']).unwrap_or(rest.len());
+    let (hierarchy, tail) = rest.split_at_checked(end).unwrap_or((rest, ""));
+    let tail = match tail.strip_prefix('?') {
+        Some(query) => {
             let fragment = query
                 .find('#')
                 .and_then(|at| query.get(at..))
                 .unwrap_or_default();
-            format!("{path}?{REDACTED}{fragment}")
+            format!("?{REDACTED}{fragment}")
         }
         None => tail.to_owned(),
     };
-    format!("{scheme}://{host}{tail}")
+    format!("{scheme}://{userinfo}{hierarchy}{tail}")
 }
 
 impl From<SecretString> for SecretUrl {
@@ -328,6 +340,55 @@ mod tests {
         ] {
             assert_eq!(redacted, SecretUrl::new(raw).redacted(), "{raw}");
         }
+    }
+
+    #[test]
+    fn a_password_holding_a_delimiter_is_redacted() {
+        for (raw, redacted) in [
+            ("https://u:p/x@host", "https://***@host"),
+            (
+                "postgres://ferrofed:Qz7/sentinel@db.example.org:5432/ferrofed",
+                "postgres://***@db.example.org:5432/ferrofed",
+            ),
+            (
+                "postgres://ferrofed:Qz7?sentinel@db.example.org/ferrofed?sslmode=require",
+                "postgres://***@db.example.org/ferrofed?***",
+            ),
+            (
+                "https://u:Qz7#sentinel@cdr-a.example.org/openehr",
+                "https://***@cdr-a.example.org/openehr",
+            ),
+        ] {
+            assert_eq!(redacted, SecretUrl::new(raw).redacted(), "{raw}");
+        }
+    }
+
+    #[test]
+    fn an_at_sign_after_the_authority_is_not_userinfo() {
+        for (raw, redacted) in [
+            (
+                "https://cdr-a.example.org/path/@handle",
+                "https://cdr-a.example.org/path/@handle",
+            ),
+            (
+                "https://cdr-a.example.org/openehr?owner=someone@example.org",
+                "https://cdr-a.example.org/openehr?***",
+            ),
+            (
+                "https://cdr-a.example.org/openehr#section@b",
+                "https://cdr-a.example.org/openehr#section@b",
+            ),
+        ] {
+            assert_eq!(redacted, SecretUrl::new(raw).redacted(), "{raw}");
+        }
+    }
+
+    #[test]
+    fn text_that_does_not_parse_is_redacted_to_its_last_at_sign() {
+        assert_eq!(
+            "https://***@handle",
+            SecretUrl::new("https://cdr a.example.org/path/@handle").redacted()
+        );
     }
 
     #[test]
