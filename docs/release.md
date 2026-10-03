@@ -214,6 +214,13 @@ without a version bump, because a published version is immutable
    verify` commands of § The build legs against one tarball and the image.
 2. **Post the board status update** with what shipped and what the next
    milestone targets (`.claude/rules/project-board.md`).
+3. **Close the milestone.** `gh api -X PATCH
+   repos/FerroHEALTH/FerroFED/milestones/<number> -f state=closed`, once the
+   release is published. A milestone left open after its cut still reads as
+   pending work on the roadmap board.
+4. **Bring the standing instructions up to date.** `CLAUDE.md`'s status names
+   the released version and the milestone now being built, in a pull request
+   of its own, never inside the version bump.
 
 ## What is immutable, and what is ours
 
