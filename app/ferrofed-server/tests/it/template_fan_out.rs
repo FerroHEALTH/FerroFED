@@ -569,7 +569,7 @@ async fn a_star_beside_an_organisation_naming_fewer_members_is_a_conflict() -> T
 
 /// Validation of the answer's `meta.federation` against the vendored
 /// result-set schema's `federationMeta` definition.
-mod schema {
+pub(crate) mod schema {
     #![expect(
         clippy::disallowed_types,
         reason = "the test seam: schema validation reads JSON as values, in tests only"
@@ -587,7 +587,7 @@ mod schema {
 
     /// Validates `meta.federation` of the JSON `text` against
     /// `$defs/federationMeta`, formats included.
-    pub(super) fn validate_federation(text: &str) -> Result<(), Box<dyn Error>> {
+    pub(crate) fn validate_federation(text: &str) -> Result<(), Box<dyn Error>> {
         let schema: Value = serde_json::from_str(&std::fs::read_to_string(RESULT_SET_SCHEMA)?)?;
         let rooted = json!({
             "$schema": schema.get("$schema").ok_or("the schema names its dialect")?,

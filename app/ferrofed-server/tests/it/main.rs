@@ -53,6 +53,7 @@ mod routing_log;
 mod run;
 mod shutdown;
 mod stored;
+mod stored_fan_out;
 mod support;
 mod targeting;
 mod telemetry;

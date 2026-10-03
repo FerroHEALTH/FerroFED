@@ -19,7 +19,7 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 300 | 298 | a test asserts it |
+| tested | 307 | 305 | a test asserts it |
 | built-untested | 1 | 1 | the code does it and no test asserts it yet |
 | planned | 35 | 32 | not built yet; an open issue holds the work |
 | missing | 0 | 0 | not built, found missing by the audit; an issue holds the work |
@@ -28,7 +28,7 @@ report behind its status.
 | contradiction | 10 | 9 | the text contradicts itself, reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) before the audit |
 | node | 15 | 0 | a member node must meet it |
 | operator | 24 | 0 | the federation operator must meet it |
-| n/a | 49 | 24 | no gateway obligation: a client or an editor must meet it, or it is a permission the gateway does not take |
+| n/a | 42 | 17 | no gateway obligation: a client or an editor must meet it, or it is a permission the gateway does not take |
 
 ## Gaps
 

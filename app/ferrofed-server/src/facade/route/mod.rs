@@ -73,7 +73,7 @@ use crate::federation::Federation;
 
 mod chosen;
 pub(crate) mod ehr;
-mod fan_out;
+pub(crate) mod fan_out;
 
 /// The API group of the EHR area (§7a.1).
 pub(crate) const EHR_GROUP: &str = "ehr";

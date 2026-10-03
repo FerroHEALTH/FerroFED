@@ -23,13 +23,17 @@
 //! registry member, the status of each and the node's HTTP status where it
 //! failed, and never a node's body (§9.5, §11.1, §12.6 item 2). The
 //! provenance headers name the members that accepted (§7a.3, N31).
+//!
+//! The per-member machinery, [`each`], [`settled`], [`record_meta`] and
+//! [`answer_status`], serves the stored-query registry's distribution and
+//! drift check too, which §12.7 holds to these same terms (N44).
 
 use std::collections::BTreeSet;
 use std::time::Instant;
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use ferrofed_engine::dispatch::DispatchOptions;
+use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
 use ferrofed_engine::fanout::TIMEOUT_POLICY;
 use ferrofed_engine::forward::{ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::outbound_id::OutboundId;
@@ -41,6 +45,7 @@ use openehr_federation::headers;
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_federation::status;
+use openehr_its::rest::client::ReqwestTransport;
 use openehr_its::rest::routes::RouteMatch;
 use serde::Serialize;
 use tokio::task::JoinSet;
@@ -82,8 +87,10 @@ pub(super) async fn definition(
         Ok(request) => request,
         Err(failure) => return unheld(&failure, arrived.request_id, &logged),
     };
+    let several =
+        |selected: &BTreeSet<EndpointId>| every_member(arrived.headers) || selected.len() > 1;
     match members(federation.snapshot(), arrived.headers) {
-        Ok(Some(selected)) => {
+        Ok(Some(selected)) if several(&selected) => {
             fan_out(
                 federation,
                 &arrived,
@@ -92,7 +99,7 @@ pub(super) async fn definition(
             )
             .await
         }
-        Ok(None) => {
+        Ok(_) => {
             let held = (request, started);
             to_named(federation, arrived, held, DEFINITION_GROUP, chooser).await
         }
@@ -105,25 +112,24 @@ fn uploads_template(matched: &RouteMatch) -> bool {
     matched.group == DEFINITION_GROUP && UPLOADS.contains(&matched.operation_id)
 }
 
-/// The members a template upload fans out to, or `None` when its targeting
-/// names one endpoint or none, so it routes to one node (§12.6, §8.4).
+/// The members the targeting headers of a definition request name, or
+/// `None` when they name none (§12.6, §8.4).
 ///
 /// `*` alone in the endpoint header selects every active member; an
 /// organisation header beside it must select the same set (§8.4.1). Any
-/// other targeting fans out when it selects more than one endpoint.
+/// other targeting selects the endpoints it names.
 ///
 /// # Errors
 ///
 /// Returns the [`TargetError`] of targeting the registry cannot answer, and
 /// [`TargetError::Conflict`] when an organisation header beside `*` selects
 /// another set (§8.4.1, N35).
-fn members(
+pub(crate) fn members(
     snapshot: &RegistrySnapshot,
     headers: &HeaderMap,
 ) -> Result<Option<BTreeSet<EndpointId>>, TargetError> {
     if !every_member(headers) {
-        let selected = target::requested(snapshot, None, headers)?;
-        return Ok(selected.filter(|selected| selected.len() > 1));
+        return target::requested(snapshot, None, headers);
     }
     let every: BTreeSet<EndpointId> = snapshot
         .endpoints()
@@ -160,17 +166,122 @@ fn every_member(headers: &HeaderMap) -> bool {
     named == [EVERY_MEMBER]
 }
 
-/// What one member made of the upload.
+/// The endpoints of `snapshot` that `selected` names, in registry order, or
+/// `None` when it names none or a suspended one, which resolves to no
+/// destination (§11.2).
+pub(crate) fn targets<'s>(
+    snapshot: &'s RegistrySnapshot,
+    selected: &BTreeSet<EndpointId>,
+) -> Option<Vec<&'s Endpoint>> {
+    let targets: Vec<&Endpoint> = snapshot
+        .endpoints()
+        .filter(|endpoint| selected.contains(endpoint.id()))
+        .collect();
+    // NOTE: §11.1 never contacts a suspended endpoint, so a fan-out naming one
+    // resolves to no destination (§11.2), as a routed request does.
+    let suspended = targets
+        .iter()
+        .any(|endpoint| endpoint.status() == EndpointStatus::Suspended);
+    (!targets.is_empty() && !suspended).then_some(targets)
+}
+
+/// What became of the request sent to one member.
 #[derive(Debug)]
-enum Reply {
-    /// The node answered, a failure status included.
-    Answered(Forwarded),
-    /// The node gave no answer of its own.
-    Failed(ForwardError),
-    /// The gateway could not send the request.
-    NotSent,
-    /// The overall budget ran out before the node answered (§11.5).
+pub(crate) enum Asked<R> {
+    /// The call ended with `R`, an answer or a failure of its own.
+    Ended(R),
+    /// The gateway holds no client for the member, so nothing was sent.
+    Unsent,
+    /// The overall budget ran out before the call ended (§11.5).
     Abandoned,
+}
+
+/// Sends one request to each of `targets` at once through `call`, within
+/// `budget`, under the gateway's `outbound` id, and returns what became of
+/// each with the gateway's measurement of its request in milliseconds, in
+/// the order of `targets`.
+///
+/// Each member is asked independently: one that fails or is late changes
+/// nothing for the others, and nothing is undone (§12.6 item 3).
+pub(crate) async fn each<R, F, Fut>(
+    federation: &Federation,
+    targets: &[&Endpoint],
+    (budget, outbound): (&Deadlines, OutboundId),
+    logged: &str,
+    call: F,
+) -> Vec<(Asked<R>, u64)>
+where
+    F: Fn(NodeClient<ReqwestTransport>, DispatchOptions) -> Fut,
+    Fut: Future<Output = R> + Send + 'static,
+    R: Send + 'static,
+{
+    let options = DispatchOptions::new(budget.per_node()).with_request_id(outbound);
+    let mut tasks = JoinSet::new();
+    let mut sent: Vec<Option<(Asked<R>, u64)>> = targets.iter().map(|_| None).collect();
+    let fanned = Instant::now();
+    for (index, endpoint) in targets.iter().enumerate() {
+        let Some(client) = federation.clients().get(endpoint.id()).cloned() else {
+            tracing::error!(
+                endpoint = %endpoint.id(),
+                request_id = logged,
+                "a registry endpoint has no node client"
+            );
+            if let Some(slot) = sent.get_mut(index) {
+                *slot = Some((Asked::Unsent, 0));
+            }
+            continue;
+        };
+        let asked = call(client, options.clone());
+        tasks.spawn(async move {
+            let started = Instant::now();
+            let answer = asked.await;
+            (index, answer, elapsed_ms(started))
+        });
+    }
+    let until = tokio::time::Instant::from_std(budget.overall());
+    loop {
+        match tokio::time::timeout_at(until, tasks.join_next()).await {
+            Ok(Some(Ok((index, answer, latency_ms)))) => {
+                if let Some(slot) = sent.get_mut(index) {
+                    *slot = Some((Asked::Ended(answer), latency_ms));
+                }
+            }
+            Ok(Some(Err(joined))) => {
+                tracing::error!(
+                    error = %joined,
+                    request_id = logged,
+                    "a fan-out task did not finish"
+                );
+            }
+            Ok(None) => break,
+            Err(_elapsed) => {
+                tasks.abort_all();
+                break;
+            }
+        }
+    }
+    let abandoned_after = elapsed_ms(fanned);
+    sent.into_iter()
+        .map(|slot| slot.unwrap_or((Asked::Abandoned, abandoned_after)))
+        .collect()
+}
+
+/// The §11.1 outcome of a member's request that ended as `sent` after
+/// `latency_ms`: `done` reads an ended call, and a request never sent or
+/// abandoned is reported as such.
+pub(crate) fn settled<R>(
+    asked: Asked<R>,
+    latency_ms: u64,
+    done: impl FnOnce(R, u64) -> Outcome,
+) -> Outcome {
+    match asked {
+        Asked::Ended(ended) => done(ended, latency_ms),
+        Asked::Unsent => not_sent(latency_ms),
+        Asked::Abandoned => Outcome::TimeOut {
+            latency_ms,
+            error: ErrorDetail::Text("no answer before the overall budget ran out".to_owned()),
+        },
+    }
 }
 
 /// Sends the client's upload, held as `request`, to each member of
@@ -184,19 +295,9 @@ async fn fan_out(
 ) -> Response {
     let request_id = arrived.request_id;
     let snapshot = federation.snapshot();
-    let targets: Vec<&Endpoint> = snapshot
-        .endpoints()
-        .filter(|endpoint| selected.contains(endpoint.id()))
-        .collect();
-    // NOTE: §11.1 never contacts a suspended endpoint, so a fan-out naming one
-    // resolves to no destination (§11.2), as a routed request does.
-    if targets.is_empty()
-        || targets
-            .iter()
-            .any(|endpoint| endpoint.status() == EndpointStatus::Suspended)
-    {
+    let Some(targets) = targets(snapshot, selected) else {
         return error::fixed(Code::NoDestination, request_id);
-    }
+    };
     let Some(budget) = Deadlines::from(federation, started) else {
         tracing::error!(
             request_id = logged,
@@ -204,11 +305,23 @@ async fn fan_out(
         );
         return error::fixed(Code::Internal, request_id);
     };
-    let sent = (request, arrived.outbound);
-    let replies = send_all(federation, sent, &targets, &budget, logged).await;
+    let sent = each(
+        federation,
+        &targets,
+        (&budget, arrived.outbound),
+        logged,
+        |client, options| {
+            let request = request.clone();
+            async move { client.forward_held(request, &options).await }
+        },
+    )
+    .await;
     let mut outcomes = Vec::with_capacity(targets.len());
-    for (endpoint, (reply, latency_ms)) in targets.iter().zip(replies) {
-        outcomes.push((endpoint.id(), outcome(endpoint, reply, latency_ms, logged)));
+    for (endpoint, (sent, latency_ms)) in targets.iter().zip(sent) {
+        let outcome = settled(sent, latency_ms, |answer, latency_ms| {
+            outcome(endpoint, answer, latency_ms, logged)
+        });
+        outcomes.push((endpoint.id(), outcome));
     }
     tracing::info!(
         members = outcomes.len(),
@@ -232,91 +345,27 @@ async fn fan_out(
     }
 }
 
-/// Sends the held `request` to each of `targets` at once under the gateway's
-/// `outbound` id, and returns what each made of it with the gateway's
-/// measurement of its request in milliseconds, in the order of `targets`.
-async fn send_all(
-    federation: &Federation,
-    (request, outbound): (&HeldRequest, OutboundId),
-    targets: &[&Endpoint],
-    budget: &Deadlines,
-    logged: &str,
-) -> Vec<(Reply, u64)> {
-    let options = DispatchOptions::new(budget.per_node()).with_request_id(outbound);
-    let mut tasks = JoinSet::new();
-    let mut replies: Vec<Option<(Reply, u64)>> = targets.iter().map(|_| None).collect();
-    let fanned = Instant::now();
-    for (index, endpoint) in targets.iter().enumerate() {
-        let Some(client) = federation.clients().get(endpoint.id()).cloned() else {
-            tracing::error!(
-                endpoint = %endpoint.id(),
-                request_id = logged,
-                "a registry endpoint has no node client"
-            );
-            if let Some(slot) = replies.get_mut(index) {
-                *slot = Some((Reply::NotSent, 0));
-            }
-            continue;
-        };
-        let request = request.clone();
-        let options = options.clone();
-        tasks.spawn(async move {
-            let asked = Instant::now();
-            let answer = client.forward_held(request, &options).await;
-            (index, answer, elapsed_ms(asked))
-        });
-    }
-    let until = tokio::time::Instant::from_std(budget.overall());
-    loop {
-        match tokio::time::timeout_at(until, tasks.join_next()).await {
-            Ok(Some(Ok((index, answer, latency_ms)))) => {
-                if let Some(slot) = replies.get_mut(index) {
-                    let made = match answer {
-                        Ok(forwarded) => Reply::Answered(forwarded),
-                        Err(failure) => Reply::Failed(failure),
-                    };
-                    *slot = Some((made, latency_ms));
-                }
-            }
-            Ok(Some(Err(joined))) => {
-                tracing::error!(
-                    error = %joined,
-                    request_id = logged,
-                    "a fan-out upload task did not finish"
-                );
-            }
-            Ok(None) => break,
-            Err(_elapsed) => {
-                tasks.abort_all();
-                break;
-            }
-        }
-    }
-    let abandoned_after = elapsed_ms(fanned);
-    replies
-        .into_iter()
-        .map(|slot| slot.unwrap_or((Reply::Abandoned, abandoned_after)))
-        .collect()
-}
-
 /// The milliseconds since `started`, saturating at `u64::MAX`.
 fn elapsed_ms(started: Instant) -> u64 {
     whole_ms(started.elapsed())
 }
 
-/// The §11.1 outcome of what `endpoint` made of the upload, measured as
+/// The §11.1 outcome of what `endpoint` answered the upload, measured as
 /// `latency_ms`, carrying the node's HTTP status and never its body (§9.5).
-fn outcome(endpoint: &Endpoint, reply: Reply, latency_ms: u64, logged: &str) -> Outcome {
+fn outcome(
+    endpoint: &Endpoint,
+    answer: Result<Forwarded, ForwardError>,
+    latency_ms: u64,
+    logged: &str,
+) -> Outcome {
     let error = |message: String| ErrorDetail::Text(message);
-    match reply {
-        Reply::Answered(forwarded) if forwarded.status().is_success() => {
-            Outcome::Active { latency_ms }
-        }
-        Reply::Answered(forwarded) => Outcome::NodeError {
+    match answer {
+        Ok(forwarded) if forwarded.status().is_success() => Outcome::Active { latency_ms },
+        Ok(forwarded) => Outcome::NodeError {
             latency_ms,
             error: error(format!("the node answered {}", forwarded.status())),
         },
-        Reply::Failed(ForwardError::Refused {
+        Err(ForwardError::Refused {
             status: refused, ..
         }) => Outcome::NodeError {
             latency_ms,
@@ -324,19 +373,15 @@ fn outcome(endpoint: &Endpoint, reply: Reply, latency_ms: u64, logged: &str) -> 
                 "the node refused the gateway's onward credentials with {refused}"
             )),
         },
-        Reply::Failed(ForwardError::TimeOut { .. }) => Outcome::TimeOut {
+        Err(ForwardError::TimeOut { .. }) => Outcome::TimeOut {
             latency_ms,
             error: error("no answer before the deadline".to_owned()),
         },
-        Reply::Abandoned => Outcome::TimeOut {
-            latency_ms,
-            error: error("no answer before the overall budget ran out".to_owned()),
-        },
-        Reply::Failed(ForwardError::Unreachable { .. }) => Outcome::Offline {
+        Err(ForwardError::Unreachable { .. }) => Outcome::Offline {
             latency_ms,
             error: error("the node could not be reached".to_owned()),
         },
-        Reply::Failed(failure) => {
+        Err(failure) => {
             if let ForwardError::Withheld {
                 endpoint: withheld,
                 part,
@@ -352,14 +397,13 @@ fn outcome(endpoint: &Endpoint, reply: Reply, latency_ms: u64, logged: &str) -> 
             );
             not_sent(latency_ms)
         }
-        Reply::NotSent => not_sent(latency_ms),
     }
 }
 
-/// The outcome of a member the gateway could not send the upload to.
+/// The outcome of a member the gateway could not send its request to.
 // NOTE: §11.1 has no status for a request the gateway itself could not send;
 // the node was not reached, so it is `offline` (our own design).
-fn not_sent(latency_ms: u64) -> Outcome {
+pub(crate) fn not_sent(latency_ms: u64) -> Outcome {
     Outcome::Offline {
         latency_ms,
         error: ErrorDetail::Text("the gateway could not send the request to the node".to_owned()),
@@ -375,17 +419,13 @@ struct Uploaded {
 
 /// The `meta` of [`Uploaded`].
 #[derive(Debug, Serialize)]
-struct UploadedMeta {
-    federation: FederationMeta,
+pub(crate) struct UploadedMeta {
+    /// The per-member record.
+    pub(crate) federation: FederationMeta,
 }
 
 /// The answer to a fan-out upload whose members ended as `outcomes`, in
-/// registry order.
-///
-/// Every registry member appears: one the request did not name, or a
-/// suspended one `*` left out, as `excluded` (§8.1, §11.1). The status is
-/// `200` when every member accepted, `207` when some did and others failed,
-/// and otherwise `504` or `424` as §11.2 maps the failures.
+/// registry order, with the status of [`answer_status`].
 ///
 /// # Errors
 ///
@@ -394,24 +434,7 @@ fn answer(
     federation: &Federation,
     outcomes: &[(&EndpointId, Outcome)],
 ) -> Result<Response, WireError> {
-    let snapshot = federation.snapshot();
-    let mut records = Vec::new();
-    for endpoint in snapshot.endpoints() {
-        let outcome = outcomes
-            .iter()
-            .find(|(id, _)| *id == endpoint.id())
-            .map_or(Outcome::Excluded { error: None }, |(_, outcome)| {
-                outcome.clone()
-            });
-        records.push(record(snapshot, endpoint, outcome)?);
-    }
-    let budget = federation.budget();
-    let meta = FederationMeta::new(records)?.with_timeout(TimeoutBudget {
-        per_node_ms: Some(whole_ms(budget.per_node())),
-        overall_ms: Some(whole_ms(budget.overall())),
-        policy: Some(TIMEOUT_POLICY.to_owned()),
-        ..TimeoutBudget::default()
-    });
+    let meta = record_meta(federation, outcomes)?;
     let provenance = Provenance::active(&meta);
     let code = answer_status(
         &outcomes
@@ -429,6 +452,39 @@ fn answer(
     Ok(provenance.stamp(response))
 }
 
+/// The `meta.federation` record of a fan-out whose members ended as
+/// `outcomes`, in registry order, with the request's budget.
+///
+/// Every registry member appears: one the request did not name, or a
+/// suspended one `*` left out, as `excluded` (§8.1, §11.1).
+///
+/// # Errors
+///
+/// Returns the [`WireError`] of an endpoint id the wire type refuses.
+pub(crate) fn record_meta(
+    federation: &Federation,
+    outcomes: &[(&EndpointId, Outcome)],
+) -> Result<FederationMeta, WireError> {
+    let snapshot = federation.snapshot();
+    let mut records = Vec::new();
+    for endpoint in snapshot.endpoints() {
+        let outcome = outcomes
+            .iter()
+            .find(|(id, _)| *id == endpoint.id())
+            .map_or(Outcome::Excluded { error: None }, |(_, outcome)| {
+                outcome.clone()
+            });
+        records.push(record(snapshot, endpoint, outcome)?);
+    }
+    let budget = federation.budget();
+    Ok(FederationMeta::new(records)?.with_timeout(TimeoutBudget {
+        per_node_ms: Some(whole_ms(budget.per_node())),
+        overall_ms: Some(whole_ms(budget.overall())),
+        policy: Some(TIMEOUT_POLICY.to_owned()),
+        ..TimeoutBudget::default()
+    }))
+}
+
 /// The milliseconds of `duration`, saturating at `u64::MAX`.
 fn whole_ms(duration: std::time::Duration) -> u64 {
     // NOTE: §9.5 reports latency in whole milliseconds; a duration past
@@ -436,11 +492,12 @@ fn whole_ms(duration: std::time::Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
-/// The status of a fan-out upload whose in-scope members ended as
-/// `outcomes`.
+/// The status of a fan-out whose in-scope members ended as `outcomes`:
+/// `200` when every member accepted, `207` when some did and others failed,
+/// and otherwise `504` or `424` as §11.2 maps the failures.
 // NOTE: §12.6 item 3 allows `207`-style reporting for a partial success; `207`
 // tells it from `200` on the status line, and an all-failed upload maps as §11.2 does.
-fn answer_status(outcomes: &[&Outcome]) -> StatusCode {
+pub(crate) fn answer_status(outcomes: &[&Outcome]) -> StatusCode {
     let accepted = outcomes
         .iter()
         .filter(|outcome| outcome.status() == status::EndpointStatus::Active)

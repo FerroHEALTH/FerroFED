@@ -57,6 +57,7 @@ pub struct Federation {
     demographic: Option<EndpointId>,
     dependencies: Dependencies,
     template_fan_out: bool,
+    stored_query_fan_out: bool,
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -339,6 +340,7 @@ impl Federation {
             demographic: settings.federation.demographic_endpoint.clone(),
             dependencies,
             template_fan_out: settings.federation.fan_out_template_upload,
+            stored_query_fan_out: settings.federation.fan_out_stored_queries,
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -378,6 +380,7 @@ impl Federation {
             demographic: None,
             dependencies,
             template_fan_out: crate::config::Federation::default().fan_out_template_upload,
+            stored_query_fan_out: crate::config::Federation::default().fan_out_stored_queries,
         }
     }
 
@@ -513,6 +516,15 @@ impl Federation {
         self.template_fan_out
     }
 
+    /// Whether the stored-query registry distributes a definition to the
+    /// members a `PUT` names, and reports per member whether its copy
+    /// matches (§12.7, N44), as `definition.stored_query_fan_out` declares it
+    /// in `OPTIONS {base}/` where the registry is offered (§7a.2).
+    #[must_use]
+    pub fn fans_out_stored_queries(&self) -> bool {
+        self.stored_query_fan_out
+    }
+
     /// How `OFFSET k > 0` is answered across the fan-out, with its bound
     /// (§11.6.2, N39), as `paging` declares it in `OPTIONS {base}/` (§7a.2).
     #[must_use]
@@ -547,6 +559,7 @@ impl std::fmt::Debug for Federation {
             .field("best_effort", &self.best_effort)
             .field("demographic", &self.demographic)
             .field("template_fan_out", &self.template_fan_out)
+            .field("stored_query_fan_out", &self.stored_query_fan_out)
             .field("offset_strategy", &self.context.offset_strategy())
             .field(
                 "decomposable_aggregates",
