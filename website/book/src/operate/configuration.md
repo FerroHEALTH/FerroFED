@@ -22,7 +22,8 @@ ferrofed config check --config /etc/ferrofed/ferrofed.toml
 names, and without that every default stands. `config check` reads and
 resolves the configuration exactly as `serve` would, secrets included, prints
 one line and exits, so a deployment pipeline can test a file without binding a
-socket.
+socket. `ferrofed admission check --endpoint <id>` checks one member against
+the admission conditions ([Admitting a node](admission.md)).
 
 A configuration the gateway refuses exits with code 78 (`EX_CONFIG`) and one
 line naming the key at fault. It refuses an unknown key, a value of the wrong

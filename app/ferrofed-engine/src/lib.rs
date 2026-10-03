@@ -9,7 +9,8 @@
 //! node's answer to its §11.1 endpoint status (#34). [`fanout`] sends one
 //! request per in-scope node under one deadline, builds `meta.federation` from
 //! every outcome and applies the all-or-nothing decision (#37; §11.4, §11.5,
-//! N37, N38). [`forward`] passes one client request to one node once,
+//! N37, N38). [`ehr`] creates and reads an EHR on one node for the admission
+//! check (§12b.1, #79). [`forward`] passes one client request to one node once,
 //! byte-identical (§7a.3, N22, N31). [`probe`] asks every member at once
 //! whether it holds a path `ehr_id`, the read-only last step of §12.5.1.
 //! A fan-out answer names the versions each endpoint's rows show it holding,
@@ -24,6 +25,7 @@
 
 pub mod declared;
 pub mod dispatch;
+pub mod ehr;
 pub mod fanout;
 pub mod forward;
 pub mod hygiene;

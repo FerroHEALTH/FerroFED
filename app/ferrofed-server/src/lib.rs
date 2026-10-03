@@ -18,8 +18,12 @@
 //! A DEMOGRAPHIC request goes to the one endpoint the deployment configured
 //! for it, and answers `501` where none is (§7a.1, N32); every other path
 //! under `/v1/` answers `501` until its issue lands.
+//!
+//! [`admission`] is the `admission check` job: one member exercised against
+//! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
 #![doc(test(attr(deny(warnings))))]
 
+pub mod admission;
 pub mod body;
 pub mod cli;
 pub mod config;
@@ -55,7 +59,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::timeout::TimeoutLayer;
 
-use crate::cli::{Cli, Command, ConfigCommand};
+use crate::cli::{AdmissionCommand, Cli, Command, ConfigCommand};
 use crate::config::Config;
 use crate::config::settings::{ServerSettings, Settings};
 use crate::federation::Federation;
@@ -111,6 +115,9 @@ where
                 ExitCode::from(EXIT_CONFIG)
             }
         },
+        Command::Admission {
+            command: AdmissionCommand::Check { endpoint, count },
+        } => admission_command(&settings, &endpoint, count),
         Command::Serve => {
             let stdout_is_terminal = std::io::stdout().is_terminal();
             if let Err(error) = telemetry::init(
@@ -148,6 +155,71 @@ where
 fn config_checked() -> ExitCode {
     println!("ferrofed: the configuration is valid");
     ExitCode::SUCCESS
+}
+
+/// Runs the admission check against `endpoint` with `count` test EHRs and
+/// writes the report to standard output.
+///
+/// The exit code is `0` when no condition failed, `1` when one did,
+/// [`EXIT_USAGE`] for an endpoint the registry does not hold, and
+/// [`EXIT_CONFIG`] for a configuration that federates nothing or does not
+/// load.
+#[expect(
+    clippy::print_stdout,
+    reason = "`admission check` answers the operator who ran it"
+)]
+#[expect(
+    clippy::print_stderr,
+    reason = "a refusal is reported to the operator, with no log subscriber installed"
+)]
+fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode {
+    let federation = match Federation::load(settings) {
+        Ok(Some(federation)) => federation,
+        Ok(None) => {
+            eprintln!(
+                "ferrofed: cannot check admission: set registry.document, whose members the check exercises"
+            );
+            return ExitCode::from(EXIT_CONFIG);
+        }
+        Err(error) => {
+            eprintln!("ferrofed: cannot start: {}", chain(&error));
+            return ExitCode::from(EXIT_CONFIG);
+        }
+    };
+    let endpoint = match ferrofed_registry::id::EndpointId::new(endpoint) {
+        Ok(endpoint) => endpoint,
+        Err(error) => {
+            eprintln!("ferrofed: cannot check admission: {}", chain(&error));
+            return ExitCode::from(EXIT_USAGE);
+        }
+    };
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("ferrofed: cannot check admission: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(admission::check(&federation, &endpoint, count)) {
+        Ok(report) => {
+            println!("{report}");
+            if report.failed() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        Err(error) => {
+            eprintln!("ferrofed: cannot check admission: {}", chain(&error));
+            match error {
+                admission::AdmissionError::UnknownEndpoint(_) => ExitCode::from(EXIT_USAGE),
+                _ => ExitCode::FAILURE,
+            }
+        }
+    }
 }
 
 /// Builds the runtime and serves `state` until the process is asked to stop.
@@ -203,7 +275,7 @@ fn clap_exit(error: &clap::Error) -> u8 {
 }
 
 /// Returns `error` and every cause behind it as one line.
-fn chain(error: &dyn std::error::Error) -> String {
+pub(crate) fn chain(error: &dyn std::error::Error) -> String {
     let mut line = error.to_string();
     let mut cause = error.source();
     while let Some(source) = cause {

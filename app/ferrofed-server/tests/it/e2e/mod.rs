@@ -23,6 +23,10 @@
 //!
 //! Track 10, the adversarial identifier-leakage suite, runs against the same
 //! two nodes in [`track10`].
+//!
+//! The admission check creates its test EHRs on node A and reads each back,
+//! with only synthetic subjects on the wire (§12b.1, §12b.2, N42a), in
+//! [`admission`].
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -46,6 +50,7 @@ use uuid::Uuid;
 
 use crate::support::settings;
 
+mod admission;
 mod attributes;
 mod commit;
 mod crossref;
@@ -112,6 +117,24 @@ fn gateway_resolving(
     b: &ProxiedNode,
     resolver: &str,
 ) -> Result<axum::Router, Box<dyn Error>> {
+    let federation = federation_resolving(dir, a, b, resolver)?;
+    let mut server = settings();
+    server.request_timeout = Duration::from_secs(30);
+    server.body_limit = 64 * 1024;
+    Ok(ferrofed_server::router(
+        Arc::new(AppState::with_federation(federation)),
+        &server,
+    ))
+}
+
+/// The federation over node A and node B, with the resolver `resolver`
+/// configures.
+pub(crate) fn federation_resolving(
+    dir: &std::path::Path,
+    a: &ProxiedNode,
+    b: &ProxiedNode,
+    resolver: &str,
+) -> Result<Federation, Box<dyn Error>> {
     let registry = format!(
         r#"
 [[organisation]]
@@ -156,14 +179,7 @@ managing_organisation = "org-b"
         "{resolver}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
     let settings_ = Config::from_sources(Some(&config), &BTreeMap::new())?.resolve()?;
-    let federation = Federation::load(&settings_)?.ok_or("a registry is configured")?;
-    let mut server = settings();
-    server.request_timeout = Duration::from_secs(30);
-    server.body_limit = 64 * 1024;
-    Ok(ferrofed_server::router(
-        Arc::new(AppState::with_federation(federation)),
-        &server,
-    ))
+    Ok(Federation::load(&settings_)?.ok_or("a registry is configured")?)
 }
 
 /// Whether the raw body of `capture` holds `needle`'s bytes.

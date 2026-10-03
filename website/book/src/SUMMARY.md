@@ -19,6 +19,7 @@
 - [What FerroFED runs beside](operate/deployment-shape.md)
 - [Configuration](operate/configuration.md)
 - [The container image and the quickstart](operate/container.md)
+- [Admitting a node](operate/admission.md)
 
 # Integrate
 
