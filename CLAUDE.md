@@ -18,20 +18,24 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.7
+## Status: building v0.0.8
 
-v0.0.6 is released and carries the v0.0.4 to v0.0.6 milestones: the merged
-answer across nodes (§9 to §11), the ITS-REST surface with follow-up routing
-(§7a, §12, §12a), and targeting with the self-description (§8, §7a.2). v0.0.7
-(definitions and membership, §12.6, §12.7, §12b) is built on `main` and is cut
-next: definition requests routed to one chosen node, the template fan-out,
-the stored-query registry with its storage backends and drift repair, the
-admission check, the metrics surface, and every credential held in a type
-that never renders it. v0.0.8 is security and the bindings (client
-authentication #80, onward OAuth 2.0 #81, consent, XCPD localization, mCSD
-addressing, Annex B), and v0.0.9 the conformance program. The gateway
-authenticates no client until #80 lands. Each crate gets the rest of its
-behaviour from its own issue, in milestone order.
+v0.0.7 is released (2026-10-03). It carries definitions and membership
+(§12.6, §12.7, §12b): definition requests routed to one chosen node, the
+template fan-out, the stored-query registry with its storage backends and
+drift repair, the admission check, the metrics surface, every credential held
+in a type that never renders it, and a gateway-only compose file with example
+configuration attached to every release. v0.0.6 carried the v0.0.4 to v0.0.6
+milestones: the merged answer across nodes (§9 to §11), the ITS-REST surface
+with follow-up routing (§7a, §12, §12a), and targeting with the
+self-description (§8, §7a.2). v0.0.8 is security and the bindings (§13 to
+§15, Annex A, Annex B): client authentication (#80), onward OAuth 2.0 with a
+signed assertion and a published JWKS (#81), the caller's identity conveyed
+to each node (#82), consent left to the node (#83), XCPD localization (#85),
+mCSD addressing (#86) and the Dutch Generic Functions (#87). v0.0.9 is the
+conformance program. The gateway authenticates no client until #80 lands.
+Each crate gets the rest of its behaviour from its own issue, in milestone
+order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
