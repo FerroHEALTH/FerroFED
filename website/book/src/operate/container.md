@@ -126,8 +126,10 @@ beside it before it unpacks a byte.
 
 Every release on the
 [releases page](https://github.com/FerroHEALTH/FerroFED/releases/latest)
-carries `ferrofed` for `x86_64` and `aarch64` Linux, on glibc and on musl. Each
-tarball holds the binary, `LICENSE`, `NOTICE` and the README, and comes with
+carries `ferrofed` for `x86_64` and `aarch64` Linux, on glibc and on musl.
+FerroFED runs on Unix only
+([Supported platforms](deployment-shape.md#supported-platforms)), and no
+release carries a Windows binary. Each tarball holds the binary, `LICENSE`, `NOTICE` and the README, and comes with
 its `.sha256sum`, a CycloneDX and an SPDX SBOM, and the Sigstore bundles of its
 provenance and SBOM attestations. Verify a tarball before you unpack it:
 

@@ -253,7 +253,6 @@ impl std::fmt::Debug for Reloader {
 /// The reload reads files, so it runs on the blocking pool. A failure to
 /// install the handler is logged, and the registry then changes only on a
 /// restart.
-#[cfg(unix)]
 pub async fn on_hangup(reloader: Arc<Reloader>) {
     use tokio::signal::unix::{SignalKind, signal};
 

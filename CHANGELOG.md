@@ -289,6 +289,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   only. `deploy/kubernetes/` holds an example ConfigMap, Deployment, Service
   and PodDisruptionBudget, validated in CI by a digest-pinned `kubeconform`
   in strict mode. No specification governs health probes: our own design.
+- The supported platforms are stated (#307): FerroFED runs on Unix only.
+  The server drains on `SIGTERM` and reloads on `SIGHUP` through Unix
+  signals, and every release binary and the container image are Linux. The
+  book says so under Operate, and building `ferrofed-server` for a non-Unix
+  target, such as Windows, stops at a `compile_error!` that names the reason.
+  No specification governs this: our own design.
 
 ### Changed
 

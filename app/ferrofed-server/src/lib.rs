@@ -28,7 +28,18 @@
 //! [`healthcheck`] is the `healthcheck` job a container runtime runs beside
 //! the server, and [`health`] answers liveness, readiness and the last
 //! observed state of every dependency.
+//!
+//! The server builds for Unix targets only: it drains on `SIGTERM` and
+//! reloads on `SIGHUP`, and every release binary and the container image are
+//! Linux.
 #![doc(test(attr(deny(warnings))))]
+
+// NOTE: no specification governs this: our own design; a non-Unix target is
+// refused here, with the reason, before the Unix signal code fails to resolve.
+#[cfg(not(unix))]
+compile_error!(
+    "ferrofed-server builds for Unix targets only: it drains on SIGTERM and reloads on SIGHUP through tokio::signal::unix, and every release binary and the container image are Linux"
+);
 
 pub mod admission;
 pub mod banner;
@@ -332,14 +343,11 @@ fn serve_command(
             .await
             .with_context(|| format!("binding {}", server.listen))?;
         tracing::info!(listen = %server.listen, "listening");
-        #[cfg(unix)]
         tokio::spawn(reload::on_hangup(Arc::new(reload::Reloader::new(
             config,
             settings,
             Arc::clone(&state),
         ))));
-        #[cfg(not(unix))]
-        drop((config, settings));
         let app = router(Arc::clone(&state), &server);
         state.lifecycle().booted();
         serve(listener, app, &server, state.lifecycle().clone())
