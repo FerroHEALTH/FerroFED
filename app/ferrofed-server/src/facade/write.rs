@@ -8,10 +8,11 @@
 //! [`Write::of`] names what an ITS-REST operation writes, from its
 //! `operationId`:
 //!
-//! - a **versioned write** amends an existing version, which it names in
+//! - a **versioned write** amends existing versions: the one it names in
 //!   `If-Match` (`composition_update`, `ehr_status_update`,
 //!   `directory_update`, `directory_delete`) or in its path
-//!   (`composition_delete`);
+//!   (`composition_delete`), or those a `CONTRIBUTION` names in its body
+//!   (`contribution_create`);
 //! - a **new EHR** (`ehr_create`, `ehr_create_with_id`) has no owner yet, so
 //!   only the targeting headers name its node (§12.4, §8.4);
 //! - every other operation, a read or a create inside an existing EHR
@@ -20,7 +21,7 @@
 //! A versioned write is EHR-scoped, so it goes to the node its path `ehr_id`
 //! routes to, by the explicit target, a held binding or the `ehr_id` index,
 //! and never by the ask-all probe (§12a.1 `route-ehr`, N41). [`controlled`]
-//! then holds that node to `route-write`: the registry must route the
+//! then holds that node to `route-write`: the registry must route each
 //! preceding version's `creating_system_id` to it, as the member's own
 //! `system_id` or a registered `[[creating_system]]` mapping (§12a.1, N21,
 //! N23). A learned route never shows control, because a holder of a version
@@ -30,6 +31,13 @@
 //! unchanged (N22, N42a), and the write is refused `409` naming the
 //! controlling node where the registry knows it (§10.3 `copy-write-reject`).
 //! No value of the request is quoted back.
+//!
+//! A `CONTRIBUTION` is read with `openehr-its`'s ITS-REST `NewContribution`
+//! for its versions' `preceding_version_uid`s only; the body forwarded is the
+//! one received, byte for byte (N22). Every version that names a preceding
+//! version must be controlled by the path node, and a version that names none
+//! is a creation inside the path EHR, so a `CONTRIBUTION` of creations alone
+//! routes by its path `ehr_id` as any other request does.
 
 use std::fmt;
 
@@ -38,10 +46,13 @@ use ferrofed_registry::id::{EndpointId, NodeId, SystemId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, header};
 use openehr_base::prelude::ObjectVersionId;
+use openehr_its::json;
+use openehr_its::rest::generated::ehr::NewContribution;
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::error::Code;
 use crate::facade::owner;
+use crate::facade::route::EHR_GROUP;
 
 /// The path parameter a `DELETE` of a composition names the version it
 /// amends in (ITS-REST 1.1.0 EHR API, `composition_delete`).
@@ -50,7 +61,7 @@ const PRECEDING_PARAM: &str = "uid_based_id";
 /// What an ITS-REST operation routed to one node writes (§12.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Write {
-    /// A write that amends an existing version, named where [`Preceding`]
+    /// A write that can amend existing versions, named where [`Preceding`]
     /// says.
     Versioned(Preceding),
     /// The creation of an EHR, which only the targeting headers route.
@@ -67,20 +78,29 @@ pub enum Preceding {
     IfMatch,
     /// In the path, as the `uid_based_id` segment.
     Path,
+    /// In the body of a `CONTRIBUTION`, as each version's
+    /// `preceding_version_uid`, which a version that creates an object omits.
+    Contribution,
 }
 
 impl Write {
     /// What the operation `matched` writes, by its ITS-REST `operationId`.
     ///
     /// ITS-REST 1.1.0 names the preceding version of a `PUT` and of a
-    /// directory `DELETE` in `If-Match`, and of a composition `DELETE` in
-    /// the path.
+    /// directory `DELETE` in `If-Match`, of a composition `DELETE` in the
+    /// path, and of each version a `CONTRIBUTION` to an EHR commits in its
+    /// body. An `operationId` is unique only within its API group, so every
+    /// classified operation is matched in the EHR group alone.
     #[must_use]
     pub fn of(matched: &RouteMatch) -> Self {
+        if matched.group != EHR_GROUP {
+            return Self::Routed;
+        }
         match matched.operation_id {
             "composition_update" | "ehr_status_update" | "directory_update"
             | "directory_delete" => Self::Versioned(Preceding::IfMatch),
             "composition_delete" => Self::Versioned(Preceding::Path),
+            "contribution_create" => Self::Versioned(Preceding::Contribution),
             "ehr_create" | "ehr_create_with_id" => Self::NewEhr,
             _ => Self::Routed,
         }
@@ -91,7 +111,7 @@ impl Write {
 /// `POST {base}/v1/ehr`, routed only by the targeting headers (§12.4).
 #[must_use]
 pub fn creates_ehr(matched: &RouteMatch) -> bool {
-    matched.operation_id == "ehr_create"
+    matched.group == EHR_GROUP && matched.operation_id == "ehr_create"
 }
 
 /// Why a versioned write routed to `at` is refused before anything is sent.
@@ -134,6 +154,13 @@ pub enum PrecedingInvalid {
         "the version the write amends is not one OBJECT_VERSION_ID, quoted in If-Match or written in the path of a DELETE, so its controlling CDR cannot be found (§12.4, N23)"
     )]
     Malformed,
+    /// The body is no canonical-JSON `CONTRIBUTION`, a version's
+    /// `preceding_version_uid` included, so the versions it amends are
+    /// unknown.
+    #[error(
+        "the body is not a CONTRIBUTION in canonical JSON whose every preceding_version_uid is one OBJECT_VERSION_ID, so the versions it amends, and their controlling CDR, are unknown (ITS-REST 1.1.0 contribution_create; §12.4, N23)"
+    )]
+    Contribution,
 }
 
 /// Why the node a versioned write routes to may not take it (§10.3, §12a.1,
@@ -143,7 +170,7 @@ pub enum NotControlling {
     /// The registry routes the preceding version's `creating_system_id` to
     /// another node.
     #[error(
-        "the version this write amends is controlled by node {controller}{}, and the request's ehr_id routes it to node {at}, which does not control it; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)",
+        "a version this write amends is controlled by node {controller}{}, and the request's ehr_id routes it to node {at}, which does not control it; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)",
         Through(.endpoint.as_ref())
     )]
     Elsewhere {
@@ -158,7 +185,7 @@ pub enum NotControlling {
     /// The registry routes the preceding version's `creating_system_id` to no
     /// node: it is no member's `system_id` and no registered mapping's.
     #[error(
-        "the version this write amends was created by a system that is no member's system_id and no registered creating_system mapping, so no member is known to control it, and the request's ehr_id routes it to node {at}, which does not; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)"
+        "a version this write amends was created by a system that is no member's system_id and no registered creating_system mapping, so no member is known to control it, and the request's ehr_id routes it to node {at}, which does not; a versioned write is never committed at another node than its controlling CDR (§10.3, §12a.1, N23)"
     )]
     Unregistered {
         /// The node the path `ehr_id` routes to.
@@ -167,26 +194,43 @@ pub enum NotControlling {
 }
 
 /// Holds a versioned write that its path `ehr_id` routes to `at` to the rule
-/// of §12a.1 `route-write`: `at` controls the version it amends (N23).
+/// of §12a.1 `route-write`: `at` controls every version it amends (N23).
+///
+/// `(matched, headers, body)` is the request as it arrived; the body is read
+/// only for a `CONTRIBUTION`, and never changed.
 ///
 /// # Errors
 ///
 /// [`Refused::Preceding`] when the write names no single preceding version,
-/// and [`Refused::NotControlling`] when the registry routes the preceding
-/// version's `creating_system_id` to another node, or to none.
+/// or is a `CONTRIBUTION` that does not parse, and [`Refused::NotControlling`]
+/// when the registry routes a preceding version's `creating_system_id` to
+/// another node, or to none.
 pub fn controlled(
     snapshot: &RegistrySnapshot,
     preceding: Preceding,
-    (matched, headers): (&RouteMatch, &HeaderMap),
+    (matched, headers, body): (&RouteMatch, &HeaderMap, &[u8]),
     at: &NodeId,
 ) -> Result<(), Refused> {
-    let version = match preceding {
-        Preceding::IfMatch => if_match(headers)?,
-        Preceding::Path => in_path(matched)?,
+    let versions = match preceding {
+        Preceding::IfMatch => vec![if_match(headers)?],
+        Preceding::Path => vec![in_path(matched)?],
+        Preceding::Contribution => amended(body)?,
     };
+    versions
+        .iter()
+        .try_for_each(|version| controlled_at(snapshot, version, at))
+}
+
+/// Whether the registry routes `version`'s `creating_system_id` to `at`
+/// (§12a.1 `route-write`).
+fn controlled_at(
+    snapshot: &RegistrySnapshot,
+    version: &ObjectVersionId,
+    at: &NodeId,
+) -> Result<(), Refused> {
     // NOTE: §12a.1, a creating_system_id that is no openEHR uid is no member's
     // system_id, so it names no controlling CDR, the unregistered answer.
-    let route = SystemId::creating_system_id_of(&version)
+    let route = SystemId::creating_system_id_of(version)
         .ok()
         .and_then(|creating_system_id| snapshot.registered_route(&creating_system_id));
     match route {
@@ -199,6 +243,24 @@ pub fn controlled(
         .into()),
         None => Err(NotControlling::Unregistered { at: at.clone() }.into()),
     }
+}
+
+/// The versions a `CONTRIBUTION` body amends, in body order: each version's
+/// `preceding_version_uid` (ITS-REST 1.1.0 EHR API, `contribution_create`,
+/// `NewContribution`).
+///
+/// A version with no `preceding_version_uid` creates an object, and amends
+/// none.
+fn amended(body: &[u8]) -> Result<Vec<ObjectVersionId>, PrecedingInvalid> {
+    let text = std::str::from_utf8(body).map_err(|_not_utf8| PrecedingInvalid::Contribution)?;
+    // TODO(#297): a CONTRIBUTION in XML or a Simplified Format is refused 400 until openehr-its reads it.
+    let contribution: NewContribution =
+        json::from_canonical_json(text).map_err(|_quoted| PrecedingInvalid::Contribution)?;
+    Ok(contribution
+        .versions
+        .into_iter()
+        .filter_map(|version| version.preceding_version_uid)
+        .collect())
 }
 
 /// The endpoint the controlling node of `route` is named by: the mapped
@@ -261,9 +323,9 @@ impl fmt::Display for Through<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Preceding, PrecedingInvalid, Write, if_match};
+    use super::{Preceding, PrecedingInvalid, Write, creates_ehr, if_match};
     use http::{HeaderMap, HeaderValue, Method, header};
-    use openehr_its::rest::routes::{Lookup, lookup};
+    use openehr_its::rest::routes::{Lookup, RouteMatch, lookup};
 
     const VERSION: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
@@ -293,6 +355,10 @@ mod tests {
             Some(Write::Versioned(Preceding::Path)),
             write(&Method::DELETE, "/ehr/7d44/composition/u::s::1")
         );
+        assert_eq!(
+            Some(Write::Versioned(Preceding::Contribution)),
+            write(&Method::POST, "/ehr/7d44/contribution")
+        );
     }
 
     #[test]
@@ -302,12 +368,43 @@ mod tests {
         for (method, path) in [
             (Method::POST, "/ehr/7d44/composition"),
             (Method::POST, "/ehr/7d44/directory"),
-            (Method::POST, "/ehr/7d44/contribution"),
+            (Method::POST, "/demographic/contribution"),
             (Method::GET, "/ehr/7d44/composition/u::s::1"),
             (Method::PUT, "/ehr/7d44/composition/u::s::1/tags"),
         ] {
             assert_eq!(Some(Write::Routed), write(&method, path), "{method} {path}");
         }
+    }
+
+    #[test]
+    fn a_classified_operation_id_in_another_group_is_routed() {
+        for operation_id in [
+            "composition_update",
+            "ehr_status_update",
+            "directory_update",
+            "directory_delete",
+            "composition_delete",
+            "contribution_create",
+            "ehr_create",
+            "ehr_create_with_id",
+        ] {
+            let elsewhere = RouteMatch {
+                group: "demographic",
+                operation_id,
+                template: "/demographic/x",
+                method: Method::POST,
+                path_params: Vec::new(),
+                params: &[],
+            };
+            assert_eq!(Write::Routed, Write::of(&elsewhere), "{operation_id}");
+            assert!(!creates_ehr(&elsewhere), "{operation_id}");
+        }
+        let Lookup::Matched(demographic) = lookup(&Method::POST, "/demographic/contribution")
+        else {
+            panic!("ITS-REST defines POST /demographic/contribution");
+        };
+        assert_eq!("contribution_create", demographic.operation_id);
+        assert_eq!(Write::Routed, Write::of(&demographic));
     }
 
     #[test]

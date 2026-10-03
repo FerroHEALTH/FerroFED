@@ -337,8 +337,21 @@ outcomes:
   delete's path is no `OBJECT_VERSION_ID`. That is a `400`
   (`preceding-version-invalid`), and nothing is sent.
 
-A `CONTRIBUTION` names the versions it amends only in its body, which the
-gateway never reads, so it is routed by its path `ehr_id` alone.
+A `CONTRIBUTION` names the versions it amends in its body, as each version's
+`preceding_version_uid` (ITS-REST 1.1.0 `contribution_create`). The gateway
+reads the body to find them, routes the request by its path `ehr_id` as above,
+and holds the node to every amended version by the same rule: one version
+another member controls, or no member is known to, makes the whole
+`CONTRIBUTION` a `409` (`controlling-system-unreachable`), and no node is sent
+it. A version with no `preceding_version_uid` creates an object, so a
+`CONTRIBUTION` of creations alone goes where its path `ehr_id` routes it. The
+node receives the body byte for byte as you sent it.
+
+The gateway reads a `CONTRIBUTION` in canonical JSON only. A body it cannot
+read as one, a `preceding_version_uid` that is no `OBJECT_VERSION_ID`, an
+XML body, or versions whose `data` is in a Simplified Format, is a `400`
+(`preceding-version-invalid`), because the gateway cannot tell which
+versions it amends (§12.4), and nothing is sent.
 
 ### Creating an EHR
 

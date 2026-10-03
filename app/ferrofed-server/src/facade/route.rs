@@ -30,9 +30,9 @@
 //! `ehr_id`, never by the version's `creating_system_id` (§12a.1, N41).
 //!
 //! A versioned write routes by its path `ehr_id` too, and is sent only when
-//! that node controls the version it amends ([`write`](mod@write); §12.4,
-//! §12a.1, N23): one that does not is refused `409`, and no node is sent the
-//! write (§10.3).
+//! that node controls every version it amends, a `CONTRIBUTION`'s included
+//! ([`write`](mod@write); §12.4, §12a.1, N23): one that does not is refused
+//! `409`, and no node is sent the write (§10.3).
 //! A new EHR has no owner, so only the targeting headers route it,
 //! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3).
 //!
@@ -68,7 +68,7 @@ use crate::facade::{follow_up, owner, security};
 use crate::federation::Federation;
 
 /// The API group of the EHR area (§7a.1).
-const EHR_GROUP: &str = "ehr";
+pub(crate) const EHR_GROUP: &str = "ehr";
 
 /// The API group of the definition area (§7a.1).
 const DEFINITION_GROUP: &str = "definition";
@@ -232,7 +232,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
         && let Err(refused) = write::controlled(
             snapshot,
             preceding,
-            (matched, arrived.headers),
+            (matched, arrived.headers, &arrived.body),
             endpoint.node(),
         )
     {

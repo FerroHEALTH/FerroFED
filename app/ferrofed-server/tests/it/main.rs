@@ -7,6 +7,7 @@ mod aggregate;
 mod ask_all;
 mod completeness;
 mod config;
+mod contribution_write;
 mod credentials;
 mod declared;
 mod dedup;
