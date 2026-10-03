@@ -168,17 +168,9 @@ gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
   --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
 ```
 
-To build it yourself from the binaries of a published release, name that
-release's version:
-
-```sh
-scripts/release/stage-dist.sh X.Y.Z
-docker buildx build -f docker/Dockerfile --platform linux/arm64 \
-  -t ghcr.io/ferrohealth/ferrofed:X.Y.Z --load .
-```
-
-The stage script checks every tarball against the `.sha256sum` published
-beside it before it unpacks a byte.
+The release lane is the only place the image is built: every compose file
+and manifest in the repository runs the published image, and none builds
+one.
 
 ## The release binaries
 
