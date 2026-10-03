@@ -77,6 +77,8 @@ pub(crate) struct LogLine {
     pub(crate) request_id: Option<String>,
     /// Whether the client named its request, on a request line.
     pub(crate) client_named: Option<bool>,
+    /// Where a thread panicked, on the panic hook's line.
+    pub(crate) location: Option<String>,
 }
 
 /// Returns every JSON line in `text`, in order.

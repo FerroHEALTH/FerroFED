@@ -740,6 +740,17 @@ federated query and identity resolution shipped in 0.0.3.
   slot. `ferrofed-registry` adds `EhrId::is_uuid`, and `ferrofed-engine`'s
   `probe::Probe` carries a `ProbedEhrId`, which only a bare UUID converts
   to, in place of the client's path segment.
+- A panic no longer prints its message to stderr (#260; §5.4.3, CP-26).
+  `ferrofed serve` used Rust's default panic hook, which printed the
+  message, and any value formatted into it, to stderr, part of a
+  deployment's log stream. The binary now installs its own hook before it
+  serves. The hook writes one fixed line through `tracing`, "a thread
+  panicked", with the source location and, inside a request, the gateway's
+  `request_id`, and never the message. It writes nothing to stderr. A
+  panicking handler still answers `500`, and its "the request handler
+  panicked" line is unchanged. Track 10's panic case now runs in a child
+  process and asserts that its stderr is empty. `ferrofed-server` adds
+  `panic::install_hook` and `request_id::serving`.
 - A request routed to one node no longer logs the client's `X-Request-Id`
   (#62; §5.4.1, §5.4.3, N33, CP-26). The security events of a refused query
   parameter or a withheld request, and the failure events of the routed path

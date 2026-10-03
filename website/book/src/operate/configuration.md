@@ -428,6 +428,10 @@ the gateway answers before its handler finishes has its line too, with the
 status it answered: `500` for a handler panic, `408` past the request
 timeout, `413` over the body ceiling. A handler panic is also logged under
 the gateway's id, without its message, which could quote a value the handler
-held. A federated query the gateway fails with a `500` also logs "the
+held. Every panic in `ferrofed serve`, inside a request or not, writes one
+more line, "a thread panicked", with the source location and, inside a
+request, the gateway's `request_id`. The panic message is never written:
+the gateway replaces Rust's default panic hook, which prints it to stderr,
+so a panic writes nothing to stderr. A federated query the gateway fails with a `500` also logs "the
 federated query failed" with its error code and the same `request_id` as its
 request line.
