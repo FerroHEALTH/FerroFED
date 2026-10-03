@@ -86,6 +86,7 @@ use http::{HeaderMap, Method, Uri};
 use openehr_its::rest::routes::{self, Lookup};
 
 use crate::auth::caller::Caller;
+use crate::conveyed;
 use crate::error::{self, Code};
 use crate::facade::request::{Arrived, Submitted};
 use crate::request_id;
@@ -115,10 +116,11 @@ pub async fn query_aql(
 ) -> Response {
     let started = Instant::now();
     let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
-    let session = session(caller);
+    let session = session(caller.clone());
     federated(
         &state,
-        (&headers, outbound, started, session.as_ref()),
+        (&headers, outbound, started),
+        (caller.as_deref(), session.as_ref()),
         Submitted::Body(&body),
     )
     .await
@@ -148,7 +150,7 @@ pub async fn query_aql_get(
 ) -> Response {
     let started = Instant::now();
     let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
-    let session = session(caller);
+    let session = session(caller.clone());
     let Lookup::Matched(matched) = routes::lookup(&Method::GET, ADHOC_QUERY) else {
         tracing::error!(
             request_id = %outbound,
@@ -161,8 +163,9 @@ pub async fn query_aql_get(
         matched: &matched,
         query: uri.query(),
     };
-    let arrived = (&headers, outbound, started, session.as_ref());
-    federated(&state, arrived, submitted).await
+    let arrived = (&headers, outbound, started);
+    let who = (caller.as_deref(), session.as_ref());
+    federated(&state, arrived, who, submitted).await
 }
 
 /// Runs `submitted` over the configured federation, or answers `501` when
@@ -172,12 +175,17 @@ pub async fn query_aql_get(
 /// is otherwise a `415` no node is asked for ([`request::unsupported_media`]).
 async fn federated(
     state: &AppState,
-    (headers, outbound, started, session): (&HeaderMap, OutboundId, Instant, Option<&SessionKey>),
+    (headers, outbound, started): (&HeaderMap, OutboundId, Instant),
+    (caller, session): (Option<&Caller>, Option<&SessionKey>),
     submitted: Submitted<'_>,
 ) -> Response {
     let request_id = request_id::of(headers).unwrap_or_default();
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, request_id);
+    };
+    let conveyance = match conveyed::of(&federation, caller) {
+        Ok(conveyance) => conveyance,
+        Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
     };
     if let Submitted::Body(body) = submitted {
         let logged = outbound.to_string();
@@ -197,6 +205,7 @@ async fn federated(
         headers,
         request_id,
         outbound,
+        conveyance: &conveyance,
         started,
         session,
     };

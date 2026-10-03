@@ -51,6 +51,7 @@ pub mod base_path;
 pub mod body;
 pub mod cli;
 pub mod config;
+pub mod conveyed;
 mod development;
 pub mod directory;
 pub mod error;
@@ -619,7 +620,7 @@ async fn unrouted(
 ) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();
     let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
-    let session = facade::session(caller);
+    let session = facade::session(caller.clone());
     let Some(path) = uri
         .path()
         .strip_prefix(ITS_REST_PREFIX.trim_end_matches('/'))
@@ -630,6 +631,14 @@ async fn unrouted(
     if method == Method::OPTIONS {
         return facade::options::allow(&state, path, request_id);
     }
+    let federation = state.federation();
+    let Some(serving) = federation.as_deref() else {
+        return error::fixed(error::Code::NotImplemented, request_id);
+    };
+    let conveyance = match conveyed::of(serving, caller.as_deref()) {
+        Ok(conveyance) => conveyance,
+        Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
+    };
     let mut arrived = facade::route::Arrived {
         method: &method,
         path,
@@ -639,8 +648,8 @@ async fn unrouted(
         request_id,
         outbound,
         session: session.as_ref(),
+        conveyance,
     };
-    let federation = state.federation();
     if let (Some(federation), Some(definitions)) = (federation.as_deref(), state.definitions())
         && let Lookup::Matched(matched) = routes::lookup(&method, path)
     {

@@ -57,6 +57,7 @@ use axum::response::Response;
 use ferrofed_engine::declared::Refusal;
 use ferrofed_engine::dispatch::{Contact, DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
+use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::EhrId;
@@ -115,6 +116,9 @@ pub struct Arrived<'a> {
     /// The verified caller's session, whose resolution bindings route a
     /// path `ehr_id` (§12.5.1 step 2); `None` when no caller was verified.
     pub session: Option<&'a SessionKey>,
+    /// Whom the request is on behalf of, conveyed to every node it reaches
+    /// (§13.1, N24).
+    pub conveyance: Conveyance,
 }
 
 /// Answers a request under the ITS-REST prefix that no other route serves.
@@ -319,15 +323,16 @@ pub(crate) enum Failure {
 }
 
 /// Forwards the held `request` to `endpoint` once, within `budget`, under
-/// the gateway's `outbound` id for it.
+/// the gateway's `outbound` id for it, conveying `conveyance`.
 async fn forward(
     federation: &Federation,
     endpoint: &Endpoint,
-    (request, outbound): (HeldRequest, OutboundId),
+    (request, outbound, conveyance): (HeldRequest, OutboundId, &Conveyance),
     budget: &Deadlines,
     logged: &str,
 ) -> Result<Forwarded, Failure> {
-    let options = DispatchOptions::new(budget.per_node()).with_request_id(outbound);
+    let options =
+        DispatchOptions::new(budget.per_node(), conveyance.clone()).with_request_id(outbound);
     send(federation, endpoint, request, &options, logged).await
 }
 

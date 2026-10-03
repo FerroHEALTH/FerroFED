@@ -33,7 +33,7 @@ flowchart TB
     end
     you -->|"AQL"| gw
     you -->|"seed over ITS-REST"| nodes
-    gw -->|"AQL, Basic auth"| nodes
+    gw -->|"AQL, Basic auth,<br/>the signed caller"| nodes
     nodes -->|"a database each"| pg
 ```
 
@@ -61,7 +61,7 @@ flowchart TB
     cfg["ferrofed.toml, registry,<br/>secret files"] -->|"start, SIGHUP"| gw
     gw -->|"ITI-83"| pix["PIX Manager"]
     gw -->|"ITI-90, ITI-91"| mcsd["mCSD directory,<br/>when the registry is read from one"]
-    gw -->|"ITS-REST"| nodes["Member CDRs"]
+    gw -->|"ITS-REST, the<br/>signed caller"| nodes["Member CDRs"]
     gw -->|"definitions"| store[("redb, PostgreSQL<br/>or files")]
     gw -->|"serves"| admin["Admin listener<br/>/metrics, /admin"]
     prom["Prometheus"] -->|"scrapes"| admin
