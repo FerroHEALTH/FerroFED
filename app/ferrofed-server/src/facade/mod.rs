@@ -32,12 +32,15 @@
 //! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3);
 //! [`owner`] finds that node in the order of §12.5.1, and a resolution here
 //! teaches its `ehr_id` index which member holds each resolved `ehr_id`.
+//! Every version a fan-out or a routed answer shows an endpoint holding
+//! teaches the follow-up routing table ([`follow_up`]; §12.2, N21).
 //! `OPTIONS {base}/` describes the whole surface, and `OPTIONS` on a sub-path
 //! names the methods served there ([`options`]; §7a.2, N30).
 
 pub mod cells;
 pub mod completeness;
 pub mod dedup;
+pub mod follow_up;
 pub mod intake;
 pub mod options;
 pub mod owner;
@@ -479,6 +482,7 @@ async fn federate(
         security::fan_out(&error, request_id);
         Failure::FanOut(error)
     })?;
+    follow_up::observe(federation, answer.seen(), request_id);
     let mut status = answer.status();
     // NOTE: no specification governs this (§11.3 covers only an answered lookup):
     // our own design, a cross-reference that could not answer fails the query

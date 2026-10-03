@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 24 of 35 covered, 11 planned, 0 deferred.
+**Gateway points:** 25 of 35 covered, 10 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -33,8 +33,8 @@ and a gateway is never marked down for them (section 17).
 | [CP-10](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-10) | Gateway | N14 | 5 | covered | [#54](https://github.com/FerroHEALTH/FerroFED/issues/54), [#187](https://github.com/FerroHEALTH/FerroFED/issues/187) | - |
 | [CP-11](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-11) | Gateway | N16 | 4 | covered | [#49](https://github.com/FerroHEALTH/FerroFED/issues/49), [#85](https://github.com/FerroHEALTH/FerroFED/issues/85) | - |
 | [CP-12](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-12) | Gateway | N6, N16 | 4 | covered | [#43](https://github.com/FerroHEALTH/FerroFED/issues/43), [#50](https://github.com/FerroHEALTH/FerroFED/issues/50), [#58](https://github.com/FerroHEALTH/FerroFED/issues/58) | the status codes are scored (section 11.2, section 11.3); the OperationOutcome clause has no FHIR-facing consumer to apply to on an ITS-REST gateway, whose answer is a RESULT_SET with its additions under meta.federation only (N17, section 9.1, section 11.4) |
-| [CP-13](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-13) | Gateway | N19, N20, N21 | 6 | planned | [#36](https://github.com/FerroHEALTH/FerroFED/issues/36), [#67](https://github.com/FerroHEALTH/FerroFED/issues/67), [#74](https://github.com/FerroHEALTH/FerroFED/issues/74) | - |
-| [CP-14](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-14) | Gateway | N22 | 6 | planned | [#64](https://github.com/FerroHEALTH/FerroFED/issues/64) | - |
+| [CP-13](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-13) | Gateway | N19, N20, N21 | 6 | covered | [#36](https://github.com/FerroHEALTH/FerroFED/issues/36), [#64](https://github.com/FerroHEALTH/FerroFED/issues/64), [#67](https://github.com/FerroHEALTH/FerroFED/issues/67), [#74](https://github.com/FerroHEALTH/FerroFED/issues/74) | - |
+| [CP-14](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-14) | Gateway | N22 | 6 | planned | [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) | section 12.3 and N22 route a version read on creating_system_id, while section 12a.1 route-ehr, section 12.5.1 and N41 route every request under a path ehr_id by that ehr_id; FerroFED follows N41, and the contradiction is recorded on #212 |
 | [CP-15](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-15) | Gateway | N23 | 6 | planned | [#65](https://github.com/FerroHEALTH/FerroFED/issues/65) | - |
 | [CP-16](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-16) | Gateway | N24 | 7 | planned | [#82](https://github.com/FerroHEALTH/FerroFED/issues/82) | - |
 | [CP-17](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-17) | Gateway | N25 | 7 | planned | [#80](https://github.com/FerroHEALTH/FerroFED/issues/80), [#81](https://github.com/FerroHEALTH/FerroFED/issues/81) | - |

@@ -21,7 +21,10 @@
 //! request's budget (§11.5). A write none of the first three routes is a
 //! `400`, and is never probed (N41); so is a read whose `ehr_id` is no bare
 //! UUID, because the probe would carry it to every member (§5.4.1, N33). A
-//! successful answer teaches the index that its node holds the `ehr_id`.
+//! successful answer teaches the index that its node holds the `ehr_id`, and
+//! teaches the follow-up routing table the versions it names ([`follow_up`];
+//! §12.2, N21). A read of one version routes the same way: by its path
+//! `ehr_id`, never by the version's `creating_system_id` (§12a.1, N41).
 
 use std::time::{Duration, Instant};
 
@@ -36,11 +39,12 @@ use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
+use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::headers;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::error::{self, Code};
-use crate::facade::{owner, security};
+use crate::facade::{follow_up, owner, security};
 use crate::federation::Federation;
 
 /// The API group of the EHR area (§7a.1).
@@ -218,14 +222,29 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     };
     match forwarded {
         Ok(forwarded) => {
-            if forwarded.status().is_success() {
-                owner::learn(federation.index(), &ehr_id, endpoint.node());
-            }
+            let read = follow_up::version_of(arrived.method, matched);
+            learn(federation, (&ehr_id, read), endpoint, &forwarded, &logged);
             provenance.stamp(answered(forwarded))
         }
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
     }
+}
+
+/// Teaches what `endpoint`'s answer shows: on a success, that its node holds
+/// `ehr_id` (§12.5.1 step 3), and to the follow-up routing table, the
+/// versions the read named and the answer's `ETag` names (§12.2, N21).
+fn learn(
+    federation: &Federation,
+    (ehr_id, read): (&EhrId, Option<ObjectVersionId>),
+    endpoint: &Endpoint,
+    forwarded: &Forwarded,
+    logged: &str,
+) {
+    if forwarded.status().is_success() {
+        owner::learn(federation.index(), ehr_id, endpoint.node());
+    }
+    follow_up::learn_from(federation, endpoint.id(), read, forwarded, logged);
 }
 
 /// The `ehr_id` the path segment of `matched` decodes to, or `None` when it

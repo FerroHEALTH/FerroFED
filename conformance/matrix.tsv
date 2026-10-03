@@ -41,8 +41,8 @@ CP-9	Gateway	N15	5	covered	#56	-
 CP-10	Gateway	N14	5	covered	#54,#187	-
 CP-11	Gateway	N16	4	covered	#49,#85	-
 CP-12	Gateway	N6,N16	4	covered	#43,#50,#58	the status codes are scored (section 11.2, section 11.3); the OperationOutcome clause has no FHIR-facing consumer to apply to on an ITS-REST gateway, whose answer is a RESULT_SET with its additions under meta.federation only (N17, section 9.1, section 11.4)
-CP-13	Gateway	N19,N20,N21	6	planned	#36,#67,#74	-
-CP-14	Gateway	N22	6	planned	#64	-
+CP-13	Gateway	N19,N20,N21	6	covered	#36,#64,#67,#74	-
+CP-14	Gateway	N22	6	planned	#212	section 12.3 and N22 route a version read on creating_system_id, while section 12a.1 route-ehr, section 12.5.1 and N41 route every request under a path ehr_id by that ehr_id; FerroFED follows N41, and the contradiction is recorded on #212
 CP-15	Gateway	N23	6	planned	#65	-
 CP-16	Gateway	N24	7	planned	#82	-
 CP-17	Gateway	N25	7	planned	#80,#81	-

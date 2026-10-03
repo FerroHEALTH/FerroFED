@@ -19,6 +19,7 @@ use openehr_federation::order::ResultOrder;
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_its::rest::generated::query::ResultSetRow;
 
+use super::seen::{self, Seen};
 use super::{Budget, Completion, FanOutError, FederatedAnswer, decide};
 
 /// How the rows of the `active` endpoints become the answer's rows.
@@ -43,6 +44,10 @@ pub(super) struct Shaping<'a> {
 /// included (§10.2: "the mode actually applied MUST be recorded"); what the
 /// mode suppressed is recorded only beside rows, so a failing answer, which
 /// returns none, carries the mode alone.
+///
+/// The versions every answering endpoint's rows show it holding are kept
+/// beside the answer, a failing one included, since the node sent them
+/// whatever the decision (§12.2, N21).
 pub(super) fn answer(
     snapshot: &RegistrySnapshot,
     records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)>,
@@ -52,11 +57,13 @@ pub(super) fn answer(
 ) -> Result<FederatedAnswer, FanOutError> {
     let mut answers = Vec::new();
     let mut statuses = Vec::with_capacity(records.len());
+    let mut versions = Seen::new();
     for (endpoint, (outcome, answered)) in records {
         // NOTE: §9.5, `row_count` is what the node contributed, counted before
         // any federation-level `DISTINCT`, dedup or `LIMIT` touches the rows.
         let row_count = answered.as_ref().map(Vec::len);
         if let Some(answered) = answered {
+            seen::record(&mut versions, &endpoint, &answered);
             let mut answer = NodeAnswer::new(endpoint.as_str(), answered);
             if let Some(system_id) = system_id(snapshot, &endpoint) {
                 answer = answer.with_system_id(system_id);
@@ -118,6 +125,10 @@ pub(super) fn answer(
         federation,
         rows,
         attributes: attributed,
+        seen: versions
+            .into_iter()
+            .map(|((endpoint, _), version)| (endpoint, version))
+            .collect(),
     })
 }
 

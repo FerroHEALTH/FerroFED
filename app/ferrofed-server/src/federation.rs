@@ -14,7 +14,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ferrofed_engine::dispatch::{NodeClients, SetupError, SharedCredentials};
 use ferrofed_engine::fanout::Budget;
@@ -25,6 +25,7 @@ use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::Resolver;
+use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::{EndpointId, NodeId};
@@ -47,6 +48,7 @@ pub struct Federation {
     resolver: Option<Arc<dyn Resolver>>,
     bindings: ResolutionBindings,
     index: EhrIndex,
+    learned: Mutex<LearnedMap>,
     context: Context,
     budget: Budget,
     best_effort: bool,
@@ -223,6 +225,7 @@ impl Federation {
             resolver,
             bindings: ResolutionBindings::new(settings.federation.binding_ttl),
             index: ehr_index(settings.federation.ehr_index_capacity),
+            learned: Mutex::new(LearnedMap::new()),
             context,
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
@@ -253,6 +256,7 @@ impl Federation {
                 crate::config::Federation::default().binding_ttl_ms,
             )),
             index: ehr_index(default_index_capacity()),
+            learned: Mutex::new(LearnedMap::new()),
             context,
             budget,
             best_effort: crate::config::Federation::default().best_effort,
@@ -278,6 +282,17 @@ impl Federation {
     #[must_use]
     pub fn index(&self) -> &EhrIndex {
         &self.index
+    }
+
+    /// The `creating_system_id` mappings learned from answers, which every
+    /// request of this process shares (§12.2, N21).
+    ///
+    /// The guard is held for one lookup or one answer's sightings, never
+    /// across an `.await`.
+    pub fn learned(&self) -> MutexGuard<'_, LearnedMap> {
+        // NOTE: a panic while the lock was held leaves mappings that may be
+        // incomplete; each is still only a routing hint, so they stay usable.
+        self.learned.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The PMIR hook (track 8, provisional): a merge or split at the identity

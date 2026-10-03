@@ -27,6 +27,7 @@ fn shape_refusal(document: &str) -> String {
     }
 }
 
+// conformance: CP-13
 #[test]
 fn a_registered_mapping_loads_and_is_listed() -> TestResult {
     let snapshot = registered()?;

@@ -147,9 +147,9 @@ enum Learned {
 ///
 /// A learned mapping only adds a route the registry document does not give,
 /// so a stale one costs a fallback and never a wrong route: a lookup that
-/// finds its endpoint gone from the snapshot is a miss. Sightings are fed off
-/// the request path. The map holds `system_id`s and `endpoint_id`s only,
-/// never a row or a patient identifier (no specification governs where
+/// finds its endpoint gone from the snapshot is a miss. The gateway feeds it
+/// the sightings of each answer once the answer is settled. The map holds
+/// `system_id`s and `endpoint_id`s only, never a row or a patient identifier (no specification governs where
 /// learned state lives: our own design).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LearnedMap {
@@ -176,7 +176,7 @@ impl LearnedMap {
         snapshot: &RegistrySnapshot,
         creating_system_id: &SystemId,
     ) -> Result<CreatingSystemRoute, CreatingSystemMiss> {
-        // TODO(#64): the follow-up read router calls this, then the row's endpoint_id on a miss.
+        // TODO(#65): the versioned-write router calls this for the controlling CDR (§12.4, N23).
         if let Some(route) = snapshot.registered_route(creating_system_id) {
             return Ok(route);
         }
