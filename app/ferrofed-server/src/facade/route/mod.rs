@@ -342,9 +342,13 @@ pub(crate) async fn send(
         );
         return Err(Failure::Internal);
     };
+    let started = Instant::now();
     let forwarded = client.forward_held(request, options).await;
     let dependencies = federation.dependencies();
     dependencies.forwarded(endpoint.id(), &forwarded);
+    federation
+        .requests()
+        .forwarded(endpoint.id(), &forwarded, started.elapsed());
     forwarded.map_err(Failure::Forward)
 }
 

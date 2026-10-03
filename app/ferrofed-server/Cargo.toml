@@ -37,6 +37,13 @@ openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["aql"] }
 openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true
+# The metrics surface (#281): one MeterProvider, the Prometheus pull reader on
+# the admin listener and the optional OTLP push.
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-prometheus.workspace = true
+opentelemetry-otlp.workspace = true
+prometheus.workspace = true
 # The EHR_STATUS of the test EHRs an admission check creates (§12b.1, #79).
 openehr-rm.workspace = true
 # The healthcheck job asks the server beside it for its readiness, over the

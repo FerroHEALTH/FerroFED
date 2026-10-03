@@ -766,7 +766,7 @@ silent on storage, so this section is FerroFED's own).
 | Observed `creating_system_id` to node (N21) | learned from result rows and routed answers | an in-memory map behind one lock every request shares, as the `ehr_id` index is, written once each answer is settled (#64) |
 | The `ehr_id` to node index (§12.5.1 step 3) | learned from resolution and probes | a bounded in-memory LRU |
 | Resolution bindings (§12.5.1 step 2) | per client session | in memory, keyed by the session (decision A20) |
-| Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log, a counter, an optional webhook |
+| Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log and a counter |
 | Stored-query definitions (N44) | a client `PUT` | the one durable store, behind `DefinitionStore` |
 | Outbound credentials | the operator | `_file` secrets per endpoint |
 
@@ -828,11 +828,39 @@ for a performance gain the session-scoped design does not need.
 **Incidents are events.** An `ehr_id` claimed by two nodes fails the request
 with `409` listing the claimants (N42) and emits an integrity incident: a
 structured `tracing` event at `ERROR` with a stable kind (`EhrIdCollision`,
-`IndexInsertCollision`), a counter
-(`ferrofed_integrity_incidents_total{kind}`) and an optional webhook. It carries
+`IndexInsertCollision`), and a count under that kind
+(`ferrofed_integrity_incidents_total{kind}`). It carries
 the `ehr_id` and the claiming endpoints, never a patient identifier. The
 operator's log pipeline is the durable record, where each participant's audit
-already lives (§2.2). The request waits on none of it.
+already lives (§2.2). The request waits on none of it. There is no webhook
+(decision A50): an operator alerts on the counter, and a webhook would add an
+outbound channel with its own credentials, retries and failure handling for
+no gain over a scrape.
+
+**Metrics** (#281, decision A50; no specification governs metrics: our own
+design). One OpenTelemetry `MeterProvider` feeds two readers, the
+Prometheus pull reader and, when `[metrics] otlp_endpoint` names a
+collector, a periodic OTLP push over gRPC, so an instrument cannot exist on
+one surface and not the other. The pull reader is served as the Prometheus
+text exposition at `GET /metrics` on an admin listener of its own,
+`[metrics] listen`, off when unset and never the gateway's client listener,
+so no client reaches it and it needs no gateway authentication; the
+configuration refuses a non-loopback address unless `[metrics]
+allow_remote = true`, an address equal to `server.listen`, and a collector
+that is no `http://` URL. The instruments fill from what the gateway already
+observes and send nothing of their own: `ferrofed.integrity.incidents{kind}`
+reads the per-kind counts `Incident::emit` keeps, `ferrofed.node.requests
+{endpoint, outcome}` and `ferrofed.node.request.duration{endpoint}` read the
+per-endpoint report of each request a member was sent (the §11.1 status
+with its `latency_ms`, or for a routed request and an ask-all probe the
+same reading of the node's answer; a probe is counted and not timed), and
+`ferrofed.registry.reloads{result}` reads each reload's outcome. Every label
+value is drawn from a closed enum (`kind`, `outcome`, `result`) or is a
+registry endpoint id (`endpoint`), never request text (§5.4.1, N33), and a
+test sends the patient identifier in a query, a path and a header and finds
+it nowhere in the exposition. `GET {base}/health/dependencies` (#303) stays
+the last observed state; the metrics count over time beside it. No trace is
+exported: span attributes need a hygiene review of their own first.
 
 **Stored queries** (§12.7, N44, #77) are the one state that needs a store.
 A client registers a federated stored query with
@@ -1644,8 +1672,8 @@ the milestone in progress.
 
 Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
-and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48 and A49, which amends
-A30, on 2026-10-03. The bracket names the report and its
+and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48, A49, which amends
+A30, and A50 on 2026-10-03. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -1700,3 +1728,4 @@ R4 is #23, #25 and #27).
 | A47 | The quickstart topology and the node databases [owner, #322, amending A44] | the compose quickstart runs four FerroEHR nodes, `ferroehr-a` to `ferroehr-d`, each with its own `system_id`, over synthetic patients at four, two, one and no nodes; the quickstart and the e2e harness run one PostgreSQL server with a database per node, each owned by its own role, created by FerroEHR's init script run once per node; CI stays at two nodes plus the third for three-node cases | two nodes show one gateway asking two servers, four show a patient missing at some members (§11.3), a directed query leaving the rest `excluded` (§8) and the merge over more than two answers (§10, §11.6); schemas cannot separate the nodes because FerroEHR fixes its schema names; one server per topology starts one database server instead of one per node (#320); no specification governs this: our own design | decided (owner, 2026-10-03) |
 | A48 | The URL authority and `Host` at the outbound gate [owner, #309] | the gate reads the path, the query string, the fragment and the headers the gateway composes, and never the authority of a node's URL or the `Host` header the HTTP client writes from it; a client `Host` is never forwarded | §5.4.1 [[no-identifier-fanout]] and N33 forbid a directly identifying identifier "in the parts of the outbound request the gateway composes (the dispatched AQL, the request path, the query string and the headers)"; the authority, and `Host` with it, is the operator's registry endpoint URL, fixed before any request and composed from none, so it cannot carry a client-supplied identifier, and searching it refused every query for a patient whose identifier occurs in a node's port (#232); the silence on the authority is on #212 | decided by the specification text under the owner's spec-first rule (2026-10-03) |
 | A49 | `AVG` over integers [owner, #309, amending A30] | an integer when every node `SUM` is an integer: the one nearest the exact quotient of the federation's sum and count, a tie to the even one, rounded once at the gateway and never per node; the decimal mean, written as the nearest JSON number, when a node `SUM` is a real | AQL 1.1.0 §3.9.1.5: "Input values type should be either Integer or Real, and it will also determine the return type"; §3.9.1.4 says the same of `SUM`, so the node sums carry the input type; AQL gives no rounding, and the rounding is our own design: the nearest integer is the Integer closest to the arithmetic mean §3.9.1 defines, and ties to even is the rule the gateway already applies writing a real mean as the nearest binary64 (IEEE 754 roundTiesToEven), with no bias toward zero or upward; the silence on the rounding is on #212 | decided by the specification text under the owner's spec-first rule (2026-10-03) for the return type; the ties-to-even rounding is our own design within that |
+| A50 | The metrics surface and the incident webhook [#281] | one OpenTelemetry `MeterProvider` (`opentelemetry` 0.33 with the Prometheus pull reader and an optional OTLP gRPC push), the family FerroEHR runs; `GET /metrics` on an admin listener of its own, off by default and on loopback unless `allow_remote`; the incident counter by `kind`, the node request counter by `endpoint` and §11.1 `outcome` with a duration histogram by `endpoint`, the reload counter by `result`, every label from an enum or the registry; no webhook | an operator alerts on a counter, and a webhook adds an outbound channel with its own credentials, retries and failure handling for no gain over a scrape; one provider keeps the two surfaces equal; a listener the client face never reaches needs no gateway authentication; no specification governs metrics: our own design | decided on #281 (2026-10-03) |

@@ -34,6 +34,7 @@ mod http;
 mod hygiene;
 mod its_rest_areas;
 mod lifecycle;
+mod metrics;
 mod no_destination;
 mod options;
 mod order;

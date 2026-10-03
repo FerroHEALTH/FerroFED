@@ -119,6 +119,11 @@ body_limit_bytes = 1048576    # a body past this answers 413
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
 filter = "info,hyper=warn,tower=warn,h2=warn"
 
+# The metrics surface, off by default; see Metrics.
+[metrics]
+listen = "127.0.0.1:9464"     # the admin listener serving GET /metrics; loopback unless allow_remote
+otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
+
 # Outbound credentials, one section per endpoint id. Each section names one
 # scheme: a bearer token, or a user and a password.
 [credentials."hospital-a"]
@@ -198,6 +203,9 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 
 Every response carries an `x-request-id`: the client's value when it is short
 printable ASCII, the gateway's own id otherwise.
+
+The metrics are not on this surface: they have a listener of their own, off
+by default ([Metrics](metrics.md)).
 
 ## Request ids
 
@@ -349,4 +357,3 @@ the gateway replaces Rust's default panic hook, which prints it to stderr,
 so a panic writes nothing to stderr. A federated query the gateway fails with a `500` also logs "the
 federated query failed" with its error code and the same `request_id` as its
 request line.
-

@@ -43,6 +43,7 @@ use crate::config::settings::{PixmSettings, Scheme, Settings};
 use crate::config::{NodeSelection, RegistryFormat};
 use crate::facade::options::{self, DescribeError};
 use crate::health::dependencies::Dependencies;
+use crate::metrics::nodes::{Instruments, NodeRequests};
 
 /// The federation a server serves the federated query over.
 pub struct Federation {
@@ -56,6 +57,7 @@ pub struct Federation {
     best_effort: bool,
     demographic: Option<EndpointId>,
     dependencies: Dependencies,
+    requests: NodeRequests,
     template_fan_out: bool,
     stored_query_fan_out: bool,
 }
@@ -233,18 +235,23 @@ impl Federation {
     /// The new federation has its own snapshot, node clients and resolver,
     /// and keeps what this one learned: the resolution bindings, the `ehr_id`
     /// index and the learned `creating_system_id` map, which
-    /// [`Federation::reconcile`] then holds to the new snapshot. This
-    /// federation is unchanged, so a request that took it finishes on it.
+    /// [`Federation::reconcile`] then holds to the new snapshot, and records
+    /// its node requests through this one's instruments. This federation is
+    /// unchanged, so a request that took it finishes on it.
     ///
     /// # Errors
     /// Returns the [`FederationError`] [`Federation::load`] returns for the
     /// same settings.
     pub fn reloaded(&self, settings: &Settings) -> Result<Option<Self>, FederationError> {
-        Self::assemble(
+        let mut next = Self::assemble(
             settings,
             read_registry(settings),
             Some(Arc::clone(&self.observed)),
-        )
+        )?;
+        if let (Some(next), Some(instruments)) = (next.as_mut(), self.requests.instruments()) {
+            next.requests.metered(instruments.clone());
+        }
+        Ok(next)
     }
 
     /// Holds what the process learned to this federation's snapshot, after a
@@ -323,6 +330,7 @@ impl Federation {
         }
         let dependencies =
             Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
+        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
         let federation = Self {
             id,
             snapshot: Arc::new(snapshot),
@@ -339,6 +347,7 @@ impl Federation {
             best_effort: settings.federation.best_effort,
             demographic: settings.federation.demographic_endpoint.clone(),
             dependencies,
+            requests,
             template_fan_out: settings.federation.fan_out_template_upload,
             stored_query_fan_out: settings.federation.fan_out_stored_queries,
         };
@@ -363,6 +372,7 @@ impl Federation {
     ) -> Self {
         let dependencies =
             Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
+        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
         Self {
             id,
             snapshot: Arc::new(snapshot),
@@ -379,6 +389,7 @@ impl Federation {
             best_effort: crate::config::Federation::default().best_effort,
             demographic: None,
             dependencies,
+            requests,
             template_fan_out: crate::config::Federation::default().fan_out_template_upload,
             stored_query_fan_out: crate::config::Federation::default().fan_out_stored_queries,
         }
@@ -397,6 +408,14 @@ impl Federation {
     #[must_use]
     pub fn with_template_fan_out(mut self, offered: bool) -> Self {
         self.template_fan_out = offered;
+        self
+    }
+
+    /// This federation, recording its node requests through `instruments`
+    /// ([`NodeRequests`]); a registry reload keeps them.
+    #[must_use]
+    pub fn metered(mut self, instruments: Instruments) -> Self {
+        self.requests.metered(instruments);
         self
     }
 
@@ -452,6 +471,13 @@ impl Federation {
     #[must_use]
     pub fn dependencies(&self) -> &Dependencies {
         &self.dependencies
+    }
+
+    /// The record of the requests sent to each member endpoint, for the
+    /// metrics surface.
+    #[must_use]
+    pub fn requests(&self) -> &NodeRequests {
+        &self.requests
     }
 
     /// The federation's own identifier (§7a.2, N30).

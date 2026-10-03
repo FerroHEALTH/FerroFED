@@ -324,6 +324,7 @@ async fn fan_out(
         let outcome = settled(sent, latency_ms, |answer, latency_ms| {
             outcome(endpoint, answer, latency_ms, logged)
         });
+        federation.requests().settled(endpoint.id(), &outcome);
         outcomes.push((endpoint.id(), outcome));
     }
     tracing::info!(
