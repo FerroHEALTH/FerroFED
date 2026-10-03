@@ -16,6 +16,7 @@ use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use http::StatusCode;
+use openehr_rm::v1_2::data_types::text::dv_text::DvText;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
@@ -73,12 +74,18 @@ const NAMES_B: [Named; 2] = [("b-uid-1", "alpha"), ("b-uid-2", "Beta")];
 /// The answer's rows, each a uid and a `DV_TEXT` name.
 #[derive(Debug, Deserialize)]
 struct Answer {
-    rows: Vec<(String, Text)>,
+    rows: Vec<(String, DvText)>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-struct Text {
-    value: String,
+/// The value of a row's name, which each node sent as a plain `DV_TEXT`.
+fn text_value(uid: String, name: DvText) -> Result<(String, String), String> {
+    match name {
+        DvText::DvText(text) => Ok((uid, text.value)),
+        DvText::DvCodedText(coded) => Err(format!(
+            "the name of {uid} came back a DV_CODED_TEXT: {}",
+            coded.value
+        )),
+    }
 }
 
 // conformance: CP-32
@@ -152,8 +159,8 @@ async fn with_no_limit_a_dv_text_key_is_answered_in_one_order_on_every_repeat() 
             answer
                 .rows
                 .into_iter()
-                .map(|(uid, name)| (uid, name.value))
-                .collect::<Vec<_>>(),
+                .map(|(uid, name)| text_value(uid, name))
+                .collect::<Result<Vec<_>, _>>()?,
         );
     }
     let row = |uid: &str, name: &str| (uid.to_owned(), name.to_owned());

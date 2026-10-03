@@ -5,10 +5,12 @@
 //! writes is a real identifier.
 
 use ferrofed_testkit::seed::{
-    self, CompositionSeed, DemoComposition, EXAMPLE_ARC, EhrSeed, EhrStatus, PatientId, SeedError,
-    SeedPlan, TEMPLATE_ID,
+    self, CompositionSeed, DemoComposition, EXAMPLE_ARC, EhrSeed, PatientId, SeedError, SeedPlan,
+    TEMPLATE_ID,
 };
 use http::StatusCode;
+use openehr_its::json::{from_canonical_json, to_canonical_json};
+use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use uuid::Uuid;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -83,7 +85,7 @@ fn every_patient_identifier_is_in_the_example_arc() {
 #[test]
 fn the_ehr_status_names_the_subject_in_the_example_arc() {
     let patient = PatientId::new(1, 1);
-    let body = serde_json::to_string(&EhrStatus::for_subject(Some(patient))).unwrap();
+    let body = to_canonical_json(&seed::ehr_status(Some(patient)));
     assert!(
         body.contains("\"_type\":\"EHR_STATUS\""),
         "the body is a canonical EHR_STATUS: {body}"
@@ -101,11 +103,20 @@ fn the_ehr_status_names_the_subject_in_the_example_arc() {
         "the value is synthetic: {body}"
     );
 
-    let anonymous = serde_json::to_string(&EhrStatus::for_subject(None)).unwrap();
+    let anonymous = to_canonical_json(&seed::ehr_status(None));
     assert!(
         !anonymous.contains("external_ref"),
         "an anonymous subject carries no reference: {anonymous}"
     );
+}
+
+#[test]
+fn the_ehr_status_reads_back_through_the_strict_canonical_reader() {
+    for subject in [Some(PatientId::new(1, 1)), None] {
+        let status = seed::ehr_status(subject);
+        let read: EhrStatus = from_canonical_json(&to_canonical_json(&status)).unwrap();
+        assert_eq!(read, status, "the EHR_STATUS for {subject:?} round-trips");
+    }
 }
 
 #[test]
@@ -204,6 +215,11 @@ async fn a_seed_writes_over_its_rest_alone_in_plan_order() {
             ),
         ],
         "the steps are the three ITS-REST calls, in plan order"
+    );
+    assert_eq!(
+        received[0].body,
+        to_canonical_json(&seed::ehr_status(Some(PatientId::new(1, 1)))).into_bytes(),
+        "the EHR is created with the canonical JSON of its EHR_STATUS"
     );
     assert_eq!(
         received[1].body,
