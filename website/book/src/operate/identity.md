@@ -127,6 +127,11 @@ Both sections take effect on a
 reports the resolver's last observed state
 ([Health probes](health.md)).
 
+Under `federation.node_selection = "localized"` the `[dev]` table is also the
+localizer: it names the members that hold a row for the patient, and every
+other member is `not-localized`
+([Node selection](registry.md#node-selection)).
+
 Two further bindings of the specification are planned for v0.0.8: IHE XCPD
 for localization, failing closed when the localizer does not answer
 ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)), and PMIR

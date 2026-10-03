@@ -14,6 +14,7 @@
 mod binding;
 #[cfg(test)]
 mod directory;
+mod localizer;
 mod patient;
 mod pixm;
 mod static_resolver;

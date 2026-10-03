@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::Profile;
+use ferrofed_identity::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
@@ -86,6 +87,9 @@ pub struct FederationSettings {
     /// How the node set of an undirected patient query is chosen, as
     /// declared; a federation refuses to load without it.
     pub node_selection: Option<NodeSelection>,
+    /// The localizer's failure policy and budget, when
+    /// `[federation.localization]` is set (§14.1).
+    pub localization: Option<LocalizationSettings>,
     /// Whether a request may opt into best-effort completion (§11.4).
     pub best_effort: bool,
     /// How `OFFSET k > 0` is answered across a fan-out, with its bound: the
@@ -106,6 +110,16 @@ pub struct FederationSettings {
     /// `definition.stored_query_fan_out` declares it (§7a.2); only ever on
     /// beside the stored-query registry.
     pub fan_out_stored_queries: bool,
+}
+
+/// The localizer's failure policy and budget, resolved (§14.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalizationSettings {
+    /// What the gateway does when the localizer does not answer.
+    pub on_failure: OnFailure,
+    /// How long the localizer may take, already known to end before the
+    /// overall budget.
+    pub timeout: Duration,
 }
 
 /// The HTTP surface, resolved.

@@ -408,6 +408,7 @@ fn federation_class(error: &FederationError) -> &'static str {
         | FederationError::PixmNamespace(_)
         | FederationError::Pixm(_) => "pixm",
         FederationError::TwoResolvers => "resolvers",
+        FederationError::Localization(_) => "localization",
         FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
         FederationError::DemographicWithoutRegistry
         | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",

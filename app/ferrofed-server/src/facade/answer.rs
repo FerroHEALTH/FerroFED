@@ -296,15 +296,9 @@ async fn federate(
     let selection = plan::Selection::of(named.as_ref(), routed.map(|owner| owner.endpoint.id()));
     let (targets, subject) = match &analysis {
         Analysis::Patient(query) => (
-            plan::patient(
-                federation.snapshot(),
-                selection,
-                federation.resolver(),
-                query,
-                deadline,
-            )
-            .await
-            .map_err(Failure::Plan)?,
+            plan::patient(federation, selection, query, deadline)
+                .await
+                .map_err(Failure::Plan)?,
             Some(query.subject()),
         ),
         Analysis::Unscoped(query) => (

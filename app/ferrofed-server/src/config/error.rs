@@ -273,6 +273,18 @@ pub enum Error {
         /// The request timeout.
         request_ms: u64,
     },
+    /// The localizer's budget does not end before the overall budget, so the
+    /// localizer could leave no time to resolve and ask the members (§11.5,
+    /// §14.1).
+    #[error(
+        "federation.localization.timeout_ms ({timeout_ms}) must be below federation.overall_timeout_ms ({overall_ms}), of which it is a part (§11.5)"
+    )]
+    LocalizationBudget {
+        /// The localizer's budget.
+        timeout_ms: u64,
+        /// The overall fan-out budget.
+        overall_ms: u64,
+    },
 }
 
 impl Error {

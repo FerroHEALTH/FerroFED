@@ -19,7 +19,7 @@
 //! ehr_id = "6f2a51a4-1b8e-4f8b-9a4c-1f6c2b1d7e30"
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::time::Instant;
 
@@ -30,6 +30,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::localizer::{Localization, Localizer};
 use crate::patient::{IdentifierNamespace, PatientRef};
 use crate::resolver::{Resolution, Resolver};
 
@@ -109,11 +110,14 @@ struct Row {
     ehr_id: EhrId,
 }
 
-/// The [`Resolver`] over the static development cross-reference.
+/// The [`Resolver`] and the [`Localizer`] over the static development
+/// cross-reference.
 ///
-/// It answers [`Resolution::Resolved`] for a row of the table and
-/// [`Resolution::Unknown`] for every other member asked; it never answers
-/// [`Resolution::Unavailable`].
+/// As a resolver it answers [`Resolution::Resolved`] for a row of the table
+/// and [`Resolution::Unknown`] for every other member asked. As a localizer
+/// it names the members that have a row for the patient, and answers
+/// [`Localization::NoRecords`] when none has. It never answers that it is
+/// unavailable.
 pub struct StaticResolver {
     rows: Vec<Row>,
 }
@@ -216,5 +220,26 @@ impl Resolver for StaticResolver {
                 (member.clone(), resolution)
             })
             .collect()
+    }
+}
+
+#[async_trait]
+impl Localizer for StaticResolver {
+    async fn localize(
+        &self,
+        patient: &PatientRef,
+        members: &[NodeId],
+        _deadline: Instant,
+    ) -> Localization {
+        let candidates: BTreeSet<NodeId> = members
+            .iter()
+            .filter(|member| self.lookup(patient, member).is_some())
+            .cloned()
+            .collect();
+        if candidates.is_empty() {
+            Localization::NoRecords
+        } else {
+            Localization::Candidates(candidates)
+        }
     }
 }

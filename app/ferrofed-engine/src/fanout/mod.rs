@@ -79,6 +79,11 @@ use crate::outbound_id::OutboundId;
 /// design, since no specification governs it).
 pub const TIMEOUT_POLICY: &str = "abandon-and-mark";
 
+/// The `meta.federation` member that carries the failure of a configured
+/// localizer, as `localization.error` (§14.1; the member name is our own
+/// design, since the specification names none).
+pub const LOCALIZATION_MEMBER: &str = "localization";
+
 /// The completion strategy a request runs under (§11.4, N37).
 ///
 /// Both apply to reads only; a write goes to one node and succeeds or fails
@@ -185,6 +190,7 @@ pub struct Plan {
     recombination: Option<Recombination>,
     dedup: DedupMode,
     attributes: Vec<EndpointAttribute>,
+    localization: Option<ErrorDetail>,
 }
 
 impl Plan {
@@ -250,6 +256,15 @@ impl Plan {
     #[must_use]
     pub fn annotating(mut self, attributes: Vec<EndpointAttribute>) -> Self {
         self.attributes = attributes;
+        self
+    }
+
+    /// This plan reporting that the configured localizer did not answer, as
+    /// `meta.federation.localization.error` on the answer, since under
+    /// fail-closed neither `complete` nor the status can carry it (§14.1).
+    #[must_use]
+    pub fn localization_failed(mut self, error: ErrorDetail) -> Self {
+        self.localization = Some(error);
         self
     }
 
@@ -625,6 +640,7 @@ where
         recombination,
         dedup,
         attributes,
+        localization,
     } = plan;
     if recombination.is_some() && completion == Completion::BestEffort {
         return Err(FanOutError::PartialAggregate);
@@ -683,6 +699,9 @@ where
         attributes: &attributes,
     };
     let mut answer = answer::answer(snapshot, records, shaping, budget, completion)?;
+    if let Some(error) = localization {
+        answer::report_localization(&mut answer.federation, error)?;
+    }
     answer.contacts = contacts;
     Ok(answer)
 }

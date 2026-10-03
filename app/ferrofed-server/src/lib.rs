@@ -53,6 +53,7 @@ pub mod facade;
 pub mod federation;
 pub mod health;
 pub mod healthcheck;
+pub mod localization;
 pub mod metrics;
 pub mod panic;
 pub mod reload;

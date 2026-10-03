@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 31 of 35 covered, 4 planned, 0 deferred.
+**Gateway points:** 32 of 35 covered, 3 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -25,7 +25,7 @@ and a gateway is never marked down for them (section 17).
 | [CP-38](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-38) | Gateway | N33 | 2, 10 | covered | [#44](https://github.com/FerroHEALTH/FerroFED/issues/44) | - |
 | [CP-3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-3) | Gateway | N3 | 2 | covered | [#42](https://github.com/FerroHEALTH/FerroFED/issues/42), [#43](https://github.com/FerroHEALTH/FerroFED/issues/43) | - |
 | [CP-4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-4) | Gateway | N7 | 2 | covered | [#35](https://github.com/FerroHEALTH/FerroFED/issues/35), [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | - |
-| [CP-5](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-5) | Gateway | N4, N10 | 3, 4 | planned | [#46](https://github.com/FerroHEALTH/FerroFED/issues/46), [#85](https://github.com/FerroHEALTH/FerroFED/issues/85) | - |
+| [CP-5](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-5) | Gateway | N4, N10 | 3, 4 | covered | [#46](https://github.com/FerroHEALTH/FerroFED/issues/46), [#85](https://github.com/FerroHEALTH/FerroFED/issues/85) | scored over three mock nodes with a localizer stub and the development cross-reference: a member the localizer does not name is not-localized and never asked, a localizer that is down or silent past its budget fails closed with its error on every member and in meta.federation, and ask-all on failure holds only where declared and is declared in OPTIONS |
 | [CP-6](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-6) | Gateway | N11 | 3 | covered | [#70](https://github.com/FerroHEALTH/FerroFED/issues/70) | - |
 | [CP-7](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-7) | Gateway | N5 | 2 | covered | [#35](https://github.com/FerroHEALTH/FerroFED/issues/35), [#38](https://github.com/FerroHEALTH/FerroFED/issues/38) | - |
 | [CP-8](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-8) | Gateway | N13 | 5 | covered | [#52](https://github.com/FerroHEALTH/FerroFED/issues/52), [#55](https://github.com/FerroHEALTH/FerroFED/issues/55) | - |

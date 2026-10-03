@@ -43,6 +43,7 @@ use crate::config::settings::{PixmSettings, Scheme, Settings};
 use crate::config::{NodeSelection, RegistryFormat};
 use crate::facade::options::{self, DescribeError};
 use crate::health::dependencies::Dependencies;
+use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::{Instruments, NodeRequests};
 
 /// The federation a server serves the federated query over.
@@ -51,6 +52,7 @@ pub struct Federation {
     snapshot: Arc<RegistrySnapshot>,
     clients: NodeClients<ReqwestTransport>,
     resolver: Option<Arc<dyn Resolver>>,
+    localization: LocalizationPolicy,
     observed: Arc<Observed>,
     context: Context,
     budget: Budget,
@@ -183,6 +185,10 @@ pub enum FederationError {
     /// The PIXm resolver refuses its Managers or members.
     #[error("the [pixm] resolver cannot be enabled")]
     Pixm(#[source] PixmConfigError),
+    /// The localizer of `node_selection = "localized"` cannot be set up
+    /// (§14.1, N4).
+    #[error("the localizer cannot be set up")]
+    Localization(#[source] localization::LocalizationError),
     /// The node clients could not be built.
     #[error("the node clients could not be built")]
     Clients(#[source] SetupError),
@@ -304,17 +310,23 @@ impl Federation {
                 endpoint: endpoint.clone(),
             });
         }
+        let mut development = None;
         let resolver = match (&settings.dev, &settings.pixm) {
             (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
             (None, None) => None,
             (Some(section), None) => {
                 let table = section.table().map_err(FederationError::DevTable)?;
-                StaticResolver::from_config(settings.profile, Some(table), &snapshot)
+                development = StaticResolver::from_config(settings.profile, Some(table), &snapshot)
                     .map_err(FederationError::DevCrossRef)?
-                    .map(|resolver| -> Arc<dyn Resolver> { Arc::new(resolver) })
+                    .map(Arc::new);
+                development
+                    .clone()
+                    .map(|resolver| -> Arc<dyn Resolver> { resolver })
             }
             (None, Some(pixm)) => Some(pixm_resolver(pixm, &snapshot)?),
         };
+        let localization = localization::policy(&settings.federation, selection, development)
+            .map_err(FederationError::Localization)?;
         let credentials = onward_credentials(settings);
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.
@@ -336,6 +348,7 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
+            localization,
             observed: observed.unwrap_or_else(|| {
                 Arc::new(Observed::new(
                     settings.federation.binding_ttl,
@@ -378,6 +391,7 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
+            localization: LocalizationPolicy::none(),
             observed: Arc::new(Observed::new(
                 std::time::Duration::from_millis(
                     crate::config::Federation::default().binding_ttl_ms,
@@ -409,6 +423,22 @@ impl Federation {
     pub fn with_template_fan_out(mut self, offered: bool) -> Self {
         self.template_fan_out = offered;
         self
+    }
+
+    /// This federation, deriving the node set of an undirected patient query
+    /// from the localizer `localization` names (N4, §14.1).
+    #[must_use]
+    pub fn with_localization(mut self, localization: LocalizationPolicy) -> Self {
+        self.context = self.context.with_targeting(Targeting::Localized);
+        self.localization = localization;
+        self
+    }
+
+    /// The localizer of an undirected patient query, with its failure policy
+    /// and budget (§14.1).
+    #[must_use]
+    pub fn localization(&self) -> &LocalizationPolicy {
+        &self.localization
     }
 
     /// This federation, recording its node requests through `instruments`
@@ -581,6 +611,7 @@ impl std::fmt::Debug for Federation {
             .field("id", &self.id)
             .field("endpoints", &self.clients.len())
             .field("resolver", &self.resolver.is_some())
+            .field("localization", &self.localization)
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
             .field("demographic", &self.demographic)
@@ -708,5 +739,6 @@ fn onward_credentials(settings: &Settings) -> BTreeMap<EndpointId, SharedCredent
 fn targeting(selection: NodeSelection) -> Targeting {
     match selection {
         NodeSelection::AskAll => Targeting::AskAll,
+        NodeSelection::Localized => Targeting::Localized,
     }
 }

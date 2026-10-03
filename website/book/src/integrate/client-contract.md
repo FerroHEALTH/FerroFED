@@ -224,7 +224,12 @@ member of the open `meta` object, `meta.federation`:
 - `endpoints[]`, one entry per node with its status and provenance (§9.5,
   §11.1);
 - `timeout`, the budget that applied (§11.5);
-- `dedup`, the de-duplication policy that applied (§10).
+- `dedup`, the de-duplication policy that applied (§10);
+- `localization`, only when a configured localizer did not answer:
+  `localization.error` carries its error, which every member also carries
+  (§14.1). Under the default fail-closed policy no member is asked, every
+  member is `not-localized`, and `complete` stays `true`, so this member is
+  how you tell "the localizer is down" from "no node holds this patient".
 
 By default you get every row every node returned, duplicates included
 (§10.1, N15). Send `openEHR-federation-dedup: version-identity` to get one
@@ -349,7 +354,9 @@ configuration, so the body says what the gateway does today:
 | `paging` | `offset_strategy: "bounded"` with the configured `max_window`, or `"reject"`; never `"cursor"`, because no cursor is offered (§11.6.2, N39) |
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
 | `definition` | `fan_out_template_upload` as `federation.fan_out_template_upload` sets it (`false` by default); `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise; `stored_query_fan_out` is `true` while `federation.fan_out_stored_queries` is set beside the registry and `false` otherwise (N43, N44, §12.7) |
-| `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
+| `localization.on_failure` | `"closed"`, the default: a localizer that does not answer leaves every member `not-localized` with its error, and nothing is asked; `"ask-all"` only where the deployment set `federation.localization.on_failure` (§14.1, N30) |
+| `localization.mode` | present with a localizer configured: the binding that localizes, `"development-static"` for the development cross-reference |
+| `timeout.localization_ms` | present with a localizer configured: the localizer's own budget, a part of `overall_ms` |
 | `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, naming the template upload fan-out where it is offered, with stored queries held at the gateway registry when it is offered and routed with the rest when it is not (§12.6, §12.7, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 

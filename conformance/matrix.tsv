@@ -33,7 +33,7 @@ CP-2	Gateway	N2,N5	1,2	covered	#35,#38	-
 CP-38	Gateway	N33	2,10	covered	#44	-
 CP-3	Gateway	N3	2	covered	#42,#43	-
 CP-4	Gateway	N7	2	covered	#35,#38	-
-CP-5	Gateway	N4,N10	3,4	planned	#46,#85	-
+CP-5	Gateway	N4,N10	3,4	covered	#46,#85	scored over three mock nodes with a localizer stub and the development cross-reference: a member the localizer does not name is not-localized and never asked, a localizer that is down or silent past its budget fails closed with its error on every member and in meta.federation, and ask-all on failure holds only where declared and is declared in OPTIONS
 CP-6	Gateway	N11	3	covered	#70	-
 CP-7	Gateway	N5	2	covered	#35,#38	-
 CP-8	Gateway	N13	5	covered	#52,#55	-

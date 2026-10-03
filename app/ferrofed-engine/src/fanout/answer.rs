@@ -20,7 +20,7 @@ use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_its::rest::generated::query::ResultSetRow;
 
 use super::seen::{self, Seen};
-use super::{Budget, Completion, FanOutError, FederatedAnswer, decide};
+use super::{Budget, Completion, FanOutError, FederatedAnswer, LOCALIZATION_MEMBER, decide};
 
 /// How the rows of the `active` endpoints become the answer's rows.
 #[derive(Debug, Clone, Copy)]
@@ -226,4 +226,21 @@ fn endpoint_record(
         record = record.with_row_count(count).map_err(record_error)?;
     }
     Ok(record)
+}
+
+/// Records in `federation` that the configured localizer did not answer, as
+/// `localization.error` (§14.1: the failure SHOULD be carried in
+/// `meta.federation` as well as on each endpoint).
+pub(super) fn report_localization(
+    federation: &mut FederationMeta,
+    error: ErrorDetail,
+) -> Result<(), FanOutError> {
+    // NOTE: §14.1 names no member for it, and the schema leaves `federation` open
+    // for it: our own design, `localization.error` in the shape of an endpoint's `error`.
+    let report = BTreeMap::from([("error", error)]);
+    federation
+        .extra_mut()
+        .insert_serialized(LOCALIZATION_MEMBER, &report)
+        .map_err(FanOutError::Envelope)?;
+    Ok(())
 }

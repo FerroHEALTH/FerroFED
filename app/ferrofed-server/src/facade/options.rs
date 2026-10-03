@@ -40,6 +40,7 @@ use openehr_its::rest::routes::{self, Lookup};
 use crate::error::{self, Code};
 use crate::facade::{QUERY_AQL, route, stored, subject, write};
 use crate::federation::Federation;
+use crate::localization::LocalizationPolicy;
 use crate::request_id;
 use crate::state::AppState;
 
@@ -52,6 +53,13 @@ const ROOT_ALLOW: &str = "GET, HEAD, OPTIONS";
 // NOTE: §11.6.2 bounds the second strategy, and the schema's `paging` object
 // is open; it names no member for the bound, so the name is our own design.
 pub const MAX_WINDOW: &str = "max_window";
+
+/// The `localization` member that names the configured localizer's binding.
+pub const LOCALIZATION_MODE: &str = "mode";
+
+/// The `timeout` member that carries the localizer's budget, in
+/// milliseconds.
+pub const LOCALIZATION_MS: &str = "localization_ms";
 
 /// Why the self-description cannot be built from the running federation.
 #[derive(Debug, thiserror::Error)]
@@ -142,12 +150,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         definition: DefinitionBehaviour::new(federation.fans_out_template_upload())
             .with_stored_query_registry(registry)?
             .with_stored_query_fan_out(registry && federation.fans_out_stored_queries())?,
-        // NOTE: §14.1, fail-closed is the default and the gateway offers no
-        // fail-open, so `closed` holds for any localizer it is configured with.
-        localization: Localization {
-            on_failure: "closed".to_owned(),
-            extra: Extra::new(),
-        },
+        localization: localization(federation.localization())?,
         // TODO(#81): declare auth.jwks_uri once the gateway publishes its JWKS (§13.1).
         auth: None,
         its_rest: its_rest(federation, registry)?,
@@ -166,20 +169,45 @@ fn fans_out(targeting: Targeting) -> bool {
     matches!(targeting, Targeting::AskAll | Targeting::Localized)
 }
 
+/// The `localization` member: what the gateway does when its localizer does
+/// not answer, `closed` by default and `ask-all` only where the deployment
+/// declared it (§14.1, N4, N30), and, with a localizer configured, which
+/// binding it is as `mode`.
+fn localization(policy: &LocalizationPolicy) -> Result<Localization, DescribeError> {
+    let mut extra = Extra::new();
+    if let Some(mode) = policy.mode() {
+        // NOTE: §14.1 asks only for `on_failure`, and the schema leaves the object
+        // open: our own design, `mode` names the binding a client is localized by.
+        extra.insert_serialized(LOCALIZATION_MODE, mode)?;
+    }
+    Ok(Localization {
+        on_failure: policy.on_failure().as_str().to_owned(),
+        extra,
+    })
+}
+
 /// The `timeout` member: the configured budget, under which a node past it
-/// is abandoned and marked `time-out` (§11.5, N38).
+/// is abandoned and marked `time-out` (§11.5, N38), and, with a localizer
+/// configured, the localizer's own part of it.
 fn timeout(federation: &Federation) -> Result<TimeoutPolicy, DescribeError> {
     let budget = federation.budget();
     let millis = |member: &'static str, duration: std::time::Duration| {
         u64::try_from(duration.as_millis()).map_err(|_overflow| DescribeError::Budget { member })
     };
+    let mut extra = Extra::new();
+    if federation.localization().localizer().is_some() {
+        let localization = millis(LOCALIZATION_MS, federation.localization().timeout())?;
+        // NOTE: §11.5 declares the budgets and its `timeout` object is open: our own
+        // design, the localizer's budget is declared beside the two N38 names.
+        extra.insert_serialized(LOCALIZATION_MS, &localization)?;
+    }
     Ok(TimeoutPolicy {
         per_node_ms: millis("per_node_ms", budget.per_node())?,
         overall_ms: millis("overall_ms", budget.overall())?,
         // NOTE: §11.5, N38: the schema leaves `policy` open, and the value
         // names what the budget does to a late node.
         policy: "abandon-and-mark".to_owned(),
-        extra: Extra::new(),
+        extra,
     })
 }
 
