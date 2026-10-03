@@ -131,7 +131,7 @@ pub fn located<'a>(
     index: &EhrIndex,
     ehr_id: &EhrId,
 ) -> Result<Located<'a>, Untargeted> {
-    if let Some(endpoint) = target(snapshot, headers)? {
+    if let Some(endpoint) = targeted(snapshot, headers)? {
         return Ok(Located::At {
             endpoint,
             step: Step::Target,
@@ -247,8 +247,14 @@ pub fn collided(ehr_id: &EhrId, detection: Detection, claimants: &[EndpointId]) 
 /// The `openEHR-federation-endpoint` and `openEHR-federation-organisation`
 /// headers both apply to a routed request, read as [`target::requested`]
 /// reads them for a query; a routed request reaches one node, so together
-/// they select exactly one endpoint (§7a.1, §12.4).
-fn target<'a>(
+/// they select exactly one endpoint (§7a.1, §12.4). A new EHR is routed by
+/// this step alone, since it has no owner for a later step to find (§12.4).
+///
+/// # Errors
+///
+/// Returns [`Untargeted`] when the headers name what the registry does not
+/// know, disagree, or select other than one endpoint (§8.4.1).
+pub fn targeted<'a>(
     snapshot: &'a RegistrySnapshot,
     headers: &HeaderMap,
 ) -> Result<Option<&'a Endpoint>, Untargeted> {

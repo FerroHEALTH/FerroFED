@@ -38,7 +38,7 @@ use openehr_federation::options::{
 use openehr_its::rest::routes::{self, Lookup};
 
 use crate::error::{self, Code};
-use crate::facade::{QUERY_AQL, route, stored};
+use crate::facade::{QUERY_AQL, route, stored, write};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
@@ -231,7 +231,9 @@ fn its_rest(registry: bool) -> Result<ItsRestAreas, DescribeError> {
         query: query.to_owned(),
         ehr: "routed: a request under {base}/v1/ehr/{ehr_id} goes to the one node \
               that owns the ehr_id, found by the targeting headers, the session's \
-              resolution binding, the ehr_id index, then for a read an ask-all probe"
+              resolution binding, the ehr_id index, then for a read an ask-all probe; \
+              a versioned write only when that node controls the version it amends; \
+              POST {base}/v1/ehr to the one endpoint the targeting headers name"
             .to_owned(),
         // TODO(#75): describe definition requests routed to one explicitly chosen node.
         definition: definition.to_owned(),
@@ -311,8 +313,10 @@ pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
 ///
 /// The federated query takes `POST` only; an EHR resource under a path
 /// `ehr_id` takes every method ITS-REST declares for it, because each is
-/// routed to one node (§7a.1). Where the stored-query `registry` is offered,
-/// a stored query takes `POST`, and a definition `GET` and `PUT` (§12.7).
+/// routed to one node (§7a.1), and the EHR collection takes `POST`, the
+/// creation of an EHR at the one node the targeting headers name (§12.4).
+/// Where the stored-query `registry` is offered, a stored query takes
+/// `POST`, and a definition `GET` and `PUT` (§12.7).
 fn served(path: &str, registry: bool) -> Option<Vec<Method>> {
     let query = QUERY_AQL.strip_prefix(crate::ITS_REST_PREFIX.trim_end_matches('/'));
     let mut methods = if query == Some(path) {
@@ -330,7 +334,9 @@ fn served(path: &str, registry: bool) -> Option<Vec<Method>> {
                 matches!(
                     routes::lookup(method, path),
                     Lookup::Matched(matched)
-                        if route::in_ehr_area(&matched) || (registry && stored::serves(&matched))
+                        if route::in_ehr_area(&matched)
+                            || write::creates_ehr(&matched)
+                            || (registry && stored::serves(&matched))
                 )
             })
             .collect()

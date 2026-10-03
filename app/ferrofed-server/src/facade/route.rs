@@ -28,6 +28,13 @@
 //! teaches the follow-up routing table the versions it names ([`follow_up`];
 //! §12.2, N21). A read of one version routes the same way: by its path
 //! `ehr_id`, never by the version's `creating_system_id` (§12a.1, N41).
+//!
+//! A versioned write routes by its path `ehr_id` too, and is sent only when
+//! that node controls the version it amends ([`write`](mod@write); §12.4,
+//! §12a.1, N23): one that does not is refused `409`, and no node is sent the
+//! write (§10.3).
+//! A new EHR has no owner, so only the targeting headers route it,
+//! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3).
 
 use std::time::{Duration, Instant};
 
@@ -41,13 +48,14 @@ use ferrofed_engine::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::incident::Detection;
-use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
+use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
 use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::headers;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::error::{self, Code};
+use crate::facade::write::{self, Write};
 use crate::facade::{follow_up, owner, security};
 use crate::federation::Federation;
 
@@ -101,6 +109,9 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
         Lookup::Matched(matched) if in_ehr_area(&matched) => {
             route(federation, arrived, &matched).await
         }
+        Lookup::Matched(matched) if write::creates_ehr(&matched) => {
+            create(federation, arrived, &matched).await
+        }
         Lookup::Matched(_) | Lookup::MethodNotAllowed { .. } | Lookup::NotFound => {
             error::fixed(Code::NotImplemented, arrived.request_id)
         }
@@ -127,7 +138,9 @@ pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
 /// session holds, the `ehr_id` index, and for a read only, the ask-all probe.
 /// A write none of the first three routes is a `400` (`target-required`),
 /// and so is a read whose `ehr_id` is no bare UUID (`probe-requires-uuid`):
-/// nothing is probed.
+/// nothing is probed. A new EHR is routed by the targeting headers alone,
+/// and a versioned write is sent only when the node controls the version it
+/// amends ([`write::controlled`]; §12.4, N23).
 async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMatch) -> Response {
     let started = Instant::now();
     let request_id = arrived.request_id;
@@ -137,26 +150,12 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     let Some(ehr_id) = path_ehr_id(matched) else {
         return error::fixed(Code::EhrIdInvalid, request_id);
     };
-    if let Some(query) = arrived.uri.query()
-        && let Err(unlisted) = hygiene::forwarded_query(matched, query)
-    {
-        security::forward_refused(unlisted.position, &logged);
-        return error::response(
-            Code::QueryParameterRefused,
-            unlisted.to_string(),
-            request_id,
-        );
+    if let Some(refused) = query_refused(matched, &arrived, &logged) {
+        return refused;
     }
-    // TODO(#80): the authenticated client session the resolution bindings belong to.
-    let session: Option<SessionKey> = None;
-    let held = session.as_ref().map(|session| owner::Held {
-        bindings: federation.bindings(),
-        session,
-        now: started,
-    });
     let snapshot = federation.snapshot();
-    let located = match owner::located(snapshot, arrived.headers, held, federation.index(), &ehr_id)
-    {
+    let write = Write::of(matched);
+    let located = match locate(federation, arrived.headers, write, &ehr_id, started) {
         Ok(located) => located,
         Err(untargeted) => {
             return error::response(untargeted.code(), untargeted.to_string(), request_id);
@@ -200,9 +199,20 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
                 Err((code, message)) => return error::response(code, message, request_id),
             }
         }
-        // TODO(#65): a versioned write routed to its controlling CDR by the target version's creating_system_id (§12.4, N23).
+        // NOTE: §12a.1 route-ehr, N41: a write no earlier step routes is refused,
+        // never routed by its version's creating_system_id alone.
         owner::Located::Unknown => return error::fixed(Code::TargetRequired, request_id),
     };
+    if let Write::Versioned(preceding) = write
+        && let Err(refused) = write::controlled(
+            snapshot,
+            preceding,
+            (matched, arrived.headers),
+            endpoint.node(),
+        )
+    {
+        return not_controlled(&refused, endpoint, (request_id, &logged));
+    }
     // NOTE: §11.1 never contacts a suspended endpoint, so a request that names
     // one resolves to no destination (§11.2); the suspension rule is our own design.
     if endpoint.status() == EndpointStatus::Suspended {
@@ -214,13 +224,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
         request_id = logged,
         "routed a path ehr_id"
     );
-    let system_id = snapshot
-        .node(endpoint.node())
-        .map(|node| node.system_id().as_str());
-    let provenance = Provenance {
-        endpoint: endpoint.id(),
-        system_id,
-    };
+    let provenance = Provenance::of(snapshot, endpoint);
     let forwarded = match probed {
         Some(answer) => Ok(answer),
         None => forward(federation, endpoint, &arrived, &budget, &logged).await,
@@ -234,6 +238,123 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
     }
+}
+
+/// The `400` refusing a request whose query string carries a parameter the
+/// operation `matched` does not declare, or `None` when it carries none
+/// (§5.4.1, N33).
+fn query_refused(matched: &RouteMatch, arrived: &Arrived<'_>, logged: &str) -> Option<Response> {
+    let query = arrived.uri.query()?;
+    let unlisted = hygiene::forwarded_query(matched, query).err()?;
+    security::forward_refused(unlisted.position, logged);
+    Some(error::response(
+        Code::QueryParameterRefused,
+        unlisted.to_string(),
+        arrived.request_id,
+    ))
+}
+
+/// What the first three steps of §12.5.1 say about the owner of `ehr_id`
+/// for a request that writes `write`, read at `started` (N41).
+///
+/// A new EHR has no owner for a binding or the index to name, so only the
+/// targeting headers route it (§12.4, §8.4, N23).
+///
+/// # Errors
+///
+/// Returns [`owner::Untargeted`] when the targeting headers name no one
+/// endpoint the registry holds (§8.4.1).
+fn locate<'a>(
+    federation: &'a Federation,
+    headers: &HeaderMap,
+    write: Write,
+    ehr_id: &EhrId,
+    started: Instant,
+) -> Result<owner::Located<'a>, owner::Untargeted> {
+    let snapshot = federation.snapshot();
+    if write == Write::NewEhr {
+        return Ok(match owner::targeted(snapshot, headers)? {
+            Some(endpoint) => owner::Located::At {
+                endpoint,
+                step: owner::Step::Target,
+            },
+            None => owner::Located::Unknown,
+        });
+    }
+    // TODO(#80): the authenticated client session the resolution bindings belong to.
+    let session: Option<SessionKey> = None;
+    let held = session.as_ref().map(|session| owner::Held {
+        bindings: federation.bindings(),
+        session,
+        now: started,
+    });
+    owner::located(snapshot, headers, held, federation.index(), ehr_id)
+}
+
+/// Routes `POST {base}/v1/ehr` to the one endpoint the targeting headers
+/// name, and answers as that node did (§12.4, N23).
+///
+/// A new EHR has no owner yet, so neither a binding nor the index can name
+/// its node, and a write is never probed (N41): without the headers the
+/// request is a `400` (`target-required`), and headers selecting more than
+/// one endpoint are a `400` too, because an EHR is created at one node only
+/// (§2.3, N23). The body is forwarded byte-identical (N22, N33).
+async fn create(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMatch) -> Response {
+    let started = Instant::now();
+    let request_id = arrived.request_id;
+    let logged = arrived.outbound.to_string();
+    if let Some(refused) = query_refused(matched, &arrived, &logged) {
+        return refused;
+    }
+    let snapshot = federation.snapshot();
+    let endpoint = match owner::targeted(snapshot, arrived.headers) {
+        Ok(Some(endpoint)) => endpoint,
+        Ok(None) => return error::fixed(Code::TargetRequired, request_id),
+        Err(untargeted) => {
+            return error::response(untargeted.code(), untargeted.to_string(), request_id);
+        }
+    };
+    if endpoint.status() == EndpointStatus::Suspended {
+        return error::fixed(Code::NoDestination, request_id);
+    }
+    let Some(budget) = Deadlines::from(federation, started) else {
+        tracing::error!(
+            request_id = logged,
+            "the routed request's deadline cannot be represented"
+        );
+        return error::fixed(Code::Internal, request_id);
+    };
+    tracing::debug!(
+        endpoint = %endpoint.id(),
+        request_id = logged,
+        "routed the creation of an EHR"
+    );
+    let provenance = Provenance::of(snapshot, endpoint);
+    match forward(federation, endpoint, &arrived, &budget, &logged).await {
+        Ok(forwarded) => provenance.stamp(answered(forwarded)),
+        Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
+        Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
+    }
+}
+
+/// The refusal of a versioned write the path `ehr_id` routes to `endpoint`,
+/// before anything is sent: it names no single preceding version, or the
+/// node does not control that version (§10.3, §12.4, N23).
+fn not_controlled(
+    refused: &write::Refused,
+    endpoint: &Endpoint,
+    (request_id, logged): (&str, &str),
+) -> Response {
+    if let write::Refused::NotControlling(_) = refused {
+        // TODO(#66): score this refusal for a write from a de-duplicated row whose owner is down (§10.3, CP-29).
+        tracing::warn!(
+            endpoint = %endpoint.id(),
+            code = refused.code().as_str(),
+            request_id = logged,
+            "a versioned write was refused at a node that does not control the version it amends"
+        );
+    }
+    error::response(refused.code(), refused.to_string(), request_id)
 }
 
 /// Teaches what `endpoint`'s answer shows: on a success, that its node holds
@@ -449,6 +570,18 @@ fn failed(
 struct Provenance<'a> {
     endpoint: &'a EndpointId,
     system_id: Option<&'a str>,
+}
+
+impl<'a> Provenance<'a> {
+    /// The provenance of an answer `endpoint` of `snapshot` acted for.
+    fn of(snapshot: &'a RegistrySnapshot, endpoint: &'a Endpoint) -> Self {
+        Self {
+            endpoint: endpoint.id(),
+            system_id: snapshot
+                .node(endpoint.node())
+                .map(|node| node.system_id().as_str()),
+        }
+    }
 }
 
 impl Provenance<'_> {

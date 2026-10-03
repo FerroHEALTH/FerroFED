@@ -23,6 +23,24 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Versioned writes reach only their controlling CDR, and a new EHR only an
+  explicit target (#65; §12.4, §12a.1, §10.3, N23, N41, CP-15). An update of
+  a composition, the `EHR_STATUS` or the directory, a directory delete (each
+  naming its preceding version in `If-Match`) and a composition delete
+  (naming it in the path) route by the path `ehr_id` as before, and are sent
+  only when the registry maps the preceding version's `creating_system_id`
+  to that same node, as the member's own `system_id` or a `[[creating_system]]`
+  mapping; a learned mapping never counts. Otherwise the write is refused
+  `409 controlling-system-unreachable`, naming the controlling node where the
+  registry knows it, and no node is sent it. A versioned write that names no
+  single preceding version (no `If-Match`, several, `*`, a weak or unquoted
+  tag, or no `OBJECT_VERSION_ID`) is refused with the new code
+  `400 preceding-version-invalid`. `POST {base}/v1/ehr` is now served, and it
+  and `PUT {base}/v1/ehr/{ehr_id}` go only to the one endpoint the targeting
+  headers name: without them the request is `400 target-required`, and with
+  several endpoints `400 endpoint-several`; neither a binding nor the index
+  routes a new EHR. `OPTIONS {base}/v1/ehr` answers `POST, OPTIONS`. A
+  `CONTRIBUTION` is routed by its path `ehr_id` alone.
 - Integrity incidents for an `ehr_id` two members claim (#63; §12.5.2,
   §12b.2, N42, CP-33). A request whose `ehr_id` the session's resolution
   bindings, the `ehr_id` index or the ask-all probe finds at two members or

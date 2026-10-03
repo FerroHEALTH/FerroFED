@@ -32,6 +32,9 @@
 //! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3);
 //! [`owner`] finds that node in the order of §12.5.1, and a resolution here
 //! teaches its `ehr_id` index which member holds each resolved `ehr_id`.
+//! A versioned write goes there only when that node controls the version it
+//! amends, and a new EHR only to an explicit target
+//! ([`write`](mod@write); §12.4).
 //! Every version a fan-out or a routed answer shows an endpoint holding
 //! teaches the follow-up routing table ([`follow_up`]; §12.2, N21).
 //! `OPTIONS {base}/` describes the whole surface, and `OPTIONS` on a sub-path
@@ -50,6 +53,7 @@ pub mod route;
 pub mod security;
 pub mod stored;
 pub mod target;
+pub mod write;
 
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
