@@ -1492,6 +1492,9 @@ image's init script creates the first role and database from `PG_INIT_USER`,
 `docker/postgres/20-ferrofed-node-databases.sh`, sorted after it, runs that
 same script once more per further node, so FerroEHR's steps are reused and
 never copied, and the cluster-wide group roles are created once and shared.
+The script then revokes `CONNECT` on every node database from `PUBLIC` and
+grants it to that node's role alone, so one node's role is refused on another
+node's database; the shared server is still no production boundary.
 Schemas cannot separate the nodes: FerroEHR creates fixed schema names
 (`clinical`, `ext`, `party`, `linkage`, `audit`) in the database it connects
 to, so two nodes in one database would share their tables and stop being
