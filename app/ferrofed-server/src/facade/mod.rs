@@ -32,6 +32,8 @@
 //! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3);
 //! [`owner`] finds that node in the order of §12.5.1, and a resolution here
 //! teaches its `ehr_id` index which member holds each resolved `ehr_id`.
+//! An undirected query the client scoped to one `ehr_id`, in either form of
+//! N29, goes to the member that owns it, found in the same order (`scoped`).
 //! A versioned write goes there only when that node controls the version it
 //! amends, and a new EHR only to an explicit target
 //! ([`write`](mod@write); §12.4).
@@ -56,6 +58,7 @@ pub mod owner;
 pub mod plan;
 pub mod prefer;
 pub mod route;
+mod scoped;
 pub mod security;
 pub mod stored;
 pub mod subject;
@@ -74,7 +77,8 @@ use axum::{Extension, Json};
 use ferrofed_engine::fanout::{Budget, Completion, FanOutError, fan_out_within};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
+use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::aql::refusal::Refusal;
@@ -187,14 +191,21 @@ pub(crate) async fn answer(
         session: session.as_ref(),
     };
     match federate(federation, query).await {
-        Ok((status, mut result_set)) => {
+        Ok((status, mut result_set, routed)) => {
             // NOTE: §12.7, N44: the answer to a stored query names the gateway's definition.
             result_set.name = name;
             let mut response = (status, Json(result_set)).into_response();
             if let Some(applied) = wait.filter(|_| budget != configured) {
                 applied_wait(&mut response, applied);
             }
-            response
+            // NOTE: §7a.3, N31: a query routed to its ehr_id's one owner is dispatched
+            // to a single node, so the answer names the acting endpoint.
+            match routed {
+                Some(endpoint) => {
+                    route::Provenance::of(federation.snapshot(), endpoint).stamp(response)
+                }
+                None => response,
+            }
         }
         Err(failure) => failure.respond(request_id, outbound),
     }
@@ -239,6 +250,10 @@ enum Failure {
     /// The fan-out could not be planned.
     #[error("the federated query could not be planned")]
     Plan(#[source] plan::TargetsError),
+    /// The query is scoped to one `ehr_id`, and the order of §12.5.1 names
+    /// no one member that owns it.
+    #[error(transparent)]
+    Routed(#[from] scoped::Unrouted),
     /// Node selection left no registry member in scope, so the request
     /// resolves to no destination (§11.2, §11.3).
     #[error(
@@ -272,6 +287,7 @@ impl Failure {
             Self::Refused(refusal) => Code::Refused(refusal.into()),
             Self::Target(error) => error.code(),
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
+            Self::Routed(unrouted) => unrouted.code(),
             Self::NoDestination => Code::NoDestination,
             // NOTE: §11.1, a node row the gateway cannot use is a node-error
             // at dispatch, so one reaching the cells is the gateway's fault.
@@ -408,17 +424,34 @@ fn directed(
     Ok((facade, named))
 }
 
-/// Runs one federated query and returns the status and the `RESULT_SET`.
+/// Holds the `{node, ehr_id}` set a resolution produced as the `session`'s
+/// resolution bindings (§12.5.1 step 2), and teaches the `ehr_id` index
+/// where each `ehr_id` is held (step 3).
+fn remember(federation: &Federation, session: Option<&SessionKey>, resolved: &[(NodeId, EhrId)]) {
+    if let Some(session) = session {
+        federation.bindings().record(
+            session,
+            Instant::now(),
+            resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
+        );
+    }
+    for (node, ehr_id) in resolved {
+        owner::learn(federation.index(), ehr_id, node);
+    }
+}
+
+/// Runs one federated query and returns the status, the `RESULT_SET`, and
+/// the endpoint a query scoped to one `ehr_id` was routed to.
 ///
 /// Resolution and the fan-out share one overall budget, which runs from the
 /// request's arrival, so the gateway answers within its declared budget
 /// (§11.5). The `{node, ehr_id}` set a resolution produces is held as the
 /// session's resolution bindings (§12.5.1 step 2); without a
 /// session there is nothing to scope them to, and none is held.
-async fn federate(
-    federation: &Federation,
+async fn federate<'f>(
+    federation: &'f Federation,
     query: Query<'_>,
-) -> Result<(StatusCode, ResultSet), Failure> {
+) -> Result<(StatusCode, ResultSet, Option<&'f Endpoint>), Failure> {
     let Query {
         sent,
         headers,
@@ -436,9 +469,16 @@ async fn federate(
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
-    let selection = named
-        .as_ref()
-        .map_or(plan::Selection::Undirected, plan::Selection::Directed);
+    let scope = scoped::Scoped {
+        headers,
+        session,
+        budget,
+        started,
+        outbound,
+    };
+    let routed = scoped::routed(federation, &analysis, named.as_ref(), scope).await?;
+    let owner = routed.map(|owner| owner.endpoint.id());
+    let selection = plan::Selection::of(named.as_ref(), owner);
     let (targets, subject) = match &analysis {
         Analysis::Patient(query) => (
             plan::patient(
@@ -460,16 +500,7 @@ async fn federate(
     if targets.plan.has_no_destination() {
         return Err(Failure::NoDestination);
     }
-    if let Some(session) = session {
-        federation.bindings().record(
-            session,
-            Instant::now(),
-            targets.resolved.iter().map(|(node, ehr_id)| (node, ehr_id)),
-        );
-    }
-    for (node, ehr_id) in &targets.resolved {
-        owner::learn(federation.index(), ehr_id, node);
-    }
+    remember(federation, session, &targets.resolved);
     let attributes = analysis.attributes();
     let mut plan = targets
         .plan
@@ -519,7 +550,7 @@ async fn federate(
     } else {
         Vec::new()
     };
-    Ok((status, result_set))
+    Ok((status, result_set, routed.map(|owner| owner.endpoint)))
 }
 
 #[cfg(test)]

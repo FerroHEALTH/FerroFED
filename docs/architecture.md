@@ -426,6 +426,22 @@ answer for a member is a `424`, never the `404`, because that member may hold
 the EHR. The `404` is the operation's own: it reads one EHR resource, so
 §11.3's `200` with no rows, which answers a query, does not apply.
 
+**A query scoped to one `ehr_id`.** N29 makes `WHERE e/ehr_id/value = …`,
+`FROM EHR e[ehr_id/value=…]` and the path `{base}/v1/ehr/{ehr_id}`
+semantically equivalent, and §12.5.1 orders only the routing of a path
+`ehr_id`; the specification is silent on where an undirected query in either
+AQL form goes. FerroFED moves the `FROM` predicate into `WHERE` on the AST
+before the scan, so both forms dispatch the canonical query of §7.1, and
+routes an undirected query scoped to exactly one `ehr_id` as a read of that
+path: binding, index, then the ask-all probe, every other member reported
+`excluded` and the acting endpoint named (N31). A directive or a targeting
+header is step 1 and is never overridden (#69; FerroFED's own).
+
+**The base path.** The gateway serves every route under `[server] base_path`,
+`/` by default; it reserves no prefix and checks the path at boot (§4.1, N28,
+#69). A node is always asked at its own base URL, so the gateway's base never
+travels.
+
 **Per-node clients.** Each endpoint has one `rest::client::Client` built from
 the registry snapshot: its base URL, a `CredentialsProvider` for the onward
 grant (section 7) and a retry policy. Every call carries `CallOptions` with the

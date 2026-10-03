@@ -17,6 +17,10 @@ use std::fmt;
 
 use openehr_query::ast::{IdentifiedPath, PathPart};
 
+use super::Context;
+use super::refusal::{Refusal, Unreducible};
+use super::scan::{Findings, Input};
+
 /// The patient a façade query identifies: the identifier and its issuing
 /// namespace (§5.2), consumed at the gateway as resolution input.
 ///
@@ -207,6 +211,69 @@ fn starts_with(parts: &[PathPart], names: &[&str]) -> bool {
             .iter()
             .zip(names)
             .all(|(part, name)| part.name == *name)
+}
+
+/// The patient the query names and the top-level leaves that name it, or
+/// `None` for a query without a patient predicate.
+pub(super) fn named(
+    findings: &Findings,
+    context: &Context,
+) -> Result<Option<(Subject, Vec<usize>)>, Refusal> {
+    let Some(first) = findings.ids.first() else {
+        if let Some((_, _, at)) = findings
+            .inputs
+            .iter()
+            .find(|(_, input, _)| *input == Input::Id)
+        {
+            return Err(Refusal::SubjectWithoutPredicate { at: at.clone() });
+        }
+        return Ok(None);
+    };
+    if let Some(second) = findings.ids.iter().find(|found| found.value != first.value) {
+        return Err(Refusal::SecondSubject {
+            at: second.at.clone(),
+        });
+    }
+    if first.value.is_empty() {
+        return Err(Refusal::EmptyIdentifier {
+            at: first.at.clone(),
+        });
+    }
+    if findings.ehr.len() > 1 {
+        return Err(Refusal::Unreducible {
+            reason: Unreducible::SeveralEhrs,
+            at: first.at.clone(),
+        });
+    }
+    let namespace = match findings.namespaces.first() {
+        Some(named) => {
+            if let Some(second) = findings
+                .namespaces
+                .iter()
+                .find(|found| found.value != named.value)
+            {
+                return Err(Refusal::SecondNamespace {
+                    at: second.at.clone(),
+                });
+            }
+            (named.value.clone(), NamespaceOrigin::Query)
+        }
+        None => match &context.default_namespace {
+            Some(default) => (default.clone(), NamespaceOrigin::Default),
+            None => return Err(Refusal::NoNamespace),
+        },
+    };
+    let consumed = findings
+        .ids
+        .iter()
+        .chain(&findings.namespaces)
+        .map(|found| found.leaf)
+        .collect();
+    let (namespace, origin) = namespace;
+    Ok(Some((
+        Subject::new(first.value.clone(), namespace, origin),
+        consumed,
+    )))
 }
 
 #[cfg(test)]

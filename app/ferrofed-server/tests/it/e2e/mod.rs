@@ -22,7 +22,8 @@
 //! sends the directive to no node (§9.4, N12), in [`attributes`].
 //!
 //! Track 10, the adversarial identifier-leakage suite, runs against the same
-//! two nodes in [`track10`].
+//! two nodes in [`track10`], and a plain client given only a prefixed base
+//! URL reads and writes through the gateway in [`track9`] (N28, N29).
 //!
 //! The admission check creates its test EHRs on node A and reads each back,
 //! with only synthetic subjects on the wire (§12b.1, §12b.2, N42a), in
@@ -56,6 +57,7 @@ mod commit;
 mod crossref;
 mod pixm;
 mod track10;
+mod track9;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -89,8 +91,14 @@ pub(crate) fn gateway(
     a: &ProxiedNode,
     b: &ProxiedNode,
 ) -> Result<axum::Router, Box<dyn Error>> {
+    gateway_resolving(dir, a, b, &dev_resolver())
+}
+
+/// The development cross-reference resolving [`PATIENT`] to [`EHR_A`] at
+/// node A and [`EHR_B`] at node B.
+pub(crate) fn dev_resolver() -> String {
     let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
-    let resolver = format!(
+    format!(
         r#"profile = "development"
 
 [[dev.crossref]]
@@ -105,8 +113,7 @@ value = "{value}"
 member = "node-b"
 ehr_id = "{EHR_B}"
 "#
-    );
-    gateway_resolving(dir, a, b, &resolver)
+    )
 }
 
 /// The gateway over node A and node B, with the resolver `resolver`
@@ -117,8 +124,20 @@ fn gateway_resolving(
     b: &ProxiedNode,
     resolver: &str,
 ) -> Result<axum::Router, Box<dyn Error>> {
+    gateway_mounted(dir, (a, b), resolver, "/")
+}
+
+/// The gateway over node A and node B, with the resolver `resolver`
+/// configures, mounted at `base` (N28).
+pub(crate) fn gateway_mounted(
+    dir: &std::path::Path,
+    (a, b): (&ProxiedNode, &ProxiedNode),
+    resolver: &str,
+    base: &str,
+) -> Result<axum::Router, Box<dyn Error>> {
     let federation = federation_resolving(dir, a, b, resolver)?;
     let mut server = settings();
+    server.base_path = base.parse()?;
     server.request_timeout = Duration::from_secs(30);
     server.body_limit = 64 * 1024;
     Ok(ferrofed_server::router(

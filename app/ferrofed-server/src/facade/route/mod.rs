@@ -531,7 +531,7 @@ pub(crate) async fn send(
 /// Runs the ask-all probe and returns the one owner it found with its
 /// answer, or the code and the message that refuse the read (§12.5.1 step
 /// 4).
-async fn ask_all<'a>(
+pub(crate) async fn ask_all<'a>(
     federation: &'a Federation,
     probe: &Probe,
     logged: &str,

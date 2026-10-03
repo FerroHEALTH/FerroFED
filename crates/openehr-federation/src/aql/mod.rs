@@ -53,6 +53,7 @@ mod function;
 mod paging;
 mod rewrite;
 mod scan;
+mod scope;
 
 pub mod definition;
 pub mod directive;
@@ -76,9 +77,9 @@ use crate::attribute::EndpointAttribute;
 use crate::dedup::DedupMode;
 use crate::order::ResultOrder;
 use directive::FacadeQuery;
-use refusal::{Indecomposable, Refusal, Unreducible};
+use refusal::{Indecomposable, Refusal};
 use scan::{Findings, Input};
-use subject::{NamespaceOrigin, Subject};
+use subject::Subject;
 
 /// The ITS-REST paging members sent beside the AQL (`AdhocQueryExecute`
 /// `offset` and `fetch`, or the GET parameters of the same names).
@@ -426,6 +427,7 @@ pub struct UnscopedQuery {
     node: NodeQuery,
     columns: Vec<ResultSetColumn>,
     ehr_scoped: bool,
+    ehr_scope: Option<String>,
     order: ResultOrder,
     recombination: Option<Recombination>,
 }
@@ -448,6 +450,14 @@ impl UnscopedQuery {
     #[must_use]
     pub fn ehr_scoped(&self) -> bool {
         self.ehr_scoped
+    }
+
+    /// The one `ehr_id` the client scoped the query to in either form of
+    /// N29, both of which reach a node as `WHERE` (§7.1), or `None` when the
+    /// query is not scoped to exactly one.
+    #[must_use]
+    pub fn ehr_scope(&self) -> Option<&str> {
+        self.ehr_scope.as_deref()
     }
 }
 
@@ -491,6 +501,7 @@ fn analyse_tree(
     context: &Context,
 ) -> Result<Analysis, Refusal> {
     bind(&mut query, parameters).map_err(Refusal::Parameters)?;
+    scope::canonical(&mut query);
     let facade_columns = render_columns(&query.select);
     let endpoint = match directive {
         Some(directive) => directive::strip_endpoint_columns(&mut query, directive)?,
@@ -524,7 +535,7 @@ fn analyse_tree(
     }
     let ordered = rewrite::Rows::of(findings.aggregate.is_none(), context.dedup);
     let distinct = query.select.distinct;
-    let mut analysis = match subject(&findings, context)? {
+    let mut analysis = match subject::named(&findings, context)? {
         Some((subject, consumed)) => {
             patient(query, &findings, subject, &consumed, columns, ordered)?
         }
@@ -596,69 +607,6 @@ fn render_columns(select: &SelectClause) -> Vec<ResultSetColumn> {
         .collect()
 }
 
-/// The patient the query names and the top-level leaves that name it, or
-/// `None` for a query without a patient predicate.
-fn subject(
-    findings: &Findings,
-    context: &Context,
-) -> Result<Option<(Subject, Vec<usize>)>, Refusal> {
-    let Some(first) = findings.ids.first() else {
-        if let Some((_, _, at)) = findings
-            .inputs
-            .iter()
-            .find(|(_, input, _)| *input == Input::Id)
-        {
-            return Err(Refusal::SubjectWithoutPredicate { at: at.clone() });
-        }
-        return Ok(None);
-    };
-    if let Some(second) = findings.ids.iter().find(|found| found.value != first.value) {
-        return Err(Refusal::SecondSubject {
-            at: second.at.clone(),
-        });
-    }
-    if first.value.is_empty() {
-        return Err(Refusal::EmptyIdentifier {
-            at: first.at.clone(),
-        });
-    }
-    if findings.ehr.len() > 1 {
-        return Err(Refusal::Unreducible {
-            reason: Unreducible::SeveralEhrs,
-            at: first.at.clone(),
-        });
-    }
-    let namespace = match findings.namespaces.first() {
-        Some(named) => {
-            if let Some(second) = findings
-                .namespaces
-                .iter()
-                .find(|found| found.value != named.value)
-            {
-                return Err(Refusal::SecondNamespace {
-                    at: second.at.clone(),
-                });
-            }
-            (named.value.clone(), NamespaceOrigin::Query)
-        }
-        None => match &context.default_namespace {
-            Some(default) => (default.clone(), NamespaceOrigin::Default),
-            None => return Err(Refusal::NoNamespace),
-        },
-    };
-    let consumed = findings
-        .ids
-        .iter()
-        .chain(&findings.namespaces)
-        .map(|found| found.leaf)
-        .collect();
-    let (namespace, origin) = namespace;
-    Ok(Some((
-        Subject::new(first.value.clone(), namespace, origin),
-        consumed,
-    )))
-}
-
 fn patient(
     query: SelectQuery,
     findings: &Findings,
@@ -726,7 +674,9 @@ fn unscoped(
     columns: Vec<ResultSetColumn>,
     ordered: rewrite::Rows,
 ) -> Result<Analysis, Refusal> {
-    if context.targeting == Targeting::Localized {
+    // NOTE: §12.5.1, N29: one ehr_id names its owner, so that query's node set is defined.
+    let ehr_scope = scope::of(findings);
+    if context.targeting == Targeting::Localized && ehr_scope.is_none() {
         return Err(Refusal::NodeSetUndefined);
     }
     if query.select.columns.is_empty() {
@@ -744,6 +694,7 @@ fn unscoped(
         },
         columns,
         ehr_scoped: findings.ehr_scoped,
+        ehr_scope,
         order,
         recombination: None,
     }))

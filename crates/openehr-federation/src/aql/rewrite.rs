@@ -156,6 +156,11 @@ pub(super) fn ehr_variable(query: &mut SelectQuery, bound: &[String]) -> String 
 fn fresh_variable(query: &SelectQuery) -> String {
     let mut taken = Vec::new();
     variables(&query.from, &mut taken);
+    fresh_name(&taken)
+}
+
+/// A variable name none of `taken` is: `e`, else `e1`, `e2` and so on.
+pub(super) fn fresh_name(taken: &[String]) -> String {
     let mut candidate = String::from("e");
     let mut suffix = 0_u32;
     while taken.contains(&candidate) {
@@ -165,7 +170,8 @@ fn fresh_variable(query: &SelectQuery) -> String {
     candidate
 }
 
-fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
+/// Appends every variable the containment `from` binds to `out`.
+pub(super) fn variables(from: &ContainsExpr, out: &mut Vec<String>) {
     match from {
         ContainsExpr::Contained { operand, contains } => {
             let (ClassExprOperand::Class { variable, .. }

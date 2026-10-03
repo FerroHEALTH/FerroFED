@@ -104,6 +104,15 @@ pub enum Error {
         #[source]
         source: std::net::AddrParseError,
     },
+    /// The base path is not one a request can be served under (§4.1, N28).
+    #[error("{key} is not a base path")]
+    BasePath {
+        /// The key that holds it.
+        key: String,
+        /// Why the path is refused.
+        #[source]
+        source: crate::base_path::BasePathError,
+    },
     /// A duration or a size that must be positive is zero.
     #[error("{key} is zero; it must be positive")]
     Zero {

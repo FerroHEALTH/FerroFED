@@ -16,6 +16,7 @@ use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
 
+use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::{
@@ -36,7 +37,7 @@ impl Config {
     /// cannot be read or holds nothing, [`Error::Authorization`] and
     /// [`Error::Basic`] for a credential the `Authorization` header cannot
     /// carry, and the value errors
-    /// ([`Error::Listen`], [`Error::Zero`], [`Error::Filter`],
+    /// ([`Error::Listen`], [`Error::BasePath`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::DemographicEndpoint`], [`Error::Missing`],
     /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]),
     /// each naming the key that carries the fault.
@@ -47,6 +48,14 @@ impl Config {
             .parse::<SocketAddr>()
             .map_err(|source| Error::Listen {
                 key: String::from("server.listen"),
+                source,
+            })?;
+        let base_path = self
+            .server
+            .base_path
+            .parse::<BasePath>()
+            .map_err(|source| Error::BasePath {
+                key: String::from("server.base_path"),
                 source,
             })?;
         let request_timeout =
@@ -77,6 +86,7 @@ impl Config {
             profile: self.profile,
             server: ServerSettings {
                 listen,
+                base_path,
                 request_timeout,
                 shutdown_timeout,
                 body_limit: self.server.body_limit_bytes,

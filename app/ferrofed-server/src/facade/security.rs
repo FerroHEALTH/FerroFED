@@ -100,14 +100,15 @@ pub(super) fn value_refused(carrier: Carrier, request_id: &str) {
     );
 }
 
-/// A read was refused the ask-all probe because its path `ehr_id` is no bare
-/// UUID, and nothing was sent; the event never names the `ehr_id` (§5.4.3).
+/// A read, or a query scoped to one `ehr_id`, was refused the ask-all probe
+/// because its `ehr_id` is no bare UUID, and nothing was sent; the event
+/// never names the `ehr_id` (§5.4.3).
 pub(super) fn probe_refused(request_id: &str) {
     tracing::warn!(
         target: TARGET,
         event = "ehr-id-probe-refused",
         request_id,
-        "a read whose path ehr_id is not a UUID was refused the ask-all probe, and no member was asked"
+        "a read or a query whose ehr_id is not a UUID was refused the ask-all probe, and no member was asked"
     );
 }
 

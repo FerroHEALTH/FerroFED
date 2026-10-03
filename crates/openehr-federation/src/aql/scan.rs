@@ -55,6 +55,9 @@ pub(super) struct Findings {
     pub(super) inputs: Vec<(usize, Input, Option<Range<usize>>)>,
     /// Whether a top-level leaf already scopes the query to an `ehr_id` (N29).
     pub(super) ehr_scoped: bool,
+    /// The literal of each top-level `<ehr>/ehr_id/value = …` leaf, `None` for
+    /// an operand that is no String literal (N29).
+    pub(super) ehr_ids: Vec<Option<String>>,
     /// The first aggregate, if the query has one.
     pub(super) aggregate: Option<Hit>,
     /// The first call of a function AQL 1.1.0 does not define, if the query
@@ -182,6 +185,10 @@ impl Scan {
             }
             if top && *op == CompOp::Eq && ehr_id_path(path, &ehr) {
                 self.findings.ehr_scoped = true;
+                self.findings.ehr_ids.push(match rhs {
+                    Terminal::Primitive(Primitive::String(value)) => Some(value.clone()),
+                    _ => None,
+                });
             }
         }
         if let IdentifiedExpr::Compare {

@@ -111,6 +111,28 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   is the operation's own `404 no-destination`; a cross-reference that cannot
   answer is the new `424 resolution-unavailable`. `OPTIONS {base}/v1/ehr`
   now lists `GET`.
+- The gateway serves at a base path of the deployment's choosing (#69;
+  §4.1, N28, CP-21). `[server] base_path`, `/` by default, puts every route
+  under it, `OPTIONS {base}/`, the health family and `{base}/v1/…` included,
+  and every path outside it answers `404`. No prefix is reserved, and
+  `/rest/openehr` is served only where a deployment chooses it. A base path
+  that does not start with `/`, ends with `/`, carries a query or a fragment,
+  or has an empty, `.` or `..` segment refuses to boot, naming
+  `server.base_path`. Nodes are still asked at their own base, and a node's
+  `Location` still passes through unmodified (N31).
+- Both AQL forms of N29 scope a query to one `ehr_id` (#69; §7.1, N29,
+  CP-22). `FROM EHR e[ehr_id/value='…']` reaches a node as the canonical
+  `WHERE e/ehr_id/value = '…'`, so both forms send the same query and answer
+  the same rows. An undirected query scoped to one `ehr_id` goes only to the
+  member that owns it, found as a path `ehr_id` is (§12.5.1, N41): the
+  session's binding, the `ehr_id` index, then the ask-all probe. Every other
+  member is reported `excluded`, the answer names the acting endpoint in
+  `openEHR-federation-endpoint` (N31), two claimants are `409
+  ehr-id-collision` with neither queried (N42), an `ehr_id` no member holds is
+  `404 no-destination`, and one that is not a bare UUID and no earlier step
+  routes is `400 probe-requires-uuid` with no member asked (§5.4.1, N33).
+  A query directed by `FROM ENDPOINT` or a targeting header still goes to the
+  endpoints it names.
 - Versioned writes reach only their controlling CDR, and a new EHR only an
   explicit target (#65; §12.4, §12a.1, §10.3, N23, N41, CP-15). An update of
   a composition, the `EHR_STATUS` or the directory, a directory delete (each
