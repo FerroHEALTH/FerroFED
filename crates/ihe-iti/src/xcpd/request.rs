@@ -64,12 +64,40 @@ pub struct RespondingGateway {
 }
 
 impl RespondingGateway {
-    /// The gateway at `endpoint`, whose receiver device is `device`.
+    /// The gateway at the `https` URL `endpoint`, whose receiver device is
+    /// `device`.
+    ///
+    /// The request carries the patient identifier and any XUA assertion, a
+    /// bearer credential, so it travels over TLS only.
     ///
     /// # Errors
-    /// [`InvalidInput::Endpoint`] when `endpoint` is not an `http` or
-    /// `https` URL without a fragment.
+    /// [`InvalidInput::Endpoint`] when `endpoint` is not an `https` URL
+    /// without a fragment.
     pub fn new(endpoint: Url, device: Oid) -> Result<Self, InvalidInput> {
+        // NOTE: ITI TF-1 Table 27.1.3-1, §27.4.1: an XCPD actor is an ATNA Secure Node
+        // or Secure Application, so "outgoing messages will be via a secure communication channel".
+        if endpoint.scheme() != "https" {
+            return Err(InvalidInput::Endpoint);
+        }
+        Self::any_scheme(endpoint, device)
+    }
+
+    /// The gateway at `endpoint`, `http` or `https`, for development and
+    /// tests only.
+    ///
+    /// Over `http` the patient identifier and any XUA assertion cross the
+    /// network in clear text, which no XCPD deployment permits (ITI TF-1
+    /// §27.4.1). A caller offers this only where its own configuration is
+    /// marked for development.
+    ///
+    /// # Errors
+    /// [`InvalidInput::Endpoint`] when `endpoint` is not an `http` or `https`
+    /// URL without a fragment.
+    pub fn unencrypted_for_development(endpoint: Url, device: Oid) -> Result<Self, InvalidInput> {
+        Self::any_scheme(endpoint, device)
+    }
+
+    fn any_scheme(endpoint: Url, device: Oid) -> Result<Self, InvalidInput> {
         if !matches!(endpoint.scheme(), "http" | "https") || endpoint.fragment().is_some() {
             return Err(InvalidInput::Endpoint);
         }

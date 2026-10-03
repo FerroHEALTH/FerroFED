@@ -66,6 +66,13 @@ impl fmt::Debug for XuaAssertion {
 
 /// The byte span of the one SAML 2.0 `Assertion` element `xml` holds, or
 /// `None` when it holds anything else.
+///
+/// The element is spliced into the SOAP header as written, so it must stand
+/// on its own: well formed, every namespace prefix it uses declared inside
+/// it (an undeclared one would bind to the envelope's own declarations once
+/// embedded), every reference one XML predefines or a character reference,
+/// and no document type declaration or processing instruction anywhere. No
+/// specification governs the check: our own design.
 fn element_span(xml: &str) -> Option<(usize, usize)> {
     let mut reader = NsReader::from_str(xml);
     let mut start = None;
@@ -74,31 +81,39 @@ fn element_span(xml: &str) -> Option<(usize, usize)> {
     loop {
         let before = usize::try_from(reader.buffer_position()).ok()?;
         let (namespace, event) = reader.read_resolved_event().ok()?;
+        if matches!(namespace, ResolveResult::Unknown(_)) {
+            return None;
+        }
         let saml = matches!(namespace, ResolveResult::Bound(ns) if ns.0 == SAML2);
-        match event {
-            Event::Start(element) => {
-                if depth == 0 {
-                    let root =
-                        end.is_none() && saml && element.local_name().as_ref() == "Assertion";
-                    if !root {
-                        return None;
-                    }
-                    start = Some(before);
+        let element = match &event {
+            Event::Start(element) | Event::Empty(element) => Some(element.clone()),
+            _ => None,
+        };
+        if let Some(element) = &element {
+            for attribute in element.attributes() {
+                let attribute = attribute.ok()?;
+                let (bound, _) = reader.resolver().resolve_attribute(attribute.key);
+                if matches!(bound, ResolveResult::Unknown(_)) {
+                    return None;
                 }
-                depth = depth.checked_add(1)?;
             }
+            if depth == 0 {
+                let root = end.is_none() && saml && element.local_name().as_ref() == "Assertion";
+                if !root {
+                    return None;
+                }
+                start = Some(before);
+            }
+        }
+        match event {
+            Event::Start(_) => depth = depth.checked_add(1)?,
             Event::End(_) => {
                 depth = depth.checked_sub(1)?;
                 if depth == 0 {
                     end = Some(usize::try_from(reader.buffer_position()).ok()?);
                 }
             }
-            Event::Empty(element) if depth == 0 => {
-                let root = end.is_none() && saml && element.local_name().as_ref() == "Assertion";
-                if !root {
-                    return None;
-                }
-                start = Some(before);
+            Event::Empty(_) if depth == 0 => {
                 end = Some(usize::try_from(reader.buffer_position()).ok()?);
             }
             Event::Text(text) if depth == 0 => {
@@ -106,11 +121,20 @@ fn element_span(xml: &str) -> Option<(usize, usize)> {
                     return None;
                 }
             }
+            Event::GeneralRef(reference) => {
+                let predefined =
+                    quick_xml::escape::resolve_predefined_entity(&reference.xml10_content())
+                        .is_some();
+                let character = matches!(reference.resolve_char_ref(), Ok(Some(_)));
+                if depth == 0 || !(predefined || character) {
+                    return None;
+                }
+            }
             Event::Decl(_) if start.is_none() && before == 0 => {}
-            Event::DocType(_) | Event::Decl(_) => return None,
+            Event::CData(_) if depth == 0 => return None,
+            Event::DocType(_) | Event::Decl(_) | Event::PI(_) => return None,
             Event::Eof => break,
-            _ if depth == 0 && !matches!(event, Event::Comment(_)) => return None,
-            _ => {}
+            Event::Empty(_) | Event::Text(_) | Event::CData(_) | Event::Comment(_) => {}
         }
     }
     Some((start?, end?))
@@ -132,17 +156,35 @@ mod tests {
 
     #[test]
     fn anything_but_one_saml_assertion_is_refused() {
+        let open = r#"<saml2:Assertion xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">"#;
         for written in [
             "",
             "not xml",
             r#"<Assertion xmlns="urn:example"/>"#,
             &format!("{ASSERTION}{ASSERTION}"),
+            &format!(
+                "{ASSERTION}<wsa:To xmlns:wsa=\"http://www.w3.org/2005/08/addressing\">x</wsa:To>"
+            ),
+            &format!("<injected/>{ASSERTION}"),
             &format!("{ASSERTION}trailing"),
+            &format!("{ASSERTION}<![CDATA[</wsse:Security>]]>"),
+            &format!("{ASSERTION}<?pi?>"),
             &format!("<!DOCTYPE a>{ASSERTION}"),
-            r#"<saml2:Assertion xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">"#,
+            open,
+            &format!("{open}</saml2:Assertion></wsse:Security><wsse:Security>"),
+            &format!("{open}<soap:Body/></saml2:Assertion>"),
+            &format!("{open}<saml2:Issuer soap:mustUnderstand=\"1\"/></saml2:Assertion>"),
+            &format!("{open}&undeclared;</saml2:Assertion>"),
         ] {
             assert!(XuaAssertion::new(written).is_err(), "refused: {written:?}");
         }
+    }
+
+    #[test]
+    fn references_and_nested_declarations_inside_the_element_are_kept() {
+        let written = r#"<saml2:Assertion xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion"><saml2:Subject xmlns:ds="http://www.w3.org/2000/09/xmldsig#" ds:x="a&amp;b&#x41;"><![CDATA[c]]></saml2:Subject></saml2:Assertion>"#;
+        let read = XuaAssertion::new(written).map(|assertion| assertion.as_str().to_owned());
+        assert_eq!(Ok(written.to_owned()), read);
     }
 
     #[test]

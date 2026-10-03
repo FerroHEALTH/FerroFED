@@ -21,9 +21,11 @@ pub enum InvalidInput {
     /// The patient identifier value is empty.
     #[error("the patient identifier value is empty")]
     EmptyValue,
-    /// The responding gateway's endpoint is not an `http` or `https` URL
-    /// without a fragment.
-    #[error("the responding gateway endpoint is not an http(s) URL without a fragment")]
+    /// The responding gateway's endpoint is not an `https` URL without a
+    /// fragment, or, on the development path, not an `http` or `https` one.
+    #[error(
+        "the responding gateway endpoint is not an https URL without a fragment (http is accepted for development only)"
+    )]
     Endpoint,
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("the XUA assertion is not one SAML 2.0 Assertion element")]
