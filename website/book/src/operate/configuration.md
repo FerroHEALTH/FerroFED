@@ -536,6 +536,7 @@ has no metrics endpoint yet, so the log lines are the record of each reload.
 | `GET /health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
 | `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
 | `/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
+| `GET /v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, answered as that node answered; `501` when no registry is configured |
 | `/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT /v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |
 | `/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
 | any other path under `/v1/` | `501` |

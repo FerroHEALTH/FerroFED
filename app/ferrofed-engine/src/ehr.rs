@@ -22,7 +22,7 @@ use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
 use crate::dispatch::{DispatchOptions, NodeClient};
-use crate::hygiene::{Outbound, Part};
+use crate::hygiene::{Composed, Outbound, Part};
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 
@@ -206,6 +206,7 @@ impl<T: Transport> NodeClient<T> {
             scope: None,
             paging: &[],
             url: &url,
+            composed: Composed::default(),
             headers,
         };
         match withheld.found_in(&outbound) {

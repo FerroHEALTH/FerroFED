@@ -605,7 +605,7 @@ async fn a_new_ehr_lands_byte_identical_at_the_one_named_node() -> TestResult {
 }
 
 #[tokio::test]
-async fn the_ehr_collection_serves_no_read() -> TestResult {
+async fn a_read_of_the_ehr_collection_without_a_subject_asks_nobody() -> TestResult {
     let a = MockServer::start().await;
     let b = MockServer::start().await;
     let dir = tempfile::tempdir()?;
@@ -615,7 +615,7 @@ async fn the_ehr_collection_serves_no_read() -> TestResult {
     refused_at_neither(
         over(dir.path(), &a, &b, "")?,
         request,
-        (StatusCode::NOT_IMPLEMENTED, "not-implemented"),
+        (StatusCode::BAD_REQUEST, "patient-invalid"),
         (&a, &b),
     )
     .await?;

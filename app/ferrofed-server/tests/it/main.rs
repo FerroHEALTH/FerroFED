@@ -17,6 +17,7 @@ mod demographic;
 mod directive;
 mod distinct;
 mod e2e;
+mod ehr_by_subject;
 mod ehr_id_collision;
 mod endpoint_attributes;
 mod endpoint_report;

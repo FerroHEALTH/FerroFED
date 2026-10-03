@@ -495,7 +495,7 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>) -> Settled {
 ///
 /// Every id is the registry's own, so the message quotes no client text
 /// (§5.4.3).
-struct Listed<'a>(&'a [EndpointId]);
+pub(crate) struct Listed<'a>(pub(crate) &'a [EndpointId]);
 
 impl fmt::Display for Listed<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

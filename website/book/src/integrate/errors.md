@@ -78,7 +78,10 @@ through as the node sent them: a node's `404` is the node's `404`, and a
 node's `500` is the node's `500` (§11.2). Those answers carry no FerroFED
 code, because the body is the node's. The single-node routes are the EHR
 resources under a path `ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it
-(§7a.1), `POST {base}/v1/ehr`, the creation of an EHR (§12.4), and every
+(§7a.1), `POST {base}/v1/ehr`, the creation of an EHR (§12.4),
+`GET {base}/v1/ehr?subject_id=…&subject_namespace=…`, the read of an EHR by
+subject, which the gateway sends as `GET {base}/v1/ehr/{ehr_id}` to the one
+member that resolves the subject, and every
 request under `{base}/v1/definition/` the stored-query registry does not
 answer itself (§12.6), except `PUT {base}/v1/definition/query/{name}/{version}`
 without the registry, which answers `501` until #298. A template-missing
@@ -115,8 +118,8 @@ the node is reported and the query succeeds.
 | `partial-unsupported` | 400 | The request asks for `partial`, and this gateway does not offer best-effort (§11.4, N37). |
 | `dedup-invalid` | 400 | The `openEHR-federation-dedup` header is repeated, or names neither `none` nor `version-identity` (§10, §7a.2). |
 | `parameter-invalid` | 400 | A query parameter is `null`, an array, an object, or an integer outside 64 bits. |
-| `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). |
-| `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope, or the `ORGANISATION` directive or the `openEHR-federation-organisation` header names only organisations that manage no endpoint (§11.2, §11.3). It also answers a read of an EHR resource that nothing routes when every member the ask-all probe asked answered `404` (§12.5.1). |
+| `patient-invalid` | 400 | The query's patient identifier or namespace cannot form a patient reference (§5.2). It also answers `GET {base}/v1/ehr` when `subject_id` or `subject_namespace` is absent, empty or given more than once (ITS-REST 1.1.0 declares both required). |
+| `no-destination` | 404 | The request can be routed to no destination at all: node selection left no registry member in scope, or the `ORGANISATION` directive or the `openEHR-federation-organisation` header names only organisations that manage no endpoint (§11.2, §11.3). It also answers a read of an EHR resource that nothing routes when every member the ask-all probe asked answered `404` (§12.5.1), and `GET {base}/v1/ehr` when no member, or not the member the `openEHR-federation-endpoint` header names, holds an EHR for the subject. That is the operation's own `404` for a subject with no EHR: it reads one EHR resource, so the `200` with no rows of §11.3, which answers a query, does not apply (ITS-REST 1.1.0, §11.2). |
 | `ehr-id-collision` | 409 | The `ehr_id` is claimed by more than one node: your session's resolution bindings or the gateway's `ehr_id` index hold it at two members or more, or the ask-all probe of a read found it at two members or more. The message lists the claiming endpoints. The gateway never chooses between them and sends the request, a read or a write, to neither; name the node in the `openEHR-federation-endpoint` header to address one of them (§12.5.1, §12.5.2, N41, N42). |
 | `controlling-system-unreachable` | 409 | A versioned write (an update of a composition, `EHR_STATUS` or directory, a delete, or a `CONTRIBUTION` amending versions) amends a version its path `ehr_id`'s node did not create: the registry routes that preceding version's `creating_system_id` to another member, or to none. The write goes to its controlling CDR alone, and the path `ehr_id` belongs to the other node, so the gateway sends it to no node. The message names the controlling node and its endpoint where the registry knows them, and never quotes your request (§10.3, §12.4, §12a.1, N23). |
 | `internal` | 500 | The gateway failed on its own side. The operator's log records the failure under the gateway's request id. |
@@ -126,7 +129,7 @@ the node is reported and the query succeeds.
 | `organisation-unknown` | 400 | The `ORGANISATION` directive or the `openEHR-federation-organisation` header names an identifier that is not an organisation of the registry, or the header names no identifier at all (§8.1, §8.4.1, N20). The message points at the identifier by its place in the list and never quotes it. |
 | `target-required` | 400 | A write to an EHR resource names no node in `openEHR-federation-endpoint`, and neither a resolution binding of the session nor the gateway's `ehr_id` index names exactly one; the gateway never finds a write's destination by trial, so nothing is probed (§12.5.1, N41). The creation of an EHR, `POST {base}/v1/ehr` or `PUT {base}/v1/ehr/{ehr_id}`, always names its node in the header, because a new EHR has no owner for a binding or the index to name (§12.4, N23). So does every request under `{base}/v1/definition/` the stored-query registry does not answer: a template lives at the node it was sent to, and the gateway never picks one for you (§12.6, N43). |
 | `endpoint-several` | 400 | A request routed to one node selects more than one endpoint through `openEHR-federation-endpoint` or `openEHR-federation-organisation` (§7a.1, §12.4). A definition request is never fanned out, so a `*` there is an unknown endpoint (`endpoint-unknown`) and two named endpoints are this error (§12.6, N43); so is a DEMOGRAPHIC request naming two (§7a.1, N32). |
-| `query-parameter-refused` | 400 | A request routed to one node carries a query parameter the ITS-REST operation it addresses does not declare, or `subject_id` or `subject_namespace`. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
+| `query-parameter-refused` | 400 | A request routed to one node carries a query parameter the ITS-REST operation it addresses does not declare, or `subject_id` or `subject_namespace` anywhere but on `GET {base}/v1/ehr`, where the gateway consumes both as resolution input. The gateway cannot tell an identifying value from any other, so it sends nothing; the message names the parameter by position, never by name or value (§5.4.1, N33). |
 | `node-timeout` | 504 | The node a request was routed to, or a member the ask-all probe asked, did not answer in time (§11.2, §11.5). A member that did not answer may hold the `ehr_id`, so the probe names no owner; the message names that member. |
 | `node-unreachable` | 504 | The node a request was routed to, or a member the ask-all probe asked, could not be reached (§11.2). |
 | `node-refused` | 424 | The node a request was routed to, or a member the ask-all probe asked, refused the gateway's onward credentials (§11.2). |
@@ -145,13 +148,25 @@ the node is reported and the query succeeds.
 | `parameter-value-invalid` | 400 | A request routed to one node carries a value that is not what the ITS-REST operation declares for it: a path `version_uid` that is no `OBJECT_VERSION_ID`, a `versioned_object_uid` that is no UUID, a `version_at_time` that is no extended ISO 8601 date-time, or a `detail_level` outside its listed values. The gateway sends nothing; the message names the header, or the parameter by its position and declared name, and never quotes the value (§5.4.1, N33). |
 | `media-type-not-acceptable` | 406 | The `Accept` header of a request routed to one node admits none of the media types the ITS-REST operation answers in, as a node would answer it (RFC 9110 §12.5.1). The message lists the media types the operation offers. |
 | `media-type-unsupported` | 415 | The `Content-Type` header of a request routed to one node is not one of the media types the ITS-REST operation takes, or carries a parameter other than `charset=utf-8` (RFC 9110 §8.3). The message lists the media types the operation takes. |
+| `subject-several` | 409 | The subject of `GET {base}/v1/ehr` resolves at more than one member, and no `openEHR-federation-endpoint` header names one of them. The gateway never chooses by where the patient resolved, so it sends the read to none; the message lists the endpoints and never the subject. Name the endpoint in the header to read that member's EHR (§8.4, §12.5.2). |
+| `resolution-unavailable` | 424 | The cross-reference service could not answer for a member while resolving the subject of `GET {base}/v1/ehr`, or no cross-reference service is configured. That member may hold the EHR, so the gateway answers neither its `404` nor another member's EHR; the message names the members and never the subject (§5.2, §11.2). |
 
-Two of the `409` codes belong to follow-up routing (§12). `ehr-id-collision`
-answers a read or a write, and the gateway also raises an integrity incident
-for the federation operator, because two nodes holding one `ehr_id` is a
-defect in the federation. `controlling-system-unreachable` answers a
-versioned write that would be committed at a node other than its controlling
-CDR, which would fork the object (§10.3).
+The gateway answers `409` with four codes, and none of them sends anything
+to a node:
+
+- `ehr-id-collision`: two members claim one `ehr_id`, on a read or a write.
+  The gateway also raises an integrity incident for the federation operator,
+  because two nodes holding one `ehr_id` is a defect in the federation
+  (§12.5.2, N42).
+- `controlling-system-unreachable`: a versioned write would be committed at
+  a node other than its controlling CDR, which would fork the object (§10.3,
+  N23).
+- `subject-several`: the subject of `GET {base}/v1/ehr` resolves at more
+  than one member. This is no integrity defect: a patient may have an EHR at
+  several members, each under its own `ehr_id`, and the read by subject
+  returns one EHR, so the gateway asks you to name the member (§12.5.2).
+- `stored-query-held`: the registry already holds the stored query's name
+  and version, and a stored version is immutable (§12.7, N44).
 
 ## Query refusals
 

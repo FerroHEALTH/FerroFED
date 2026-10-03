@@ -402,7 +402,7 @@ pub(crate) fn on_the_route(ehr_a: Uuid) -> Vec<Case> {
                 encoded(&PATIENT.namespace())
             ),
             &[],
-            Expect::Unsent(StatusCode::NOT_IMPLEMENTED),
+            Expect::Routed(StatusCode::OK),
         ),
         routed(
             "the endpoint header",

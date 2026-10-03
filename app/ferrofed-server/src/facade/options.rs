@@ -38,7 +38,7 @@ use openehr_federation::options::{
 use openehr_its::rest::routes::{self, Lookup};
 
 use crate::error::{self, Code};
-use crate::facade::{QUERY_AQL, route, stored, write};
+use crate::facade::{QUERY_AQL, route, stored, subject, write};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
@@ -243,6 +243,8 @@ fn its_rest(
               that owns the ehr_id, found by the targeting headers, the session's \
               resolution binding, the ehr_id index, then for a read an ask-all probe; \
               a versioned write only when that node controls the version it amends; \
+              GET {base}/v1/ehr?subject_id= resolves the subject and goes to the one \
+              member that holds it, by its ehr_id; \
               POST {base}/v1/ehr to the one endpoint the targeting headers name"
             .to_owned(),
         definition: definition.to_owned(),
@@ -331,8 +333,10 @@ pub fn allow(state: &AppState, path: &str, request_id: &str) -> Response {
 ///
 /// The federated query takes `POST` only; an EHR resource under a path
 /// `ehr_id` takes every method ITS-REST declares for it, because each is
-/// routed to one node (§7a.1), and the EHR collection takes `POST`, the
-/// creation of an EHR at the one node the targeting headers name (§12.4).
+/// routed to one node (§7a.1), and the EHR collection takes `GET`, the read
+/// of an EHR by subject at the one member that resolves it (§5.2, N33), and
+/// `POST`, the creation of an EHR at the one node the targeting headers name
+/// (§12.4).
 /// A definition resource takes every method ITS-REST declares for it that
 /// is routed to the one node the targeting headers name (§12.6), which
 /// leaves out the versioned stored-query `PUT`. Where the stored-query
@@ -360,6 +364,7 @@ fn served(path: &str, registry: bool, demographic: bool) -> Option<Vec<Method>> 
                         if route::in_ehr_area(&matched)
                             || write::creates_ehr(&matched)
                             || route::in_definition_area(&matched)
+                            || subject::serves(&matched)
                             || (registry && stored::serves(&matched))
                             || (demographic && route::in_demographic_area(&matched))
                 )

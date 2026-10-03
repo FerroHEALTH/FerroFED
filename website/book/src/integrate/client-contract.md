@@ -7,7 +7,10 @@ A client of a federation gateway is an ordinary openEHR client. This page sets
 out what the specification promises that client. Once a registry is
 configured, FerroFED serves the federated query at
 `POST {base}/v1/query/aql` and routes the EHR resources under a path
-`ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it, to one node (§7a.1). A
+`ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it, to one node (§7a.1). It
+reads an EHR by subject at `GET {base}/v1/ehr?subject_id=…&subject_namespace=…`
+from the one member that resolves the subject
+([reading an EHR by subject](#reading-an-ehr-by-subject)). A
 request under `{base}/v1/definition/` goes to the one node you name
 ([templates and definitions](#templates-and-definitions), §12.6). A
 deployment that offers the stored-query registry stores queries under
@@ -369,6 +372,37 @@ included, reaches that node byte for byte, and the node's `Location` and
 `ETag` come back unmodified. A composition or a directory created inside an
 existing EHR is routed by its path `ehr_id` like any other request under it.
 
+### Reading an EHR by subject
+
+`GET {base}/v1/ehr?subject_id=…&subject_namespace=…` names the patient in
+its query string, and no node may receive a directly identifying identifier
+(§5.4.1, N33). The gateway therefore consumes both parameters as resolution
+input: it resolves the subject at the members through the cross-reference
+service (§5.2) and sends the member that holds it
+`GET {base}/v1/ehr/{ehr_id}` under that member's own `ehr_id`, with no query
+string and no client header the operation does not declare. The node's
+`EHR`, `ETag` included, comes back as the node sent it, with the acting
+endpoint in `openEHR-federation-endpoint` and its `system_id` in
+`openEHR-federation-system-id` (N31, §9.6).
+
+- **Several members hold the subject:** a patient can have an EHR at more
+  than one member, and this operation returns one. The gateway never picks
+  one by where the patient resolved (§12.5.2), so the answer is a `409`
+  (`subject-several`) listing the endpoints. Name one in
+  `openEHR-federation-endpoint` to read its EHR; the header limits the
+  resolution to that endpoint (§8.4).
+- **No member holds the subject**, or not the one the header names: the
+  operation's own `404` for a subject with no EHR (`no-destination`). This
+  request reads one EHR resource, so the `200` with no rows that §11.3 sets
+  for a query does not apply.
+- **The cross-reference cannot answer** for a member: a `424`
+  (`resolution-unavailable`), never a `404`, because that member may hold the
+  EHR.
+- `subject_id` and `subject_namespace` are each given once; anything else in
+  the query string is a `400`, and nothing is resolved or sent.
+
+No error body and no log line carries the subject.
+
 ## Templates and definitions
 
 A template lives at the node it was uploaded to, and a `COMPOSITION` built on
@@ -563,7 +597,8 @@ What is absent is absent on purpose:
 `OPTIONS` on a path under `{base}/v1/` answers `204` with the methods served
 there in `Allow`: `POST, OPTIONS` for `/v1/query/aql`, and the ITS-REST
 methods of the resource for an EHR resource under a path `ehr_id`, such as
-`GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`. A definition resource answers the
+`GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`, and `GET, POST, OPTIONS` for
+`/v1/ehr`. A definition resource answers the
 ITS-REST methods of the resource, such as `GET, POST, OPTIONS` for
 `/v1/definition/template/adl1.4`. Where the stored-query registry is
 offered, a stored query answers `POST, OPTIONS`. Where the DEMOGRAPHIC area is

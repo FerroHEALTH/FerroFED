@@ -125,21 +125,10 @@ pub fn forwarded_query<'q>(
     operation: &RouteMatch,
     query: &'q str,
 ) -> Result<&'q str, UnlistedParameter> {
-    let unlisted = query
-        .split('&')
-        .filter(|pair| !pair.is_empty())
-        .position(|pair| {
-            let name = pair.split('=').next().unwrap_or(pair);
-            let name = percent_decoded(name);
-            WITHHELD_QUERY_PARAMETERS.contains(&name.as_str())
-                || operation.query_key(&name).is_none()
-        });
-    match unlisted {
-        Some(index) => Err(UnlistedParameter {
-            position: index.saturating_add(1),
-        }),
-        None => Ok(query),
-    }
+    crate::declared::query::admitted(query, |name| {
+        !WITHHELD_QUERY_PARAMETERS.contains(&name) && operation.query_key(name).is_some()
+    })?;
+    Ok(query)
 }
 
 /// A query parameter a single-node route does not forward, so the request is
@@ -194,6 +183,11 @@ impl Withheld {
     /// identifier that contains the whole `ehr_id` is never masked: the
     /// cross-reference maps a patient to an `ehr_id` the node minted, so the
     /// two are equal only through a defect, and the gate then fails closed.
+    ///
+    /// The URL path is masked the same way, by position, in one place only
+    /// ([`Composed`]): the node's own `ehr_id` segment after `{base}/ehr/`,
+    /// when the gateway wrote it. The base path, every other part of the
+    /// path, the query and the headers are searched whole.
     #[must_use]
     pub fn found_in(&self, request: &Outbound<'_>) -> Option<Part> {
         self.0.iter().find_map(|value| {
@@ -211,7 +205,7 @@ impl Withheld {
                 Some(Part::Aql)
             } else if request.paging.iter().any(|number| number.contains(value)) {
                 Some(Part::Paging)
-            } else if carried_in_target(request.url, value) {
+            } else if carried_in_target(request.url, request.composed, value) {
                 Some(Part::Url)
             } else {
                 request
@@ -245,9 +239,28 @@ pub struct Outbound<'a> {
     /// The URL the request is sent to, of which the gate reads the path, the
     /// query and the fragment, and never the authority.
     pub url: &'a Url,
+    /// The node's own `ehr_id` segment the gateway composed into the path.
+    pub composed: Composed<'a>,
     /// The headers the gateway adds, by name, other than the minted
     /// `X-Request-Id`.
     pub headers: &'a [(&'static str, &'a str)],
+}
+
+/// The node's own `ehr_id` segment of a request's URL path, when the
+/// gateway composed it, which the gate masks by position before it searches
+/// the path.
+///
+/// The `ehr_id` is never client text: it comes from a resolution or the
+/// `ehr_id` index. The path before it, the endpoint's base path included,
+/// stays searched.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Composed<'a> {
+    /// The path the segment follows, `{base}/ehr/`, which is searched.
+    pub ehr_prefix: &'a str,
+    /// The node's own `ehr_id` segment, percent-encoded as the path carries
+    /// it right after [`Composed::ehr_prefix`]; `None` when that segment is
+    /// the client's.
+    pub ehr_segment: Option<&'a str>,
 }
 
 /// The part of a request that carried a withheld identifier.
@@ -275,11 +288,12 @@ impl fmt::Display for Part {
 }
 
 /// Whether the path, query or fragment of `url`, raw or percent-decoded,
-/// carries `value`.
-fn carried_in_target(url: &Url, value: &str) -> bool {
+/// carries `value`, once the `composed` segment of the path is masked.
+fn carried_in_target<'a>(url: &'a Url, composed: Composed<'a>, value: &str) -> bool {
     // NOTE: §5.4.1, N33 name the request path, the query string and the headers;
     // the authority comes from the operator's registry, never a request, so it is unread.
-    let mut target = url.path().to_owned();
+    let (before, after) = searched_path(url.path(), composed, value);
+    let mut target = after.to_owned();
     if let Some(query) = url.query() {
         target.push('?');
         target.push_str(query);
@@ -288,7 +302,34 @@ fn carried_in_target(url: &Url, value: &str) -> bool {
         target.push('#');
         target.push_str(fragment);
     }
-    target.contains(value) || percent_decoded(&target).contains(value)
+    [before, target.as_str()]
+        .into_iter()
+        .any(|text| text.contains(value) || percent_decoded(text).contains(value))
+}
+
+/// The two stretches of `path` the gate searches for `value`: the text
+/// before a masked `ehr_id` segment, and the text after it.
+///
+/// The segment is masked only where `composed` names it, right after
+/// [`Composed::ehr_prefix`] and followed by the end or a `/`, and never when
+/// `value` contains it, so an identifier equal to it fails closed. Without a
+/// masked segment, the first stretch is empty and the second is the path.
+fn searched_path<'a>(path: &'a str, composed: Composed<'a>, value: &str) -> (&'a str, &'a str) {
+    // NOTE: §5.4, N33: a node is located by the ehr_id it minted, and the gateway composed this one
+    // from a resolution, never from the client, so a value inside it is chance, not a leak.
+    let head = composed.ehr_prefix;
+    let segment = composed
+        .ehr_segment
+        .filter(|segment| !head.is_empty() && !segment.is_empty() && !value.contains(*segment));
+    let tail = segment.and_then(|segment| {
+        path.strip_prefix(head)?
+            .strip_prefix(segment)
+            .filter(|tail| tail.is_empty() || tail.starts_with('/'))
+    });
+    match tail {
+        Some(tail) => (head, tail),
+        None => ("", path),
+    }
 }
 
 /// `text` with every `%XX` escape decoded, invalid UTF-8 replaced; an escape
@@ -326,7 +367,7 @@ fn hex(digit: u8) -> Option<u8> {
 mod tests {
     use std::sync::LazyLock;
 
-    use super::{Outbound, Part, Withheld, percent_decoded};
+    use super::{Composed, Outbound, Part, Withheld, percent_decoded};
     use openehr_its::rest::routes::{Lookup, RouteMatch, lookup};
     use secrecy::SecretString;
     use url::Url;
@@ -355,6 +396,7 @@ mod tests {
             scope: None,
             paging: &[],
             url,
+            composed: Composed::default(),
             headers,
         }
     }
