@@ -25,9 +25,9 @@ use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::Backend;
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::stored::files::FilesError;
+use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
-use wiremock::MockServer;
 
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, node_answering, registry, settings_with_room,
@@ -86,7 +86,7 @@ fn settings(
 /// A gateway over two mock members whose registry reads `definitions`.
 fn gateway(
     dir: &Path,
-    (a, b): (&MockServer, &MockServer),
+    (a, b): (&Server, &Server),
     definitions: &Path,
 ) -> Result<Router, Box<dyn Error>> {
     let settings = settings(dir, (&a.uri(), &b.uri()), definitions, "")?;
@@ -167,8 +167,8 @@ async fn a_definition_file_is_read_listed_and_run_by_name() -> TestResult {
 // conformance: CP-40
 #[tokio::test]
 async fn a_put_at_a_read_only_registry_is_a_405_naming_the_read_methods() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let definitions = dir.path().join("definitions");
     write(&definitions, NAME, "1.0.0", parameterised().as_bytes())?;
@@ -200,8 +200,8 @@ async fn a_put_at_a_read_only_registry_is_a_405_naming_the_read_methods() -> Tes
 
 #[tokio::test]
 async fn options_on_a_read_only_definition_lists_no_put() -> TestResult {
-    let a = MockServer::start().await;
-    let b = MockServer::start().await;
+    let a = Server::start().await;
+    let b = Server::start().await;
     let dir = tempfile::tempdir()?;
     let definitions = dir.path().join("definitions");
     std::fs::create_dir_all(&definitions)?;
@@ -372,6 +372,76 @@ fn an_empty_definition_directory_offers_an_empty_registry() -> TestResult {
     let held = state.definitions().ok_or("the registry is offered")?;
     assert!(held.is_empty());
     assert!(held.is_read_only());
+    Ok(())
+}
+
+// conformance: CP-40
+#[tokio::test]
+async fn a_held_version_put_naming_members_at_a_read_only_registry_is_a_405() -> TestResult {
+    let a = Server::start().await;
+    let b = Server::start().await;
+    let dir = tempfile::tempdir()?;
+    let definitions = dir.path().join("definitions");
+    write(&definitions, NAME, "1.0.0", parameterised().as_bytes())?;
+    let app = gateway(dir.path(), (&a, &b), &definitions)?;
+    for target in ["*", "node-a-pub"] {
+        let request = Request::put(format!("/v1/definition/query/{NAME}/1.0.0"))
+            .header(header::CONTENT_TYPE, "text/plain")
+            .header("openEHR-federation-endpoint", target)
+            .body(Body::from(parameterised()))?;
+        let (status, headers, body) = exchange(app.clone(), request).await?;
+        let text = String::from_utf8(body)?;
+        assert_eq!(
+            StatusCode::METHOD_NOT_ALLOWED,
+            status,
+            "§12.7: a read-only registry sends nothing again: {target}: {text}"
+        );
+        assert_eq!("stored-query-read-only", error_body(&text)?.code);
+        assert_eq!(
+            Some("GET, OPTIONS"),
+            headers.get(header::ALLOW).and_then(|v| v.to_str().ok()),
+            "RFC 9110 §15.5.6: {target}"
+        );
+    }
+    for node in [&a, &b] {
+        let requests = node.received_requests().await.ok_or("recording is on")?;
+        assert!(requests.is_empty(), "no node is asked");
+    }
+    Ok(())
+}
+
+// conformance: CP-40
+#[tokio::test]
+async fn the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothing() -> TestResult {
+    let a = Server::start().await;
+    let b = Server::start().await;
+    let dir = tempfile::tempdir()?;
+    let definitions = dir.path().join("definitions");
+    write(&definitions, NAME, "1.0.0", parameterised().as_bytes())?;
+    let settings = settings(dir.path(), (&a.uri(), &b.uri()), &definitions, "")?;
+    let operator = ferrofed_server::admin::router(Arc::new(AppState::build(&settings)?));
+    for target in ["*", "node-a-pub"] {
+        let request = Request::post(format!("/admin/stored-queries/{NAME}/1.0.0/distribute"))
+            .header("openEHR-federation-endpoint", target)
+            .body(Body::empty())?;
+        let (status, headers, body) = exchange(operator.clone(), request).await?;
+        let text = String::from_utf8(body)?;
+        assert_eq!(
+            StatusCode::METHOD_NOT_ALLOWED,
+            status,
+            "a read-only registry distributes nothing: {target}: {text}"
+        );
+        assert_eq!("stored-query-read-only", error_body(&text)?.code);
+        assert_eq!(
+            Some(""),
+            headers.get(header::ALLOW).and_then(|v| v.to_str().ok()),
+            "RFC 9110 §10.2.1: no method is allowed here: {target}"
+        );
+    }
+    for node in [&a, &b] {
+        let requests = node.received_requests().await.ok_or("recording is on")?;
+        assert!(requests.is_empty(), "no node is asked");
+    }
     Ok(())
 }
 

@@ -269,9 +269,14 @@ impl std::fmt::Debug for Metrics {
 /// The listener carries no other route and no authentication, so it binds a
 /// loopback address unless the operator allows a remote one.
 pub fn router(metrics: Arc<Metrics>) -> Router {
+    routes(metrics).fallback(|| async { StatusCode::NOT_FOUND })
+}
+
+/// Returns the `GET /metrics` route over `metrics` alone, with no fallback,
+/// for the admin listener to merge beside its other routes.
+pub fn routes(metrics: Arc<Metrics>) -> Router {
     Router::new()
         .route(PATH, get(exposition))
-        .fallback(|| async { StatusCode::NOT_FOUND })
         .with_state(metrics)
 }
 

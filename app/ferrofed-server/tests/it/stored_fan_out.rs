@@ -43,16 +43,16 @@ use crate::template_fan_out::schema::validate_federation;
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The endpoint header (§8.4).
-const ENDPOINT: &str = "openEHR-federation-endpoint";
+pub(crate) const ENDPOINT: &str = "openEHR-federation-endpoint";
 
 /// The qualified name every fixture stores under.
-const NAME: &str = "org.example::fanned_compositions";
+pub(crate) const NAME: &str = "org.example::fanned_compositions";
 
 /// The version every fixture stores.
-const VERSION: &str = "1.0.0";
+pub(crate) const VERSION: &str = "1.0.0";
 
 /// A comment the client writes into its definition, which no node receives.
-const COMMENT: &str = "SYNTHETIC-COMMENT-5c1e";
+pub(crate) const COMMENT: &str = "SYNTHETIC-COMMENT-5c1e";
 
 /// The message a node answers with, which the gateway's answer carries after
 /// a failing node's status (§9.5, §11.1).
@@ -73,13 +73,13 @@ system_id = "cdr-c.example.org"
 "#;
 
 /// The node path of the stored definition (ITS-REST Definition API).
-fn node_path() -> String {
+pub(crate) fn node_path() -> String {
     format!("/v1/definition/query/{NAME}/{VERSION}")
 }
 
 /// A definition naming the patient through `$patient`, written with a
 /// comment and loose layout.
-fn definition() -> String {
+pub(crate) fn definition() -> String {
     format!(
         "SELECT c/uid/value\n  FROM EHR e CONTAINS COMPOSITION c -- {COMMENT}\n \
          WHERE e/ehr_status/subject/external_ref/id/value = $patient \
@@ -88,7 +88,7 @@ fn definition() -> String {
 }
 
 /// The registry of node A, node B and node C at `a`, `b` and `c`.
-fn three(a: &Server, b: &Server, c: &Server) -> String {
+pub(crate) fn three(a: &Server, b: &Server, c: &Server) -> String {
     let endpoint = format!(
         "{THIRD}\n[[endpoint]]\nid = \"node-c-pub\"\nnode = \"node-c\"\nurl = \"{}\"\n\
          connection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-c\"\n",
@@ -100,7 +100,24 @@ fn three(a: &Server, b: &Server, c: &Server) -> String {
 /// A gateway over `registry` offering the registry in `dir`, with
 /// `federation` in its `[federation]` table and the patient known at node A
 /// and node B.
-fn gateway(dir: &Path, registry: &str, federation: &str) -> Result<Router, Box<dyn Error>> {
+pub(crate) fn gateway(
+    dir: &Path,
+    registry: &str,
+    federation: &str,
+) -> Result<Router, Box<dyn Error>> {
+    Ok(ferrofed_server::router(
+        state(dir, registry, federation)?,
+        &crate::facade::settings_with_room(),
+    ))
+}
+
+/// The state of the gateway [`gateway`] builds, for the admin listener's
+/// application over it.
+pub(crate) fn state(
+    dir: &Path,
+    registry: &str,
+    federation: &str,
+) -> Result<Arc<AppState>, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
@@ -113,20 +130,17 @@ fn gateway(dir: &Path, registry: &str, federation: &str) -> Result<Router, Box<d
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
-    Ok(ferrofed_server::router(
-        Arc::new(AppState::build(&settings)?),
-        &crate::facade::settings_with_room(),
-    ))
+    Ok(Arc::new(AppState::build(&settings)?))
 }
 
 /// The gateway over the three nodes with definition fan-out offered.
-fn offered(dir: &Path, nodes: [&Server; 3]) -> Result<Router, Box<dyn Error>> {
+pub(crate) fn offered(dir: &Path, nodes: [&Server; 3]) -> Result<Router, Box<dyn Error>> {
     let [a, b, c] = nodes;
     gateway(dir, &three(a, b, c), "fan_out_stored_queries = true")
 }
 
 /// `PUT` of `aql` at [`NAME`] and [`VERSION`], naming `target` when given.
-fn put(aql: &str, target: Option<&str>) -> Result<Request<Body>, http::Error> {
+pub(crate) fn put(aql: &str, target: Option<&str>) -> Result<Request<Body>, http::Error> {
     let mut request = Request::put(format!("/v1/definition/query/{NAME}/{VERSION}"))
         .header(header::CONTENT_TYPE, "text/plain");
     if let Some(target) = target {
@@ -177,7 +191,7 @@ async fn refused_unoffered(
 }
 
 /// `GET` of [`NAME`] at [`VERSION`], naming `target` when given.
-fn get(target: Option<&str>) -> Result<Request<Body>, http::Error> {
+pub(crate) fn get(target: Option<&str>) -> Result<Request<Body>, http::Error> {
     let mut request = Request::get(format!("/v1/definition/query/{NAME}/{VERSION}"));
     if let Some(target) = target {
         request = request.header(ENDPOINT, target);
@@ -186,7 +200,7 @@ fn get(target: Option<&str>) -> Result<Request<Body>, http::Error> {
 }
 
 /// A node answering the definition `PUT` with `status` and its own body.
-async fn storing(status: u16) -> Server {
+pub(crate) async fn storing(status: u16) -> Server {
     let server = Server::start().await;
     let answer = ResponseTemplate::new(status).set_body_raw(
         format!(r#"{{"message":"{NODE_BODY}"}}"#).into_bytes(),
@@ -216,20 +230,23 @@ async fn holding(aql: &str) -> Result<Server, Box<dyn Error>> {
 /// The answer to a distribution or a drift report: the registry's
 /// definition and the per-member record.
 #[derive(Debug, Deserialize)]
-struct Reported {
+pub(crate) struct Reported {
     #[serde(flatten)]
-    definition: StoredQuery,
-    meta: Meta,
+    pub(crate) definition: StoredQuery,
+    pub(crate) meta: Meta,
 }
 
 /// The `meta` of [`Reported`].
 #[derive(Debug, Deserialize)]
-struct Meta {
-    federation: FederationMeta,
+pub(crate) struct Meta {
+    pub(crate) federation: FederationMeta,
+    /// What the registry did with a distributed version: `stored` or
+    /// `held`; a drift report carries none.
+    pub(crate) registry: Option<String>,
 }
 
 /// Each endpoint `meta` reports, with its status, in answer order.
-fn statuses(meta: &FederationMeta) -> Vec<(String, EndpointStatus)> {
+pub(crate) fn statuses(meta: &FederationMeta) -> Vec<(String, EndpointStatus)> {
     meta.endpoints()
         .iter()
         .map(|outcome| (outcome.id().as_str().to_owned(), outcome.status()))
@@ -406,11 +423,23 @@ async fn with_one_member_failing_the_distribution_is_partial_and_the_registry_ho
     );
     let held: StoredQuery = serde_json::from_str(&text)?;
     assert_eq!(answer.definition.q, held.q, "the registry's copy stands");
-    let (status, _) = call(app, put(&definition(), Some("*"))?).await?;
+    assert_eq!(
+        Some("stored"),
+        answer.meta.registry.as_deref(),
+        "the request stored the version"
+    );
+    let (status, _) = call(app.clone(), put(&definition(), Some("*"))?).await?;
     assert_eq!(
         StatusCode::CONFLICT,
         status,
         "§12.7: the version is immutable"
+    );
+    let changed = definition().replace("c/uid/value", "c/name/value");
+    let (status, _) = call(app, put(&changed, Some("*"))?).await?;
+    assert_eq!(
+        StatusCode::CONFLICT,
+        status,
+        "§12.7: the version is immutable, whatever the body"
     );
     Ok(())
 }
@@ -552,6 +581,7 @@ async fn the_drift_report_names_matching_differing_and_missing_members() -> Test
         VERSION, answer.definition.version,
         "the registry's definition"
     );
+    assert_eq!(None, answer.meta.registry, "a drift report stores nothing");
     let meta = &answer.meta.federation;
     assert_eq!(
         vec![
