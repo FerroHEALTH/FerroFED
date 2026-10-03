@@ -381,3 +381,38 @@ async fn a_query_that_reaches_dispatch_with_no_verified_caller_reaches_no_node()
     assert!(tokens(&a).await?.is_empty() && tokens(&b).await?.is_empty());
     Ok(())
 }
+
+// conformance: CP-16
+#[tokio::test]
+async fn a_registry_from_either_source_without_a_signing_key_does_not_load() -> TestResult {
+    let harness = ferrofed_testkit::mcsd::HarnessDirectory::start().await;
+    let (a, b) = (
+        "https://cdr-a.example.org/openehr",
+        "https://cdr-b.example.org/openehr",
+    );
+    harness.publish(&crate::registry_mcsd::members(a, b))?;
+    let dir = tempfile::tempdir()?;
+    let document = dir.path().join("registry.toml");
+    std::fs::write(&document, registry(a, b, ""))?;
+    let document = toml::Value::String(document.display().to_string());
+    let federation = format!("[federation]\nnode_selection = \"ask-all\"\nid = \"{FEDERATION}\"\n");
+    for source in [
+        format!("[registry]\ndocument = {document}\n"),
+        format!(
+            "[registry.mcsd]\nurl = \"{}\"\nrefresh_interval_s = 3600\ndeadline_ms = 5000\n",
+            harness.base()
+        ),
+    ] {
+        let text = format!("profile = \"development\"\n\n{source}\n{federation}");
+        let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+        let refused = Federation::load(&settings).err();
+        assert!(
+            matches!(
+                refused,
+                Some(ferrofed_server::federation::FederationError::Unsigned)
+            ),
+            "§13.1, N24: {source}: {refused:?}"
+        );
+    }
+    Ok(())
+}

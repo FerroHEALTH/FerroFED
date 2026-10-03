@@ -46,10 +46,10 @@ pub(crate) fn member(name: &str, address: &str) -> Member {
 /// The development configuration reading its registry from the directory at
 /// `base`, with a deadline of `deadline_ms` per read, resolving the patient at both nodes.
 pub(crate) fn config(base: &str, deadline_ms: u64) -> String {
-    format!(
+    crate::support::signed(&format!(
         "profile = \"development\"\n\n[registry.mcsd]\nurl = \"{base}\"\nrefresh_interval_s = 3600\ndeadline_ms = {deadline_ms}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
-    )
+    ))
 }
 
 /// A gateway serving the registry of a directory, with what a test drives
@@ -113,5 +113,5 @@ impl Gateway {
 
 /// The settings `text` resolves to.
 pub(crate) fn settings(text: &str) -> Result<Settings, Box<dyn Error>> {
-    Ok(Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?)
+    Ok(Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?)
 }

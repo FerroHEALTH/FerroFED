@@ -820,9 +820,9 @@ decided with #82:
   as for any header the gateway adds (§5.4.1, N33); `iss`, `aud`, `iat`,
   `exp` and `jti` come from no request and are not read, as the minted
   `X-Request-Id` is not;
-- **`[signing]` is required** whenever `registry.document` is set: a
-  federating gateway without a key cannot convey the caller, so it refuses to
-  start.
+- **`[signing]` is required** whenever a registry is configured, by
+  `registry.document` or by `[registry.mcsd]`: a federating gateway without a
+  key cannot convey the caller, so it refuses to start.
 
 **Purpose of use** (decision A24). Required by default: a request whose token
 carries no purpose of use (an IUA `purpose_of_use` claim, or RAR

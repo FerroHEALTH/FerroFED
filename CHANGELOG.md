@@ -225,8 +225,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
-- `[signing]` is required whenever `registry.document` is set: a federating
-  gateway without a signing key refuses to start, and `config check` refuses
+- `[signing]` is required whenever a registry is configured, by
+  `registry.document` or by `[registry.mcsd]`: a federating gateway without a
+  signing key refuses to start, and `config check` refuses
   its configuration with exit code 78, naming the key.
 - The ADMIN API under `{base}/v1/admin/` answers `403` (`operation-refused`)
   to every caller, where it answered `501`.

@@ -163,7 +163,8 @@ resource = "https://cdr-c.example.org/openehr"   # optional, RFC 8707
 
 # The gateway's signing keys, which sign the caller's identity on every
 # request to a node and every client assertion, and are published as a JWK
-# Set. Required whenever registry.document is set.
+# Set. Required whenever a registry is configured, by registry.document or
+# by [registry.mcsd].
 [signing]
 key_file = "/run/secrets/ferrofed-signing-key.pem"
 # previous_key_file = "/run/secrets/ferrofed-signing-key-previous.pem"
@@ -294,9 +295,10 @@ The caller's own `Authorization` header never reaches a node.
 ### Signing keys and the JWK Set
 
 `[signing]` holds the gateway's ES384 keys: P-384 private keys in PKCS#8
-PEM, each read from a file. It is required whenever `registry.document`
-is set: every request to a node carries the caller's identity in an
-`openEHR-federation-client` token signed with the current key
+PEM, each read from a file. It is required whenever a registry is
+configured, by `registry.document` or by `[registry.mcsd]`: every request
+to a node carries the caller's identity in an `openEHR-federation-client`
+token signed with the current key
 ([Client authentication](authentication.md#what-a-node-is-told-about-the-caller);
 §13.1, N24), and a federating gateway without the key refuses to start,
 naming it. The current key signs every client assertion of an `oauth2`

@@ -266,8 +266,9 @@ The gateway's own requests for its operator, the
 query on the admin listener, carry the header with the gateway as `sub` and
 no caller claim.
 
-`[signing]` is therefore required whenever `registry.document` is set: a
-federating gateway without a signing key refuses to start, naming the key
+`[signing]` is therefore required whenever a registry is configured, by
+`registry.document` or by `[registry.mcsd]`: a federating gateway without a
+signing key refuses to start, naming the key
 ([Signing keys](configuration.md#signing-keys-and-the-jwk-set)). The
 specification leaves end-user conveyance open (§13.1), so the header and its
 claims are FerroFED's own design.

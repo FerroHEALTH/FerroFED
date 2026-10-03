@@ -207,11 +207,11 @@ pub enum FederationError {
         /// The credentials section.
         section: String,
     },
-    /// A registry is configured, but `[signing]` is not: every request to a
-    /// node conveys the caller's identity, signed with that key (§13.1, N24,
-    /// N25).
+    /// A registry is configured, from `registry.document` or from
+    /// `[registry.mcsd]`, but `[signing]` is not: every request to a node
+    /// conveys the caller's identity, signed with that key (§13.1, N24, N25).
     #[error(
-        "set [signing] when registry.document is set: every request to a node carries the caller's identity, signed with that key (§13.1, N24)"
+        "set [signing] when a registry is configured, by registry.document or [registry.mcsd]: every request to a node carries the caller's identity, signed with that key (§13.1, N24)"
     )]
     Unsigned,
     /// The node clients could not be built.

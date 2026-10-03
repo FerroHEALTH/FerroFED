@@ -457,7 +457,7 @@ pub(crate) fn signing_key_file() -> &'static str {
 /// `text` with the [`signing_toml`] table appended when it configures a
 /// registry and no `[signing]` of its own.
 pub(crate) fn signed(text: &str) -> String {
-    if text.contains("[registry]") && !text.contains("[signing]") {
+    if text.contains("[registry") && !text.contains("[signing]") {
         format!("{text}{}", signing_toml())
     } else {
         text.to_owned()

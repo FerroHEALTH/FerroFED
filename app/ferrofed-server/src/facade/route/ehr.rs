@@ -96,9 +96,7 @@ pub(super) async fn route(
     let (endpoint, step, probed) = match located {
         owner::Located::At { endpoint, step } => (endpoint, step, None),
         owner::Located::Collision(claimed) => return collision(&ehr_id, claimed, request_id),
-        owner::Located::Unreachable { .. } => {
-            return error::fixed(Code::NoDestination, request_id);
-        }
+        owner::Located::Unreachable { .. } => return error::fixed(Code::NoDestination, request_id),
         owner::Located::Unknown if arrived.method.is_safe() => {
             // NOTE: §5.4.1, N33: the probe reaches members the client never named,
             // so an ehr_id that may be a patient identifier is never probed.

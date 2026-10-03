@@ -190,9 +190,13 @@ pub enum ConveyanceError {
 ///
 /// `Debug` names the principal's kind and no value.
 #[derive(Debug, Clone)]
-pub struct Conveyance {
+pub struct Conveyance(Arc<Conveyed>);
+
+/// What a [`Conveyance`] shares among the requests that carry it.
+#[derive(Debug)]
+struct Conveyed {
     signer: Arc<Signer>,
-    principal: Arc<Principal>,
+    principal: Principal,
 }
 
 /// The claims of one token.
@@ -220,16 +224,13 @@ impl Conveyance {
     /// The conveyance of `principal`, signed by `signer`.
     #[must_use]
     pub fn new(signer: Arc<Signer>, principal: Principal) -> Self {
-        Self {
-            signer,
-            principal: Arc::new(principal),
-        }
+        Self(Arc::new(Conveyed { signer, principal }))
     }
 
     /// On whose behalf the request reaches a node.
     #[must_use]
     pub fn principal(&self) -> &Principal {
-        &self.principal
+        &self.0.principal
     }
 
     /// The [`HEADER`] value for `endpoint`: a compact JWS, its `aud` the
@@ -239,7 +240,7 @@ impl Conveyance {
     ///
     /// Returns [`ConveyanceError::Sign`] when the key cannot sign.
     pub fn signed_for(&self, endpoint: &EndpointId) -> Result<String, ConveyanceError> {
-        let iss = self.signer.issuer_at(endpoint);
+        let iss = self.0.signer.issuer_at(endpoint);
         let iat = jiff::Timestamp::now().as_second();
         let lifetime = i64::try_from(LIFETIME.as_secs()).unwrap_or(i64::MAX);
         let mut claims = Claims {
@@ -255,7 +256,7 @@ impl Conveyance {
             purpose_of_use: &[],
             scope: None,
         };
-        if let Principal::Caller(caller) = self.principal.as_ref() {
+        if let Principal::Caller(caller) = &self.0.principal {
             claims.sub = &caller.subject;
             claims.iss_upstream = Some(&caller.issuer);
             claims.verified_by = Some(caller.verified_by.as_str());
@@ -263,7 +264,7 @@ impl Conveyance {
             claims.purpose_of_use = &caller.purposes;
             claims.scope = Some(caller.scope.as_str()).filter(|scope| !scope.is_empty());
         }
-        let key = self.signer.keys.current();
+        let key = self.0.signer.keys.current();
         let mut header = Header::new(ALGORITHM);
         header.typ = Some(TYPE.to_owned());
         header.kid = Some(key.kid().to_owned());
@@ -277,7 +278,7 @@ impl Conveyance {
     /// `exp` and `jti` come from no request, and are not among them.
     #[must_use]
     pub fn carried(&self) -> Vec<&str> {
-        let Principal::Caller(caller) = self.principal.as_ref() else {
+        let Principal::Caller(caller) = &self.0.principal else {
             return Vec::new();
         };
         let mut carried = vec![
