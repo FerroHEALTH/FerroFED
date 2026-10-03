@@ -22,6 +22,17 @@ path = "src/lib.rs"
 name = "ferrofed"
 path = "src/main.rs"
 
+[features]
+# The PostgreSQL backend of the stored-query registry, for several replicas
+# sharing one store (#268). Off by default, so a single gateway carries no
+# PostgreSQL client (no specification governs this: our own design).
+postgres = [
+  "dep:tokio-postgres",
+  "dep:tokio-postgres-rustls",
+  "dep:rustls",
+  "dep:rustls-platform-verifier",
+]
+
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
@@ -37,6 +48,13 @@ openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["aql"] }
 openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true
+# The metrics surface (#281): one MeterProvider, the Prometheus pull reader on
+# the admin listener and the optional OTLP push.
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-prometheus.workspace = true
+opentelemetry-otlp.workspace = true
+prometheus.workspace = true
 # The EHR_STATUS of the test EHRs an admission check creates (§12b.1, #79).
 openehr-rm.workspace = true
 # The healthcheck job asks the server beside it for its readiness, over the
@@ -51,6 +69,10 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+tokio-postgres = { workspace = true, optional = true }
+tokio-postgres-rustls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-platform-verifier = { workspace = true, optional = true }
 toml.workspace = true
 tower-http.workspace = true
 tracing.workspace = true

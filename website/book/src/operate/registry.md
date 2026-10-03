@@ -210,7 +210,7 @@ Four sections take effect on a reload:
 |---|---|
 | `[registry]`: the document's contents, its path and its `format` | `profile` |
 | `[credentials]` | `[server]` |
-| `[dev]` | `[telemetry]` |
+| `[dev]` | `[telemetry]` and `[metrics]` |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
 
 `federation.demographic_endpoint` keeps its running value until a restart,
@@ -261,8 +261,9 @@ the same file to see the fault. The classes are:
 | `registry-presence` | `registry.document` was set or unset, which takes a restart |
 
 Reloading uses a Unix signal, and FerroFED runs on Unix only
-([Supported platforms](deployment-shape.md#supported-platforms)). The gateway
-has no metrics endpoint yet, so the log lines are the record of each reload.
+([Supported platforms](deployment-shape.md#supported-platforms)). Each
+reload is counted by `result` on the [metrics](metrics.md) surface, and the
+log lines record what it changed.
 
 ## Integrity incidents
 
@@ -293,7 +294,7 @@ the least recently used one past the index capacity). Until then, requests
 that name no node are refused, and a client can still reach one of the
 members by naming its endpoint in the `openEHR-federation-endpoint` header.
 
-The gateway has no metrics endpoint, so the log is the record: count the
-incidents by filtering the target `ferrofed::integrity` and grouping on
-`kind` in your log pipeline. The request line of a refused request carries
+The gateway counts every incident by `kind` on its [metrics](metrics.md)
+surface, `ferrofed_integrity_incidents_total`, and the line carries the
+routing ids you act on. The request line of a refused request carries
 its `409` and its `request_id`; the incident line does not name the request.

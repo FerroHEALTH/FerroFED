@@ -28,10 +28,11 @@ ferrofed healthcheck --config /etc/ferrofed/ferrofed.toml
 
 `--config` names the file; without it the file is the one `FERROFED_CONFIG`
 names, and without that every default stands. `config check` reads and
-resolves the configuration exactly as `serve` would, secrets included, prints
-one line and exits, so a deployment pipeline can test a file without binding a
-socket. `ferrofed admission check --endpoint <id>` checks one member against
-the admission conditions ([Admitting a node](admission.md)).
+resolves the configuration exactly as `serve` would, secrets included, loads
+a read-only stored-query directory, prints one line and exits, so a deployment
+pipeline can test a file without binding a socket. It opens no store file and
+connects to no database. `ferrofed admission check --endpoint <id>` checks
+one member against the admission conditions ([Admitting a node](admission.md)).
 `healthcheck` asks the gateway running on this host for its readiness: it
 connects to the port of `server.listen` (on `127.0.0.1` or `[::1]` when the
 address is a wildcard, and on the address itself otherwise), prints one line,
@@ -119,6 +120,11 @@ body_limit_bytes = 1048576    # a body past this answers 413
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
 filter = "info,hyper=warn,tower=warn,h2=warn"
 
+# The metrics surface, off by default; see Metrics.
+[metrics]
+listen = "127.0.0.1:9464"     # the admin listener serving GET /metrics; loopback unless allow_remote
+otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to
+
 # Outbound credentials, one section per endpoint id. Each section names one
 # scheme: a bearer token, or a user and a password.
 [credentials."hospital-a"]
@@ -198,6 +204,9 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 
 Every response carries an `x-request-id`: the client's value when it is short
 printable ASCII, the gateway's own id otherwise.
+
+The metrics are not on this surface: they have a listener of their own, off
+by default ([Metrics](metrics.md)).
 
 ## Request ids
 
@@ -349,4 +358,3 @@ the gateway replaces Rust's default panic hook, which prints it to stderr,
 so a panic writes nothing to stderr. A federated query the gateway fails with a `500` also logs "the
 federated query failed" with its error code and the same `request_id` as its
 request line.
-

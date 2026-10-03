@@ -297,6 +297,7 @@ pub(crate) async fn ask_all<'a>(
             security::forward_withheld(endpoint, *part, logged);
         }
         federation.dependencies().probed(endpoint, answer);
+        federation.requests().probed(endpoint, answer);
     }
     let (endpoint, answer) = match owner::settled(answers) {
         owner::Settled::Owner { endpoint, answer } => (endpoint, answer),

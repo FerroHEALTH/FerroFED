@@ -20,10 +20,10 @@ use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::{
-    FederationSettings, PixManagerSettings, PixmSettings, ServerSettings, Settings,
-    TelemetrySettings,
+    FederationSettings, MetricsSettings, PixManagerSettings, PixmSettings, ServerSettings,
+    Settings, TelemetrySettings,
 };
-use crate::config::{COMBINING_MARGIN_MS, Config, OffsetPaging, Pixm, stored_queries};
+use crate::config::{COMBINING_MARGIN_MS, Config, Metrics, OffsetPaging, Pixm, stored_queries};
 
 impl Config {
     /// Resolves this tree into the settings the run path holds.
@@ -40,9 +40,15 @@ impl Config {
     /// ([`Error::Listen`], [`Error::BasePath`], [`Error::Zero`], [`Error::Filter`],
     /// [`Error::EndpointId`], [`Error::DemographicEndpoint`], [`Error::Missing`],
     /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]),
-    /// each naming the key that carries the fault, and
-    /// [`Error::StoredQueryFanOutWithoutRegistry`] when definitions would be
-    /// distributed with no registry to distribute from.
+    /// each naming the key that carries the fault, the stored-query store
+    /// errors of [`stored_queries::resolve`], and
+    /// [`Error::StoredQueryFanOutWithoutRegistry`] and
+    /// [`Error::StoredQueryFanOutReadOnly`] when definitions would be
+    /// distributed with no registry, or no `PUT`, to distribute from. The
+    /// metrics surface refuses a remote listener without `metrics.allow_remote`
+    /// ([`Error::MetricsRemote`]), a listener on `server.listen`
+    /// ([`Error::MetricsShared`]) and a collector that is no `http://` URL
+    /// ([`Error::OtlpScheme`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -85,10 +91,17 @@ impl Config {
         let federation = self.resolve_federation(request_timeout)?;
         let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
         let stored_queries = stored_queries::resolve(self)?;
+        let metrics = resolve_metrics(&self.metrics, listen)?;
         // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
         // of the registry and is never offered without it.
-        if federation.fan_out_stored_queries && stored_queries.is_none() {
-            return Err(Error::StoredQueryFanOutWithoutRegistry);
+        if federation.fan_out_stored_queries {
+            match stored_queries.as_ref().map(stored_queries::Store::backend) {
+                None => return Err(Error::StoredQueryFanOutWithoutRegistry),
+                Some(stored_queries::Backend::Files) => {
+                    return Err(Error::StoredQueryFanOutReadOnly);
+                }
+                Some(_) => {}
+            }
         }
         Ok(Settings {
             profile: self.profile,
@@ -110,6 +123,7 @@ impl Config {
             dev: self.dev.clone(),
             pixm,
             stored_queries,
+            metrics,
         })
     }
 
@@ -216,6 +230,54 @@ fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
     Ok(PixmSettings {
         managers,
         namespaces: pixm.namespaces.clone(),
+    })
+}
+
+/// Resolves `[metrics]`: the listener on a loopback address unless
+/// `allow_remote` is set and never on `server`, the gateway's own address,
+/// and the OTLP collector an `http://` URL.
+fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSettings, Error> {
+    let listen = metrics
+        .listen
+        .as_deref()
+        .map(|listen| {
+            listen
+                .parse::<SocketAddr>()
+                .map_err(|source| Error::Listen {
+                    key: String::from("metrics.listen"),
+                    source,
+                })
+        })
+        .transpose()?;
+    if let Some(address) = listen {
+        // NOTE: no specification governs this: our own design; the listener has
+        // no authentication, so it stays on the host unless the operator says.
+        if !address.ip().is_loopback() && !metrics.allow_remote {
+            return Err(Error::MetricsRemote { address });
+        }
+        if address == server {
+            return Err(Error::MetricsShared { address });
+        }
+    }
+    let otlp_endpoint = metrics
+        .otlp_endpoint
+        .as_deref()
+        .map(|endpoint| {
+            url::Url::parse(endpoint).map_err(|source| Error::Url {
+                key: String::from("metrics.otlp_endpoint"),
+                source,
+            })
+        })
+        .transpose()?;
+    if otlp_endpoint
+        .as_ref()
+        .is_some_and(|endpoint| endpoint.scheme() != "http")
+    {
+        return Err(Error::OtlpScheme);
+    }
+    Ok(MetricsSettings {
+        listen,
+        otlp_endpoint,
     })
 }
 

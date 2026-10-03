@@ -33,6 +33,7 @@ use ferrofed_registry::id::{EndpointId, NodeId};
 use crate::config::settings::Settings;
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{FederationError, Reconciled};
+use crate::metrics::ReloadResult;
 use crate::state::AppState;
 
 /// The configuration sections a reload applies.
@@ -200,12 +201,13 @@ impl Reloader {
         })
     }
 
-    /// Logs an outcome: ids and counts, never a value of the configuration,
-    /// the document, a credential or a header.
+    /// Logs an outcome, ids and counts, never a value of the configuration,
+    /// the document, a credential or a header, and counts it on the metrics
+    /// surface.
     fn log(&self, outcome: &Result<Applied, ReloadError>) {
-        // TODO(#281): count every reload, applied or refused, on the metrics surface.
         match outcome {
             Ok(applied) => {
+                self.state.metrics().reloaded(ReloadResult::Applied);
                 tracing::info!(
                     members = applied.members,
                     endpoints_added = joined(&applied.endpoints_added, EndpointId::as_str),
@@ -223,12 +225,15 @@ impl Reloader {
                     );
                 }
             }
-            Err(error) => tracing::error!(
-                class = error.class(),
-                config = self.source().map(|path| path.display().to_string()),
-                document = error.document().map(|path| path.display().to_string()),
-                "registry reload refused, the running registry stays; `ferrofed config check` names the fault"
-            ),
+            Err(error) => {
+                self.state.metrics().reloaded(ReloadResult::Refused);
+                tracing::error!(
+                    class = error.class(),
+                    config = self.source().map(|path| path.display().to_string()),
+                    document = error.document().map(|path| path.display().to_string()),
+                    "registry reload refused, the running registry stays; `ferrofed config check` names the fault"
+                );
+            }
         }
     }
 
@@ -291,6 +296,7 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         dev: fresh.dev,
         pixm: fresh.pixm,
         stored_queries: boot.stored_queries.clone(),
+        metrics: boot.metrics.clone(),
     }
 }
 
@@ -362,8 +368,20 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             was.demographic_endpoint != now.demographic_endpoint,
         ),
         (
-            "stored_queries.path",
-            boot.stored_queries != fresh.stored_queries,
+            "stored_queries",
+            match (&boot.stored_queries, &fresh.stored_queries) {
+                (Some(was), Some(now)) => !was.same_as(now),
+                (None, None) => false,
+                (Some(_), None) | (None, Some(_)) => true,
+            },
+        ),
+        (
+            "metrics.listen",
+            boot.metrics.listen != fresh.metrics.listen,
+        ),
+        (
+            "metrics.otlp_endpoint",
+            boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint,
         ),
     ]
     .into_iter()

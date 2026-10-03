@@ -188,6 +188,7 @@ pub(super) async fn distribute(
         let outcome = settled(sent, latency_ms, |stored, latency_ms| {
             stored.unwrap_or_else(|failure| unsent(endpoint, &failure, latency_ms, &logged))
         });
+        federation.requests().settled(endpoint.id(), &outcome);
         outcomes.push((endpoint.id(), outcome));
     }
     tracing::info!(
@@ -249,6 +250,7 @@ pub(super) async fn drift(
             Ok(copy) => compared(definition.aql(), copy),
             Err(failure) => unsent(endpoint, &failure, latency_ms, &logged),
         });
+        federation.requests().settled(endpoint.id(), &outcome);
         outcomes.push((endpoint.id(), outcome));
     }
     tracing::info!(

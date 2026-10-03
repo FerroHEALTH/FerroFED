@@ -28,6 +28,10 @@
 //! The admission check creates its test EHRs on node A and reads each back,
 //! with only synthetic subjects on the wire (§12b.1, §12b.2, N42a), in
 //! [`admission`].
+//!
+//! With the `postgres` feature, the stored-query registry's PostgreSQL store
+//! runs its store suite, and two gateway instances sharing it race one new
+//! version with exactly one stored (§12.7, N44), in `stored_postgres`.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -56,6 +60,8 @@ mod attributes;
 mod commit;
 mod crossref;
 mod pixm;
+#[cfg(feature = "postgres")]
+mod stored_postgres;
 mod track10;
 mod track9;
 

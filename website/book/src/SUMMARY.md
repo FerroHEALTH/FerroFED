@@ -22,6 +22,7 @@
   - [Queries and API areas](operate/queries-and-areas.md)
 - [The container image and the quickstart](operate/container.md)
 - [Admitting a node](operate/admission.md)
+- [Metrics](operate/metrics.md)
 
 # Integrate
 

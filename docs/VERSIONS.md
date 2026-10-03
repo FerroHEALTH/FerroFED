@@ -146,6 +146,26 @@ because ITI-78 answers with `Patient` resources, which only `resources`
 carries (#119); the mCSD directory (#86) reads `Organization` and `Endpoint`
 from the same set.
 
+## Metrics crates (crates.io)
+
+The metrics surface (#281) is one OpenTelemetry `MeterProvider` read by the
+Prometheus pull reader and the optional OTLP push, the stack FerroEHR runs.
+The four `opentelemetry` crates are released in lockstep, so their rows are
+one group: they move together, and `scripts/checks/versions.sh` fails when
+one member moves alone, here or in the root `Cargo.toml`
+`[workspace.dependencies]`. `prometheus` is the registry and text encoder
+the pull reader renders through, on its own release line, checked against
+the root `Cargo.toml` alone. Every version was the latest on crates.io on
+2026-10-03.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| `opentelemetry` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `opentelemetry_sdk` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `opentelemetry-prometheus` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `opentelemetry-otlp` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `prometheus` | 0.14.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+
 ## Language and runtime
 
 `rust-toolchain.toml` carries the toolchain, and the root `Cargo.toml` carries
@@ -167,14 +187,15 @@ toolchain.
 A single gateway needs no database (`docs/architecture.md` §8). PostgreSQL is
 used only as the optional backend of the stored-query store when several
 gateway replicas run. Every PostgreSQL FerroFED itself tests against or
-documents is the latest release line, so the image row, added with its first
-consumer, pins the latest `postgres:18.x` image by tag and by the digest of its
-image index. A member node in the test harness runs FerroEHR's documented
-database image, which is part of the product under test (§13).
+documents is the latest release line. A member node in the test harness runs
+FerroEHR's documented database image, which is part of the product under test
+(§13). The stored-query store's end-to-end tests run on that same image, built
+on `postgres:18.6`, one database per use (#268), so no other PostgreSQL image
+is pinned.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| PostgreSQL | 18 | nothing yet; the image row is added with its first consumer |
+| PostgreSQL | 18 | the stored-query `postgres` backend's tests, on the FerroEHR node database image below; the configuration page of the book |
 
 ## Container images
 

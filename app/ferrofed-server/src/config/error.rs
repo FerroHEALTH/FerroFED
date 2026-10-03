@@ -10,6 +10,7 @@ use ferrofed_registry::error::IdError;
 use openehr_its::rest::client::InvalidCredentials;
 
 use crate::config::ENV_PREFIX;
+use crate::config::stored_queries::Backend;
 
 /// A configuration the server refuses to start on.
 #[derive(Debug, thiserror::Error)]
@@ -84,9 +85,43 @@ pub enum Error {
     /// registry to distribute from (§12.7, N44).
     #[error(
         "federation.fan_out_stored_queries distributes the stored-query registry's definitions, \
-         and no registry is offered: set stored_queries.path, or turn the setting off (§12.7)"
+         and no registry is offered: configure [stored_queries], or turn the setting off (§12.7)"
     )]
     StoredQueryFanOutWithoutRegistry,
+    /// Stored-query definitions would be distributed from a read-only
+    /// registry, which stores none to distribute (§12.7, N44).
+    #[error(
+        "federation.fan_out_stored_queries distributes the definitions a PUT stores, \
+         and stored_queries.backend = \"files\" refuses every PUT: turn the setting off, \
+         or choose a backend that stores (§12.7)"
+    )]
+    StoredQueryFanOutReadOnly,
+    /// A `[stored_queries]` key the chosen backend does not read is set.
+    #[error("{key} does not apply to stored_queries.backend = \"{backend}\"; remove it")]
+    StoreKey {
+        /// The key that is set.
+        key: String,
+        /// The backend chosen.
+        backend: Backend,
+    },
+    /// The chosen stored-query backend is not built into this binary.
+    #[error(
+        "stored_queries.backend = \"{backend}\" is not built into this binary; build ferrofed-server with its {backend} feature"
+    )]
+    StoreBackendUnavailable {
+        /// The backend chosen.
+        backend: Backend,
+    },
+    /// The PostgreSQL connection string does not parse.
+    ///
+    /// The parser's message is not kept: it may quote a character of the
+    /// string, which holds a password.
+    #[error("{key} is not a PostgreSQL connection string, a URL or libpq key/value pairs")]
+    StoreUrl {
+        /// The key the string was read from: the inline key or its `_file`
+        /// sibling.
+        key: String,
+    },
     /// A key a section needs is not set.
     #[error("{key} is not set, and its section needs it")]
     Missing {
@@ -195,6 +230,26 @@ pub enum Error {
         "the [dev] table is not valid: every [[dev.crossref]] row names namespace, value, member and ehr_id, and nothing else"
     )]
     DevTable,
+    /// `metrics.listen` names an address other than a loopback one, and
+    /// `metrics.allow_remote` does not allow it.
+    #[error(
+        "metrics.listen is {address}, which is not a loopback address; the metrics listener has no authentication, so set metrics.allow_remote = true to serve it beyond this host"
+    )]
+    MetricsRemote {
+        /// The address `metrics.listen` names.
+        address: std::net::SocketAddr,
+    },
+    /// `metrics.listen` names the address `server.listen` binds.
+    #[error("metrics.listen is {address}, the address server.listen binds; give it its own")]
+    MetricsShared {
+        /// The address both keys name.
+        address: std::net::SocketAddr,
+    },
+    /// `metrics.otlp_endpoint` is not an `http://` URL.
+    #[error(
+        "metrics.otlp_endpoint must be an http:// URL: the OTLP push speaks gRPC without TLS, to a collector beside the gateway"
+    )]
+    OtlpScheme,
     /// The request timeout does not exceed the overall fan-out budget plus
     /// the combining margin, so it could cut the answer and the `504`
     /// envelope the budget produces when it expires (§11.4, §11.5).

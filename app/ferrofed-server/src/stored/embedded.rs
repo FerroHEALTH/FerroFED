@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The stored-query registry's store on disk, over `redb` (§12.7, N44).
+//! The stored-query registry's embedded store, over `redb`, for one gateway
+//! process (§12.7, N44).
 //!
 //! One table maps a qualified query name and a version to the instant the
 //! definition was stored and its AQL. An insert reads the key and writes it

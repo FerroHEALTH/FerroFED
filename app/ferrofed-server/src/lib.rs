@@ -52,6 +52,7 @@ pub mod facade;
 pub mod federation;
 pub mod health;
 pub mod healthcheck;
+pub mod metrics;
 pub mod panic;
 pub mod reload;
 pub mod request_id;
@@ -147,8 +148,8 @@ where
         Command::Healthcheck => healthcheck_command(&settings),
         Command::Config {
             command: ConfigCommand::Check,
-        } => match Federation::load(&settings) {
-            Ok(_) => config_checked(),
+        } => match AppState::check(&settings) {
+            Ok(()) => config_checked(),
             Err(error) => {
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 ExitCode::from(EXIT_CONFIG)
@@ -183,7 +184,10 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
                 settings.server.base_path.clone(),
                 settings.server.listen,
                 described,
-                settings.stored_queries.is_some(),
+                settings
+                    .stored_queries
+                    .as_ref()
+                    .map(config::stored_queries::Store::backend),
                 settings.profile == Profile::Development,
             ),
             format.colour(stdout_is_terminal, no_color.as_deref()),
@@ -199,6 +203,19 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
         return ExitCode::from(EXIT_CONFIG);
     }
     panic::install_hook();
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            tracing::error!(%error, "cannot start the runtime");
+            return ExitCode::FAILURE;
+        }
+    };
+    // NOTE: no specification governs this: our own design; the OTLP push is a
+    // tonic client, which is built inside the runtime it will run on.
+    let entered = runtime.enter();
     let state = match AppState::build_read(&settings, document) {
         Ok(state) => Arc::new(state),
         Err(error) => {
@@ -206,7 +223,8 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
             return ExitCode::from(EXIT_CONFIG);
         }
     };
-    match serve_command(settings, state, config) {
+    drop(entered);
+    match serve_command(&runtime, settings, &state, config) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(error = format!("{error:#}"), "cannot serve");
@@ -326,19 +344,22 @@ fn healthcheck_command(settings: &Settings) -> ExitCode {
     }
 }
 
-/// Builds the runtime and serves `state` until the process is asked to stop,
+/// Serves `state` on `runtime` until the process is asked to stop,
 /// reloading the registry on `SIGHUP` from `config`, the file `settings`
-/// were read from ([`reload`]).
+/// were read from ([`reload`]), and serving `GET /metrics` on the admin
+/// listener when `metrics.listen` is set ([`metrics`]).
+///
+/// The metrics are flushed once the gateway has stopped, while the runtime
+/// an OTLP push runs on is still up.
 fn serve_command(
+    runtime: &tokio::runtime::Runtime,
     settings: Settings,
-    state: Arc<AppState>,
+    state: &Arc<AppState>,
     config: Option<PathBuf>,
 ) -> anyhow::Result<()> {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?;
     let server = settings.server.clone();
-    runtime.block_on(async move {
+    let admin = settings.metrics.listen;
+    let outcome = runtime.block_on(async {
         use anyhow::Context;
 
         tracing::info!(
@@ -350,19 +371,35 @@ fn serve_command(
             .await
             .with_context(|| format!("binding {}", server.listen))?;
         tracing::info!(listen = %server.listen, "listening");
+        if let Some(address) = admin {
+            let metrics = TcpListener::bind(address)
+                .await
+                .with_context(|| format!("binding metrics.listen {address}"))?;
+            tracing::info!(listen = %address, path = metrics::PATH, "serving metrics");
+            let app = metrics::router(Arc::clone(state.metrics()));
+            tokio::spawn(async move {
+                if let Err(error) = axum::serve(metrics, app).await {
+                    tracing::error!(%error, "the metrics listener stopped");
+                }
+            });
+        }
         tokio::spawn(reload::on_hangup(Arc::new(reload::Reloader::new(
             config,
             settings,
-            Arc::clone(&state),
+            Arc::clone(state),
         ))));
-        let app = router(Arc::clone(&state), &server);
+        let app = router(Arc::clone(state), &server);
         state.lifecycle().booted();
         serve(listener, app, &server, state.lifecycle().clone())
             .await
             .context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
-        Ok(())
-    })
+        anyhow::Ok(())
+    });
+    if let Err(error) = state.metrics().shutdown() {
+        tracing::warn!(error = chain(&error), "the metrics could not be flushed");
+    }
+    outcome
 }
 
 /// Returns the exit code a command-line refusal deserves.

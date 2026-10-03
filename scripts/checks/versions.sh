@@ -52,6 +52,9 @@
 #  12. book pins           every row of the pin table on the book page
 #                          website/book/src/evaluate/versions.md restates
 #                          the docs/VERSIONS.md rows its Item cell names.
+#  13. metrics crates      the opentelemetry group moves as one, and each of
+#                          its rows and the prometheus row matches the root
+#                          Cargo.toml [workspace.dependencies] requirement.
 #
 # FerroFED's own database image gets a check of its own in the change that adds
 # its first pin row.
@@ -842,6 +845,35 @@ else
     fi
   fi
 fi
+
+echo "== metrics crates ($matrix <-> Cargo.toml)"
+# The opentelemetry crates are released in lockstep, so their rows are one
+# group, as the openehr-* family's are; prometheus is held to its own row.
+otel_pin=""
+for crate in opentelemetry opentelemetry_sdk opentelemetry-prometheus opentelemetry-otlp prometheus; do
+  want="$(pin_of "$crate" "$matrix")"
+  if [ -z "$want" ]; then
+    bad "$matrix has no $crate row"
+    continue
+  fi
+  if [ "$crate" != prometheus ]; then
+    if [ -z "$otel_pin" ]; then
+      otel_pin="$want"
+    elif [ "$want" != "$otel_pin" ]; then
+      bad "$crate: $matrix pins $want, the rest of the opentelemetry group $otel_pin; the group moves together"
+    fi
+  fi
+  if [ -f Cargo.toml ]; then
+    req="$(manifest_req "$crate")"
+    if [ -z "$req" ]; then
+      bad "$crate: root Cargo.toml has no requirement, $matrix pins $want"
+    elif [ "$req" != "$want" ]; then
+      bad "$crate: root Cargo.toml requires $req, $matrix pins $want"
+    else
+      note "OK: $crate $want (root Cargo.toml agrees)"
+    fi
+  fi
+done
 
 echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"
 # The reference a pin cell names: its first 40-hex token (a commit), else its

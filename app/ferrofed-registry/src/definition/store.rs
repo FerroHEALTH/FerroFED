@@ -8,9 +8,13 @@
 //! that registered it invokes it by name after a restart, and a second `PUT`
 //! refused before a restart is refused after it too (§12.7, N44). So the
 //! store's one write is [`DefinitionStore::insert_if_absent`], which refuses
-//! a held name and version atomically, and its one read loads every
-//! definition into [`Definitions`] when the gateway starts. A version never
-//! changes once held, so the in-memory view never needs invalidating. This
+//! a held name and version atomically, and its read loads every definition
+//! into [`Definitions`] when the gateway starts. A version never changes once
+//! held, so the in-memory view never needs invalidating. A store several
+//! gateway processes share can gain versions another process inserted, so
+//! the view over it reads the store again before it answers
+//! ([`Definitions::refresh`], [`Definitions::refresh_named`]), and only ever
+//! adds what it did not hold. A read-only store refuses every insert. This
 //! crate holds the interface only: no storage implementation is reachable
 //! from it (no specification governs the storage: our own design).
 
@@ -42,6 +46,9 @@ pub enum StoreError {
     /// A held row does not read as a definition: the store is damaged.
     #[error("the stored-query store holds a row that is not a stored definition")]
     Corrupt(#[source] Box<dyn Error + Send + Sync>),
+    /// The store is read-only, so nothing is inserted.
+    #[error("the stored-query store is read-only")]
+    ReadOnly,
 }
 
 /// The durable store of stored-query definitions.
@@ -56,7 +63,7 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
     /// # Errors
     ///
     /// A [`StoreError`] when the backend cannot complete the insert; nothing
-    /// is stored then.
+    /// is stored then. [`StoreError::ReadOnly`] from a read-only store.
     fn insert_if_absent(&self, definition: &StoredDefinition) -> Result<Insertion, StoreError>;
 
     /// Every definition the store holds.
@@ -66,6 +73,31 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
     /// A [`StoreError`] when the backend cannot be read, or a held row does
     /// not read as a definition.
     fn load(&self) -> Result<Vec<StoredDefinition>, StoreError>;
+
+    /// Every version of `name` the store holds.
+    ///
+    /// The default reads every definition and keeps those of `name`; a
+    /// backend that can select by name overrides it.
+    ///
+    /// # Errors
+    ///
+    /// The [`StoreError`] of [`DefinitionStore::load`].
+    fn load_named(&self, name: &QueryName) -> Result<Vec<StoredDefinition>, StoreError> {
+        let mut definitions = self.load()?;
+        definitions.retain(|definition| definition.name() == name);
+        Ok(definitions)
+    }
+
+    /// Whether another process may insert into the store while this one
+    /// holds it open, so a view over it reads it again before answering.
+    fn is_shared(&self) -> bool {
+        false
+    }
+
+    /// Whether the store refuses every insert.
+    fn is_read_only(&self) -> bool {
+        false
+    }
 }
 
 /// Every held definition, by name and then by version.
@@ -86,15 +118,60 @@ impl Definitions {
     /// The [`StoreError`] of [`DefinitionStore::load`].
     pub fn open(store: Box<dyn DefinitionStore>) -> Result<Self, StoreError> {
         let mut held = Held::new();
-        for definition in store.load()? {
-            held.entry(definition.name().clone())
-                .or_default()
-                .insert(definition.version(), Arc::new(definition));
-        }
+        add(&mut held, store.load()?);
         Ok(Self {
             store,
             held: RwLock::new(held),
         })
+    }
+
+    /// Whether another process may insert into the store, so a read calls
+    /// [`Definitions::refresh`] or [`Definitions::refresh_named`] first.
+    #[must_use]
+    pub fn is_shared(&self) -> bool {
+        self.store.is_shared()
+    }
+
+    /// Whether the store refuses every insert, so the registry answers no
+    /// `PUT`.
+    #[must_use]
+    pub fn is_read_only(&self) -> bool {
+        self.store.is_read_only()
+    }
+
+    /// Reads every definition from a shared store again, and adds each
+    /// version the view does not hold; a store that is not shared is not
+    /// read.
+    ///
+    /// A held version never changes (§12.7, N44), so nothing the view holds
+    /// is replaced. This call reads the store: a caller on an asynchronous
+    /// runtime makes it on a thread that may block.
+    ///
+    /// # Errors
+    ///
+    /// The [`StoreError`] of [`DefinitionStore::load`]; the view stays as it
+    /// was.
+    pub fn refresh(&self) -> Result<(), StoreError> {
+        if self.is_shared() {
+            let loaded = self.store.load()?;
+            add(&mut self.write(), loaded);
+        }
+        Ok(())
+    }
+
+    /// Reads every version of `name` from a shared store again, as
+    /// [`Definitions::refresh`] reads every definition.
+    ///
+    /// # Errors
+    ///
+    /// The [`StoreError`] of [`DefinitionStore::load_named`]; the view stays
+    /// as it was.
+    pub fn refresh_named(&self, name: &QueryName) -> Result<(), StoreError> {
+        if self.is_shared() {
+            let loaded = self.store.load_named(name)?;
+            add(&mut self.write(), loaded);
+        }
+        Ok(())
     }
 
     /// Stores `definition` unless its name and version are held (§12.7,
@@ -168,6 +245,16 @@ impl Definitions {
 
     fn write(&self) -> std::sync::RwLockWriteGuard<'_, Held> {
         self.held.write().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// Adds each of `definitions` that `held` does not hold yet.
+fn add(held: &mut Held, definitions: Vec<StoredDefinition>) {
+    for definition in definitions {
+        held.entry(definition.name().clone())
+            .or_default()
+            .entry(definition.version())
+            .or_insert_with(|| Arc::new(definition));
     }
 }
 

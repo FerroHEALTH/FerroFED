@@ -21,6 +21,7 @@ use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::Analysis;
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::dedup::DedupMode;
+use openehr_federation::meta::FederationMeta;
 use openehr_its::rest::generated::query::ResultSet;
 use openehr_its::rest::runtime::ApiError;
 
@@ -238,6 +239,14 @@ fn remember(federation: &Federation, session: Option<&SessionKey>, targets: &pla
     }
 }
 
+/// Records what a fan-out's per-endpoint report shows of each member it
+/// asked: its last state for the health surface, and its request for the
+/// metrics surface.
+fn observed(federation: &Federation, report: &FederationMeta) {
+    federation.dependencies().fan_out(report);
+    federation.requests().report(report);
+}
+
 /// Runs one federated query and returns the status, the `RESULT_SET`, and
 /// the endpoints the answer names as having acted for it (§7a.3, N31).
 ///
@@ -322,7 +331,7 @@ async fn federate(
         security::fan_out(&error, request_id);
         Failure::FanOut(error)
     })?;
-    federation.dependencies().fan_out(answer.federation());
+    observed(federation, answer.federation());
     follow_up::observe(federation, answer.seen(), request_id);
     let mut status = answer.status();
     // NOTE: no specification governs this (§11.3 covers only an answered lookup):

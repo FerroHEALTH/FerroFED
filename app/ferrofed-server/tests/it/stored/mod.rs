@@ -5,15 +5,20 @@
 //! N33; CP-40, CP-28): definitions held at the gateway on ITS-REST's semver
 //! segment, a held version immutable across a restart, a literal patient
 //! refused at storage, and a definition invoked by name as an ordinary
-//! fan-out whose answer names the gateway's definition.
+//! fan-out whose answer names the gateway's definition. The store suite every
+//! writable backend passes is [`suite`], the `[stored_queries]` backends are
+//! configured in [`backends`], and the read-only backend is [`files`].
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
 )]
 
+mod backends;
 mod declaration;
+mod files;
 mod invocation;
 mod storage;
+pub(crate) mod suite;
 
 use std::collections::BTreeMap;
 use std::error::Error;
