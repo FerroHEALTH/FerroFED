@@ -40,7 +40,7 @@ use crate::facade::{
     Answer, PATIENT, body, crossref, patient_query, post, registry, schema, settings_with_room,
     statuses,
 };
-use crate::support::{Logs, call};
+use crate::support::{CLIENT_TOKEN, Logs, call};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -52,9 +52,6 @@ const SCOPE: &str = "system/aql-*.s";
 
 /// The JWK Set location the gateway declares.
 const JWKS_URI: &str = "https://gw.example.org/.well-known/jwks.json";
-
-/// The caller's own bearer token, which no node may receive.
-const CALLER_TOKEN: &str = "synthetic-caller-token-Qz7c";
 
 /// A one-row answer from a node.
 const ONE_ROW: &str =
@@ -151,7 +148,7 @@ fn patient_post() -> Result<Request<Body>, Box<dyn Error>> {
     let mut request = post(body(&patient_query())?)?;
     request.headers_mut().insert(
         header::AUTHORIZATION,
-        format!("Bearer {CALLER_TOKEN}").parse()?,
+        format!("Bearer {}", *CLIENT_TOKEN).parse()?,
     );
     Ok(request)
 }
@@ -189,13 +186,13 @@ async fn the_node_receives_the_token_its_endpoint_issued_against_the_published_j
         .to_str()?;
     assert!(sent.starts_with("Bearer "), "{sent}");
     assert!(
-        !sent.contains(CALLER_TOKEN),
+        !sent.contains(CLIENT_TOKEN.as_str()),
         "the caller's token is never forwarded"
     );
     for form in endpoint.forms() {
         for (name, value) in form {
             assert!(
-                !value.contains(CALLER_TOKEN),
+                !value.contains(CLIENT_TOKEN.as_str()),
                 "{name} carries the caller's token"
             );
             assert!(!value.contains(PATIENT), "{name} carries the patient (N33)");

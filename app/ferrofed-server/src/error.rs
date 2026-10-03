@@ -183,21 +183,15 @@ pub enum Code {
     /// an EHR for it (N27a, §13.2.1). The body names the endpoints, never the
     /// subject.
     ConsentDenied,
-    /// The request carries no valid access token for this gateway: none, one
-    /// it cannot read, one from an issuer it does not trust, or one whose
-    /// signature, audience or validity window fails (§13.1, N25; RFC 6750 §3.1).
+    /// The request carries no access token this gateway accepts (§13.1, N25).
     Unauthenticated,
-    /// No scope the access token grants covers the operation (RFC 6750 §3.1;
-    /// ITS-REST SMART on openEHR, master08 §Resource Scopes).
+    /// No scope the access token grants covers the operation (RFC 6750 §3.1).
     ScopeInsufficient,
-    /// The access token carries no purpose of use, which this gateway requires
-    /// (§13.4).
+    /// The access token carries no purpose of use, which is required (§13.4).
     PurposeOfUseRequired,
-    /// The issuer's key set or introspection endpoint cannot be reached, so
-    /// no access token can be verified, and none is admitted (§13.1, N25).
+    /// The issuer's key set or introspection endpoint cannot be had (§13.1).
     AuthenticationUnavailable,
-    /// The gateway admits no caller to the operation: an admin operation, or
-    /// one it does not know (§13.1).
+    /// No caller is admitted to the operation: an admin or an unknown one.
     OperationRefused,
 }
 
@@ -488,16 +482,10 @@ impl Code {
             Self::ConsentDenied => {
                 "the consent pre-filter does not permit asking the members that might hold this subject's EHR, and no other member holds one (N27a)"
             }
-            Self::Unauthenticated => {
-                "the request carries no access token this gateway accepts (§13.1, N25)"
-            }
+            Self::Unauthenticated => "no access token this gateway accepts (§13.1, N25)",
             Self::ScopeInsufficient => "no scope of the access token grants this operation",
-            Self::PurposeOfUseRequired => {
-                "the access token carries no purpose of use, which this gateway requires (§13.4)"
-            }
-            Self::AuthenticationUnavailable => {
-                "the access token cannot be verified now: its issuer cannot be reached (§13.1)"
-            }
+            Self::PurposeOfUseRequired => "the access token declares no purpose of use (§13.4)",
+            Self::AuthenticationUnavailable => "the access token cannot be verified now (§13.1)",
             Self::OperationRefused => "this gateway admits no caller to this operation",
         }
     }

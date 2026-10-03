@@ -29,6 +29,7 @@ fn granting(scope: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 /// CP-17, inbound half: a query needs an `aql-` search scope; a composition
 /// grant does not cover it.
+// conformance: CP-17
 #[tokio::test]
 async fn a_query_without_an_aql_search_scope_is_403() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -38,6 +39,7 @@ async fn a_query_without_an_aql_search_scope_is_403() -> TestResult {
 
 /// CP-17, inbound half: an ad hoc query is covered only by a pattern over
 /// every query, never by a named one.
+// conformance: CP-17
 #[tokio::test]
 async fn a_named_aql_pattern_does_not_cover_an_ad_hoc_query() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -47,6 +49,7 @@ async fn a_named_aql_pattern_does_not_cover_an_ad_hoc_query() -> TestResult {
 
 /// CP-17, inbound half: a scope the grammar does not read as a resource
 /// scope, and a token with no `scope` claim, grant nothing.
+// conformance: CP-17
 #[tokio::test]
 async fn a_scope_outside_the_grammar_and_no_scope_grant_nothing() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -64,6 +67,7 @@ async fn a_scope_outside_the_grammar_and_no_scope_grant_nothing() -> TestResult 
 
 /// CP-17, inbound half: `system/aql-*` counts only for a backend client the
 /// issuer's entry lists (master08 §Resource Scopes).
+// conformance: CP-17
 #[tokio::test]
 async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> TestResult {
     let mut auth = support::auth();
@@ -84,6 +88,7 @@ async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> Te
 /// CP-17, inbound half: a `patient/` grant is confined to its launch
 /// context, which names no subject the gateway resolves, so it admits no
 /// query, whichever patient the query names, its own or another.
+// conformance: CP-17
 #[tokio::test]
 async fn a_patient_grant_admits_no_query() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -101,6 +106,7 @@ async fn a_patient_grant_admits_no_query() -> TestResult {
 
 /// CP-17, inbound half: a `patient/` grant admits no request addressed by
 /// `ehr_id` either.
+// conformance: CP-17
 #[tokio::test]
 async fn a_patient_grant_admits_no_ehr_id_route() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -111,6 +117,7 @@ async fn a_patient_grant_admits_no_ehr_id_route() -> TestResult {
 
 /// CP-17, inbound half: a routed composition read needs a composition read
 /// grant over every template, because only the node knows the template.
+// conformance: CP-17
 #[tokio::test]
 async fn a_composition_read_needs_a_composition_read_over_every_template() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -137,6 +144,7 @@ async fn a_composition_read_needs_a_composition_read_over_every_template() -> Te
 
 /// CP-17, inbound half: an EHR resource that is no COMPOSITION is held to
 /// the composition family with the operation's permission.
+// conformance: CP-17
 #[tokio::test]
 async fn an_ehr_status_update_needs_a_composition_update() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -147,6 +155,7 @@ async fn an_ehr_status_update_needs_a_composition_update() -> TestResult {
 
 /// CP-17, inbound half: a template named in the path is covered by a
 /// pattern that matches it, and by no other.
+// conformance: CP-17
 #[tokio::test]
 async fn a_named_template_is_covered_by_its_own_pattern() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -167,6 +176,7 @@ async fn a_named_template_is_covered_by_its_own_pattern() -> TestResult {
 
 /// CP-17, inbound half: a stored query needs a scope whose pattern covers
 /// its name.
+// conformance: CP-17
 #[tokio::test]
 async fn a_stored_query_needs_a_pattern_over_its_name() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -177,6 +187,7 @@ async fn a_stored_query_needs_a_pattern_over_its_name() -> TestResult {
 
 /// CP-17, inbound half: an admin operation is refused to every caller,
 /// before any credential is read.
+// conformance: CP-17
 #[tokio::test]
 async fn an_admin_operation_is_refused_to_every_caller() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -188,6 +199,7 @@ async fn an_admin_operation_is_refused_to_every_caller() -> TestResult {
 
 /// CP-17, inbound half: the DEMOGRAPHIC API, which no SMART on openEHR
 /// family covers, admits only a client the issuer's entry lists.
+// conformance: CP-17
 #[tokio::test]
 async fn the_demographic_api_admits_only_a_listed_client() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;

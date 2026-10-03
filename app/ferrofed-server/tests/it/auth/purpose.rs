@@ -17,6 +17,7 @@ use crate::support;
 
 /// §13.4, CP-17 inbound half: a token with no purpose of use is a `403`
 /// that reaches no node.
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_without_a_purpose_of_use_is_403() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -27,6 +28,7 @@ async fn a_token_without_a_purpose_of_use_is_403() -> TestResult {
 }
 
 /// §13.4: an IUA coding with no code declares no purpose.
+// conformance: CP-17
 #[tokio::test]
 async fn an_iua_coding_without_a_code_declares_none() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -43,6 +45,7 @@ async fn an_iua_coding_without_a_code_declares_none() -> TestResult {
 
 /// §13.4: a purpose of use in RFC 9396 `authorization_details` is read as
 /// well as one in the IUA extension.
+// conformance: CP-17
 #[tokio::test]
 async fn a_purpose_in_authorization_details_is_admitted() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -57,6 +60,7 @@ async fn a_purpose_in_authorization_details_is_admitted() -> TestResult {
 
 /// §13.4: a deployment that declares the purpose optional admits a token
 /// without one.
+// conformance: CP-17
 #[tokio::test]
 async fn a_deployment_that_declares_it_optional_admits_a_token_without_one() -> TestResult {
     let mut auth = support::auth();

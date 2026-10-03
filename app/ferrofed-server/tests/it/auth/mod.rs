@@ -5,10 +5,8 @@
 //! `OPTIONS {base}/` behind it (§7a.2), the purpose of use (§13.4), and the
 //! SMART on openEHR scopes (ITS-REST SMART on openEHR, master08).
 //!
-//! Every test here is scored against CP-17's inbound half: the client
-//! authenticates to the gateway, and a request that fails reaches no node.
-//! CP-17's matrix row stays planned until the onward half (#81, #82) lands,
-//! so the tests carry the point in their documentation, not as a marker.
+//! Every test here scores CP-17's inbound half: the client authenticates to
+//! the gateway, and a request that fails reaches no node.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"

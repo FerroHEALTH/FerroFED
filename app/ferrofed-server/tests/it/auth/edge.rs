@@ -54,6 +54,7 @@ fn asserted(assertion: &str) -> Result<Request<Body>, Box<dyn Error>> {
 
 /// CP-17, inbound half: the edge's assertion admits the caller, and the
 /// gateway records the identity the edge asserted.
+// conformance: CP-17
 #[tokio::test]
 async fn an_assertion_of_the_edge_admits_and_is_recorded() -> TestResult {
     let edge = Issuer::new(EDGE)?;
@@ -78,6 +79,7 @@ async fn an_assertion_of_the_edge_admits_and_is_recorded() -> TestResult {
 
 /// CP-17, inbound half: in the edge mode a bearer token alone is a `401`,
 /// even one a trusted issuer signed.
+// conformance: CP-17
 #[tokio::test]
 async fn a_bearer_token_alone_is_401_at_the_edge() -> TestResult {
     let edge = Issuer::new(EDGE)?;
@@ -87,6 +89,7 @@ async fn a_bearer_token_alone_is_401_at_the_edge() -> TestResult {
 }
 
 /// CP-17, inbound half: an assertion another issuer signed is a `401`.
+// conformance: CP-17
 #[tokio::test]
 async fn an_assertion_of_another_issuer_is_401() -> TestResult {
     let edge = Issuer::new(EDGE)?;

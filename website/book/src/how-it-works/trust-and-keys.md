@@ -9,23 +9,33 @@ specification requires both: the client authenticates to the gateway, the
 gateway authenticates onward to each node, and the client's identity
 travels with every request (§13.1, N24, N25, CP-16, CP-17).
 
-Most of this page is planned for v0.0.8: client authentication
-([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), OAuth 2.0 to
+Client authentication
+([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)) and OAuth 2.0 to
 each node with the gateway's own key
-([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)), and the caller's
-identity conveyed to each node
-([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)). The design is
-decided; the diagrams below draw it, and the next section says what runs
-today.
+([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)) run today. The
+caller's identity conveyed to each node is planned for v0.0.8
+([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)); the diagrams draw
+it dashed.
 
-## What runs today
+## The gate
 
-The gateway authenticates no caller yet, and it authenticates to each node
-with a credential you configure per endpoint.
+Every request to the ITS-REST surface, and `OPTIONS {base}/`, passes the
+gate before anything else reads it: the caller's access token is verified,
+the operation's scope and the purpose of use are checked, and a refused
+request reaches no node ([Client authentication](../operate/authentication.md)).
 
 ```mermaid
 flowchart TB
-    client["Client application"] -->|"HTTPS"| proxy["Your reverse proxy:<br/>TLS, caller authentication"]
+    client["Client application"] -->|"HTTPS, Bearer<br/>access token"| proxy["Your reverse proxy:<br/>TLS"]
+    proxy -->|"HTTP"| gate["The gate: token,<br/>scope, purpose of use"]
+    gate -->|"401, 403, 503"| client
+    gate --> gw["FerroFED gateway"]
+    gw -->|"its own credential<br/>per endpoint"| node["Node A"]
+```
+
+A caller's `Authorization` header never reaches a node. A proxy that
+authenticates callers itself uses the explicit edge mode, signing an
+assertion the gate verifies.|"HTTPS"| proxy["Your reverse proxy:<br/>TLS, caller authentication"]
     proxy -->|"HTTP, no caller<br/>check at the gateway"| gw["FerroFED gateway"]
     gw -->|"bearer or Basic,<br/>per endpoint"| node["Node A"]
     gw -->|"bearer, Basic<br/>or none"| pix["PIX Manager"]
@@ -37,19 +47,19 @@ or behind a reverse proxy that authenticates each caller
 A caller's `Authorization` header never reaches a node. Each credential is a
 file named by a `_file` key, sent only to its own endpoint.
 
-## Two trust relationships, planned for v0.0.8
+## Two trust relationships
 
 ```mermaid
 flowchart TB
     classDef planned stroke-dasharray: 6 4
-    as["Callers' authorization servers<br/>one signing key each"]:::planned
+    as["Callers' authorization servers<br/>one signing key each"]
     subgraph gwbox["FerroFED gateway"]
-        trust["Trust list<br/>of issuers"]:::planned
-        key["Gateway key pair, ES384<br/>private half: a _file secret"]:::planned
-        jwks["{base}/.well-known/jwks.json<br/>current and previous kid"]:::planned
+        trust["Trust list<br/>of issuers"]
+        key["Gateway key pair, ES384<br/>private half: a _file secret"]
+        jwks["{base}/.well-known/jwks.json<br/>current and previous kid"]
     end
     subgraph nodebox["Member node A"]
-        tok["Token endpoint"]:::planned
+        tok["Token endpoint"]
         cdr["CDR"]
     end
     as -->|"each issuer's JWKS"| trust
@@ -75,7 +85,7 @@ flowchart TB
   the `openEHR-federation-client` header is a JWS signed with the same
   gateway key, so the node verifies it against the same JWKS.
 
-## The token flow, planned for v0.0.8
+## The token flow
 
 ```mermaid
 %%{init: {"sequence": {"actorMargin": 24}}}%%
@@ -107,9 +117,10 @@ must not have expired. Any of those is a `401`. The scopes are read in the
 SMART on openEHR grammar with `openehr-sdt`, and a token without a scope
 that covers the operation is a `403`. A token without a purpose of use is a
 `403` too, unless your deployment declares it optional (§13.4). For a
-deployment whose proxy already authenticates callers, an edge mode is
-planned: you configure it explicitly, and the gateway records which
-identity the proxy asserted.
+deployment whose proxy already authenticates callers, the edge mode is
+configured explicitly: the proxy signs an assertion of the caller, the
+gateway verifies it like a token and records which identity the proxy
+asserted.
 
 **Authenticating to the node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
 §13.1, N25). The gateway sends the node's token endpoint an OAuth 2.0 client

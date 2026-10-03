@@ -85,6 +85,7 @@ fn in_an_hour() -> i64 {
 
 /// CP-17, inbound half: an opaque token the endpoint calls active for this
 /// gateway is admitted, the gateway authenticating to the endpoint.
+// conformance: CP-17
 #[tokio::test]
 async fn an_active_token_for_this_gateway_is_admitted() -> TestResult {
     let introspection = endpoint(200, answer(true, AUDIENCE, in_an_hour())).await;
@@ -93,6 +94,7 @@ async fn an_active_token_for_this_gateway_is_admitted() -> TestResult {
 }
 
 /// CP-17, inbound half: a token the endpoint calls inactive is a `401`.
+// conformance: CP-17
 #[tokio::test]
 async fn an_inactive_token_is_401() -> TestResult {
     let introspection = endpoint(200, String::from(r#"{"active":false}"#)).await;
@@ -101,6 +103,7 @@ async fn an_inactive_token_is_401() -> TestResult {
 }
 
 /// CP-17, inbound half: an active token for another audience is a `401`.
+// conformance: CP-17
 #[tokio::test]
 async fn an_active_token_for_another_audience_is_401() -> TestResult {
     let introspection = endpoint(
@@ -113,6 +116,7 @@ async fn an_active_token_for_another_audience_is_401() -> TestResult {
 }
 
 /// CP-17, inbound half: an answer whose `exp` has passed is a `401`.
+// conformance: CP-17
 #[tokio::test]
 async fn an_answer_past_its_expiry_is_401() -> TestResult {
     let expired = jiff::Timestamp::now().as_second() - 3_600;
@@ -123,6 +127,7 @@ async fn an_answer_past_its_expiry_is_401() -> TestResult {
 
 /// CP-17, inbound half: an endpoint answering with an error is a `503`,
 /// never a pass.
+// conformance: CP-17
 #[tokio::test]
 async fn an_endpoint_answering_an_error_is_503() -> TestResult {
     let introspection = endpoint(500, String::from("{}")).await;
@@ -131,6 +136,7 @@ async fn an_endpoint_answering_an_error_is_503() -> TestResult {
 }
 
 /// CP-17, inbound half: an endpoint that cannot be reached is a `503`.
+// conformance: CP-17
 #[tokio::test]
 async fn an_unreachable_endpoint_is_503() -> TestResult {
     let gateway = Gateway::with(introspecting(unreachable::BASE)?).await?;

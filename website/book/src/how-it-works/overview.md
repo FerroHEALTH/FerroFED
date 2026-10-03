@@ -130,7 +130,7 @@ so where each piece of state lives is FerroFED's own design.
 | Organisations, nodes, endpoints, `system_id`s and `creating_system_id` mappings | the registry document you review, loaded into a snapshot | yes, it is your file |
 | `ehr_id` to node index | memory, bounded, least recently used out first | no |
 | `creating_system_id` routes learned from answers | memory | no |
-| Resolution bindings per client session | memory, under a lifetime; held once client authentication lands, planned for v0.0.8 ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)) | no |
+| Resolution bindings per client session | memory, under a lifetime; not held yet: the caller is verified, and bindings per verified caller are not built | no |
 | Stored-query definitions | `redb`, PostgreSQL or read-only files | yes |
 | Outbound credentials | one secret file each | yes, they are your files |
 

@@ -28,6 +28,7 @@ fn now() -> i64 {
 
 /// CP-17, inbound half: a request with no credential is a `401` whose
 /// challenge names no error (RFC 6750 §3.1), and reaches no node.
+// conformance: CP-17
 #[tokio::test]
 async fn a_query_without_a_token_is_401_and_reaches_no_node() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -35,6 +36,7 @@ async fn a_query_without_a_token_is_401_and_reaches_no_node() -> TestResult {
 }
 
 /// CP-17, inbound half: a credential in another scheme is no bearer token.
+// conformance: CP-17
 #[tokio::test]
 async fn a_basic_credential_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -48,6 +50,7 @@ async fn a_basic_credential_is_401() -> TestResult {
 
 /// CP-17, inbound half: two `Authorization` fields are refused, never one of
 /// them chosen.
+// conformance: CP-17
 #[tokio::test]
 async fn two_authorization_fields_are_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -62,6 +65,7 @@ async fn two_authorization_fields_are_401() -> TestResult {
 
 /// CP-17, inbound half: a token past its `exp`, beyond the clock skew, is a
 /// `401` (RFC 7519 §4.1.4).
+// conformance: CP-17
 #[tokio::test]
 async fn an_expired_token_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -74,6 +78,7 @@ async fn an_expired_token_is_401() -> TestResult {
 
 /// CP-17, inbound half: a token that expired inside the configured clock
 /// skew is still admitted (RFC 7519 §4.1.4).
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_expired_within_the_clock_skew_is_admitted() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -85,6 +90,7 @@ async fn a_token_expired_within_the_clock_skew_is_admitted() -> TestResult {
 
 /// CP-17, inbound half: a token before its `nbf`, beyond the clock skew, is
 /// a `401` (RFC 7519 §4.1.5).
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_not_yet_valid_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -96,6 +102,7 @@ async fn a_token_not_yet_valid_is_401() -> TestResult {
 
 /// CP-17, inbound half: a token issued for another audience is a `401`
 /// (RFC 9068 §4).
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_for_another_audience_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -107,6 +114,7 @@ async fn a_token_for_another_audience_is_401() -> TestResult {
 
 /// CP-17, inbound half: a token from an issuer not on the trust list is a
 /// `401`, however well formed.
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_from_an_untrusted_issuer_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -120,6 +128,7 @@ async fn a_token_from_an_untrusted_issuer_is_401() -> TestResult {
 
 /// CP-17, inbound half: a token naming the trusted issuer and its key, but
 /// signed with another key, is a `401` (RFC 7515 §5.2).
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_signed_by_another_key_under_a_trusted_name_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -130,6 +139,7 @@ async fn a_token_signed_by_another_key_under_a_trusted_name_is_401() -> TestResu
 
 /// CP-17, inbound half: a token naming a key its issuer does not publish is
 /// a `401`.
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_naming_an_unpublished_key_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -141,6 +151,7 @@ async fn a_token_naming_an_unpublished_key_is_401() -> TestResult {
 
 /// CP-17, inbound half: an HMAC-signed token is a `401`, never verified
 /// with a published key as its secret (RFC 8725 §3.1, §3.2).
+// conformance: CP-17
 #[tokio::test]
 async fn an_hmac_token_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -157,6 +168,7 @@ async fn an_hmac_token_is_401() -> TestResult {
 
 /// CP-17, inbound half: an unsigned token, `alg` `none`, is a `401` (RFC
 /// 8725 §3.1).
+// conformance: CP-17
 #[tokio::test]
 async fn an_unsigned_token_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -168,6 +180,7 @@ async fn an_unsigned_token_is_401() -> TestResult {
 }
 
 /// CP-17, inbound half: a token not typed `at+jwt` is a `401` (RFC 9068 §4).
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_not_typed_as_an_access_token_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -179,6 +192,7 @@ async fn a_token_not_typed_as_an_access_token_is_401() -> TestResult {
 
 /// CP-17, inbound half: a token without a claim RFC 9068 §2.2 requires is a
 /// `401`.
+// conformance: CP-17
 #[tokio::test]
 async fn a_token_without_its_client_id_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -194,6 +208,7 @@ async fn a_token_without_its_client_id_is_401() -> TestResult {
 /// CP-17, inbound half: the caller's own token reaches no node of a
 /// federated query; each node sees its own onward credential, or none (RFC
 /// 9700 §2.3).
+// conformance: CP-17
 #[tokio::test]
 async fn an_admitted_token_reaches_no_node() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
@@ -216,6 +231,7 @@ async fn an_admitted_token_reaches_no_node() -> TestResult {
 
 /// §7a.2, §13.1: `OPTIONS {base}/` answers `401` without a token, and `200`
 /// to an authenticated caller, who needs no scope and no purpose of use.
+// conformance: CP-17 CP-23
 #[tokio::test]
 async fn options_root_is_behind_the_gate() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;

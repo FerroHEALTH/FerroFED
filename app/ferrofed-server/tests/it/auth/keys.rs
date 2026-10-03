@@ -72,6 +72,7 @@ fn token(issuer: &Issuer) -> Result<String, Box<dyn Error>> {
 
 /// CP-17, inbound half: a token verifies under the key set fetched from its
 /// issuer's `jwks_uri`, fetched once for many tokens.
+// conformance: CP-17
 #[tokio::test]
 async fn a_key_set_is_fetched_once_and_verifies_every_token() -> TestResult {
     let issuer = Issuer::new(ROTATING)?;
@@ -86,6 +87,7 @@ async fn a_key_set_is_fetched_once_and_verifies_every_token() -> TestResult {
 
 /// CP-17, inbound half: an ES384 key verifies its tokens as an ES256 one
 /// does.
+// conformance: CP-17
 #[tokio::test]
 async fn an_es384_key_verifies_its_tokens() -> TestResult {
     let mut issuer = Issuer::new(ROTATING)?;
@@ -98,6 +100,7 @@ async fn an_es384_key_verifies_its_tokens() -> TestResult {
 
 /// CP-17, inbound half: after a rotation, a token naming the new key fetches
 /// the set once more and verifies.
+// conformance: CP-17
 #[tokio::test]
 async fn a_rotated_key_is_picked_up_by_one_refetch() -> TestResult {
     let mut issuer = Issuer::new(ROTATING)?;
@@ -114,6 +117,7 @@ async fn a_rotated_key_is_picked_up_by_one_refetch() -> TestResult {
 
 /// CP-17, inbound half: tokens naming a key the set does not hold refetch it
 /// at most once per refetch interval, and are refused.
+// conformance: CP-17
 #[tokio::test]
 async fn an_unknown_key_refetches_at_most_once_per_interval() -> TestResult {
     let issuer = Issuer::new(ROTATING)?;
@@ -131,6 +135,7 @@ async fn an_unknown_key_refetches_at_most_once_per_interval() -> TestResult {
 
 /// CP-17, inbound half: a key set that cannot be fetched is a `503`, never
 /// a pass.
+// conformance: CP-17
 #[tokio::test]
 async fn an_unreachable_key_set_is_503() -> TestResult {
     let issuer = Issuer::new(ROTATING)?;
@@ -145,6 +150,7 @@ async fn an_unreachable_key_set_is_503() -> TestResult {
 }
 
 /// CP-17, inbound half: a key set answered with an error is a `503`.
+// conformance: CP-17
 #[tokio::test]
 async fn a_key_set_answered_with_an_error_is_503() -> TestResult {
     let issuer = Issuer::new(ROTATING)?;
@@ -165,6 +171,7 @@ async fn a_key_set_answered_with_an_error_is_503() -> TestResult {
 
 /// CP-17, inbound half: a key set read from a file verifies, and a missing
 /// file is a `503`.
+// conformance: CP-17
 #[tokio::test]
 async fn a_key_set_file_verifies_and_a_missing_one_is_503() -> TestResult {
     let issuer = Issuer::new(ROTATING)?;
