@@ -128,7 +128,7 @@ impl Topology<'_> {
         let document = toml::Value::String(document.display().to_string());
         let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
         let mut config = format!(
-            "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\n"
+            "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
         );
         for (member, ehr_id) in [("node-a", self.a.ehr_id), ("node-b", self.b.ehr_id)] {
             write!(

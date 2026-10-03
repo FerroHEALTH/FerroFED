@@ -13,6 +13,7 @@ use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::{DevTable, Profile};
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
+use openehr_federation::id::FederationId;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -156,6 +157,10 @@ pub enum RegistryFormat {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Federation {
+    /// The federation's own identifier, `federation.id` of the
+    /// `OPTIONS {base}/` body (§7a.2, N30). It has no default: a federating
+    /// gateway names its federation.
+    pub id: Option<String>,
     /// How long one node's request may take (§11.5, N38).
     pub per_node_timeout_ms: u64,
     /// How long the whole fan-out may take (§11.5, N38). With a registry
@@ -254,6 +259,7 @@ pub enum NodeSelection {
 impl Default for Federation {
     fn default() -> Self {
         Self {
+            id: None,
             per_node_timeout_ms: 10_000,
             overall_timeout_ms: 25_000,
             default_namespace: None,
@@ -563,6 +569,10 @@ impl Config {
                 key: String::from("federation.default_namespace"),
             });
         }
+        let named = self.federation.id.as_deref().map(FederationId::new);
+        let id = named.transpose().map_err(|_empty| Error::Missing {
+            key: String::from("federation.id"),
+        })?;
         let binding_ttl = positive_ms("federation.binding_ttl_ms", self.federation.binding_ttl_ms)?;
         let ehr_index_capacity =
             NonZeroU32::new(self.federation.ehr_index_capacity).ok_or_else(|| Error::Zero {
@@ -577,6 +587,7 @@ impl Config {
             OffsetPaging::Bounded => OffsetStrategy::Bounded { max_window },
         };
         Ok(FederationSettings {
+            id,
             budget,
             default_namespace: self.federation.default_namespace.clone(),
             binding_ttl,

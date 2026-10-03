@@ -32,13 +32,16 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
+use openehr_federation::id::FederationId;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::settings::{PixmSettings, Scheme, Settings};
 use crate::config::{NodeSelection, RegistryFormat};
+use crate::facade::options::{self, DescribeError};
 
 /// The federation a server serves the federated query over.
 pub struct Federation {
+    id: FederationId,
     snapshot: Arc<RegistrySnapshot>,
     clients: NodeClients<ReqwestTransport>,
     resolver: Option<Arc<dyn Resolver>>,
@@ -97,6 +100,17 @@ pub enum FederationError {
         "set federation.node_selection when registry.document is set: \"ask-all\" asks every member's cross-reference (§4.3, N4)"
     )]
     NodeSelectionUndeclared,
+    /// A registry is configured, but `federation.id` is not: the
+    /// `OPTIONS {base}/` body names the federation (§7a.2, N30), and the
+    /// identifier is the deployment's to choose, never defaulted.
+    #[error(
+        "set federation.id when registry.document is set: the OPTIONS {{base}}/ self-description names the federation (§7a.2, N30)"
+    )]
+    IdUndeclared,
+    /// The `OPTIONS {base}/` self-description cannot be built from the
+    /// configuration (§7a.2, N30).
+    #[error("the OPTIONS {{base}}/ self-description cannot be built")]
+    Describe(#[source] DescribeError),
     /// A `[pixm]` member key is not a node id.
     #[error("pixm.manager[{manager}].members.{key:?} is not a node id")]
     PixmMember {
@@ -161,6 +175,9 @@ impl Federation {
         let Some(selection) = settings.federation.node_selection else {
             return Err(FederationError::NodeSelectionUndeclared);
         };
+        let Some(id) = settings.federation.id.clone() else {
+            return Err(FederationError::IdUndeclared);
+        };
         let snapshot = match settings.registry_format {
             RegistryFormat::Toml => {
                 RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
@@ -199,7 +216,8 @@ impl Federation {
         if let Some(namespace) = &settings.federation.default_namespace {
             context = context.with_default_namespace(namespace.clone());
         }
-        Ok(Some(Self {
+        let federation = Self {
+            id,
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
@@ -208,7 +226,9 @@ impl Federation {
             context,
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
-        }))
+        };
+        options::describe(&federation).map_err(FederationError::Describe)?;
+        Ok(Some(federation))
     }
 
     /// Assembles a federation from parts, for a test that builds its own.
@@ -217,6 +237,7 @@ impl Federation {
     /// default; [`Federation::with_best_effort`] withdraws it.
     #[must_use]
     pub fn new(
+        id: FederationId,
         snapshot: RegistrySnapshot,
         clients: NodeClients<ReqwestTransport>,
         resolver: Option<Arc<dyn Resolver>>,
@@ -224,6 +245,7 @@ impl Federation {
         budget: Budget,
     ) -> Self {
         Self {
+            id,
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
@@ -275,6 +297,12 @@ impl Federation {
         dropped
     }
 
+    /// The federation's own identifier (§7a.2, N30).
+    #[must_use]
+    pub fn id(&self) -> &FederationId {
+        &self.id
+    }
+
     /// The registry snapshot every query of this process runs over.
     #[must_use]
     pub fn snapshot(&self) -> &RegistrySnapshot {
@@ -308,32 +336,31 @@ impl Federation {
     }
 
     /// Whether a request may opt into best-effort completion with
-    /// `openEHR-federation-completeness: partial` (§11.4, N37).
-    // TODO(#73): declare completeness.best_effort and its opt_in in the OPTIONS {base}/ body (§7a.2, §11.4).
+    /// `openEHR-federation-completeness: partial` (§11.4, N37), as
+    /// `completeness` declares it in `OPTIONS {base}/` (§7a.2).
     #[must_use]
     pub fn best_effort(&self) -> bool {
         self.best_effort
     }
 
     /// How `OFFSET k > 0` is answered across the fan-out, with its bound
-    /// (§11.6.2, N39).
-    // TODO(#73): declare paging.offset_strategy and paging.max_window in the OPTIONS {base}/ body (§7a.2, §11.6.2).
+    /// (§11.6.2, N39), as `paging` declares it in `OPTIONS {base}/` (§7a.2).
     #[must_use]
     pub fn offset_strategy(&self) -> OffsetStrategy {
         self.context.offset_strategy()
     }
 
     /// The dedup modes a request may select with `openEHR-federation-dedup`,
-    /// the default `none` first (§10, N15).
-    // TODO(#73): declare dedup.default, dedup.modes and dedup.request_header in the OPTIONS {base}/ body (§7a.2, §10).
+    /// the default `none` first (§10, N15), as `dedup` declares them in
+    /// `OPTIONS {base}/` (§7a.2).
     #[must_use]
     pub fn dedup_modes() -> &'static [DedupMode] {
         &DedupMode::OFFERED
     }
 
     /// The aggregate functions recombined across the fan-out, in declaration
-    /// order (§11.6.3).
-    // TODO(#73): declare aggregates.decomposable in the OPTIONS {base}/ body (§7a.2, §11.6.3).
+    /// order (§11.6.3), as `aggregates.decomposable` declares them in
+    /// `OPTIONS {base}/` (§7a.2).
     #[must_use]
     pub fn decomposable_aggregates(&self) -> &BTreeSet<AggregateFunction> {
         self.context.decomposable_aggregates()
@@ -343,6 +370,7 @@ impl Federation {
 impl std::fmt::Debug for Federation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Federation")
+            .field("id", &self.id)
             .field("endpoints", &self.clients.len())
             .field("resolver", &self.resolver.is_some())
             .field("budget", &self.budget)
@@ -441,8 +469,8 @@ fn onward_credentials(
 }
 
 /// The rewrite's targeting for an undirected query under the declared node
-/// selection (§4.3, N4).
-// TODO(#73): declare the node selection in the OPTIONS {base}/ body (§7a.2, N30).
+/// selection (§4.3, N4), which `OPTIONS {base}/` declares as `aql.fan_out`
+/// (§7a.2).
 fn targeting(selection: NodeSelection) -> Targeting {
     match selection {
         NodeSelection::AskAll => Targeting::AskAll,

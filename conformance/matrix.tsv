@@ -51,7 +51,7 @@ CP-19	Node	N27,N27a	7	node-profile	#83,#93	a Node obligation, scored against the
 CP-20	Operator	N19	6	operator	#74	verified at admission or in the registry, not on a request (section 16.2); the gateway assists: its registry load refuses an endpoint whose connectionType is hl7-fhir-rest or no defined code
 CP-21	Gateway	N28	9	planned	#69	-
 CP-22	Gateway	N29	9	planned	#69	-
-CP-23	Gateway	N30	9	planned	#73	-
+CP-23	Gateway	N30	9	covered	#73	the body, the endpoint list without a patient identifier and the sub-path Allow are scored; the clause that the endpoint list is subject to the gateway normal authentication (section 7a.2, section 13) waits on client authentication (#80)
 CP-24	Gateway	N31	9	covered	#61	-
 CP-25	Gateway	N32	9	planned	#68	-
 CP-26	Gateway	N33	10	covered	#45,#90,#217	-

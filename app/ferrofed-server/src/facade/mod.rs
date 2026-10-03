@@ -32,11 +32,14 @@
 //! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3);
 //! [`owner`] finds that node in the order of §12.5.1, and a resolution here
 //! teaches its `ehr_id` index which member holds each resolved `ehr_id`.
+//! `OPTIONS {base}/` describes the whole surface, and `OPTIONS` on a sub-path
+//! names the methods served there ([`options`]; §7a.2, N30).
 
 pub mod cells;
 pub mod completeness;
 pub mod dedup;
 pub mod intake;
+pub mod options;
 pub mod owner;
 pub mod plan;
 pub mod prefer;

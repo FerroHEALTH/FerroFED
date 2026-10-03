@@ -100,7 +100,7 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
 
 /// Whether `matched` is an operation on an EHR resource addressed by a path
 /// `ehr_id` (§7a.1).
-fn in_ehr_area(matched: &RouteMatch) -> bool {
+pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
     matched.group == EHR_GROUP
         && matched
             .template

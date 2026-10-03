@@ -65,6 +65,7 @@ fn the_9_4_federation_record_is_complete_with_an_excluded_member() {
     );
 }
 
+// conformance: CP-23
 #[test]
 fn the_7a_2_example_round_trips_unchanged() {
     let example = support::only_example("rest-facade.adoc").expect("§7a.2 carries one example");

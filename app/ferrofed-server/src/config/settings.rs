@@ -13,6 +13,7 @@ use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::Profile;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
+use openehr_federation::id::FederationId;
 use secrecy::SecretString;
 
 use crate::config::{DevSection, NodeSelection, RegistryFormat};
@@ -64,6 +65,9 @@ pub struct PixManagerSettings {
 /// The federated query, resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FederationSettings {
+    /// The federation's own identifier, as declared; a federation refuses to
+    /// load without it (§7a.2, N30).
+    pub id: Option<FederationId>,
     /// The per-node timeout and the overall budget of each fan-out.
     pub budget: Budget,
     /// The issuing namespace an unqualified patient identifier resolves in.
@@ -144,6 +148,7 @@ impl Settings {
             profile = ?self.profile,
             registry = self.registry_document.is_some(),
             registry_format = ?self.registry_format,
+            federation_id = self.federation.id.as_ref().map(FederationId::as_str),
             node_selection = ?self.federation.node_selection,
             best_effort = self.federation.best_effort,
             offset_strategy = self.federation.offset.name(),

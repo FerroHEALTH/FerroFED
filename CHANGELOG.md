@@ -46,6 +46,24 @@ federated query and identity resolution shipped in 0.0.3.
   `federation.ehr_index_capacity` (default 100000; 0 is refused). Session
   bindings answer once client authentication lands (#80); the integrity
   incident of a collision is #63.
+
+- `OPTIONS {base}/`, the gateway's self-description (#73; §7a.2, N30,
+  CP-23). The body validates against the vendored `options-root.schema.json`
+  and is built from the running configuration: the federation id, the
+  `major.minor` of the pinned specification, `aql.fan_out` from the node
+  selection, the dedup default, modes and request header, the per-node and
+  overall budgets, all-or-nothing with the best-effort opt-in when it is
+  offered, the `OFFSET` strategy (`bounded` with its `max_window`, or
+  `reject`, never a cursor), the decomposable aggregates (an empty list when
+  none), nothing offered in the definition area, `localization.on_failure:
+  "closed"`, the ITS-REST areas, and every registry endpoint with its
+  organisation, membership status, node, `system_id`, and product and
+  version where the registry holds them. It declares no targeting mechanism,
+  no resolution carrier, no asynchronous queries and no JWKS location, and it
+  needs no patient identifier. `OPTIONS` on a path under `{base}/v1/`
+  answers `204` with the methods served there in `Allow`, without asking a
+  node, and `501` where the gateway serves nothing.
+
 - ENDPOINT attributes in rows (#72; §9.2, §9.3, §9.4, N12, N17, N18,
   CP-35, CP-37). A directed query that selects `p/id` or `p/endpoint_id`,
   `p/organisation` or `p/organization_id`, `p/system_id` or `p/url` through
@@ -359,6 +377,11 @@ federated query and identity resolution shipped in 0.0.3.
   expiry in `meta.federation` and runs the fan-out on every request.
 
 ### Changed
+
+- A gateway with `registry.document` set now refuses to boot without
+  `federation.id`, the federation's own identifier that `OPTIONS {base}/`
+  names (#73; §7a.2, N30). Add `id = "<your federation>"` to `[federation]`;
+  an empty id is refused.
 
 - The `openehr-*` family moves from 0.0.78 to 0.0.79 (#234). The
   `openehr-rm` attribute model now holds the BASE primitives, the `Ordered`

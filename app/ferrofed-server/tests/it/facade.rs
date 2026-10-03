@@ -159,7 +159,7 @@ pub(crate) fn gateway(
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\n\n{tables}"
+        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{tables}"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
@@ -711,10 +711,27 @@ pub(crate) mod schema {
         "/../../docs/specs/federation-spec/modules/ROOT/attachments/federated-result-set.schema.json"
     );
 
+    /// The vendored `OPTIONS {base}/` schema.
+    const OPTIONS_SCHEMA: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../docs/specs/federation-spec/modules/ROOT/attachments/options-root.schema.json"
+    );
+
     /// Validates the JSON `text` against the result-set schema, formats
     /// included.
     pub(crate) fn validate(text: &str) -> Result<(), Box<dyn Error>> {
-        let schema: Value = serde_json::from_str(&std::fs::read_to_string(RESULT_SET_SCHEMA)?)?;
+        validate_against(RESULT_SET_SCHEMA, text)
+    }
+
+    /// Validates the JSON `text` against the `OPTIONS {base}/` schema,
+    /// formats included.
+    pub(crate) fn validate_options(text: &str) -> Result<(), Box<dyn Error>> {
+        validate_against(OPTIONS_SCHEMA, text)
+    }
+
+    /// Validates the JSON `text` against the schema at `path`.
+    fn validate_against(path: &str, text: &str) -> Result<(), Box<dyn Error>> {
+        let schema: Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
         let validator = jsonschema::options()
             .should_validate_formats(true)
             .build(&schema)?;
@@ -726,7 +743,7 @@ pub(crate) mod schema {
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(format!("federated-result-set.schema.json: {}", errors.join("; ")).into())
+            Err(format!("{path}: {}", errors.join("; ")).into())
         }
     }
 }

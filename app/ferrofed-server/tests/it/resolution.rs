@@ -327,7 +327,7 @@ fn load_refusal(dir: &Path, text: &str) -> Result<FederationError, Box<dyn Error
     )?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "{text}\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\n"
+        "{text}\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     match Federation::load(&settings) {

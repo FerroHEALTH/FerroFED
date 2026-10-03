@@ -150,7 +150,7 @@ impl Nodes {
         )?;
         let document = toml::Value::String(document.display().to_string());
         let mut text = format!(
-            "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\ndefault_namespace = \"{NAMESPACE}\"\n"
+            "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\ndefault_namespace = \"{NAMESPACE}\"\n"
         );
         for (member, ehr_id) in [("node_1", EHR_1), ("node_2", EHR_2)] {
             write!(
