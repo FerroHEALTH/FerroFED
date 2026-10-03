@@ -465,7 +465,7 @@ jobs:
           tool: cargo-nextest
       # Every feature: a library feature no workspace member enables yet (the
       # aql rewrite of openehr-federation) still runs its tests.
-      - run: cargo nextest run --workspace --locked --all-features --no-tests=pass
+      - run: cargo nextest run --profile ci --workspace --locked --all-features --no-tests=pass
       # nextest does not run doctests, so they get their own compile.
       - run: cargo test --doc --workspace --locked --all-features
 
@@ -499,7 +499,7 @@ jobs:
       # The testkit's whole suite, and every other crate's container tests
       # alone, since the test job already runs the rest offline.
       - run: >-
-          cargo nextest run --locked --workspace
+          cargo nextest run --profile ci --locked --workspace
           -E 'package(ferrofed-testkit) or test(/^e2e::/)'
           --no-tests=pass
 
