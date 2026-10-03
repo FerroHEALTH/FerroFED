@@ -1,0 +1,103 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# An example Deployment of the gateway, over the configuration in
+# configmap.yaml. The probes:
+#
+#   startup    GET /health/readiness until boot completes; the gateway opens
+#              its port only once the registry and its clients are built.
+#   liveness   GET /health, 200 while the process serves; it checks nothing
+#              else, so a slow member never restarts the gateway.
+#   readiness  GET /health/readiness, 200 while the gateway serves with its
+#              own subsystems up, 503 from the moment SIGTERM arrives. No
+#              member node and no identity source gates it.
+#
+# Every path sits under server.base_path; with a base other than /, put it in
+# front of each probe path.
+#
+# The resource figures are a starting point, not a measurement: size them
+# from your own load. The image tag is the product version, which
+# scripts/checks/versions.sh holds equal to docs/VERSIONS.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ferrofed
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ferrofed
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ferrofed
+        app.kubernetes.io/component: gateway
+    spec:
+      # The gateway calls no Kubernetes API.
+      automountServiceAccountToken: false
+      # Longer than server.shutdown_timeout_ms (10 s in configmap.yaml), so a
+      # drain finishes before the kubelet sends SIGKILL.
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ferrofed
+          image: ghcr.io/ferrohealth/ferrofed:0.0.6
+          imagePullPolicy: IfNotPresent
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: FERROFED_CONFIG
+              value: /etc/ferrofed/ferrofed.toml
+          startupProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/ferrofed
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: ferrofed-config

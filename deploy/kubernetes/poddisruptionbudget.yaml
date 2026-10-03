@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Keeps one gateway pod serving through a voluntary disruption such as a node
+# drain, with the two replicas of deployment.yaml.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ferrofed
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ferrofed
+      app.kubernetes.io/component: gateway

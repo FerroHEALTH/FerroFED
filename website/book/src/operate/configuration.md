@@ -18,6 +18,7 @@ endpoint a request names to reach it, and every other path under
 ```text
 ferrofed serve --config /etc/ferrofed/ferrofed.toml
 ferrofed config check --config /etc/ferrofed/ferrofed.toml
+ferrofed healthcheck --config /etc/ferrofed/ferrofed.toml
 ```
 
 `--config` names the file; without it the file is the one `FERROFED_CONFIG`
@@ -26,6 +27,13 @@ resolves the configuration exactly as `serve` would, secrets included, prints
 one line and exits, so a deployment pipeline can test a file without binding a
 socket. `ferrofed admission check --endpoint <id>` checks one member against
 the admission conditions ([Admitting a node](admission.md)).
+`healthcheck` asks the gateway running on this host for its readiness: it
+connects to the port of `server.listen` (on `127.0.0.1` or `[::1]` when the
+address is a wildcard, and on the address itself otherwise), prints one line,
+and exits `0` only when `GET {base}/health/readiness` answers `200` within
+three seconds. Every other outcome, a configuration that does not load included,
+exits `1`, the two codes a container runtime's health check reads
+([The container image](container.md#the-health-probes)).
 
 A configuration the gateway refuses exits with code 78 (`EX_CONFIG`) and one
 line naming the key at fault. It refuses an unknown key, a value of the wrong
@@ -545,7 +553,8 @@ The gateway then serves `GET /fed/openehr/`, `OPTIONS /fed/openehr/`,
 `GET /fed/openehr/health`, `POST /fed/openehr/v1/query/aql` and the rest of
 the table, serves `{base}` without the trailing slash as `{base}/`, and
 answers `404` for every path outside the base, the root included, so point a
-health probe at `{base}/health`. The specification reserves no prefix, and
+health probe at `{base}/health`; `ferrofed healthcheck` asks under the base
+by itself. The specification reserves no prefix, and
 the gateway reserves none either: `/rest/openehr` is a valid base when you
 choose it, and is not served unless you do. The base is checked at boot: it
 starts with `/`, has no trailing `/` unless it is `/`, has no query or
@@ -564,7 +573,8 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `GET {base}/` | the product name and version |
 | `OPTIONS {base}/` | the federation's self-description (§7a.2) |
 | `GET {base}/health` | `200` while the process is up |
-| `GET {base}/health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
+| `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems (the configuration, the registry, the outbound clients, the stored-query store) are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives, with the phase and each subsystem's state; no member node and no identity source gates it |
+| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint and of the resolver: `up`, `failing`, `down` or `unknown`; endpoint ids and states only |
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |

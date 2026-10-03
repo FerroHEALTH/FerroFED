@@ -24,6 +24,9 @@
 //!
 //! [`admission`] is the `admission check` job: one member exercised against
 //! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
+//! [`healthcheck`] is the `healthcheck` job a container runtime runs beside
+//! the server, and [`health`] answers liveness, readiness and the last
+//! observed state of every dependency.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod admission;
@@ -35,6 +38,7 @@ pub mod error;
 pub mod facade;
 pub mod federation;
 pub mod health;
+pub mod healthcheck;
 pub mod panic;
 pub mod reload;
 pub mod request_id;
@@ -69,6 +73,7 @@ use crate::cli::{AdmissionCommand, Cli, Command, ConfigCommand};
 use crate::config::Config;
 use crate::config::settings::{ServerSettings, Settings};
 use crate::federation::Federation;
+use crate::health::lifecycle::{Lifecycle, drain_on};
 use crate::state::AppState;
 
 /// The exit code of a command line the binary refuses.
@@ -106,12 +111,19 @@ where
     };
     let settings = match Config::load(cli.config.as_deref()).and_then(|config| config.resolve()) {
         Ok(settings) => settings,
+        Err(error) if cli.command == Command::Healthcheck => {
+            // NOTE: no specification governs this: our own design; a runtime
+            // reads any exit but 0 and 1 as reserved, so a refusal is unhealthy.
+            eprintln!("ferrofed: not ready: {}", chain(&error));
+            return ExitCode::FAILURE;
+        }
         Err(error) => {
             eprintln!("ferrofed: cannot start: {}", chain(&error));
             return ExitCode::from(EXIT_CONFIG);
         }
     };
     match cli.command {
+        Command::Healthcheck => healthcheck_command(&settings),
         Command::Config {
             command: ConfigCommand::Check,
         } => match Federation::load(&settings) {
@@ -228,6 +240,42 @@ fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode
     }
 }
 
+/// Asks the gateway this configuration describes for its readiness and
+/// prints one line.
+///
+/// The exit code is `0` when readiness answered `200` and `1` otherwise,
+/// the two codes a container runtime's health check reads.
+#[expect(
+    clippy::print_stdout,
+    reason = "`healthcheck` answers the runtime or operator that ran it"
+)]
+#[expect(
+    clippy::print_stderr,
+    reason = "an unready gateway is reported with no log subscriber installed"
+)]
+fn healthcheck_command(settings: &Settings) -> ExitCode {
+    let address = healthcheck::target(settings.server.listen);
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("ferrofed: not ready: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let path = settings.server.base_path.join(healthcheck::READINESS);
+    let outcome = runtime.block_on(healthcheck::check(address, &path, healthcheck::TIMEOUT));
+    if outcome.is_ready() {
+        println!("ferrofed: {address}: {outcome}");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("ferrofed: {address}: {outcome}");
+        ExitCode::FAILURE
+    }
+}
+
 /// Builds the runtime and serves `state` until the process is asked to stop,
 /// reloading the registry on `SIGHUP` from `config`, the file `settings`
 /// were read from ([`reload`]).
@@ -260,7 +308,9 @@ fn serve_command(
         ))));
         #[cfg(not(unix))]
         drop((config, settings));
-        serve(listener, router(Arc::clone(&state), &server), &server)
+        let app = router(Arc::clone(&state), &server);
+        state.lifecycle().booted();
+        serve(listener, app, &server, state.lifecycle().clone())
             .await
             .context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
@@ -309,9 +359,12 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// ([`ServerSettings::base_path`]; §4.1, N28). `GET {base}/` answers a small
 /// JSON document naming the product and its version, `OPTIONS {base}/` the
 /// federation's self-description ([`facade::options::options_root`]),
-/// `GET {base}/health` answers `200` while the process is up, and
-/// `GET {base}/health/readiness` answers `200` when every registered
-/// indicator is up and `503` with each indicator's state otherwise.
+/// `GET {base}/health` answers `200` while the process is up,
+/// `GET {base}/health/readiness` answers `200` while the process serves
+/// and every registered indicator is up and `503` with the phase and each
+/// indicator's state otherwise, and `GET {base}/health/dependencies`
+/// answers `200` with the last observed state of each member endpoint and of
+/// the resolver ([`health::dependencies`]).
 /// `POST {base}/v1/query/aql` answers the federated query when a registry is
 /// configured ([`facade::query_aql`]), and so does `GET {base}/v1/query/aql`
 /// from its query string ([`facade::query_aql_get`]). Every other path under
@@ -322,6 +375,7 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let surface = Router::new()
         .route("/health", get(liveness))
         .route("/health/readiness", get(readiness))
+        .route("/health/dependencies", get(dependencies))
         .route(
             facade::QUERY_AQL,
             get(facade::query_aql_get)
@@ -397,10 +451,23 @@ async fn liveness() -> Json<body::Liveness> {
     })
 }
 
-/// `GET /health/readiness`: the state of every registered indicator.
+/// `GET /health/readiness`: the phase of the process and the state of every
+/// registered indicator.
 async fn readiness(State(state): State<Arc<AppState>>) -> Response {
     let report = state.health().evaluate().await;
-    (report.status(), Json(report)).into_response()
+    let readiness = health::Readiness::new(state.lifecycle().phase(), report);
+    (readiness.status(), Json(readiness)).into_response()
+}
+
+/// `GET /health/dependencies`: the last observed state of each member
+/// endpoint and of the resolver, always `200`.
+async fn dependencies(State(state): State<Arc<AppState>>) -> Json<health::dependencies::Report> {
+    Json(
+        state
+            .federation()
+            .map(|federation| federation.dependencies().report())
+            .unwrap_or_default(),
+    )
 }
 
 /// Every path no route serves.
@@ -461,14 +528,25 @@ async fn unrouted(
 /// Serves `app` on an already-bound listener until the process receives
 /// `SIGTERM` or `SIGINT`, then drains.
 ///
+/// The signal moves `lifecycle` to draining before the drain starts, so
+/// readiness answers `503` from the moment the signal arrives
+/// ([`drain_on`]).
+///
 /// # Errors
 /// Returns the I/O error from accepting or serving connections.
 pub async fn serve(
     listener: TcpListener,
     app: Router,
     server: &ServerSettings,
+    lifecycle: Lifecycle,
 ) -> std::io::Result<()> {
-    serve_until(listener, app, server.shutdown_timeout, shutdown_signal()).await
+    serve_until(
+        listener,
+        app,
+        server.shutdown_timeout,
+        drain_on(shutdown_signal(), lifecycle),
+    )
+    .await
 }
 
 /// Serves `app` on an already-bound listener until `shutdown` completes, then

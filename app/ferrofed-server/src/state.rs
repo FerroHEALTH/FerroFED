@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! What every handler shares: the health registry, the federation, and the
-//! stored-query registry.
+//! What every handler shares: the phase of the process, the health registry,
+//! the federation, and the stored-query registry.
 
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
@@ -11,16 +11,18 @@ use ferrofed_registry::definition::store::{Definitions, StoreError};
 
 use crate::config::settings::Settings;
 use crate::federation::{Federation, FederationError};
-use crate::health::Registry;
+use crate::health::lifecycle::Lifecycle;
+use crate::health::{Built, HealthIndicator, Registry};
 use crate::stored::RedbStore;
 
-// TODO(#36): register the indicator that the registry snapshot is loaded.
-// TODO(#34): register one reachability indicator per node endpoint.
-// TODO(#42): register the indicator that the identity source answers.
-
 /// The state the router is built over.
+///
+/// Every state starts booting, so readiness answers `503` until the run path
+/// marks boot complete ([`Lifecycle::booted`]).
 #[derive(Debug, Default)]
 pub struct AppState {
+    /// Where the process is in its life, which gates readiness.
+    lifecycle: Lifecycle,
     /// The indicators readiness runs.
     health: Registry,
     /// The federation the ITS-REST façade queries, when a registry is set.
@@ -54,10 +56,11 @@ pub enum StateError {
 impl AppState {
     /// Returns the state `settings` describe.
     ///
-    /// No subsystem with an indicator exists yet, so the health registry is
-    /// empty and readiness answers `200` for a process that serves what it
-    /// serves. The stored-query store is opened, and every definition it
-    /// holds read, before the gateway serves.
+    /// The registry document is loaded, the outbound clients built, and the
+    /// stored-query store opened with every definition it holds read, before
+    /// the gateway serves. Each subsystem built gets a [`Built`] indicator,
+    /// and no member node or identity source gets one. The state is booting
+    /// until the run path marks boot complete.
     ///
     /// # Errors
     /// Returns a [`StateError`] when the federation `settings` describe
@@ -77,31 +80,50 @@ impl AppState {
                     })
             })
             .transpose()?;
+        let mut built: Vec<Arc<dyn HealthIndicator>> = vec![Arc::new(Built("configuration"))];
+        if federation.is_some() {
+            built.push(Arc::new(Built("registry")));
+            built.push(Arc::new(Built("outbound_clients")));
+        }
+        if definitions.is_some() {
+            built.push(Arc::new(Built("stored_queries")));
+        }
         Ok(Self {
-            health: Registry::default(),
+            lifecycle: Lifecycle::default(),
+            health: Registry::new(built),
             federation: RwLock::new(federation.map(Arc::new)),
             definitions: definitions.map(Arc::new),
         })
     }
 
-    /// Returns a state with `health` as its registry and no federation.
+    /// Returns a booting state with `health` as its registry and no
+    /// federation.
     #[must_use]
-    pub const fn with_health(health: Registry) -> Self {
+    pub fn with_health(health: Registry) -> Self {
         Self {
+            lifecycle: Lifecycle::default(),
             health,
             federation: RwLock::new(None),
             definitions: None,
         }
     }
 
-    /// Returns a state that serves the federated query over `federation`.
+    /// Returns a booting state that serves the federated query over
+    /// `federation`.
     #[must_use]
     pub fn with_federation(federation: Federation) -> Self {
         Self {
+            lifecycle: Lifecycle::default(),
             health: Registry::default(),
             federation: RwLock::new(Some(Arc::new(federation))),
             definitions: None,
         }
+    }
+
+    /// Returns where the process is in its life, which gates readiness.
+    #[must_use]
+    pub const fn lifecycle(&self) -> &Lifecycle {
+        &self.lifecycle
     }
 
     /// Returns the indicators readiness runs.

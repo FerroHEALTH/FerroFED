@@ -220,6 +220,22 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   changed pages are reclassified. The comment-style guard now reads the
   `evidence` cells of the conformance tables as it reads their `reason`
   cells.
+- Container readiness (#303). `ferrofed healthcheck` asks the gateway on this
+  host for `GET /health/readiness` over loopback, prints one line and exits
+  `0` only on `200`, `1` otherwise; the image carries
+  `HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3`
+  over it, and the `compose.yaml` gateway service the same healthcheck.
+  Readiness answers `503` until boot completes and from the moment `SIGTERM`
+  or `SIGINT` arrives, before the drain starts, and its body names the phase
+  and the gateway's own subsystems (the configuration, the registry, the
+  outbound clients, the stored-query store). No member node and no identity
+  source gates readiness: the new `GET /health/dependencies` always answers
+  `200` with the state the gateway last observed of each member endpoint and
+  of the resolver (`up`, `failing`, `down`, `unknown`), from the requests it
+  already makes, never a probe of its own, naming endpoint ids and states
+  only. `deploy/kubernetes/` holds an example ConfigMap, Deployment, Service
+  and PodDisruptionBudget, validated in CI by a digest-pinned `kubeconform`
+  in strict mode. No specification governs health probes: our own design.
 
 ### Changed
 

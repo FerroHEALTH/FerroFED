@@ -1,14 +1,21 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Readiness over a registry of per-subsystem indicators.
+//! Liveness, readiness over a registry of the gateway's own subsystems, and
+//! the last observed state of every dependency.
 //!
-//! An indicator is a named, bounded check of one subsystem: the registry
-//! loaded (#36), each node reachable (#34), the identity source reachable
-//! (#42), each registered by the issue that builds the subsystem. Liveness
-//! answers `200` while the process is up; readiness runs every registered
-//! indicator and answers `503` while any of them is down, with a body naming
-//! each one. No specification governs health probes: our own design.
+//! Liveness answers `200` while the process serves and checks nothing.
+//! Readiness answers `200` only while the process is in
+//! [`lifecycle::Phase::Serving`] and every registered indicator is up, and
+//! `503` otherwise, with a body naming the phase and each indicator. An
+//! indicator checks one of the gateway's own subsystems (the configuration
+//! and the registry loaded, the stored-query store open, the outbound
+//! clients built). A member node or the identity source never gates
+//! readiness: their last observed state is [`dependencies`]'s, reported on
+//! its own route. No specification governs health probes: our own design.
+
+pub mod dependencies;
+pub mod lifecycle;
 
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -154,9 +161,69 @@ impl Report {
     }
 }
 
+/// An indicator for a subsystem boot built: the configuration, the
+/// registry, the outbound clients or the stored-query store.
+///
+/// Boot refuses to serve without the subsystem, so the indicator is
+/// registered only once the subsystem exists, and it answers up. Its place in
+/// the readiness body names what the gateway serves with.
+#[derive(Debug, Clone, Copy)]
+pub struct Built(pub &'static str);
+
+impl HealthIndicator for Built {
+    fn name(&self) -> &'static str {
+        self.0
+    }
+
+    fn check(&self) -> Check<'_> {
+        Box::pin(std::future::ready(IndicatorState::up()))
+    }
+}
+
+/// What `GET /health/readiness` answers with: the phase of the process and
+/// the indicators.
+#[derive(Debug, Clone, Serialize)]
+pub struct Readiness {
+    /// The aggregate: up only while the process serves and every indicator
+    /// is up.
+    pub state: State,
+    /// The phase of the process.
+    pub phase: lifecycle::Phase,
+    /// Every indicator by name, in name order.
+    pub indicators: BTreeMap<&'static str, IndicatorState>,
+}
+
+impl Readiness {
+    /// Returns the readiness of a process in `phase` whose indicators
+    /// reported `report`.
+    #[must_use]
+    pub fn new(phase: lifecycle::Phase, report: Report) -> Self {
+        let state = if phase == lifecycle::Phase::Serving {
+            report.state
+        } else {
+            State::Down
+        };
+        Self {
+            state,
+            phase,
+            indicators: report.indicators,
+        }
+    }
+
+    /// Returns the HTTP status this readiness answers with.
+    #[must_use]
+    pub const fn status(&self) -> http::StatusCode {
+        match self.state {
+            State::Up => http::StatusCode::OK,
+            State::Down => http::StatusCode::SERVICE_UNAVAILABLE,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Check, HealthIndicator, IndicatorState, Registry, State};
+    use super::lifecycle::Phase;
+    use super::{Built, Check, HealthIndicator, IndicatorState, Readiness, Registry, State};
     use http::StatusCode;
     use std::sync::Arc;
 
@@ -206,5 +273,22 @@ mod tests {
             report.indicators.get("identity").map(|state| state.state)
         );
         assert_eq!(vec!["registry", "identity"], registry.names());
+    }
+
+    #[tokio::test]
+    async fn only_a_serving_process_with_every_indicator_up_is_ready() {
+        let registry = Registry::new(vec![Arc::new(Built("configuration"))]);
+        for (phase, status) in [
+            (Phase::Booting, StatusCode::SERVICE_UNAVAILABLE),
+            (Phase::Serving, StatusCode::OK),
+            (Phase::Draining, StatusCode::SERVICE_UNAVAILABLE),
+        ] {
+            let readiness = Readiness::new(phase, registry.evaluate().await);
+            assert_eq!(status, readiness.status(), "{phase:?}");
+            assert_eq!(1, readiness.indicators.len(), "{phase:?}");
+        }
+        let down = Registry::new(vec![Arc::new(Fixed("registry", State::Down))]);
+        let readiness = Readiness::new(Phase::Serving, down.evaluate().await);
+        assert_eq!(StatusCode::SERVICE_UNAVAILABLE, readiness.status());
     }
 }

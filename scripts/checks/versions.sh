@@ -21,8 +21,10 @@
 #   4. product version     CITATION.cff version against the docs/VERSIONS.md
 #                          product-version row, and against the root Cargo.toml
 #                          [workspace.package] version.
-#   5. CI tool pins        the zizmor, actionlint, shellcheck and hadolint
-#                          versions .github/workflows/ci.yml installs, and the
+#   5. CI tool pins        the zizmor, actionlint, shellcheck, hadolint and
+#                          kubeconform versions .github/workflows/ci.yml
+#                          installs, the Kubernetes release and the schema
+#                          commit kubeconform validates against, and the
 #                          cargo-auditable, cargo-cyclonedx and syft versions
 #                          the release workflows install.
 #   6. docs toolchain      the mdBook, mdbook-toc and mdbook-mermaid defaults of
@@ -36,8 +38,9 @@
 #   9. container images    the FROM of docker/Dockerfile against the base-image
 #                          row, every digest-pinned compose.yaml image against
 #                          a row naming the same reference, and the
-#                          compose.yaml gateway tag default against the product
-#                          version.
+#                          compose.yaml gateway tag default and the image tag
+#                          of deploy/kubernetes/deployment.yaml against the
+#                          product version.
 #  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
 #                          own.
@@ -677,9 +680,19 @@ if [ -f "$ci" ]; then
     hadolint)
       sed -nE 's|.*hadolint/hadolint:v([^@[:space:]]+)@sha256:.*|\1|p' "$ci" | sort -u
       ;;
+    kubeconform)
+      sed -nE 's|.*yannh/kubeconform:v([^@[:space:]]+)@sha256:.*|\1|p' "$ci" | sort -u
+      ;;
+    'kubeconform schema version')
+      sed -nE 's|.*-kubernetes-version[[:space:]]+([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
+      ;;
+    kubernetes-json-schema)
+      sed -nE 's|.*yannh/kubernetes-json-schema/([0-9a-f]{40})/.*|\1|p' "$ci" | sort -u
+      ;;
     esac
   }
-  for tool in zizmor actionlint shellcheck hadolint; do
+  ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema)
+  for tool in "${ci_tools[@]}"; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(ci_tool_pin "$tool")"
     if [ -z "$want" ]; then
@@ -937,6 +950,21 @@ if [ -f compose.yaml ]; then
   fi
 else
   note "no compose.yaml yet, skipped"
+fi
+deployment=deploy/kubernetes/deployment.yaml
+if [ -f "$deployment" ]; then
+  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:([^@[:space:]]+)[[:space:]]*$|\1|p' "$deployment" | sort -u)"
+  if [ -z "$tags" ]; then
+    bad "$deployment has no ghcr.io/ferrohealth/ferrofed image tag"
+  elif [ "$(printf '%s\n' "$tags" | wc -l | tr -d '[:space:]')" -gt 1 ]; then
+    bad "$deployment names more than one ferrofed tag: $(printf '%s' "$tags" | tr '\n' ' ')"
+  elif [ "$tags" != "$want_product" ]; then
+    bad "example manifest: $deployment runs $tags, $matrix pins the product version $want_product"
+  else
+    note "OK: the $deployment gateway tag is the product version $tags"
+  fi
+else
+  note "no $deployment yet, skipped"
 fi
 
 echo "== licence (LICENSE <-> SPDX headers, manifests, badges, labels)"

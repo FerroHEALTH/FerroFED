@@ -56,6 +56,7 @@ use crate::facade::owner::{self, Listed};
 use crate::facade::route::{self, Arrived, Deadlines, Failure, Provenance};
 use crate::facade::security;
 use crate::federation::Federation;
+use crate::health::dependencies::Observed;
 
 /// The ITS-REST operation that reads an EHR by its subject.
 const OPERATION: &str = "ehr_get_by_subject";
@@ -259,6 +260,9 @@ async fn resolve<'a>(
         }
         Some(_) | None => BTreeMap::new(),
     };
+    if let Some(observed) = Observed::of_resolutions(&answers) {
+        federation.dependencies().resolver(observed);
+    }
     let mut resolved = Resolved {
         holders: Vec::new(),
         silent: Vec::new(),

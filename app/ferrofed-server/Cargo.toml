@@ -39,6 +39,10 @@ openehr-its = { workspace = true, features = ["rest", "rest-client"] }
 openehr-query.workspace = true
 # The EHR_STATUS of the test EHRs an admission check creates (§12b.1, #79).
 openehr-rm.workspace = true
+# The healthcheck job asks the server beside it for its readiness, over the
+# HTTP client the node dispatch already brings in; the shutdown and
+# wire-capture tests drive a real socket with it too.
+reqwest.workspace = true
 http.workspace = true
 jiff.workspace = true
 redb.workspace = true
@@ -58,9 +62,6 @@ uuid.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 wiremock.workspace = true
-# The shutdown and wire-capture cases drive a real socket, so they need a real
-# HTTP client.
-reqwest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util"] }
 tower.workspace = true

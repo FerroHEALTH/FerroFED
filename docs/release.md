@@ -112,9 +112,10 @@ slow one.
    next milestone.
 2. **The version moves in every file the pin matrix names:** `CITATION.cff`,
    the product-version row of `docs/VERSIONS.md` and the root `Cargo.toml`
-   `[workspace.package]` `version`. `scripts/checks/versions.sh` fails on any
-   file left behind, and the `plan` job checks the same files against the
-   tag.
+   `[workspace.package]` `version`. The gateway image tag moves with it in
+   the `compose.yaml` default and in `deploy/kubernetes/deployment.yaml`.
+   `scripts/checks/versions.sh` fails on any file left behind, and the
+   `plan` job checks the first three against the tag.
 3. **The changelog names the release.** `[Unreleased]` becomes the version and
    the date, with a fresh empty `[Unreleased]` above it and a new link
    reference. What sits under the version heading is what the release notes

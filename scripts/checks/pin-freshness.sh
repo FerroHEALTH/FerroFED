@@ -31,7 +31,8 @@ readonly WATCHED="\
 zizmor	zizmorcore/zizmor
 actionlint	rhysd/actionlint
 shellcheck	koalaman/shellcheck
-hadolint	hadolint/hadolint"
+hadolint	hadolint/hadolint
+kubeconform	yannh/kubeconform"
 
 # The second cell of the matrix row whose first cell is $1, with the backticks
 # stripped and only the first token kept, the same shape versions.sh reads.

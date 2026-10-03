@@ -5,7 +5,8 @@
 #
 #   1. The workflow, shell, container and guard tier needs no Rust: zizmor
 #      over .github, actionlint over .github/workflows, shellcheck over the
-#      tracked shell programs, hadolint over any Dockerfile, and the committed
+#      tracked shell programs, hadolint over any Dockerfile, kubeconform over
+#      the example Kubernetes manifests, and the committed
 #      comment-style, file-length and versions guards. These keep this very
 #      file honest, so none of them may depend on the Rust toolchain.
 #   2. The Rust tier is gated behind a detection job that looks for a root
@@ -176,6 +177,33 @@ jobs:
             -v "$PWD:/repo" --workdir /repo \
             hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d \
             hadolint --config .hadolint.yaml "${files[@]}"
+
+  # kubeconform over the example Kubernetes manifests under deploy/kubernetes,
+  # in strict mode, so an unknown field fails as well as a wrong type. The
+  # schemas are read from yannh/kubernetes-json-schema at a pinned commit for
+  # one Kubernetes release, so a schema change upstream never moves the result.
+  kubernetes-manifests:
+    name: kubeconform
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Every example manifest passes kubeconform
+        # The official image, digest-pinned, for the same reason as hadolint:
+        # no checksum-verified installer for it is in the pinned tool set.
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD:/repo:ro" --workdir /repo \
+            ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e \
+            -strict -summary \
+            -kubernetes-version 1.34.0 \
+            -schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/8df8a883b68a24a104b4a9e43c1288090ae60b3b/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json' \
+            deploy/kubernetes
 
   # The comment-style guard (RFC 505 and RFC 1574) over the whole tree: every
   # hand-written .rs file, plus the citation checks over the shell scripts,
@@ -644,6 +672,7 @@ jobs:
       - workflow-lint
       - shellcheck
       - dockerfile-lint
+      - kubernetes-manifests
       - comment-style
       - file-length
       - versions

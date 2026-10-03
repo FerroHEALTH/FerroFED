@@ -53,6 +53,7 @@ under the pins below.
 | `actionlint` | the official image, pinned by tag and digest |
 | `shellcheck` | `--severity=style` over every tracked `*.sh` and every tracked extensionless file with a shell shebang, outside `docs/specs/**` and `**/vendor/**` |
 | `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` |
+| `kubeconform` | the official image, pinned by tag and digest, in strict mode over the example manifests under `deploy/kubernetes/`, against the schemas of one Kubernetes release at a pinned commit of `yannh/kubernetes-json-schema` |
 | `comment-style` | `scripts/checks/comment-style.sh --all` |
 | `file-length` | `scripts/checks/file-length.sh`, the 1000-line cap on hand-written Rust with its ratchet allow-list |
 | `versions` | `scripts/checks/versions.sh --self-test`, then `scripts/checks/versions.sh`: the pin matrix against every file that repeats a pin and each specification row against the crate constant it names, the landing page's release string against the newest `CHANGELOG.md` release, the book's pin table against the rows it names, the vendored provenance stamps and the SPDX licence claims |
@@ -177,7 +178,8 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | `uses:` references in `.github/workflows/**` and `.github/actions/**`, pinned by full commit SHA | Dependabot, `github-actions` ecosystem |
 | the workspace dependency table in the root `Cargo.toml`, with the `openehr-*` family as one lockstep group | Dependabot, `cargo` ecosystem |
 | a digest-pinned `FROM` in a first-party Dockerfile | Dependabot, `docker` ecosystem at `/` and `/docker` |
-| the zizmor, actionlint, shellcheck and hadolint versions in `ci.yml` | `pin-freshness.yml`, weekly |
+| the zizmor, actionlint, shellcheck, hadolint and kubeconform versions in `ci.yml` | `pin-freshness.yml`, weekly |
+| the Kubernetes release and the `yannh/kubernetes-json-schema` commit kubeconform validates against | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows; a bump is a deliberate change to both |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows; a bump is a deliberate change to both |
 | the release and fuzz tool versions (`cargo-auditable`, `cargo-cyclonedx`, `syft`, `cargo-fuzz`) | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` tool rows |
@@ -305,6 +307,7 @@ These are repository settings only the owner can change. The state on
 - zizmor: <https://docs.zizmor.sh/>
 - actionlint: <https://github.com/rhysd/actionlint>
 - hadolint: <https://github.com/hadolint/hadolint>
+- kubeconform: <https://github.com/yannh/kubeconform>
 - Dependabot options reference:
   <https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference>
 - Scorecard checks: <https://github.com/ossf/scorecard/blob/main/docs/checks.md>

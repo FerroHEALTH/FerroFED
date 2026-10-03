@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The cluster-internal Service in front of the gateway pods. A pod whose
+# readiness answers 503 (booting, or draining after SIGTERM) leaves its
+# endpoints, so the Service sends it no new request.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ferrofed
+  labels:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ferrofed
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
