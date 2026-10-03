@@ -1,28 +1,33 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# The release compose guard: deploy/compose/compose.yaml, the compose.yaml
-# every release carries, renders with the example values of
-# deploy/compose/example/, refuses to render without each required variable,
-# and the gateway configuration it embeds is one `ferrofed config check`
-# accepts (no specification governs this: our own design).
+# The release compose guard (no specification governs this: our own design).
+# Every release attaches deploy/compose/compose.yaml, ferrofed.toml and
+# registry.toml under those names. This guard checks, over copies laid out as
+# a downloader has them:
 #
-# Docker Compose does the rendering, so the variables are filled in exactly as
-# they are for an operator. The rendered configuration names container paths
-# (/etc/ferrofed/registry and /run/secrets/ferrofed/); the guard points them at
-# a temporary copy of the example registry and at synthetic secret files, then
-# runs the binary it is given over the result.
+#   1. no compose file in the repository carries `build:`, because every one
+#      runs the published image and only release-image.yml builds it;
+#   2. Docker Compose renders the release compose file;
+#   3. given a static Linux ferrofed binary, `ferrofed config check` accepts
+#      the example ferrofed.toml and registry.toml exactly as attached, mounted
+#      at the paths the rendered compose file mounts them, in the pinned base
+#      image of docker/Dockerfile, with synthetic files for the credentials
+#      the example names; and it refuses the same configuration once a member
+#      is left out of the PIX Manager, naming that member.
 #
 # Usage:
-#   scripts/checks/release-compose.sh                   render and refuse only
-#   scripts/checks/release-compose.sh <ferrofed binary> also run config check
+#   scripts/checks/release-compose.sh                  checks 1 and 2
+#   scripts/checks/release-compose.sh <ferrofed binary> all three; the binary
+#                                                      is a static Linux
+#                                                      build for this host's
+#                                                      architecture
 # Needs `docker compose` and `jq`. Exit 1 naming each failure; 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-readonly COMPOSE=deploy/compose/compose.yaml
-readonly EXAMPLE=deploy/compose/example
-readonly REQUIRED="FERROFED_FEDERATION_ID FERROFED_PIXM_URL FERROFED_PIXM_MEMBERS"
+readonly RELEASE=deploy/compose
+readonly ASSETS="compose.yaml ferrofed.toml registry.toml"
 
 case "$#" in
   0) binary="" ;;
@@ -37,85 +42,82 @@ if [ -n "$binary" ] && [ ! -x "$binary" ]; then
   exit 2
 fi
 
-docker compose version
-
 fail=0
 bad() {
-  echo "::error file=$COMPOSE::$1" >&2
+  echo "::error::$1" >&2
   fail=1
 }
 
+echo "== no compose file builds the image"
+built=0
+while IFS= read -r file; do
+  [ -n "$file" ] || continue
+  if grep -n -E '^[[:space:]]*build:' "$file" >&2; then
+    bad "$file carries build:; every compose file runs the published image, which only release-image.yml builds"
+    built=1
+  fi
+done < <(git ls-files -- '*compose*.yaml' '*compose*.yml' ':(exclude)docs/specs/**' ':(glob,exclude)**/vendor/**')
+[ "$built" -eq 0 ] && echo "OK: no compose file carries build:"
+
+docker compose version
+
+# The downloader's directory: the three assets, byte for byte, and secrets/.
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-mkdir "$work/secrets"
-# Synthetic credentials for the two files example.env names.
-printf 'synthetic-token-a\n' > "$work/secrets/node-a"
-printf 'synthetic-password-b\n' > "$work/secrets/node-b"
-cp "$EXAMPLE/registry.toml" "$work/registry.toml"
-
-# compose ENV_FILE ARGS...: docker compose over the release file with ENV_FILE
-# as its variables, the example registry and the synthetic secrets.
-compose() {
-  local env_file="$1"
-  shift
-  FERROFED_REGISTRY="$work/registry.toml" FERROFED_SECRETS_DIR="$work/secrets" \
-    docker compose --project-directory "$(dirname "$COMPOSE")" -f "$COMPOSE" \
-    --env-file "$env_file" "$@"
-}
-
-echo "== the release compose file renders with the example values"
-if compose "$EXAMPLE/example.env" config --quiet; then
-  echo "OK: $COMPOSE renders"
-else
-  bad "$COMPOSE does not render with $EXAMPLE/example.env"
-fi
-
-echo "== each required variable is refused when missing"
-for name in $REQUIRED; do
-  grep -v -E "^${name}=" "$EXAMPLE/example.env" > "$work/without.env"
-  if out="$(compose "$work/without.env" config --quiet 2>&1)"; then
-    bad "$COMPOSE renders without $name"
-  elif ! grep -q "set $name" <<< "$out"; then
-    bad "without $name, docker compose says something other than its message: $out"
-  else
-    echo "OK: $name is required"
-  fi
+for asset in $ASSETS; do
+  cp "$RELEASE/$asset" "$work/$asset"
 done
+mkdir "$work/secrets"
+# A synthetic value for every credential file the example names.
+while IFS= read -r secret; do
+  printf 'synthetic-%s\n' "$secret" > "$work/secrets/$secret"
+done < <(sed -nE 's|^[a-z_]+_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)"[[:space:]]*$|\1|p' "$work/ferrofed.toml")
+chmod -R a+rX "$work"
 
-echo "== the embedded configuration"
-rendered="$(compose "$EXAMPLE/example.env" config --format json)"
-content="$(jq -r '.configs["ferrofed-toml"].content // empty' <<< "$rendered")"
-label="$(jq -r '.services.ferrofed.labels["eu.ferrofed.compose.configuration"] // empty' <<< "$rendered")"
-if [ -z "$content" ]; then
-  bad "$COMPOSE embeds no ferrofed-toml configuration"
-elif [ "$content" != "$label" ]; then
-  bad "the gateway's configuration label is not the embedded configuration, so a changed value would not recreate it"
+echo "== the release compose file renders"
+if rendered="$(docker compose --project-directory "$work" -f "$work/compose.yaml" config --format json)"; then
+  echo "OK: $RELEASE/compose.yaml renders"
 else
-  echo "OK: the configuration and the gateway's label agree"
+  bad "$RELEASE/compose.yaml does not render"
+  rendered=""
 fi
 
 if [ -z "$binary" ]; then
   echo "no ferrofed binary given: config check skipped"
-else
-  # The container paths, pointed at the files this run wrote.
-  sed -e "s|\"/etc/ferrofed/registry\"|\"$work/registry.toml\"|" \
-    -e "s|\"/run/secrets/ferrofed/|\"$work/secrets/|g" \
-    <<< "$content" > "$work/ferrofed.toml"
-  if grep -q -E '/etc/ferrofed/|/run/secrets/' "$work/ferrofed.toml"; then
-    bad "the embedded configuration names a container path this guard does not know"
-  fi
-  # A clean environment, so no FERROFED__ override of the caller's applies.
-  if out="$(env -i PATH="$PATH" "$binary" config check --config "$work/ferrofed.toml" 2>&1)"; then
+elif [ -n "$rendered" ]; then
+  echo "== config check over the attached examples"
+  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | head -n1)"
+  config="$(jq -r '.services.ferrofed.environment.FERROFED_CONFIG // empty' <<< "$rendered")"
+  mounts=()
+  while IFS= read -r mount; do
+    mounts+=(--volume "$mount")
+  done < <(jq -r '.services.ferrofed.volumes[] | select(.type == "bind") | "\(.source):\(.target):ro"' <<< "$rendered")
+  # check: runs config check as the image does, read-only and unprivileged.
+  check() {
+    docker run --rm --read-only --user 65532:65532 --cap-drop ALL \
+      --security-opt no-new-privileges:true --network none \
+      --env FERROFED_CONFIG="$config" \
+      --volume "$(cd "$(dirname "$binary")" && pwd)/$(basename "$binary"):/usr/local/bin/ferrofed:ro" \
+      "${mounts[@]}" --entrypoint /usr/local/bin/ferrofed "$base" config check
+  }
+  docker pull --quiet "$base" > /dev/null
+  if [ -z "$config" ] || [ "${#mounts[@]}" -eq 0 ]; then
+    bad "the rendered compose file names no FERROFED_CONFIG or no bind mount"
+  elif out="$(check 2>&1)"; then
     echo "OK: $out"
   else
-    bad "ferrofed config check refuses the embedded configuration: $out"
+    bad "ferrofed config check refuses the attached examples: $out"
   fi
   # The check has teeth: a member the PIX Manager does not resolve is refused.
-  sed -e 's|, "node-b" = "urn:oid:2.999.20"||' "$work/ferrofed.toml" > "$work/refused.toml"
-  if env -i PATH="$PATH" "$binary" config check --config "$work/refused.toml" > /dev/null 2>&1; then
-    bad "ferrofed config check accepts a configuration whose PIX Manager resolves only one of two members"
+  # Rewritten in place, so the mounted file keeps its inode.
+  sed '/^"node-b" = /d' "$work/ferrofed.toml" > "$work/refused.toml"
+  cat "$work/refused.toml" > "$work/ferrofed.toml"
+  if out="$(check 2>&1)"; then
+    bad "ferrofed config check accepts a PIX Manager that resolves only one of two members"
+  elif ! grep -q 'node-b' <<< "$out"; then
+    bad "ferrofed config check refuses a missing member without naming it: $out"
   else
-    echo "OK: config check refuses a member no PIX Manager resolves"
+    echo "OK: a member no PIX Manager resolves is refused by name"
   fi
 fi
 

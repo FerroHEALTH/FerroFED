@@ -23,25 +23,27 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
-- Every release carries `compose.yaml`, which starts the gateway alone in
-  front of the CDRs you already run, with no checkout of the repository
-  (#385; no specification governs packaging: our own design). It runs
-  `ghcr.io/ferrohealth/ferrofed` at the release's version and embeds the
-  gateway configuration, filled in from `.env`: the federation id, the PIX
-  Manager's URL and each member's `ehr_id` domain there are required, and
-  each endpoint's credentials are optional. The registry document is
-  `registry.toml` beside the file and every credential is a file under
-  `secrets/`, read through a `_file` key, so a federation of any size runs
-  the file unchanged. A `ferrofed-config` service runs `ferrofed config
-  check` before the gateway starts, so a bad value stops `docker compose up`
-  naming its key. The gateway runs read-only, as uid 65532, with every
-  capability dropped, `no-new-privileges`, CPU and memory limits and the
-  `ferrofed healthcheck` probe. The release lane attaches the file to the
-  draft and refuses to publish a draft without it, `scripts/checks/versions.sh`
-  and the release plan hold its image tag to the product version, and the
-  CI job `release compose` renders it and checks the configuration it embeds.
-  The repository's `compose.yaml` stays the four-node quickstart. The
-  container page of the book has a section "The gateway from a release".
+- Every release carries `compose.yaml`, `ferrofed.toml` and `registry.toml`,
+  which start the gateway alone in front of the CDRs you already run, with no
+  checkout of the repository (#385; no specification governs packaging: our
+  own design). You download the three, edit the two TOML files (the gateway
+  configuration and the registry document, in their documented formats, every
+  value to change marked `EDIT`), put each credential in a file under
+  `secrets/`, and run `docker compose up --wait`. The compose file runs the
+  published `ghcr.io/ferrohealth/ferrofed` image at the release's version and
+  mounts the two files and `secrets/` read-only; its only variables are about
+  the container (image tag, host address and port, CPU and memory). The
+  gateway runs read-only, as uid 65532, with every capability dropped,
+  `no-new-privileges`, CPU and memory limits, a 20-second stop grace period,
+  the `ferrofed healthcheck` probe and the `unless-stopped` restart policy, so
+  a configuration it refuses (exit 78, naming the key) is retried at Docker's
+  doubling delay. The release lane attaches the three files to the draft and
+  refuses to publish a draft missing any of them, `scripts/checks/versions.sh`
+  and the release plan hold the image tag to the product version, and the CI
+  job `release compose` renders the compose file and runs `ferrofed config
+  check` over the two examples as attached. The repository's `compose.yaml`
+  stays the four-node quickstart. The container page of the book has a
+  section "The gateway from a release".
 - The operator can send a stored-query version the registry holds to the
   members that missed it (#342; §12.7 stored-query-drift, N44, CP-40; no
   specification gives drift repair a request, so this is our own design).
@@ -410,6 +412,14 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   the ADMIN API; stored-query execution without the stored-query registry; a
   path ITS-REST does not define or a method it does not declare; and
   `OPTIONS` on an unserved path. The errors test now sends each of them.
+- The quickstart's `compose.yaml` runs only the published
+  `ghcr.io/ferrohealth/ferrofed` image: its `build:` block is gone, so
+  `docker compose up --build` no longer builds the gateway, and
+  `scripts/checks/release-compose.sh` fails when any compose file in the
+  repository carries `build:` (#385; no specification governs packaging: our
+  own design). The gateway service now has a 20-second stop grace period,
+  longer than its 10-second drain, so `docker compose down` no longer cuts a
+  drain off at Docker's default 10 seconds.
 - The README, the landing page and the book are rewritten against what the
   gateway does on `main` (#363; no specification governs the website). The
   book's claims page lists what v0.0.3, v0.0.6 and v0.0.7 carry and what

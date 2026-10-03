@@ -9,7 +9,7 @@
 # build-binaries and build-image are calls to the reusable workflows
 # release-build.yml and release-image.yml, the SLSA Build Level 3 lanes.
 #
-# The release is created as a DRAFT, the gateway compose file, the binaries,
+# The release is created as a DRAFT, the gateway compose files, the binaries,
 # SBOMs and attestation bundles are attached to it, the image is pushed to
 # GHCR, and only
 # once the expected asset set is complete is it PUBLISHED. Publishing last
@@ -243,7 +243,7 @@ jobs:
     permissions:
       contents: write # create the GitHub release
     steps:
-      # The tag's tree, for the compose file attached below. Checked out
+      # The tag's tree, for the compose files attached below. Checked out
       # first, because checkout cleans the workspace and would remove the
       # notes downloaded after it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -297,17 +297,23 @@ jobs:
               ;;
           esac
 
-      # The gateway alone, at this release's image, so a downloader starts it
-      # with `docker compose up` and no checkout. The asset is named after the
-      # file, compose.yaml, the name Compose reads without `-f`. --clobber
-      # replaces the copy a re-run of this job attached to the same draft.
-      - name: Attach the gateway compose file
+      # The gateway alone, at this release's image, with the two example files
+      # it mounts, so a downloader edits them and starts it with
+      # `docker compose up` and no checkout. Each asset is named after its
+      # file: compose.yaml, the name Compose reads without `-f`, ferrofed.toml
+      # and registry.toml, the names it mounts. --clobber replaces the copies a
+      # re-run of this job attached to the same draft.
+      - name: Attach the gateway compose files
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
         run: |
           set -euo pipefail
-          gh release upload "$TAG" deploy/compose/compose.yaml --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$TAG" \
+            deploy/compose/compose.yaml \
+            deploy/compose/ferrofed.toml \
+            deploy/compose/registry.toml \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
   # ---- build-binaries: the SLSA Build L3 lane, once per target --------------
 
@@ -392,9 +398,11 @@ jobs:
                 || missing="$missing ferrofed-${TAG}-${target}${suffix}"
             done
           done < <(printf '%s' "$TARGETS" | jq -r '.include[].target')
-          # The release-wide asset github-release attaches: the gateway
-          # compose file a downloader runs without a checkout.
-          printf '%s\n' "$assets" | grep -Fxq "compose.yaml" || missing="$missing compose.yaml"
+          # The release-wide assets github-release attaches: the gateway
+          # compose file and the two example files it mounts.
+          for asset in compose.yaml ferrofed.toml registry.toml; do
+            printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
+          done
           if [ -n "$missing" ]; then
             echo "::error::the draft is missing assets, so it will not be published:$missing" >&2
             exit 1

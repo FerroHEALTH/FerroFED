@@ -39,7 +39,9 @@ never runs anywhere, which is how #272 found one; `scripts/checks/e2e-placement.
 **How to apply:** a new container-backed test uses the harness and the gate,
 never its own `docker` calls, and sits under `tests/it/e2e/`; a new image is a
 `PinnedImage` constant plus a `docs/VERSIONS.md` row, which
-`scripts/checks/versions.sh` compares. Locally: `FERROFED_E2E=1 cargo nextest
+`scripts/checks/versions.sh` compares. A check that must run `docker
+compose` lives in `scripts/checks/` and a CI job, never in a Rust test, as
+`scripts/checks/release-compose.sh` does. Locally: `FERROFED_E2E=1 cargo nextest
 run --locked --workspace -E 'package(ferrofed-testkit) or test(/^e2e::/)'`
 with Docker running. Linked: [[postgresql-18]],
 [[strict-over-reference]].

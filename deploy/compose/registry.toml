@@ -1,11 +1,20 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# An example registry document for the release compose.yaml: two members,
-# each one CDR with one ITS-REST endpoint. Put your own beside compose.yaml as
-# registry.toml, with your organisations, nodes, system_ids and URLs; the
-# members here are placeholders under example.org. No specification governs
-# the document format: our own design over the §12b.1 registry entry (N21).
+# The registry document of the release compose.yaml: the members the gateway
+# federates. compose.yaml mounts this file read-only at
+# /etc/ferrofed/registry.toml, the path ferrofed.toml names.
+#
+# Replace the two example members with your own: one [[organisation]] per
+# operator, one [[node]] per CDR with the openEHR system_id it stamps into
+# every EHR and version, and one [[endpoint]] per ITS-REST base URL. List as
+# many as the federation has. Every value below is a placeholder: example.org
+# hosts and names of our own. The full format, and the FHIR form
+# (registry.format = "fhir" in ferrofed.toml), are on the book's registry page:
+# https://ferrofed.eu/docs/operate/registry.html
+#
+# No specification governs the document format: our own design over the
+# §12b.1 registry entry (N21).
 
 [[organisation]]
 id = "org-a"
@@ -15,6 +24,8 @@ name = "Example organisation A"
 id = "org-b"
 name = "Example organisation B"
 
+# A node id is what ferrofed.toml's [pixm.manager.members] maps to an ehr_id
+# domain.
 [[node]]
 id = "node-a"
 organisation = "org-a"
@@ -25,6 +36,9 @@ id = "node-b"
 organisation = "org-b"
 system_id = "cdr-b.example.org"
 
+# An endpoint id is what a query's endpoint directive names, and what
+# ferrofed.toml's [credentials."<endpoint id>"] sections are keyed by. A CDR
+# on the Docker host itself is reachable as host.docker.internal.
 [[endpoint]]
 id = "node-a-query"
 node = "node-a"

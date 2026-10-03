@@ -121,26 +121,22 @@ gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
 ```
 
 Every release also carries `compose.yaml`, which runs the gateway alone, at
-that release's image, in front of the CDRs you already run. Download it, put
-your registry document beside it as `registry.toml`, your credential files in
-`secrets/` and three required variables in `.env`, and start it:
+that release's image, in front of the CDRs you already run, with two example
+files it mounts. Download the three, edit `registry.toml` (your members) and
+`ferrofed.toml` (your federation id, your PIX Manager and the credentials each
+endpoint gets), put each credential file in `secrets/`, and start it:
 
 ```sh
-curl -LO https://github.com/FerroHEALTH/FerroFED/releases/latest/download/compose.yaml
-mkdir -p secrets
-cat > .env <<'EOF'
-FERROFED_FEDERATION_ID=example-federation
-FERROFED_PIXM_URL=https://pix.example.org/fhir/
-FERROFED_PIXM_MEMBERS='{ "node-a" = "urn:oid:2.999.10", "node-b" = "urn:oid:2.999.20" }'
-EOF
+for f in compose.yaml ferrofed.toml registry.toml; do
+  curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
+done
+# edit ferrofed.toml and registry.toml; put credential files in secrets/
 docker compose up --wait
 ```
 
-`FERROFED_PIXM_MEMBERS` maps each node of your registry to its `ehr_id`
-domain at your PIX Manager, and `FERROFED_CREDENTIALS` names the credential
-file each endpoint gets. A credential is always a file, never a variable.
+A credential is always a file, never a value in `ferrofed.toml`.
 [The container page](https://ferrofed.eu/docs/operate/container.html#the-gateway-from-a-release)
-lists every variable.
+walks through each step.
 
 `ferrofed serve --config ferrofed.toml` runs the gateway, and
 `ferrofed config check --config ferrofed.toml` reports whether it would start

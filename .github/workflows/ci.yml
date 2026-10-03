@@ -547,12 +547,14 @@ jobs:
           -E 'package(ferrofed-testkit) or test(/^e2e::/)'
           --no-tests=pass
 
-  # The compose.yaml every release carries, deploy/compose/compose.yaml (no
-  # specification governs it: our own design). Docker Compose renders it with
-  # the example values of deploy/compose/example/ and refuses it without each
-  # required variable, and `ferrofed config check`, built here, accepts the
-  # gateway configuration it embeds. It sits in the Rust tier because the
-  # check needs the binary; the runner image carries Docker Compose and jq.
+  # The release compose assets, deploy/compose/compose.yaml, ferrofed.toml and
+  # registry.toml (no specification governs them: our own design). No compose
+  # file in the repository may build the image, Docker Compose renders the
+  # release file, and `ferrofed config check`, built here as a static musl
+  # binary, accepts the two example files as attached, mounted where the
+  # compose file mounts them in the pinned base image of docker/Dockerfile.
+  # It sits in the Rust tier because the check needs the binary; the runner
+  # image carries Docker Compose and jq.
   release-compose:
     name: release compose
     needs: detect
@@ -566,8 +568,15 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - run: cargo build --locked -p ferrofed-server --bin ferrofed
-      - run: bash scripts/checks/release-compose.sh target/debug/ferrofed
+        with:
+          target: x86_64-unknown-linux-musl
+      # musl needs its C toolchain for the link step.
+      - name: Install the musl toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends musl-tools
+      - run: cargo build --locked -p ferrofed-server --bin ferrofed --target x86_64-unknown-linux-musl
+      - run: bash scripts/checks/release-compose.sh target/x86_64-unknown-linux-musl/debug/ferrofed
 
   doc:
     name: rustdoc

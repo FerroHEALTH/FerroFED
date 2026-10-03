@@ -30,15 +30,17 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   changelog section fails the release, so a cut can never ship with notes
   generated from the commit range standing in for the changelog.
 - **github-release** creates the release as a draft carrying those notes, and
-  attaches `deploy/compose/compose.yaml` as the asset `compose.yaml`, the
-  gateway alone at this release's image. A draft is mutable and invisible to
+  attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
+  under those names: the gateway alone at this release's image, with the two
+  example files it mounts. A draft is mutable and invisible to
   anyone browsing releases, which is the window the asset uploads need.
 - **build-binaries** calls `release-build.yml` once per target (two Linux
   architectures, glibc and musl). See § The build legs.
 - **build-image** calls `release-image.yml`, which builds the container from
   the attested musl binaries and pushes it to `ghcr.io/ferrohealth/ferrofed`.
 - **finalize-release** checks that the draft carries every asset this version
-  promises, eight per target and `compose.yaml`, and publishes only then. A draft missing any of
+  promises, eight per target and the three compose files, and publishes only
+  then. A draft missing any of
   them fails the check and stays a draft, so a half-assembled release is never
   visible. A pre-release is published with `--latest=false`, so it never
   becomes the repository's latest release.
@@ -114,8 +116,8 @@ slow one.
 2. **The version moves in every file the pin matrix names:** `CITATION.cff`,
    the product-version row of `docs/VERSIONS.md` and the root `Cargo.toml`
    `[workspace.package]` `version`. The gateway image tag moves with it in
-   the `compose.yaml` default, in the `FERROFED_VERSION` default of
-   `deploy/compose/compose.yaml` (the release asset) and in
+   the `compose.yaml` default, in the `FERROFED_VERSION` default on the
+   `image:` line of `deploy/compose/compose.yaml` (the release asset) and in
    `deploy/kubernetes/deployment.yaml`. `scripts/checks/versions.sh` fails on
    any file left behind, and the `plan` job checks the first three and the
    release asset's tag against the tag.

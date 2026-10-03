@@ -105,15 +105,19 @@ filter selects it. Locally: `FERROFED_E2E=1 cargo nextest run --locked
 --workspace -E 'package(ferrofed-testkit) or test(/^e2e::/)'` with Docker
 running.
 
-`release compose` holds the `compose.yaml` every release carries,
-`deploy/compose/compose.yaml`. It builds `ferrofed` and runs
-`scripts/checks/release-compose.sh` with it: Docker Compose renders the file
-with the example values of `deploy/compose/example/`, refuses it without
-each required variable, and the gateway configuration it embeds passes
-`ferrofed config check` over the example registry and synthetic secret
-files. It sits in this tier because the check needs the binary. Locally:
-`cargo build -p ferrofed-server --bin ferrofed && scripts/checks/release-compose.sh
-target/debug/ferrofed` with Docker running.
+`release compose` holds the compose files every release carries,
+`deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`. It builds
+`ferrofed` as a static musl binary and runs
+`scripts/checks/release-compose.sh` with it: no compose file in the
+repository carries `build:`, because every one runs the published image and
+only `release-image.yml` builds it; Docker Compose renders the release file;
+and `ferrofed config check` accepts the two examples exactly as attached,
+mounted where the compose file mounts them, in the pinned base image of
+`docker/Dockerfile` with synthetic credential files, and refuses them once a
+member is left out of the PIX Manager. It sits in this tier because the check
+needs the binary. Locally, with Docker running, pass a static Linux build of
+`ferrofed` for the host's architecture; without one the script runs the
+first two checks.
 
 `features (cargo-hack)` lints every feature of the three published crates on
 its own: `cargo hack clippy --each-feature --all-targets` over
