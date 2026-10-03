@@ -5,8 +5,8 @@
 
 FerroFED ships one static binary, `ferrofed`, and an image that carries it on
 distroless static. The repository's `compose.yaml` starts that image beside
-two member CDRs, two FerroEHR instances, so the topology a federated query runs
-over is up in one command.
+four member CDRs, four FerroEHR instances, so the topology a federated query
+runs over is up in one command.
 
 ## The image
 
@@ -70,6 +70,7 @@ gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
 
 ```sh
 docker compose up --wait
+scripts/quickstart/seed.sh
 curl http://127.0.0.1:8080/health
 ```
 
@@ -81,18 +82,31 @@ built from staged binaries instead, add `--build`.
 | Service | What it is | On the host |
 |---|---|---|
 | `ferrofed` | the gateway | `127.0.0.1:8080` |
-| `ferroehr-a`, `ferroehr-a-postgres` | member node A, FerroEHR with `system_id` `node-a.quickstart.local` | `127.0.0.1:8081/ferroehr/rest/openehr/v1` |
-| `ferroehr-b`, `ferroehr-b-postgres` | member node B, FerroEHR with `system_id` `node-b.quickstart.local` | `127.0.0.1:8082/ferroehr/rest/openehr/v1` |
+| `ferroehr-a` | member node A, FerroEHR with `system_id` `node-a.quickstart.local` | `127.0.0.1:8081/ferroehr/rest/openehr/v1` |
+| `ferroehr-b` | member node B, FerroEHR with `system_id` `node-b.quickstart.local` | `127.0.0.1:8082/ferroehr/rest/openehr/v1` |
+| `ferroehr-c` | member node C, FerroEHR with `system_id` `node-c.quickstart.local` | `127.0.0.1:8083/ferroehr/rest/openehr/v1` |
+| `ferroehr-d` | member node D, FerroEHR with `system_id` `node-d.quickstart.local` | `127.0.0.1:8084/ferroehr/rest/openehr/v1` |
+| `ferroehr-postgres` | one FerroEHR PostgreSQL server, a database per node | not published |
 
-Both nodes run FerroEHR's documented image, each on its own FerroEHR PostgreSQL
-container, and each stamps its own `system_id` into every EHR and version it
-creates, the value the quickstart registry declares for it. Two instances of
-one product: EHRbase, the second product the topology first used, refuses a
-`.` in `PARTY_REF.namespace`, which openEHR BASE admits, so its EHRs could not
-carry the OID-style issuing namespace the synthetic patients use. Both nodes
-use FerroEHR's quickstart Basic-auth user, `ferroehr` / `ferroehr`, a
-development credential that must not reach anything real. Every image is
-pinned by tag and digest, and `docs/VERSIONS.md` carries each pin.
+The four nodes run FerroEHR's documented image, and each stamps its own
+`system_id` into every EHR and version it creates, the value the quickstart
+registry declares for it. They share one FerroEHR PostgreSQL container, and
+each connects to its own database there, `ferroehr_a` to `ferroehr_d`, owned
+by a login role of the same name. The image's own init script creates the
+first; `docker/postgres/20-ferrofed-node-databases.sh`, mounted beside it, runs
+that script again for the other three. A schema per node would not do:
+FerroEHR creates fixed schema names in the database it connects to, so two
+nodes in one database would share their tables. The nodes also share the
+server's group roles, so the separation is the quickstart's and no security
+boundary.
+
+Four instances of one product: EHRbase, the second product the topology first
+used, refuses a `.` in `PARTY_REF.namespace`, which openEHR BASE admits, so its
+EHRs could not carry the OID-style issuing namespace the synthetic patients
+use. Every node uses FerroEHR's quickstart Basic-auth user, `ferroehr` /
+`ferroehr`, and every database role's password is its name: development
+credentials that must not reach anything real. Every image is pinned by tag
+and digest, and `docs/VERSIONS.md` carries each pin.
 
 Every published port binds the loopback interface. A published port is
 DNAT'd ahead of the host firewall's own rules, so a port on `0.0.0.0` is
@@ -100,12 +114,92 @@ reachable from the network even when the firewall says otherwise. Set
 `FERROFED_BIND_HOST` to the one address you mean, or put a reverse proxy in
 front.
 
-The gateway federates the two nodes. `docker/quickstart/registry.toml` names the nodes and
+`docker/quickstart/registry.toml` names the four nodes and
 `docker/quickstart/ferrofed.toml` configures the gateway with each node's
-quickstart credentials; Compose mounts both read-only. `POST /v1/query/aql`
-answers one ITS-REST `RESULT_SET` over both nodes, with `meta.federation`
-reporting each endpoint, and every other path under `/v1/` answers `501`. The
-quickstart binds no identity service, so a query that names a patient fails
-closed with `424`; the README's quickstart sends one that names none.
+quickstart credentials; Compose mounts both read-only. The configuration runs
+in the development profile, with a static cross-reference from four synthetic
+patients to their EHRs. It is a testing device and no identity binding; a
+deployment resolves patients through an identifier cross-reference service,
+such as a PIXm Manager ([What FerroFED runs beside](deployment-shape.md)).
 
 `docker compose down -v` stops the stack and removes its volumes.
+
+### The synthetic patients
+
+`scripts/quickstart/seed.sh` reads the cross-reference rows of
+`docker/quickstart/ferrofed.toml` and creates exactly those EHRs over each
+node's ITS-REST API: `PUT /v1/ehr/{ehr_id}` with the patient on
+`EHR_STATUS.subject`, the vendored `International Patient Summary` template,
+and one vendored demo composition per EHR. It needs `curl`, and a second run
+reports what is already there and adds nothing. Every identifier lies in the
+example arc `urn:oid:2.999`:
+
+| Patient, in `urn:oid:2.999.1.1` | Node A | Node B | Node C | Node D |
+|---|---|---|---|---|
+| `ffd-test-0001` | `aaaaaaaa-…-000000000001` | `bbbbbbbb-…-000000000001` | `cccccccc-…-000000000001` | `dddddddd-…-000000000001` |
+| `ffd-test-0002` | | `bbbbbbbb-…-000000000002` | | `dddddddd-…-000000000002` |
+| `ffd-test-0003` | | | `cccccccc-…-000000000003` | |
+| `ffd-test-0004` | | | | |
+
+The first group of each `ehr_id` names its node and the last group its
+patient.
+
+### A federated query
+
+Ask for the compositions of the patient every node knows:
+
+```sh
+curl -s http://127.0.0.1:8080/v1/query/aql \
+  -H 'Content-Type: application/json' -d @- <<'EOF'
+{"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
+EOF
+```
+
+The gateway resolves the patient to the four `ehr_id`s, sends each node an
+ordinary AQL query scoped to its own `ehr_id` with no patient identifier in
+it, and answers `200` with one `RESULT_SET`: four rows, one composition from
+each node, its `uid` carrying the `system_id` of the node that created it.
+`meta.federation.complete` is `true`, and `meta.federation.endpoints` reports
+all four endpoints `active` with `row_count` 1.
+
+### A patient missing at some nodes
+
+Send the same query for `ffd-test-0002`. The answer is `200` with two rows,
+from node B and node D. Node A and node C hold no EHR for the patient, so the
+gateway asks neither of them and reports both `not-resolved`, with no
+`latency_ms`, and `meta.federation.complete` is `false`. A `not-resolved`
+member is an answer and never fails the query (§11.3, N6, N37). For
+`ffd-test-0003` only node C answers, and for `ffd-test-0004`, which no node
+holds, the answer is `200` with no rows and all four endpoints
+`not-resolved`.
+
+### A query directed at one node
+
+Name the node in the query with the endpoint directive, and project its
+attributes beside the data (§8, §9.4):
+
+```sh
+curl -s http://127.0.0.1:8080/v1/query/aql \
+  -H 'Content-Type: application/json' -d @- <<'EOF'
+{"q": "SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition FROM ENDPOINT p [\"node-c-query\"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
+EOF
+```
+
+Only node C is asked. The one row reads `node-c-query`,
+`node-c.quickstart.local` and the composition's `uid`; the other three
+endpoints are reported `excluded`, "not named by the request's endpoint
+directive", and `meta.federation.complete` is `true`, because an excluded
+member was never in scope. The header form selects the same way without
+changing the query: send the patient query above with
+`-H 'openEHR-federation-endpoint: node-b-query'` and only node B answers.
+
+### Memory footprint
+
+Measured on 2026-10-03 with `docker stats --no-stream`, on an Apple silicon
+Mac running Docker Desktop with 8 CPUs and 7.65 GiB for its virtual machine,
+the images already pulled:
+
+| When | Gateway | PostgreSQL | Each FerroEHR node | Total |
+|---|---|---|---|---|
+| right after `docker compose up --wait` (22 s) | 1.8 MiB | 145 MiB | 23 MiB | 238 MiB |
+| after the seed and the queries on this page | 2.2 MiB | 185 MiB | 54 to 65 MiB | 425 MiB |

@@ -447,6 +447,9 @@ jobs:
   # module of every crate against the digest-pinned images the testkit's
   # PinnedImage constants name and docs/VERSIONS.md repeats. The e2e-placement
   # guard keeps every gated test inside an e2e module, so this filter selects it.
+  # It runs at nextest's default parallelism with no test group bounding it:
+  # each test starts one PostgreSQL container holding a database per node,
+  # never one container per node (#320).
   e2e:
     name: e2e (containers)
     needs: detect

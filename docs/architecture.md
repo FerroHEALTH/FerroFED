@@ -1458,9 +1458,10 @@ the variable first and returns early, and CI runs an `e2e (containers)` job.
 
 | Role | Image, pinned by tag and image-index digest (2026-10-01) |
 |---|---|
-| node A, FerroEHR, `system_id` `cdr-a.example.org` | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6`, with `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` |
-| node B, FerroEHR, `system_id` `cdr-b.example.org` | the same pins, on its own database container (decision A44) |
-| node C, for three-node cases | a third FerroEHR on the same pins, with its own database and `system_id` (decision A44) |
+| node A, FerroEHR, `system_id` `cdr-a.example.org` | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6` |
+| node B, FerroEHR, `system_id` `cdr-b.example.org` | the same pin (decision A44) |
+| node C, for three-node cases | a third FerroEHR on the same pin, with its own `system_id` (decision A44) |
+| the nodes' database server | one `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` container per topology a test starts, holding a database per node, each owned by its own role (decision A47) |
 | the stored-query HA backend, when tested | `postgres:18.6`, pinned by digest in the change that adds it |
 | PIX Manager | the in-testkit PIXm fake, no image (decision A39) |
 | capture and fault proxy | in-testkit, one per node, no image |
@@ -1480,6 +1481,25 @@ own `system_id` into every EHR and version it creates, and mints its own
 product returns when one is found that admits the BASE namespace. A new image
 is a `PinnedImage` constant plus a `docs/VERSIONS.md` row the versions guard
 checks, and pin freshness watches the tags.
+
+**One database server, a database per node** (decision A47, amending A44).
+A topology a test starts gets one FerroEHR PostgreSQL container, never one
+per node, and each node connects to its own database there, owned by its own
+login role. The
+image's init script creates the first role and database from `PG_INIT_USER`,
+`PG_INIT_PASSWORD` and `PG_INIT_DB`; FerroFED's
+`docker/postgres/20-ferrofed-node-databases.sh`, sorted after it, runs that
+same script once more per further node, so FerroEHR's steps are reused and
+never copied, and the cluster-wide group roles are created once and shared.
+Schemas cannot separate the nodes: FerroEHR creates fixed schema names
+(`clinical`, `ext`, `party`, `linkage`, `audit`) in the database it connects
+to, so two nodes in one database would share their tables and stop being
+separate members. The CI harness stays at two nodes plus the third for
+three-node cases. The compose quickstart runs four, `ferroehr-a` to
+`ferroehr-d`, on the same layout, with synthetic patients spread across them:
+one at all four, one at two, one at one and one at none, all in the example
+arc, which the quickstart's development cross-reference maps and
+`scripts/quickstart/seed.sh` creates over ITS-REST.
 
 **The PIX Manager.** No lightweight container answers `$ihe-pix` and accepts
 ITI-104 seeding on its own: HAPI FHIR does not implement the operation out of
@@ -1609,7 +1629,8 @@ the milestone in progress.
 
 Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
-and A45 were decided on 2026-10-02. The bracket names the report and its
+and A45 were decided on 2026-10-02, and A46 and A47, which amends A44, on
+2026-10-03. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -1661,3 +1682,4 @@ R4 is #23, #25 and #27).
 | A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject; a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
 | A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (upstream report on #212) | decided (owner, 2026-10-02) |
 | A46 | Follow-up reads of EHR-scoped versions [owner, #64] | route by N41, not `creating_system_id`: a read of a version under `{base}/v1/ehr/{ehr_id}/…` goes by the explicit target, the binding, the index and the ask-all probe of the path `ehr_id`; the learned `creating_system_id` map is still fed from every answer (CP-13) | N41 and §12.5.1 order every path `ehr_id` and forbid skipping a step that answers; §12a.1 [[route-ehr]] routes an EHR-scoped request "not on `creating_system_id`"; N22 forbids mutating the uid-bearing path, so the holder's `ehr_id` cannot be rewritten for the creator; N42a means the creator never adopted that `ehr_id`, so the forwarded read would `404`, against N1; the holder's copy carries the same immutable version; the contradiction with §12.3 and N22's order is on #212, and CP-14 stays planned | decided (owner, 2026-10-03) |
+| A47 | The quickstart topology and the node databases [owner, #322, amending A44] | the compose quickstart runs four FerroEHR nodes, `ferroehr-a` to `ferroehr-d`, each with its own `system_id`, over synthetic patients at four, two, one and no nodes; the quickstart and the e2e harness run one PostgreSQL server with a database per node, each owned by its own role, created by FerroEHR's init script run once per node; CI stays at two nodes plus the third for three-node cases | two nodes show one gateway asking two servers, four show a patient missing at some members (§11.3), a directed query leaving the rest `excluded` (§8) and the merge over more than two answers (§10, §11.6); schemas cannot separate the nodes because FerroEHR fixes its schema names; one server per topology starts one database server instead of one per node (#320); no specification governs this: our own design | decided (owner, 2026-10-03) |

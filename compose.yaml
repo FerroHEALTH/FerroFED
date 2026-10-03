@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: Vernum Projecten B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# The FerroFED quickstart: the gateway beside two member CDRs, two FerroEHR
-# instances with their own databases and system_ids (docs/architecture.md
-# section 13, decision A44).
+# The FerroFED quickstart: the gateway beside four member CDRs, four FerroEHR
+# instances with their own system_ids, on one PostgreSQL server that holds a
+# database per node (docs/architecture.md section 13).
 #
 #   docker compose up --wait
+#   scripts/quickstart/seed.sh
 #   curl http://127.0.0.1:8080/health
 #
 # THE GATEWAY IMAGE. ghcr.io/ferrohealth/ferrofed is published by the image
@@ -19,21 +20,29 @@
 # The tag default is the product version, and scripts/checks/versions.sh keeps
 # it equal to the workspace version.
 #
-# WHAT RUNS. The gateway federates the two nodes below: docker/quickstart/
+# WHAT RUNS. The gateway federates the four nodes below: docker/quickstart/
 # registry.toml names them and docker/quickstart/ferrofed.toml configures the
-# gateway, both mounted read-only. `POST /v1/query/aql` answers one federated
-# RESULT_SET over both (#38), from the release that carries it; every other
-# path under `/v1/` answers `501`. No identity binding is configured, so a
-# query that names a patient fails closed with 424; the README shows a query
-# that names none.
+# gateway, both mounted read-only. The configuration is a development profile
+# with a static cross-reference from four synthetic patients to their EHRs,
+# which scripts/quickstart/seed.sh creates over ITS-REST: a patient at all
+# four nodes, one at two, one at one and one at none.
 #
-# THE NODES. Each runs FerroEHR's documented image on its own FerroEHR
-# PostgreSQL image, and stamps its own system_id into every EHR and version it
-# creates. Both use FerroEHR's quickstart Basic-auth user, a development
-# credential and NOT for anything real:
+# THE NODES. Each runs FerroEHR's documented image and stamps its own system_id
+# into every EHR and version it creates. All four use FerroEHR's quickstart
+# Basic-auth user, a development credential and NOT for anything real:
 #
 #   node A  http://127.0.0.1:8081/ferroehr/rest/openehr/v1   ferroehr / ferroehr
 #   node B  http://127.0.0.1:8082/ferroehr/rest/openehr/v1   ferroehr / ferroehr
+#   node C  http://127.0.0.1:8083/ferroehr/rest/openehr/v1   ferroehr / ferroehr
+#   node D  http://127.0.0.1:8084/ferroehr/rest/openehr/v1   ferroehr / ferroehr
+#
+# THE DATABASE. One FerroEHR PostgreSQL container holds four databases,
+# ferroehr_a to ferroehr_d, each owned by a login role of the same name whose
+# password is that name too: development credentials, NOT for anything real.
+# A database per node, never a schema per node, because FerroEHR creates fixed
+# schema names in the database it connects to. The nodes share one server and
+# its cluster-wide group roles, so the separation is the quickstart's, never a
+# security boundary.
 #
 # PORTS. Every published port binds the loopback interface by default. A
 # published port is DNAT'd ahead of the host firewall's own chains, so a port on
@@ -50,6 +59,31 @@
 # the container, network and volume names move when the directory does.
 name: ferrofed
 
+# What the four nodes share; each service below merges it and adds its own
+# database, system_id and port.
+x-ferroehr-node: &ferroehr-node
+  image: ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6
+  restart: unless-stopped
+  depends_on:
+    ferroehr-postgres:
+      condition: service_healthy
+  configs:
+    - source: ferroehr-config
+      target: /etc/ferroehr/ferroehr.toml
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  # NOT read_only: Compose refuses an inline config in a read-only service,
+  # and the inline config below keeps the node configuration in this file.
+  tmpfs:
+    - /tmp
+  healthcheck:
+    test: ["CMD", "/usr/local/bin/ferroehr", "healthcheck"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
 services:
   ferrofed:
     image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.6}
@@ -62,6 +96,10 @@ services:
       ferroehr-a:
         condition: service_healthy
       ferroehr-b:
+        condition: service_healthy
+      ferroehr-c:
+        condition: service_healthy
+      ferroehr-d:
         condition: service_healthy
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_PORT:-8080}:8080"
@@ -90,19 +128,25 @@ services:
         soft: 8192
         hard: 16384
 
-  # Node A, FerroEHR, on its own PostgreSQL image.
-  ferroehr-a-postgres:
+  # The one database server of the four nodes, FerroEHR's own PostgreSQL image.
+  ferroehr-postgres:
     image: ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9
     restart: unless-stopped
     environment:
-      # Development defaults of FerroEHR's own quickstart; the image's init
-      # script creates the role and the database from the PG_INIT_ keys.
+      # The development superuser password of FerroEHR's own quickstart.
       POSTGRES_PASSWORD: ${FERROEHR_POSTGRES_PASSWORD:-postgres}
-      PG_INIT_USER: ferroehr
-      PG_INIT_PASSWORD: ferroehr
-      PG_INIT_DB: ferroehr
+      # The image's init script creates node A's role and database from the
+      # PG_INIT_ keys; the script mounted below runs it again for each name in
+      # FERROFED_NODE_DATABASES.
+      PG_INIT_USER: ferroehr_a
+      PG_INIT_PASSWORD: ferroehr_a
+      PG_INIT_DB: ferroehr_a
+      FERROFED_NODE_DATABASES: ferroehr_b ferroehr_c ferroehr_d
     volumes:
-      - ferroehr-a-pgdata:/var/lib/postgresql
+      - ferroehr-pgdata:/var/lib/postgresql
+      # Sorted after the image's own 10-ferroehr-init.sh, which the entrypoint
+      # runs first.
+      - ./docker/postgres/20-ferrofed-node-databases.sh:/docker-entrypoint-initdb.d/20-ferrofed-node-databases.sh:ro
     # The entrypoint starts as root to chown the data directory and then drops
     # to `postgres`, so it keeps exactly the capabilities that needs.
     cap_drop: [ALL]
@@ -115,103 +159,58 @@ services:
       - /run
       - /var/run/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ferroehr -d ferroehr"]
+      # Over TCP: the entrypoint's initialisation server listens on the Unix
+      # socket alone, so the port answers only once every init script has run
+      # and every node database exists.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ferroehr_a -d ferroehr_a"]
       interval: 5s
       timeout: 5s
-      retries: 20
-      start_period: 10s
+      retries: 30
+      start_period: 20s
 
   ferroehr-a:
-    image: ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6
-    restart: unless-stopped
-    depends_on:
-      ferroehr-a-postgres:
-        condition: service_healthy
+    <<: *ferroehr-node
     environment:
-      FERROEHR__DB__URL: postgres://ferroehr:ferroehr@ferroehr-a-postgres:5432/ferroehr
+      FERROEHR__DB__URL: postgres://ferroehr_a:ferroehr_a@ferroehr-postgres:5432/ferroehr_a
       # The system_id the node stamps into every EHR and version it creates,
       # the one docker/quickstart/registry.toml declares for node-a.
       FERROEHR__SERVER__SYSTEM_ID: node-a.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-    configs:
-      - source: ferroehr-config
-        target: /etc/ferroehr/ferroehr.toml
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_A_PORT:-8081}:8080"
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
-    # NOT read_only: Compose refuses an inline config in a read-only service,
-    # and the inline config below keeps this file free of host bind mounts.
-    tmpfs:
-      - /tmp
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/ferroehr", "healthcheck"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  # Node B, a second FerroEHR on the same images, with its own database and its
-  # own system_id (decision A44).
-  ferroehr-b-postgres:
-    image: ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9
-    restart: unless-stopped
-    environment:
-      POSTGRES_PASSWORD: ${FERROEHR_POSTGRES_PASSWORD:-postgres}
-      PG_INIT_USER: ferroehr
-      PG_INIT_PASSWORD: ferroehr
-      PG_INIT_DB: ferroehr
-    volumes:
-      - ferroehr-b-pgdata:/var/lib/postgresql
-    cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run
-      - /var/run/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ferroehr -d ferroehr"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
 
   ferroehr-b:
-    image: ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6
-    restart: unless-stopped
-    depends_on:
-      ferroehr-b-postgres:
-        condition: service_healthy
+    <<: *ferroehr-node
     environment:
-      FERROEHR__DB__URL: postgres://ferroehr:ferroehr@ferroehr-b-postgres:5432/ferroehr
+      FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b@ferroehr-postgres:5432/ferroehr_b
       FERROEHR__SERVER__SYSTEM_ID: node-b.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-    configs:
-      - source: ferroehr-config
-        target: /etc/ferroehr/ferroehr.toml
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_B_PORT:-8082}:8080"
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/ferroehr", "healthcheck"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+
+  ferroehr-c:
+    <<: *ferroehr-node
+    environment:
+      FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c@ferroehr-postgres:5432/ferroehr_c
+      FERROEHR__SERVER__SYSTEM_ID: node-c.quickstart.local
+      FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_C_PORT:-8083}:8080"
+
+  ferroehr-d:
+    <<: *ferroehr-node
+    environment:
+      FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d@ferroehr-postgres:5432/ferroehr_d
+      FERROEHR__SERVER__SYSTEM_ID: node-d.quickstart.local
+      FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_D_PORT:-8084}:8080"
 
 configs:
-  # FerroEHR's quickstart configuration, shared by both nodes and inline so this
-  # file needs no bind mount (`$` is escaped as `$$` against Compose
-  # interpolation). The Basic-auth user is ferroehr / ferroehr (the hash is
-  # Argon2id of "ferroehr"): development credentials only.
+  # FerroEHR's quickstart configuration, shared by the four nodes and inline
+  # (`$` is escaped as `$$` against Compose interpolation). The Basic-auth user
+  # is ferroehr / ferroehr (the hash is Argon2id of "ferroehr"): development
+  # credentials only.
   ferroehr-config:
     content: |
       [server]
@@ -229,5 +228,4 @@ configs:
       enabled = false
 
 volumes:
-  ferroehr-a-pgdata:
-  ferroehr-b-pgdata:
+  ferroehr-pgdata:

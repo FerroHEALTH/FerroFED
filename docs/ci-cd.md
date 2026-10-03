@@ -93,8 +93,11 @@ checks the `FERROFED_E2E` gate first and returns early without it, so the
 container tests (the whole `tools/ferrofed-testkit` suite and the `e2e` module
 of every other crate's test binary) against the digest-pinned images of
 `docs/VERSIONS.md` §Container images: two FerroEHR instances as the two nodes,
-each behind the testkit's capturing and fault proxy (`docs/architecture.md`
-§13). It feeds `conclusion` like every other lane. The tier-1
+on one FerroEHR PostgreSQL container with a database per node, each behind the
+testkit's capturing and fault proxy (`docs/architecture.md` §13). It runs at
+nextest's default parallelism, with no test group bounding it: each test
+starts one database container for its nodes rather than one per node, and the
+suite passes that way on an 8-CPU developer machine (#320). It feeds `conclusion` like every other lane. The tier-1
 `e2e-placement` guard keeps every gated test inside an `e2e` module, so the
 filter selects it. Locally: `FERROFED_E2E=1 cargo nextest run --locked
 --workspace -E 'package(ferrofed-testkit) or test(/^e2e::/)'` with Docker

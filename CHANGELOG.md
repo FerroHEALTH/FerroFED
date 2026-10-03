@@ -223,6 +223,27 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The compose quickstart runs four FerroEHR nodes, `ferroehr-a` to
+  `ferroehr-d` on ports 8081 to 8084, each with its own `system_id` (#322).
+  They share one FerroEHR PostgreSQL container, `ferroehr-postgres`, with a
+  database per node owned by its own role; the image's init script runs once
+  per node through `docker/postgres/20-ferrofed-node-databases.sh`, so the
+  per-node `ferroehr-a-postgres` and `ferroehr-b-postgres` services and their
+  volumes are gone (`docker compose down -v` removes the old ones). The
+  gateway's quickstart configuration is a development profile whose static
+  cross-reference maps four synthetic patients in `urn:oid:2.999.1.1`: one at
+  all four nodes, one at two, one at one and one at none, and
+  `scripts/quickstart/seed.sh` creates exactly those EHRs and a composition in
+  each over ITS-REST. A patient query now resolves in the quickstart instead
+  of failing closed with `424`. The book's container page walks through a full
+  federated query, a patient missing at some nodes and a query directed at one
+  node, and states the measured memory use: 238 MiB after
+  `docker compose up --wait`, 425 MiB after the seed and the queries.
+- The end-to-end harness starts one FerroEHR PostgreSQL container per topology
+  with a database per node, through the same init script, instead of one
+  container per node (#322, #320). CI keeps two nodes.
+- `scripts/conformance/obligations.sh` and `scripts/checks/obligations.sh`
+  are executable, as every other script is (#320).
 - The query string of a stored-query `PUT {base}/v1/definition/query/{name}/{version}`
   is decoded by the generated `openehr-its` parameters (#292, FerroEHR
   #3540), so a `+` is a literal plus. A `query_type` given twice, or a pair
