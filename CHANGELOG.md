@@ -374,6 +374,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The ask-all probe is timed (#366; no specification governs metrics): each
+  member's probe now carries its latency, so
+  `ferrofed_node_request_duration_seconds` times it beside its count in
+  `ferrofed_node_requests_total`, and a probe still waiting when the overall
+  budget runs out is a `time-out` timed to that moment. The book's Metrics
+  page lists which calls each `outcome` and the histogram cover.
 - The book's client contract and configuration pages are split along their
   own sections (#348): the client contract continues on Follow-ups,
   Templates, definitions and demographics, and Stored queries, and the
@@ -485,6 +491,24 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- `GET {base}/health/dependencies` records each member a fan-out template
+  upload, a stored-query distribution or repair, or a stored-query drift
+  check asked (#366; no specification governs health probes), where a member
+  those calls found down kept the state an earlier request left. One rule
+  now holds for every call: the state is the member's reachability and
+  health, never whether the request was valid. Any answer below `500` is
+  `up`, a `5xx` is `failing`, and no answer is `down`, read from the node's
+  own HTTP status whatever the §11.1 record says. A query member that
+  answered `400`, a refused store, a node that refused the gateway's onward
+  credentials, and a drift check whose copy differs or is missing are `up`
+  where some of them were `failing`; a request that never left the gateway
+  changes nothing.
+- `ferrofed_node_requests_total` and `ferrofed_node_request_duration_seconds`
+  count only requests that left the gateway (#366). A member a fan-out
+  template upload or a stored-query call could not send a request to stays
+  `offline` in `meta.federation`, which §11.1 leaves no other status for,
+  and is no longer counted and timed as an `offline` node request; nor is a
+  federated query member whose deadline passed before its request left.
 - A request the gateway routes or answers under `{base}/v1/` is logged under
   the path template of the ITS-REST operation it addresses, such as
   `/v1/ehr/{ehr_id}/composition/{uid_based_id}`, where its request line named

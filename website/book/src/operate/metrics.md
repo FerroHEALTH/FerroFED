@@ -80,26 +80,45 @@ start, so an alert on their increase works from the first scrape. A node
 request series appears with the first request to that endpoint, and an
 endpoint a reload removes keeps its series until a restart.
 
-### What a node request's outcome is
+### Which calls the node request series cover
 
-A request's `outcome` is the §11.1 status the per-endpoint report of
-`meta.federation` gives it, for a federated query, a fan-out template
-upload and a stored-query distribution or drift check alike. Only the
-statuses of a request the gateway sent are counted, the ones that carry a
-`latency_ms`: a member that was `not-resolved`, `excluded` or
-`not-localized` was not asked, and is not counted. The counter follows the
-report exactly, so a member the report marks `offline` or `node-error` is
-counted under that outcome whatever the cause, and a stored-query copy that
-drifted from the registry's definition is `node-error` here as it is there.
+Six kinds of call send a request to a member. Each request one of them
+sends is counted once in `ferrofed_node_requests_total` and timed once in
+`ferrofed_node_request_duration_seconds`, under the same `endpoint`, so the
+histogram's `_count` equals the counter summed over `outcome`. A request
+that never left the gateway is in neither: a member that was
+`not-resolved`, `excluded` or `not-localized`, and a request the gateway
+could not send, for want of a client or a credential, or because the
+identifier-hygiene gate withheld it. A federated query or a stored-query
+call whose deadline passed before the request left is not counted either; a
+routed request, a probe or a template upload cannot tell that case from a
+node that did not answer in time, and counts it `time-out`. §11.1 has no
+status for a request the gateway could not send, so a member record in
+`meta.federation` still reports that member `offline`; the series do not
+count it.
 
-A request routed to one node, and the ask-all probe that finds the node
-holding an `ehr_id`, have no per-endpoint report, so their outcome is read
-from the answer the same way: a `5xx` answer, or a node refusing the
-gateway's onward credentials, is `node-error`; a timeout is `time-out`; a
-node that cannot be reached is `offline`; any other answer, a `404`
-included, is `active`. The probe is counted and not timed, because a probe
-answer carries no measurement of its own; the duration histogram therefore
-counts the fan-out members and the routed requests.
+| Call | Requests counted | `outcome` read from | Time recorded |
+|---|---|---|---|
+| A federated query, `GET` or `POST {base}/v1/query/aql`, and a stored-query invocation | one per member sent the query | its §11.1 status in `meta.federation` | its `latency_ms` |
+| A fan-out template upload | one per member sent the upload | its §11.1 status in `meta.federation` | its `latency_ms` |
+| A stored-query distribution, a `PUT` naming members or the admin listener's repair | one per member sent the definition | its §11.1 status in `meta.federation` | its `latency_ms` |
+| A stored-query drift check, a `GET` naming members | one per member asked for its copy | its §11.1 status in `meta.federation` | its `latency_ms` |
+| A request routed to one node: the `{base}/v1/ehr/` area, `GET {base}/v1/ehr?subject_id=…`, a definition request naming one endpoint, a demographic request | one | the node's answer | from sending it to the answer |
+| The ask-all probe, `GET /ehr/{ehr_id}` at every member for a read whose owner no earlier step named | one per member probed | the node's answer | from sending it to the answer, or to the moment the overall budget ran out |
+
+The per-member record a federated query, a template upload, a
+distribution and a drift check write is the one the client reads in
+`meta.federation`, and the counter follows it exactly. A routed request and
+a probe have no such record, so their `outcome` is read from the node's
+answer by the same rules. Each outcome therefore covers these calls:
+
+| `outcome` | Covers |
+|---|---|
+| `active` | a member that answered with success; for a routed request or a probe, any answer below `500`, a `404` included, so a probe that finds no EHR at a member is `active` |
+| `node-error` | in a member record, any answer that is not a success, a `4xx` included, and a drift check whose copy differs from the registry's definition or is missing; for a routed request or a probe, a `5xx` answer; in every call, a node that refused the gateway's onward credentials |
+| `time-out` | a member that gave no answer before its per-node deadline, and a member still being waited on when the overall budget ran out |
+| `offline` | a member the gateway sent a request to and could not reach |
+| `consent-denied` | a federated query member whose node refused the request on consent; a refusal by a consent pre-filter sends no request and is not counted |
 
 ## Alerting
 

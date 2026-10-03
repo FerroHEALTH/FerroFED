@@ -146,7 +146,7 @@ async fn a_result_set_is_active_and_carries_the_rows() -> TestResult {
             assert!(result_set.rows.is_empty());
             assert_eq!(result_set.columns.map(|columns| columns.len()), Some(1));
         }
-        NodeReply::Failed { outcome } => {
+        NodeReply::Failed { outcome, .. } => {
             return Err(format!("expected a result set, got {outcome:?}").into());
         }
     }

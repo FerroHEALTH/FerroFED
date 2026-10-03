@@ -875,7 +875,7 @@ reads the per-kind counts `Incident::emit` keeps, `ferrofed.node.requests
 {endpoint, outcome}` and `ferrofed.node.request.duration{endpoint}` read the
 per-endpoint report of each request a member was sent (the §11.1 status
 with its `latency_ms`, or for a routed request and an ask-all probe the
-same reading of the node's answer; a probe is counted and not timed), and
+same reading of the node's answer, timed by the probe's own latency), and
 `ferrofed.registry.reloads{result}` reads each reload's outcome. Every label
 value is drawn from a closed enum (`kind`, `outcome`, `result`) or is a
 registry endpoint id (`endpoint`), never request text (§5.4.1, N33), and a

@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::dispatch::REQUEST_ID_HEADER;
+use ferrofed_engine::dispatch::{Contact, REQUEST_ID_HEADER};
 use ferrofed_engine::fanout::{FanOutError, Plan, TIMEOUT_POLICY, Verdict, fan_out};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
@@ -351,6 +351,45 @@ async fn a_plan_naming_an_endpoint_the_registry_lacks_is_refused() -> TestResult
     assert!(
         matches!(refused, Err(FanOutError::UnknownEndpoint { .. })),
         "{refused:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn each_dispatched_endpoint_keeps_the_nodes_own_status_beside_its_record() -> TestResult {
+    let answering = node(json(200, &result_set(&[]))).await;
+    let refusing = node(json(400, r#"{"message":"the query is not valid here"}"#)).await;
+    let snapshot = federation(&[
+        ("node-a-pub", &answering.uri()),
+        ("node-b-pub", &refusing.uri()),
+        ("node-o-pub", ferrofed_testkit::unreachable::BASE),
+        ("node-x-pub", "https://cdr-x.example.org/openehr"),
+    ])?;
+    let plan = plan_for(&["node-a-pub", "node-b-pub", "node-o-pub"])?.settle(
+        EndpointId::new("node-x-pub")?,
+        Outcome::Excluded { error: None },
+    )?;
+    let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;
+    assert_eq!(
+        statuses(&answer).get("node-b-pub"),
+        Some(&EndpointStatus::NodeError),
+        "§11.1: the record says node-error"
+    );
+    let contacts: BTreeMap<String, Contact> = answer
+        .contacts()
+        .map(|(endpoint, contact)| (endpoint.as_str().to_owned(), contact))
+        .collect();
+    assert_eq!(
+        BTreeMap::from([
+            ("node-a-pub".to_owned(), Contact::Answered(StatusCode::OK)),
+            (
+                "node-b-pub".to_owned(),
+                Contact::Answered(StatusCode::BAD_REQUEST)
+            ),
+            ("node-o-pub".to_owned(), Contact::Silent),
+        ]),
+        contacts,
+        "the node's own status, and no contact for an endpoint settled with no request"
     );
     Ok(())
 }

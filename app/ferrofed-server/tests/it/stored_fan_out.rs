@@ -37,7 +37,7 @@ use serde::Deserialize;
 use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, registry, schema, wire};
-use crate::support::{asked, call, error_body, exchange, field, mount};
+use crate::support::{asked, call, error_body, exchange, field, mount, observed, states};
 use crate::template_fan_out::schema::validate_federation;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -614,6 +614,72 @@ async fn the_drift_report_names_matching_differing_and_missing_members() -> Test
     }
     let (status, text) = call(app, get(Some("node-a-pub"))?).await?;
     assert_eq!(StatusCode::OK, status, "every named member matches: {text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_distribution_records_each_members_state_on_the_dependencies() -> TestResult {
+    let (a, b) = (storing(200).await, storing(500).await);
+    let c = Server::start().await;
+    let late = ResponseTemplate::new(200).set_delay(std::time::Duration::from_millis(2500));
+    mount(&c, "PUT", node_path(), late).await;
+    let dir = tempfile::tempdir()?;
+    let app = offered(dir.path(), [&a, &b, &c])?;
+    let (status, text) = call(app.clone(), put(&definition(), Some("*"))?).await?;
+    assert_eq!(StatusCode::MULTI_STATUS, status, "{text}");
+    assert_eq!(
+        states(&[
+            ("node-a-pub", "up"),
+            ("node-b-pub", "failing"),
+            ("node-c-pub", "down"),
+        ]),
+        observed(&app).await?,
+        "each member as the distribution found it"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_distribution_member_refusing_with_a_4xx_is_up() -> TestResult {
+    let (a, b, c) = (storing(400).await, storing(409).await, storing(503).await);
+    let dir = tempfile::tempdir()?;
+    let app = offered(dir.path(), [&a, &b, &c])?;
+    let (status, text) = call(app.clone(), put(&definition(), Some("*"))?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
+    assert_eq!(
+        states(&[
+            ("node-a-pub", "up"),
+            ("node-b-pub", "up"),
+            ("node-c-pub", "failing"),
+        ]),
+        observed(&app).await?,
+        "a refused store is an answer; only a server error is a failure"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_drift_check_records_a_drifted_member_as_up_and_a_failing_one_as_failing() -> TestResult {
+    let differing = format!("SELECT c/name/value FROM EHR e CONTAINS COMPOSITION c -- {NODE_COPY}");
+    let a = holding(&differing).await?;
+    let b = Server::start().await;
+    let c = Server::start().await;
+    mount(&c, "GET", node_path(), ResponseTemplate::new(500)).await;
+    let dir = tempfile::tempdir()?;
+    let app = offered(dir.path(), [&a, &b, &c])?;
+    let (status, text) = call(app.clone(), put(&definition(), None)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let (status, text) = call(app.clone(), get(Some("*"))?).await?;
+    assert_eq!(StatusCode::MULTI_STATUS, status, "{text}");
+    assert_eq!(
+        states(&[
+            ("node-a-pub", "up"),
+            ("node-b-pub", "up"),
+            ("node-c-pub", "failing"),
+        ]),
+        observed(&app).await?,
+        "a differing or missing copy is an answer; a server error is a failure"
+    );
     Ok(())
 }
 

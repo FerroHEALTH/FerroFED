@@ -11,17 +11,18 @@
 //! the federation is built, so it never grows. A dependency's state never
 //! gates readiness: under §11 a node outage is reported per query, and
 //! readiness that followed it would turn one CDR outage into a total
-//! outage. No specification governs health probes: our own design.
+//! outage. A member's state is its reachability and health, never whether
+//! a request to it was valid: every call that sends a member a request reads
+//! the node's own answer the same way ([`Observed::of_contact`]), whatever
+//! the §11.1 record of that call says. No specification governs health
+//! probes: our own design.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use ferrofed_engine::forward::{ForwardError, Forwarded};
-use ferrofed_engine::probe::Answer;
+use ferrofed_engine::dispatch::Contact;
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
-use openehr_federation::meta::FederationMeta;
-use openehr_federation::status::EndpointStatus;
 use serde::Serialize;
 
 /// The last state observed of one dependency.
@@ -59,31 +60,25 @@ impl Observed {
         }
     }
 
-    /// Returns what a §11.1 endpoint status says of the node, or `None` for
-    /// a status no request to the node produced.
+    /// Returns what a request's contact with a node says of it, or `None`
+    /// when the request never left the gateway.
+    ///
+    /// The state is the node's reachability and health, never whether the
+    /// request was valid: any answer below `500` is [`Observed::Up`], a `5xx`
+    /// is [`Observed::Failing`], and no answer is [`Observed::Down`].
     #[must_use]
-    pub const fn of_status(status: EndpointStatus) -> Option<Self> {
-        match status {
-            EndpointStatus::Active => Some(Self::Up),
-            EndpointStatus::NodeError => Some(Self::Failing),
-            EndpointStatus::Offline | EndpointStatus::TimeOut => Some(Self::Down),
-            _ => None,
-        }
-    }
-
-    /// Returns what a forwarded request's failure says of the node, or `None`
-    /// when the gateway sent nothing.
-    #[must_use]
-    pub const fn of_forward_error(error: &ForwardError) -> Option<Self> {
-        match error {
-            ForwardError::TimeOut { .. } | ForwardError::Unreachable { .. } => Some(Self::Down),
-            ForwardError::Refused { .. } => Some(Self::Failing),
-            _ => None,
+    pub fn of_contact(contact: Contact) -> Option<Self> {
+        match contact {
+            Contact::Unsent => None,
+            Contact::Answered(status) => Some(Self::of_answer(status)),
+            Contact::Silent => Some(Self::Down),
         }
     }
 
     /// Returns what a node's HTTP answer says of it: a server error is a
     /// failure, and any other answer is an answer.
+    // NOTE: no specification governs this: our own design; a 4xx says the
+    // request was refused, never that the node is unwell, so the node is up.
     #[must_use]
     pub fn of_answer(status: http::StatusCode) -> Self {
         if status.is_server_error() {
@@ -107,19 +102,6 @@ impl Observed {
             Some(Self::Down)
         } else {
             Some(Self::Up)
-        }
-    }
-
-    /// Returns what an ask-all probe answer says of the member, or `None`
-    /// when the gateway sent nothing.
-    #[must_use]
-    pub fn of_probe(answer: &Answer) -> Option<Self> {
-        match answer {
-            Answer::Holds(forwarded) => Some(Self::of_answer(forwarded.status())),
-            Answer::Absent => Some(Self::Up),
-            Answer::Erred(status) => Some(Self::of_answer(*status)),
-            Answer::Failed(error) => Self::of_forward_error(error),
-            Answer::Abandoned => Some(Self::Down),
         }
     }
 }
@@ -157,38 +139,11 @@ impl Dependencies {
         }
     }
 
-    /// Records what a request forwarded to `endpoint` showed of it, when the
-    /// gateway sent one.
-    pub fn forwarded(&self, endpoint: &EndpointId, outcome: &Result<Forwarded, ForwardError>) {
-        let observed = match outcome {
-            Ok(answer) => Some(Observed::of_answer(answer.status())),
-            Err(error) => Observed::of_forward_error(error),
-        };
-        if let Some(observed) = observed {
+    /// Records what a request to `endpoint` showed of it, when the request
+    /// left the gateway ([`Observed::of_contact`]).
+    pub fn contacted(&self, endpoint: &EndpointId, contact: Contact) {
+        if let Some(observed) = Observed::of_contact(contact) {
             self.endpoint(endpoint, observed);
-        }
-    }
-
-    /// Records what an ask-all probe answer showed of `endpoint`, when the
-    /// gateway sent the probe.
-    pub fn probed(&self, endpoint: &EndpointId, answer: &Answer) {
-        if let Some(observed) = Observed::of_probe(answer) {
-            self.endpoint(endpoint, observed);
-        }
-    }
-
-    /// Records the state of every endpoint a fan-out sent a request to, from
-    /// the §11.1 status `meta.federation` reports for it.
-    pub fn fan_out(&self, federation: &FederationMeta) {
-        for outcome in federation.endpoints() {
-            let Some(observed) = Observed::of_status(outcome.status()) else {
-                continue;
-            };
-            // NOTE: no specification governs this: our own design; an id the
-            // registry would refuse names no slot, so there is nothing to record.
-            if let Ok(endpoint) = EndpointId::new(outcome.id().as_str()) {
-                self.endpoint(&endpoint, observed);
-            }
         }
     }
 
@@ -236,9 +191,11 @@ pub struct Report {
 #[cfg(test)]
 mod tests {
     use super::{Dependencies, Observed};
+    use ferrofed_engine::dispatch::Contact;
+    use ferrofed_engine::dispatch::definition::NodeCopy;
     use ferrofed_registry::id::EndpointId;
     use http::StatusCode;
-    use openehr_federation::status::EndpointStatus;
+    use openehr_federation::outcome::{ErrorDetail, Outcome};
 
     #[test]
     fn every_slot_starts_unknown_and_keeps_the_last_state() {
@@ -271,35 +228,61 @@ mod tests {
     }
 
     #[test]
-    fn only_the_statuses_a_request_produced_are_observations() {
-        assert_eq!(
-            Some(Observed::Up),
-            Observed::of_status(EndpointStatus::Active)
-        );
-        assert_eq!(
-            Some(Observed::Down),
-            Observed::of_status(EndpointStatus::Offline)
-        );
-        assert_eq!(
-            Some(Observed::Down),
-            Observed::of_status(EndpointStatus::TimeOut)
-        );
+    fn only_a_request_that_left_the_gateway_is_an_observation() {
+        assert_eq!(None, Observed::of_contact(Contact::Unsent));
+        assert_eq!(Some(Observed::Down), Observed::of_contact(Contact::Silent));
+    }
+
+    #[test]
+    fn any_answer_below_500_is_up_and_a_5xx_is_failing() {
+        for status in [
+            StatusCode::OK,
+            StatusCode::CREATED,
+            StatusCode::MOVED_PERMANENTLY,
+            StatusCode::BAD_REQUEST,
+            StatusCode::UNAUTHORIZED,
+            StatusCode::NOT_FOUND,
+            StatusCode::CONFLICT,
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ] {
+            assert_eq!(
+                Some(Observed::Up),
+                Observed::of_contact(Contact::Answered(status)),
+                "{status}"
+            );
+        }
+        for status in [
+            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::BAD_GATEWAY,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ] {
+            assert_eq!(
+                Some(Observed::Failing),
+                Observed::of_contact(Contact::Answered(status)),
+                "{status}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_copy_held_or_missing_is_an_answer_whether_or_not_it_matches() {
+        let held = NodeCopy::Held {
+            aql: "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
+            latency_ms: 3,
+        };
+        assert_eq!(Some(Observed::Up), Observed::of_contact(held.contact()));
+        let missing = NodeCopy::Missing { latency_ms: 3 };
+        assert_eq!(Some(Observed::Up), Observed::of_contact(missing.contact()));
+        let failed = NodeCopy::Failed {
+            outcome: Outcome::NodeError {
+                latency_ms: 3,
+                error: ErrorDetail::Text("synthetic".to_owned()),
+            },
+            contact: Contact::Answered(StatusCode::BAD_GATEWAY),
+        };
         assert_eq!(
             Some(Observed::Failing),
-            Observed::of_status(EndpointStatus::NodeError)
-        );
-        for settled in [
-            EndpointStatus::NotResolved,
-            EndpointStatus::ConsentDenied,
-            EndpointStatus::Excluded,
-            EndpointStatus::NotLocalized,
-        ] {
-            assert_eq!(None, Observed::of_status(settled), "{settled:?}");
-        }
-        assert_eq!(Observed::Up, Observed::of_answer(StatusCode::NOT_FOUND));
-        assert_eq!(
-            Observed::Failing,
-            Observed::of_answer(StatusCode::BAD_GATEWAY)
+            Observed::of_contact(failed.contact())
         );
     }
 }

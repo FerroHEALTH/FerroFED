@@ -26,7 +26,7 @@ use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
 };
 
-use super::{DispatchError, DispatchOptions, NodeClient, classify, reported};
+use super::{Contact, DispatchError, DispatchOptions, NodeClient, classify, reported};
 use crate::hygiene::{Composed, Outbound, Withheld};
 
 /// The query language a distributed definition is stored as, the ITS-REST
@@ -63,12 +63,37 @@ pub enum NodeCopy {
     Failed {
         /// The endpoint outcome.
         outcome: Outcome,
+        /// What the request showed of the node.
+        contact: Contact,
     },
+}
+
+impl NodeCopy {
+    /// Returns what the read showed of the node: a copy held is the
+    /// node's `200`, and a copy missing its `404`.
+    #[must_use]
+    pub fn contact(&self) -> Contact {
+        match self {
+            Self::Held { .. } => Contact::Answered(StatusCode::OK),
+            Self::Missing { .. } => Contact::Answered(StatusCode::NOT_FOUND),
+            Self::Failed { contact, .. } => *contact,
+        }
+    }
+}
+
+/// What a node made of a definition the gateway sent it.
+#[derive(Debug, Clone)]
+pub struct Stored {
+    /// The endpoint outcome: `active` when the node answered `200`.
+    pub outcome: Outcome,
+    /// What the request showed of the node.
+    pub contact: Contact,
 }
 
 impl<T: Transport> NodeClient<T> {
     /// Stores `aql` at the node as `definition` and reports what the node
-    /// made of it: `active` when it answered `200`.
+    /// made of it: `active` when it answered `200`, with the node's own
+    /// status beside the outcome.
     ///
     /// # Errors
     ///
@@ -80,7 +105,7 @@ impl<T: Transport> NodeClient<T> {
         definition: DefinitionAt<'_>,
         aql: &str,
         options: &DispatchOptions,
-    ) -> Result<Outcome, DispatchError> {
+    ) -> Result<Stored, DispatchError> {
         self.gate_definition(definition, aql, options)?;
         let params = DefinitionQueryVersionStoreYamlParams {
             qualified_query_name: definition.name.to_owned(),
@@ -95,15 +120,16 @@ impl<T: Transport> NodeClient<T> {
             .await;
         let latency_ms = classify::elapsed_ms(started);
         match answer {
-            Ok(DefinitionQueryVersionStoreYamlOutcome::Ok { .. }) => {
-                Ok(Outcome::Active { latency_ms })
-            }
+            Ok(DefinitionQueryVersionStoreYamlOutcome::Ok { .. }) => Ok(Stored {
+                outcome: Outcome::Active { latency_ms },
+                contact: Contact::Answered(StatusCode::OK),
+            }),
             Ok(DefinitionQueryVersionStoreYamlOutcome::BadRequest { body }) => Ok(node_error(
-                latency_ms,
+                (latency_ms, StatusCode::BAD_REQUEST),
                 reported::answered(StatusCode::BAD_REQUEST, &body, options.withheld()),
             )),
             Ok(DefinitionQueryVersionStoreYamlOutcome::Conflict { body }) => Ok(node_error(
-                latency_ms,
+                (latency_ms, StatusCode::CONFLICT),
                 reported::answered(StatusCode::CONFLICT, &body, options.withheld()),
             )),
             Err(error) => self.definition_failure(error, latency_ms, options.withheld()),
@@ -144,7 +170,7 @@ impl<T: Transport> NodeClient<T> {
             }
             Err(error) => self
                 .definition_failure(error, latency_ms, options.withheld())
-                .map(|outcome| NodeCopy::Failed { outcome }),
+                .map(|Stored { outcome, contact }| NodeCopy::Failed { outcome, contact }),
         }
     }
 
@@ -169,26 +195,36 @@ impl<T: Transport> NodeClient<T> {
         error: ClientError,
         latency_ms: u64,
         withheld: &Withheld,
-    ) -> Result<Outcome, DispatchError> {
+    ) -> Result<Stored, DispatchError> {
         let failed = |message: String| ErrorDetail::Text(message);
+        let late = || Outcome::TimeOut {
+            latency_ms,
+            error: failed("no answer before the deadline".to_owned()),
+        };
         match error {
-            ClientError::DeadlineElapsed { .. }
-            | ClientError::Transport {
+            ClientError::DeadlineElapsed { .. } => Ok(Stored {
+                outcome: late(),
+                contact: Contact::Unsent,
+            }),
+            ClientError::Transport {
                 source: TransportError::Timeout { .. },
                 ..
-            } => Ok(Outcome::TimeOut {
-                latency_ms,
-                error: failed("no answer before the deadline".to_owned()),
+            } => Ok(Stored {
+                outcome: late(),
+                contact: Contact::Silent,
             }),
             ClientError::Transport {
                 source: TransportError::Send { .. },
                 ..
-            } => Ok(Outcome::Offline {
-                latency_ms,
-                error: failed("the node could not be reached".to_owned()),
+            } => Ok(Stored {
+                outcome: Outcome::Offline {
+                    latency_ms,
+                    error: failed("the node could not be reached".to_owned()),
+                },
+                contact: Contact::Silent,
             }),
             ClientError::Unauthorized { body, .. } => Ok(node_error(
-                latency_ms,
+                (latency_ms, StatusCode::UNAUTHORIZED),
                 reported::said(
                     format!(
                         "the node refused the gateway's onward credentials with {}",
@@ -199,20 +235,20 @@ impl<T: Transport> NodeClient<T> {
                 ),
             )),
             ClientError::Forbidden { body, .. } => Ok(node_error(
-                latency_ms,
+                (latency_ms, StatusCode::FORBIDDEN),
                 reported::answered(StatusCode::FORBIDDEN, &body, withheld),
             )),
             ClientError::ServiceFailure { status, body, .. }
             | ClientError::UndocumentedStatus { status, body, .. } => Ok(node_error(
-                latency_ms,
+                (latency_ms, status),
                 reported::answered(status, &body, withheld),
             )),
-            ClientError::Body { status, .. } => Ok(Outcome::NodeError {
-                latency_ms,
-                error: failed(format!(
+            ClientError::Body { status, .. } => Ok(node_error(
+                (latency_ms, status),
+                failed(format!(
                     "the node answered {status} with a body that is not an ITS-REST StoredQuery"
                 )),
-            }),
+            )),
             credentials @ ClientError::Credentials { .. } => Err(DispatchError::Credentials {
                 endpoint: self.endpoint.clone(),
                 source: Box::new(credentials),
@@ -262,7 +298,10 @@ impl<T: Transport> NodeClient<T> {
     }
 }
 
-/// The `node-error` outcome carrying `error`.
-fn node_error(latency_ms: u64, error: ErrorDetail) -> Outcome {
-    Outcome::NodeError { latency_ms, error }
+/// The `node-error` of a node that answered `status`, carrying `error`.
+fn node_error((latency_ms, status): (u64, StatusCode), error: ErrorDetail) -> Stored {
+    Stored {
+        outcome: Outcome::NodeError { latency_ms, error },
+        contact: Contact::Answered(status),
+    }
 }
