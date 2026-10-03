@@ -64,12 +64,12 @@ async fn the_query_declaration_names_stored_query_execution_only_where_the_regis
         let setup = Setup::new(mode, &[("node-a", EHR_A), ("node-b", EHR_B)]).await?;
         let declared = setup.declared().await?.federation.its_rest.query;
         assert_eq!(
-            mode.registry,
+            mode.registry(),
             declared.contains("GET and POST {base}/v1/query/{name}[/{version}] fan out"),
             "§7a.1, §12.7: {mode:?}: {declared}"
         );
-        if mode.registry {
-            let held = setup.send(store(None)?).await?;
+        if mode.registry() {
+            let held = setup.send(store("1.0.0", None)?).await?;
             assert_eq!(StatusCode::OK, held.status, "§12.7: stored: {}", held.text);
         }
         let bound = format!(r#"{{"query_parameters":{{"patient":"{PATIENT}"}}}}"#);
@@ -89,7 +89,7 @@ async fn the_query_declaration_names_stored_query_execution_only_where_the_regis
         ];
         for invocation in invoked {
             let outcome = setup.send(invocation).await?;
-            if mode.registry {
+            if mode.registry() {
                 assert_eq!(
                     StatusCode::OK,
                     outcome.status,

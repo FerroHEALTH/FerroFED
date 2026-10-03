@@ -16,7 +16,7 @@ use super::{Mode, Setup, TestResult};
 async fn every_mode_declares_all_four_areas_and_each_follows_only_its_own_settings() -> TestResult {
     let mut query = BTreeMap::<bool, BTreeSet<String>>::new();
     let mut ehr = BTreeSet::new();
-    let mut definition = BTreeMap::<(bool, bool), BTreeSet<String>>::new();
+    let mut definition = BTreeMap::<(bool, bool, bool), BTreeSet<String>>::new();
     let mut demographic = BTreeMap::<bool, BTreeSet<String>>::new();
     for mode in Mode::all() {
         let setup = Setup::new(mode, &[]).await?;
@@ -50,12 +50,12 @@ async fn every_mode_declares_all_four_areas_and_each_follows_only_its_own_settin
             "§7a.1, N32: {mode:?}: {declared_demographic}"
         );
         query
-            .entry(mode.registry)
+            .entry(mode.registry())
             .or_default()
             .insert(declared_query);
         ehr.insert(declared_ehr);
         definition
-            .entry((mode.registry, mode.fan_out))
+            .entry((mode.registry(), mode.distribution(), mode.fan_out))
             .or_default()
             .insert(declared_definition);
         demographic

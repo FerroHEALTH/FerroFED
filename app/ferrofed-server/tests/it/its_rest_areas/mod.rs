@@ -4,8 +4,9 @@
 //! The four `its_rest` declarations of `OPTIONS {base}/`, held to what the
 //! gateway does, in every configuration mode against two mock nodes (§7a.1,
 //! §7a.2, N30, N32; CP-23, CP-25). A mode is one combination of the
-//! DEMOGRAPHIC endpoint, the template fan-out and the stored-query registry;
-//! the `GET` forms of query execution are served in every mode. Each test
+//! DEMOGRAPHIC endpoint, the template fan-out, the stored-query registry and
+//! its distribution to the members; the `GET` forms of query execution are
+//! served in every mode. Each test
 //! reads the declaration of each mode, checks that it states a behaviour,
 //! and exercises that behaviour, reading what each node received from the
 //! node's own capture (§16, track 10).
@@ -62,26 +63,48 @@ struct Mode {
     demographic: bool,
     /// `federation.fan_out_template_upload` is set.
     fan_out: bool,
-    /// The stored-query registry is offered (`[stored_queries]`).
-    registry: bool,
+    /// Where stored queries live.
+    stored: Stored,
+}
+
+/// The stored-query settings a configuration admits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Stored {
+    /// No registry: a definition request routes to one node.
+    Routed,
+    /// The registry is offered (`[stored_queries]`).
+    Held,
+    /// The registry is offered and `federation.fan_out_stored_queries` is
+    /// set, which only the registry admits.
+    Distributed,
 }
 
 impl Mode {
-    /// Every combination of the three settings.
+    /// Every combination of the settings a configuration admits.
     fn all() -> Vec<Self> {
         let mut modes = Vec::new();
         for demographic in [false, true] {
             for fan_out in [false, true] {
-                for registry in [false, true] {
+                for stored in [Stored::Routed, Stored::Held, Stored::Distributed] {
                     modes.push(Self {
                         demographic,
                         fan_out,
-                        registry,
+                        stored,
                     });
                 }
             }
         }
         modes
+    }
+
+    /// Whether the stored-query registry is offered.
+    fn registry(self) -> bool {
+        self.stored != Stored::Routed
+    }
+
+    /// Whether the registry distributes its definitions to the members.
+    fn distribution(self) -> bool {
+        self.stored == Stored::Distributed
     }
 
     /// The `[federation]` lines this mode adds.
@@ -92,6 +115,9 @@ impl Mode {
         }
         if self.fan_out {
             lines.push_str("fan_out_template_upload = true\n");
+        }
+        if self.distribution() {
+            lines.push_str("fan_out_stored_queries = true\n");
         }
         lines
     }
@@ -193,7 +219,7 @@ fn settings_text(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(&a.uri(), &b.uri(), ""))?;
     let document = toml::Value::String(document.display().to_string());
-    let store = if mode.registry {
+    let store = if mode.registry() {
         let path = toml::Value::String(dir.join("definitions.redb").display().to_string());
         format!("[stored_queries]\npath = {path}\n")
     } else {
@@ -233,9 +259,9 @@ fn at(verb: &Method, path: &str) -> (String, String) {
     (verb.as_str().to_owned(), path.to_owned())
 }
 
-/// The `PUT` storing version `1.0.0` of [`NAME`], a definition naming the
-/// patient through `$patient`, naming `target` when given.
-fn store(target: Option<&str>) -> Result<Request<Body>, http::Error> {
+/// The `PUT` storing `version` of [`NAME`], a definition naming the patient
+/// through `$patient`, naming `target` when given.
+fn store(version: &str, target: Option<&str>) -> Result<Request<Body>, http::Error> {
     let definition = format!(
         "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
          WHERE e/ehr_status/subject/external_ref/id/value = $patient \
@@ -243,7 +269,7 @@ fn store(target: Option<&str>) -> Result<Request<Body>, http::Error> {
     );
     request(
         &Method::PUT,
-        &format!("/v1/definition/query/{NAME}/1.0.0"),
+        &format!("/v1/definition/query/{NAME}/{version}"),
         target,
         Some(("text/plain", definition)),
     )

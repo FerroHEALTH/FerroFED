@@ -439,6 +439,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   query parameter the gateway does not admit for its operation, and was
   refused", which is true of a routed request and of the stored-query
   definition `PUT` that raises it too (#269).
+- `OPTIONS {base}/` declares the EHR area as the gateway routes it (#290;
+  §7a.2, N30, CP-23). `its_rest.ehr` now says that a new EHR, by
+  `POST {base}/v1/ehr` or by `PUT {base}/v1/ehr/{ehr_id}`, goes only to the
+  endpoint the targeting headers name, and that the `PUT` is refused when
+  another member holds its `ehr_id`. It no longer names the session's
+  resolution binding as a routing step, because without client
+  authentication no request has a session. Each of the four `its_rest`
+  declarations is now tested against the behaviour of its area in every
+  configuration mode.
 - A query dispatched to a single node, directed at one endpoint by the
   `openEHR-federation-endpoint` header or `FROM ENDPOINT`, or undirected with
   the patient resolving at one member alone, answers with
