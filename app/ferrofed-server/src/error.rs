@@ -134,6 +134,19 @@ pub enum Code {
     /// `If-Match` or in the path of a `DELETE`, so its controlling CDR cannot
     /// be found (§12.4, N23).
     PrecedingVersionInvalid,
+    /// A path identifier, query value or header of a request routed to a
+    /// single node does not match what the ITS-REST operation declares for it
+    /// (§5.4.1, N33). The body names the header, or the parameter by
+    /// position, never the value.
+    ParameterValueInvalid,
+    /// The `Accept` header of a request routed to a single node admits none
+    /// of the media types the ITS-REST operation answers in (RFC 9110
+    /// §12.5.1).
+    MediaTypeNotAcceptable,
+    /// The `Content-Type` header of a request routed to a single node names
+    /// none of the media types the ITS-REST operation takes, or a parameter
+    /// other than a `utf-8` charset (RFC 9110 §8.3).
+    MediaTypeUnsupported,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -149,7 +162,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 32] = [
+    pub const GATEWAY: [Self; 35] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -182,6 +195,9 @@ impl Code {
         Self::StoredQueryHeld,
         Self::StoredQueryUnknown,
         Self::PrecedingVersionInvalid,
+        Self::ParameterValueInvalid,
+        Self::MediaTypeNotAcceptable,
+        Self::MediaTypeUnsupported,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -230,6 +246,9 @@ impl Code {
             Self::StoredQueryHeld => "stored-query-held",
             Self::StoredQueryUnknown => "stored-query-unknown",
             Self::PrecedingVersionInvalid => "preceding-version-invalid",
+            Self::ParameterValueInvalid => "parameter-value-invalid",
+            Self::MediaTypeNotAcceptable => "media-type-not-acceptable",
+            Self::MediaTypeUnsupported => "media-type-unsupported",
         }
     }
 
@@ -257,7 +276,8 @@ impl Code {
             | Self::QueryVersionRequired
             | Self::QueryTypeUnsupported
             | Self::SubjectLiteral
-            | Self::PrecedingVersionInvalid => StatusCode::BAD_REQUEST,
+            | Self::PrecedingVersionInvalid
+            | Self::ParameterValueInvalid => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
                 StatusCode::NOT_FOUND
             }
@@ -268,6 +288,8 @@ impl Code {
             Self::NotImplemented => StatusCode::NOT_IMPLEMENTED,
             Self::NodeTimeout | Self::NodeUnreachable => StatusCode::GATEWAY_TIMEOUT,
             Self::NodeRefused | Self::NodeError => StatusCode::FAILED_DEPENDENCY,
+            Self::MediaTypeNotAcceptable => StatusCode::NOT_ACCEPTABLE,
+            Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         }
     }
 
@@ -342,6 +364,15 @@ impl Code {
             }
             Self::PrecedingVersionInvalid => {
                 "a versioned write names the version it amends as one quoted OBJECT_VERSION_ID in If-Match, or in the path of a DELETE, so its controlling CDR can be found (§12.4, N23)"
+            }
+            Self::ParameterValueInvalid => {
+                "a path identifier, query value or header routed to one node matches what its ITS-REST operation declares, or nothing is sent (§5.4.1, N33)"
+            }
+            Self::MediaTypeNotAcceptable => {
+                "the Accept header admits none of the media types the ITS-REST operation answers in"
+            }
+            Self::MediaTypeUnsupported => {
+                "the Content-Type header is not a media type the ITS-REST operation takes"
             }
         }
     }
@@ -434,6 +465,9 @@ mod tests {
             Code::StoredQueryHeld => Some(29),
             Code::StoredQueryUnknown => Some(30),
             Code::PrecedingVersionInvalid => Some(31),
+            Code::ParameterValueInvalid => Some(32),
+            Code::MediaTypeNotAcceptable => Some(33),
+            Code::MediaTypeUnsupported => Some(34),
         }
     }
 
@@ -510,6 +544,12 @@ mod tests {
             (Code::StoredQueryHeld, StatusCode::CONFLICT),
             (Code::StoredQueryUnknown, StatusCode::NOT_FOUND),
             (Code::PrecedingVersionInvalid, StatusCode::BAD_REQUEST),
+            (Code::ParameterValueInvalid, StatusCode::BAD_REQUEST),
+            (Code::MediaTypeNotAcceptable, StatusCode::NOT_ACCEPTABLE),
+            (
+                Code::MediaTypeUnsupported,
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            ),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

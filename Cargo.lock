@@ -868,6 +868,7 @@ dependencies = [
  "ferrofed-testkit",
  "http",
  "jsonschema",
+ "mime",
  "openehr-base",
  "openehr-federation",
  "openehr-its",

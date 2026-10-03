@@ -35,6 +35,7 @@ use serde::Deserialize;
 use serde::de::IgnoredAny;
 use wiremock::{MockServer, ResponseTemplate};
 
+use crate::declared::composition_at;
 use crate::facade::{
     EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, body, dev_gateway, node_answering, patient_query,
     post, registry,
@@ -304,10 +305,7 @@ async fn a_write_in_collision_is_refused_409_and_reaches_no_node() -> TestResult
     let mut requests = vec![post(body(&patient_query())?)?];
     for (verb, at) in [
         (Method::POST, format!("/v1/ehr/{EHR_A}/composition")),
-        (
-            Method::PUT,
-            format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}"),
-        ),
+        (Method::PUT, composition_at(&Method::PUT, VERSION_A)),
         (
             Method::DELETE,
             format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}"),

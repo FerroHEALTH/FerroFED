@@ -29,7 +29,9 @@
 //! query string only when the operation declares every parameter in it
 //! ([`forwarded_query`]). The gateway cannot tell an identifying value from
 //! any other by looking at it, so an undeclared header is stripped and an
-//! undeclared query parameter is refused (§5.4.1, N33).
+//! undeclared query parameter is refused (§5.4.1, N33). A declared value that
+//! travels is held to the kind the operation declares for it
+//! ([`crate::declared`]).
 
 use std::fmt;
 
@@ -291,7 +293,7 @@ fn carried_in_target(url: &Url, value: &str) -> bool {
 
 /// `text` with every `%XX` escape decoded, invalid UTF-8 replaced; an escape
 /// that is not two hex digits is kept as written.
-fn percent_decoded(text: &str) -> String {
+pub(crate) fn percent_decoded(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut index = 0;

@@ -343,7 +343,8 @@ fn routed(name: &str, uri: String, headers: &[(&str, String)], expect: Expect) -
 /// The patient's identifier in the query string or the headers of a request
 /// the gateway routes to one node: the request travels keyed on the node's
 /// `ehr_id` with no client header the ITS-REST operation does not declare,
-/// and an undeclared query parameter refuses it (§7a.1, §5.4.1, N33).
+/// and an undeclared query parameter, or a declared value that does not match
+/// its declared kind, refuses it (§7a.1, §5.4.1, N33).
 pub(crate) fn on_the_route(ehr_a: Uuid) -> Vec<Case> {
     let value = PATIENT.value();
     let ehr = format!("/v1/ehr/{ehr_a}");
@@ -367,6 +368,30 @@ pub(crate) fn on_the_route(ehr_a: Uuid) -> Vec<Case> {
         routed(
             "subject_id on the ehr_status read",
             format!("{ehr}/ehr_status?subject_id={value}"),
+            &[],
+            refused(),
+        ),
+        routed(
+            "version_at_time, a date-time parameter",
+            format!("{ehr}/ehr_status?version_at_time={value}"),
+            &[],
+            refused(),
+        ),
+        routed(
+            "Accept, a composed header",
+            ehr.clone(),
+            &[("accept", format!("application/json; patient={value}"))],
+            Expect::Routed(StatusCode::OK),
+        ),
+        routed(
+            "a version_uid in the path",
+            format!("{ehr}/ehr_status/{value}"),
+            &[],
+            refused(),
+        ),
+        routed(
+            "a versioned_object_uid in the path",
+            format!("{ehr}/versioned_composition/{value}"),
             &[],
             refused(),
         ),

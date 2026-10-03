@@ -11,6 +11,7 @@
 
 use std::ops::Range;
 
+use ferrofed_engine::declared::Carrier;
 use ferrofed_engine::dispatch::DispatchError;
 use ferrofed_engine::fanout::FanOutError;
 use ferrofed_engine::hygiene::Part;
@@ -72,6 +73,19 @@ pub(super) fn forward_refused(position: usize, request_id: &str) {
         position,
         request_id,
         "a routed request carried a query parameter that is never forwarded, and was refused"
+    );
+}
+
+/// A routed request was refused for a declared value that does not match its
+/// declared kind, named by where it travelled and never by the value
+/// (§5.4.3).
+pub(super) fn value_refused(carrier: Carrier, request_id: &str) {
+    tracing::warn!(
+        target: TARGET,
+        event = "parameter-value-refused",
+        carrier = %carrier,
+        request_id,
+        "a routed request carried a declared value that does not match its declared kind, and was refused"
     );
 }
 

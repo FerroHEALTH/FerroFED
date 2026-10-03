@@ -29,6 +29,9 @@ openehr-query.workspace = true
 # The identifiers the gate withholds are never printed (#45).
 secrecy.workspace = true
 http.workspace = true
+# Accept and Content-Type composed from the operation's listed media types
+# (#261).
+mime.workspace = true
 # The result cells the versions a node holds are read from (§12.2, #64).
 serde_json.workspace = true
 thiserror.workspace = true

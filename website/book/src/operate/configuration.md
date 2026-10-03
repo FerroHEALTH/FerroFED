@@ -443,16 +443,84 @@ writes. None is copied from the client request.
 
 A request routed to one node (`{base}/v1/ehr/{ehr_id}` and below) carries the
 same `Authorization`, `X-Request-Id`, `Host`, `Content-Length` and
-`Accept-Encoding`, and the client's own value of each request header the
-matched ITS-REST operation declares, byte for byte: of `Accept`,
-`Content-Type`, `If-Match`, `Prefer`, `openehr-version`,
-`openehr-audit-details`, `openehr-template-id`, `openehr-item-tag` and
-`openehr-version-item-tag`, only those that operation lists. The list comes
-from the `openehr-its` parameter table, never from the gateway's own copy.
-`Accept` is `application/json` when the client sent none. Every other client
-header is stripped, the client's `Authorization` and `x-request-id` and the
-federation's own headers included, and the outbound gate reads every
-forwarded value.
+`Accept-Encoding`, and each request header the matched ITS-REST operation
+declares, of `Accept`, `Content-Type`, `If-Match`, `Prefer`,
+`openehr-version`, `openehr-audit-details`, `openehr-template-id`,
+`openehr-item-tag` and `openehr-version-item-tag`, only those that operation
+lists. The list comes from the `openehr-its` parameter table, never from the
+gateway's own copy. `Accept`, `Content-Type` and `Prefer` are composed by the
+gateway as values the operation lists; every other declared header is the
+client's value byte for byte (see [Declared values](#declared-values)). Every
+other client header is stripped, the client's `Authorization` and
+`x-request-id` and the federation's own headers included, and the outbound
+gate reads every forwarded value.
+
+## Declared values
+
+A routed request resolves no patient, so the outbound gate has no identifier
+to compare a forwarded value against. The gateway works from what the
+operation declares instead, before anything is sent.
+
+It composes three headers itself, so a node receives a value the operation
+lists, in the operation's own spelling, and never the client's text:
+
+- `Accept` is read as a list of media ranges with weights (RFC 9110
+  §12.5.1). Each listed media type takes the weight of the most specific
+  range that covers it, and the node receives the heaviest one, the first
+  listed on a tie. `*/*`, or no `Accept` at all, sends the first media type
+  the operation lists; ITS-REST declares no default media type, so the first
+  listed is the gateway's own choice, `application/json` in every EHR
+  operation. A range with a parameter other than `q` or `charset=utf-8`
+  covers nothing. An `Accept` that admits no listed type is a `406`
+  (`media-type-not-acceptable`), as a node would answer it.
+- `Content-Type` is read as a media type (RFC 9110 §8.3). When its type and
+  subtype are a listed value, the node receives that value. A
+  `charset=utf-8` is accepted and dropped, since the listed value carries no
+  parameter and JSON is UTF-8 (RFC 8259 §8.1). Any other parameter, or a
+  type that is not listed, is a `415` (`media-type-unsupported`).
+- `Prefer` is read as a list of preferences (RFC 7240 §2). The node receives
+  only the preferences the operation lists, in their listed spelling: a
+  preference name is compared without regard to case, its value exactly, and
+  only its first instance counts. Any other preference is dropped and never
+  refused, as RFC 7240 allows a server to ignore it.
+
+It holds every other value to what the operation declares, and a value that
+does not match is a `400` (`parameter-value-invalid`) with nothing sent:
+
+- a path `version_uid` is an openEHR `OBJECT_VERSION_ID`, a text
+  `uid_based_id` an `OBJECT_VERSION_ID` or a `HIER_OBJECT_ID`, and a path
+  parameter the table states as a UUID, such as `versioned_object_uid` or the
+  `uid_based_id` of a composition update, is a UUID in its canonical
+  hyphenated form, each parsed by `openehr-base`. The path then travels as
+  the client sent it, since an openEHR uid is never rewritten (N22). The
+  `ehr_id` is parsed by the routing itself;
+- a date-time, such as `version_at_time`, is an extended ISO 8601 date-time
+  in the openEHR BASE sense, with an offset only when needed (ITS-REST
+  Overview, "Datetime format"), read by the `openehr-base` parser;
+- an enumerated query value, such as `detail_level`, is exactly one of the
+  values the operation lists;
+- a UUID, an integer, a number and a boolean are each parsed as one.
+
+The refusal names the header, or the path or query parameter by its position
+and declared name, and never the value (§5.4.3). A value of such a kind
+carries only what the kind admits: a four-digit year is a valid partial
+date-time, and a `HIER_OBJECT_ID` admits a bare number as a one-arc ISO OID.
+
+ITS-REST states the identifier class of `version_uid` and of a text
+`uid_based_id` only in their descriptions, which the `openehr-its` table does
+not carry yet, so the gateway reads those two names itself until it does
+([FerroHEALTH/FerroEHR#3539](https://github.com/FerroHEALTH/FerroEHR/issues/3539)).
+
+The parameter table states no kind for the rest, so the gateway cannot
+classify them and forwards them as the client sent them. In the EHR area they
+are the headers `If-Match`, `openehr-audit-details`, `openehr-item-tag`,
+`openehr-template-id`, `openehr-version` and `openehr-version-item-tag`, the
+path parameter `key` of an item tag, and the query parameters `path`,
+`tag_key`, `tag_value` and `tag_target_path`.
+N33 forbids an identifier in the parts of a request the gateway composes
+(§5.4.1). Whether a client value the gateway forwards unchanged is one of
+those parts is a question the specification leaves open, recorded on
+[#212](https://github.com/FerroHEALTH/FerroFED/issues/212).
 
 ## What the log records
 

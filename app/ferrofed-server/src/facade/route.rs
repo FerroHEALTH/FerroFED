@@ -40,6 +40,7 @@ use std::time::{Duration, Instant};
 
 use axum::body::{Body, Bytes};
 use axum::response::Response;
+use ferrofed_engine::declared::{self, Refusal};
 use ferrofed_engine::dispatch::{DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded};
 use ferrofed_engine::hygiene;
@@ -133,7 +134,8 @@ pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
 ///
 /// The path `ehr_id` is parsed first, and a malformed one is a `400` before
 /// any routing (§12.5); so is a query parameter the operation does not
-/// declare, before anything is sent (§5.4.1, N33). The owner is then found in
+/// declare, or a declared header or query value that does not match its
+/// declared kind, before anything is sent (§5.4.1, N33). The owner is then found in
 /// the order of §12.5.1 (N41): the targeting headers, a binding the client
 /// session holds, the `ehr_id` index, and for a read only, the ask-all probe.
 /// A write none of the first three routes is a `400` (`target-required`),
@@ -150,7 +152,7 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     let Some(ehr_id) = path_ehr_id(matched) else {
         return error::fixed(Code::EhrIdInvalid, request_id);
     };
-    if let Some(refused) = query_refused(matched, &arrived, &logged) {
+    if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
         return refused;
     }
     let snapshot = federation.snapshot();
@@ -383,6 +385,39 @@ fn collision(ehr_id: &EhrId, claimed: owner::Claimed, request_id: &str) -> Respo
     error::response(refused.code(), refused.to_string(), request_id)
 }
 
+/// The `400` for a request whose query string or headers `matched` does not
+/// forward, or `None` when every declared value may travel (§5.4.1, N33).
+///
+/// A query parameter the operation does not declare is
+/// `query-parameter-refused`; a declared header or query value that does not
+/// match its declared kind is `parameter-value-invalid`. Each refusal is a
+/// security event under the gateway's `logged` id.
+fn refused_carriers(matched: &RouteMatch, arrived: &Arrived<'_>, logged: &str) -> Option<Response> {
+    let request_id = arrived.request_id;
+    if let Some(refused) = query_refused(matched, arrived, logged) {
+        return Some(refused);
+    }
+    declared::held(matched, arrived.uri.query(), arrived.headers)
+        .err()
+        .map(|refusal| declared_refused(&refusal, request_id, logged))
+}
+
+/// The answer to a request whose declared values `refusal` refuses: `400`
+/// for a malformed value, a security event as well, and the `406` or `415` a
+/// node answers an `Accept` or a `Content-Type` it cannot serve with (RFC
+/// 9110 §12.4.1, §15.5.16).
+fn declared_refused(refusal: &Refusal, request_id: &str, logged: &str) -> Response {
+    let code = match refusal {
+        Refusal::Malformed(malformed) => {
+            security::value_refused(malformed.carrier(), logged);
+            Code::ParameterValueInvalid
+        }
+        Refusal::NotAcceptable { .. } => Code::MediaTypeNotAcceptable,
+        Refusal::UnsupportedMediaType { .. } => Code::MediaTypeUnsupported,
+    };
+    error::response(code, refusal.to_string(), request_id)
+}
+
 /// The `ehr_id` the path segment of `matched` decodes to, or `None` when it
 /// is no `HIER_OBJECT_ID`.
 fn path_ehr_id(matched: &RouteMatch) -> Option<EhrId> {
@@ -544,6 +579,7 @@ fn failed(
             security::forward_refused(unlisted.position, logged);
             return error::response(Code::QueryParameterRefused, failure.to_string(), request_id);
         }
+        ForwardError::Value(refusal) => return declared_refused(refusal, request_id, logged),
         ForwardError::Withheld { endpoint, part } => {
             security::forward_withheld(endpoint, *part, logged);
             Code::Internal

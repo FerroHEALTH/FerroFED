@@ -10,7 +10,10 @@
 //! no right to alter (§5.4 scope note, N33). Of the client's headers and query
 //! string, only what the ITS-REST operation the method and path address
 //! declares travels, as the outbound gate admits it
-//! ([`hygiene::forwarded_headers`], [`hygiene::forwarded_query`]). The
+//! ([`hygiene::forwarded_headers`], [`hygiene::forwarded_query`]). Each path
+//! identifier and each value that travels matches what the operation
+//! declares for it, and `Accept`, `Content-Type` and `Prefer` travel as values
+//! the operation lists ([`declared::held`]). The
 //! endpoint's onward credentials set `Authorization`, and the request's
 //! minted [`OutboundId`](crate::outbound_id::OutboundId) sets `X-Request-Id`.
 //!
@@ -23,6 +26,7 @@
 
 use std::fmt;
 
+use crate::declared::{self, Refusal};
 use crate::dispatch::{DispatchOptions, NodeClient};
 use crate::hygiene::{self, Outbound, Part, UnlistedParameter};
 use ferrofed_registry::id::EndpointId;
@@ -117,6 +121,11 @@ pub enum ForwardError {
     /// forward, so nothing was sent (§5.4.1, N33).
     #[error(transparent)]
     QueryParameter(#[from] UnlistedParameter),
+    /// A path, query or header value the operation declares does not match
+    /// what it declares for it, or `Accept` or `Content-Type` names no media
+    /// type it lists, so nothing was sent (§5.4.1, N33).
+    #[error(transparent)]
+    Value(#[from] Refusal),
     /// The outbound gate found a withheld patient identifier in the request,
     /// so nothing was sent (§5.4.1, N33).
     #[error(
@@ -185,14 +194,15 @@ impl<T: Transport> NodeClient<T> {
     /// Forwards `request` to the node once and returns its answer.
     ///
     /// The ITS-REST operation the method and path address decides which of
-    /// the client's headers and query parameters travel. The deadline and the
+    /// the client's headers and query parameters travel, and each must match
+    /// the kind the operation declares for it. The deadline and the
     /// request id of `options` apply, and the outbound gate reads the URL and
     /// every forwarded header against the identifiers `options` withholds.
     ///
     /// # Errors
     ///
-    /// Returns [`ForwardError::Unrouted`], [`ForwardError::QueryParameter`]
-    /// and [`ForwardError::Withheld`] with nothing sent,
+    /// Returns [`ForwardError::Unrouted`], [`ForwardError::QueryParameter`],
+    /// [`ForwardError::Value`] and [`ForwardError::Withheld`] with nothing sent,
     /// [`ForwardError::Credentials`] and [`ForwardError::Compose`] when the
     /// request could not leave, [`ForwardError::TimeOut`] and
     /// [`ForwardError::Unreachable`] when the node gave no answer, and
@@ -216,9 +226,8 @@ impl<T: Transport> NodeClient<T> {
         if let Some(query) = query.as_deref() {
             outgoing.raw_query(hygiene::forwarded_query(&operation, query)?);
         }
-        outgoing
-            .headers_mut()
-            .extend(hygiene::forwarded_headers(&operation, &headers));
+        let sent = declared::held(&operation, query.as_deref(), &headers)?;
+        outgoing.headers_mut().extend(sent);
         let call = options
             .call_options()
             .map_err(|source| ForwardError::Compose {

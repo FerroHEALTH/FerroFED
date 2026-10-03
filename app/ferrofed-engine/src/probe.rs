@@ -7,7 +7,8 @@
 //! Each probe is a [`NodeClient::forward`](crate::dispatch::NodeClient::forward) of the one request, so it passes
 //! the same outbound gate as every routed request: the path carries the
 //! node-local `ehr_id` and nothing else, and of the client's headers only the
-//! ones `GET {base}/v1/ehr/{ehr_id}` declares travel (§5.4.1, N33). The
+//! ones `GET {base}/v1/ehr/{ehr_id}` declares travel, each composed for that
+//! operation and left out when it does not fit it (§5.4.1, N33). The
 //! `ehr_id` is a [`ProbedEhrId`], a bare UUID, because the probe carries it
 //! to members the client never named and any other form may be a patient
 //! identifier (§5.4.1, N33). Every
@@ -25,8 +26,10 @@ use std::time::Instant;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::Transport;
+use openehr_its::rest::routes::{self, Lookup};
 use tokio::task::{JoinError, JoinSet};
 
+use crate::declared;
 use crate::dispatch::{DispatchOptions, NodeClients};
 use crate::forward::{ClientRequest, ForwardError, Forwarded};
 use crate::outbound_id::OutboundId;
@@ -155,13 +158,20 @@ where
     }
     let deadline = probe.per_node.min(probe.overall);
     let options = DispatchOptions::new(deadline).with_request_id(probe.request_id);
+    let path = probe.path();
+    // NOTE: no specification governs this: our own design; the probe is the gateway's own read, so
+    // a client value that does not fit its operation's declared kind is left out, never refused.
+    let headers = match routes::lookup(&Method::GET, &path) {
+        Lookup::Matched(operation) => declared::fitting(&operation, &probe.headers),
+        Lookup::MethodNotAllowed { .. } | Lookup::NotFound => probe.headers.clone(),
+    };
     let mut tasks = JoinSet::new();
     for (index, client) in asked.into_iter().enumerate() {
         let request = ClientRequest {
             method: Method::GET,
-            path: probe.path(),
+            path: path.clone(),
             query: None,
-            headers: probe.headers.clone(),
+            headers: headers.clone(),
             body: Vec::new(),
         };
         let options = options.clone();
