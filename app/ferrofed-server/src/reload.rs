@@ -345,6 +345,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             was.node_selection != now.node_selection,
         ),
         ("federation.best_effort", was.best_effort != now.best_effort),
+        (
+            "federation.fan_out_template_upload",
+            was.fan_out_template_upload != now.fan_out_template_upload,
+        ),
         ("federation.offset", was.offset != now.offset),
         (
             "federation.decomposable_aggregates",

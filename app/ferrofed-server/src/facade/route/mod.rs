@@ -36,11 +36,11 @@
 //! A new EHR has no owner, so only the targeting headers route it,
 //! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3).
 //!
-//! A request under `{base}/v1/definition/` (a template upload, list, read or
-//! example, or stored-query management where the gateway holds no registry)
-//! is routed by the targeting headers alone too, to exactly one endpoint,
-//! and answered as that node answered: no node is picked implicitly and no
-//! two nodes' answers are combined (§7a.1, §12.6, §12.7, N43).
+//! A request under `{base}/v1/definition/` is routed by the targeting
+//! headers alone too, to exactly one endpoint, and answered as that node
+//! answered: nothing is picked implicitly and no two nodes' answers are
+//! combined (§7a.1, §12.6, §12.7, N43). Where offered, a template upload
+//! naming `*` or several endpoints fans out to each member instead.
 //!
 //! A request under `{base}/v1/demographic/` is never federated (§7a.1, N32).
 //! It answers `501` unless the deployment declares one member endpoint for
@@ -77,6 +77,7 @@ use crate::facade::{follow_up, owner, security, subject};
 use crate::federation::Federation;
 
 mod chosen;
+mod fan_out;
 
 /// The API group of the EHR area (§7a.1).
 pub(crate) const EHR_GROUP: &str = "ehr";
@@ -140,14 +141,7 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
             named(federation, arrived, &matched, EHR_GROUP, Chooser::Client).await
         }
         Lookup::Matched(matched) if in_definition_area(&matched) => {
-            named(
-                federation,
-                arrived,
-                &matched,
-                DEFINITION_GROUP,
-                Chooser::Client,
-            )
-            .await
+            fan_out::definition(federation, arrived, &matched).await
         }
         Lookup::Matched(matched) if in_demographic_area(&matched) => {
             match federation.demographic_endpoint() {

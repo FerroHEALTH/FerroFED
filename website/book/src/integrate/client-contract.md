@@ -556,10 +556,11 @@ or `openEHR-federation-organisation` (§7a.1, §12.6, N43). The gateway never
 picks a node for you and never probes for one:
 
 - Without a header the request is a `400` (`target-required`).
-- Headers that select several endpoints are a `400` (`endpoint-several`).
-  The gateway does not offer the fan-out template upload of §12.6, so `*` is
-  no endpoint the registry knows, and it is a `400` (`endpoint-unknown`) like
-  any other unknown id.
+- Headers that select several endpoints are a `400` (`endpoint-several`), and
+  `*` is no endpoint the registry knows, so it is a `400`
+  (`endpoint-unknown`) like any other unknown id. A template upload is the
+  one exception, and only where the deployment offers
+  [fan-out template upload](#fan-out-template-upload).
 - The body reaches that node byte for byte, and only the headers and query
   parameters the ITS-REST operation declares travel with it (§5.4.1, N33).
 - The answer is that node's answer, its status, body, `Location` and `ETag`
@@ -586,6 +587,49 @@ Where the gateway offers the stored-query registry, the registry answers every
 request under `{base}/v1/definition/query/` itself, with or without a header,
 and templates still go to the one node you name ([stored
 queries](#stored-queries), §7a.2).
+
+### Fan-out template upload
+
+A deployment may offer one template upload applied to several members, so
+that a later `COMPOSITION` commit validates wherever it lands (§12.6, N43).
+It is off by default, and `OPTIONS {base}/` declares it as
+`definition.fan_out_template_upload` (§7a.2). Where it is offered:
+
+- Only an ADL 1.4 or ADL 2 template upload
+  (`POST {base}/v1/definition/template/adl1.4` or `.../adl2`) fans out, and
+  only when you ask for it: `openEHR-federation-endpoint: *` names every
+  active member, and a header that selects several endpoints names those.
+  An upload that names one endpoint goes to that node alone and comes back
+  as that node answered; an upload that names none is still a `400`
+  (`target-required`). Every other definition request routes to one node,
+  and `*` stays `endpoint-unknown` there. A list naming a suspended
+  endpoint, or `*` with no active member, is a `404` (`no-destination`) and
+  nothing is sent; `*` leaves a suspended member out and reports it
+  `excluded`.
+- Each member is sent the upload on its own, the body byte for byte, with
+  only the headers the operation declares. A member that accepts keeps the
+  template whatever the others answer: nothing is rolled back.
+- The answer is a JSON body holding `meta.federation`, in the shape of a
+  federated result set's (§9.5): `complete`, the `timeout` in force, and one
+  `endpoints[]` entry per registry member. A member that accepted is
+  `active`, one that failed is `node-error` with the node's HTTP status in
+  `error`, or `time-out` or `offline`, and one you did not name is
+  `excluded`. No node's body or `Location` is copied into it.
+- The status is `200` when every member you named accepted, and `207` with
+  `complete: false` when some accepted and others failed: a partial success
+  is never reported as success (§12.6). When none accepted, the status is
+  `504` if a member timed out or could not be reached, and `424` otherwise
+  (§11.2).
+- `openEHR-federation-endpoint` and `openEHR-federation-system-id` list the
+  members that accepted, comma-separated in registry order (§7a.3, N31).
+
+```http
+POST {base}/v1/definition/template/adl1.4
+openEHR-federation-endpoint: *
+Content-Type: application/xml
+
+<template xmlns="http://schemas.openehr.org/v1">…</template>
+```
 
 ## Demographics
 
@@ -721,9 +765,9 @@ says what the gateway does, not what it was once meant to do:
 | `completeness` | `default: "all-or-nothing"`; `best_effort` and, when it is offered, `opt_in` naming `openEHR-federation-completeness: partial` (§11.4, N37) |
 | `paging` | `offset_strategy: "bounded"` with the configured `max_window`, or `"reject"`; never `"cursor"`, because no cursor is offered (§11.6.2, N39) |
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
-| `definition` | `fan_out_template_upload: false` and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
+| `definition` | `fan_out_template_upload` as `federation.fan_out_template_upload` sets it (`false` by default) and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
-| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered and routed with the rest when it is not (§12.6, §12.7, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, naming the template upload fan-out where it is offered, with stored queries held at the gateway registry when it is offered and routed with the rest when it is not (§12.6, §12.7, §7a.2), and `demographic` unsupported (`501`), or `routed-single-node` naming the endpoint a request names when `federation.demographic_endpoint` is set; never federated (§7a.1, §12.6, N32) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 
 What is absent is absent on purpose:

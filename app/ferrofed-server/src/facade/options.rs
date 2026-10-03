@@ -137,9 +137,8 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
                 .collect(),
             extra: Extra::new(),
         },
-        // TODO(#76): declare fan_out_template_upload true once template fan-out upload is offered.
         // TODO(#78): declare stored_query_fan_out true once definitions fan out to the nodes.
-        definition: DefinitionBehaviour::new(false)
+        definition: DefinitionBehaviour::new(federation.fans_out_template_upload())
             .with_stored_query_registry(registry)?
             .with_stored_query_fan_out(false)?,
         // NOTE: §14.1, fail-closed is the default and the gateway offers no
@@ -150,7 +149,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         },
         // TODO(#81): declare auth.jwks_uri once the gateway publishes its JWKS (§13.1).
         auth: None,
-        its_rest: its_rest(registry, federation.demographic_endpoint())?,
+        its_rest: its_rest(federation, registry)?,
         extra: Extra::new(),
     };
     Ok(OptionsRoot {
@@ -212,17 +211,15 @@ fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
     })
 }
 
-/// The `its_rest` member: how each ITS-REST area is served (§7a.1, N30,
-/// N32), with stored queries held at the gateway when `registry` is `true`
-/// (§12.7) and every other definition request routed to one explicitly
-/// chosen node (§12.6, N43). The DEMOGRAPHIC area is never federated: it is
-/// `501`, or routed to the one `demographic` endpoint the deployment
-/// declared, which each request names (§7a.1, §12.4, §12.6, N23, N32).
-fn its_rest(
-    registry: bool,
-    demographic: Option<&ferrofed_registry::id::EndpointId>,
-) -> Result<ItsRestAreas, DescribeError> {
-    let (query, definition) = if registry {
+/// The `its_rest` member: how each ITS-REST area of `federation` is served
+/// (§7a.1, N30, N32), with stored queries held at the gateway when
+/// `registry` is `true` (§12.7) and every other definition request routed to
+/// one explicitly chosen node, or a template upload fanned out where offered
+/// (§12.6, N43). The DEMOGRAPHIC area is never federated: it is `501`, or
+/// routed to the one `demographic` endpoint the deployment declared, which
+/// each request names (§7a.1, §12.4, §12.6, N23, N32).
+fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, DescribeError> {
+    let (query, routed) = if registry {
         (
             "federated: GET and POST {base}/v1/query/aql and GET and POST \
              {base}/v1/query/{name}[/{version}] fan out",
@@ -247,8 +244,15 @@ fn its_rest(
               member that holds it, by its ehr_id; \
               POST {base}/v1/ehr to the one endpoint the targeting headers name"
             .to_owned(),
-        definition: definition.to_owned(),
-        demographic: DemographicSupport::new(match demographic {
+        definition: if federation.fans_out_template_upload() {
+            format!(
+                "{routed}; a template upload naming * or several endpoints in the \
+                 targeting headers fans out to each, reported per node and never rolled back"
+            )
+        } else {
+            routed.to_owned()
+        },
+        demographic: DemographicSupport::new(match federation.demographic_endpoint() {
             Some(endpoint) => format!(
                 "routed-single-node: a request under {{base}}/v1/demographic/ names the \
                  declared endpoint {endpoint} in the targeting headers and goes to it \

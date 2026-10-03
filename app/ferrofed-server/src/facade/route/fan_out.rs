@@ -1,0 +1,553 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! Fan-out template upload: one template upload sent to every member the
+//! request names, each independently, and answered per node (§12.6, N43,
+//! CP-34).
+//!
+//! It is offered only where the deployment sets
+//! `federation.fan_out_template_upload`, which `OPTIONS {base}/` declares
+//! (§7a.2, N30), and it applies to the two template upload operations of
+//! ITS-REST alone. Such an upload fans out when its
+//! `openEHR-federation-endpoint` header is `*`, every active member, or when
+//! its targeting headers select more than one endpoint: a distinct request,
+//! never the reading of a plain upload, which still names its one node or is
+//! refused (§12.6 item 1). Every other definition request routes to one node
+//! ([`named`]).
+//!
+//! Each member is sent the client's request through the same forwarding as a
+//! routed request: the operation's declared values only, the body
+//! byte-identical (N22, N33). Nothing is rolled back, so a member that
+//! accepted keeps its template whatever the others answered (§12.6 item 3).
+//! The answer carries `meta.federation` with one `endpoints[]` entry per
+//! registry member, the status of each and the node's HTTP status where it
+//! failed, and never a node's body (§9.5, §11.1, §12.6 item 2). The
+//! provenance headers name the members that accepted (§7a.3, N31).
+
+use std::collections::BTreeSet;
+use std::time::Instant;
+
+use axum::Json;
+use axum::response::{IntoResponse, Response};
+use ferrofed_engine::dispatch::DispatchOptions;
+use ferrofed_engine::fanout::TIMEOUT_POLICY;
+use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded};
+use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
+use http::{HeaderMap, StatusCode};
+use openehr_federation::error::WireError;
+use openehr_federation::headers;
+use openehr_federation::meta::{FederationMeta, TimeoutBudget};
+use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
+use openehr_federation::status;
+use openehr_its::rest::routes::RouteMatch;
+use serde::Serialize;
+use tokio::task::JoinSet;
+
+use super::chosen::{Chooser, named};
+use super::{Arrived, DEFINITION_GROUP, Deadlines, refused_carriers};
+use crate::error::{self, Code};
+use crate::facade::provenance::Provenance;
+use crate::facade::security;
+use crate::facade::target::{self, Mechanism, Selected, TargetError};
+use crate::federation::Federation;
+
+/// The ITS-REST operations that upload a template, ADL 1.4 and ADL 2
+/// (§12.6).
+const UPLOADS: [&str; 2] = [
+    "definition_template_adl1.4_upload",
+    "definition_template_adl2_upload",
+];
+
+/// The endpoint header value that names every active member (§12.6 item 1).
+const EVERY_MEMBER: &str = "*";
+
+/// Answers a request in the definition area: a template upload that names
+/// several members fans out where the deployment offers it, and every other
+/// request routes to the one endpoint the targeting headers name (§7a.1,
+/// §12.6, N43).
+pub(super) async fn definition(
+    federation: &Federation,
+    arrived: Arrived<'_>,
+    matched: &RouteMatch,
+) -> Response {
+    if federation.fans_out_template_upload() && uploads_template(matched) {
+        let started = Instant::now();
+        let logged = arrived.outbound.to_string();
+        if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
+            return refused;
+        }
+        match members(federation.snapshot(), arrived.headers) {
+            Ok(Some(selected)) => {
+                return fan_out(federation, &arrived, &selected, (started, &logged)).await;
+            }
+            Ok(None) => {}
+            Err(refused) => {
+                return error::response(refused.code(), refused.to_string(), arrived.request_id);
+            }
+        }
+    }
+    let chooser = Chooser::Client;
+    named(federation, arrived, matched, DEFINITION_GROUP, chooser).await
+}
+
+/// Whether `matched` uploads a template (§12.6).
+fn uploads_template(matched: &RouteMatch) -> bool {
+    matched.group == DEFINITION_GROUP && UPLOADS.contains(&matched.operation_id)
+}
+
+/// The members a template upload fans out to, or `None` when its targeting
+/// names one endpoint or none, so it routes to one node (§12.6, §8.4).
+///
+/// `*` alone in the endpoint header selects every active member; an
+/// organisation header beside it must select the same set (§8.4.1). Any
+/// other targeting fans out when it selects more than one endpoint.
+///
+/// # Errors
+///
+/// Returns the [`TargetError`] of targeting the registry cannot answer, and
+/// [`TargetError::Conflict`] when an organisation header beside `*` selects
+/// another set (§8.4.1, N35).
+fn members(
+    snapshot: &RegistrySnapshot,
+    headers: &HeaderMap,
+) -> Result<Option<BTreeSet<EndpointId>>, TargetError> {
+    if !every_member(headers) {
+        let selected = target::requested(snapshot, None, headers)?;
+        return Ok(selected.filter(|selected| selected.len() > 1));
+    }
+    let every: BTreeSet<EndpointId> = snapshot
+        .endpoints()
+        .filter(|endpoint| endpoint.status() == EndpointStatus::Active)
+        .map(|endpoint| endpoint.id().clone())
+        .collect();
+    let mut others = headers.clone();
+    others.remove(headers::ENDPOINT);
+    match target::requested(snapshot, None, &others)? {
+        Some(organisations) if organisations != every => Err(TargetError::Conflict {
+            first: Selected {
+                by: Mechanism::EndpointHeader,
+                endpoints: every,
+            },
+            second: Selected {
+                by: Mechanism::OrganisationHeader,
+                endpoints: organisations,
+            },
+        }),
+        _ => Ok(Some(every)),
+    }
+}
+
+/// Whether the endpoint header of `headers` is `*` and nothing else, its
+/// empty list elements ignored as everywhere (RFC 9110 §5.6.1).
+fn every_member(headers: &HeaderMap) -> bool {
+    let mut named = Vec::new();
+    for line in headers.get_all(headers::ENDPOINT) {
+        let Ok(text) = line.to_str() else {
+            return false;
+        };
+        named.extend(text.split(',').map(str::trim).filter(|id| !id.is_empty()));
+    }
+    named == [EVERY_MEMBER]
+}
+
+/// What one member made of the upload.
+#[derive(Debug)]
+enum Reply {
+    /// The node answered, a failure status included.
+    Answered(Forwarded),
+    /// The node gave no answer of its own.
+    Failed(ForwardError),
+    /// The gateway could not send the request.
+    NotSent,
+    /// The overall budget ran out before the node answered (§11.5).
+    Abandoned,
+}
+
+/// Sends the client's upload to each member of `selected` independently,
+/// within the request's budget, and answers per node (§12.6, §11.5).
+async fn fan_out(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    selected: &BTreeSet<EndpointId>,
+    (started, logged): (Instant, &str),
+) -> Response {
+    let request_id = arrived.request_id;
+    let snapshot = federation.snapshot();
+    let targets: Vec<&Endpoint> = snapshot
+        .endpoints()
+        .filter(|endpoint| selected.contains(endpoint.id()))
+        .collect();
+    // NOTE: §11.1 never contacts a suspended endpoint, so a fan-out naming one
+    // resolves to no destination (§11.2), as a routed request does.
+    if targets.is_empty()
+        || targets
+            .iter()
+            .any(|endpoint| endpoint.status() == EndpointStatus::Suspended)
+    {
+        return error::fixed(Code::NoDestination, request_id);
+    }
+    let Some(budget) = Deadlines::from(federation, started) else {
+        tracing::error!(
+            request_id = logged,
+            "the fan-out upload's deadline cannot be represented"
+        );
+        return error::fixed(Code::Internal, request_id);
+    };
+    let replies = send_all(federation, arrived, &targets, &budget, logged).await;
+    let mut outcomes = Vec::with_capacity(targets.len());
+    for (endpoint, (reply, latency_ms)) in targets.iter().zip(replies) {
+        outcomes.push((endpoint.id(), outcome(endpoint, reply, latency_ms, logged)));
+    }
+    tracing::info!(
+        members = outcomes.len(),
+        accepted = outcomes
+            .iter()
+            .filter(|(_, outcome)| outcome.status() == status::EndpointStatus::Active)
+            .count(),
+        request_id = logged,
+        "a template upload fanned out"
+    );
+    match answer(federation, &outcomes) {
+        Ok(response) => response,
+        Err(refused) => {
+            tracing::error!(
+                error = %crate::chain(&refused),
+                request_id = logged,
+                "the fan-out upload's per-node record could not be built"
+            );
+            error::fixed(Code::Internal, request_id)
+        }
+    }
+}
+
+/// Sends the client's request to each of `targets` at once, and returns
+/// what each made of it with the gateway's measurement of its request in
+/// milliseconds, in the order of `targets`.
+async fn send_all(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    targets: &[&Endpoint],
+    budget: &Deadlines,
+    logged: &str,
+) -> Vec<(Reply, u64)> {
+    let options = DispatchOptions::new(budget.per_node()).with_request_id(arrived.outbound);
+    let mut tasks = JoinSet::new();
+    let mut replies: Vec<Option<(Reply, u64)>> = targets.iter().map(|_| None).collect();
+    let fanned = Instant::now();
+    for (index, endpoint) in targets.iter().enumerate() {
+        let Some(client) = federation.clients().get(endpoint.id()).cloned() else {
+            tracing::error!(
+                endpoint = %endpoint.id(),
+                request_id = logged,
+                "a registry endpoint has no node client"
+            );
+            if let Some(slot) = replies.get_mut(index) {
+                *slot = Some((Reply::NotSent, 0));
+            }
+            continue;
+        };
+        let request = ClientRequest {
+            method: arrived.method.clone(),
+            path: arrived.path.to_owned(),
+            query: arrived.uri.query().map(str::to_owned),
+            headers: arrived.headers.clone(),
+            body: arrived.body.to_vec(),
+        };
+        let options = options.clone();
+        tasks.spawn(async move {
+            let asked = Instant::now();
+            let answer = client.forward(request, &options).await;
+            (index, answer, elapsed_ms(asked))
+        });
+    }
+    let until = tokio::time::Instant::from_std(budget.overall());
+    loop {
+        match tokio::time::timeout_at(until, tasks.join_next()).await {
+            Ok(Some(Ok((index, answer, latency_ms)))) => {
+                if let Some(slot) = replies.get_mut(index) {
+                    let made = match answer {
+                        Ok(forwarded) => Reply::Answered(forwarded),
+                        Err(failure) => Reply::Failed(failure),
+                    };
+                    *slot = Some((made, latency_ms));
+                }
+            }
+            Ok(Some(Err(joined))) => {
+                tracing::error!(
+                    error = %joined,
+                    request_id = logged,
+                    "a fan-out upload task did not finish"
+                );
+            }
+            Ok(None) => break,
+            Err(_elapsed) => {
+                tasks.abort_all();
+                break;
+            }
+        }
+    }
+    let abandoned_after = elapsed_ms(fanned);
+    replies
+        .into_iter()
+        .map(|slot| slot.unwrap_or((Reply::Abandoned, abandoned_after)))
+        .collect()
+}
+
+/// The milliseconds since `started`, saturating at `u64::MAX`.
+fn elapsed_ms(started: Instant) -> u64 {
+    whole_ms(started.elapsed())
+}
+
+/// The §11.1 outcome of what `endpoint` made of the upload, measured as
+/// `latency_ms`, carrying the node's HTTP status and never its body (§9.5).
+fn outcome(endpoint: &Endpoint, reply: Reply, latency_ms: u64, logged: &str) -> Outcome {
+    let error = |message: String| ErrorDetail::Text(message);
+    match reply {
+        Reply::Answered(forwarded) if forwarded.status().is_success() => {
+            Outcome::Active { latency_ms }
+        }
+        Reply::Answered(forwarded) => Outcome::NodeError {
+            latency_ms,
+            error: error(format!("the node answered {}", forwarded.status())),
+        },
+        Reply::Failed(ForwardError::Refused {
+            status: refused, ..
+        }) => Outcome::NodeError {
+            latency_ms,
+            error: error(format!(
+                "the node refused the gateway's onward credentials with {refused}"
+            )),
+        },
+        Reply::Failed(ForwardError::TimeOut { .. }) => Outcome::TimeOut {
+            latency_ms,
+            error: error("no answer before the deadline".to_owned()),
+        },
+        Reply::Abandoned => Outcome::TimeOut {
+            latency_ms,
+            error: error("no answer before the overall budget ran out".to_owned()),
+        },
+        Reply::Failed(ForwardError::Unreachable { .. }) => Outcome::Offline {
+            latency_ms,
+            error: error("the node could not be reached".to_owned()),
+        },
+        Reply::Failed(failure) => {
+            if let ForwardError::Withheld {
+                endpoint: withheld,
+                part,
+            } = &failure
+            {
+                security::forward_withheld(withheld, *part, logged);
+            }
+            tracing::error!(
+                endpoint = %endpoint.id(),
+                error = %crate::chain(&failure),
+                request_id = logged,
+                "the fan-out upload could not be sent to a member"
+            );
+            not_sent(latency_ms)
+        }
+        Reply::NotSent => not_sent(latency_ms),
+    }
+}
+
+/// The outcome of a member the gateway could not send the upload to.
+// NOTE: §11.1 has no status for a request the gateway itself could not send;
+// the node was not reached, so it is `offline` (our own design).
+fn not_sent(latency_ms: u64) -> Outcome {
+    Outcome::Offline {
+        latency_ms,
+        error: ErrorDetail::Text("the gateway could not send the request to the node".to_owned()),
+    }
+}
+
+/// The body of a fan-out upload's answer: `meta.federation` alone (§9.5,
+/// §12.6 item 2).
+#[derive(Debug, Serialize)]
+struct Uploaded {
+    meta: UploadedMeta,
+}
+
+/// The `meta` of [`Uploaded`].
+#[derive(Debug, Serialize)]
+struct UploadedMeta {
+    federation: FederationMeta,
+}
+
+/// The answer to a fan-out upload whose members ended as `outcomes`, in
+/// registry order.
+///
+/// Every registry member appears: one the request did not name, or a
+/// suspended one `*` left out, as `excluded` (§8.1, §11.1). The status is
+/// `200` when every member accepted, `207` when some did and others failed,
+/// and otherwise `504` or `424` as §11.2 maps the failures.
+///
+/// # Errors
+///
+/// Returns the [`WireError`] of an endpoint id the wire type refuses.
+fn answer(
+    federation: &Federation,
+    outcomes: &[(&EndpointId, Outcome)],
+) -> Result<Response, WireError> {
+    let snapshot = federation.snapshot();
+    let mut records = Vec::new();
+    for endpoint in snapshot.endpoints() {
+        let outcome = outcomes
+            .iter()
+            .find(|(id, _)| *id == endpoint.id())
+            .map_or(Outcome::Excluded { error: None }, |(_, outcome)| {
+                outcome.clone()
+            });
+        records.push(record(snapshot, endpoint, outcome)?);
+    }
+    let budget = federation.budget();
+    let meta = FederationMeta::new(records)?.with_timeout(TimeoutBudget {
+        per_node_ms: Some(whole_ms(budget.per_node())),
+        overall_ms: Some(whole_ms(budget.overall())),
+        policy: Some(TIMEOUT_POLICY.to_owned()),
+        ..TimeoutBudget::default()
+    });
+    let provenance = Provenance::active(&meta);
+    let code = answer_status(
+        &outcomes
+            .iter()
+            .map(|(_, outcome)| outcome)
+            .collect::<Vec<_>>(),
+    );
+    let response = (
+        code,
+        Json(Uploaded {
+            meta: UploadedMeta { federation: meta },
+        }),
+    )
+        .into_response();
+    Ok(provenance.stamp(response))
+}
+
+/// The milliseconds of `duration`, saturating at `u64::MAX`.
+fn whole_ms(duration: std::time::Duration) -> u64 {
+    // NOTE: §9.5 reports latency in whole milliseconds; a duration past
+    // u64::MAX ms cannot occur inside any budget, so saturating loses nothing.
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// The status of a fan-out upload whose in-scope members ended as
+/// `outcomes`.
+// NOTE: §12.6 item 3 allows `207`-style reporting for a partial success; `207`
+// tells it from `200` on the status line, and an all-failed upload maps as §11.2 does.
+fn answer_status(outcomes: &[&Outcome]) -> StatusCode {
+    let accepted = outcomes
+        .iter()
+        .filter(|outcome| outcome.status() == status::EndpointStatus::Active)
+        .count();
+    if accepted == outcomes.len() {
+        StatusCode::OK
+    } else if accepted > 0 {
+        StatusCode::MULTI_STATUS
+    } else if outcomes.iter().any(|outcome| {
+        matches!(
+            outcome.status(),
+            status::EndpointStatus::Offline | status::EndpointStatus::TimeOut
+        )
+    }) {
+        StatusCode::GATEWAY_TIMEOUT
+    } else {
+        StatusCode::FAILED_DEPENDENCY
+    }
+}
+
+/// The `endpoints[]` entry of `endpoint` of `snapshot`: its outcome, node,
+/// managing organisation, and the node's `system_id`, product and version
+/// where the registry holds them (§9.5, N20, N40).
+fn record(
+    snapshot: &RegistrySnapshot,
+    endpoint: &Endpoint,
+    outcome: Outcome,
+) -> Result<EndpointOutcome, WireError> {
+    let id = openehr_federation::id::EndpointId::new(endpoint.id().as_str())?;
+    let mut record = EndpointOutcome::new(id, outcome)
+        .with_node_id(endpoint.node().as_str())
+        .with_organisation(endpoint.managing_organisation().as_str());
+    if let Some(node) = snapshot.node(endpoint.node()) {
+        record = record.with_system_id(node.system_id().as_str());
+        if let Some(product) = node.product() {
+            record = record.with_product(product);
+        }
+        if let Some(version) = node.version() {
+            record = record.with_version(version);
+        }
+    }
+    Ok(record)
+}
+
+#[cfg(test)]
+mod tests {
+    use http::{HeaderMap, HeaderValue, Method, StatusCode};
+    use openehr_federation::headers;
+    use openehr_federation::outcome::{ErrorDetail, Outcome};
+    use openehr_its::rest::routes::{Lookup, lookup};
+
+    use super::{answer_status, every_member, uploads_template};
+
+    fn upload(method: &Method, path: &str) -> bool {
+        matches!(lookup(method, path), Lookup::Matched(matched) if uploads_template(&matched))
+    }
+
+    #[test]
+    fn only_the_two_template_uploads_fan_out() {
+        assert!(upload(&Method::POST, "/definition/template/adl1.4"));
+        assert!(upload(&Method::POST, "/definition/template/adl2"));
+        for (method, path) in [
+            (Method::GET, "/definition/template/adl1.4"),
+            (Method::GET, "/definition/template/adl2/t.v1"),
+            (Method::GET, "/definition/template/adl1.4/t.v1/example"),
+            (Method::PUT, "/definition/query/org::q/1.0.0"),
+            (Method::POST, "/ehr"),
+        ] {
+            assert!(!upload(&method, path), "{method} {path}");
+        }
+    }
+
+    fn endpoint_header(lines: &[&'static str]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for line in lines {
+            map.append(headers::ENDPOINT, HeaderValue::from_static(line));
+        }
+        map
+    }
+
+    #[test]
+    fn a_star_alone_names_every_member() {
+        assert!(every_member(&endpoint_header(&["*"])));
+        assert!(every_member(&endpoint_header(&[" * ,"])));
+        assert!(!every_member(&endpoint_header(&["*, node-a-pub"])));
+        assert!(!every_member(&endpoint_header(&["*", "*"])));
+        assert!(!every_member(&endpoint_header(&["node-a-pub"])));
+        assert!(!every_member(&HeaderMap::new()));
+    }
+
+    // conformance: CP-34
+    #[test]
+    fn a_failed_member_is_never_reported_as_overall_success() {
+        let active = Outcome::Active { latency_ms: 3 };
+        let failed = Outcome::NodeError {
+            latency_ms: 4,
+            error: ErrorDetail::Text("the node answered 422 Unprocessable Entity".to_owned()),
+        };
+        let late = Outcome::TimeOut {
+            latency_ms: 9,
+            error: ErrorDetail::Text("no answer before the deadline".to_owned()),
+        };
+        assert_eq!(StatusCode::OK, answer_status(&[&active, &active]));
+        assert_eq!(StatusCode::MULTI_STATUS, answer_status(&[&active, &failed]));
+        assert_eq!(StatusCode::MULTI_STATUS, answer_status(&[&late, &active]));
+        assert_eq!(
+            StatusCode::FAILED_DEPENDENCY,
+            answer_status(&[&failed, &failed])
+        );
+        assert_eq!(
+            StatusCode::GATEWAY_TIMEOUT,
+            answer_status(&[&failed, &late])
+        );
+    }
+}
