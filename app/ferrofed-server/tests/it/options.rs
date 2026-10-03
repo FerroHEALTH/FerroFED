@@ -341,7 +341,7 @@ async fn the_completeness_modes_follow_the_configuration() -> TestResult {
     Ok(())
 }
 
-// conformance: CP-23
+// conformance: CP-23 CP-34
 #[tokio::test]
 async fn the_definition_area_declares_nothing_offered() -> TestResult {
     let body = described("").await?;
@@ -351,6 +351,14 @@ async fn the_definition_area_declares_nothing_offered() -> TestResult {
             .with_stored_query_fan_out(false)?,
         body.federation.definition,
         "N43, N44: no template fan-out, no registry, no definition fan-out"
+    );
+    assert!(
+        body.federation
+            .its_rest
+            .definition
+            .starts_with("routed-single-node"),
+        "§7a.1, §12.6, N43: {}",
+        body.federation.its_rest.definition
     );
     assert!(
         body.federation.auth.is_none(),
@@ -432,6 +440,10 @@ async fn options_on_a_sub_path_names_the_methods_served_there() -> TestResult {
             "/v1/ehr/7d44/composition/u::s::1",
             "GET, PUT, DELETE, OPTIONS",
         ),
+        ("/v1/definition/template/adl1.4", "GET, POST, OPTIONS"),
+        ("/v1/definition/template/adl2/t.v1", "GET, OPTIONS"),
+        ("/v1/definition/query/org::q", "GET, PUT, OPTIONS"),
+        ("/v1/definition/query/org::q/1.0.0", "GET, PUT, OPTIONS"),
     ] {
         let response = send(app.clone(), options(uri)?).await?;
         assert_eq!(StatusCode::NO_CONTENT, response.status(), "{uri}");
@@ -452,11 +464,7 @@ async fn options_on_a_sub_path_names_the_methods_served_there() -> TestResult {
 async fn options_on_a_path_the_gateway_does_not_serve_is_not_implemented() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), "http://127.0.0.1:9", "", "")?;
-    for uri in [
-        "/v1/demographic/agent/u::s::1",
-        "/v1/definition/template/adl1.4",
-        "/v1/",
-    ] {
+    for uri in ["/v1/demographic/agent/u::s::1", "/v1/"] {
         let (status, text) = call(app.clone(), options(uri)?).await?;
         assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "N32: {uri}");
         assert_eq!("not-implemented", error_body(&text)?.code);

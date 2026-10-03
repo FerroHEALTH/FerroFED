@@ -6,8 +6,9 @@
 The `ferrofed` binary reads one TOML file and the environment. It serves the
 process shape (health, readiness, the request log, graceful shutdown) and, once
 a registry is configured, the federated query `POST /v1/query/aql`, the EHR
-resources routed to one node, and, when `[stored_queries]` is set, the
-stored-query registry; every other path under `/v1/` answers `501`.
+resources and the definition area routed to one node, and, when
+`[stored_queries]` is set, the stored-query registry; every other path under
+`/v1/` answers `501`.
 
 ## Running it
 
@@ -387,9 +388,10 @@ path = "/var/lib/ferrofed/stored-queries.redb"
   `stored_queries.path` without `registry.document` refuses the
   configuration, naming `registry.document`.
 - `OPTIONS {base}/` declares `definition.stored_query_registry: true` while
-  the path is set, and `false` without it; without it the definition routes
-  answer `501`. Whether the registry is offered is named in the startup log
-  line.
+  the path is set, and `false` without it; without it a stored-query
+  definition request goes to the one node the targeting headers name, and
+  `POST /v1/query/{name}` answers `501`. Whether the registry is offered is
+  named in the startup log line.
 
 The [client contract](../integrate/client-contract.md#stored-queries) says how
 a client stores and invokes a query.
@@ -417,6 +419,7 @@ define, is refused like any other unknown key.
 | `GET /health/readiness` | `200` when every registered indicator is up, `503` with each indicator's state otherwise |
 | `POST /v1/query/aql` | the federated `RESULT_SET`; `501` when no registry is configured |
 | `/v1/ehr/{ehr_id}` and below | routed to the one node `openEHR-federation-endpoint` names, and answered as that node answered; `501` when no registry is configured |
+| `/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; `501` when no registry is configured |
 | any other path under `/v1/` | `501` |
 | any other path | `404` |
 

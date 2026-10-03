@@ -35,6 +35,10 @@
 //! A versioned write goes there only when that node controls the version it
 //! amends, and a new EHR only to an explicit target
 //! ([`write`](mod@write); §12.4).
+//! A definition request goes to the one endpoint the targeting headers
+//! name, never to a node picked implicitly and never merged ([`route`];
+//! §7a.1, §12.6, N43), unless the stored-query registry holds it
+//! ([`stored`]; §12.7).
 //! Every version a fan-out or a routed answer shows an endpoint holding
 //! teaches the follow-up routing table ([`follow_up`]; §12.2, N21).
 //! `OPTIONS {base}/` describes the whole surface, and `OPTIONS` on a sub-path

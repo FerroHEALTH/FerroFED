@@ -63,7 +63,7 @@ CP-31	Gateway	N38,N40	4	covered	#49,#51	-
 CP-32	Gateway	N39,N14,N9	5	covered	#52,#53,#54,#55,#157,#187	-
 CP-33	Gateway	N41,N42	6,11	covered	#62,#63,#91	the routing clause is scored (explicit target, binding, index, then a read-only ask-all, and a write no earlier step routes refused 400 and never probed), and so is the integrity clause over two mock nodes: an ehr_id a binding, the index or the probe finds at two members is a 409 listing them on a read as on a write, neither is sent the request, one integrity incident is logged per refusal, and the index-insert alarm of section 12b.2 fires once; a binding collision is scored on the routing order alone until client sessions exist (#80), and the two-node harness of tracks 6 and 11 is #91
 CP-33a	Operator	N42a	11	operator	#79,#91	verified at admission or in the registry, not on a request (section 16.2)
-CP-34	Gateway	N43	9	planned	#75,#76	-
+CP-34	Gateway	N43	9	covered	#75,#76	scored over two mock nodes: every template and stored-query definition request reaches the one endpoint the targeting headers name, byte-identical, and is answered as that node answered, its 4xx included; without a target, with *, an unknown id or several ids it is refused 400 and no node is asked; a template list is one node's answer, never a union; with the registry offered, stored queries stay at the gateway while templates route; the fan-out upload clauses apply only where fan-out upload is offered, which it is not (#76)
 CP-35	Gateway	N17,N18	1	covered	#33,#38,#72	-
 CP-36	Gateway	N8	2,7	covered	#43,#83	-
 CP-37	Gateway	N12	3	covered	#72	-

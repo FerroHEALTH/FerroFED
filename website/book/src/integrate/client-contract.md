@@ -8,8 +8,10 @@ out what the specification promises that client. Once a registry is
 configured, FerroFED serves the federated query at
 `POST {base}/v1/query/aql` and routes the EHR resources under a path
 `ehr_id`, `{base}/v1/ehr/{ehr_id}` and below it, to one node (§7a.1). A
-deployment that offers the stored-query registry also stores queries under
-`{base}/v1/definition/query/` and runs them by name at
+request under `{base}/v1/definition/` goes to the one node you name
+([templates and definitions](#templates-and-definitions), §12.6). A
+deployment that offers the stored-query registry stores queries under
+`{base}/v1/definition/query/` itself instead, and runs them by name at
 `POST {base}/v1/query/{name}` ([stored queries](#stored-queries), §12.7).
 Every other ITS-REST path under `/v1/` answers `501` (N32).
 
@@ -351,6 +353,37 @@ included, reaches that node byte for byte, and the node's `Location` and
 `ETag` come back unmodified. A composition or a directory created inside an
 existing EHR is routed by its path `ehr_id` like any other request under it.
 
+## Templates and definitions
+
+A template lives at the node it was uploaded to, and a `COMPOSITION` built on
+it validates only there. So every request under `{base}/v1/definition/` (an
+ADL 1.4 or ADL 2 template upload, the template list, one template, its
+example composition, and stored-query management where the gateway holds no
+registry) goes to the one endpoint you name in `openEHR-federation-endpoint`
+or `openEHR-federation-organisation` (§7a.1, §12.6, N43). The gateway never
+picks a node for you and never probes for one:
+
+- Without a header the request is a `400` (`target-required`).
+- Headers that select several endpoints are a `400` (`endpoint-several`).
+  The gateway does not offer the fan-out template upload of §12.6, so `*` is
+  no endpoint the registry knows, and it is a `400` (`endpoint-unknown`) like
+  any other unknown id.
+- The body reaches that node byte for byte, and only the headers and query
+  parameters the ITS-REST operation declares travel with it (§5.4.1, N33).
+- The answer is that node's answer, its status, body, `Location` and `ETag`
+  as the node sent them, with `openEHR-federation-endpoint` and
+  `openEHR-federation-system-id` naming who acted (§7a.3, N31). A template
+  list is one node's list: the gateway never combines two nodes' templates
+  into one catalogue (§12.6).
+- A node's own error comes back as the node sent it. A `404` for a template
+  the node does not hold, or a `400` for a template it rejects, is never
+  masked or rewritten (§12.6, §11.2).
+
+Where the gateway offers the stored-query registry, the registry answers every
+request under `{base}/v1/definition/query/` itself, with or without a header,
+and templates still go to the one node you name ([stored
+queries](#stored-queries), §7a.2).
+
 ## Stored queries
 
 A deployment that sets `[stored_queries]` offers the federated stored-query
@@ -431,8 +464,9 @@ Content-Type: application/json
   name: each gets the standard AQL of an inline query.
 
 The gateway does not distribute definitions to the nodes, and
-`definition.stored_query_fan_out` is `false` (§12.7). Templates are not
-served: `{base}/v1/definition/template/…` answers `501`.
+`definition.stored_query_fan_out` is `false` (§12.7). Templates go to the one
+node you name ([templates and definitions](#templates-and-definitions)).
+Without the registry, `POST {base}/v1/query/{name}` answers `501`.
 
 ## Self-description
 
@@ -455,7 +489,7 @@ says what the gateway does, not what it was once meant to do:
 | `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
 | `definition` | `fan_out_template_upload: false` and `stored_query_fan_out: false`; `stored_query_registry` is `true` while `[stored_queries]` is set and `false` otherwise (N43, N44, §12.7) |
 | `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
-| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` held at the gateway registry for stored queries when it is offered and unsupported (`501`) otherwise, and `demographic` unsupported (`501`) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` `routed-single-node`, to the one endpoint the targeting headers name, with stored queries held at the gateway registry when it is offered (§12.6, §7a.2), and `demographic` unsupported (`501`) |
 | `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
 
 What is absent is absent on purpose:
@@ -475,7 +509,8 @@ What is absent is absent on purpose:
 `OPTIONS` on a path under `{base}/v1/` answers `204` with the methods served
 there in `Allow`: `POST, OPTIONS` for `/v1/query/aql`, and the ITS-REST
 methods of the resource for an EHR resource under a path `ehr_id`, such as
-`GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`. Where the stored-query registry is
-offered, a stored query answers `POST, OPTIONS` and a definition
-`GET, PUT, OPTIONS`. The gateway answers it without
+`GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`. A definition resource answers the
+ITS-REST methods of the resource, such as `GET, POST, OPTIONS` for
+`/v1/definition/template/adl1.4`. Where the stored-query registry is
+offered, a stored query answers `POST, OPTIONS`. The gateway answers it without
 asking a node. A path the gateway does not serve answers `501`.
