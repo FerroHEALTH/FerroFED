@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use ferrofed_registry::id::{EhrId, NodeId};
+use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::header::{AUTHORIZATION, HeaderMap};
 use ihe_iti::pixm::PixmClient;
@@ -59,8 +60,8 @@ pub enum PixAuth {
 /// One PIX Manager as the configuration names it.
 #[derive(Debug)]
 pub struct ManagerConfig {
-    /// The Manager's FHIR base URL.
-    pub base: Url,
+    /// The Manager's FHIR base URL, which `Debug` shows without its userinfo.
+    pub base: SecretUrl,
     /// How the gateway authenticates to it.
     pub auth: PixAuth,
     /// The members this Manager resolves, each with its `ehr_id` domain: the
@@ -96,6 +97,9 @@ pub enum PixmConfigError {
         #[source]
         source: InvalidInput,
     },
+    /// A Manager's base URL does not parse as a URL.
+    #[error("a PIX Manager base URL is not a URL")]
+    BaseUrl(#[source] url::ParseError),
     /// A Manager's base URL is not an `http(s)` URL without a query.
     #[error("a PIX Manager base URL is not an http(s) URL without a query or a fragment")]
     Base(#[source] InvalidInput),
@@ -166,9 +170,9 @@ impl PixmResolver {
     ///
     /// # Errors
     /// A [`PixmConfigError`] for an unknown, doubled or uncovered member, a
-    /// domain or base URL the PIXm client refuses, a namespace mapping that
-    /// is not a URI, credentials no header can carry, or an HTTP client that
-    /// cannot be built.
+    /// base URL that does not parse, a domain or base URL the PIXm client
+    /// refuses, a namespace mapping that is not a URI, credentials no header
+    /// can carry, or an HTTP client that cannot be built.
     pub fn from_config(
         managers: Vec<ManagerConfig>,
         namespaces: BTreeMap<IdentifierNamespace, String>,
@@ -197,7 +201,8 @@ impl PixmResolver {
                 members.push((member, target));
             }
             let http = http_client(&manager.auth)?;
-            let client = PixmClient::new(manager.base, http).map_err(PixmConfigError::Base)?;
+            let base = Url::parse(manager.base.expose()).map_err(PixmConfigError::BaseUrl)?;
+            let client = PixmClient::new(base, http).map_err(PixmConfigError::Base)?;
             built.push(Arc::new(Manager { client, members }));
         }
         if let Some(uncovered) = registry

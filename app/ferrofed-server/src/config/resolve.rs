@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
 use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::secret::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -207,22 +208,31 @@ impl Config {
     }
 }
 
-/// Resolves `[pixm]`: every Manager URL parses and every secret is read.
+/// Resolves `[pixm]`: every Manager URL parses and carries no userinfo, and
+/// every secret is read.
 fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
     let mut managers = Vec::with_capacity(pixm.manager.len());
     for (index, manager) in pixm.manager.iter().enumerate() {
         let key = format!("pixm.manager[{index}]");
-        let url = url::Url::parse(&manager.url).map_err(|source| Error::Url {
+        let url = url::Url::parse(manager.url.expose()).map_err(|source| Error::Url {
             key: format!("{key}.url"),
             source,
         })?;
+        // NOTE: no specification governs this: our own design; as the registry
+        // refuses it on an endpoint URL, a credential goes in its own section.
+        if !url.username().is_empty() || url.password().is_some() {
+            return Err(Error::UrlCredentials {
+                key: format!("{key}.url"),
+                section: format!("{key}.credentials"),
+            });
+        }
         let credentials = manager
             .credentials
             .as_ref()
             .map(|section| resolve_credentials(&format!("{key}.credentials"), section))
             .transpose()?;
         managers.push(PixManagerSettings {
-            url,
+            url: manager.url.clone(),
             members: manager.members.clone(),
             credentials,
         });
@@ -261,9 +271,9 @@ fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSetti
     }
     let otlp_endpoint = metrics
         .otlp_endpoint
-        .as_deref()
+        .as_ref()
         .map(|endpoint| {
-            url::Url::parse(endpoint).map_err(|source| Error::Url {
+            url::Url::parse(endpoint.expose()).map_err(|source| Error::Url {
                 key: String::from("metrics.otlp_endpoint"),
                 source,
             })
@@ -277,7 +287,7 @@ fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSetti
     }
     Ok(MetricsSettings {
         listen,
-        otlp_endpoint,
+        otlp_endpoint: otlp_endpoint.map(|endpoint| SecretUrl::new(String::from(endpoint))),
     })
 }
 

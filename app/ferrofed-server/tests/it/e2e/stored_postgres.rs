@@ -15,13 +15,13 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_registry::definition::store::{DefinitionStore, StoreError};
+use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_server::stored::postgres::PostgresStore;
 use ferrofed_testkit::containers;
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
-use secrecy::SecretString;
 
 use crate::e2e::TestResult;
 use crate::facade::{
@@ -89,14 +89,14 @@ async fn the_postgresql_store_passes_the_store_suite() -> TestResult {
     let others: Vec<&str> = others.iter().map(String::as_str).collect();
     let server = containers::postgres(first, &others).await?;
     for ((scenario, run), database) in SCENARIOS.into_iter().zip(&databases) {
-        let url = SecretString::from(server.url(database));
+        let url = SecretUrl::new(server.url(database));
         let open = || -> Result<Box<dyn DefinitionStore>, StoreError> {
             Ok(Box::new(PostgresStore::open(&url)?))
         };
         tokio::task::block_in_place(|| run(&open))
             .map_err(|failed| format!("{scenario}: {failed}"))?;
     }
-    let url = SecretString::from(server.url(first));
+    let url = SecretUrl::new(server.url(first));
     let store = tokio::task::block_in_place(|| PostgresStore::open(&url))?;
     assert!(store.is_shared(), "every replica inserts into it");
     assert!(!store.is_read_only());

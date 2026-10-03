@@ -181,3 +181,49 @@ async fn a_valid_credential_reaches_its_node_on_every_request() -> TestResult {
     }
     Ok(())
 }
+
+/// A credential read from a `_file` sibling travels as a redacting secret
+/// from the configuration to the node client, and still reaches its node as
+/// written.
+#[tokio::test]
+async fn a_credential_from_a_file_reaches_its_node_as_written() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_answering("uid-at-b").await;
+    let dir = tempfile::tempdir()?;
+    let token = dir.path().join("token");
+    std::fs::write(&token, "synthetic-file-token\n")?;
+    let password = dir.path().join("password");
+    std::fs::write(&password, "synthetic-file-pw\n")?;
+    let token = toml::Value::String(token.display().to_string());
+    let password = toml::Value::String(password.display().to_string());
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "",
+        &format!(
+            "[credentials.\"node-a-pub\"]\nbearer_token_file = {token}\n\n\
+             [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword_file = {password}\n"
+        ),
+    )?;
+    let aql = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
+
+    let (status, text) = call(app, post(body(aql)?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    for (server, expected) in [
+        (&a, "Bearer synthetic-file-token"),
+        // The base64 of `gateway:synthetic-file-pw` (RFC 7617 §2).
+        (&b, "Basic Z2F0ZXdheTpzeW50aGV0aWMtZmlsZS1wdw=="),
+    ] {
+        let requests = server.received_requests().await.ok_or("recording is on")?;
+        assert_eq!(1, requests.len(), "each node is asked once");
+        for request in requests {
+            let sent = request
+                .headers
+                .get(http::header::AUTHORIZATION)
+                .map(http::HeaderValue::to_str)
+                .transpose()?;
+            assert_eq!(Some(expected), sent, "the node receives its credential");
+        }
+    }
+    Ok(())
+}

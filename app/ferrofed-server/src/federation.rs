@@ -661,10 +661,10 @@ fn pixm_resolver(
         }
         let auth = match &manager.credentials {
             None => PixAuth::None,
-            Some(Scheme::Bearer(token)) => PixAuth::Bearer(token.clone()),
+            Some(Scheme::Bearer(token)) => PixAuth::Bearer(token.to_secret_string()),
             Some(Scheme::Basic { user, password }) => PixAuth::Basic {
                 user: user.clone(),
-                password: password.clone(),
+                password: password.to_secret_string(),
             },
         };
         managers.push(ManagerConfig {
@@ -690,10 +690,10 @@ fn onward_credentials(settings: &Settings) -> BTreeMap<EndpointId, SharedCredent
     let mut credentials = BTreeMap::new();
     for (endpoint, scheme) in &settings.credentials {
         let onward = match scheme {
-            Scheme::Bearer(token) => Credentials::Bearer(token.clone()),
+            Scheme::Bearer(token) => Credentials::Bearer(token.to_secret_string()),
             Scheme::Basic { user, password } => Credentials::Basic {
                 user: user.clone(),
-                password: password.clone(),
+                password: password.to_secret_string(),
             },
         };
         let shared: SharedCredentials = Arc::new(onward);

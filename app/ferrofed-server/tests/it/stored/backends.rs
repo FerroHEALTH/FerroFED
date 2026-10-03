@@ -183,7 +183,7 @@ fn a_postgres_url_resolves_inline_or_from_its_file_and_is_never_shown() -> TestR
         let Store::Postgres(held) = store else {
             panic!("a postgres store: {store:?}");
         };
-        assert_eq!(url, secrecy::ExposeSecret::expose_secret(held), "trimmed");
+        assert_eq!(url, held.expose(), "trimmed");
         assert!(!format!("{settings:?}").contains(PASSWORD), "Debug redacts");
         let logged = logged(&settings)?;
         assert!(

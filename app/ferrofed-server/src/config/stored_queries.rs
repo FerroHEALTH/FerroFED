@@ -20,7 +20,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use secrecy::{ExposeSecret, SecretString};
+use ferrofed_registry::secret::SecretUrl;
 use serde::Deserialize;
 
 use crate::config::Config;
@@ -60,8 +60,8 @@ impl fmt::Display for Backend {
 
 /// The federated stored-query registry, as written.
 ///
-/// `Debug` names whether a connection string is set, never the string.
-#[derive(Clone, Default, PartialEq, Eq, Deserialize)]
+/// `Debug` shows the connection string as [`SecretUrl`] redacts it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct StoredQueries {
     /// The backend; `redb` when the table sets none.
@@ -71,32 +71,21 @@ pub struct StoredQueries {
     pub path: Option<PathBuf>,
     /// The PostgreSQL connection string of the `postgres` backend, a URL or
     /// libpq key/value pairs; a secret.
-    pub url: Option<String>,
+    pub url: Option<SecretUrl>,
     /// A file holding [`StoredQueries::url`], read at boot.
     pub url_file: Option<PathBuf>,
 }
 
-impl fmt::Debug for StoredQueries {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StoredQueries")
-            .field("backend", &self.backend)
-            .field("path", &self.path)
-            .field("url", &self.url.as_ref().map(|_| "[REDACTED]"))
-            .field("url_file", &self.url_file)
-            .finish()
-    }
-}
-
 /// The store the stored-query registry is opened over, resolved.
 ///
-/// `Debug` redacts the connection string, because [`SecretString`] does.
+/// `Debug` redacts the connection string, because [`SecretUrl`] does.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Store {
     /// The `redb` store file.
     Redb(PathBuf),
     /// The PostgreSQL connection string.
-    Postgres(SecretString),
+    Postgres(SecretUrl),
     /// The directory of read-only definition files.
     Files(PathBuf),
 }
@@ -118,7 +107,7 @@ impl Store {
     pub fn same_as(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Redb(a), Self::Redb(b)) | (Self::Files(a), Self::Files(b)) => a == b,
-            (Self::Postgres(a), Self::Postgres(b)) => a.expose_secret() == b.expose_secret(),
+            (Self::Postgres(a), Self::Postgres(b)) => a == b,
             _ => false,
         }
     }
@@ -181,7 +170,7 @@ fn path(section: &StoredQueries, backend: Backend) -> Result<PathBuf, Error> {
 }
 
 /// The connection string of the `postgres` backend, checked to parse.
-fn url(section: &StoredQueries) -> Result<SecretString, Error> {
+fn url(section: &StoredQueries) -> Result<SecretUrl, Error> {
     if section.path.is_some() {
         return Err(Error::StoreKey {
             key: String::from("stored_queries.path"),
@@ -194,8 +183,8 @@ fn url(section: &StoredQueries) -> Result<SecretString, Error> {
         });
     }
     let key = "stored_queries.url";
-    let url = secret(key, section.url.as_deref(), section.url_file.as_deref())?
-        .filter(|url| !url.expose_secret().trim().is_empty())
+    let url = secret(key, section.url.as_ref(), section.url_file.as_deref())?
+        .filter(|url: &SecretUrl| !url.expose().trim().is_empty())
         .ok_or_else(|| Error::Missing {
             key: String::from(key),
         })?;

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
+use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
 use ferrofed_server::metrics::{self, CONTENT_TYPE, Metrics};
@@ -176,7 +177,7 @@ fn the_otlp_push_takes_an_http_collector_and_refuses_any_other() -> TestResult {
             .metrics
             .otlp_endpoint
             .as_ref()
-            .map(url::Url::as_str)
+            .map(SecretUrl::expose)
     );
     for refused in ["https://collector.example.org:4317", "not a url"] {
         let text = format!("[metrics]\notlp_endpoint = \"{refused}\"\n");
