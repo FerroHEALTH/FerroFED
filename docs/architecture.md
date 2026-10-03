@@ -249,8 +249,10 @@ its public AST. FerroFED has no AQL parser, no printer and no text splicing.
    template once and substitutes a string into it, as the reference
    implementation does.
 7. **Gate** the composed request line and headers: no path segment, query
-   parameter or header value equals a consumed identifier (N33). The node-side
-   wire capture of track 10 (#90) is the backstop.
+   parameter or header value equals a consumed identifier (N33). The URL
+   authority, and the `Host` header the HTTP client writes from it, are the
+   registry's and are not read (decision A48). The node-side wire capture of
+   track 10 (#90) is the backstop.
 
 `columns[]` is rendered once, from the façade AST, with
 `IdentifiedPath::column_path_text` and the select alias (or `#i`), never from a
@@ -1136,11 +1138,16 @@ nodes that answered is a wrong value for the federation, not a subset of a
 right one, and §11.4 forbids silently serving all-or-nothing to a request
 that asked for `partial`. A real arrives as the binary64 nearest the node's
 text and is read back as its shortest decimal; a sum the decimal or the JSON
-number cannot hold exactly is a `500`, never a rounding. The mean is the
-decimal quotient to 28 significant digits, written as the nearest JSON
-number, because AQL ties `AVG`'s return type to its input without saying how
-an integer mean rounds. With no node answering, the answer has
-no row, as §11.3 requires of a patient found nowhere.
+number cannot hold exactly is a `500`, never a rounding. AQL 1.1.0
+§3.9.1.5 lets the input type "determine the return type" of `AVG`, and the
+input type reaches the gateway as the type of the node sums, which §3.9.1.4
+ties to the same input (decision A49). When every node sum is an integer, the
+mean is an integer: the one nearest the exact quotient of the federation's
+sum and count, a tie going to the even one, rounded once and never per node.
+When a node sum is a real, the mean is the decimal quotient to 28
+significant digits, written as the nearest JSON number. With no node
+answering, the answer has no row, as §11.3 requires of a patient found
+nowhere.
 
 **Dedup** (decision A32, #56). `none` by default (N15), `version-identity` on
 request, with the header `openEHR-federation-dedup: version-identity`
@@ -1633,8 +1640,8 @@ the milestone in progress.
 
 Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
-and A45 were decided on 2026-10-02, and A46 and A47, which amends A44, on
-2026-10-03. The bracket names the report and its
+and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48 and A49, which amends
+A30, on 2026-10-03. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -1669,7 +1676,7 @@ R4 is #23, #25 and #27).
 | A27 | The N39 agreement check [R3 D3] | uid tie-break pushed down, `LIMIT n + 1`, and a cut node out of order reported `node-error` | §11.6.1's containment argument assumes an order AQL does not define; a wrong top `n` is undetectable for a client | superseded by A43 (owner, 2026-10-02: "always go to the specs and see how it should be done"; §11.6.1 and N39 require dispatching `LIMIT n`) |
 | A28 | An `ORDER BY` path not in `SELECT` [R3 D4] | a hidden column, stripped after the merge | the client's query stays answerable; hygiene re-checks the dispatched AQL | decided (owner, 2026-10-01) |
 | A29 | `OFFSET` [R3 D5] | bounded `k + n`, 1000 rows per node by default, `400` past it; each node is sent `LIMIT k + n` with no `OFFSET`, checked as A43 checks `LIMIT n`, merged under the Tier order and sliced `[k, k + n)`; no `LIMIT` or no `ORDER BY` is `400` | §11.6.2 admits it when declared, "permitted only where the gateway can bound `k + n`" | decided (owner, 2026-10-01; mechanism revised 2026-10-02 per the #52 review: `LIMIT k + n` replaces the superseded `k + n + 1` check) |
-| A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01) |
+| A30 | Aggregates [R3 D6] | `COUNT`, `SUM`, `MIN`, `MAX`, and `AVG` through a sum and a count, without `DISTINCT` or dedup | §11.6.3 admits decomposable aggregates when exactly correct; Gray et al. 1997 | decided (owner, 2026-10-01; the return type of `AVG` over integers amended by A49 on 2026-10-03) |
 | A31 | Cursor and async [R3 D7] | not built; `Prefer: respond-async` ignored and answered synchronously, no cursor handle in `meta.federation`, both pinned by tests (#59, #60) | both need state with an expiry and request affinity | decided (owner, 2026-10-01) |
 | A32 | The dedup key [R3 D8] | the full `ObjectVersionId` | §10.3's scenario and the RM's copy semantics; §10.2 contradicts §10.3 (held on #17); grouping by `object_id` collapses a version history | decided (owner, 2026-10-01) |
 | A33 | The wire types [R4 D1] | hand-written in `openehr-federation`, held to the schemas by three test layers; no FerroFED generator | typify drops open members and supports no `if`/`then` | decided (owner, 2026-10-01) |
@@ -1687,3 +1694,5 @@ R4 is #23, #25 and #27).
 | A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (upstream report on #212) | decided (owner, 2026-10-02) |
 | A46 | Follow-up reads of EHR-scoped versions [owner, #64] | route by N41, not `creating_system_id`: a read of a version under `{base}/v1/ehr/{ehr_id}/…` goes by the explicit target, the binding, the index and the ask-all probe of the path `ehr_id`; the learned `creating_system_id` map is still fed from every answer (CP-13) | N41 and §12.5.1 order every path `ehr_id` and forbid skipping a step that answers; §12a.1 [[route-ehr]] routes an EHR-scoped request "not on `creating_system_id`"; N22 forbids mutating the uid-bearing path, so the holder's `ehr_id` cannot be rewritten for the creator; N42a means the creator never adopted that `ehr_id`, so the forwarded read would `404`, against N1; the holder's copy carries the same immutable version; the contradiction with §12.3 and N22's order is on #212, and CP-14 stays planned | decided (owner, 2026-10-03) |
 | A47 | The quickstart topology and the node databases [owner, #322, amending A44] | the compose quickstart runs four FerroEHR nodes, `ferroehr-a` to `ferroehr-d`, each with its own `system_id`, over synthetic patients at four, two, one and no nodes; the quickstart and the e2e harness run one PostgreSQL server with a database per node, each owned by its own role, created by FerroEHR's init script run once per node; CI stays at two nodes plus the third for three-node cases | two nodes show one gateway asking two servers, four show a patient missing at some members (§11.3), a directed query leaving the rest `excluded` (§8) and the merge over more than two answers (§10, §11.6); schemas cannot separate the nodes because FerroEHR fixes its schema names; one server per topology starts one database server instead of one per node (#320); no specification governs this: our own design | decided (owner, 2026-10-03) |
+| A48 | The URL authority and `Host` at the outbound gate [owner, #309] | the gate reads the path, the query string, the fragment and the headers the gateway composes, and never the authority of a node's URL or the `Host` header the HTTP client writes from it; a client `Host` is never forwarded | §5.4.1 [[no-identifier-fanout]] and N33 forbid a directly identifying identifier "in the parts of the outbound request the gateway composes (the dispatched AQL, the request path, the query string and the headers)"; the authority, and `Host` with it, is the operator's registry endpoint URL, fixed before any request and composed from none, so it cannot carry a client-supplied identifier, and searching it refused every query for a patient whose identifier occurs in a node's port (#232); the silence on the authority is on #212 | decided (owner, 2026-10-03) |
+| A49 | `AVG` over integers [owner, #309, amending A30] | an integer when every node `SUM` is an integer: the one nearest the exact quotient of the federation's sum and count, a tie to the even one, rounded once at the gateway and never per node; the decimal mean, written as the nearest JSON number, when a node `SUM` is a real | AQL 1.1.0 §3.9.1.5: "Input values type should be either Integer or Real, and it will also determine the return type"; §3.9.1.4 says the same of `SUM`, so the node sums carry the input type; AQL gives no rounding, and the rounding is our own design: the nearest integer is the Integer closest to the arithmetic mean §3.9.1 defines, and ties to even is the rule the gateway already applies writing a real mean as the nearest binary64 (IEEE 754 roundTiesToEven), with no bias toward zero or upward; the silence on the rounding is on #212 | decided (owner, 2026-10-03) |

@@ -401,7 +401,16 @@ to that node's `ehr_id`, and answers one row in your query's columns.
 - `MIN` and `MAX` are the least or greatest node value, over numbers and
   complete date-times.
 - `AVG` is asked of each node as the `SUM` and the `COUNT` of its path, and
-  answered as their quotient, or `NULL` when no node counts a value.
+  answered as their quotient, or `NULL` when no node counts a value. The type
+  of the input decides the type of the answer (AQL 1.1.0 §3.9.1.5), and it
+  reaches the gateway as the type of the node sums. Over integers, `AVG` is
+  an integer: the one nearest the exact quotient of the federation's sum and
+  count, with a tie going to the even integer, so `5 / 2` is `2` and `7 / 2`
+  is `4`. The gateway rounds once, after it adds every node's sum and count,
+  and never rounds a node's own mean. Over reals, `AVG` is the decimal
+  quotient written as the nearest JSON number, so `12.5 / 3` is
+  `4.166666666666667`. AQL states no rounding rule, so the rounding is
+  FerroFED's own.
 
 Integers add exactly, and reals add in decimal arithmetic, so `0.1 + 0.2` is
 `0.3`. A recombination over some of the nodes would be a wrong value, so:
@@ -686,7 +695,11 @@ Every other header the gateway sends to a node for a federated query is fixed
 by the gateway: `Accept` and `Content-Type` (`application/json`),
 `Authorization` (the endpoint's configured onward credential, when it has
 one), and the `Host`, `Content-Length` and `Accept-Encoding` the HTTP client
-writes. None is copied from the client request.
+writes. None is copied from the client request. `Host` is the authority of
+the endpoint URL in your registry, never a value from a request, so the
+outbound gate does not search it, or the URL's host and port, for a
+withheld identifier (§5.4.1, N33). It searches the path, the query string
+and the other headers, except the minted id above.
 
 A request routed to one node (`{base}/v1/ehr/{ehr_id}` and below) carries the
 same `Authorization`, `X-Request-Id`, `Host`, `Content-Length` and

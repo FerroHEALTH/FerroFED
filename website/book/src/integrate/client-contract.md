@@ -231,6 +231,12 @@ Two versions of one
 composition are two rows either way, and `none` states the default
 explicitly. Any other value is refused `400` with the code `dedup-invalid`.
 
+An aggregate across nodes comes back as one row in your query's columns
+([Aggregates across nodes](../operate/configuration.md#aggregates-across-nodes)).
+`AVG` answers in the type of its input (AQL 1.1.0 §3.9.1.5): over integers,
+the integer nearest the federation's mean, a tie going to the even one, and
+over reals, a real.
+
 Read whether an answer is complete from `meta.federation.complete`, never
 from the status code; the gateway emits no FHIR `OperationOutcome`, because
 its answer is an ITS-REST `RESULT_SET` (§11.4, N17).

@@ -71,6 +71,27 @@ async fn the_node_answers_recombine_into_one_row() -> TestResult {
     Ok(())
 }
 
+// conformance: CP-32
+#[tokio::test]
+async fn an_avg_over_integers_answers_an_integer() -> TestResult {
+    let a = aggregate_node("[3, 12, 2]", Duration::ZERO).await;
+    let b = aggregate_node("[2, 7, 1]", Duration::ZERO).await;
+    let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &b.uri())])?;
+    let answer = run(
+        &snapshot,
+        plan(&["node-a-pub", "node-b-pub"])?,
+        budget(2_000, 5_000)?,
+    )
+    .await?;
+    assert_eq!(answer.status(), StatusCode::OK);
+    assert_eq!(
+        rows_text(&answer)?,
+        "[[5,6]]",
+        "AQL 1.1.0 §3.9.1.5: (12 + 7) / (2 + 1) over Integer input, the nearest integer"
+    );
+    Ok(())
+}
+
 // conformance: CP-10 CP-32
 #[tokio::test]
 async fn a_value_the_recombination_cannot_use_fails_the_query_424() -> TestResult {

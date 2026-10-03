@@ -8,6 +8,8 @@
 //! exactly correct answer refuses its node and leaves no row.
 #![cfg(feature = "merge")]
 
+use std::cmp::Ordering;
+
 use openehr_federation::aggregate::{Recombination, Recombine};
 use openehr_federation::merge::{Disagreement, Merged, NodeAnswer, combine};
 use openehr_federation::order::ResultOrder;
@@ -114,11 +116,34 @@ fn mean(sum: i128, count: usize, scale: u32) -> Cell {
     json!(text.parse::<f64>().unwrap())
 }
 
+/// The integer nearest `sum / count`, a tie going to the even one: of the two
+/// integers around the quotient, the one whose multiple of `count` lies
+/// nearer `sum`.
+fn nearest_even(sum: i128, count: usize) -> Cell {
+    let count = i128::try_from(count).unwrap();
+    let below = sum.div_euclid(count);
+    let above = below + 1;
+    let distance = |candidate: i128| (candidate * count - sum).abs();
+    let nearest = match distance(below).cmp(&distance(above)) {
+        Ordering::Less => below,
+        Ordering::Equal if below.rem_euclid(2) == 0 => below,
+        Ordering::Greater | Ordering::Equal => above,
+    };
+    json!(nearest)
+}
+
 /// The federation's row over the union of `values`.
 fn expected(values: &[Option<i128>], scale: u32) -> ResultSetRow {
     let (rows, counted, sum, min, max) = aggregates(values);
     let cell = |found: Option<i128>| found.map_or(json!(null), |m| value(m, scale));
-    let average = sum.map_or(json!(null), |sum| mean(sum, counted, scale));
+    // AQL 1.1.0 §3.9.1.5: the input type determines the return type of AVG.
+    let average = sum.map_or(json!(null), |sum| {
+        if scale == 0 {
+            nearest_even(sum, counted)
+        } else {
+            mean(sum, counted, scale)
+        }
+    });
     vec![
         json!(rows),
         json!(counted),
@@ -226,6 +251,83 @@ fn an_aggregate_over_no_value_is_null_and_a_count_is_zero() {
         combined(nodes, &avg).rows(),
         [vec![json!(null)]],
         "AQL §AVG"
+    );
+}
+
+/// The recombined `AVG` over nodes answering the `SUM` and `COUNT` pairs
+/// `sums`.
+fn average(sums: &[(Cell, i128)]) -> Merged {
+    let nodes = sums
+        .iter()
+        .enumerate()
+        .map(|(index, (sum, count))| {
+            NodeAnswer::new(
+                format!("node-{index}"),
+                vec![vec![sum.clone(), json!(count)]],
+            )
+        })
+        .collect();
+    combined(
+        nodes,
+        &Recombination::new(vec![Recombine::Avg { sum: 0, count: 1 }]),
+    )
+}
+
+// conformance: CP-32
+#[test]
+fn avg_over_integers_is_the_nearest_integer_a_tie_to_the_even_one() {
+    for (sum, count, mean) in [
+        (19, 3, 6),
+        (20, 3, 7),
+        (6, 3, 2),
+        (1, 2, 0),
+        (5, 2, 2),
+        (7, 2, 4),
+        (-5, 2, -2),
+        (-7, 2, -4),
+        (-3, 4, -1),
+        (-1, 4, 0),
+    ] {
+        assert_eq!(
+            average(&[(json!(sum), count)]).rows(),
+            [vec![json!(mean)]],
+            "AQL 1.1.0 §3.9.1.5: {sum} / {count} over Integer input is an Integer"
+        );
+    }
+}
+
+// conformance: CP-32
+#[test]
+fn avg_over_integers_rounds_once_over_the_federation_sum_and_count() {
+    assert_eq!(
+        average(&[(json!(1), 2), (json!(2), 2)]).rows(),
+        [vec![json!(1)]],
+        "3 / 4 is 0.75, whatever each node's own mean would round to"
+    );
+    assert_eq!(
+        average(&[(json!(3), 2), (json!(1), 2)]).rows(),
+        [vec![json!(1)]],
+        "4 / 4, where the node means 1.5 and 0.5 round to 2 and 0"
+    );
+    assert_eq!(
+        average(&[(json!(1), 2), (json!(1), 2)]).rows(),
+        [vec![json!(0)]],
+        "2 / 4 is the tie 0.5, which goes to the even 0"
+    );
+}
+
+// conformance: CP-32
+#[test]
+fn avg_with_a_real_node_sum_is_the_decimal_mean() {
+    assert_eq!(
+        average(&[(json!(12), 2), (number("0.5"), 1)]).rows(),
+        [vec![number("4.166666666666667")]],
+        "AQL 1.1.0 §3.9.1.5: a Real input gives a Real"
+    );
+    assert_eq!(
+        average(&[(number("4.0"), 2)]).rows(),
+        [vec![number("2.0")]],
+        "a Real mean stays a Real when it is whole"
     );
 }
 

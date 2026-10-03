@@ -9,7 +9,8 @@
 //! an exact answer refuses its node instead of being guessed around: the
 //! gateway reports it `node-error`, "a response the gateway could not use"
 //! (§11.1). Integers add in `i128` with checked arithmetic; a real adds in
-//! decimal arithmetic, never in binary floating point.
+//! decimal arithmetic, never in binary floating point. An `AVG` over integers
+//! divides in `i128` too and rounds once, after the division.
 
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
@@ -228,21 +229,45 @@ pub(super) fn recombine(
                 if counted == 0 {
                     cell::null()
                 } else {
-                    let sum = match total(&sums).ok_or(overflow)? {
-                        Total::Null => Decimal::ZERO,
-                        Total::Integer(sum) => decimal(Num::Int(sum)).ok_or(overflow)?,
-                        Total::Real(sum) => sum,
-                    };
-                    let counted = decimal(Num::Int(counted)).ok_or(overflow)?;
-                    sum.checked_div(counted)
-                        .and_then(cell::nearest_real)
-                        .ok_or(overflow)?
+                    match total(&sums).ok_or(overflow)? {
+                        Total::Null => integer_mean(0, counted).and_then(cell::integer),
+                        Total::Integer(sum) => integer_mean(sum, counted).and_then(cell::integer),
+                        Total::Real(sum) => decimal(Num::Int(counted))
+                            .and_then(|counted| sum.checked_div(counted))
+                            .and_then(cell::nearest_real),
+                    }
+                    .ok_or(overflow)?
                 }
             }
         };
         row.push(cell);
     }
     Ok(row)
+}
+
+/// The mean `sum / counted`, rounded once to the nearest integer with a tie
+/// to the even one; `None` for a `counted` of zero, since a count is never
+/// negative.
+///
+/// The node sums carry the input type, since the input determines the return
+/// type of `SUM` (AQL 1.1.0 §3.9.1.4), and an Integer input gives an Integer
+/// `AVG` (AQL 1.1.0 §3.9.1.5).
+// NOTE: AQL 1.1.0 §3.9.1.5 states no rounding, so no specification governs this: our own
+// design; the nearest integer, ties to even as IEEE 754 roundTiesToEven, with no bias.
+fn integer_mean(sum: i128, counted: i128) -> Option<i128> {
+    let quotient = sum.checked_div(counted)?;
+    let remainder = sum.checked_rem(counted)?;
+    let twice = remainder.unsigned_abs().checked_mul(2)?;
+    let away = match twice.cmp(&counted.unsigned_abs()) {
+        Ordering::Greater => true,
+        Ordering::Equal => quotient & 1 == 1,
+        Ordering::Less => false,
+    };
+    match (away, sum < 0) {
+        (false, _) => Some(quotient),
+        (true, false) => quotient.checked_add(1),
+        (true, true) => quotient.checked_sub(1),
+    }
 }
 
 /// A recombined sum.
