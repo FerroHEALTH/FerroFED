@@ -29,6 +29,13 @@ vendored bytes and the `mdbook-mermaid` binary that consumes them stay in step:
 `mdbook-mermaid` 0.17.1 in `docs/VERSIONS.md` and in
 `.github/actions/docs-toolchain/action.yml`.
 
+`mermaid-init.js` picks mermaid's theme from the book theme when a page loads
+and reloads the page on a click of a named theme. The book's own
+`website/book/js/mermaid-theme-sync.js`, loaded after it, reloads the page
+when the theme crosses between light and dark by any other route, such as the
+"Auto" choice. It is first-party code under the project's licence, kept
+outside this directory so the vendored bytes stay as upstream ships them.
+
 ## Refreshing
 
 Change the pins at the top of `scripts/vendor/mdbook-mermaid-assets.sh`, run

@@ -9,6 +9,8 @@ local `ehr_id` each member holds for the patient, and sends each member a
 query scoped to that `ehr_id` alone (§5.2, N3, N7). This page covers the
 cross-reference the gateway asks and how you configure it.
 
+See how it works: [where the patient identifier stops](../how-it-works/identifier-hygiene.md).
+
 ## Where the identifier comes from
 
 The gateway reads the patient on either carrier §5.4.3 names (N33, CP-38):

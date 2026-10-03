@@ -56,6 +56,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `[[dev.consent_denied]]` rows beside the cross-reference are a static
   pre-filter, accepted only under `profile = "development"` and declared as
   `development-static`.
+- A "How it works" part of the book, right after the introduction, explains
+  the gateway in Mermaid diagrams (#395; no specification governs the
+  documentation: our own design). Its pages cover a federated query end to
+  end with each member's status and the answer's status (§4, §11, N37), where
+  the patient identifier stops (§5.4, N33), follow-ups and writes (§12, §12a,
+  N41, N42), definitions and stored queries (§12.6, §12.7, N43, N44), trust
+  and keys (§13.1, N25), and the quickstart and production layouts. Each
+  diagram cites the sections it shows, and a planned part is drawn dashed
+  with its issue and milestone. The pages of the other parts link to the
+  diagram that belongs to them. The diagrams follow the book's theme when
+  you choose "Auto" too: `website/book/js/mermaid-theme-sync.js` redraws them
+  when the theme crosses between light and dark, which the vendored
+  mdbook-mermaid script does only on a click of a named theme.
 
 ## [0.0.7] - 2026-10-03
 

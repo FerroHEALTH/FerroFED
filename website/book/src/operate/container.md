@@ -12,6 +12,8 @@ starts the image beside four member CDRs, four FerroEHR instances, so the
 topology a federated query runs over is up in one command ([The
 quickstart](#the-quickstart)).
 
+See how it works: [the quickstart and a production layout](../how-it-works/deployment.md).
+
 ## The gateway from a release
 
 Every release carries three files that run the gateway alone, at that
