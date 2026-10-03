@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1113,7 +1113,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "bytes",
  "fhir-types",

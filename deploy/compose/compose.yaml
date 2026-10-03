@@ -50,7 +50,7 @@ name: ferrofed-gateway
 
 services:
   ferrofed:
-    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.6}
+    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.7}
     # Docker doubles the wait before each restart, from 100 ms
     # (https://docs.docker.com/reference/cli/docker/container/run/), so a
     # refused configuration (exit 78) is retried at a slowing pace, not in a

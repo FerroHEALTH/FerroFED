@@ -82,7 +82,7 @@ x-ferroehr-node: &ferroehr-node
 
 services:
   ferrofed:
-    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.6}
+    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.7}
     container_name: ferrofed
     restart: unless-stopped
     depends_on:
