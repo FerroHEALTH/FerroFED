@@ -25,28 +25,36 @@ use ferrofed_registry::creating_system::Sighting;
 use ferrofed_registry::id::EndpointId;
 use http::{Method, header};
 use openehr_base::prelude::ObjectVersionId;
-use openehr_its::rest::routes::RouteMatch;
+use openehr_its::rest::routes::{IdentifierClass, ParamLocation, RouteMatch};
 
 use crate::federation::Federation;
-
-/// The path parameters of the EHR area that name one version, in the order
-/// they are read: a `version_uid` is always one, a `uid_based_id` is one when
-/// it is a full `OBJECT_VERSION_ID`.
-const VERSION_PARAMS: [&str; 2] = ["version_uid", "uid_based_id"];
 
 /// The version a read under `matched` names in its path, or `None` when it
 /// is a write or names no full `OBJECT_VERSION_ID`.
 ///
-/// A node that answers such a read with a success holds the version (§12.2).
-/// A `uid_based_id` may be a `versioned_object_uid`, which carries no
+/// The path parameters read are those `openehr-its`'s table states as an
+/// `OBJECT_VERSION_ID` or a `UID_BASED_ID`, in path order. A node that
+/// answers such a read with a success holds the version (§12.2). A
+/// `UID_BASED_ID` may be a `HIER_OBJECT_ID`, which carries no
 /// `creating_system_id`.
 #[must_use]
 pub fn version_of(method: &Method, matched: &RouteMatch) -> Option<ObjectVersionId> {
     if !method.is_safe() {
         return None;
     }
-    VERSION_PARAMS.iter().find_map(|name| {
-        let decoded = matched.path_param(name)?.decoded().ok()?;
+    matched.path_params.iter().find_map(|segment| {
+        let names_version = matched.params.iter().any(|param| {
+            param.location == ParamLocation::Path
+                && param.name == segment.name
+                && matches!(
+                    param.identifier,
+                    Some(IdentifierClass::ObjectVersion | IdentifierClass::UidBased)
+                )
+        });
+        if !names_version {
+            return None;
+        }
+        let decoded = segment.decoded().ok()?;
         // NOTE: §12.2, a uid that is no OBJECT_VERSION_ID names no version
         // and carries no creating_system_id, so it is legitimately absent here.
         ObjectVersionId::new(decoded.as_str()).ok()

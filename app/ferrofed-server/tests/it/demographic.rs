@@ -215,6 +215,11 @@ async fn with_the_setting_a_create_body_is_forwarded_unchanged() -> TestResult {
         sent.body.as_slice(),
         "§5.4 scope note: a client-supplied body passes through unmodified"
     );
+    assert_eq!(
+        Some("application/json"),
+        field(&sent.headers, "content-type"),
+        "a declared media type travels with the body"
+    );
     assert!(asked(&a).await?.is_empty(), "node A is never asked");
     Ok(())
 }

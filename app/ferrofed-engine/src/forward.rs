@@ -13,7 +13,8 @@
 //! ([`hygiene::forwarded_headers`], [`hygiene::forwarded_query`]). Each path
 //! identifier and each value that travels matches what the operation
 //! declares for it, and `Accept`, `Content-Type` and `Prefer` travel as values
-//! the operation lists ([`declared::held`]). The
+//! the operation lists ([`declared::held`]); a body never travels without a
+//! `Content-Type` its operation's body is declared in. The
 //! endpoint's onward credentials set `Authorization`, and the request's
 //! minted [`OutboundId`](crate::outbound_id::OutboundId) sets `X-Request-Id`.
 //!
@@ -228,7 +229,7 @@ impl<T: Transport> NodeClient<T> {
         if let Some(query) = query.as_deref() {
             outgoing.raw_query(hygiene::forwarded_query(&operation, query)?);
         }
-        let sent = declared::held(&operation, query.as_deref(), &headers)?;
+        let sent = declared::held(&operation, query.as_deref(), &headers, &body)?;
         outgoing.headers_mut().extend(sent);
         let call = options
             .call_options()
@@ -267,8 +268,10 @@ impl<T: Transport> NodeClient<T> {
     /// `operation` declares that the request carries (§5.4.1, N33).
     ///
     /// Those are all the headers [`hygiene::forwarded_headers`] admits. The
-    /// minted `X-Request-Id` is the one other header set before sending, and
-    /// is exempt as in every node request ([`crate::hygiene`]).
+    /// minted `X-Request-Id` is exempt as in every node request
+    /// ([`crate::hygiene`]), and a `Content-Type` the operation declares no
+    /// parameter for is one of its listed media types, never the client's
+    /// text.
     fn gate_forward(
         &self,
         operation: &RouteMatch,

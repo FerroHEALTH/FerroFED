@@ -12,7 +12,7 @@
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_base::v1_3::base_types::identification::lexical::is_uuid;
 use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVersionId;
-use openehr_its::rest::routes::{Param, ParamKind, ParamLocation, RouteMatch};
+use openehr_its::rest::routes::{IdentifierClass, Param, ParamKind, ParamLocation, RouteMatch};
 
 use super::kind::{fits, is_free_text};
 use super::{Carrier, Expected, MalformedValue};
@@ -20,19 +20,12 @@ use super::{Carrier, Expected, MalformedValue};
 /// The path parameter the routing reads as the EHR's `HIER_OBJECT_ID`.
 const EHR_ID: &str = "ehr_id";
 
-/// The path parameter ITS-REST names an `OBJECT_VERSION_ID`.
-const VERSION_UID: &str = "version_uid";
-
-/// The path parameter ITS-REST names a `UID_BASED_ID` where its schema
-/// states no `uuid` format.
-const UID_BASED_ID: &str = "uid_based_id";
-
 /// What a path parameter must parse as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PathValue {
     /// The `ehr_id`, which the routing parses itself.
     Routed,
-    /// An identifier class the ITS-REST descriptions name.
+    /// An identifier class or a kind `openehr-its`'s table states.
     Expected(Expected),
     /// Free text the gateway cannot classify.
     Free,
@@ -40,19 +33,21 @@ pub(super) enum PathValue {
 
 /// What the path parameter `param` must parse as.
 ///
-/// A schema `uuid` format is an openEHR `UUID`. ITS-REST states the class of
-/// `version_uid` and of a text `uid_based_id` only in their descriptions,
-/// which `openehr-its`'s table does not carry (FerroHEALTH/FerroEHR#3539).
+/// A schema `uuid` format is an openEHR `UUID`, the narrowest form. Any
+/// other path parameter that carries an openEHR identifier parses as the
+/// identifier class `openehr-its`'s table states for it
+/// ([`IdentifierClass`]), and one that carries none is held to its kind.
 pub(super) fn expected(param: &Param) -> PathValue {
-    // NOTE: ITS-REST EHR API, version_uid is "VERSION identifier taken from VERSION.uid.value" and
-    // uid_based_id "an OBJECT_VERSION_ID … or … a HIER_OBJECT_ID", which the table states as text.
-    match (param.name, param.kind) {
-        (EHR_ID, _) => PathValue::Routed,
-        (_, ParamKind::Uuid) => PathValue::Expected(Expected::Kind(ParamKind::Uuid)),
-        (VERSION_UID, _) => PathValue::Expected(Expected::ObjectVersionId),
-        (UID_BASED_ID, _) => PathValue::Expected(Expected::UidBasedId),
-        (_, kind) if is_free_text(&kind) => PathValue::Free,
-        (_, kind) => PathValue::Expected(Expected::Kind(kind)),
+    if param.name == EHR_ID {
+        return PathValue::Routed;
+    }
+    match (param.kind, param.identifier) {
+        (ParamKind::Uuid, _) => PathValue::Expected(Expected::Kind(ParamKind::Uuid)),
+        (_, Some(IdentifierClass::ObjectVersion)) => PathValue::Expected(Expected::ObjectVersionId),
+        (_, Some(IdentifierClass::UidBased)) => PathValue::Expected(Expected::UidBasedId),
+        (_, Some(IdentifierClass::HierObject)) => PathValue::Expected(Expected::HierObjectId),
+        (kind, None) if is_free_text(&kind) => PathValue::Free,
+        (kind, None) => PathValue::Expected(Expected::Kind(kind)),
     }
 }
 
@@ -93,6 +88,7 @@ fn parses(expected: Expected, value: &str) -> bool {
         Expected::Kind(ParamKind::Uuid) => is_uuid(value),
         Expected::Kind(kind) => fits(&kind, value, false),
         Expected::ObjectVersionId => ObjectVersionId::new(value).is_ok(),
+        Expected::HierObjectId => HierObjectId::new(value).is_ok(),
         Expected::UidBasedId => {
             ObjectVersionId::new(value).is_ok() || HierObjectId::new(value).is_ok()
         }
@@ -149,6 +145,20 @@ mod tests {
                 name: "uid_based_id"
             }),
             carrier(&Method::GET, &read("O'Sentinel%20one"))
+        );
+    }
+
+    // conformance: CP-26
+    #[test]
+    fn the_uid_based_id_of_a_delete_parses_as_an_object_version_id() {
+        let delete = |uid: &str| format!("/demographic/person/{uid}");
+        assert_eq!(None, carrier(&Method::DELETE, &delete(VERSION)));
+        let refusal = held(&operation(&Method::DELETE, &delete(OBJECT))).expect_err("a refusal");
+        assert_eq!(Expected::ObjectVersionId, refusal.expected());
+        assert_eq!(
+            None,
+            carrier(&Method::GET, &delete(OBJECT)),
+            "a read takes either form"
         );
     }
 

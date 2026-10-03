@@ -85,7 +85,7 @@ pub(crate) async fn serve(
         Ok(subject) => subject,
         Err(unserved) => return unserved.respond(request_id, &logged),
     };
-    if let Err(refusal) = declared::held(matched, None, arrived.headers) {
+    if let Err(refusal) = declared::held(matched, None, arrived.headers, &arrived.body) {
         return route::declared_refused(&refusal, request_id, &logged);
     }
     security::subject_consumed(&logged);

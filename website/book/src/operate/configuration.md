@@ -394,10 +394,9 @@ path = "/var/lib/ferrofed/stored-queries.redb"
   configuration, naming `registry.document`.
 - `OPTIONS {base}/` declares `definition.stored_query_registry: true` while
   the path is set, and `false` without it; without it a stored-query
-  definition request goes to the one node the targeting headers name, except
-  `PUT /v1/definition/query/{name}/{version}`, which answers `501` (#298), and
-  `GET` and `POST /v1/query/{name}` answer `501`. Whether the registry is offered is
-  named in the startup log line.
+  definition request goes to the one node the targeting headers name, both
+  `PUT`s included, and `GET` and `POST /v1/query/{name}` answer `501`.
+  Whether the registry is offered is named in the startup log line.
 
 The [client contract](../integrate/client-contract.md#stored-queries) says how
 a client stores and invokes a query.
@@ -569,7 +568,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |
-| `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, `PUT {base}/v1/definition/query/{name}/{version}` answers `501` (#298); `501` when no registry is configured |
+| `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, routed like every other definition request; `501` when no registry is configured |
 | `{base}/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
 | any other path under `{base}/v1/` | `501` |
 | any other path | `404` |
@@ -631,7 +630,14 @@ lists, in the operation's own spelling, and never the client's text:
   subtype are a listed value, the node receives that value. A
   `charset=utf-8` is accepted and dropped, since the listed value carries no
   parameter and JSON is UTF-8 (RFC 8259 §8.1). Any other parameter, or a
-  type that is not listed, is a `415` (`media-type-unsupported`).
+  type that is not listed, is a `415` (`media-type-unsupported`). The listed
+  values are those of the operation's `Content-Type` parameter, or, for an
+  operation that declares none, such as the versioned stored-query `PUT`,
+  the media types its request body is declared in (`openehr-its`'s
+  `request_media`). A body never travels without a `Content-Type`: when the
+  client sends none, the node receives the one media type the operation's
+  body is declared in, and an operation whose body is declared in several
+  is a `415`.
 - `Prefer` is read as a list of preferences (RFC 7240 §2). The node receives
   only the preferences the operation lists, in their listed spelling: a
   preference name is compared without regard to case, its value exactly, and
@@ -641,11 +647,15 @@ lists, in the operation's own spelling, and never the client's text:
 It holds every other value to what the operation declares, and a value that
 does not match is a `400` (`parameter-value-invalid`) with nothing sent:
 
-- a path `version_uid` is an openEHR `OBJECT_VERSION_ID`, a text
-  `uid_based_id` an `OBJECT_VERSION_ID` or a `HIER_OBJECT_ID`, and a path
-  parameter the table states as a UUID, such as `versioned_object_uid` or the
-  `uid_based_id` of a composition update, is a UUID in its canonical
-  hyphenated form, each parsed by `openehr-base`. The path then travels as
+- a path identifier is the openEHR identifier class the `openehr-its` table
+  states for it: a `version_uid`, and the `uid_based_id` of a delete, an
+  `OBJECT_VERSION_ID`; any other text `uid_based_id` an `OBJECT_VERSION_ID`
+  or a `HIER_OBJECT_ID`; and a path parameter the table states as a UUID,
+  such as `versioned_object_uid` or the `uid_based_id` of a composition
+  update, a UUID in its canonical hyphenated form, each parsed by
+  `openehr-base` (a composition delete whose path names no
+  `OBJECT_VERSION_ID` is `preceding-version-invalid` instead, since the path
+  names the version it amends). The path then travels as
   the client sent it, since an openEHR uid is never rewritten (N22). The
   `ehr_id` is parsed by the routing itself;
 - a date-time, such as `version_at_time`, is an extended ISO 8601 date-time
@@ -660,10 +670,9 @@ and declared name, and never the value (§5.4.3). A value of such a kind
 carries only what the kind admits: a four-digit year is a valid partial
 date-time, and a `HIER_OBJECT_ID` admits a bare number as a one-arc ISO OID.
 
-ITS-REST states the identifier class of `version_uid` and of a text
-`uid_based_id` only in their descriptions, which the `openehr-its` table does
-not carry yet, so the gateway reads those two names itself until it does
-([FerroHEALTH/FerroEHR#3539](https://github.com/FerroHEALTH/FerroEHR/issues/3539)).
+ITS-REST states the identifier class of a path parameter only in its
+description; the `openehr-its` table carries it, and the gateway reads it
+from there, never from a copy of its own.
 
 The parameter table states no kind for the rest, so the gateway cannot
 classify them and forwards them as the client sent them. In the EHR area they

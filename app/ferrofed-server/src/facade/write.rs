@@ -399,6 +399,20 @@ fn if_match(headers: &HeaderMap) -> Result<ObjectVersionId, PrecedingInvalid> {
     ObjectVersionId::new(tag).map_err(|_malformed| PrecedingInvalid::Malformed)
 }
 
+/// The refusal of a `write` under `matched` whose path names no version it
+/// amends, or `None` when it names one or names none in its path.
+///
+/// The path of a composition `DELETE` is the version it amends, so a path
+/// that names none is refused as that write, before the path parameter is
+/// held to its declared identifier class (§12.4, N23).
+#[must_use]
+pub fn path_refused(write: Write, matched: &RouteMatch) -> Option<Refused> {
+    match write {
+        Write::Versioned(Preceding::Path) => in_path(matched).err().map(Refused::from),
+        Write::Versioned(_) | Write::NewEhr | Write::Routed => None,
+    }
+}
+
 /// The version the path of a composition `DELETE` names (ITS-REST 1.1.0 EHR
 /// API: "the `uid_based_id` MUST be in a form of an `OBJECT_VERSION_ID`").
 fn in_path(matched: &RouteMatch) -> Result<ObjectVersionId, PrecedingInvalid> {

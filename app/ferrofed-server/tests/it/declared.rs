@@ -155,6 +155,36 @@ async fn the_listed_values_of_a_commit_reach_the_node_and_no_client_text() -> Te
     Ok(())
 }
 
+// conformance: CP-24
+#[tokio::test]
+async fn a_body_sent_without_a_content_type_travels_with_the_one_its_operation_declares()
+-> TestResult {
+    let a = holder().await;
+    let b = stranger().await;
+    let dir = tempfile::tempdir()?;
+    let sent = r#"{"_type":"COMPOSITION", "name":{"value":"synthétic"}}"#;
+    let request = Request::post(format!("/v1/ehr/{EHR_A}/composition"))
+        .header(ENDPOINT, ENDPOINT_A)
+        .body(Body::from(sent))?;
+    let (status, _, text) = answer(over(dir.path(), &a, &b)?, request).await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    let received = a.received_requests().await.ok_or("recording is on")?;
+    let [commit] = received.as_slice() else {
+        return Err(format!("one request at node A, not {}", received.len()).into());
+    };
+    assert_eq!(sent.as_bytes(), commit.body.as_slice(), "byte-identical");
+    assert_eq!(
+        Some("application/json"),
+        commit
+            .headers
+            .get("content-type")
+            .and_then(|value| value.to_str().ok()),
+        "ITS-REST EHR API: the media type composition_create's body is declared in"
+    );
+    assert!(asked(&b).await?.is_empty());
+    Ok(())
+}
+
 /// The status and code a routed directory read with the client header
 /// `name: value` is answered with, and whether a node was asked.
 async fn directory_with(

@@ -156,8 +156,7 @@ mod tests {
         (ParamLocation::Header, "openehr-version"),
     ];
 
-    /// The free-text parameters of the definition area, but for the
-    /// versioned stored-query `PUT`, which is not routed.
+    /// The free-text parameters of the definition area.
     const DEFINITION_FREE_TEXT: [(ParamLocation, &str); 7] = [
         (ParamLocation::Path, "qualified_query_name"),
         (ParamLocation::Path, "template_id"),
@@ -209,8 +208,8 @@ mod tests {
         );
         assert_eq!(
             listed(&DEFINITION_FREE_TEXT),
-            free_in(definition::ROUTES, definition::ROUTE_PARAMS, |_, _, id| {
-                id != "definition_query_version_store.yaml"
+            free_in(definition::ROUTES, definition::ROUTE_PARAMS, |_, _, _| {
+                true
             }),
             "§12.6: the definition area"
         );

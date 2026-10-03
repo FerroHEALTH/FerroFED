@@ -606,6 +606,14 @@ async fn a_new_ehr_lands_byte_identical_at_the_one_named_node() -> TestResult {
         received.body.as_slice(),
         "byte-identical (N22)"
     );
+    assert_eq!(
+        Some("application/json"),
+        received
+            .headers
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        "a declared media type travels with the body"
+    );
     let composed = outside_bodies(&b).await?;
     assert!(!composed.contains(PATIENT), "N33: {composed}");
     assert!(asked(&a).await?.is_empty(), "node A is never asked");

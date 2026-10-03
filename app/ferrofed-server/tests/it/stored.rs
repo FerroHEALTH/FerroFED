@@ -690,9 +690,13 @@ async fn without_the_registry_a_definition_is_routed_and_no_name_is_invoked() ->
         "§12.7 registry-not-offered: §12.6 routes it to one explicitly chosen node: {text}"
     );
     assert_eq!("target-required", error_body(&text)?.code);
-    // TODO(#298): route a versioned PUT once openehr-its declares its Content-Type.
     let (status, text) = call(app.clone(), put(NAME, "1.0.0", &parameterised())?).await?;
-    assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "{text}");
+    assert_eq!(
+        StatusCode::BAD_REQUEST,
+        status,
+        "§12.7 registry-not-offered: the versioned PUT routes as the unversioned one: {text}"
+    );
+    assert_eq!("target-required", error_body(&text)?.code);
     let (status, text) = call(app, invoke(NAME, &bound(), &[])?).await?;
     assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "§12.6: {text}");
     for server in [&a, &b] {

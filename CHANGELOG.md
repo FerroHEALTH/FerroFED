@@ -68,10 +68,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   two endpoints are `400 endpoint-several`, so no node is ever picked
   implicitly and no two nodes' templates are combined into one catalogue.
   Where the registry is offered it keeps answering stored-query definitions
-  itself. Without the registry,
-  `PUT {base}/v1/definition/query/{name}/{version}` answers `501`, and
-  `OPTIONS` on that path lists no `PUT`, because the ITS-REST library the
-  gateway forwards through declares no `Content-Type` for it (#298).
+  itself. Without the registry both stored-query `PUT`s are routed, the
+  versioned `PUT {base}/v1/definition/query/{name}/{version}` included
+  (#298), and `OPTIONS` on either path lists `PUT`.
   `OPTIONS {base}/` declares `its_rest.definition` as `routed-single-node`,
   and `OPTIONS` on a definition path names its ITS-REST methods.
 - `ferrofed admission check --endpoint <id>` exercises one configured
@@ -253,6 +252,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   is sent nothing and the creating node is never tried, and a write through
   the creating node's own `ehr_id` reaches it alone and its answer names no
   copy.
+- A body routed to one node always travels with a `Content-Type` its
+  ITS-REST operation declares (#298; §12.6, N43, CP-34). The gateway reads
+  each operation's request-body media types from `openehr-its`
+  (`request_media`): a client `Content-Type` for an operation that declares
+  no `Content-Type` parameter, such as the versioned stored-query `PUT`, is
+  composed as the listed media type it names, or refused `415
+  media-type-unsupported`; a body sent without one travels with the one
+  media type the operation's body is declared in, `text/plain` for a stored
+  query and `application/json` for a commit, and an operation whose body is
+  declared in several is `415`. A forwarded body no longer reaches a node
+  without a `Content-Type`.
+- Each path identifier of a routed request is parsed as the identifier class
+  `openehr-its` states for it, and the follow-up routing table reads a
+  version from the path parameters of that class, with no name list of the
+  gateway's own (#291; §5.4.1, §12.2, N33, CP-26). The `uid_based_id` of a
+  `DELETE` is an `OBJECT_VERSION_ID`, as ITS-REST declares: a DEMOGRAPHIC
+  delete addressing a `HIER_OBJECT_ID` is `400 parameter-value-invalid`,
+  and a composition delete stays `400 preceding-version-invalid`, with
+  nothing sent.
 
 ### Fixed
 

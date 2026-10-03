@@ -37,9 +37,8 @@
 //! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3).
 //!
 //! A request under `{base}/v1/definition/` (a template upload, list, read or
-//! example, or stored-query management where the gateway holds no registry,
-//! except the versioned stored-query `PUT`, which answers `501`) is routed
-//! by the targeting headers alone too, to exactly one endpoint,
+//! example, or stored-query management where the gateway holds no registry)
+//! is routed by the targeting headers alone too, to exactly one endpoint,
 //! and answered as that node answered: no node is picked implicitly and no
 //! two nodes' answers are combined (§7a.1, §12.6, §12.7, N43).
 //!
@@ -188,9 +187,7 @@ pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
 /// a stored query under `{base}/v1/definition/`, that the gateway routes to
 /// one node (§7a.1, §12.6).
 pub(crate) fn in_definition_area(matched: &RouteMatch) -> bool {
-    // TODO(#298): openehr-its declares no Content-Type for this PUT (FerroEHR#3543), so it is 501.
     matched.group == DEFINITION_GROUP
-        && matched.operation_id != "definition_query_version_store.yaml"
 }
 
 /// Routes one request in the EHR area to the owner of its path `ehr_id` and
@@ -216,11 +213,14 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     let Some(ehr_id) = path_ehr_id(matched) else {
         return error::fixed(Code::EhrIdInvalid, request_id);
     };
+    let write = Write::of(matched);
+    if let Some(refused) = write::path_refused(write, matched) {
+        return error::response(refused.code(), refused.to_string(), request_id);
+    }
     if let Some(refused) = refused_carriers(matched, &arrived, &logged) {
         return refused;
     }
     let snapshot = federation.snapshot();
-    let write = Write::of(matched);
     let located = match locate(federation, arrived.headers, write, &ehr_id, started) {
         Ok(located) => located,
         Err(untargeted) => {
@@ -416,7 +416,7 @@ fn refused_carriers(matched: &RouteMatch, arrived: &Arrived<'_>, logged: &str) -
     if let Some(refused) = query_refused(matched, arrived, logged) {
         return Some(refused);
     }
-    declared::held(matched, arrived.uri.query(), arrived.headers)
+    declared::held(matched, arrived.uri.query(), arrived.headers, &arrived.body)
         .err()
         .map(|refusal| declared_refused(&refusal, request_id, logged))
 }
@@ -730,14 +730,11 @@ mod tests {
             (Method::POST, "/definition/template/adl2"),
             (Method::GET, "/definition/template/adl2/t.v1/1.0.0"),
             (Method::GET, "/definition/query/org::q/1.0.0"),
+            (Method::PUT, "/definition/query/org::q/1.0.0"),
         ] {
             assert!(area(&method, path), "{method} {path}");
         }
-        for (method, path) in [
-            (Method::PUT, "/definition/query/org::q/1.0.0"),
-            (Method::POST, "/query/org::q"),
-            (Method::POST, "/ehr"),
-        ] {
+        for (method, path) in [(Method::POST, "/query/org::q"), (Method::POST, "/ehr")] {
             assert!(!area(&method, path), "{method} {path}");
         }
     }

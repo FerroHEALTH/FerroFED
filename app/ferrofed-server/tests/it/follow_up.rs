@@ -274,6 +274,50 @@ fn a_routed_answer_teaches_the_table_the_version_its_etag_names() -> TestResult 
     Ok(())
 }
 
+/// The version `version_of` reads from a request `method path` names.
+fn named_version(method: &http::Method, path: &str) -> Option<String> {
+    match openehr_its::rest::routes::lookup(method, path) {
+        openehr_its::rest::routes::Lookup::Matched(matched) => {
+            ferrofed_server::facade::follow_up::version_of(method, &matched)
+                .map(|version| version.value().to_owned())
+        }
+        _ => None,
+    }
+}
+
+// conformance: CP-13
+#[test]
+fn a_read_names_the_version_its_path_identifier_classes_carry() {
+    let ehr = format!("/ehr/{EHR_A}");
+    for at in [
+        format!("{ehr}/composition/{CREATED_ELSEWHERE}"),
+        format!("{ehr}/ehr_status/{CREATED_ELSEWHERE}"),
+        format!("{ehr}/versioned_composition/{OBJECT_ELSEWHERE}/version/{CREATED_ELSEWHERE}"),
+    ] {
+        assert_eq!(
+            Some(CREATED_ELSEWHERE.to_owned()),
+            named_version(&http::Method::GET, &at),
+            "{at}"
+        );
+    }
+    for (method, at) in [
+        (
+            http::Method::GET,
+            format!("{ehr}/composition/{OBJECT_ELSEWHERE}"),
+        ),
+        (
+            http::Method::GET,
+            format!("{ehr}/versioned_composition/{OBJECT_ELSEWHERE}"),
+        ),
+        (
+            http::Method::DELETE,
+            format!("{ehr}/composition/{CREATED_ELSEWHERE}"),
+        ),
+    ] {
+        assert_eq!(None, named_version(&method, &at), "{method} {at}");
+    }
+}
+
 // conformance: CP-13
 #[test]
 fn a_routed_read_teaches_the_table_the_version_it_named() -> TestResult {

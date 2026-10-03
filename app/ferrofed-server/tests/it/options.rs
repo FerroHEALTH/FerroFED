@@ -361,6 +361,11 @@ async fn the_definition_area_declares_nothing_offered() -> TestResult {
         body.federation.its_rest.definition
     );
     assert!(
+        !body.federation.its_rest.definition.contains("unsupported"),
+        "§12.7 registry-not-offered: every definition request routes, the versioned PUT included: {}",
+        body.federation.its_rest.definition
+    );
+    assert!(
         body.federation.auth.is_none(),
         "§13.1: no JWKS is configured, so no auth"
     );
@@ -443,7 +448,7 @@ async fn options_on_a_sub_path_names_the_methods_served_there() -> TestResult {
         ("/v1/definition/template/adl1.4", "GET, POST, OPTIONS"),
         ("/v1/definition/template/adl2/t.v1", "GET, OPTIONS"),
         ("/v1/definition/query/org::q", "GET, PUT, OPTIONS"),
-        ("/v1/definition/query/org::q/1.0.0", "GET, OPTIONS"),
+        ("/v1/definition/query/org::q/1.0.0", "GET, PUT, OPTIONS"),
     ] {
         let response = send(app.clone(), options(uri)?).await?;
         assert_eq!(StatusCode::NO_CONTENT, response.status(), "{uri}");
