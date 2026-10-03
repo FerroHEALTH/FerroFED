@@ -27,7 +27,15 @@
 
 use http::StatusCode;
 use http::header::{ACCEPT, CONTENT_TYPE, ETAG};
-use serde::Serialize;
+use openehr_base::v1_3::base_types::identification::archetype_id::ArchetypeId;
+use openehr_base::v1_3::base_types::identification::generic_id::GenericId;
+use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
+use openehr_base::v1_3::base_types::identification::party_ref::PartyRef;
+use openehr_its::json::to_canonical_json;
+use openehr_rm::v1_2::common::archetyped::archetyped::Archetyped;
+use openehr_rm::v1_2::common::generic::party_self::PartySelf;
+use openehr_rm::v1_2::data_types::text::dv_text::{DvText, DvTextData};
+use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -235,8 +243,8 @@ pub enum SeedError {
         #[source]
         source: std::io::Error,
     },
-    /// The `EHR_STATUS` body could not be serialised.
-    #[error("the EHR_STATUS body could not be serialised")]
+    /// The ITI-104 `Patient` body could not be serialised.
+    #[error("the ITI-104 Patient body could not be serialised")]
     Body(#[source] serde_json::Error),
     /// The ITS-REST client could not be built.
     #[error("the ITS-REST client could not be built")]
@@ -292,8 +300,7 @@ pub async fn seed(api_root: &str, plan: &SeedPlan) -> Result<SeedReport, SeedErr
     let mut report = SeedReport::default();
 
     for ehr in &plan.ehrs {
-        let body =
-            serde_json::to_vec(&EhrStatus::for_subject(ehr.subject)).map_err(SeedError::Body)?;
+        let body = to_canonical_json(&ehr_status(ehr.subject));
         let step = format!("PUT /v1/ehr/{}", ehr.ehr_id);
         let request = client
             .put(format!("{api_root}/v1/ehr/{}", ehr.ehr_id))
@@ -434,104 +441,59 @@ fn read(path: &PathBuf) -> Result<Vec<u8>, SeedError> {
     })
 }
 
-/// The canonical-JSON `EHR_STATUS` a `PUT /ehr/{ehr_id}` carries.
-#[derive(Debug, Serialize)]
-pub struct EhrStatus {
-    #[serde(rename = "_type")]
-    kind: &'static str,
-    archetype_node_id: &'static str,
-    name: DvText,
-    archetype_details: Archetyped,
-    subject: PartySelf,
-    is_queryable: bool,
-    is_modifiable: bool,
-}
+/// The archetype of the `EHR_STATUS` a seeded EHR is created with.
+const EHR_STATUS_ARCHETYPE: &str = "openEHR-EHR-EHR_STATUS.generic.v1";
 
-impl EhrStatus {
-    /// Returns the status of an EHR whose subject is `subject`, or an
-    /// anonymous `PARTY_SELF` when there is none.
-    #[must_use]
-    pub fn for_subject(subject: Option<PatientId>) -> Self {
-        Self {
-            kind: "EHR_STATUS",
-            archetype_node_id: "openEHR-EHR-EHR_STATUS.generic.v1",
-            name: DvText {
-                kind: "DV_TEXT",
-                value: "EHR Status",
+/// Returns the `EHR_STATUS` a `PUT /ehr/{ehr_id}` carries: a queryable,
+/// modifiable status whose `PARTY_SELF` subject refers to `subject`, or an
+/// anonymous `PARTY_SELF` when there is none.
+///
+/// The status names its archetype (RM `LOCATABLE` invariant
+/// `Archetyped_valid`), as an archetype root must.
+///
+/// # Examples
+///
+/// ```
+/// use ferrofed_testkit::seed::{self, PatientId};
+///
+/// let status = seed::ehr_status(Some(PatientId::new(1, 7)));
+/// let namespace = status.subject.external_ref.map(|reference| reference.namespace);
+/// assert_eq!(namespace.as_deref(), Some("urn:oid:2.999.1.1"));
+/// ```
+#[must_use]
+pub fn ehr_status(subject: Option<PatientId>) -> EhrStatus {
+    EhrStatus {
+        name: DvText::DvText(DvTextData {
+            value: "EHR Status".to_owned(),
+            hyperlink: None,
+            formatting: None,
+            mappings: None,
+            language: None,
+            encoding: None,
+        }),
+        archetype_node_id: EHR_STATUS_ARCHETYPE.to_owned(),
+        uid: None,
+        links: None,
+        archetype_details: Some(Archetyped {
+            archetype_id: ArchetypeId {
+                value: EHR_STATUS_ARCHETYPE.to_owned(),
             },
-            // NOTE: RM 1.1.0 LOCATABLE invariant Archetyped_valid; an
-            // EHR_STATUS is an archetype root, so it names its archetype.
-            archetype_details: Archetyped {
-                kind: "ARCHETYPED",
-                archetype_id: ArchetypeId {
-                    kind: "ARCHETYPE_ID",
-                    value: "openEHR-EHR-EHR_STATUS.generic.v1",
-                },
-                rm_version: "1.1.0",
-            },
-            subject: PartySelf {
-                kind: "PARTY_SELF",
-                external_ref: subject.map(|patient| PartyRef {
-                    kind: "PARTY_REF",
-                    id: GenericId {
-                        kind: "GENERIC_ID",
-                        value: patient.value(),
-                        scheme: "ffd-test",
-                    },
-                    namespace: patient.namespace(),
-                    party_type: "PERSON",
+            template_id: None,
+            rm_version: "1.1.0".to_owned(),
+        }),
+        feeder_audit: None,
+        subject: PartySelf {
+            external_ref: subject.map(|patient| PartyRef {
+                namespace: patient.namespace(),
+                r#type: "PERSON".to_owned(),
+                id: ObjectId::GenericId(GenericId {
+                    value: patient.value(),
+                    scheme: "ffd-test".to_owned(),
                 }),
-            },
-            is_queryable: true,
-            is_modifiable: true,
-        }
+            }),
+        },
+        is_queryable: true,
+        is_modifiable: true,
+        other_details: None,
     }
-}
-
-#[derive(Debug, Serialize)]
-struct DvText {
-    #[serde(rename = "_type")]
-    kind: &'static str,
-    value: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-struct Archetyped {
-    #[serde(rename = "_type")]
-    kind: &'static str,
-    archetype_id: ArchetypeId,
-    rm_version: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-struct ArchetypeId {
-    #[serde(rename = "_type")]
-    kind: &'static str,
-    value: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-struct PartySelf {
-    #[serde(rename = "_type")]
-    kind: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    external_ref: Option<PartyRef>,
-}
-
-#[derive(Debug, Serialize)]
-struct PartyRef {
-    #[serde(rename = "_type")]
-    kind: &'static str,
-    id: GenericId,
-    namespace: String,
-    #[serde(rename = "type")]
-    party_type: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-struct GenericId {
-    #[serde(rename = "_type")]
-    kind: &'static str,
-    value: String,
-    scheme: &'static str,
 }
