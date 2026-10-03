@@ -19,8 +19,9 @@
 //! targeting headers, a resolution binding of the client session, the `ehr_id` index,
 //! and for a read only, the ask-all probe of every member, all within the
 //! request's budget (§11.5). A write none of the first three routes is a
-//! `400`, and is never probed (N41). A successful answer teaches the index
-//! that its node holds the `ehr_id`.
+//! `400`, and is never probed (N41); so is a read whose `ehr_id` is no bare
+//! UUID, because the probe would carry it to every member (§5.4.1, N33). A
+//! successful answer teaches the index that its node holds the `ehr_id`.
 
 use std::time::{Duration, Instant};
 
@@ -30,7 +31,7 @@ use ferrofed_engine::dispatch::{DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded};
 use ferrofed_engine::hygiene;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_engine::probe::{self, Answer, Probe};
+use ferrofed_engine::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
@@ -117,14 +118,15 @@ pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
 /// the order of §12.5.1 (N41): the targeting headers, a binding the client
 /// session holds, the `ehr_id` index, and for a read only, the ask-all probe.
 /// A write none of the first three routes is a `400` (`target-required`),
-/// and nothing is probed.
+/// and so is a read whose `ehr_id` is no bare UUID (`probe-requires-uuid`):
+/// nothing is probed.
 async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMatch) -> Response {
     let started = Instant::now();
     let request_id = arrived.request_id;
     // NOTE: §5.4.1, N33: the client's id is free text that may carry an
     // identifier, so every log event names the gateway's own id instead.
     let logged = arrived.outbound.to_string();
-    let Some((segment, ehr_id)) = path_ehr_id(matched) else {
+    let Some(ehr_id) = path_ehr_id(matched) else {
         return error::fixed(Code::EhrIdInvalid, request_id);
     };
     if let Some(query) = arrived.uri.query()
@@ -165,8 +167,14 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
             return error::fixed(Code::NoDestination, request_id);
         }
         owner::Located::Unknown if arrived.method.is_safe() => {
+            // NOTE: §5.4.1, N33: the probe reaches members the client never named,
+            // so an ehr_id that may be a patient identifier is never probed.
+            let Ok(asked) = ProbedEhrId::try_from(&ehr_id) else {
+                security::probe_refused(&logged);
+                return error::fixed(Code::ProbeRequiresUuid, request_id);
+            };
             let probe = Probe {
-                ehr_id_segment: segment,
+                ehr_id: asked,
                 headers: arrived.headers.clone(),
                 per_node: budget.per_node(),
                 overall: budget.overall,
@@ -220,14 +228,13 @@ async fn route(federation: &Federation, arrived: Arrived<'_>, matched: &RouteMat
     }
 }
 
-/// The `ehr_id` path segment of `matched` as received, and the `ehr_id` it
-/// decodes to, or `None` when it is no `HIER_OBJECT_ID`.
-fn path_ehr_id(matched: &RouteMatch) -> Option<(String, EhrId)> {
+/// The `ehr_id` the path segment of `matched` decodes to, or `None` when it
+/// is no `HIER_OBJECT_ID`.
+fn path_ehr_id(matched: &RouteMatch) -> Option<EhrId> {
     let param = matched.path_param(EHR_ID_PARAM)?;
     // NOTE: §12.5, a segment that is not UTF-8 or not a HIER_OBJECT_ID names
     // no EHR, so either failure is the malformed-ehr_id answer.
-    let ehr_id = EhrId::new(param.decoded().ok()?).ok()?;
-    Some((param.raw.clone(), ehr_id))
+    EhrId::new(param.decoded().ok()?).ok()
 }
 
 /// The per-node timeout and the overall budget of one routed request, the

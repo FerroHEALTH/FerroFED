@@ -102,6 +102,10 @@ pub enum Code {
     /// (§11.2): a member answered the ask-all probe of a path `ehr_id` with
     /// neither a success nor `404` (§12.5.1).
     NodeError,
+    /// A read of an EHR resource that no targeting header, binding or index
+    /// routes to one node has a path `ehr_id` that is no bare UUID, so it is
+    /// never probed at every member (§5.4.1, N33, §12.5.1).
+    ProbeRequiresUuid,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -117,7 +121,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 23] = [
+    pub const GATEWAY: [Self; 24] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -141,6 +145,7 @@ impl Code {
         Self::TargetingConflict,
         Self::EhrIdInvalid,
         Self::NodeError,
+        Self::ProbeRequiresUuid,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -180,6 +185,7 @@ impl Code {
             Self::TargetingConflict => "targeting-conflict",
             Self::EhrIdInvalid => "ehr-id-invalid",
             Self::NodeError => "node-error",
+            Self::ProbeRequiresUuid => "probe-requires-uuid",
         }
     }
 
@@ -200,7 +206,8 @@ impl Code {
             | Self::EndpointSeveral
             | Self::QueryParameterRefused
             | Self::TargetingConflict
-            | Self::EhrIdInvalid => StatusCode::BAD_REQUEST,
+            | Self::EhrIdInvalid
+            | Self::ProbeRequiresUuid => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound => StatusCode::NOT_FOUND,
             Self::EhrIdCollision | Self::ControllingSystemUnreachable => StatusCode::CONFLICT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -257,6 +264,9 @@ impl Code {
             }
             Self::EhrIdInvalid => "the ehr_id in the path is not an openEHR HIER_OBJECT_ID (§12.5)",
             Self::NodeError => "a node answered with an error (§11.2)",
+            Self::ProbeRequiresUuid => {
+                "a read of an EHR resource that no header, binding or index routes to one node is probed at every member only when its ehr_id is a UUID, so name its node in the openEHR-federation-endpoint header (§5.4.1, N33, §12.5.1)"
+            }
         }
     }
 }
@@ -339,6 +349,7 @@ mod tests {
             Code::TargetingConflict => Some(20),
             Code::EhrIdInvalid => Some(21),
             Code::NodeError => Some(22),
+            Code::ProbeRequiresUuid => Some(23),
         }
     }
 
@@ -406,6 +417,7 @@ mod tests {
             (Code::TargetingConflict, StatusCode::BAD_REQUEST),
             (Code::EhrIdInvalid, StatusCode::BAD_REQUEST),
             (Code::NodeError, StatusCode::FAILED_DEPENDENCY),
+            (Code::ProbeRequiresUuid, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

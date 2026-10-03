@@ -219,7 +219,13 @@ exactly one node (§12.5.1, N41):
    neither is read (§12.5.2, N42). When a member does not answer in time,
    cannot be reached, or answers an error, the owner is unknown and the read
    fails: `504` (`node-timeout`, `node-unreachable`) or `424`
-   (`node-error`, `node-refused`), naming the member.
+   (`node-error`, `node-refused`), naming the member. The probe is sent only
+   for an `ehr_id` that is a bare UUID. Any other `HIER_OBJECT_ID` form, such
+   as an ISO OID, could be a patient identifier, and the probe would carry it
+   to every member, so the read is a `400` (`probe-requires-uuid`) and no
+   member is asked (§5.4.1, N33). Such an `ehr_id` is routed by the first
+   three steps only: name its node in the endpoint header, and the gateway
+   forwards it to that node alone.
 
 A binding or an index entry that names two members names none, and the
 gateway never picks one of them: a read goes to the ask-all probe, which

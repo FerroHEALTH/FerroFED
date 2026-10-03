@@ -304,6 +304,23 @@ impl EhrId {
     pub fn hier_object_id(&self) -> &HierObjectId {
         &self.id
     }
+
+    /// Whether this `ehr_id` is a bare UUID: its root is a `UUID` and it has
+    /// no extension (BASE `UID_BASED_ID.root`, `UID_BASED_ID.extension`).
+    ///
+    /// ```
+    /// use ferrofed_registry::id::EhrId;
+    ///
+    /// let minted: EhrId = "7d44b88c-4199-4bad-97dc-d78268e01398".parse()?;
+    /// let oid: EhrId = "12345".parse()?;
+    /// assert!(minted.is_uuid());
+    /// assert!(!oid.is_uuid());
+    /// # Ok::<(), ferrofed_registry::error::IdError>(())
+    /// ```
+    #[must_use]
+    pub fn is_uuid(&self) -> bool {
+        matches!(self.id.root(), Uid::Uuid(_)) && !self.id.has_extension()
+    }
 }
 
 impl PartialEq for EhrId {

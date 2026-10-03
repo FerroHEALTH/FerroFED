@@ -152,6 +152,16 @@ async fn the_identifier_on_the_single_node_route_reaches_no_node() -> TestResult
 
 // conformance: CP-26 track-10
 #[tokio::test]
+async fn the_identifier_in_the_ehr_id_slot_is_never_probed_at_a_node() -> TestResult {
+    let nodes = MockNodes::start().await?;
+    let topology = nodes.topology();
+    let dir = tempfile::tempdir()?;
+    let app = topology.gateway(dir.path())?;
+    run_all(&app, &topology, &cases::in_the_ehr_id_slot()).await
+}
+
+// conformance: CP-26 track-10
+#[tokio::test]
 async fn a_committed_dv_identifier_arrives_at_the_node_byte_identical() -> TestResult {
     let nodes = MockNodes::start().await?;
     let topology = nodes.topology();

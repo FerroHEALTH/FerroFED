@@ -26,6 +26,7 @@ mod order_key;
 mod outbound;
 mod outbound_id;
 mod path_ehr_id;
+mod probed_ehr_id;
 mod readiness;
 mod registry_fhir;
 mod request_log;
