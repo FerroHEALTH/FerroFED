@@ -53,7 +53,8 @@ const VERSION: &str = "1.0.0";
 /// A comment the client writes into its definition, which no node receives.
 const COMMENT: &str = "SYNTHETIC-COMMENT-5c1e";
 
-/// A body a node answers with, which the gateway's answer never copies.
+/// The message a node answers with, which the gateway's answer carries after
+/// a failing node's status (§9.5, §11.1).
 const NODE_BODY: &str = "SYNTHETIC-NODE-BODY-2d7a";
 
 /// A literal only a member's differing copy carries.
@@ -353,11 +354,21 @@ async fn with_one_member_failing_the_distribution_is_partial_and_the_registry_ho
         "§12.6 item 3: a partial success, never overall success: {text}"
     );
     validate_federation(&text)?;
-    assert!(
-        !text.contains(NODE_BODY),
-        "§12.6 item 2: no node body: {text}"
-    );
     let answer: Reported = serde_json::from_str(&text)?;
+    let failed = answer
+        .meta
+        .federation
+        .endpoints()
+        .iter()
+        .find(|outcome| outcome.id().as_str() == "node-c-pub")
+        .ok_or("node C is reported")?;
+    assert_eq!(
+        Some(&ErrorDetail::Text(format!(
+            "the node answered 500 Internal Server Error: {NODE_BODY}"
+        ))),
+        failed.outcome().error(),
+        "§9.5, §11.1: the failing member's status, then its own message: {text}"
+    );
     assert_eq!(
         (NAME, VERSION),
         (

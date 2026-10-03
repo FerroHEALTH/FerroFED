@@ -8,14 +8,15 @@
 use std::time::Instant;
 
 use ferrofed_registry::id::EndpointId;
+use http::StatusCode;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
-use openehr_its::rest::client::{ClientError, ErrorBody, TransportError};
+use openehr_its::rest::client::{ClientError, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
+use super::reported::{self, excerpt_of};
 use super::{DispatchError, NodeReply};
-
-/// The longest node message a `node-error` copies into `error`, in characters.
-const MESSAGE_LIMIT: usize = 512;
+use crate::hygiene::Withheld;
+use crate::hygiene::mask::MASK;
 
 /// `reply`, or a `node-error` when one of its rows has fewer than `width`
 /// cells (§11.1).
@@ -55,28 +56,36 @@ pub(super) fn elapsed_ms(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-/// The reply for a documented answer of `POST /query/aql`.
-pub(super) fn answered(outcome: QueryExecuteAdhocQueryBodyOutcome, latency_ms: u64) -> NodeReply {
+/// The reply for a documented answer of `POST /query/aql`, its `error`
+/// holding no identifier of `withheld`.
+pub(super) fn answered(
+    outcome: QueryExecuteAdhocQueryBodyOutcome,
+    latency_ms: u64,
+    withheld: &Withheld,
+) -> NodeReply {
     match outcome {
         QueryExecuteAdhocQueryBodyOutcome::Ok { body, .. } => NodeReply::Answered {
             result_set: Box::new(body),
             latency_ms,
         },
-        QueryExecuteAdhocQueryBodyOutcome::BadRequest { body } => {
-            node_error(latency_ms, "400 Bad Request", &body)
-        }
-        QueryExecuteAdhocQueryBodyOutcome::RequestTimeout { body } => {
-            node_error(latency_ms, "408 Request Timeout", &body)
-        }
+        QueryExecuteAdhocQueryBodyOutcome::BadRequest { body } => node_error(
+            latency_ms,
+            reported::answered(StatusCode::BAD_REQUEST, &body, withheld),
+        ),
+        QueryExecuteAdhocQueryBodyOutcome::RequestTimeout { body } => node_error(
+            latency_ms,
+            reported::answered(StatusCode::REQUEST_TIMEOUT, &body, withheld),
+        ),
     }
 }
 
 /// The reply, or the gateway-side error, for a call that reached no
-/// documented answer.
+/// documented answer, its `error` holding no identifier of `withheld`.
 pub(super) fn failed(
     endpoint: &EndpointId,
     error: ClientError,
     latency_ms: u64,
+    withheld: &Withheld,
 ) -> Result<NodeReply, DispatchError> {
     let failure = |outcome| Ok(NodeReply::Failed { outcome });
     match error {
@@ -104,19 +113,24 @@ pub(super) fn failed(
                 chain(&*source)
             )),
         }),
-        ClientError::Unauthorized { body, .. } => {
-            Ok(node_error(latency_ms, "401 Unauthorized", &body))
-        }
-        ClientError::Forbidden { body, .. } => Ok(node_error(latency_ms, "403 Forbidden", &body)),
+        ClientError::Unauthorized { body, .. } => Ok(node_error(
+            latency_ms,
+            reported::answered(StatusCode::UNAUTHORIZED, &body, withheld),
+        )),
+        ClientError::Forbidden { body, .. } => Ok(node_error(
+            latency_ms,
+            reported::answered(StatusCode::FORBIDDEN, &body, withheld),
+        )),
         ClientError::ServiceFailure { status, body, .. }
-        | ClientError::UndocumentedStatus { status, body, .. } => {
-            Ok(node_error(latency_ms, &status.to_string(), &body))
-        }
+        | ClientError::UndocumentedStatus { status, body, .. } => Ok(node_error(
+            latency_ms,
+            reported::answered(status, &body, withheld),
+        )),
         ClientError::Body { status, source, .. } => failure(Outcome::NodeError {
             latency_ms,
             error: text(format!(
                 "the node answered {status} with a body that is not an ITS-REST RESULT_SET (at `{}`, a {:?} defect)",
-                source.path(),
+                excerpt_of(&source.path().to_string(), withheld).unwrap_or_else(|| MASK.to_owned()),
                 source.inner().classify(),
             )),
         }),
@@ -131,19 +145,10 @@ pub(super) fn failed(
     }
 }
 
-/// A `node-error` reply carrying the node's `status` and its own message.
-fn node_error(latency_ms: u64, status: &str, body: &ErrorBody) -> NodeReply {
-    let message = match body.message().or_else(|| body.text()) {
-        Some(said) if !said.trim().is_empty() => {
-            format!("the node answered {status}: {}", bounded(said.trim()))
-        }
-        _ => format!("the node answered {status}"),
-    };
+/// A `node-error` reply carrying `error`.
+fn node_error(latency_ms: u64, error: ErrorDetail) -> NodeReply {
     NodeReply::Failed {
-        outcome: Outcome::NodeError {
-            latency_ms,
-            error: text(message),
-        },
+        outcome: Outcome::NodeError { latency_ms, error },
     }
 }
 
@@ -166,20 +171,11 @@ fn chain(error: &(dyn std::error::Error + 'static)) -> String {
     out
 }
 
-/// At most [`MESSAGE_LIMIT`] characters of `said`, cut on a character
-/// boundary.
-fn bounded(said: &str) -> String {
-    let mut kept: String = said.chars().take(MESSAGE_LIMIT).collect();
-    if said.chars().nth(MESSAGE_LIMIT).is_some() {
-        kept.push('…');
-    }
-    kept
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{MESSAGE_LIMIT, bounded, failed};
+    use super::failed;
     use crate::dispatch::DispatchError;
+    use crate::hygiene::Withheld;
     use ferrofed_registry::id::EndpointId;
     use http::Method;
     use openehr_its::rest::client::ClientError;
@@ -192,7 +188,7 @@ mod tests {
     fn is_compose(error: ClientError) -> Result<bool, Box<dyn std::error::Error>> {
         let endpoint = EndpointId::new("node-a-pub")?;
         Ok(matches!(
-            failed(&endpoint, error, 0),
+            failed(&endpoint, error, 0, &Withheld::none()),
             Err(DispatchError::Compose { .. })
         ))
     }
@@ -236,14 +232,5 @@ mod tests {
         };
         assert!(is_compose(ClientError::Serialize { source })?);
         Ok(())
-    }
-
-    #[test]
-    fn a_long_node_message_is_cut_on_a_character_boundary() {
-        let said = "é".repeat(MESSAGE_LIMIT + 10);
-        let kept = bounded(&said);
-        assert_eq!(kept.chars().count(), MESSAGE_LIMIT + 1);
-        assert!(kept.ends_with('…'));
-        assert_eq!(bounded("short"), "short");
     }
 }

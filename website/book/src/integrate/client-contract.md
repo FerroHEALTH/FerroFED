@@ -282,6 +282,34 @@ openEHR-federation-system-id: cdr1.example.org, cdr3.example.org
 A request that fails answers the status §11.2 names and a stable code; the
 [errors and status codes](errors.md) page lists every one.
 
+### A node's error in `endpoints[]`
+
+A member that answered with an error is `node-error`, and its `error` carries
+the node's own failure (§9.5, §11.1): the node's HTTP status, then an excerpt
+of the node's message, the ITS-REST `Error.message` when the body is one and
+the body's text otherwise.
+
+```json
+{ "id": "node_3", "status": "node-error", "latency_ms": 41,
+  "error": "the node answered 400 Bad Request: unknown archetype path in WHERE" }
+```
+
+- The excerpt is at most 512 characters, with `…` where it was cut.
+- Control characters and invisible format marks (line breaks, tabs, the
+  bidirectional overrides, zero-width marks) become one space.
+- The patient identifier your query resolved on never comes back: where the
+  node echoed it, raw or as an AQL string literal, it reads `[withheld]`,
+  and where the node echoed it in a form the gateway cannot replace in place,
+  percent-encoded for one, the whole message reads `[withheld]`.
+- A node that sent no message, or nothing printable, is reported by its
+  status alone.
+
+One rule covers every per-member record FerroFED writes: a federated query,
+the [fan-out template upload](#fan-out-template-upload), and the
+[stored-query distribution and drift check](#distributing-a-stored-query).
+A node's body that is no error, an accepted upload's body or a member's copy
+of a stored query, is never copied.
+
 ## Follow-ups
 
 A composition id in a result row is an `OBJECT_VERSION_ID`, which already
@@ -642,9 +670,11 @@ It is off by default, and `OPTIONS {base}/` declares it as
 - The answer is a JSON body holding `meta.federation`, in the shape of a
   federated result set's (§9.5): `complete`, the `timeout` in force, and one
   `endpoints[]` entry per registry member. A member that accepted is
-  `active`, one that failed is `node-error` with the node's HTTP status in
-  `error`, or `time-out` or `offline`, and one you did not name is
-  `excluded`. No node's body or `Location` is copied into it.
+  `active`, one that failed is `node-error` with the node's HTTP status and
+  an excerpt of its message in `error` (see
+  [A node's error in `endpoints[]`](#a-nodes-error-in-endpoints)), or
+  `time-out` or `offline`, and one you did not name is `excluded`. No other
+  part of a node's body, and no `Location`, is copied into it.
 - The status is `200` when every member you named accepted, and `207` with
   `complete: false` when some accepted and others failed: a partial success
   is never reported as success (§12.6). When none accepted, the status is
@@ -812,7 +842,10 @@ offered:
   [template fan-out](#fan-out-template-upload): `200` when every member you
   named accepted, `207` with `complete: false` when some did, and `504` or
   `424` when none did. Whatever the status, the registry holds the
-  definition. No node's body is copied into the answer.
+  definition. A member that failed carries its HTTP status and an excerpt
+  of its message in `error`, as in a query's answer
+  ([A node's error in `endpoints[]`](#a-nodes-error-in-endpoints)); no
+  other part of a node's body is copied into the answer.
 - A definition whose AQL carries a `FROM ENDPOINT` or `ORGANISATION`
   directive is refused `400` (`definition-endpoint-targeted`) and nothing is
   stored: a node cannot run a directive that names members of the

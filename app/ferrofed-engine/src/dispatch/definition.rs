@@ -10,12 +10,13 @@
 //! back with `definition_query_version_get` for the drift check. Both are
 //! composed by `openehr-its`'s `rest-client` and pass the outbound
 //! gate first (§5.4.1, N33). What the node made of the call is one §11.1
-//! status, as for a dispatched query; a failure carries the node's HTTP
-//! status and never its body, so no node text reaches the answer (§12.6
-//! item 2).
+//! status, as for a dispatched query, and a `node-error` carries what one
+//! does: the node's HTTP status and an excerpt of its message
+//! ([`super::reported`], §9.5, §12.6 item 2).
 
 use std::time::Instant;
 
+use http::StatusCode;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_its::rest::client::{ClientError, Transport, TransportError, path_segment};
 use openehr_its::rest::generated::definition::client::{
@@ -25,8 +26,8 @@ use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
 };
 
-use super::{DispatchError, DispatchOptions, NodeClient, classify};
-use crate::hygiene::{Composed, Outbound};
+use super::{DispatchError, DispatchOptions, NodeClient, classify, reported};
+use crate::hygiene::{Composed, Outbound, Withheld};
 
 /// The query language a distributed definition is stored as, the ITS-REST
 /// `query_type`.
@@ -97,13 +98,15 @@ impl<T: Transport> NodeClient<T> {
             Ok(DefinitionQueryVersionStoreYamlOutcome::Ok { .. }) => {
                 Ok(Outcome::Active { latency_ms })
             }
-            Ok(DefinitionQueryVersionStoreYamlOutcome::BadRequest { .. }) => {
-                Ok(answered(latency_ms, "400 Bad Request"))
-            }
-            Ok(DefinitionQueryVersionStoreYamlOutcome::Conflict { .. }) => {
-                Ok(answered(latency_ms, "409 Conflict"))
-            }
-            Err(error) => self.definition_failure(error, latency_ms),
+            Ok(DefinitionQueryVersionStoreYamlOutcome::BadRequest { body }) => Ok(node_error(
+                latency_ms,
+                reported::answered(StatusCode::BAD_REQUEST, &body, options.withheld()),
+            )),
+            Ok(DefinitionQueryVersionStoreYamlOutcome::Conflict { body }) => Ok(node_error(
+                latency_ms,
+                reported::answered(StatusCode::CONFLICT, &body, options.withheld()),
+            )),
+            Err(error) => self.definition_failure(error, latency_ms, options.withheld()),
         }
     }
 
@@ -140,7 +143,7 @@ impl<T: Transport> NodeClient<T> {
                 Ok(NodeCopy::Missing { latency_ms })
             }
             Err(error) => self
-                .definition_failure(error, latency_ms)
+                .definition_failure(error, latency_ms, options.withheld())
                 .map(|outcome| NodeCopy::Failed { outcome }),
         }
     }
@@ -159,12 +162,13 @@ impl<T: Transport> NodeClient<T> {
     }
 
     /// The outcome of a call that reached no documented answer, carrying the
-    /// node's status and never its body, or the gateway-side error when
-    /// nothing left.
+    /// node's status and an excerpt of its message with no identifier of
+    /// `withheld`, or the gateway-side error when nothing left.
     fn definition_failure(
         &self,
         error: ClientError,
         latency_ms: u64,
+        withheld: &Withheld,
     ) -> Result<Outcome, DispatchError> {
         let failed = |message: String| ErrorDetail::Text(message);
         match error {
@@ -183,18 +187,26 @@ impl<T: Transport> NodeClient<T> {
                 latency_ms,
                 error: failed("the node could not be reached".to_owned()),
             }),
-            ClientError::Unauthorized { .. } => Ok(Outcome::NodeError {
+            ClientError::Unauthorized { body, .. } => Ok(node_error(
                 latency_ms,
-                error: failed(
-                    "the node refused the gateway's onward credentials with 401 Unauthorized"
-                        .to_owned(),
+                reported::said(
+                    format!(
+                        "the node refused the gateway's onward credentials with {}",
+                        StatusCode::UNAUTHORIZED
+                    ),
+                    &body,
+                    withheld,
                 ),
-            }),
-            ClientError::Forbidden { .. } => Ok(answered(latency_ms, "403 Forbidden")),
-            ClientError::ServiceFailure { status, .. }
-            | ClientError::UndocumentedStatus { status, .. } => {
-                Ok(answered(latency_ms, &status.to_string()))
-            }
+            )),
+            ClientError::Forbidden { body, .. } => Ok(node_error(
+                latency_ms,
+                reported::answered(StatusCode::FORBIDDEN, &body, withheld),
+            )),
+            ClientError::ServiceFailure { status, body, .. }
+            | ClientError::UndocumentedStatus { status, body, .. } => Ok(node_error(
+                latency_ms,
+                reported::answered(status, &body, withheld),
+            )),
             ClientError::Body { status, .. } => Ok(Outcome::NodeError {
                 latency_ms,
                 error: failed(format!(
@@ -250,10 +262,7 @@ impl<T: Transport> NodeClient<T> {
     }
 }
 
-/// The `node-error` of a node that answered `status`, its body not copied.
-fn answered(latency_ms: u64, status: &str) -> Outcome {
-    Outcome::NodeError {
-        latency_ms,
-        error: ErrorDetail::Text(format!("the node answered {status}")),
-    }
+/// The `node-error` outcome carrying `error`.
+fn node_error(latency_ms: u64, error: ErrorDetail) -> Outcome {
+    Outcome::NodeError { latency_ms, error }
 }

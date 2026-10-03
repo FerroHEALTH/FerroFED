@@ -17,10 +17,13 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::dispatch::reported::MESSAGE_LIMIT;
 use ferrofed_engine::dispatch::{
     DispatchError, DispatchOptions, NodeClient, NodeClients, NodeQuery, NodeReply,
     REQUEST_ID_HEADER, SetupError, SharedCredentials,
 };
+use ferrofed_engine::hygiene::Withheld;
+use ferrofed_engine::hygiene::mask::MASK;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
@@ -30,6 +33,7 @@ use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{
     Credentials, CredentialsError, CredentialsProvider, ReqwestTransport,
 };
+use secrecy::SecretString;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 
@@ -37,6 +41,10 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 /// A synthetic node query, scoped to an `ehr_id` under no real system.
 const NODE_AQL: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'";
+
+/// A synthetic subject the gateway resolved on and withholds, with a quote so
+/// its AQL literal form differs from the raw one.
+const SUBJECT: &str = "O'SYNTHETIC-SUBJECT-7c1d";
 
 /// An empty ITS-REST `RESULT_SET`.
 const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c","columns":[{"name":"#0","path":"c/uid/value"}],"rows":[]}"##;
@@ -198,6 +206,67 @@ async fn a_5xx_is_a_node_error_never_offline() -> TestResult {
     let error = error_text(&reply)?;
     assert!(error.contains("503 Service Unavailable"), "{error}");
     assert!(error.contains("maintenance window"), "{error}");
+    Ok(())
+}
+
+/// Dispatches `NODE_AQL` to `server` under `/openehr`, withholding
+/// [`SUBJECT`], and returns the text of the reply's `error`.
+async fn error_withholding_the_subject(server: &MockServer) -> Result<String, Box<dyn Error>> {
+    let client = client_at(&format!("{}/openehr", server.uri()))?;
+    let options = within(Duration::from_secs(5))?
+        .with_withheld(Arc::new(Withheld::new([SecretString::from(SUBJECT)])));
+    let reply = client.query(&NodeQuery::new(NODE_AQL), &options).await?;
+    assert_eq!(reply.status(), EndpointStatus::NodeError, "§11.1");
+    error_text(&reply)
+}
+
+#[tokio::test]
+async fn a_node_message_carrying_the_withheld_subject_is_masked() -> TestResult {
+    // The right-to-left override goes in as its JSON escape, so the source
+    // carries no such mark.
+    let rlo = format!("\\u{:04x}", 0x202e);
+    let said = format!(
+        r#"{{"message":"no EHR for subject {SUBJECT}\n{rlo} at this node; '{}' unknown"}}"#,
+        SUBJECT.replace('\'', "\\\\'")
+    );
+    let server = node_answering("/openehr", json(400, &said)).await;
+    let error = error_withholding_the_subject(&server).await?;
+    assert_eq!(
+        format!(
+            "the node answered 400 Bad Request: no EHR for subject {MASK} at this node; '{MASK}' unknown"
+        ),
+        error,
+        "§9.5: the node's status and message; §5.4.1, N33: never the subject"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_node_message_carrying_the_subject_percent_encoded_is_withheld_whole() -> TestResult {
+    let encoded = SUBJECT.replace('\'', "%27").replace('-', "%2D");
+    let server = node_answering(
+        "/openehr",
+        ResponseTemplate::new(503).set_body_string(format!("no route for ?subject={encoded}")),
+    )
+    .await;
+    let error = error_withholding_the_subject(&server).await?;
+    assert_eq!(
+        format!("the node answered 503 Service Unavailable: {MASK}"),
+        error
+    );
+    assert!(!error.contains(&encoded), "{error}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_long_node_message_is_cut_to_the_limit() -> TestResult {
+    let long = "x".repeat(MESSAGE_LIMIT * 2);
+    let server = node_answering("/openehr", json(400, &format!(r#"{{"message":"{long}"}}"#))).await;
+    let error = error_text(&dispatch_to(&server).await?)?;
+    let prefix = "the node answered 400 Bad Request: ";
+    let kept = error.strip_prefix(prefix).ok_or("the status leads")?;
+    assert_eq!(MESSAGE_LIMIT + 1, kept.chars().count(), "{kept}");
+    assert!(kept.ends_with('…'), "{kept}");
     Ok(())
 }
 

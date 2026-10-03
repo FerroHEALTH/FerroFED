@@ -21,8 +21,9 @@
 //! | did not answer before the deadline | `time-out` |
 //! | answered with a failure: a documented error, an undocumented status, a body that is not a result set, rows shorter than the query selects | `node-error` |
 //!
-//! A `node-error` carries the node's own status and message (§11.2), never
-//! folded into `offline`; a refused connection still carries its reason. A
+//! A `node-error` carries the node's own status and an excerpt of its
+//! message ([`reported`], §9.5, §11.2), never folded into `offline`; a
+//! refused connection still carries its reason. A
 //! failure on the gateway's side before any request left (a credential the
 //! provider could not produce, a body that would not serialize) is a
 //! [`DispatchError`], never an endpoint status: nothing was sent to report on.
@@ -50,6 +51,7 @@ use url::Url;
 mod classify;
 pub mod definition;
 mod gate;
+pub mod reported;
 
 /// The API version segment ITS-REST 1.1.0 puts every path under
 /// (`{baseUrl}/v1/...`), appended to the endpoint's base URL.
@@ -408,10 +410,10 @@ impl<T: Transport> NodeClient<T> {
         let latency_ms = classify::elapsed_ms(started);
         match answer {
             Ok(outcome) => Ok(classify::narrow(
-                classify::answered(outcome, latency_ms),
+                classify::answered(outcome, latency_ms, options.withheld()),
                 query.width,
             )),
-            Err(error) => classify::failed(&self.endpoint, error, latency_ms),
+            Err(error) => classify::failed(&self.endpoint, error, latency_ms, options.withheld()),
         }
     }
 }

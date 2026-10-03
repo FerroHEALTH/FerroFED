@@ -12,7 +12,11 @@
 
 use std::error::Error;
 
+use ferrofed_engine::hygiene::mask::MASK;
 use http::StatusCode;
+use openehr_federation::outcome::ErrorDetail;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::{
     Answer, Column, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, dev_gateway,
@@ -231,6 +235,50 @@ async fn a_failing_node_fails_the_query_and_the_envelope_still_comes_back() -> T
         vec![("node-a-pub", "active"), ("node-b-pub", "node-error")],
         statuses(&answer),
         "the failing answer carries the envelope"
+    );
+    Ok(())
+}
+
+// conformance: CP-30
+#[tokio::test]
+async fn a_node_error_carries_the_nodes_message_with_the_subject_masked() -> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = MockServer::start().await;
+    let said = format!(
+        r#"{{"message":"no EHR at this node for {PATIENT}\r\n\u0007 in namespace {NAMESPACE}"}}"#
+    );
+    Mock::given(method("POST"))
+        .and(path("/v1/query/aql"))
+        .respond_with(
+            ResponseTemplate::new(400).set_body_raw(said.into_bytes(), "application/json"),
+        )
+        .mount(&b)
+        .await;
+    let dir = tempfile::tempdir()?;
+    let app = dev_gateway(
+        dir.path(),
+        &a.uri(),
+        &b.uri(),
+        &[("node-a", EHR_A), ("node-b", EHR_B)],
+    )?;
+
+    let (status, text) = call(app, post(body(&patient_query())?)?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "N37: {text}");
+    schema::validate(&text)?;
+    let answer: Answer = serde_json::from_str(&text)?;
+    let failed = answer
+        .meta
+        .federation
+        .endpoints
+        .iter()
+        .find(|endpoint| endpoint.id == "node-b-pub")
+        .ok_or("node B is reported")?;
+    assert_eq!(
+        Some(ErrorDetail::Text(format!(
+            "the node answered 400 Bad Request: no EHR at this node for {MASK} in namespace {NAMESPACE}"
+        ))),
+        failed.error,
+        "§9.5, §11.1: the node's status and message; §5.4.1, N33: never the subject"
     );
     Ok(())
 }

@@ -20,8 +20,9 @@
 //! byte-identical (N22, N33). Nothing is rolled back, so a member that
 //! accepted keeps its template whatever the others answered (§12.6 item 3).
 //! The answer carries `meta.federation` with one `endpoints[]` entry per
-//! registry member, the status of each and the node's HTTP status where it
-//! failed, and never a node's body (§9.5, §11.1, §12.6 item 2). The
+//! registry member, the status of each, and where it failed the node's HTTP
+//! status with an excerpt of its message, as a federated query's endpoint
+//! record carries them (§9.5, §11.1, §12.6 item 2). The
 //! provenance headers name the members that accepted (§7a.3, N31).
 //!
 //! The per-member machinery, [`each`], [`settled`], [`record_meta`] and
@@ -33,9 +34,11 @@ use std::time::Instant;
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
+use ferrofed_engine::dispatch::reported;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
 use ferrofed_engine::fanout::TIMEOUT_POLICY;
 use ferrofed_engine::forward::{ForwardError, Forwarded, HeldRequest};
+use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
@@ -45,7 +48,7 @@ use openehr_federation::headers;
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_federation::status;
-use openehr_its::rest::client::ReqwestTransport;
+use openehr_its::rest::client::{ErrorBody, ReqwestTransport};
 use openehr_its::rest::routes::RouteMatch;
 use serde::Serialize;
 use tokio::task::JoinSet;
@@ -351,7 +354,8 @@ fn elapsed_ms(started: Instant) -> u64 {
 }
 
 /// The §11.1 outcome of what `endpoint` answered the upload, measured as
-/// `latency_ms`, carrying the node's HTTP status and never its body (§9.5).
+/// `latency_ms`: a failure carries the node's HTTP status and an excerpt of
+/// its message (§9.5, [`reported`]).
 fn outcome(
     endpoint: &Endpoint,
     answer: Result<Forwarded, ForwardError>,
@@ -359,19 +363,29 @@ fn outcome(
     logged: &str,
 ) -> Outcome {
     let error = |message: String| ErrorDetail::Text(message);
+    // NOTE: §12.6: a template is not patient data, and no resolution precedes
+    // its upload, so the gateway withholds no identifier for the request.
+    let withheld = Withheld::none();
     match answer {
         Ok(forwarded) if forwarded.status().is_success() => Outcome::Active { latency_ms },
-        Ok(forwarded) => Outcome::NodeError {
-            latency_ms,
-            error: error(format!("the node answered {}", forwarded.status())),
-        },
+        Ok(forwarded) => {
+            let (status, _, body) = forwarded.into_parts();
+            Outcome::NodeError {
+                latency_ms,
+                error: reported::answered(status, &ErrorBody::from_bytes(body), &withheld),
+            }
+        }
         Err(ForwardError::Refused {
-            status: refused, ..
+            status: refused,
+            body,
+            ..
         }) => Outcome::NodeError {
             latency_ms,
-            error: error(format!(
-                "the node refused the gateway's onward credentials with {refused}"
-            )),
+            error: reported::said(
+                format!("the node refused the gateway's onward credentials with {refused}"),
+                &body,
+                &withheld,
+            ),
         },
         Err(ForwardError::TimeOut { .. }) => Outcome::TimeOut {
             latency_ms,
