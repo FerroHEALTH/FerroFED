@@ -586,12 +586,13 @@ impl Localizer for PixmResolver {
             .filter(|(_, lookup)| matches!(lookup, Lookup::Resolved(_) | Lookup::Unusable(_)))
             .map(|(member, _)| member.clone())
             .collect();
-        self.keep(patient, lookups);
+        // NOTE: no specification governs this: our own design; only a
+        // localization with candidates is followed by a resolution to keep for.
         if candidates.is_empty() {
-            Localization::NoRecords
-        } else {
-            Localization::Candidates(candidates)
+            return Localization::NoRecords;
         }
+        self.keep(patient, lookups);
+        Localization::Candidates(candidates)
     }
 }
 

@@ -223,6 +223,40 @@ async fn a_patient_the_manager_does_not_know_has_no_records() {
     assert!(matches!(answer, Localization::NoRecords), "{answer:?}");
 }
 
+#[tokio::test]
+async fn a_localization_no_resolution_follows_keeps_nothing() {
+    let unknown = manager(
+        404,
+        r#"{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"not-found"}]}"#,
+        Duration::ZERO,
+    )
+    .await;
+    let pixm = pixm(&unknown);
+    for index in 0..64 {
+        let answer = pixm
+            .localize(
+                &patient(&format!("SENTINEL-UNKNOWN-{index}")),
+                &members(),
+                soon(),
+            )
+            .await;
+        assert!(matches!(answer, Localization::NoRecords), "{answer:?}");
+    }
+    assert!(
+        format!("{pixm:?}").contains("shared: 0"),
+        "a burst of unknown patients leaves the memo empty: {pixm:?}"
+    );
+
+    let failing = manager(503, "{}", Duration::ZERO).await;
+    let pixm = self::pixm(&failing);
+    let answer = pixm.localize(&patient(SENTINEL), &members(), soon()).await;
+    assert!(matches!(answer, Localization::Unavailable(_)), "{answer:?}");
+    assert!(
+        format!("{pixm:?}").contains("shared: 0"),
+        "a failed localization keeps nothing: {pixm:?}"
+    );
+}
+
 // conformance: CP-5
 #[tokio::test]
 async fn a_manager_that_fails_leaves_the_localization_unavailable() {
