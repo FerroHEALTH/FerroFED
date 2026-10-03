@@ -36,10 +36,10 @@ use crate::facade::{
 };
 use crate::support::{error_body, send};
 
-type TestResult = Result<(), Box<dyn Error>>;
+pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
 /// The endpoints of node A and node B in [`registry`].
-const ENDPOINT_A: &str = "node-a-pub";
+pub(crate) const ENDPOINT_A: &str = "node-a-pub";
 const ENDPOINT_B: &str = "node-b-pub";
 
 /// A version uid node A minted.
@@ -210,7 +210,7 @@ fn a_member_the_registry_no_longer_holds_names_nothing() -> TestResult {
 }
 
 /// A node answering `verb` at `at` with `answer`, and `404` to the rest.
-async fn mount(server: &MockServer, verb: &str, at: String, answer: ResponseTemplate) {
+pub(crate) async fn mount(server: &MockServer, verb: &str, at: String, answer: ResponseTemplate) {
     Mock::given(method(verb))
         .and(path(at))
         .respond_with(answer)
@@ -220,7 +220,7 @@ async fn mount(server: &MockServer, verb: &str, at: String, answer: ResponseTemp
 
 /// A node that holds the EHR of [`EHR_A`] and the composition of
 /// [`VERSION_A`] in it.
-async fn holder() -> MockServer {
+pub(crate) async fn holder() -> MockServer {
     let server = MockServer::start().await;
     mount(
         &server,
@@ -251,17 +251,21 @@ async fn holder() -> MockServer {
 }
 
 /// A node that holds no EHR at all: it answers `404` to everything.
-async fn stranger() -> MockServer {
+pub(crate) async fn stranger() -> MockServer {
     MockServer::start().await
 }
 
 /// The gateway over node A at `a` and node B at `b`.
-fn over(dir: &std::path::Path, a: &MockServer, b: &MockServer) -> Result<Router, Box<dyn Error>> {
+pub(crate) fn over(
+    dir: &std::path::Path,
+    a: &MockServer,
+    b: &MockServer,
+) -> Result<Router, Box<dyn Error>> {
     gateway(dir, &registry(&a.uri(), &b.uri(), ""), "", "")
 }
 
 /// The method and path of every request `server` received, in order.
-async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+pub(crate) async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await
@@ -271,13 +275,13 @@ async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn Err
         .collect())
 }
 
-fn probe_at() -> (String, String) {
+pub(crate) fn probe_at() -> (String, String) {
     ("GET".to_owned(), format!("/v1/ehr/{EHR_A}"))
 }
 
 /// The status, the acting endpoint and the body text of `request` sent to
 /// `app`.
-async fn answer(
+pub(crate) async fn answer(
     app: Router,
     request: Request<Body>,
 ) -> Result<(StatusCode, Option<String>, String), Box<dyn Error>> {

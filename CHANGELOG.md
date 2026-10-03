@@ -724,6 +724,22 @@ federated query and identity resolution shipped in 0.0.3.
 
 ### Security
 
+- The ask-all probe no longer sends a path `ehr_id` that is not a bare UUID
+  to every member (#259; §5.4.1, §12.5.1, N33, CP-26). The path `ehr_id` was
+  checked only as a `HIER_OBJECT_ID`, a form that admits a bare national
+  number as a one-arc ISO OID, so a patient identifier in the `ehr_id` slot
+  of a read nothing routed was broadcast to the whole federation. A read
+  whose `ehr_id` is an ISO OID, an internet id or a UUID with an extension,
+  and that no targeting header, resolution binding or `ehr_id` index entry
+  routes, is now refused with the new code `probe-requires-uuid` (`400`),
+  and no member is asked. The same `ehr_id` with the endpoint header is
+  forwarded to the named node alone, and the index then routes it, since a
+  member may mint `ehr_id`s in a scheme other than UUID (§12b.2, N42a).
+  The refusal is logged as the security event `ehr-id-probe-refused`, which
+  never names the `ehr_id`. Track 10 gains the identifier in the `ehr_id`
+  slot. `ferrofed-registry` adds `EhrId::is_uuid`, and `ferrofed-engine`'s
+  `probe::Probe` carries a `ProbedEhrId`, which only a bare UUID converts
+  to, in place of the client's path segment.
 - A request routed to one node no longer logs the client's `X-Request-Id`
   (#62; §5.4.1, §5.4.3, N33, CP-26). The security events of a refused query
   parameter or a withheld request, and the failure events of the routed path

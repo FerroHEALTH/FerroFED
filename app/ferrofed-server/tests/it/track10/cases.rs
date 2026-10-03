@@ -394,6 +394,36 @@ pub(crate) fn on_the_route(ehr_a: Uuid) -> Vec<Case> {
     ]
 }
 
+/// The patient's identifier in the `ehr_id` slot of a read no header, binding
+/// or index routes: every form it takes there is a `HIER_OBJECT_ID` that is
+/// no UUID, so the ask-all probe never carries it to a member, and the read
+/// is a `400` that asks nobody (§5.4.1, N33, §12.5.1).
+pub(crate) fn in_the_ehr_id_slot() -> Vec<Case> {
+    let value = PATIENT.value();
+    let namespace = PATIENT.namespace();
+    let oid = namespace.trim_start_matches("urn:oid:");
+    let read = |name: &str, uri: String| Case {
+        name: format!("{name} in the ehr_id slot, routed by nothing"),
+        method: Method::GET,
+        uri,
+        headers: vec![("accept".to_owned(), "application/json".to_owned())],
+        body: Payload::Empty,
+        expect: refused(),
+    };
+    vec![
+        read("the identifier", format!("/v1/ehr/{value}")),
+        read(
+            "the identifier under its namespace",
+            format!("/v1/ehr/{oid}::{value}"),
+        ),
+        read(
+            "the identifier, on the ehr_status read",
+            format!("/v1/ehr/{value}/ehr_status"),
+        ),
+        read("the namespace", format!("/v1/ehr/{oid}")),
+    ]
+}
+
 /// Returns `text` percent-encoded for a query string.
 fn encoded(text: &str) -> String {
     let mut out = String::new();

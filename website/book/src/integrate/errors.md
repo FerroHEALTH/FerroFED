@@ -121,6 +121,7 @@ the node is reported and the query succeeds.
 | `targeting-conflict` | 400 | The request names its node set twice, and the two sets differ: the AQL directive and a targeting header, or the endpoint header and the organisation header. The gateway never merges them and never picks one (§8.4.1, N35). The message names both sets by the registry endpoints each selects; every identifier in it is one the registry already holds. Two mechanisms that select the same set are accepted. |
 | `ehr-id-invalid` | 400 | The `ehr_id` in the request path is not an openEHR `HIER_OBJECT_ID`, so it names no EHR and the request is not routed (§12.5). The message never quotes the path. |
 | `node-error` | 424 | A member the ask-all probe asked answered with neither a success nor `404`, so whether it holds the `ehr_id` is unknown and the read is not served (§11.2, §12.5.1). The message names the member and its status. |
+| `probe-requires-uuid` | 400 | A read of an EHR resource that no targeting header, resolution binding or `ehr_id` index entry routes to one node has a path `ehr_id` that is not a bare UUID: an ISO OID, an internet id, or a UUID with an extension. The gateway cannot tell such a value from a patient identifier, and the ask-all probe would send it to every member, so it asks no member anything (§5.4.1, N33, §12.5.1). Name the node in `openEHR-federation-endpoint`. The message never quotes the path. |
 
 The two `409` codes belong to follow-up routing (§12). `ehr-id-collision`
 answers a read today; the integrity incident it also raises for the operator,

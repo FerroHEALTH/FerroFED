@@ -7,7 +7,10 @@
 //! Each probe is a [`NodeClient::forward`](crate::dispatch::NodeClient::forward) of the one request, so it passes
 //! the same outbound gate as every routed request: the path carries the
 //! node-local `ehr_id` and nothing else, and of the client's headers only the
-//! ones `GET {base}/v1/ehr/{ehr_id}` declares travel (§5.4.1, N33). Every
+//! ones `GET {base}/v1/ehr/{ehr_id}` declares travel (§5.4.1, N33). The
+//! `ehr_id` is a [`ProbedEhrId`], a bare UUID, because the probe carries it
+//! to members the client never named and any other form may be a patient
+//! identifier (§5.4.1, N33). Every
 //! member is asked at once, each under the per-node deadline and all under
 //! the overall budget (§11.5, N38): a slow member is abandoned, never waited
 //! on past the budget, and abandoning it aborts no other probe.
@@ -19,7 +22,7 @@
 
 use std::time::Instant;
 
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::Transport;
 use tokio::task::{JoinError, JoinSet};
@@ -61,13 +64,46 @@ pub enum ProbeError {
     Task(#[from] JoinError),
 }
 
-/// One probe: the path segment it asks about, the client headers it may
-/// carry, and its budget.
+/// The `ehr_id` an ask-all probe asks every member about: a bare UUID, the
+/// form §12b.2 asks a member to mint its `ehr_id`s in (N42a).
+///
+/// Every other `HIER_OBJECT_ID` form admits a value the gateway cannot tell
+/// from a patient identifier, a bare national number parsing as a one-arc
+/// ISO OID, and the probe would carry it to every member (§5.4.1, N33).
+#[derive(Debug, Clone)]
+pub struct ProbedEhrId(EhrId);
+
+impl ProbedEhrId {
+    /// The `ehr_id`, a bare UUID.
+    #[must_use]
+    pub fn ehr_id(&self) -> &EhrId {
+        &self.0
+    }
+}
+
+impl TryFrom<&EhrId> for ProbedEhrId {
+    type Error = NotUuid;
+
+    fn try_from(ehr_id: &EhrId) -> Result<Self, Self::Error> {
+        if ehr_id.is_uuid() {
+            Ok(Self(ehr_id.clone()))
+        } else {
+            Err(NotUuid)
+        }
+    }
+}
+
+/// An `ehr_id` that is no bare UUID, which no member is ever probed for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("only an ehr_id that is a UUID is probed at every member (§5.4.1, N33)")]
+pub struct NotUuid;
+
+/// One probe: the `ehr_id` it asks about, the client headers it may carry,
+/// and its budget.
 #[derive(Debug)]
 pub struct Probe {
-    /// The `ehr_id` path segment as the client sent it, still
-    /// percent-encoded.
-    pub ehr_id_segment: String,
+    /// The `ehr_id` every member is asked about.
+    pub ehr_id: ProbedEhrId,
     /// The client's headers; the operation decides which travel.
     pub headers: HeaderMap,
     /// The instant each member must have answered by: the per-node timeout,
@@ -82,9 +118,12 @@ pub struct Probe {
 impl Probe {
     /// The path the probe asks every member for, relative to the ITS-REST
     /// base.
+    ///
+    /// A UUID is written in hexadecimal digits and hyphens, so the `ehr_id`
+    /// is its own path segment.
     #[must_use]
     pub fn path(&self) -> String {
-        format!("/ehr/{}", self.ehr_id_segment)
+        format!("/ehr/{}", self.ehr_id.ehr_id())
     }
 }
 

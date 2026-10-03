@@ -111,3 +111,27 @@ fn an_ehr_id_is_a_hier_object_id_compared_without_case() -> Result<(), Box<dyn E
     );
     Ok(())
 }
+
+#[test]
+fn only_a_bare_uuid_ehr_id_is_a_uuid() -> Result<(), Box<dyn Error>> {
+    for minted in [
+        "6f2a51a4-1b8e-4f8b-9a4c-1f6c2b1d7e30",
+        "6F2A51A4-1B8E-4F8B-9A4C-1F6C2B1D7E30",
+    ] {
+        assert!(EhrId::new(minted)?.is_uuid(), "{minted}");
+    }
+    for other in [
+        "12345",
+        "2.999.1.1",
+        "2.999.1.1::ffd-test-0010",
+        "ffd-test-0010",
+        "cdr-a.example.org",
+        "6f2a51a4-1b8e-4f8b-9a4c-1f6c2b1d7e30::12345",
+    ] {
+        assert!(
+            !EhrId::new(other)?.is_uuid(),
+            "{other}: an ISO OID, an internet id or a UUID with an extension is not a bare UUID"
+        );
+    }
+    Ok(())
+}

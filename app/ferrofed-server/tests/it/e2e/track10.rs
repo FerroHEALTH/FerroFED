@@ -91,6 +91,7 @@ async fn the_four_positions_reach_neither_ferroehr_node_on_any_path() -> TestRes
         all.extend(cases::directed(position));
     }
     all.extend(cases::on_the_route(EHR_A));
+    all.extend(cases::in_the_ehr_id_slot());
     run_all(&app, &topology, &all).await
 }
 
