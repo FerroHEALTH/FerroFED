@@ -98,20 +98,22 @@ pub(super) fn failed(
             ..
         } => failure(Outcome::TimeOut {
             latency_ms,
-            error: text(format!(
-                "no answer before the deadline: {}",
-                chain(&*source)
-            )),
+            error: reported::followed_by(
+                "no answer before the deadline".to_owned(),
+                &chain(&*source),
+                withheld,
+            ),
         }),
         ClientError::Transport {
             source: TransportError::Send { source },
             ..
         } => failure(Outcome::Offline {
             latency_ms,
-            error: text(format!(
-                "the node could not be reached: {}",
-                chain(&*source)
-            )),
+            error: reported::followed_by(
+                "the node could not be reached".to_owned(),
+                &chain(&*source),
+                withheld,
+            ),
         }),
         ClientError::Unauthorized { body, .. } => Ok(node_error(
             latency_ms,

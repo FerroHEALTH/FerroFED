@@ -330,7 +330,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   characters and invisible format marks turned into spaces, and the patient
   identifier the query resolved on replaced by `[withheld]` wherever the
   node echoed it, the whole message when the node echoed it percent-encoded
-  (§5.4.1, N33). The two fan-outs carried the node's status alone before,
+  (§5.4.1, N33). The HTTP client's reason an `offline` or `time-out` node
+  was not reached is held to the same rule. The two fan-outs carried the
+  node's status alone before,
   and a query copied the node's message with no cleaning and no masking.
 - A recombined `AVG` over integers answers an integer (#309; AQL 1.1.0
   §3.9.1.5, "it will also determine the return type"). When every node's
