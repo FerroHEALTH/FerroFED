@@ -80,6 +80,34 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `scripts/checks/e2e-placement.sh`, refuses a container test placed where
   that job never selects it.
 
+### Security
+
+- A request routed to one node no longer forwards a declared header or query
+  value of the wrong kind (#261; §5.4.1, N33, CP-26). The routed path
+  resolves no patient, so the outbound gate had nothing to compare a
+  client's `version_at_time`, `Prefer` or `Accept` against, and a patient
+  identifier written there reached the node. Every header and query value
+  the ITS-REST operation declares is now held to the kind `openehr-its`'s
+  parameter table states for it: a date-time is an extended ISO 8601
+  date-time read by `openehr-base`'s `Iso8601_date_time` (ITS-REST Overview,
+  "Datetime format"), an enumerated value is exactly one of the listed
+  values, and a UUID, an integer, a number or a boolean parses as one. A
+  value of another kind is refused with the new code
+  `parameter-value-invalid` (`400`), naming the header, or the parameter by
+  position and declared name, never the value, and no node is asked, the
+  ask-all probe included. The refusal is logged as the security event
+  `parameter-value-refused`. `Accept: */*`, a list of media types and a
+  media-type parameter are refused, since none is a listed value. The free
+  text the table states no kind for (`If-Match`, `openehr-audit-details`,
+  `openehr-item-tag`, `openehr-template-id`, `openehr-version`,
+  `openehr-version-item-tag`, `path`, `tag_key`, `tag_value`,
+  `tag_target_path`) still travels as sent; whether N33 covers a forwarded
+  client value is recorded on #212. The ask-all probe leaves out a client
+  header whose value its own operation does not admit. Track 10 gains a
+  date-time parameter and an enumerated header carrying the identifier.
+  `ferrofed-engine` adds the `declared` module and
+  `ForwardError::Value`.
+
 ## [0.0.6] - 2026-10-03
 
 The v0.0.4, v0.0.5 and v0.0.6 milestones in one release (no v0.0.4 or v0.0.5

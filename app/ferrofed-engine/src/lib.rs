@@ -15,11 +15,14 @@
 //! A fan-out answer names the versions each endpoint's rows show it holding,
 //! which the follow-up routing table learns from (§12.2, N21).
 //! [`hygiene`] is the outbound gate every
-//! request to a node passes before it is sent (#45). [`outbound_id`] is the
+//! request to a node passes before it is sent (#45), and [`declared`] holds
+//! each header and query value a routed request forwards to the kind its
+//! ITS-REST operation declares (§5.4.1, N33). [`outbound_id`] is the
 //! correlation id the gateway mints for a node request, with the inventory of
 //! every header a node request carries (§5.4.1, N33).
 #![doc(test(attr(deny(warnings))))]
 
+pub mod declared;
 pub mod dispatch;
 pub mod fanout;
 pub mod forward;

@@ -134,6 +134,11 @@ pub enum Code {
     /// `If-Match` or in the path of a `DELETE`, so its controlling CDR cannot
     /// be found (§12.4, N23).
     PrecedingVersionInvalid,
+    /// A header or query value of a request routed to a single node does not
+    /// match the kind the ITS-REST operation declares for it (§5.4.1, N33).
+    /// The body names the header, or the parameter by position, never the
+    /// value.
+    ParameterValueInvalid,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -149,7 +154,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 32] = [
+    pub const GATEWAY: [Self; 33] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -182,6 +187,7 @@ impl Code {
         Self::StoredQueryHeld,
         Self::StoredQueryUnknown,
         Self::PrecedingVersionInvalid,
+        Self::ParameterValueInvalid,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -230,6 +236,7 @@ impl Code {
             Self::StoredQueryHeld => "stored-query-held",
             Self::StoredQueryUnknown => "stored-query-unknown",
             Self::PrecedingVersionInvalid => "preceding-version-invalid",
+            Self::ParameterValueInvalid => "parameter-value-invalid",
         }
     }
 
@@ -257,7 +264,8 @@ impl Code {
             | Self::QueryVersionRequired
             | Self::QueryTypeUnsupported
             | Self::SubjectLiteral
-            | Self::PrecedingVersionInvalid => StatusCode::BAD_REQUEST,
+            | Self::PrecedingVersionInvalid
+            | Self::ParameterValueInvalid => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
                 StatusCode::NOT_FOUND
             }
@@ -342,6 +350,9 @@ impl Code {
             }
             Self::PrecedingVersionInvalid => {
                 "a versioned write names the version it amends as one quoted OBJECT_VERSION_ID in If-Match, or in the path of a DELETE, so its controlling CDR can be found (§12.4, N23)"
+            }
+            Self::ParameterValueInvalid => {
+                "a header or query value routed to one node matches the kind its ITS-REST operation declares, or nothing is sent (§5.4.1, N33)"
             }
         }
     }
@@ -434,6 +445,7 @@ mod tests {
             Code::StoredQueryHeld => Some(29),
             Code::StoredQueryUnknown => Some(30),
             Code::PrecedingVersionInvalid => Some(31),
+            Code::ParameterValueInvalid => Some(32),
         }
     }
 
@@ -510,6 +522,7 @@ mod tests {
             (Code::StoredQueryHeld, StatusCode::CONFLICT),
             (Code::StoredQueryUnknown, StatusCode::NOT_FOUND),
             (Code::PrecedingVersionInvalid, StatusCode::BAD_REQUEST),
+            (Code::ParameterValueInvalid, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

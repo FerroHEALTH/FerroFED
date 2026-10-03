@@ -454,6 +454,38 @@ header is stripped, the client's `Authorization` and `x-request-id` and the
 federation's own headers included, and the outbound gate reads every
 forwarded value.
 
+## Declared values
+
+A routed request resolves no patient, so the outbound gate has no identifier
+to compare a forwarded value against. The gateway holds every forwarded
+header and query value to the kind the `openehr-its` parameter table states
+for it instead, and a value of another kind is a `400`
+(`parameter-value-invalid`) with nothing sent:
+
+- a date-time, such as `version_at_time`, is an extended ISO 8601 date-time
+  in the openEHR BASE sense, with an offset only when needed (ITS-REST
+  Overview, "Datetime format"), read by the `openehr-base` parser;
+- an enumerated value, such as `Prefer`, `Accept` or `Content-Type`, is
+  exactly one of the values the operation lists, compared byte for byte, so
+  `Accept: */*`, a list of media types and a media-type parameter such as
+  `charset` are refused;
+- a UUID, an integer, a number and a boolean are each parsed as one.
+
+The refusal names the header, or the query parameter by its position and
+declared name, and never the value (§5.4.3). A value of such a kind carries
+only what the kind admits: a four-digit year, for example, is a valid partial
+date-time.
+
+The parameter table states no kind for the rest, so the gateway cannot
+classify them and forwards them as the client sent them. In the EHR area they
+are the headers `If-Match`, `openehr-audit-details`, `openehr-item-tag`,
+`openehr-template-id`, `openehr-version` and `openehr-version-item-tag`, and
+the query parameters `path`, `tag_key`, `tag_value` and `tag_target_path`.
+N33 forbids an identifier in the parts of a request the gateway composes
+(§5.4.1). Whether a client value the gateway forwards unchanged is one of
+those parts is a question the specification leaves open, recorded on
+[#212](https://github.com/FerroHEALTH/FerroFED/issues/212).
+
 ## What the log records
 
 One line per request: the method, the matched route, the status, the latency,

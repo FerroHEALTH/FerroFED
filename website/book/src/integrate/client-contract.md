@@ -280,7 +280,16 @@ A routed request reaches the node as you sent it:
   as `version_at_time` on a read, or `path` on a directory read). Any other
   parameter is a `400` (`query-parameter-refused`) and nothing is sent,
   because the gateway cannot tell an identifying value from any other
-  (§5.4.1, N33).
+  (§5.4.1, N33);
+- each declared header and query value only when it is of the kind the
+  operation states for it: a `version_at_time` in the extended ISO 8601
+  format, a `Prefer`, `Accept` or `Content-Type` that is exactly one of the
+  values the operation lists. Any other value is a `400`
+  (`parameter-value-invalid`) and nothing is sent. Send `Accept` as one media
+  type the operation lists, or leave it out: `*/*`, a list or a media-type
+  parameter is refused. A value of free text, such as `If-Match` or a
+  directory `path`, travels as you sent it (see
+  [Configuration](../operate/configuration.md#declared-values)).
 
 The answer is the node's: its status, its body, and its `Location` and `ETag`
 unmodified, since openEHR uids are never rewritten (N22, N31). Every routed
