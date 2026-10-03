@@ -64,7 +64,7 @@ flowchart TB
     gw -->|"definitions"| store[("redb, PostgreSQL<br/>or files")]
     gw -->|"serves"| admin["Admin listener<br/>/metrics, /admin"]
     prom["Prometheus"] -->|"scrapes"| admin
-    gw -.->|"v0.0.8"| planned["Callers' JWKS (#80)<br/>XCPD localizer (#85)<br/>Consent service (#83)"]:::planned
+    gw -.->|"v0.0.8"| planned["Callers' JWKS (#80)<br/>XCPD localizer (#85)<br/>Mitz consent service (#87)"]:::planned
 ```
 
 - **The proxy** terminates TLS and, until client authentication lands
@@ -79,8 +79,9 @@ flowchart TB
 - **The planned services** are client authentication against the callers'
   issuers ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), XCPD
   localization ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85))
-  and the consent pre-filter
-  ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)). OAuth 2.0 to
+  and the Mitz consent pre-filter of the Dutch binding
+  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)). The
+  localization and pre-filter seams they plug into are built. OAuth 2.0 to
   each node's token endpoint
   ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)) replaces the
   static credential per endpoint ([Trust and keys](trust-and-keys.md)).

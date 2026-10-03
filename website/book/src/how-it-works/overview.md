@@ -30,7 +30,6 @@ diagram follows the three tiers of the specification's own figure in §3.1.
 
 ```mermaid
 flowchart TB
-    classDef planned stroke-dasharray: 6 4
     subgraph app["Application tier"]
         client["Client application"]
     end
@@ -38,7 +37,7 @@ flowchart TB
         gw["FerroFED gateway"]
     end
     subgraph step1["Step 1, outside AQL"]
-        loc["Localizer<br/>planned (#85)"]:::planned
+        loc["Localizer"]
         pix["PIX Manager"]
     end
     subgraph nodes["Node tier"]
@@ -53,9 +52,11 @@ flowchart TB
     gw -->|"5. RESULT_SET"| client
 ```
 
-Without a localizer, which is what FerroFED runs today, every registry member
-is a candidate and the gateway asks the PIX Manager about all of them (§4.3,
-N4). Localization through XCPD is planned for v0.0.8
+Step 2 is optional. Under `federation.node_selection = "ask-all"` every
+registry member is a candidate, and the gateway asks the PIX Manager about
+all of them (§4.3, N4). Under `"localized"` a localizer names the candidates
+first (§14.1). The localizer today is the development cross-reference; the
+IHE XCPD binding is planned for v0.0.8
 ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)).
 
 ## The parts of the gateway
@@ -98,12 +99,13 @@ flowchart TB
   both carriers, and prints one standard query per node with
   `printer::to_aql` (§7.1, N2, N7). It refuses a query it cannot reduce
   safely (§5.4.3).
-- **Identity seams:** one trait per role of §5.2 and §14: the resolver
-  (built: the PIX Manager over ITI-83, and a static cross-reference for
-  trials), the localizer (planned for v0.0.8,
-  [#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) and the consent
-  pre-filter (planned for v0.0.8,
-  [#83](https://github.com/FerroHEALTH/FerroFED/issues/83)).
+- **Identity seams:** one trait per role of §5.2, §13.2.1 and §14: the
+  resolver (the PIX Manager over ITI-83, or a static cross-reference for
+  trials), the localizer and the consent pre-filter. The localizer and the
+  pre-filter have development bindings today. Their production bindings,
+  XCPD ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) and the
+  Dutch Mitz ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)),
+  are planned for v0.0.8.
 - **Engine:** sends one request per node under one deadline (§11.5, N38),
   routes a follow-up to the node that owns it (§12), and passes every
   outbound request through the outbound gate (§5.4.1, N33).

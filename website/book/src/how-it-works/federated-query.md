@@ -18,7 +18,8 @@ namespace (§7, N2). The gateway takes that value out of the query and asks
 the identity seams where the patient is and under which local `ehr_id`
 (§5.2, N3, CP-3). The order is fixed: the registry snapshot, then the
 localizer, then the consent pre-filter, then the resolver. Only a member the
-resolver answers with an `ehr_id` is sent a query (N8, CP-36).
+resolver answers with an `ehr_id`, and the pre-filter did not deny, is sent a
+query (N8, CP-36).
 
 ```mermaid
 %%{init: {"sequence": {"actorMargin": 24}}}%%
@@ -31,11 +32,11 @@ sequenceDiagram
     C->>F: POST /v1/query/aql
     Note over F: parse, bind,<br/>find the patient,<br/>or answer 400
     Note over F: take the registry<br/>snapshot
-    opt localizer, planned for v0.0.8 (#35;85)
+    opt node_selection = localized
         F->>L: candidates?
         L-->>F: members, or fail closed
     end
-    opt consent pre-filter, planned for v0.0.8 (#35;83)
+    opt a consent pre-filter is configured
         F->>P: may each be asked?
         P-->>F: denied, or no signal
     end
@@ -44,15 +45,26 @@ sequenceDiagram
     Note over F: {node, ehr_id}<br/>pairs
 ```
 
-- With no localizer, every registry member is a candidate (§4.3, N4). A
-  configured localizer that does not answer leaves no candidate and asks no
-  node, unless you declared an ask-all fallback (§14.1, N4, CP-5). The
-  localization seam and its XCPD adapter are planned for v0.0.8
+- **Node selection** is a declaration you make (§4.3, N4, N10). Under
+  `federation.node_selection = "ask-all"`, every active member is a
+  candidate. Under `"localized"`, the localizer names the candidates, and a
+  member it does not name is `not-localized` and never asked. A directed
+  query is never localized (§8).
+- **A localizer that fails** fails closed: no member is asked, every member
+  is `not-localized` with the localizer's error, and
+  `meta.federation.localization.error` carries the same error, so an outage
+  never reads as a patient with no data. Only
+  `federation.localization.on_failure = "ask-all"` widens instead (§14.1,
+  N4, CP-5). The localizer today is the development cross-reference, under
+  `profile = "development"`; the IHE XCPD binding is planned for v0.0.8
   ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)).
-- A consent pre-filter is optional and never the gate: every node still
-  checks consent before it releases data (§13.2, N27, N27a). The pre-filter
-  is planned for v0.0.8
-  ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)).
+- **The consent pre-filter** is optional and never the gate: a member it
+  denies is `consent-denied`, never resolved and never sent a request, and
+  every other member is asked so its node can decide (§13.2.1, N27, N27a).
+  When the pre-filter cannot answer, every candidate is asked. The
+  pre-filter today is the development table `[[dev.consent_denied]]`; the
+  Dutch binding, Mitz, is planned for v0.0.8
+  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
 - "No identifier in this domain" is an answer: that member is
   `not-resolved` and does not fail the query (N6). A PIX Manager that cannot
   answer is a failure, reported on the member and failing the query `424`
@@ -140,13 +152,12 @@ member reaches each status.
 
 ```mermaid
 flowchart TD
-    classDef planned stroke-dasharray: 6 4
     m["A registry member"] -->|"node selection"| sel{"In scope?"}
     sel -->|"left out or<br/>suspended"| excl["excluded"]
-    sel -->|"not a<br/>candidate"| nloc["not-localized"]:::planned
-    sel -->|"in scope"| pre{"Consent<br/>pre-filter"}:::planned
-    pre -->|"denied"| cden["consent-denied"]:::planned
-    pre -->|"no signal"| res{"Resolver"}
+    sel -->|"not a<br/>candidate"| nloc["not-localized"]
+    sel -->|"in scope"| pre{"Consent<br/>pre-filter"}
+    pre -->|"denied"| cden["consent-denied,<br/>no latency_ms"]
+    pre -->|"not denied"| res{"Resolver"}
     res -->|"no ehr_id"| nres["not-resolved"]
     res -->|"no answer"| nresf["not-resolved,<br/>with the error"]
     res -->|"ehr_id"| sent["Sent the<br/>node query"]
@@ -154,15 +165,17 @@ flowchart TD
     sent -->|"no<br/>connection"| off["offline"]
     sent -->|"deadline"| tout["time-out"]
     sent -->|"error or<br/>unusable"| nerr["node-error"]
+    sent -->|"403, a listed<br/>consent code"| cref["consent-denied,<br/>with latency_ms"]
 ```
 
-`not-localized` comes from the localizer, and `consent-denied` from the
-pre-filter, both planned for v0.0.8
-([#85](https://github.com/FerroHEALTH/FerroFED/issues/85),
-[#83](https://github.com/FerroHEALTH/FerroFED/issues/83)). Today a node's own
-consent refusal reaches the gateway as an HTTP error, so it is reported
-`node-error`; how a node refusal is reported is part of #83. A member
-settled before dispatch carries no `latency_ms` (N40).
+A member settled before dispatch carries no `latency_ms`, and a member the
+gateway sent a request carries the time it observed (N40). That is why the
+two `consent-denied` boxes differ. ITS-REST defines no consent signal, so a
+node's refusal is `consent-denied` only when it is a `403` whose ITS-REST
+`Error` carries a `code` the registry lists for that endpoint in
+`consent_refusal_codes`; every other refusal is `node-error`
+([Consent](../operate/identity.md#consent)). The list is empty by default,
+and the key is FerroFED's own design.
 
 ## The status of the whole answer
 
@@ -189,6 +202,10 @@ flowchart TD
 - `not-resolved` and `consent-denied` are answers. They clear `complete` and
   never fail the query (§11.3, N6). A patient no member holds is a `200`
   with no rows.
+- A localizer that failed closed leaves every member `not-localized`, so the
+  answer is a `200` with `complete: true` and no rows. Read
+  `meta.federation.localization.error` to tell that apart from a patient
+  no member holds (§14.1).
 - `excluded` and `not-localized` members were never in scope, so they do not
   clear `complete` (§11.1).
 - Read `meta.federation.complete`, never the status code: a `200` can carry
