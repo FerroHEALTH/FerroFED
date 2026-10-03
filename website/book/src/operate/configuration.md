@@ -446,6 +446,36 @@ demographic_endpoint = "hospital-a.demographic"
   without the setting, and as `routed-single-node` naming the endpoint a
   client names, with it. The setting is named in the startup log line.
 
+## Fan-out template upload
+
+A template lives at the node it was uploaded to, so a deployment whose
+clients commit to any member needs the same template at every member
+(§12.6). By default the gateway routes every template upload to the one
+endpoint the request names, and the deployment keeps templates consistent
+another way: distributing them out of band, or through a shared template
+repository (§12.6, N43). The gateway can instead fan an upload out:
+
+```toml
+[federation]
+fan_out_template_upload = true   # off by default
+```
+
+- Only an ADL 1.4 or ADL 2 template upload fans out, and only when the
+  request asks for it, with `openEHR-federation-endpoint: *` (every active
+  member) or headers that select several endpoints. A plain upload still
+  names its one node, and every other definition request still routes to
+  one node.
+- Each member is sent the upload independently, within the request's
+  `per_node_timeout_ms` and `overall_timeout_ms`. A member that accepts keeps
+  the template: the gateway rolls nothing back.
+- The answer names each member's outcome, and a partial success answers
+  `207`, never `200` ([client
+  contract](../integrate/client-contract.md#fan-out-template-upload)).
+- `OPTIONS {base}/` declares the setting as
+  `definition.fan_out_template_upload`, and `its_rest.definition` says that
+  an upload naming `*` or several endpoints fans out. The setting is named
+  in the startup log line, and changing it needs a restart.
+
 ## The environment
 
 Any key can be set or overridden with `FERROFED__<SECTION>__<KEY>`, upper or
@@ -578,7 +608,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |
-| `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, routed like every other definition request; `501` when no registry is configured |
+| `{base}/v1/definition/` and below | routed to the one node `openEHR-federation-endpoint` names, never merged; without the header a `400`; a template upload naming `*` or several endpoints fanned out to each when `federation.fan_out_template_upload` is set; stored-query definitions held at the gateway when `[stored_queries]` is set; without `[stored_queries]`, routed like every other definition request; `501` when no registry is configured |
 | `{base}/v1/demographic/` and below | `501`, never federated; when `federation.demographic_endpoint` is set, routed to that endpoint when `openEHR-federation-endpoint` names it, and a `400` without the header |
 | any other path under `{base}/v1/` | `501` |
 | any other path | `404` |

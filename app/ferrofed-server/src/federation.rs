@@ -56,6 +56,7 @@ pub struct Federation {
     best_effort: bool,
     demographic: Option<EndpointId>,
     dependencies: Dependencies,
+    template_fan_out: bool,
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -327,6 +328,7 @@ impl Federation {
             best_effort: settings.federation.best_effort,
             demographic: settings.federation.demographic_endpoint.clone(),
             dependencies,
+            template_fan_out: settings.federation.fan_out_template_upload,
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -335,7 +337,9 @@ impl Federation {
     /// Assembles a federation from parts, for a test that builds its own.
     ///
     /// It offers best-effort completion, as the configuration does by
-    /// default; [`Federation::with_best_effort`] withdraws it.
+    /// default; [`Federation::with_best_effort`] withdraws it. It fans no
+    /// template upload out, as the configuration does not by default;
+    /// [`Federation::with_template_fan_out`] offers it.
     #[must_use]
     pub fn new(
         id: FederationId,
@@ -363,6 +367,7 @@ impl Federation {
             best_effort: crate::config::Federation::default().best_effort,
             demographic: None,
             dependencies,
+            template_fan_out: crate::config::Federation::default().fan_out_template_upload,
         }
     }
 
@@ -371,6 +376,14 @@ impl Federation {
     #[must_use]
     pub fn with_best_effort(mut self, offered: bool) -> Self {
         self.best_effort = offered;
+        self
+    }
+
+    /// This federation, fanning a template upload out to several members
+    /// when `offered` is `true` (§12.6, N43).
+    #[must_use]
+    pub fn with_template_fan_out(mut self, offered: bool) -> Self {
+        self.template_fan_out = offered;
         self
     }
 
@@ -482,6 +495,14 @@ impl Federation {
         self.demographic.as_ref()
     }
 
+    /// Whether a template upload naming `*` or several endpoints fans out to
+    /// each of them (§12.6, N43), as `definition.fan_out_template_upload`
+    /// declares it in `OPTIONS {base}/` (§7a.2).
+    #[must_use]
+    pub fn fans_out_template_upload(&self) -> bool {
+        self.template_fan_out
+    }
+
     /// How `OFFSET k > 0` is answered across the fan-out, with its bound
     /// (§11.6.2, N39), as `paging` declares it in `OPTIONS {base}/` (§7a.2).
     #[must_use]
@@ -515,6 +536,7 @@ impl std::fmt::Debug for Federation {
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
             .field("demographic", &self.demographic)
+            .field("template_fan_out", &self.template_fan_out)
             .field("offset_strategy", &self.context.offset_strategy())
             .field(
                 "decomposable_aggregates",

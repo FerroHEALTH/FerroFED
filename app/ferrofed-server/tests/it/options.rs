@@ -372,6 +372,33 @@ async fn the_definition_area_declares_nothing_offered() -> TestResult {
     Ok(())
 }
 
+// conformance: CP-23 CP-34
+#[tokio::test]
+async fn the_template_fan_out_upload_follows_the_configuration() -> TestResult {
+    for (federation, offered) in [
+        ("", false),
+        ("fan_out_template_upload = false", false),
+        ("fan_out_template_upload = true", true),
+    ] {
+        let body = described(federation).await?;
+        assert_eq!(
+            DefinitionBehaviour::new(offered)
+                .with_stored_query_registry(false)?
+                .with_stored_query_fan_out(false)?,
+            body.federation.definition,
+            "§7a.2, N43: {federation:?} declares fan_out_template_upload {offered}"
+        );
+        let described = &body.federation.its_rest.definition;
+        assert!(described.starts_with("routed-single-node"), "{described}");
+        assert_eq!(
+            offered,
+            described.contains("fans out"),
+            "§7a.1: {described}"
+        );
+    }
+    Ok(())
+}
+
 // conformance: CP-23
 #[tokio::test]
 async fn the_member_endpoints_follow_the_registry() -> TestResult {

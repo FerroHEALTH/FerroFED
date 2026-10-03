@@ -197,6 +197,13 @@ pub struct Federation {
     /// answers `501`; it is never federated either way. A value that names
     /// no endpoint of the registry refuses to boot.
     pub demographic_endpoint: Option<String>,
+    /// Whether a template upload may fan out to several members (§12.6,
+    /// N43): off by default. With it on, an ADL 1.4 or ADL 2 template upload
+    /// whose `openEHR-federation-endpoint` header is `*`, or whose targeting
+    /// headers select more than one endpoint, is sent to each of them
+    /// independently and answered per node; `OPTIONS {base}/` declares it as
+    /// `definition.fan_out_template_upload` (§7a.2, N30).
+    pub fan_out_template_upload: bool,
 }
 
 /// An aggregate function the gateway recombines across a fan-out
@@ -275,6 +282,7 @@ impl Default for Federation {
                 DecomposableAggregate::Avg,
             ],
             demographic_endpoint: None,
+            fan_out_template_upload: false,
         }
     }
 }
