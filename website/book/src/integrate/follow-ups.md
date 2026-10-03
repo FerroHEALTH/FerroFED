@@ -55,8 +55,9 @@ exactly one node (§12.5.1, N41):
 2. A resolution binding of your client session: the node your earlier query
    resolved that `ehr_id` at. A session needs a client identity. The gateway verifies
    every caller ([Client authentication](../operate/authentication.md)), and
-   keeping bindings per verified caller is not built yet, so this step never
-   answers.
+   keeping bindings per verified caller is planned
+   ([#412](https://github.com/FerroHEALTH/FerroFED/issues/412)), so this step
+   never answers yet.
 3. The gateway's `ehr_id` index, which it learns from resolutions and from
    the nodes' successful answers.
 4. For a read only, an ask-all probe: the gateway sends

@@ -44,7 +44,7 @@ pub(crate) async fn answer(
         outbound,
         started,
     } = arrived;
-    // TODO(#80): the authenticated client session the resolution bindings belong to.
+    // TODO(#412): the authenticated client session the resolution bindings belong to.
     let session: Option<SessionKey> = None;
     let completion = match completeness::of(headers, federation.best_effort()) {
         Ok(completion) => completion,

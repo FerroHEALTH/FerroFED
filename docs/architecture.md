@@ -697,8 +697,7 @@ rules are FerroFED's own design, decided with #80 after a security review:
   patient as the identifier and namespace the gateway resolves, so the
   gateway cannot prove a request stays inside the context, on a query, on
   `GET {base}/v1/ehr?subject_id=` or on a route addressed by `ehr_id`. Until
-  a patient-context claim in the resolved form is chosen, the grant admits
-  nothing.
+  #413 decides how to bind a patient context, the grant admits nothing.
 - **The DEMOGRAPHIC API admits only listed clients.** The grammar defines no
   demographic family, so each issuer entry lists its `demographic_clients`,
   empty by default, and no scope grants the area.

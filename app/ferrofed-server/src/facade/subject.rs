@@ -318,7 +318,7 @@ async fn resolve<'a>(
 /// `{node, ehr_id}` pair `holders` names, as a federated query's resolution
 /// does (§12.5.1 steps 2 and 3).
 fn learn(federation: &Federation, holders: &[(&Endpoint, EhrId)], now: Instant) {
-    // TODO(#80): the authenticated client session the resolution bindings belong to.
+    // TODO(#412): the authenticated client session the resolution bindings belong to.
     let session: Option<SessionKey> = None;
     if let Some(session) = &session {
         federation.bindings().record(

@@ -201,8 +201,9 @@ client session: which member holds which `ehr_id`, so a follow-up on a path
 `ehr_id` reaches the right node (§12.5.1 step 2). A session needs a client
 identity. The gateway verifies every caller
 ([Client authentication](authentication.md)), and keeping bindings per
-verified caller is not built yet, so no binding is held, and the `ehr_id`
-index below carries what a resolution teaches.
+verified caller is planned
+([#412](https://github.com/FerroHEALTH/FerroFED/issues/412)), so no binding
+is held yet, and the `ehr_id` index below carries what a resolution teaches.
 
 The lifetime a binding will have is already a setting, checked at boot:
 

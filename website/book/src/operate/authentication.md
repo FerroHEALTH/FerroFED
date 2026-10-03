@@ -133,7 +133,8 @@ FerroFED's design:
   (master07 §Context Selection), which SMART on openEHR gives as an `ehrId`
   at one platform. The gateway resolves patients by identifier and namespace,
   and cannot show that a request stays inside that context, so a `patient/`
-  grant admits nothing at the gateway.
+  grant admits nothing at the gateway. How to accept a patient on its own
+  data is open on [#413](https://github.com/FerroHEALTH/FerroFED/issues/413).
 - `system/aql-*` "would grant access to all registered and ad-hoc AQL queries
   system-wide" (master08), so it counts only for a client listed in
   `backend_clients`.

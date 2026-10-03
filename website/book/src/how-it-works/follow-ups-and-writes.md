@@ -46,8 +46,8 @@ flowchart TD
   `endpoint_id`, so name it in `openEHR-federation-endpoint` (§12.5.1).
 - **Step 2**, the resolution binding your session's query left behind, needs
   a client session. The caller is verified, and bindings per verified caller
-  are not built yet, so the index of step 3 carries what a resolution
-  teaches.
+  are planned ([#412](https://github.com/FerroHEALTH/FerroFED/issues/412));
+  until then the index of step 3 carries what a resolution teaches.
 - **Step 3**, the `ehr_id` index, is in memory and learns from resolutions
   and from the nodes' successful answers. A miss costs one fallback step,
   never a wrong route.

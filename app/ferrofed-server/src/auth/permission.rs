@@ -504,9 +504,9 @@ fn every(scope: &ResourceScope) -> bool {
 /// grant, and a `system/aql-*` grant only for a backend client the
 /// deployment lists.
 fn honoured(scope: &ResourceScope, backend: bool) -> bool {
-    // NOTE: ITS-REST SMART on openEHR master07 §Context Selection, a patient
-    // grant is confined to its launch context (`ehrId`, one platform's EHR),
-    // which names no subject the gateway resolves, so it is never honoured.
+    // NOTE: ITS-REST SMART on openEHR master07 §Context Selection; a patient grant
+    // is confined to an `ehrId`, which names no subject the gateway resolves, so
+    // it is never honoured until #413 decides how to bind one.
     if scope.compartment == Compartment::Patient {
         return false;
     }

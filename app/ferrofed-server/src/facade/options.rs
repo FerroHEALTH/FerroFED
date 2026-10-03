@@ -312,7 +312,7 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
     };
     Ok(ItsRestAreas {
         query: query.to_owned(),
-        // TODO(#80): name the session's resolution binding among the owner steps once client sessions exist.
+        // TODO(#412): name the session's resolution binding among the owner steps once client sessions exist.
         ehr: "routed: a new EHR, POST {base}/v1/ehr or PUT {base}/v1/ehr/{ehr_id}, goes \
               only to the one endpoint the targeting headers name, and a PUT is refused \
               when another member holds its ehr_id; every other request under \
