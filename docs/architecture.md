@@ -1467,11 +1467,14 @@ sanitises its logs but not its dispatches passes the wrong test" (§16.3).
 | `excluded` | the registry or the directive excludes the node |
 | `not-localized` | the localizer stub omits the node; an unreachable localizer fails closed (CP-5) |
 
-**The adversarial tracks.** Track 10 runs the four carriers from the golden
-cases and passes on zero occurrences in any node journal or a `400`; its
-converse asserts a forwarded write body is byte-identical. Track 11 creates the
-same `ehr_id` on two nodes with `PUT /ehr/{same-uuid}` and expects a `409` and
-an incident, never a served row or an applied write. Track 6 creates a
+**The adversarial tracks.** Track 10 runs the four positions on the fan-out, a
+directed query and the single-node route, against two mock nodes in the normal
+suite and the two FerroEHR nodes behind the gate. It passes on zero occurrences
+of the identifier, its namespace, or any fragment of it no UUID or port can
+hold, raw or percent-decoded, in any node journal, or on a `400` that asked no
+node; its converse asserts a forwarded write body is byte-identical. Track 11
+creates the same `ehr_id` on two nodes with `PUT /ehr/{same-uuid}` and expects
+a `409` and an incident, never a served row or an applied write. Track 6 creates a
 composition on node A and imports it to node B with its `creating_system_id`
 kept, which exercises routing and dedup. A slow body and a reset after headers
 exercise partial reads.

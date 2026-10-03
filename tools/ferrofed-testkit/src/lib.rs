@@ -12,6 +12,8 @@
 //!   pinned by digest;
 //! - [`proxy`]: the capturing and fault proxy in front of each node, whose
 //!   journal the tests read;
+//! - [`leak`]: the track 10 oracle over that journal, which searches every
+//!   carrier for an identifier and its fragments, raw and percent-decoded;
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
 //!   what an ITI-104 feed delivered (#47);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
@@ -25,6 +27,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod containers;
+pub mod leak;
 pub mod pix;
 pub mod proxy;
 pub mod seed;

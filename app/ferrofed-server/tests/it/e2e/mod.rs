@@ -14,6 +14,9 @@
 //! A commit routed to one node lands there byte-identical, its
 //! `DV_IDENTIFIER` included, with the node's `Location` and `ETag` and the
 //! acting endpoint's headers on the answer (§7a.3, N22, N31, track 10).
+//!
+//! Track 10, the adversarial identifier-leakage suite, runs against the same
+//! two nodes in [`track10`].
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -40,6 +43,8 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::support::{call, settings};
+
+mod track10;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -564,10 +569,10 @@ async fn a_patient_fed_at_both_members_resolves_through_pix_at_both() -> TestRes
     Ok(())
 }
 
-/// The vendored hospital composition with the patient's own identifier added
+/// The vendored hospital composition with `patient`'s own identifier added
 /// to its composer as a `DV_IDENTIFIER`, the content track 10's converse
 /// check commits.
-fn composition_carrying_the_identifier() -> Result<String, Box<dyn Error>> {
+pub(crate) fn composition_carrying(patient: PatientId) -> Result<String, Box<dyn Error>> {
     let vendored = std::fs::read_to_string(DemoComposition::FirstHospital.path())?;
     let composer = "\"name\": \"Dr. Mark Antonio\"";
     if !vendored.contains(composer) {
@@ -575,8 +580,8 @@ fn composition_carrying_the_identifier() -> Result<String, Box<dyn Error>> {
     }
     let identifier = format!(
         "{composer},\n  \"identifiers\": [{{\"_type\": \"DV_IDENTIFIER\", \"issuer\": \"{ns}\", \"assigner\": \"{ns}\", \"id\": \"{id}\", \"type\": \"MR\"}}]",
-        ns = PATIENT.namespace(),
-        id = PATIENT.value()
+        ns = patient.namespace(),
+        id = patient.value()
     );
     Ok(vendored.replacen(composer, &identifier, 1))
 }
@@ -673,7 +678,7 @@ async fn a_composition_committed_through_the_gateway_lands_byte_identical_at_one
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), &nodes.a, &nodes.b)?;
 
-    let sent = composition_carrying_the_identifier()?;
+    let sent = composition_carrying(PATIENT)?;
     let commit = routed_to_a(
         http::Method::POST,
         &format!("/v1/ehr/{EHR_A}/composition"),
