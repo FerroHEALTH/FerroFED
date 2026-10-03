@@ -74,19 +74,45 @@ fn shows_placeholder(name: &str, value: &impl Debug) {
     }
 }
 
+/// A PIX Manager URL that carries userinfo, which the configuration holds
+/// but refuses to resolve.
+fn pix_url_with_userinfo() -> String {
+    format!("https://{URL_USER}:{URL_PASSWORD}@pix.example.org/fhir")
+}
+
+/// A PIX Manager URL without userinfo.
+const PIX_URL: &str = "https://pix.example.org/fhir";
+
+/// An OTLP collector URL that carries userinfo.
+fn otlp_url() -> String {
+    format!("http://{URL_USER}:{URL_PASSWORD}@127.0.0.1:4317")
+}
+
+/// A PostgreSQL connection URL that carries a password.
+fn postgres_url() -> String {
+    format!("postgres://ferrofed:{PG_PASSWORD}@db.example.org:5432/ferrofed")
+}
+
 /// The configuration under test: one endpoint with an inline bearer token,
 /// one with an inline basic password, one whose token the environment sets,
-/// one whose password a `_file` sibling holds, and a PIX Manager whose URL
-/// carries userinfo and whose credentials are inline.
-fn configuration(password_file: &str) -> Result<Config, Box<dyn Error>> {
+/// one whose password a `_file` sibling holds, a PIX Manager at `pix_url`
+/// whose credentials are inline, an OTLP collector URL with userinfo, and
+/// the tables of `extra`.
+fn configuration(
+    password_file: &str,
+    pix_url: &str,
+    extra: &str,
+) -> Result<Config, Box<dyn Error>> {
     let path = toml::Value::String(password_file.to_owned());
+    let otlp = otlp_url();
     let text = format!(
         "[credentials.\"node-a-pub\"]\nbearer_token = \"{BEARER}\"\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n\n\
-         [[pixm.manager]]\nurl = \"https://{URL_USER}:{URL_PASSWORD}@pix.example.org/fhir\"\n\
+         [metrics]\notlp_endpoint = \"{otlp}\"\n\n\
+         [[pixm.manager]]\nurl = \"{pix_url}\"\n\
          members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
-         [pixm.manager.credentials]\nbearer_token = \"{BEARER}\"\n"
+         [pixm.manager.credentials]\nbearer_token = \"{BEARER}\"\n\n{extra}"
     );
     let env = BTreeMap::from([(
         String::from("FERROFED__CREDENTIALS__NODE-C-PUB__BEARER_TOKEN"),
@@ -95,10 +121,24 @@ fn configuration(password_file: &str) -> Result<Config, Box<dyn Error>> {
     Ok(Config::from_sources(Some(&text), &env)?)
 }
 
+/// The `[stored_queries]` table of a PostgreSQL store, with the registry
+/// document it needs.
+fn postgres_store() -> String {
+    let url = postgres_url();
+    format!(
+        "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n\
+         [stored_queries]\nbackend = \"postgres\"\nurl = \"{url}\"\n"
+    )
+}
+
 #[test]
-fn no_configuration_type_renders_a_credential() -> TestResult {
+fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
     let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
-    let config = configuration(&file.path().display().to_string())?;
+    let config = configuration(
+        &file.path().display().to_string(),
+        &pix_url_with_userinfo(),
+        &postgres_store(),
+    )?;
     assert_eq!(4, config.credentials.len(), "every section is read");
     shows_placeholder("Config", &config);
     for (endpoint, credentials) in &config.credentials {
@@ -110,8 +150,45 @@ fn no_configuration_type_renders_a_credential() -> TestResult {
         redacted("PixManager", manager);
         shows_placeholder("PixManager.url", &manager.url);
     }
+    shows_placeholder("Metrics", &config.metrics);
+    shows_placeholder("StoredQueries", &config.stored_queries);
+    let composed = ManagerConfig {
+        base: SecretUrl::new(pix_url_with_userinfo()),
+        auth: PixAuth::Basic {
+            user: String::from("gateway"),
+            password: Secret::new(PASSWORD).to_secret_string(),
+        },
+        members: BTreeMap::new(),
+    };
+    shows_placeholder("ManagerConfig", &composed);
+    Ok(())
+}
 
+#[cfg(feature = "postgres")]
+#[test]
+fn a_resolved_postgres_store_never_renders_its_password() -> TestResult {
+    let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
+    let settings = configuration(
+        &file.path().display().to_string(),
+        PIX_URL,
+        &postgres_store(),
+    )?
+    .resolve()?;
+    shows_placeholder("Settings", &settings);
+    let store = settings
+        .stored_queries
+        .as_ref()
+        .ok_or("the store resolves")?;
+    shows_placeholder("Store", store);
+    Ok(())
+}
+
+#[test]
+fn no_resolved_settings_type_renders_a_credential() -> TestResult {
+    let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
+    let config = configuration(&file.path().display().to_string(), PIX_URL, "")?;
     let settings = config.resolve()?;
+    shows_placeholder("MetricsSettings", &settings.metrics);
     shows_placeholder("Settings", &settings);
     for (endpoint, scheme) in &settings.credentials {
         shows_placeholder(endpoint.as_str(), scheme);
@@ -129,7 +206,7 @@ fn no_configuration_type_renders_a_credential() -> TestResult {
             auth,
             members: BTreeMap::new(),
         };
-        shows_placeholder("ManagerConfig", &composed);
+        redacted("ManagerConfig", &composed);
     }
     Ok(())
 }
@@ -137,7 +214,7 @@ fn no_configuration_type_renders_a_credential() -> TestResult {
 #[test]
 fn every_secret_still_resolves_to_its_value() -> TestResult {
     let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
-    let settings = configuration(&file.path().display().to_string())?.resolve()?;
+    let settings = configuration(&file.path().display().to_string(), PIX_URL, "")?.resolve()?;
     let mut tokens = BTreeMap::new();
     for (endpoint, scheme) in &settings.credentials {
         let value = match scheme {
@@ -156,10 +233,87 @@ fn every_secret_still_resolves_to_its_value() -> TestResult {
     assert_eq!(expected, tokens, "each endpoint holds its own secret");
     let pixm = settings.pixm.as_ref().ok_or("the PIXm settings resolve")?;
     let url = pixm.managers.first().ok_or("one Manager")?.url.expose();
+    assert_eq!(PIX_URL, url, "the Manager URL is kept as written");
+    let otlp = settings
+        .metrics
+        .otlp_endpoint
+        .as_ref()
+        .ok_or("an OTLP push")?;
     assert_eq!(
-        format!("https://{URL_USER}:{URL_PASSWORD}@pix.example.org/fhir"),
-        url,
-        "the Manager URL is kept as written for connecting"
+        format!("{}/", otlp_url()),
+        otlp.expose(),
+        "the collector URL is kept for connecting"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_pix_manager_url_with_userinfo_is_refused_without_quoting_it() -> TestResult {
+    let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
+    let config = configuration(
+        &file.path().display().to_string(),
+        &pix_url_with_userinfo(),
+        "",
+    )?;
+    let Err(refused) = config.resolve() else {
+        return Err("a PIX Manager URL with userinfo was accepted".into());
+    };
+    assert!(
+        matches!(
+            &refused,
+            ferrofed_server::config::error::Error::UrlCredentials { key, section }
+                if key == "pixm.manager[0].url" && section == "pixm.manager[0].credentials"
+        ),
+        "the refusal names the key and the section"
+    );
+    let rendered = format!("{refused}\n{refused:?}");
+    for sentinel in [URL_USER, URL_PASSWORD] {
+        assert!(!rendered.contains(sentinel), "the refusal quotes the URL");
+    }
+    let output = binary(
+        &["config", "check"],
+        &format!("[[pixm.manager]]\nurl = \"{}\"\n", pix_url_with_userinfo()),
+    )?;
+    assert_eq!(
+        Some(i32::from(ferrofed_server::EXIT_CONFIG)),
+        output.status.code()
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("pixm.manager[0].url"),
+        "config check names the key"
+    );
+    for sentinel in [URL_USER, URL_PASSWORD] {
+        assert!(!stderr.contains(sentinel), "config check quotes the URL");
+    }
+    Ok(())
+}
+
+#[cfg(feature = "postgres")]
+#[test]
+fn a_postgres_url_file_resolves_into_its_redacting_type() -> TestResult {
+    let file = secret_file(&format!("{}\n", postgres_url()))?;
+    let path = toml::Value::String(file.path().display().to_string());
+    let settings = Config::from_sources(
+        Some(&format!(
+            "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n\
+             [stored_queries]\nbackend = \"postgres\"\nurl_file = {path}\n"
+        )),
+        &BTreeMap::new(),
+    )?
+    .resolve()?;
+    let store = settings
+        .stored_queries
+        .as_ref()
+        .ok_or("the store resolves")?;
+    shows_placeholder("Store", store);
+    let ferrofed_server::config::stored_queries::Store::Postgres(url) = store else {
+        return Err("a PostgreSQL store".into());
+    };
+    assert_eq!(
+        postgres_url(),
+        url.expose(),
+        "read from the file and trimmed"
     );
     Ok(())
 }

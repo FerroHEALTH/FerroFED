@@ -6,11 +6,12 @@
 //! Redaction is a property of the type. A [`Secret`] (a bearer token, a
 //! password) renders as [`REDACTED`] through `Debug`, `Display` and
 //! `Serialize`; a [`SecretUrl`] (a URL that may carry a user name and
-//! password in its userinfo, RFC 3986 §3.2.1) renders with that userinfo
-//! replaced by [`REDACTED`]. Each deserializes from a plain string, and the
-//! value is reached only through `expose`. They live in the registry crate
-//! because the registry document, the identity bindings and the server
-//! configuration all hold one. No specification governs this: our own design.
+//! password in its userinfo, RFC 3986 §3.2.1, or a credential in its query)
+//! renders with those parts replaced by [`REDACTED`]. Each holds its value in
+//! a [`SecretString`], zeroed on drop, deserializes from a plain string, and
+//! is reached only through `expose`. They live in the registry crate because
+//! the registry document, the identity bindings and the server configuration
+//! all hold one. No specification governs this: our own design.
 
 use std::fmt;
 
@@ -67,6 +68,12 @@ impl Secret {
     }
 }
 
+impl From<SecretString> for Secret {
+    fn from(value: SecretString) -> Self {
+        Self(value)
+    }
+}
+
 impl fmt::Debug for Secret {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(REDACTED, f)
@@ -105,11 +112,11 @@ impl Serialize for Secret {
     }
 }
 
-/// A URL kept as written, whose renderings never show its userinfo.
+/// A URL or connection string kept as written, whose renderings never show
+/// a credential.
 ///
-/// [`SecretUrl::expose`] returns the URL verbatim for connecting with it.
-/// `Debug`, `Display` and `Serialize` show [`SecretUrl::redacted`], which
-/// replaces the userinfo with [`REDACTED`].
+/// [`SecretUrl::expose`] returns the text verbatim for connecting with it.
+/// `Debug`, `Display` and `Serialize` show [`SecretUrl::redacted`].
 ///
 /// # Examples
 ///
@@ -120,59 +127,80 @@ impl Serialize for Secret {
 /// assert_eq!(url.to_string(), "postgres://***@db.example.org:5432/ferrofed");
 /// assert_eq!(url.expose(), "postgres://ferrofed:Qz7pw@db.example.org:5432/ferrofed");
 /// ```
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct SecretUrl(String);
+#[derive(Clone, Default)]
+pub struct SecretUrl(SecretString);
 
 impl SecretUrl {
     /// Creates a URL holding `url` verbatim.
     #[must_use]
     pub fn new(url: impl Into<String>) -> Self {
-        Self(url.into())
+        Self(SecretString::from(url.into()))
     }
 
-    /// Returns the URL as written, userinfo included, for connecting with it.
+    /// Returns the URL as written, credentials included, for connecting with
+    /// it.
     ///
     /// Never log or format the result.
     #[must_use]
     pub fn expose(&self) -> &str {
-        &self.0
+        self.0.expose_secret()
     }
 
     /// Whether the URL is the empty string.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.0.expose_secret().is_empty()
     }
 
-    /// Returns the URL with its userinfo replaced by [`REDACTED`]
-    /// (`scheme://***@host/path`); a URL without userinfo is returned as
-    /// written.
+    /// Returns the URL with every part that may carry a credential replaced
+    /// by [`REDACTED`].
+    ///
+    /// The userinfo becomes `***@` (`scheme://***@host/path`) and the query
+    /// becomes `?***`; the scheme, the host, the port, the path and the
+    /// fragment show as written. Text with no `://` (a libpq key/value
+    /// connection string, which carries its password outside any userinfo)
+    /// shows as [`REDACTED`] whole.
     #[must_use]
     pub fn redacted(&self) -> String {
-        redact_userinfo(&self.0)
+        redact(self.0.expose_secret())
     }
 }
 
-/// Returns `url` with the userinfo of its authority replaced by [`REDACTED`].
+/// Returns `url` with its userinfo and its query replaced by [`REDACTED`].
 ///
-/// The authority runs from after `://` (or from the start, when there is
-/// none) to the first `/`, `?` or `#`, and the userinfo is everything in it
-/// before its last `@`, since a host holds no `@` (RFC 3986 §3.2). The text
-/// is never decoded, so it is redacted as written.
-fn redact_userinfo(url: &str) -> String {
-    let (scheme, rest) = match url.split_once("://") {
-        Some((scheme, rest)) => (Some(scheme), rest),
-        None => (None, url),
+/// The authority runs from after `://` to the first `/`, `?` or `#`, and the
+/// userinfo is everything in it before its last `@`, since a host holds no
+/// `@` (RFC 3986 §3.2). The text is never decoded, so it is redacted as
+/// written.
+fn redact(url: &str) -> String {
+    if url.is_empty() {
+        return String::new();
+    }
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return REDACTED.to_owned();
     };
     let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let authority = rest.get(..end).unwrap_or(rest);
-    let Some(at) = authority.rfind('@') else {
-        return url.to_owned();
+    let (authority, tail) = rest.split_at_checked(end).unwrap_or((rest, ""));
+    let host = match authority.rfind('@') {
+        Some(at) => format!("{REDACTED}@{}", authority.get(at + 1..).unwrap_or_default()),
+        None => authority.to_owned(),
     };
-    let after = rest.get(at + 1..).unwrap_or_default();
-    match scheme {
-        Some(scheme) => format!("{scheme}://{REDACTED}@{after}"),
-        None => format!("{REDACTED}@{after}"),
+    let tail = match tail.split_once('?') {
+        Some((path, query)) => {
+            let fragment = query
+                .find('#')
+                .and_then(|at| query.get(at..))
+                .unwrap_or_default();
+            format!("{path}?{REDACTED}{fragment}")
+        }
+        None => tail.to_owned(),
+    };
+    format!("{scheme}://{host}{tail}")
+}
+
+impl From<SecretString> for SecretUrl {
+    fn from(url: SecretString) -> Self {
+        Self(url)
     }
 }
 
@@ -187,6 +215,14 @@ impl fmt::Display for SecretUrl {
         f.write_str(&self.redacted())
     }
 }
+
+impl PartialEq for SecretUrl {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Eq for SecretUrl {}
 
 impl<'de> Deserialize<'de> for SecretUrl {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -247,6 +283,8 @@ mod tests {
     fn secrets_compare_by_value() {
         assert_eq!(Secret::new(SENTINEL), Secret::new(SENTINEL));
         assert_ne!(Secret::new(SENTINEL), Secret::new("other"));
+        assert_eq!(SecretUrl::new(SENTINEL), SecretUrl::new(SENTINEL));
+        assert_ne!(SecretUrl::new(SENTINEL), SecretUrl::new("other"));
     }
 
     #[test]
@@ -267,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn userinfo_is_redacted_in_every_form_of_authority() {
+    fn every_part_that_may_carry_a_credential_is_redacted() {
         for (raw, redacted) in [
             (
                 "https://Qz7user@pix.example.org/fhir",
@@ -279,20 +317,25 @@ mod tests {
             ),
             (
                 "https://u:p@pix.example.org?x=1",
-                "https://***@pix.example.org?x=1",
+                "https://***@pix.example.org?***",
             ),
-            ("u:Qz7sentinel@db.example.org/x", "***@db.example.org/x"),
+            (
+                "postgres://db.example.org/ferrofed?password=Qz7sentinel#f",
+                "postgres://db.example.org/ferrofed?***#f",
+            ),
+            ("host=db.example.org password=Qz7sentinel", "***"),
+            ("u:Qz7sentinel@db.example.org/x", "***"),
         ] {
             assert_eq!(redacted, SecretUrl::new(raw).redacted(), "{raw}");
         }
     }
 
     #[test]
-    fn a_url_without_userinfo_renders_as_written() {
+    fn a_url_without_a_credential_renders_as_written() {
         for raw in [
             "https://cdr-a.example.org/openehr",
             "https://cdr-a.example.org/path/@handle",
-            "https://cdr-a.example.org?who=@me",
+            "http://127.0.0.1:4317/",
             "",
         ] {
             assert_eq!(raw, SecretUrl::new(raw).redacted(), "{raw}");

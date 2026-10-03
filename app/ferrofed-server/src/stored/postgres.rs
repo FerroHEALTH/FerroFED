@@ -30,10 +30,10 @@ use std::time::Duration;
 
 use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
 use ferrofed_registry::definition::{QueryName, StoredDefinition};
+use ferrofed_registry::secret::SecretUrl;
 use jiff::Timestamp;
 use rustls::ClientConfig;
 use rustls_platform_verifier::BuilderVerifierExt;
-use secrecy::{ExposeSecret, SecretString};
 use tokio::runtime::Runtime;
 use tokio_postgres::{Client, Config, Row};
 use tokio_postgres_rustls::MakeRustlsConnect;
@@ -125,10 +125,10 @@ enum Command {
 /// Whether `url` parses as a PostgreSQL connection string, a URL or libpq
 /// key/value pairs.
 #[must_use]
-pub fn parses(url: &SecretString) -> bool {
+pub fn parses(url: &SecretUrl) -> bool {
     // NOTE: no specification governs this: our own design; a parse failure is
     // the answer here, and its message may quote the secret.
-    Config::from_str(url.expose_secret()).is_ok()
+    Config::from_str(url.expose()).is_ok()
 }
 
 impl PostgresStore {
@@ -140,9 +140,9 @@ impl PostgresStore {
     /// [`StoreError::Backend`] when `url` does not parse, the TLS setup
     /// fails, the database cannot be reached in time, or the schema cannot
     /// be created.
-    pub fn open(url: &SecretString) -> Result<Self, StoreError> {
-        let config = Config::from_str(url.expose_secret())
-            .map_err(|_quoted| backend(PostgresError::Unparsable))?;
+    pub fn open(url: &SecretUrl) -> Result<Self, StoreError> {
+        let config =
+            Config::from_str(url.expose()).map_err(|_quoted| backend(PostgresError::Unparsable))?;
         let tls = tls().map_err(backend)?;
         let (commands, received) = mpsc::channel();
         let (ready, opened) = mpsc::sync_channel(1);
@@ -367,7 +367,7 @@ fn corrupt(error: impl std::error::Error + Send + Sync + 'static) -> StoreError 
 mod tests {
     use super::{PostgresError, PostgresStore, parses};
     use ferrofed_registry::definition::store::StoreError;
-    use secrecy::SecretString;
+    use ferrofed_registry::secret::SecretUrl;
 
     #[test]
     fn a_url_and_libpq_pairs_parse_and_garbage_does_not() {
@@ -375,16 +375,16 @@ mod tests {
             "postgres://ferrofed:secret@db.example.org:5432/ferrofed?sslmode=require",
             "host=db.example.org user=ferrofed password=secret dbname=ferrofed",
         ] {
-            assert!(parses(&SecretString::from(parsed)), "{parsed}");
+            assert!(parses(&SecretUrl::new(parsed)), "{parsed}");
         }
         for refused in ["postgres://a:b@host:notaport/db", "host='unterminated"] {
-            assert!(!parses(&SecretString::from(refused)), "{refused}");
+            assert!(!parses(&SecretUrl::new(refused)), "{refused}");
         }
     }
 
     #[test]
     fn an_unparsable_url_is_refused_without_quoting_it() {
-        let refused = PostgresStore::open(&SecretString::from("postgres://u:s3cr3t@h:x/d"));
+        let refused = PostgresStore::open(&SecretUrl::new("postgres://u:s3cr3t@h:x/d"));
         let Err(StoreError::Backend(error)) = refused else {
             panic!("refused: {refused:?}");
         };

@@ -6,8 +6,9 @@
 
 use std::path::Path;
 
-use ferrofed_registry::secret::Secret;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
+use secrecy::SecretString;
+use secrecy::zeroize::Zeroizing;
 
 use crate::config::Credentials;
 use crate::config::error::{BasicFault, Error};
@@ -107,32 +108,44 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
     }
 }
 
-/// Returns the secret `key` names, inline or from its `_file` sibling.
-pub(super) fn secret(
+/// Returns the secret `key` names, inline or from its `_file` sibling, as
+/// the redacting type `T` that holds it.
+pub(super) fn secret<T>(
     key: &str,
-    inline: Option<&Secret>,
+    inline: Option<&T>,
     file: Option<&Path>,
-) -> Result<Option<Secret>, Error> {
+) -> Result<Option<T>, Error>
+where
+    T: Clone + From<SecretString>,
+{
     match (inline, file) {
         (Some(_), Some(_)) => Err(Error::Conflict {
             key: key.to_owned(),
         }),
         (Some(value), None) => Ok(Some(value.clone())),
         (None, Some(path)) => {
-            let text = std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: format!("{key}_file"),
-                path: path.to_path_buf(),
-                source,
-            })?;
-            let value = text.trim();
-            if value.is_empty() {
-                return Err(Error::EmptySecret {
-                    key: format!("{key}_file"),
-                    path: path.to_path_buf(),
-                });
-            }
-            Ok(Some(Secret::new(value)))
+            read_secret(&format!("{key}_file"), path).map(|value| Some(T::from(value)))
         }
         (None, None) => Ok(None),
     }
+}
+
+/// Reads the secret file `path`, trimmed and refused when empty, into a
+/// [`SecretString`]; the text read is zeroed once the trimmed value is taken.
+fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
+    let text = std::fs::read_to_string(path)
+        .map(Zeroizing::new)
+        .map_err(|source| Error::Secret {
+            key: key.to_owned(),
+            path: path.to_path_buf(),
+            source,
+        })?;
+    let value = text.trim();
+    if value.is_empty() {
+        return Err(Error::EmptySecret {
+            key: key.to_owned(),
+            path: path.to_path_buf(),
+        });
+    }
+    Ok(SecretString::from(value))
 }

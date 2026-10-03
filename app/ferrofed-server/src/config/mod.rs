@@ -405,7 +405,7 @@ pub struct Metrics {
     pub allow_remote: bool,
     /// The `http://` URL of an OTLP collector the metrics are pushed to over
     /// gRPC. Unset, nothing is pushed.
-    pub otlp_endpoint: Option<String>,
+    pub otlp_endpoint: Option<SecretUrl>,
 }
 
 /// The credentials one endpoint expects.

@@ -139,7 +139,7 @@ pub struct MetricsSettings {
     /// serving was allowed; `None` runs no listener.
     pub listen: Option<SocketAddr>,
     /// The OTLP collector the metrics are pushed to; `None` pushes nothing.
-    pub otlp_endpoint: Option<url::Url>,
+    pub otlp_endpoint: Option<SecretUrl>,
 }
 
 /// The authentication scheme a credentials section resolves to.

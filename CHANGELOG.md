@@ -573,12 +573,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   URL showed the user name and password of its userinfo. Every credential
   is now held in one of two types of the new `ferrofed_registry::secret`
   module: a `Secret`, which `Debug`, `Display` and `Serialize` render as
-  `***`, or a `SecretUrl`, which they render with the userinfo replaced by
-  `***`. A `_file` sibling resolves into the same type, so the resolved
-  settings, the composed PIXm configuration and the registry document carry
-  them too. What reaches a node or a PIX Manager is unchanged.
-  `ferrofed-identity` adds `PixmConfigError::BaseUrl` for a Manager base URL
-  that does not parse.
+  `***`, or a `SecretUrl`, which they render with the userinfo and the query
+  replaced by `***`, and as `***` whole for a libpq key/value connection
+  string. The stored-query store's PostgreSQL `url` and `url_file` and
+  `metrics.otlp_endpoint` are `SecretUrl`s too. A `_file` sibling is read
+  straight into the same type, and the text read is zeroed once it is
+  trimmed, so the resolved settings, the composed PIXm configuration and
+  the registry document carry them as well. What reaches a node, a PIX
+  Manager, the store or the collector is unchanged. `ferrofed-identity`
+  adds `PixmConfigError::BaseUrl` for a Manager base URL that does not
+  parse.
+- A PIX Manager `url` that carries a user name or a password is refused by
+  `config check` and at start, naming `pixm.manager[N].url` and never
+  quoting it, as an endpoint URL in the registry document already is (#364).
+  Its credentials go in `[pixm.manager.credentials]`. A configuration that
+  put them in the URL must move them there.
 
 ## [0.0.6] - 2026-10-03
 

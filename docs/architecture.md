@@ -772,20 +772,25 @@ silent on storage, so this section is FerroFED's own).
 
 **A secret is a type** (#364, the design FerroEHR's configuration uses). Every
 credential the configuration holds is a `Secret` (a bearer token, a basic
-password) or a `SecretUrl` (a URL whose userinfo may carry a user name and a
-password: a PIX Manager URL, a registry endpoint URL, a store connection
-URL), both in `ferrofed_registry::secret`, the one crate the registry
-document, the identity bindings and the server configuration share. A
-`Secret` wraps `secrecy::SecretString` and renders as `***` through `Debug`,
-`Display` and `Serialize`; a `SecretUrl` keeps the URL as written and
-renders it with the userinfo replaced by `***`
-(`postgres://***@host:5432/db`). Both deserialize from a plain string, and a
-`_file` sibling resolves into the same type at load, so a consumer only ever
-holds the redacting type. Redaction is a property of the type, never a list
-of fields to mask, so no derived `Debug` can print a credential. The value
-leaves the type only where a request is composed: the node client and the
-PIXm client take the wrapped `SecretString`, and a URL is parsed from
-`expose()` where load validates it and where its client is built.
+password) or a `SecretUrl` (a URL or connection string that may carry one:
+the stored-query store's PostgreSQL `url`, `metrics.otlp_endpoint`, a PIX
+Manager URL, a registry endpoint URL), both in `ferrofed_registry::secret`,
+the one crate the registry document, the identity bindings and the server
+configuration share. Both hold their value in a `secrecy::SecretString`,
+zeroed on drop. A `Secret` renders as `***` through `Debug`, `Display` and
+`Serialize`; a `SecretUrl` renders with its userinfo and its query replaced
+by `***` (`postgres://***@host:5432/db?***`), and as `***` whole when it has
+no `://`, since a libpq key/value string carries its password outside any
+userinfo. Both deserialize from a plain string, and a `_file` sibling is
+read straight into the same type at load (the text read is zeroed once it
+is trimmed), so a consumer only ever holds the redacting type. Redaction is
+a property of the type, never a list of fields to mask, so no derived
+`Debug` can print a credential. The value leaves the type only where a
+request is composed: the node client and the PIXm client take the wrapped
+`SecretString`, and a URL is parsed from `expose()` where load validates it
+and where its client or store is built. A PIX Manager URL, like a registry
+endpoint URL, refuses userinfo at load: its credentials go in
+`[pixm.manager.credentials]`.
 
 **Membership is configuration.** The bootstrap document is TOML
 (`[[organisation]]`, `[[node]]`, `[[endpoint]]`, `[[node.identifier]]`) with
