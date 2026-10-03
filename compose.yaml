@@ -9,16 +9,11 @@
 #   scripts/quickstart/seed.sh
 #   curl http://127.0.0.1:8080/health
 #
-# THE GATEWAY IMAGE. ghcr.io/ferrohealth/ferrofed is published by the image
-# lane (#31) for every release cut after it landed. v0.0.1 predates the lane
-# and has no image, so for that version the service builds the same recipe from
-# the binaries of the published release, staged first:
-#
-#   scripts/release/stage-dist.sh 0.0.1
-#   docker compose up --build --wait
-#
-# The tag default is the product version, and scripts/checks/versions.sh keeps
-# it equal to the workspace version.
+# THE GATEWAY IMAGE. The service runs the published
+# ghcr.io/ferrohealth/ferrofed image, which only the release lane builds
+# (.github/workflows/release-image.yml); no compose file builds it. The tag
+# default is the product version, and scripts/checks/versions.sh keeps it equal
+# to the workspace version.
 #
 # WHAT RUNS. The gateway federates the four nodes below: docker/quickstart/
 # registry.toml names them and docker/quickstart/ferrofed.toml configures the
@@ -88,9 +83,6 @@ x-ferroehr-node: &ferroehr-node
 services:
   ferrofed:
     image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.6}
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
     container_name: ferrofed
     restart: unless-stopped
     depends_on:
@@ -128,6 +120,10 @@ services:
       nofile:
         soft: 8192
         hard: 16384
+    # Longer than the gateway's 10-second drain (server.shutdown_timeout_ms in
+    # docker/quickstart/ferrofed.toml), so `docker compose down` never kills a
+    # drain in progress; Docker's default stop timeout is those same 10 seconds.
+    stop_grace_period: 20s
     # The image's own HEALTHCHECK, repeated so `docker compose up --wait`
     # visibly waits on it. Readiness gates on the gateway alone, so a member
     # node that is down never marks the gateway unhealthy. An image of a

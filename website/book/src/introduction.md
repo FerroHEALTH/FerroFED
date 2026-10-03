@@ -22,7 +22,9 @@ ITS-REST 1.1.0.
 
 The [latest release](https://github.com/FerroHEALTH/FerroFED/releases/latest)
 ships the `ferrofed` binary for Linux and the image
-`ghcr.io/ferrohealth/ferrofed`, both signed.
+`ghcr.io/ferrohealth/ferrofed`, both signed, and a `compose.yaml` that runs
+the gateway alone in front of your own CDRs
+([The gateway from a release](operate/container.md#the-gateway-from-a-release)).
 [The quickstart](operate/container.md#the-quickstart) runs it beside four
 member CDRs. This book describes the gateway as it is built on `main`, and
 the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md)

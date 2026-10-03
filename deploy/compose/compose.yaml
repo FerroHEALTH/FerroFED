@@ -1,0 +1,113 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# FerroFED alone, in front of the openEHR CDRs you already run. Every release
+# carries this file beside two examples, ferrofed.toml and registry.toml, so
+# it needs no checkout of the repository. It starts no CDR; the repository's
+# own compose.yaml is the four-node quickstart, which does.
+#
+#   for f in compose.yaml ferrofed.toml registry.toml; do
+#     curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
+#   done
+#   # edit ferrofed.toml and registry.toml; put credential files in secrets/
+#   docker compose up --wait
+#   curl http://127.0.0.1:8080/health
+#
+# The book's container page has the walk-through:
+# https://ferrofed.eu/docs/operate/container.html#the-gateway-from-a-release
+#
+# WHAT IT MOUNTS, read-only, from the directory this file is in:
+#
+#   ferrofed.toml  the gateway configuration  /etc/ferrofed/ferrofed.toml
+#   registry.toml  the registry document      /etc/ferrofed/registry.toml
+#   secrets/       one file per credential    /run/secrets/ferrofed/
+#
+# A missing ferrofed.toml or registry.toml stops `docker compose up`; a
+# missing secrets/ is created empty. A configuration the gateway refuses
+# stops it with exit code 78 and one line naming the key, which
+# `docker compose logs ferrofed` shows.
+#
+# VARIABLES, all about the container; set them in the shell or in .env:
+#
+#   FERROFED_VERSION    another published image tag
+#   FERROFED_BIND_HOST  127.0.0.1 by default
+#   FERROFED_PORT       8080 by default
+#   FERROFED_CPUS       1 by default
+#   FERROFED_MEMORY     256M by default
+#
+# PORTS. The port binds the loopback interface by default. A published port is
+# DNAT'd ahead of the host firewall's own chains, so a port on 0.0.0.0 is
+# reachable from the network even when the firewall says otherwise
+# (https://docs.docker.com/engine/network/packet-filtering-firewalls/). To
+# serve another machine, name the interface (FERROFED_BIND_HOST=10.0.0.7) or
+# put a reverse proxy in front.
+#
+# The image is the published one: nothing here builds it. Its tag is the
+# release this file shipped with, and scripts/checks/versions.sh keeps it
+# equal to the workspace version.
+
+name: ferrofed-gateway
+
+services:
+  ferrofed:
+    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.6}
+    # Docker doubles the wait before each restart, from 100 ms
+    # (https://docs.docker.com/reference/cli/docker/container/run/), so a
+    # refused configuration (exit 78) is retried at a slowing pace, not in a
+    # tight loop. on-failure would cap the retries, but Docker does not apply
+    # it when the daemon restarts, so a gateway that drained cleanly on a
+    # reboot would stay down
+    # (https://docs.docker.com/engine/containers/start-containers-automatically/).
+    restart: unless-stopped
+    environment:
+      FERROFED_CONFIG: /etc/ferrofed/ferrofed.toml
+    ports:
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_PORT:-8080}:8080"
+    volumes:
+      - type: bind
+        source: ./ferrofed.toml
+        target: /etc/ferrofed/ferrofed.toml
+        read_only: true
+      - type: bind
+        source: ./registry.toml
+        target: /etc/ferrofed/registry.toml
+        read_only: true
+      - type: bind
+        source: ./secrets
+        target: /run/secrets/ferrofed
+        read_only: true
+        bind:
+          create_host_path: true
+    # Lets a registry URL name a CDR on the Docker host itself as
+    # host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # The gateway writes nothing: no cache, no scratch file, and every secret is
+    # read at boot. So the root filesystem is read-only with no tmpfs beside it.
+    # The image runs as the numeric user 65532 and has no shell.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${FERROFED_CPUS:-1}"
+          memory: ${FERROFED_MEMORY:-256M}
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 16384
+    # Longer than the gateway's 10-second drain (server.shutdown_timeout_ms),
+    # so `docker compose down` never kills a drain in progress.
+    stop_grace_period: 20s
+    # The image's own HEALTHCHECK, repeated so `docker compose up --wait`
+    # visibly waits on it. Readiness gates on the gateway alone, so a CDR that
+    # is down never marks the gateway unhealthy. An image of a release before
+    # v0.0.7 has no `healthcheck` subcommand and never turns healthy.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ferrofed", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

@@ -1,0 +1,80 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The gateway configuration of the release compose.yaml, which mounts this
+# file read-only at /etc/ferrofed/ferrofed.toml. It federates the two example
+# members of registry.toml through one PIX Manager. Replace every value marked
+# EDIT with your own; every value here is a placeholder (example.org hosts,
+# identifiers in the urn:oid:2.999 example arc).
+#
+# A credential is never written here. Each one is a file in secrets/ beside
+# compose.yaml, mounted read-only at /run/secrets/ferrofed/, and named below
+# by a `_file` key. The gateway runs as uid 65532, so that user must be able
+# to read each file.
+#
+# Every key, with its default, is in the book:
+# https://ferrofed.eu/docs/operate/configuration.html. A value the gateway
+# refuses stops it with exit code 78 and one line naming the key, which
+# `docker compose logs ferrofed` shows.
+
+# `production` admits no development cross-reference.
+profile = "production"
+
+[server]
+# The image sets FERROFED__SERVER__LISTEN to this same address, which takes
+# precedence; compose.yaml publishes port 8080.
+listen = "0.0.0.0:8080"
+request_timeout_ms = 30000
+# The drain after SIGTERM; compose.yaml's stop_grace_period stays longer.
+shutdown_timeout_ms = 10000
+
+[telemetry]
+# auto renders pretty output on a terminal and JSON otherwise.
+format = "auto"
+filter = "info,hyper=warn,tower=warn,h2=warn"
+
+[registry]
+document = "/etc/ferrofed/registry.toml"
+format = "toml"
+
+[federation]
+# EDIT: your federation's identifier, which OPTIONS / names.
+id = "example-federation"
+node_selection = "ask-all"
+per_node_timeout_ms = 10000
+overall_timeout_ms = 25000
+# The namespace a patient identifier without one resolves in; without it,
+# such a query is refused with a 400.
+# default_namespace = "urn:oid:2.999.1"
+
+# The identity service: an IHE PIXm PIX Manager.
+# https://ferrofed.eu/docs/operate/identity.html
+[[pixm.manager]]
+# EDIT: the Manager's FHIR base URL.
+url = "https://pix.example.org/fhir/"
+
+# EDIT: every node of registry.toml, mapped to its ehr_id domain at the
+# Manager. A node missing here refuses the configuration.
+[pixm.manager.members]
+"node-a" = "urn:oid:2.999.10"
+"node-b" = "urn:oid:2.999.20"
+
+# How the gateway authenticates to the Manager. Remove the section when the
+# transport does, or use `user` with `password_file` instead.
+[pixm.manager.credentials]
+bearer_token_file = "/run/secrets/ferrofed/pix-token"
+
+# A client namespace mapped to the assigning authority the Manager knows it
+# by; a namespace that is itself an absolute URI needs no entry.
+# [pixm.namespaces]
+# "2.999.1" = "urn:oid:2.999.1"
+
+# EDIT: the credentials the gateway sends each endpoint of registry.toml, one
+# section per endpoint id: a bearer token, or a user and a password. Leave an
+# endpoint out when it needs none.
+[credentials."node-a-query"]
+bearer_token_file = "/run/secrets/ferrofed/node-a-token"
+
+[credentials."node-b-query"]
+user = "ferrofed"
+password_file = "/run/secrets/ferrofed/node-b-password"

@@ -120,6 +120,24 @@ gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
   --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
 ```
 
+Every release also carries `compose.yaml`, which runs the gateway alone, at
+that release's image, in front of the CDRs you already run, with two example
+files it mounts. Download the three, edit `registry.toml` (your members) and
+`ferrofed.toml` (your federation id, your PIX Manager and the credentials each
+endpoint gets), put each credential file in `secrets/`, and start it:
+
+```sh
+for f in compose.yaml ferrofed.toml registry.toml; do
+  curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
+done
+# edit ferrofed.toml and registry.toml; put credential files in secrets/
+docker compose up --wait
+```
+
+A credential is always a file, never a value in `ferrofed.toml`.
+[The container page](https://ferrofed.eu/docs/operate/container.html#the-gateway-from-a-release)
+walks through each step.
+
 `ferrofed serve --config ferrofed.toml` runs the gateway, and
 `ferrofed config check --config ferrofed.toml` reports whether it would start
 on that file. The

@@ -40,9 +40,10 @@
 #   9. container images    the FROM of docker/Dockerfile against the base-image
 #                          row, every digest-pinned compose.yaml image against
 #                          a row naming the same reference, and the
-#                          compose.yaml gateway tag default and the image tag
-#                          of deploy/kubernetes/deployment.yaml against the
-#                          product version.
+#                          compose.yaml gateway tag default, the one image of
+#                          the release asset deploy/compose/compose.yaml and
+#                          the image tag of deploy/kubernetes/deployment.yaml
+#                          against the product version.
 #  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
 #                          own.
@@ -990,6 +991,32 @@ if [ -f compose.yaml ]; then
   fi
 else
   note "no compose.yaml yet, skipped"
+fi
+# The compose.yaml every release carries runs the gateway image alone, at the
+# version of the release, so its one tag default moves with the cut.
+release_compose=deploy/compose/compose.yaml
+if [ -f "$release_compose" ]; then
+  images="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p' "$release_compose" | sort -u)"
+  [ -n "$images" ] || bad "$release_compose runs no image"
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    case "$ref" in
+    "ghcr.io/ferrohealth/ferrofed:\${FERROFED_VERSION:-"*"}") ;;
+    *) bad "$release_compose runs $ref, which is not ghcr.io/ferrohealth/ferrofed:\${FERROFED_VERSION:-<version>}" ;;
+    esac
+  done <<< "$images"
+  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\1|p' "$release_compose" | sort -u)"
+  if [ -z "$tags" ]; then
+    bad "$release_compose has no ghcr.io/ferrohealth/ferrofed image tag default"
+  elif [ "$(printf '%s\n' "$tags" | wc -l | tr -d '[:space:]')" -gt 1 ]; then
+    bad "$release_compose names more than one ferrofed tag default: $(printf '%s' "$tags" | tr '\n' ' ')"
+  elif [ "$tags" != "$want_product" ]; then
+    bad "release compose tag: $release_compose runs $tags, $matrix pins the product version $want_product"
+  else
+    note "OK: the $release_compose gateway tag is the product version $tags"
+  fi
+else
+  note "no $release_compose yet, skipped"
 fi
 deployment=deploy/kubernetes/deployment.yaml
 if [ -f "$deployment" ]; then

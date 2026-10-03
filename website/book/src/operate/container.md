@@ -4,9 +4,103 @@
 # The container image and the quickstart
 
 FerroFED ships one static binary, `ferrofed`, and an image that carries it on
-distroless static. The repository's `compose.yaml` starts that image beside
-four member CDRs, four FerroEHR instances, so the topology a federated query
-runs over is up in one command.
+distroless static. Every release carries `compose.yaml`, which runs that image
+alone in front of the CDRs you already run, with an example `ferrofed.toml`
+and `registry.toml` ([The gateway from a
+release](#the-gateway-from-a-release)). The repository's own `compose.yaml`
+starts the image beside four member CDRs, four FerroEHR instances, so the
+topology a federated query runs over is up in one command ([The
+quickstart](#the-quickstart)).
+
+## The gateway from a release
+
+Every release carries three files that run the gateway alone, at that
+release's image, in front of the CDRs you already run. You need Docker
+Compose and no checkout of the repository.
+
+1. Download the three files into a directory of their own:
+
+   ```sh
+   mkdir ferrofed && cd ferrofed
+   for f in compose.yaml ferrofed.toml registry.toml; do
+     curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
+   done
+   ```
+
+   `…/releases/download/vX.Y.Z/$f` downloads the files of one version.
+2. Edit `registry.toml`, the [registry document](registry.md): replace the two
+   example members with your organisations, nodes and endpoints, as many as the
+   federation has.
+3. Edit `ferrofed.toml`, the [gateway configuration](configuration.md): your
+   federation id, your PIX Manager's URL with each node's `ehr_id` domain there
+   ([Identity resolution](identity.md)), and a `[credentials."<endpoint id>"]`
+   section for each endpoint that needs one. Every value to change is marked
+   `EDIT`.
+4. Put each credential in its own file in `secrets/`, under the name
+   `ferrofed.toml` gives it after `/run/secrets/ferrofed/`. The gateway runs as
+   uid 65532, so that user must be able to read each file:
+
+   ```sh
+   mkdir -p secrets
+   printf '%s\n' "$PIX_TOKEN" > secrets/pix-token
+   sudo chown -R 65532:65532 secrets && sudo chmod 0400 secrets/*
+   ```
+
+5. Start it:
+
+   ```sh
+   docker compose up --wait
+   curl http://127.0.0.1:8080/health
+   ```
+
+A credential is never written in `ferrofed.toml`: each one is a file, named by
+a `bearer_token_file` or `password_file` key. Compose mounts `ferrofed.toml`,
+`registry.toml` and `secrets/` read-only at `/etc/ferrofed/` and
+`/run/secrets/ferrofed/`. A missing `ferrofed.toml` or `registry.toml` stops
+`docker compose up`; a missing `secrets/` is created empty.
+
+A configuration the gateway refuses stops it with exit code 78, and
+`docker compose up --wait` reports the container unhealthy. `docker compose
+logs ferrofed` shows the one line naming the key at fault. After you correct a
+file, `docker compose restart ferrofed` starts the gateway on it.
+
+The variables in the compose file are about the container only, read from the
+shell or from `.env` beside it:
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `FERROFED_VERSION` | the release's version | the image tag |
+| `FERROFED_BIND_HOST` | `127.0.0.1` | the host address the gateway is published on |
+| `FERROFED_PORT` | `8080` | the host port |
+| `FERROFED_CPUS` | `1` | the CPU limit |
+| `FERROFED_MEMORY` | `256M` | the memory limit |
+
+The gateway service runs as uid 65532 with a read-only root filesystem, every
+capability dropped and `no-new-privileges`. Its healthcheck is the image's
+`ferrofed healthcheck`, so `--wait` returns once the gateway is ready. Its
+port binds the loopback interface unless you set `FERROFED_BIND_HOST`, for the
+reason under [The quickstart](#the-quickstart). A registry URL can name a CDR
+on the Docker host itself as `host.docker.internal`. The stop grace period of
+20 seconds is longer than the gateway's 10-second drain.
+
+The restart policy is `unless-stopped`. Docker restarts a gateway that exits
+with an error, doubling its wait before each attempt from 100 ms
+([`docker run --restart`](https://docs.docker.com/reference/cli/docker/container/run/)),
+so a refused configuration is retried at a slowing pace rather than in a
+tight loop. `on-failure` would stop the retries after a count, but Docker
+does not apply it when the daemon restarts
+([restart policies](https://docs.docker.com/engine/containers/start-containers-automatically/)),
+so a gateway that drained cleanly on a host reboot would stay down. Docker restarts no container
+for failing its healthcheck; the healthcheck tells `--wait` and you whether the
+gateway is ready.
+
+To move to a newer release, download its `compose.yaml` over the old one and
+run `docker compose up --wait`. Read the release's changelog for any key that
+changed in `ferrofed.toml`.
+
+The files carry no development cross-reference. That table is for trials only,
+and the quickstart below carries it; a deployment resolves patients through
+its PIX Manager.
 
 ## The image
 
@@ -74,17 +168,9 @@ gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
   --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
 ```
 
-To build it yourself from the binaries of a published release, name that
-release's version:
-
-```sh
-scripts/release/stage-dist.sh X.Y.Z
-docker buildx build -f docker/Dockerfile --platform linux/arm64 \
-  -t ghcr.io/ferrohealth/ferrofed:X.Y.Z --load .
-```
-
-The stage script checks every tarball against the `.sha256sum` published
-beside it before it unpacks a byte.
+The release lane is the only place the image is built: every compose file
+and manifest in the repository runs the published image, and none builds
+one.
 
 ## The release binaries
 
@@ -116,8 +202,8 @@ runs `ghcr.io/ferrohealth/ferrofed` at the product version, the tag default
 `compose.yaml` holds, and `FERROFED_VERSION` selects another published
 version. Its healthcheck is the image's own `ferrofed healthcheck`, which
 images before v0.0.7 do not carry, so with an older `FERROFED_VERSION` the
-gateway never turns healthy and `--wait` fails. To run an image you built
-from staged binaries instead, add `--build`.
+gateway never turns healthy and `--wait` fails. No compose file builds the
+image; every one runs the published image.
 
 | Service | What it is | On the host |
 |---|---|---|
