@@ -6,8 +6,8 @@
 #   1. The workflow, shell, container and guard tier needs no Rust: zizmor
 #      over .github, actionlint over .github/workflows, shellcheck over the
 #      tracked shell programs, hadolint over any Dockerfile, kubeconform over
-#      the example Kubernetes manifests, and the committed
-#      comment-style, file-length and versions guards. These keep this very
+#      the example Kubernetes manifests, the committed comment-style,
+#      file-length and versions guards, and the offline site link guard. These keep this very
 #      file honest, so none of them may depend on the Rust toolchain.
 #   2. The Rust tier is gated behind a detection job that looks for a root
 #      Cargo.toml. The workspace carries one, so every cargo lane runs on
@@ -331,6 +331,45 @@ jobs:
           set -euo pipefail
           bash scripts/checks/e2e-placement.sh --self-test
           bash scripts/checks/e2e-placement.sh
+
+  # The site link guard: the site assembled as the Docs workflow publishes it,
+  # the landing page at the root and the book under /docs/, with every internal
+  # link and anchor resolved offline, and README.md against the tree. It sits
+  # here, in the required conclusion, because the Docs workflow's build is no
+  # required check. --offline sends no request: an external link is skipped.
+  # Its self-test proves a broken anchor and a missing page fail.
+  site-links:
+    name: site-links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/docs-toolchain
+      # lychee's upstream release binary, pinned by version and by the
+      # SHA-256 its release publishes beside the tarball; the install-action
+      # manifest carries no lychee, so the checksum is checked here.
+      - name: Install lychee
+        env:
+          LYCHEE_VERSION: 0.24.2
+          LYCHEE_SHA256: 1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+        run: |
+          set -euo pipefail
+          name=lychee-x86_64-unknown-linux-gnu
+          dir="$RUNNER_TEMP/lychee"
+          mkdir -p "$dir"
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$dir/$name.tar.gz" \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/$name.tar.gz"
+          echo "${LYCHEE_SHA256}  $dir/$name.tar.gz" | sha256sum --check --strict
+          tar -xzf "$dir/$name.tar.gz" -C "$dir" --strip-components=1 "$name/lychee"
+          echo "$dir" >> "$GITHUB_PATH"
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/site-links.sh --self-test
+          bash scripts/checks/site-links.sh
 
   # The tracker helpers that carry a self-test. Their real branches run only
   # against the live tracker: the fallback of fields.sh needs a token that
@@ -688,6 +727,7 @@ jobs:
       - conformance-matrix
       - obligations
       - e2e-placement
+      - site-links
       - tracker-helpers
       - crate-version-guard-self-test
       - detect

@@ -279,7 +279,10 @@ upstream release checksum; `actionlint`, `hadolint` and `kubeconform` run from
 their official container images, pinned by tag and by digest. `kubeconform`
 validates the example manifests under `deploy/kubernetes/` against the schemas
 of one Kubernetes release, read from `yannh/kubernetes-json-schema` at a pinned
-commit, so neither a new schema nor a new release moves the result.
+commit, so neither a new schema nor a new release moves the result. `lychee`,
+the offline link checker of the `site-links` job, is its upstream release
+binary, fetched by version and checked against the SHA-256 its release
+publishes, which the job carries beside the version.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -290,6 +293,7 @@ commit, so neither a new schema nor a new release moves the result.
 | `kubeconform` | 0.8.0 | `.github/workflows/ci.yml` |
 | `kubeconform schema version` | 1.34.0 | `.github/workflows/ci.yml` |
 | `kubernetes-json-schema` | `8df8a883b68a24a104b4a9e43c1288090ae60b3b` | `.github/workflows/ci.yml` |
+| `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).
