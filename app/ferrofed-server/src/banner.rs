@@ -17,11 +17,9 @@
 use std::fmt::Write as _;
 use std::net::SocketAddr;
 
-use ferrofed_identity::dev::Profile;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::base_path::BasePath;
-use crate::config::settings::Settings;
 use crate::federation::FederationError;
 use crate::telemetry::{Format, Rendering};
 
@@ -86,16 +84,24 @@ pub struct Deployment {
 }
 
 impl Deployment {
-    /// Returns the deployment `settings` describe, with the registry
-    /// `document` [`read_registry`](crate::federation::read_registry) read from them.
+    /// Returns the deployment the gateway serves under `base_path` on
+    /// `listen`, with the registry `document`
+    /// [`read_registry`](crate::federation::read_registry) read, whether
+    /// `stored_queries` are offered, and whether the profile is
+    /// `development`.
     ///
     /// The boot builds the gateway over the same read, so the counts are
     /// those of the registry it serves.
     #[must_use]
     pub fn of(
-        settings: &Settings,
+        base_path: BasePath,
+        listen: SocketAddr,
         document: Option<Result<&RegistrySnapshot, &FederationError>>,
+        stored_queries: bool,
+        development: bool,
     ) -> Self {
+        // NOTE: no specification governs this: our own design; the banner takes
+        // only the values it displays, so no struct carrying a credential reaches stdout.
         let registry = match document {
             None => Registry::Unset,
             Some(Ok(snapshot)) => Registry::Read {
@@ -107,11 +113,11 @@ impl Deployment {
             Some(Err(_)) => Registry::Unreadable,
         };
         Self {
-            base_path: settings.server.base_path.clone(),
-            listen: settings.server.listen,
+            base_path,
+            listen,
             registry,
-            stored_queries: settings.stored_queries.is_some(),
-            development: settings.profile == Profile::Development,
+            stored_queries,
+            development,
         }
     }
 }

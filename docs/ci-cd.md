@@ -27,7 +27,7 @@ has run on every change since the workspace landed.
 |---|---|---|
 | `ci.yml` | push to `main`, pull request, merge group, dispatch | the two tiers below and the `conclusion` check |
 | `contribution-licence.yml` | pull request opened, edited, reopened or synchronized | `contribution-licence-guard`: the pull request body accepts the contribution terms |
-| `codeql.yml` | push and pull request touching workflows, actions or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` |
+| `codeql.yml` | push and pull request touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
 | `docs.yml` | push to `main`, pull request, dispatch | builds the site (the landing page at `/`, the book under `/docs/`) on every event and deploys it to GitHub Pages from `main` only |

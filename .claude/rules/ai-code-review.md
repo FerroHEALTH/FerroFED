@@ -46,6 +46,18 @@ never weaken a test because a finding suggested it.
 CodeQL (`.github/workflows/codeql.yml`) runs separately as the security
 scanner and is advisory here too, until a precision case is made to gate on it.
 
+**The integration-test trees are out of CodeQL's Rust scope** (#302): the
+`paths-ignore` entry `**/tests/**` in `.github/codeql/codeql-config.yml`
+leaves them out, because their sinks are assertion and panic messages over
+synthetic fixtures, which `rust/cleartext-logging` reads as logging. The
+logging surfaces that rule should cover (the request log, the panic hook, the
+tracing output, the startup banner) live under `src/` and stay in scope. A
+`#[cfg(test)]` module under `src/` stays in scope too, and an alert there is
+dismissed one at a time with a reason that names the issue, never quieted by
+changing the test. A finding in production code is fixed in the code: the
+startup banner takes only the values it prints, so no struct carrying a
+credential reaches stdout.
+
 ## Official documentation (durable citations)
 
 - <https://docs.sonarsource.com/sonarqube-cloud/>

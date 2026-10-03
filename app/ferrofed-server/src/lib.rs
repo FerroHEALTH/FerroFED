@@ -63,6 +63,7 @@ use axum::routing::get;
 use axum::{Extension, Json, Router};
 use clap::Parser;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::dev::Profile;
 use http::{HeaderMap, Method, StatusCode, Uri};
 use openehr_its::rest::routes::{self, Lookup};
 use tokio::net::TcpListener;
@@ -167,7 +168,13 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     if banner::prints(format, stdout_is_terminal) {
         let described = document.as_ref().map(Result::as_ref);
         banner::print(
-            &banner::Deployment::of(&settings, described),
+            &banner::Deployment::of(
+                settings.server.base_path.clone(),
+                settings.server.listen,
+                described,
+                settings.stored_queries.is_some(),
+                settings.profile == Profile::Development,
+            ),
             format.colour(stdout_is_terminal, no_color.as_deref()),
         );
     }
