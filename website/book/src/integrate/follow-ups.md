@@ -292,6 +292,13 @@ endpoint in `openEHR-federation-endpoint` and its `system_id` in
 - **The cross-reference cannot answer** for a member: a `424`
   (`resolution-unavailable`), never a `404`, because that member may hold the
   EHR.
+- **The consent pre-filter denies a member:** the subject is never resolved
+  there and the member is sent nothing, as on a federated query (N27a). If
+  no other member holds the subject, the answer is a `403`
+  (`consent-denied`) naming the denied endpoints, never a `404`, because a
+  denied member may hold the EHR. A pre-filter that cannot answer leaves
+  every member to its own consent check
+  ([Consent](../operate/identity.md#consent)).
 - `subject_id` and `subject_namespace` are each given once; anything else in
   the query string is a `400`, and nothing is resolved or sent.
 

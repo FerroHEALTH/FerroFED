@@ -11,6 +11,7 @@ mod base_url;
 mod completeness;
 mod config;
 mod consent;
+mod consent_everywhere;
 mod contribution_write;
 mod created_ehr_id;
 mod credentials;

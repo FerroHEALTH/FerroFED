@@ -232,6 +232,10 @@ member of the open `meta` object, `meta.federation`:
   (§14.1). Under the default fail-closed policy no member is asked, every
   member is `not-localized`, and `complete` stays `true`, so this member is
   how you tell "the localizer is down" from "no node holds this patient".
+- `consent`, only when the consent pre-filter could not answer:
+  `consent.error` carries its error. Every candidate was then asked and each
+  node applied its own consent check, so `complete` and the status are what
+  the nodes made them ([Consent](../operate/identity.md#consent)).
 
 By default you get every row every node returned, duplicates included
 (§10.1, N15). Send `openEHR-federation-dedup: version-identity` to get one
