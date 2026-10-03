@@ -10,3 +10,4 @@ mod pix;
 mod proxy;
 mod seed;
 mod unreachable;
+mod xcpd;

@@ -52,8 +52,9 @@ uuid.workspace = true
 wiremock.workspace = true
 
 [dev-dependencies]
-# The PIXm client the harness PIX Manager is held to (#42).
-ihe-iti = { workspace = true, features = ["pixm"] }
+# The PIXm client the harness PIX Manager is held to (#42), and the XCPD
+# client the stub responding gateway is held to (#85).
+ihe-iti = { workspace = true, features = ["pixm", "xcpd"] }
 secrecy.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync"] }
 
