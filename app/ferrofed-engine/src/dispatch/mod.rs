@@ -31,7 +31,7 @@ use std::time::Instant;
 
 use crate::hygiene::{Part, Withheld};
 use crate::outbound_id::OutboundId;
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_federation::outcome::Outcome;
@@ -140,6 +140,7 @@ pub struct DispatchOptions {
     deadline: Instant,
     request_id: Option<OutboundId>,
     withheld: Arc<Withheld>,
+    composed_ehr_id: Option<EhrId>,
 }
 
 impl DispatchOptions {
@@ -151,7 +152,20 @@ impl DispatchOptions {
             deadline,
             request_id: None,
             withheld: Arc::new(Withheld::none()),
+            composed_ehr_id: None,
         }
+    }
+
+    /// These options naming the node's own `ehr_id`, which the gateway
+    /// composed into a forwarded request's path as `/ehr/{ehr_id}` from a
+    /// resolution or the `ehr_id` index, never from the client.
+    ///
+    /// The outbound gate masks that one path segment, as it masks the scope
+    /// literal of a dispatched query (§5.4.1, N33).
+    #[must_use]
+    pub fn with_composed_ehr_id(mut self, ehr_id: EhrId) -> Self {
+        self.composed_ehr_id = Some(ehr_id);
+        self
     }
 
     /// These options refusing to send a request that carries one of the
@@ -182,6 +196,11 @@ impl DispatchOptions {
     /// The identifiers no request may carry.
     pub(crate) fn withheld(&self) -> &Withheld {
         &self.withheld
+    }
+
+    /// The `ehr_id` the gateway composed into a forwarded request's path.
+    pub(crate) fn composed_ehr_id(&self) -> Option<&EhrId> {
+        self.composed_ehr_id.as_ref()
     }
 
     /// The `openehr-its` call options for these options.

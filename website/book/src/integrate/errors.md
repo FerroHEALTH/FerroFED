@@ -151,15 +151,22 @@ the node is reported and the query succeeds.
 | `subject-several` | 409 | The subject of `GET {base}/v1/ehr` resolves at more than one member, and no `openEHR-federation-endpoint` header names one of them. The gateway never chooses by where the patient resolved, so it sends the read to none; the message lists the endpoints and never the subject. Name the endpoint in the header to read that member's EHR (§8.4, §12.5.2). |
 | `resolution-unavailable` | 424 | The cross-reference service could not answer for a member while resolving the subject of `GET {base}/v1/ehr`, or no cross-reference service is configured. That member may hold the EHR, so the gateway answers neither its `404` nor another member's EHR; the message names the members and never the subject (§5.2, §11.2). |
 
-Two of the `409` codes belong to follow-up routing (§12). `ehr-id-collision`
-answers a read or a write, and the gateway also raises an integrity incident
-for the federation operator, because two nodes holding one `ehr_id` is a
-defect in the federation. `controlling-system-unreachable` answers a
-versioned write that would be committed at a node other than its controlling
-CDR, which would fork the object (§10.3). `subject-several` is no
-integrity defect: a patient may have an EHR at several members, each under
-its own `ehr_id`, and the read by subject returns one EHR, so the gateway
-asks you to name the member.
+The gateway answers `409` with four codes, and none of them sends anything
+to a node:
+
+- `ehr-id-collision`: two members claim one `ehr_id`, on a read or a write.
+  The gateway also raises an integrity incident for the federation operator,
+  because two nodes holding one `ehr_id` is a defect in the federation
+  (§12.5.2, N42).
+- `controlling-system-unreachable`: a versioned write would be committed at
+  a node other than its controlling CDR, which would fork the object (§10.3,
+  N23).
+- `subject-several`: the subject of `GET {base}/v1/ehr` resolves at more
+  than one member. This is no integrity defect: a patient may have an EHR at
+  several members, each under its own `ehr_id`, and the read by subject
+  returns one EHR, so the gateway asks you to name the member (§12.5.2).
+- `stored-query-held`: the registry already holds the stored query's name
+  and version, and a stored version is immutable (§12.7, N44).
 
 ## Query refusals
 

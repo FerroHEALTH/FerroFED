@@ -6,7 +6,7 @@
 
 use openehr_its::rest::client::Transport;
 
-use crate::hygiene::Outbound;
+use crate::hygiene::{Composed, Outbound};
 
 use super::{DispatchError, DispatchOptions, NodeClient, NodeQuery};
 
@@ -38,6 +38,7 @@ impl<T: Transport> NodeClient<T> {
             scope: query.scope.as_deref(),
             paging: &paging,
             url: &url,
+            composed: Composed::default(),
             headers: &headers,
         };
         match options.withheld.found_in(&outbound) {

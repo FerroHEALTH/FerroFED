@@ -21,6 +21,7 @@ use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
 use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::ReqwestTransport;
@@ -276,6 +277,109 @@ async fn a_withheld_identifier_in_the_path_or_a_forwarded_header_is_never_sent()
     );
     let shown = refused.err().ok_or("refused")?.to_string();
     assert!(!shown.contains(PATIENT), "{shown}");
+    assert!(received(&server).await?.is_empty(), "nothing is sent");
+    Ok(())
+}
+
+/// A short synthetic identifier that occurs inside [`EHR`] and inside the
+/// base path of [`composed_client`].
+const SHORT: &str = "4199";
+
+/// The node client of an endpoint whose registry URL holds [`SHORT`].
+fn composed_client(server: &MockServer) -> Result<NodeClient<ReqwestTransport>, Box<dyn Error>> {
+    client(&format!("{}/cdr-{SHORT}", server.uri()))
+}
+
+/// Options withholding [`SHORT`], naming [`EHR`] as the `ehr_id` the gateway
+/// composed into the path when `composed` is set.
+fn short_options(composed: bool) -> Result<DispatchOptions, Box<dyn Error>> {
+    let options = options(Withheld::new([SecretString::from(SHORT)]))?;
+    Ok(if composed {
+        options.with_composed_ehr_id(EhrId::new(EHR)?)
+    } else {
+        options
+    })
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn an_identifier_inside_the_composed_ehr_id_and_base_path_is_forwarded() -> TestResult {
+    let server = node(
+        "GET",
+        &format!("/cdr-{SHORT}/v1/ehr/{EHR}"),
+        ResponseTemplate::new(200),
+    )
+    .await;
+    let read = request(Method::GET, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
+    let answer = composed_client(&server)?
+        .forward(read, &short_options(true)?)
+        .await?;
+    assert_eq!(
+        StatusCode::OK,
+        answer.status(),
+        "§5.4, N33: trusted parts are masked"
+    );
+    assert_eq!(1, received(&server).await?.len(), "the node is asked once");
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
+async fn the_same_identifier_in_a_part_the_client_wrote_is_still_withheld() -> TestResult {
+    let server = MockServer::start().await;
+    let client = composed_client(&server)?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "openehr-audit-details",
+        format!("committer.id={SHORT}").parse()?,
+    );
+    let in_header = request(
+        Method::POST,
+        &format!("/ehr/{EHR}/composition"),
+        headers,
+        b"",
+    );
+    let refused = client.forward(in_header, &short_options(true)?).await;
+    assert!(
+        matches!(
+            &refused,
+            Err(ForwardError::Withheld {
+                part: Part::Header("openehr-audit-details"),
+                ..
+            })
+        ),
+        "a client header is never masked: {refused:?}"
+    );
+    let mut in_query = request(
+        Method::GET,
+        &format!("/ehr/{EHR}/directory"),
+        HeaderMap::new(),
+        b"",
+    );
+    in_query.query = Some(format!("path={SHORT}"));
+    let refused = client.forward(in_query, &short_options(true)?).await;
+    assert!(
+        matches!(
+            &refused,
+            Err(ForwardError::Withheld {
+                part: Part::Url,
+                ..
+            })
+        ),
+        "a client query value is never masked: {refused:?}"
+    );
+    let unmasked = request(Method::GET, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
+    let refused = client.forward(unmasked, &short_options(false)?).await;
+    assert!(
+        matches!(
+            &refused,
+            Err(ForwardError::Withheld {
+                part: Part::Url,
+                ..
+            })
+        ),
+        "an ehr_id segment the client wrote is never masked: {refused:?}"
+    );
     assert!(received(&server).await?.is_empty(), "nothing is sent");
     Ok(())
 }

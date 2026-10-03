@@ -115,7 +115,8 @@ pub(crate) async fn serve(
     let withheld = Arc::new(Withheld::new([subject.value]));
     let options = DispatchOptions::new(budget.per_node())
         .with_request_id(arrived.outbound)
-        .with_withheld(withheld);
+        .with_withheld(withheld)
+        .with_composed_ehr_id(ehr_id.clone());
     // NOTE: §5.4.1, N33: the node is located by its own ehr_id alone, so the
     // request is the gateway's own, with none of the client's query or body.
     let request = ClientRequest {
@@ -158,6 +159,7 @@ impl Subject {
     fn of(matched: &RouteMatch, query: Option<&str>) -> Result<Self, Unserved> {
         let mut values = Vec::new();
         let mut namespaces = Vec::new();
+        // TODO(#292): decode through the openehr-its params of ehr_get_by_subject (FerroEHR#3540).
         let pairs = url::form_urlencoded::parse(query.unwrap_or_default().as_bytes());
         for (position, (name, value)) in (1_usize..).zip(pairs) {
             match matched.query_key(&name).map(|param| param.name) {

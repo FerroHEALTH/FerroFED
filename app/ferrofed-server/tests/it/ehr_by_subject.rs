@@ -247,6 +247,47 @@ async fn a_subject_one_member_holds_is_that_members_ehr_read_by_its_ehr_id() -> 
 
 // conformance: CP-26
 #[tokio::test]
+async fn a_short_subject_inside_the_routed_ehr_id_and_the_base_path_still_forwards() -> TestResult {
+    let short = "8222";
+    let a = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/cdr-{short}/v1/ehr/{EHR_A}")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(ehr(SYSTEM_A, EHR_A).into_bytes(), "application/json"),
+        )
+        .mount(&a)
+        .await;
+    let b = node(SYSTEM_B, EHR_B).await;
+    let dir = tempfile::tempdir()?;
+    let rows = format!(
+        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{short}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+    );
+    let app = gateway(
+        dir.path(),
+        &registry(&format!("{}/cdr-{short}", a.uri()), &b.uri(), ""),
+        "profile = \"development\"",
+        &rows,
+    )?;
+    assert!(
+        EHR_A.contains(short),
+        "the fixture places the value in the ehr_id"
+    );
+
+    let uri = format!("/v1/ehr?subject_id={short}&subject_namespace={NAMESPACE}");
+    let (status, headers, text) = answer(app, get(&uri, None)?).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "the gate masks the parts the gateway composed (§5.4, N33): {text}"
+    );
+    names(&headers, ENDPOINT_A, SYSTEM_A);
+    assert_eq!(1, asked(&a).await?, "the holder is asked once");
+    Ok(())
+}
+
+// conformance: CP-26
+#[tokio::test]
 async fn a_subject_several_members_hold_is_a_409_listing_them_and_asks_nobody() -> TestResult {
     let a = node(SYSTEM_A, EHR_A).await;
     let b = node(SYSTEM_B, EHR_B).await;

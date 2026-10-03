@@ -28,11 +28,13 @@ use std::fmt;
 
 use crate::declared::{self, Refusal};
 use crate::dispatch::{DispatchOptions, NodeClient};
-use crate::hygiene::{self, Outbound, Part, UnlistedParameter};
+use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
 use ferrofed_registry::id::EndpointId;
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
 use http::{HeaderMap, HeaderName, Method, StatusCode};
-use openehr_its::rest::client::{ClientError, ErrorBody, Request, Transport, TransportError};
+use openehr_its::rest::client::{
+    ClientError, ErrorBody, Request, Transport, TransportError, path_segment,
+};
 use openehr_its::rest::routes::{self, Lookup, ParamLocation, RouteMatch};
 
 /// The hop-by-hop fields RFC 9110 §7.6.1 names besides `Connection` itself,
@@ -301,11 +303,18 @@ impl<T: Transport> NodeClient<T> {
             .iter()
             .map(|(name, value)| (*name, value.as_str()))
             .collect();
+        let segment = options
+            .composed_ehr_id()
+            .map(|ehr_id| path_segment(&ehr_id.as_str()));
         let outbound = Outbound {
             aql: "",
             scope: None,
             paging: &[],
             url: &url,
+            composed: Composed {
+                base_path: base.path().trim_end_matches('/'),
+                ehr_segment: segment.as_deref(),
+            },
             headers: &headers,
         };
         match withheld.found_in(&outbound) {
