@@ -12,7 +12,6 @@ mod dedup;
 mod directive;
 mod distinct;
 mod e2e;
-mod e2e_attributes;
 mod ehr_id_collision;
 mod endpoint_attributes;
 mod endpoint_report;

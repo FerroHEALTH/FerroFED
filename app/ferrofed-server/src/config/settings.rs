@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::Profile;
+use ferrofed_registry::id::EndpointId;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -35,7 +36,7 @@ pub struct Settings {
     /// The federated query.
     pub federation: FederationSettings,
     /// The outbound credentials, by endpoint id.
-    pub credentials: BTreeMap<String, Scheme>,
+    pub credentials: BTreeMap<EndpointId, Scheme>,
     /// The static development cross-reference, as written.
     pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
@@ -139,7 +140,7 @@ impl Settings {
     /// credentials, so a start-up log states what the process can reach
     /// without stating any of it.
     pub fn log_summary(&self) {
-        let endpoints: Vec<&str> = self.credentials.keys().map(String::as_str).collect();
+        let endpoints: Vec<&str> = self.credentials.keys().map(EndpointId::as_str).collect();
         let decomposable: Vec<&str> = self
             .federation
             .decomposable

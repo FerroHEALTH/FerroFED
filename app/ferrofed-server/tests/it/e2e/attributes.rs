@@ -1,16 +1,10 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The §9.4 directed query end to end, behind the `FERROFED_E2E` gate: the
-//! ENDPOINT attributes in every row over two FerroEHR nodes, and no node
-//! request carrying the directive, a path through its variable or the patient
-//! identifier (§8.1, §9.3, §9.4; N12, N17, N33; CP-35, CP-37).
-#![allow(
-    clippy::panic_in_result_fn,
-    reason = "test assertions in tests that return their setup errors"
-)]
-
-use std::error::Error;
+//! The §9.4 directed query over two FerroEHR nodes: the ENDPOINT attributes
+//! in every row, and no node request carrying the directive, a path through
+//! its variable or the patient identifier (§8.1, §9.3, §9.4; N12, N17, N33;
+//! CP-35, CP-37).
 
 use ferrofed_testkit::containers;
 use ferrofed_testkit::seed::{self, DemoComposition};
@@ -18,11 +12,10 @@ use http::StatusCode;
 use serde::Deserialize;
 
 use crate::e2e::{
-    EHR_A, EHR_B, PATIENT, assert_no_patient_identifier_on_the_wire, gateway, plan, query,
+    EHR_A, EHR_B, PATIENT, TestResult, assert_no_patient_identifier_on_the_wire, gateway, plan,
+    query,
 };
 use crate::support::call;
-
-type TestResult = Result<(), Box<dyn Error>>;
 
 /// The members of the answer the test reads.
 #[derive(Debug, Deserialize)]

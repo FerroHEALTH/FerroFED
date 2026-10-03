@@ -29,11 +29,15 @@ harness is `tools/ferrofed-testkit`:
 Every container test begins with `containers::e2e_enabled()` and returns early
 when `FERROFED_E2E` is not `1`, so `cargo nextest run --workspace` stays
 offline and green. CI runs the gated tests in the `e2e (containers)` job: the
-testkit's suite and the `e2e` module of `ferrofed-server`.
+testkit's suite and the `e2e` module of every crate's test binary, selected by
+`test(/^e2e::/)`. A gated test outside `tests/it/e2e.rs` or `tests/it/e2e/`
+never runs anywhere, which is how #272 found one; `scripts/checks/e2e-placement.sh`
+(tier 1) now refuses it.
 
 **How to apply:** a new container-backed test uses the harness and the gate,
-never its own `docker` calls; a new image is a `PinnedImage` constant plus a
-`docs/VERSIONS.md` row, which `scripts/checks/versions.sh` compares. Locally:
-`FERROFED_E2E=1 cargo nextest run -p ferrofed-testkit -p ferrofed-server -E
-'test(/^e2e::/)'` with Docker running. Linked: [[postgresql-18]],
+never its own `docker` calls, and sits under `tests/it/e2e/`; a new image is a
+`PinnedImage` constant plus a `docs/VERSIONS.md` row, which
+`scripts/checks/versions.sh` compares. Locally: `FERROFED_E2E=1 cargo nextest
+run --locked --workspace -E 'package(ferrofed-testkit) or test(/^e2e::/)'`
+with Docker running. Linked: [[postgresql-18]],
 [[strict-over-reference]].

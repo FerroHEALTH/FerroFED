@@ -11,6 +11,7 @@ use std::num::NonZeroU32;
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
+use ferrofed_registry::id::EndpointId;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -21,9 +22,7 @@ use crate::config::settings::{
     FederationSettings, PixManagerSettings, PixmSettings, ServerSettings, Settings,
     TelemetrySettings,
 };
-use crate::config::{
-    COMBINING_MARGIN_MS, Config, MAX_ENDPOINT_ID_LENGTH, OffsetPaging, Pixm, stored_queries,
-};
+use crate::config::{COMBINING_MARGIN_MS, Config, OffsetPaging, Pixm, stored_queries};
 
 impl Config {
     /// Resolves this tree into the settings the run path holds.
@@ -65,13 +64,12 @@ impl Config {
             .map_err(|source| Error::Filter { source })?;
         let mut credentials = BTreeMap::new();
         for (endpoint, section) in &self.credentials {
-            if !is_endpoint_id(endpoint) {
-                return Err(Error::EndpointId {
-                    key: endpoint.clone(),
-                });
-            }
+            let id = EndpointId::new(endpoint.as_str()).map_err(|source| Error::EndpointId {
+                key: endpoint.clone(),
+                source,
+            })?;
             let scheme = resolve_credentials(&format!("credentials.{endpoint}"), section)?;
-            credentials.insert(endpoint.clone(), scheme);
+            credentials.insert(id, scheme);
         }
         let federation = self.resolve_federation(request_timeout)?;
         let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
@@ -201,30 +199,4 @@ fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
         });
     }
     Ok(Duration::from_millis(millis))
-}
-
-/// Returns whether `key` may name an endpoint.
-///
-/// The registry (#36) owns the endpoint id type; until it lands the rule is the
-/// one a log line and a header can carry safely: printable ASCII with no space,
-/// bounded in length.
-fn is_endpoint_id(key: &str) -> bool {
-    !key.is_empty()
-        && key.len() <= MAX_ENDPOINT_ID_LENGTH
-        && key.chars().all(|c| c.is_ascii_graphic())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_endpoint_id;
-    use crate::config::MAX_ENDPOINT_ID_LENGTH;
-
-    #[test]
-    fn an_endpoint_id_is_bounded_printable_ascii_with_no_space() {
-        assert!(is_endpoint_id("hospital-a.query"));
-        assert!(!is_endpoint_id(""));
-        assert!(!is_endpoint_id("node a"));
-        assert!(!is_endpoint_id("node\u{e9}"));
-        assert!(!is_endpoint_id(&"a".repeat(MAX_ENDPOINT_ID_LENGTH + 1)));
-    }
 }

@@ -35,9 +35,6 @@ pub const ENV_PREFIX: &str = "FERROFED__";
 /// The environment variable naming the configuration file.
 pub const CONFIG_PATH_ENV: &str = "FERROFED_CONFIG";
 
-/// The longest endpoint id a credentials section may be keyed by.
-pub const MAX_ENDPOINT_ID_LENGTH: usize = 128;
-
 /// The milliseconds kept for combining the answers after the fan-out budget.
 ///
 /// `server.request_timeout_ms` must exceed `federation.overall_timeout_ms` by

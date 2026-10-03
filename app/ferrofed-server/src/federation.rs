@@ -130,15 +130,6 @@ pub enum FederationError {
     /// The PIXm resolver refuses its Managers or members.
     #[error("the [pixm] resolver cannot be enabled")]
     Pixm(#[source] PixmConfigError),
-    /// A credentials section is keyed by something that is not an endpoint id.
-    #[error("credentials.{key:?} is not an endpoint id")]
-    CredentialsKey {
-        /// The key that was given.
-        key: String,
-        /// What the id rules reported.
-        #[source]
-        source: IdError,
-    },
     /// The node clients could not be built.
     #[error("the node clients could not be built")]
     Clients(#[source] SetupError),
@@ -161,9 +152,8 @@ impl Federation {
     ///
     /// # Errors
     /// Returns a [`FederationError`] for a registry document that does not
-    /// load, a `[dev]` table that is refused, a credentials key that is not an
-    /// endpoint id or names no endpoint of the registry, and an HTTP client
-    /// that cannot be built.
+    /// load, a `[dev]` table that is refused, a credentials key that names no
+    /// endpoint of the registry, and an HTTP client that cannot be built.
     pub fn load(settings: &Settings) -> Result<Option<Self>, FederationError> {
         let Some(path) = &settings.registry_document else {
             if settings.dev.is_some() {
@@ -205,7 +195,7 @@ impl Federation {
             }
             (None, Some(pixm)) => Some(pixm_resolver(pixm, &snapshot)?),
         };
-        let credentials = onward_credentials(settings)?;
+        let credentials = onward_credentials(settings);
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.
         let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
@@ -460,16 +450,9 @@ fn pixm_resolver(
 
 /// The onward credentials of each endpoint that has a `[credentials]`
 /// section, as the node clients send them.
-fn onward_credentials(
-    settings: &Settings,
-) -> Result<BTreeMap<EndpointId, SharedCredentials>, FederationError> {
+fn onward_credentials(settings: &Settings) -> BTreeMap<EndpointId, SharedCredentials> {
     let mut credentials = BTreeMap::new();
-    for (key, scheme) in &settings.credentials {
-        let endpoint =
-            EndpointId::new(key.as_str()).map_err(|source| FederationError::CredentialsKey {
-                key: key.clone(),
-                source,
-            })?;
+    for (endpoint, scheme) in &settings.credentials {
         let onward = match scheme {
             Scheme::Bearer(token) => Credentials::Bearer(token.clone()),
             Scheme::Basic { user, password } => Credentials::Basic {
@@ -478,9 +461,9 @@ fn onward_credentials(
             },
         };
         let shared: SharedCredentials = Arc::new(onward);
-        credentials.insert(endpoint, shared);
+        credentials.insert(endpoint.clone(), shared);
     }
-    Ok(credentials)
+    credentials
 }
 
 /// The rewrite's targeting for an undirected query under the declared node

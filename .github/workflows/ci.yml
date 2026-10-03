@@ -262,6 +262,25 @@ jobs:
           persist-credentials: false
       - run: bash scripts/checks/conformance-matrix.sh
 
+  # The e2e placement guard: a test that checks the FERROFED_E2E gate lives in
+  # an e2e module, the one place the e2e job's filter selects, and that job
+  # still runs that filter across the workspace. Its self-test proves each
+  # refused placement and each near miss.
+  e2e-placement:
+    name: e2e-placement
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/e2e-placement.sh --self-test
+          bash scripts/checks/e2e-placement.sh
+
   # The tracker helpers that carry a self-test. Their real branches run only
   # against the live tracker: the fallback of fields.sh needs a token that
   # cannot read the organisation's issue types, the migration and the label
@@ -405,9 +424,10 @@ jobs:
 
   # The container-backed suite (#39; no specification governs it: our own
   # design). Every such test checks FERROFED_E2E first and returns early without it, so the
-  # test job above stays offline; this job sets the gate and runs the crates
-  # that carry container tests against the digest-pinned images the
-  # testkit's PinnedImage constants name and docs/VERSIONS.md repeats.
+  # test job above stays offline; this job sets the gate and runs the e2e
+  # module of every crate against the digest-pinned images the testkit's
+  # PinnedImage constants name and docs/VERSIONS.md repeats. The e2e-placement
+  # guard keeps every gated test inside an e2e module, so this filter selects it.
   e2e:
     name: e2e (containers)
     needs: detect
@@ -426,11 +446,11 @@ jobs:
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
           tool: cargo-nextest
-      # The testkit's whole suite, and the server's container tests alone,
-      # since the test job already runs the rest of the server offline.
+      # The testkit's whole suite, and every other crate's container tests
+      # alone, since the test job already runs the rest offline.
       - run: >-
-          cargo nextest run --locked -p ferrofed-testkit -p ferrofed-server
-          -E 'package(ferrofed-testkit) or (package(ferrofed-server) and test(/^e2e::/))'
+          cargo nextest run --locked --workspace
+          -E 'package(ferrofed-testkit) or test(/^e2e::/)'
           --no-tests=pass
 
   doc:
@@ -610,6 +630,7 @@ jobs:
       - versions
       - favicon-sync
       - conformance-matrix
+      - e2e-placement
       - tracker-helpers
       - crate-version-guard-self-test
       - detect

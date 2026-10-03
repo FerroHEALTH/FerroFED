@@ -48,6 +48,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   routes the request to it (§12.5.1 step 1, N41). The integrity incidents of
   the `creating_system_id` map are logged under `ferrofed::integrity` too.
 
+### Fixed
+
+- A `[credentials."<endpoint id>"]` key is held to the registry's endpoint id
+  rule when the configuration resolves, with or without a registry (#272).
+  Configuration used to accept 1 to 128 printable ASCII characters and left
+  the registry's rule to the federation load, so a key such as `node:a`,
+  `-node` or a 65-character id passed when no registry was configured. The
+  one rule is now the registry's: 1 to 64 ASCII letters, digits, `.`, `-`
+  and `_`, starting with a letter or digit, and the refusal (exit 78) names
+  the key. The CI container job now runs the `ENDPOINT`
+  attribute test against both FerroEHR nodes, and a new tier-1 guard,
+  `scripts/checks/e2e-placement.sh`, refuses a container test placed where
+  that job never selects it.
+
 ## [0.0.6] - 2026-10-03
 
 The v0.0.4, v0.0.5 and v0.0.6 milestones in one release (no v0.0.4 or v0.0.5

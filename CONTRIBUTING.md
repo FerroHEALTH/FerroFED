@@ -31,6 +31,7 @@ scripts/checks/file-length.sh
 scripts/checks/versions.sh
 scripts/checks/favicon-sync.sh
 scripts/checks/conformance-matrix.sh
+scripts/checks/e2e-placement.sh
 ```
 
 These are the tier-1 guards `ci.yml` runs, with the same flags, so a local
@@ -53,9 +54,13 @@ The container end-to-end suite needs Docker and runs behind its gate, as the
 `e2e (containers)` job runs it:
 
 ```
-FERROFED_E2E=1 cargo nextest run --locked -p ferrofed-testkit -p ferrofed-server \
-  -E 'package(ferrofed-testkit) or (package(ferrofed-server) and test(/^e2e::/))'
+FERROFED_E2E=1 cargo nextest run --locked --workspace \
+  -E 'package(ferrofed-testkit) or test(/^e2e::/)'
 ```
+
+A test that checks the gate lives in the `e2e` module of its crate's test
+binary (`tests/it/e2e.rs` or `tests/it/e2e/`), the one place that filter
+selects; `scripts/checks/e2e-placement.sh` refuses it anywhere else.
 
 Every cargo invocation uses `--locked`, and `Cargo.lock` is committed.
 
