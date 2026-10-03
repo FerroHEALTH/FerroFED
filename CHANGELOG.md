@@ -332,7 +332,7 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   decimal mean written as the nearest JSON number, as before.
   `openehr-federation` is 0.0.33.
 - The `openehr-*` family moves to 0.0.81 (FerroEHR #3548, #3551, #3552), and
-  `openehr-federation` to 0.0.34 with it (#329).
+  `openehr-federation` to 0.0.35 with it (#329).
 - A body routed to one node without a `Content-Type` travels with the first
   media type the operation lists, `application/json` wherever ITS-REST lists
   several, where it was a `415` for an operation whose body is declared in
