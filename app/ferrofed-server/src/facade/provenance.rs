@@ -58,6 +58,15 @@ impl Provenance {
         }
     }
 
+    /// The provenance listing the endpoints of `federation` that reached
+    /// `active`: the members that accepted a fan-out template upload, in
+    /// the record's order (§12.6, §7a.3).
+    pub(crate) fn active(federation: &FederationMeta) -> Self {
+        Self::listed(federation, |record| {
+            record.status() == EndpointStatus::Active
+        })
+    }
+
     /// The provenance listing the endpoints of `federation`, the
     /// `meta.federation` record of an answer, that `named` picks.
     fn listed(federation: &FederationMeta, named: impl Fn(&EndpointOutcome) -> bool) -> Self {

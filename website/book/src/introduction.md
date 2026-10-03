@@ -27,13 +27,19 @@ ships the `ferrofed` binary for Linux and the image
 `ghcr.io/ferrohealth/ferrofed`, both signed, and
 [the container page](operate/container.md) runs it beside four member CDRs.
 
-v0.0.3 serves the federated query, `POST /v1/query/aql`, over the members of a
-registry. It resolves the patient outside AQL through an IHE PIXm PIX Manager,
-sends each member standard AQL scoped to its own `ehr_id`, refuses a query that
-would carry the patient identifier to a node, and fails the query when a node
-that was asked does not answer. Every other ITS-REST path answers `501` until
-its milestone. Each page says what is built, and names the issue of what is
-planned.
+FerroFED serves the federated query, `POST {base}/v1/query/aql` and its `GET`
+form, over the members of a registry. It resolves the patient outside AQL
+through an IHE PIXm PIX Manager, sends each member standard AQL scoped to its
+own `ehr_id`, refuses a query that would carry the patient identifier to a
+node, and merges the answers with each node's provenance, failing the query
+when a node that was asked does not answer unless you ask for a partial
+answer. It routes the EHR resources under a path `ehr_id` to the one node that
+holds them, reads an EHR by subject, sends a definition request to the node
+you name, and runs stored queries by name where a deployment offers the
+stored-query registry. The DEMOGRAPHIC area is never federated, and the
+ITS-REST paths outside these answer `501`; [the client
+contract](integrate/client-contract.md) lists each. Each page says what is
+built, and names the issue of what is planned.
 
 ## How this book is organised
 

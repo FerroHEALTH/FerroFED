@@ -96,6 +96,9 @@ pub struct FederationSettings {
     /// The one member endpoint that may serve the DEMOGRAPHIC area, or
     /// `None` when that area answers `501` (§7a.1, N32).
     pub demographic_endpoint: Option<EndpointId>,
+    /// Whether a template upload may fan out to several members (§12.6,
+    /// N43), as `definition.fan_out_template_upload` declares it (§7a.2).
+    pub fan_out_template_upload: bool,
 }
 
 /// The HTTP surface, resolved.
@@ -170,6 +173,7 @@ impl Settings {
                 .demographic_endpoint
                 .as_ref()
                 .map(EndpointId::as_str),
+            fan_out_template_upload = self.federation.fan_out_template_upload,
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             stored_query_registry = self.stored_queries.is_some(),
             credentials = endpoints.join(","),

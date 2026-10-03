@@ -33,6 +33,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   none, and `meta.federation.endpoints[]` still names every endpoint (§11.1).
   The headers carry registry ids and `system_id`s, never a request value
   (§5.4.1).
+- Fan-out template upload, opt-in with `[federation] fan_out_template_upload`
+  (#76; §12.6, N43, CP-34). Off by default, and `OPTIONS {base}/` declares
+  the configured value as `definition.fan_out_template_upload`. Where it is
+  on, an ADL 1.4 or ADL 2 template upload whose `openEHR-federation-endpoint`
+  is `*` (every active member) or whose targeting headers select several
+  endpoints is sent to each member independently, byte-identical through the
+  routed forwarding path, and nothing is rolled back. The answer is
+  `meta.federation` with one `endpoints[]` entry per registry member and no
+  node's body: `200` when every named member accepted, `207` with
+  `complete: false` when some failed, and `424` or `504` when none accepted.
+  The provenance headers list the members that accepted. A plain upload still
+  names its one node, and `*` stays `endpoint-unknown` on every other
+  definition request and whenever the setting is off.
 - The ITS-REST `GET` forms of query execution are served (#287; N1, CP-1).
   `GET {base}/v1/query/aql` and, where the stored-query registry is offered,
   `GET {base}/v1/query/{name}[/{version}]` carry the request in the query
@@ -255,7 +268,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   database per node owned by its own role; the image's init script runs once
   per node through `docker/postgres/20-ferrofed-node-databases.sh`, so the
   per-node `ferroehr-a-postgres` and `ferroehr-b-postgres` services and their
-  volumes are gone (`docker compose down -v` removes the old ones). The
+  volumes are gone (`docker compose down -v` removes the old ones). Each node
+  database admits only its own node's role: `CONNECT` is revoked from
+  `PUBLIC`, so one node's role is refused on another node's database. The
   gateway's quickstart configuration is a development profile whose static
   cross-reference maps four synthetic patients in `urn:oid:2.999.1.1`: one at
   all four nodes, one at two, one at one and one at none, and

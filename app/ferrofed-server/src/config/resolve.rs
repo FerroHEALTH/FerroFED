@@ -179,6 +179,7 @@ impl Config {
                 .map(AggregateFunction::from)
                 .collect(),
             demographic_endpoint,
+            fan_out_template_upload: self.federation.fan_out_template_upload,
         })
     }
 }
