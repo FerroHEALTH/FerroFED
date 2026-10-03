@@ -21,6 +21,7 @@ use std::time::Duration;
 use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::probe::{Answer, Probed};
+use ferrofed_identity::consent::ConsentDecision;
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 use openehr_federation::outcome::Outcome;
@@ -28,7 +29,9 @@ use openehr_federation::status::EndpointStatus;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
-use crate::metrics::{NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION, NODE_REQUESTS};
+use crate::metrics::{
+    CONSENT_PREFILTER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION, NODE_REQUESTS,
+};
 
 /// The node request instruments of one meter provider, shared by every
 /// federation a reload builds.
@@ -36,6 +39,7 @@ use crate::metrics::{NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION, NODE_REQUESTS
 pub struct Instruments {
     requests: Counter<u64>,
     duration: Histogram<f64>,
+    prefilter: Counter<u64>,
 }
 
 impl Instruments {
@@ -52,6 +56,10 @@ impl Instruments {
                 .with_description("The time a member node took to answer a request")
                 .with_unit("s")
                 .with_boundaries(NODE_DURATION_BUCKETS.to_vec())
+                .build(),
+            prefilter: meter
+                .u64_counter(CONSENT_PREFILTER_REQUESTS)
+                .with_description("Calls to the consent pre-filter, by outcome")
                 .build(),
         }
     }
@@ -150,6 +158,23 @@ impl NodeRequests {
 
     /// Counts one request to `endpoint` that ended as `status` after
     /// `elapsed`; an endpoint outside the snapshot is not recorded.
+    /// Counts one call to the consent pre-filter that ended in `decision`, in
+    /// a series of its own: the pre-filter is no member, so it has no
+    /// `endpoint` and no §11.1 outcome.
+    pub fn prefiltered(&self, decision: &ConsentDecision) {
+        let Some(instruments) = &self.instruments else {
+            return;
+        };
+        let outcome = match decision {
+            ConsentDecision::Denied(_) => "denied",
+            ConsentDecision::NoSignal => "no-signal",
+            ConsentDecision::Unavailable(_) => "unavailable",
+        };
+        instruments
+            .prefilter
+            .add(1, &[KeyValue::new("outcome", outcome)]);
+    }
+
     fn count(&self, endpoint: &EndpointId, status: EndpointStatus, elapsed: Duration) {
         let Some(instruments) = &self.instruments else {
             return;

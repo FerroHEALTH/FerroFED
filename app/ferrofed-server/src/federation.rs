@@ -23,7 +23,7 @@ use ferrofed_engine::dispatch::{NodeClients, SetupError};
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
 use ferrofed_identity::consent::ConsentPrefilter;
-use ferrofed_identity::dev::{DevCrossRefError, StaticConsentPrefilter, StaticResolver};
+use ferrofed_identity::dev::DevCrossRefError;
 use ferrofed_identity::directory;
 use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
@@ -327,7 +327,7 @@ impl Federation {
             (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
             (None, None) => None,
             (Some(section), None) => {
-                (development, consent) = dev_seams(settings, section, &snapshot)?;
+                (development, consent) = crate::development::seams(settings, section, &snapshot)?;
                 development
                     .clone()
                     .map(|resolver| -> Arc<dyn Resolver> { resolver })
@@ -350,7 +350,8 @@ impl Federation {
             context = context.with_default_namespace(namespace.clone());
         }
         let dependencies =
-            Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
+            Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some())
+                .with_consent(consent.is_some());
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
         let federation = Self {
             id,
@@ -427,6 +428,7 @@ impl Federation {
     #[must_use]
     pub fn with_consent_prefilter(mut self, prefilter: Arc<dyn ConsentPrefilter>) -> Self {
         self.consent = Some(prefilter);
+        self.dependencies = self.dependencies.with_consent(true);
         self
     }
 
@@ -710,29 +712,6 @@ fn ehr_index(capacity: NonZeroU32) -> EhrIndex {
 fn default_index_capacity() -> NonZeroU32 {
     NonZeroU32::new(crate::config::Federation::default().ehr_index_capacity)
         .expect("the default ehr_id index capacity should be positive")
-}
-
-/// The resolver and the consent pre-filter of the `[dev]` table.
-type DevSeams = (
-    Option<Arc<StaticResolver>>,
-    Option<Arc<dyn ConsentPrefilter>>,
-);
-
-/// The static cross-reference and, when `[[dev.consent_denied]]` has rows,
-/// the static consent pre-filter that the `[dev]` table describes.
-fn dev_seams(
-    settings: &Settings,
-    section: &crate::config::DevSection,
-    snapshot: &RegistrySnapshot,
-) -> Result<DevSeams, FederationError> {
-    let table = section.table().map_err(FederationError::DevTable)?;
-    let consent = StaticConsentPrefilter::from_config(settings.profile, &table, snapshot)
-        .map_err(FederationError::DevCrossRef)?
-        .map(|prefilter| -> Arc<dyn ConsentPrefilter> { Arc::new(prefilter) });
-    let resolver = StaticResolver::from_config(settings.profile, Some(table), snapshot)
-        .map_err(FederationError::DevCrossRef)?
-        .map(Arc::new);
-    Ok((resolver, consent))
 }
 
 /// The PIXm resolver `[pixm]` describes over the members of `snapshot`.

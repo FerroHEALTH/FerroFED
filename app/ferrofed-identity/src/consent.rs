@@ -27,10 +27,30 @@ pub enum ConsentError {
     /// The pre-filter's budget ran out before the consent service answered.
     #[error("the consent service did not answer within its budget")]
     DeadlineExceeded,
-    /// The consent service failed: an outage, a refusal, or an answer that
-    /// could not be read.
+    /// The consent service could not be reached, or gave no answer.
     #[error("the consent service failed")]
     Backend(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// The consent service answered `status` with a failure, or with an
+    /// answer that could not be read.
+    #[error("the consent service answered {status}")]
+    Answered {
+        /// The HTTP status the service answered with.
+        status: http::StatusCode,
+        /// What was wrong with the answer.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
+
+impl ConsentError {
+    /// The HTTP status the consent service answered with, when it answered.
+    #[must_use]
+    pub fn status(&self) -> Option<http::StatusCode> {
+        match self {
+            Self::Answered { status, .. } => Some(*status),
+            Self::DeadlineExceeded | Self::Backend(_) => None,
+        }
+    }
 }
 
 /// What a consent pre-filter answered for one patient and a set of

@@ -14,7 +14,7 @@ No specification governs health probes: our own design.
 |---|---|---|
 | `GET {base}/health` | `200` while the process serves; it checks nothing else | liveness |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives | readiness, startup, the image `HEALTHCHECK` |
-| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint and of the resolver | monitoring, never a probe |
+| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver and of the consent pre-filter | monitoring, never a probe |
 
 Readiness reports the gateway's own subsystems by name: the configuration,
 the registry and the outbound clients when a registry is configured, and the
@@ -31,7 +31,8 @@ with one node would turn one CDR outage into a total outage. Their state is on
 ```json
 {
   "endpoints": { "node-a-query": "up", "node-b-query": "down" },
-  "resolver": "up"
+  "resolver": "up",
+  "consent": "down"
 }
 ```
 
@@ -55,7 +56,10 @@ request routed to one node, the ask-all probe, a fan-out template upload, and
 a stored-query distribution, repair or drift check. A drift check that finds
 a member's copy different or missing records the member `up`, because it
 answered. A resolution updates `resolver`, which is absent when no resolver
-is configured. The body names endpoint ids and states only, never a URL, a
+is configured. A call to the consent pre-filter updates `consent` by the same
+rule: a decision, or an answer below `500`, is `up`, a `5xx` is `failing`, and
+no answer is `down`. It is absent when no pre-filter is configured
+([Consent](identity.md#consent)). The body names endpoint ids and states only, never a URL, a
 credential or a body.
 
 ## `ferrofed healthcheck`

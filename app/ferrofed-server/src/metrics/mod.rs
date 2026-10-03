@@ -8,7 +8,8 @@
 //! One provider feeds both readers, so an instrument cannot exist on one
 //! surface and not the other. Every label value is drawn from a closed set
 //! or from the registry: `kind` from the integrity incident kinds, `outcome`
-//! from the §11.1 statuses, `result` from the reload outcomes, and `endpoint`
+//! from the §11.1 statuses or, for the consent pre-filter's calls, from its
+//! three decisions, `result` from the reload outcomes, and `endpoint`
 //! from the registry's endpoint ids. Nothing a request carries becomes a
 //! label, so no patient identifier and no client text can reach the
 //! surface (§5.4.1, N33). The instruments fill from what the gateway already
@@ -57,6 +58,10 @@ pub const NODE_REQUESTS: &str = "ferrofed.node.requests";
 /// The time a member node took to answer, by `endpoint`; Prometheus
 /// `ferrofed_node_request_duration_seconds`.
 pub const NODE_REQUEST_DURATION: &str = "ferrofed.node.request.duration";
+
+/// The calls to the consent pre-filter, by `outcome` (`denied`, `no-signal` or
+/// `unavailable`); Prometheus `ferrofed_consent_prefilter_requests_total`.
+pub const CONSENT_PREFILTER_REQUESTS: &str = "ferrofed.consent.prefilter.requests";
 
 /// The registry reloads, by `result`; Prometheus
 /// `ferrofed_registry_reloads_total`.

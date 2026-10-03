@@ -144,6 +144,15 @@ asked, and its node decides. When the consent service cannot answer, Step 1
 carries no consent signal, which is the state of a deployment with no consent
 service at all, so every candidate is asked and each node checks consent
 itself (§13.2.1, N27a). This `pass-to-node` policy is FerroFED's own design.
+The outage is never silent: the answer to a query carries it as
+`meta.federation.consent.error`, mirroring `localization.error` of §14.1
+([The client contract](../integrate/client-contract.md)), the pre-filter's
+state on `GET {base}/health/dependencies` turns `down` or `failing`
+([Health probes](health.md)), and each call is counted in
+`ferrofed_consent_prefilter_requests_total` ([Metrics](metrics.md)). The
+pre-filter applies to every patient route: a federated query and the read
+of an EHR by subject
+([Follow-ups](../integrate/follow-ups.md#reading-an-ehr-by-subject)).
 `OPTIONS {base}/` declares a configured pre-filter under `federation.consent`,
 with its mode and that policy; a deployment with no pre-filter declares
 nothing there.

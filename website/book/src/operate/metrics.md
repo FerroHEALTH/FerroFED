@@ -60,6 +60,7 @@ the unit after a histogram.
 | `ferrofed_integrity_incidents_total` | `ferrofed.integrity.incidents` | counter | `kind` | the [integrity incidents](registry.md#integrity-incidents) the gateway emitted, one per incident line under `ferrofed::integrity` |
 | `ferrofed_node_requests_total` | `ferrofed.node.requests` | counter | `endpoint`, `outcome` | the requests the gateway sent to a member endpoint |
 | `ferrofed_node_request_duration_seconds` | `ferrofed.node.request.duration` (unit `s`) | histogram | `endpoint` | the time a member endpoint took to answer, with the series `_bucket` (and `le`), `_sum` and `_count` |
+| `ferrofed_consent_prefilter_requests_total` | `ferrofed.consent.prefilter.requests` | counter | `outcome` | the calls to the [consent pre-filter](identity.md#consent), by `denied`, `no-signal` or `unavailable` |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
 | `target_info` | the resource | gauge | `service_name`, `service_version`, `telemetry_sdk_*` | always `1`: the gateway and its version |
 

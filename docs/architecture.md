@@ -513,13 +513,20 @@ are dispatched (N8).
   = "pass-to-node"` beside the pre-filter's mode. No fail-closed variant is
   offered: no §11.1 status says "not asked because consent could not be
   checked", and `excluded` would leave `complete` true on an answer that asked
-  nobody. No specification governs the policy: our own design.
+  nobody. No specification governs the policy: our own design. The outage is
+  carried in `meta.federation.consent.error` beside §14.1's
+  `localization.error`, on `/health/dependencies` as `consent` (a decision or
+  an answer below `500` is up, a `5xx` failing, no answer down, the members'
+  rule) and in `ferrofed.consent.prefilter.requests` by outcome (#400).
 
 **Consent stays with the node** (#83). The pre-filter runs at Step 1 on every
-patient query, a directed one included, after localization and before
-resolution, over the candidates localization left (every member the request
-lets the plan ask, where nothing localizes); a member localization did not
-name stays `not-localized`, since nothing decided about it. A member it denies is `consent-denied` with no `latency_ms`, is never
+patient route: every federated query, a directed one included, and the read
+of an EHR by subject (#399), which answers `403 consent-denied` when every
+member that might hold the subject is denied. It runs after localization and
+before resolution, over the candidates localization left (every member the
+request lets the plan ask, where nothing localizes); a member localization
+did not name stays `not-localized`, since nothing decided about it. A member
+it denies is `consent-denied` with no `latency_ms`, is never
 resolved and never sent a request, and the session's bindings that name it are
 dropped (`ResolutionBindings::forget_denied`). A member it does not deny is
 asked: absence from `Denied` asserts nothing (§14.3). A node's own refusal is

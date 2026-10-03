@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The last state the gateway observed of each member endpoint and of the
-//! resolver, which `GET /health/dependencies` reports.
+//! The last state the gateway observed of each member endpoint, of the
+//! resolver and of the consent pre-filter, which `GET /health/dependencies`
+//! reports.
 //!
 //! Nothing here sends a request: the states come from the requests the
 //! gateway already makes for its clients, so a dependency nobody has asked
 //! since boot is [`Observed::Unknown`]. The record holds one slot per
-//! endpoint of the registry snapshot and one for the resolver, fixed when
+//! endpoint of the registry snapshot, one for the resolver and one for the
+//! consent pre-filter, fixed when
 //! the federation is built, so it never grows. A dependency's state never
 //! gates readiness: under §11 a node outage is reported per query, and
 //! readiness that followed it would turn one CDR outage into a total
@@ -21,6 +23,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use ferrofed_engine::dispatch::Contact;
+use ferrofed_identity::consent::ConsentDecision;
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use serde::Serialize;
@@ -88,6 +91,20 @@ impl Observed {
         }
     }
 
+    /// Returns what a consent pre-filter's decision says of its service, by
+    /// the rule the members follow: a decision, or any answer below `500`, is
+    /// [`Observed::Up`], a `5xx` is [`Observed::Failing`], and no answer is
+    /// [`Observed::Down`].
+    #[must_use]
+    pub fn of_consent(decision: &ConsentDecision) -> Self {
+        match decision {
+            ConsentDecision::Denied(_) | ConsentDecision::NoSignal => Self::Up,
+            ConsentDecision::Unavailable(error) => {
+                error.status().map_or(Self::Down, Self::of_answer)
+            }
+        }
+    }
+
     /// Returns what a resolution says of the resolver: down when it could not
     /// answer for some member, up when it answered for each, and `None` when
     /// it was not asked.
@@ -114,6 +131,8 @@ pub struct Dependencies {
     endpoints: BTreeMap<EndpointId, AtomicU8>,
     /// The resolver's slot, when one is configured.
     resolver: Option<AtomicU8>,
+    /// The consent pre-filter's slot, when one is configured.
+    consent: Option<AtomicU8>,
 }
 
 impl Dependencies {
@@ -127,7 +146,16 @@ impl Dependencies {
                 .map(|endpoint| (endpoint.clone(), AtomicU8::new(Observed::Unknown.code())))
                 .collect(),
             resolver: resolver.then(|| AtomicU8::new(Observed::Unknown.code())),
+            consent: None,
         }
+    }
+
+    /// Returns this record with a slot for the consent pre-filter when
+    /// `configured` is `true`, its state [`Observed::Unknown`].
+    #[must_use]
+    pub fn with_consent(mut self, configured: bool) -> Self {
+        self.consent = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
+        self
     }
 
     /// Records `observed` as the last state of `endpoint`.
@@ -155,6 +183,14 @@ impl Dependencies {
         }
     }
 
+    /// Records `observed` as the consent pre-filter's last state, when one is
+    /// configured.
+    pub fn consent(&self, observed: Observed) {
+        if let Some(slot) = &self.consent {
+            slot.store(observed.code(), Ordering::Relaxed);
+        }
+    }
+
     /// Returns the report `GET /health/dependencies` answers with.
     #[must_use]
     pub fn report(&self) -> Report {
@@ -173,6 +209,10 @@ impl Dependencies {
                 .resolver
                 .as_ref()
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
+            consent: self
+                .consent
+                .as_ref()
+                .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
         }
     }
 }
@@ -186,6 +226,10 @@ pub struct Report {
     /// The resolver's state, absent when no resolver is configured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resolver: Option<Observed>,
+    /// The consent pre-filter's state, absent when no pre-filter is
+    /// configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consent: Option<Observed>,
 }
 
 #[cfg(test)]

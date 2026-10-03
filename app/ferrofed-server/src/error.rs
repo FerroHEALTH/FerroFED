@@ -178,6 +178,11 @@ pub enum Code {
     /// A stored-query `PUT` at a read-only registry, whose definitions are
     /// loaded from files at start; nothing is stored (§12.7, N44).
     StoredQueryReadOnly,
+    /// The consent pre-filter does not permit asking the members it names
+    /// about the subject of `GET {base}/v1/ehr`, and no other member holds
+    /// an EHR for it (N27a, §13.2.1). The body names the endpoints, never the
+    /// subject.
+    ConsentDenied,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -193,7 +198,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 41] = [
+    pub const GATEWAY: [Self; 42] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -235,6 +240,7 @@ impl Code {
         Self::DefinitionEndpointTargeted,
         Self::StoredQueryFanOutUnsupported,
         Self::StoredQueryReadOnly,
+        Self::ConsentDenied,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -292,6 +298,7 @@ impl Code {
             Self::DefinitionEndpointTargeted => "definition-endpoint-targeted",
             Self::StoredQueryFanOutUnsupported => "stored-query-fan-out-unsupported",
             Self::StoredQueryReadOnly => "stored-query-read-only",
+            Self::ConsentDenied => "consent-denied",
         }
     }
 
@@ -340,6 +347,7 @@ impl Code {
             Self::MediaTypeNotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StoredQueryReadOnly => StatusCode::METHOD_NOT_ALLOWED,
+            Self::ConsentDenied => StatusCode::FORBIDDEN,
         }
     }
 
@@ -442,6 +450,9 @@ impl Code {
             Self::StoredQueryReadOnly => {
                 "this gateway's stored-query registry is read-only: its definitions are loaded from files when it starts, so nothing was stored; read or run a definition it holds (§12.7, N44)"
             }
+            Self::ConsentDenied => {
+                "the consent pre-filter does not permit asking the members that might hold this subject's EHR, and no other member holds one (N27a)"
+            }
         }
     }
 }
@@ -542,6 +553,7 @@ mod tests {
             Code::DefinitionEndpointTargeted => Some(38),
             Code::StoredQueryFanOutUnsupported => Some(39),
             Code::StoredQueryReadOnly => Some(40),
+            Code::ConsentDenied => Some(41),
         }
     }
 
@@ -630,6 +642,7 @@ mod tests {
             (Code::DefinitionEndpointTargeted, StatusCode::BAD_REQUEST),
             (Code::StoredQueryFanOutUnsupported, StatusCode::BAD_REQUEST),
             (Code::StoredQueryReadOnly, StatusCode::METHOD_NOT_ALLOWED),
+            (Code::ConsentDenied, StatusCode::FORBIDDEN),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

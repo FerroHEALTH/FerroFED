@@ -20,7 +20,7 @@ use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_its::rest::generated::query::ResultSetRow;
 
 use super::seen::{self, Seen};
-use super::{Budget, Completion, FanOutError, FederatedAnswer, LOCALIZATION_MEMBER, decide};
+use super::{Budget, Completion, FanOutError, FederatedAnswer, decide};
 
 /// How the rows of the `active` endpoints become the answer's rows.
 #[derive(Debug, Clone, Copy)]
@@ -228,19 +228,21 @@ fn endpoint_record(
     Ok(record)
 }
 
-/// Records in `federation` that the configured localizer did not answer, as
-/// `localization.error` (§14.1: the failure SHOULD be carried in
-/// `meta.federation` as well as on each endpoint).
-pub(super) fn report_localization(
+/// Records in `federation` that a Step-1 service did not answer, as
+/// `<member>.error`: the localizer as `localization.error` (§14.1: the
+/// failure SHOULD be carried in `meta.federation` as well as on each
+/// endpoint), and the consent pre-filter as `consent.error`.
+pub(super) fn report_unavailable(
     federation: &mut FederationMeta,
+    member: &'static str,
     error: ErrorDetail,
 ) -> Result<(), FanOutError> {
     // NOTE: §14.1 names no member for it, and the schema leaves `federation` open
-    // for it: our own design, `localization.error` in the shape of an endpoint's `error`.
+    // for it: our own design, `<member>.error` in the shape of an endpoint's `error`.
     let report = BTreeMap::from([("error", error)]);
     federation
         .extra_mut()
-        .insert_serialized(LOCALIZATION_MEMBER, &report)
+        .insert_serialized(member, &report)
         .map_err(FanOutError::Envelope)?;
     Ok(())
 }

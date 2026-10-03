@@ -23,6 +23,23 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The consent pre-filter applies to the read of an EHR by subject as it does
+  to a federated query (#399; N27a, §13.2.1). A member it denies is never
+  resolved and never sent a request. When it denies every member that might
+  hold the subject and no other member holds one, the answer is
+  `403 consent-denied` naming the denied endpoints, never the `404` of a
+  subject with no EHR. A pre-filter that cannot answer leaves every member to
+  its own consent check, as on a query.
+- A consent pre-filter outage is visible (#400). The answer to a query asked
+  while the pre-filter could not answer carries `meta.federation.consent.error`,
+  beside the `localization.error` of §14.1, with `complete` and the status
+  unchanged. `GET /health/dependencies` reports the pre-filter as `consent`
+  under the members' rule (a decision or an answer below `500` is `up`, a
+  `5xx` is `failing`, no answer is `down`), absent when none is configured.
+  Each call is counted in `ferrofed_consent_prefilter_requests_total` by
+  `outcome` (`denied`, `no-signal`, `unavailable`). The carriers are
+  FerroFED's own design; no specification names one.
+
 - `federation.node_selection = "localized"`: an undirected patient query gets
   its node set from a localizer (N4, N10, §14.1). A member the localizer does
   not name is reported `not-localized` and never asked. A localizer that fails
