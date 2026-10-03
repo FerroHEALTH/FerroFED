@@ -53,7 +53,7 @@ CP-21	Gateway	N28	9	planned	#69	-
 CP-22	Gateway	N29	9	planned	#69	-
 CP-23	Gateway	N30	9	covered	#73	the body, the endpoint list without a patient identifier and the sub-path Allow are scored; the clause that the endpoint list is subject to the gateway normal authentication (section 7a.2, section 13) waits on client authentication (#80)
 CP-24	Gateway	N31	9	covered	#61	-
-CP-25	Gateway	N32	9	planned	#68	-
+CP-25	Gateway	N32	9	covered	#68	scored over two mock nodes in both modes: by default a read and a create answer 501 and no node is asked; with federation.demographic_endpoint set every operation reaches that one endpoint, byte-identical and with the N31 provenance headers, a header naming another endpoint, several endpoints or * is refused 400 and no node is asked, and an endpoint the registry does not hold refuses the configuration; OPTIONS its_rest.demographic declares each mode and the behaviour matches it
 CP-26	Gateway	N33	10	covered	#45,#90,#217	-
 CP-27	Node	N34	10	node-profile	#93	a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design
 CP-28	Gateway	N35	3	covered	#70,#71,#77	the stored-query clause is scored on a query stored at the gateway and invoked by name, targeted by the header and by the directive with the same answer, and refused 400 when the two select different node sets (section 8.4, section 12.7)

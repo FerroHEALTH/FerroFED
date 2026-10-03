@@ -14,8 +14,9 @@
 //! ([`facade`], §7), and routes every request to an EHR resource under a
 //! path `ehr_id`, the creation of an EHR, and every definition request, to
 //! one node ([`facade::route`], §7a.1, §12.4, §12.6), unless the
-//! stored-query registry holds the definition ([`facade::stored`], §12.7);
-//! every other path
+//! stored-query registry holds the definition ([`facade::stored`], §12.7).
+//! A DEMOGRAPHIC request goes to the one endpoint the deployment configured
+//! for it, and answers `501` where none is (§7a.1, N32); every other path
 //! under `/v1/` answers `501` until its issue lands.
 #![doc(test(attr(deny(warnings))))]
 
@@ -289,8 +290,9 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 ///
 /// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface: a
 /// request to an EHR resource under a path `ehr_id`, the creation of an
-/// EHR, and a definition request the stored-query registry does not hold,
-/// is routed to one node ([`facade::route`]; §7a.1, §12.4, §12.6), `OPTIONS`
+/// EHR, a definition request the stored-query registry does not hold, and a
+/// DEMOGRAPHIC request where the deployment configured its endpoint, is
+/// routed to one node ([`facade::route`]; §7a.1, §12.4, §12.6), `OPTIONS`
 /// names the methods the gateway serves for the path
 /// ([`facade::options::allow`]; §7a.2), and every other path answers `501`
 /// (§7a.1, N32), because a `404` would claim the resource does not exist.

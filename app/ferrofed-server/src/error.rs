@@ -96,7 +96,9 @@ pub enum Code {
     /// credentials (§11.2).
     NodeRefused,
     /// Two targeting mechanisms of one request, the AQL directive and a
-    /// header or the two headers, select different node sets (§8.4.1, N35).
+    /// header or the two headers, select different node sets (§8.4.1, N35),
+    /// or the headers of a DEMOGRAPHIC request name an endpoint other than
+    /// the one the deployment configured for that area (§7a.1, N32).
     /// The body names both sets.
     TargetingConflict,
     /// The `ehr_id` in a request path is not an openEHR `HIER_OBJECT_ID`

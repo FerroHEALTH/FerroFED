@@ -52,6 +52,7 @@ pub struct Federation {
     context: Context,
     budget: Budget,
     best_effort: bool,
+    demographic: Option<EndpointId>,
 }
 
 /// A federation that cannot be built from the settings.
@@ -87,6 +88,19 @@ pub enum FederationError {
     /// The static cross-reference refuses its rows or the profile.
     #[error("the [dev] cross-reference cannot be enabled")]
     DevCrossRef(#[source] DevCrossRefError),
+    /// `federation.demographic_endpoint` is set but no registry document is,
+    /// so it names an endpoint that does not exist.
+    #[error("federation.demographic_endpoint needs registry.document, whose endpoint it names")]
+    DemographicWithoutRegistry,
+    /// `federation.demographic_endpoint` names no endpoint of the registry
+    /// (§7a.1, §12.6, N32).
+    #[error(
+        "federation.demographic_endpoint names {endpoint}, which is no endpoint of the registry"
+    )]
+    DemographicEndpointUnknown {
+        /// The endpoint id that was given.
+        endpoint: EndpointId,
+    },
     /// `[pixm]` is set but no registry document is, so it names members that
     /// do not exist.
     #[error("the [pixm] resolver needs registry.document, whose members it names")]
@@ -152,8 +166,9 @@ impl Federation {
     ///
     /// # Errors
     /// Returns a [`FederationError`] for a registry document that does not
-    /// load, a `[dev]` table that is refused, a credentials key that names no
-    /// endpoint of the registry, and an HTTP client that cannot be built.
+    /// load, a `[dev]` table that is refused, a credentials key or a
+    /// `federation.demographic_endpoint` that names no endpoint of the
+    /// registry, and an HTTP client that cannot be built.
     pub fn load(settings: &Settings) -> Result<Option<Self>, FederationError> {
         let Some(path) = &settings.registry_document else {
             if settings.dev.is_some() {
@@ -161,6 +176,9 @@ impl Federation {
             }
             if settings.pixm.is_some() {
                 return Err(FederationError::PixmWithoutRegistry);
+            }
+            if settings.federation.demographic_endpoint.is_some() {
+                return Err(FederationError::DemographicWithoutRegistry);
             }
             return Ok(None);
         };
@@ -184,6 +202,13 @@ impl Federation {
                 })?
             }
         };
+        if let Some(endpoint) = &settings.federation.demographic_endpoint
+            && snapshot.endpoint(endpoint).is_none()
+        {
+            return Err(FederationError::DemographicEndpointUnknown {
+                endpoint: endpoint.clone(),
+            });
+        }
         let resolver = match (&settings.dev, &settings.pixm) {
             (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
             (None, None) => None,
@@ -219,6 +244,7 @@ impl Federation {
             context,
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
+            demographic: settings.federation.demographic_endpoint.clone(),
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -250,6 +276,7 @@ impl Federation {
             context,
             budget,
             best_effort: crate::config::Federation::default().best_effort,
+            demographic: None,
         }
     }
 
@@ -348,6 +375,14 @@ impl Federation {
         self.best_effort
     }
 
+    /// The one member endpoint every DEMOGRAPHIC request is routed to, or
+    /// `None` when that area answers `501` (§7a.1, §12.6, N32), as
+    /// `its_rest.demographic` declares it in `OPTIONS {base}/` (§7a.2).
+    #[must_use]
+    pub fn demographic_endpoint(&self) -> Option<&EndpointId> {
+        self.demographic.as_ref()
+    }
+
     /// How `OFFSET k > 0` is answered across the fan-out, with its bound
     /// (§11.6.2, N39), as `paging` declares it in `OPTIONS {base}/` (§7a.2).
     #[must_use]
@@ -380,6 +415,7 @@ impl std::fmt::Debug for Federation {
             .field("resolver", &self.resolver.is_some())
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
+            .field("demographic", &self.demographic)
             .field("offset_strategy", &self.context.offset_strategy())
             .field(
                 "decomposable_aggregates",

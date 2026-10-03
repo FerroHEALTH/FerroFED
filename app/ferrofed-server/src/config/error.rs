@@ -126,6 +126,13 @@ pub enum Error {
         #[source]
         source: IdError,
     },
+    /// `federation.demographic_endpoint` is not an endpoint id.
+    #[error("federation.demographic_endpoint is not an endpoint id")]
+    DemographicEndpoint {
+        /// What the registry's endpoint id rule reported.
+        #[source]
+        source: IdError,
+    },
     /// A credentials section names both a bearer token and a user.
     #[error("{section} names both a bearer token and a user; set one scheme")]
     Scheme {

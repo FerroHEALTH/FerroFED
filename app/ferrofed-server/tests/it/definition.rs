@@ -91,7 +91,7 @@ fn media_type(at: &str) -> &'static str {
 }
 
 /// The status, the headers and the body bytes `app` answers `request` with.
-async fn exchange(
+pub(crate) async fn exchange(
     app: Router,
     request: Request<Body>,
 ) -> Result<(StatusCode, HeaderMap, Vec<u8>), Box<dyn Error>> {
@@ -103,13 +103,13 @@ async fn exchange(
 }
 
 /// The value of the field `name` in `headers`, when it is text.
-fn field<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
+pub(crate) fn field<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
     headers.get(name).and_then(|value| value.to_str().ok())
 }
 
 /// Asserts that `headers` name `endpoint` and its node's `system_id` as the
 /// ones that acted (§7a.3, N31, §9.6).
-fn acted(headers: &HeaderMap, endpoint: &str, system_id: &str) {
+pub(crate) fn acted(headers: &HeaderMap, endpoint: &str, system_id: &str) {
     assert_eq!(Some(endpoint), field(headers, ENDPOINT), "N31");
     assert_eq!(
         Some(system_id),
@@ -120,7 +120,7 @@ fn acted(headers: &HeaderMap, endpoint: &str, system_id: &str) {
 
 /// Asserts that `request` is refused `400` with `code`, names no acting
 /// endpoint, and that neither node received anything.
-async fn refused_at_neither(
+pub(crate) async fn refused_at_neither(
     app: Router,
     request: Request<Body>,
     code: &str,

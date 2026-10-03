@@ -191,6 +191,11 @@ pub struct Federation {
     /// `MAX` and `AVG`. An empty list refuses every undirected aggregate with
     /// a `400`.
     pub decomposable_aggregates: Vec<DecomposableAggregate>,
+    /// The one member endpoint every request under `{base}/v1/demographic/`
+    /// is routed to (§7a.1, §12.6, N32). Without it the DEMOGRAPHIC area
+    /// answers `501`; it is never federated either way. A value that names
+    /// no endpoint of the registry refuses to boot.
+    pub demographic_endpoint: Option<String>,
 }
 
 /// An aggregate function the gateway recombines across a fan-out
@@ -268,6 +273,7 @@ impl Default for Federation {
                 DecomposableAggregate::Max,
                 DecomposableAggregate::Avg,
             ],
+            demographic_endpoint: None,
         }
     }
 }

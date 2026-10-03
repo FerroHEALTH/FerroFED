@@ -37,9 +37,9 @@ impl Config {
     /// [`Error::Basic`] for a credential the `Authorization` header cannot
     /// carry, and the value errors
     /// ([`Error::Listen`], [`Error::Zero`], [`Error::Filter`],
-    /// [`Error::EndpointId`], [`Error::Missing`], [`Error::Scheme`],
-    /// [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]), each naming the
-    /// key that carries the fault.
+    /// [`Error::EndpointId`], [`Error::DemographicEndpoint`], [`Error::Missing`],
+    /// [`Error::Scheme`], [`Error::NoScheme`], [`Error::Budget`], [`Error::Url`]),
+    /// each naming the key that carries the fault.
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -141,6 +141,13 @@ impl Config {
             NonZeroU32::new(self.federation.max_offset_window).ok_or_else(|| Error::Zero {
                 key: String::from("federation.max_offset_window"),
             })?;
+        let demographic_endpoint = self
+            .federation
+            .demographic_endpoint
+            .as_deref()
+            .map(EndpointId::new)
+            .transpose()
+            .map_err(|source| Error::DemographicEndpoint { source })?;
         let offset = match self.federation.offset_strategy {
             OffsetPaging::Reject => OffsetStrategy::Reject,
             OffsetPaging::Bounded => OffsetStrategy::Bounded { max_window },
@@ -161,6 +168,7 @@ impl Config {
                 .copied()
                 .map(AggregateFunction::from)
                 .collect(),
+            demographic_endpoint,
         })
     }
 }

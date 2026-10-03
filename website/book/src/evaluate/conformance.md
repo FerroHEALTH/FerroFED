@@ -11,7 +11,7 @@ columns are derived from the vendored specification; the status, issue and
 reason columns are kept by FerroFED. A point is covered only when a test
 carries its marker and CI runs it.
 
-**Gateway points:** 27 of 35 covered, 8 planned, 0 deferred.
+**Gateway points:** 28 of 35 covered, 7 planned, 0 deferred.
 
 The other 6 points belong to a member node or to the federation operator,
 and a gateway is never marked down for them (section 17).
@@ -45,7 +45,7 @@ and a gateway is never marked down for them (section 17).
 | [CP-22](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-22) | Gateway | N29 | 9 | planned | [#69](https://github.com/FerroHEALTH/FerroFED/issues/69) | - |
 | [CP-23](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-23) | Gateway | N30 | 9 | covered | [#73](https://github.com/FerroHEALTH/FerroFED/issues/73) | the body, the endpoint list without a patient identifier and the sub-path Allow are scored; the clause that the endpoint list is subject to the gateway normal authentication (section 7a.2, section 13) waits on client authentication (#80) |
 | [CP-24](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-24) | Gateway | N31 | 9 | covered | [#61](https://github.com/FerroHEALTH/FerroFED/issues/61) | - |
-| [CP-25](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-25) | Gateway | N32 | 9 | planned | [#68](https://github.com/FerroHEALTH/FerroFED/issues/68) | - |
+| [CP-25](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-25) | Gateway | N32 | 9 | covered | [#68](https://github.com/FerroHEALTH/FerroFED/issues/68) | scored over two mock nodes in both modes: by default a read and a create answer 501 and no node is asked; with federation.demographic_endpoint set every operation reaches that one endpoint, byte-identical and with the N31 provenance headers, a header naming another endpoint, several endpoints or * is refused 400 and no node is asked, and an endpoint the registry does not hold refuses the configuration; OPTIONS its_rest.demographic declares each mode and the behaviour matches it |
 | [CP-26](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-26) | Gateway | N33 | 10 | covered | [#45](https://github.com/FerroHEALTH/FerroFED/issues/45), [#90](https://github.com/FerroHEALTH/FerroFED/issues/90), [#217](https://github.com/FerroHEALTH/FerroFED/issues/217) | - |
 | [CP-27](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-27) | Node | N34 | 10 | node-profile | [#93](https://github.com/FerroHEALTH/FerroFED/issues/93) | a Node obligation, scored against the member nodes of the harness and never the gateway (section 16.2); no specification governs the choice of two FerroEHR nodes: our own design |
 | [CP-28](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-28) | Gateway | N35 | 3 | covered | [#70](https://github.com/FerroHEALTH/FerroFED/issues/70), [#71](https://github.com/FerroHEALTH/FerroFED/issues/71), [#77](https://github.com/FerroHEALTH/FerroFED/issues/77) | the stored-query clause is scored on a query stored at the gateway and invoked by name, targeted by the header and by the directive with the same answer, and refused 400 when the two select different node sets (section 8.4, section 12.7) |
