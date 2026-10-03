@@ -39,22 +39,27 @@
 //! (§10.3 `dedup-write-target`, CP-29).
 //!
 //! A `CONTRIBUTION` is read with `openehr-its`'s ITS-REST `NewContribution`
-//! for its versions' `preceding_version_uid`s only; the body forwarded is the
-//! one received, byte for byte (N22). Every version that names a preceding
+//! for its versions' `preceding_version_uid`s only, in the representation its
+//! `Content-Type` selects: canonical JSON, or a canonical envelope whose
+//! versions' `data` is FLAT or STRUCTURED (ITS-REST 1.1.0
+//! `contribution_create`, §Simplified Formats). The body forwarded is the one
+//! received, byte for byte (N22). Every version that names a preceding
 //! version must be controlled by the path node, and a version that names none
 //! is a creation inside the path EHR, so a `CONTRIBUTION` of creations alone
 //! routes by its path `ehr_id` as any other request does.
 
 use std::fmt;
 
+use ferrofed_engine::declared;
 use ferrofed_registry::creating_system::CreatingSystemRoute;
 use ferrofed_registry::id::{EndpointId, NodeId, SystemId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, header};
 use openehr_base::prelude::ObjectVersionId;
 use openehr_its::json;
-use openehr_its::rest::generated::ehr::NewContribution;
+use openehr_its::rest::generated::ehr::{NewContribution, Versionable};
 use openehr_its::rest::routes::RouteMatch;
+use serde::de::{DeserializeOwned, IgnoredAny};
 
 use crate::error::Code;
 use crate::facade::owner;
@@ -63,6 +68,20 @@ use crate::facade::route::EHR_GROUP;
 /// The path parameter a `DELETE` of a composition names the version it
 /// amends in (ITS-REST 1.1.0 EHR API, `composition_delete`).
 const PRECEDING_PARAM: &str = "uid_based_id";
+
+/// The canonical JSON media type (ITS-REST 1.1.0 overview, §JSON Format).
+const CANONICAL_JSON: &str = "application/json";
+
+/// The canonical XML media type (ITS-REST 1.1.0 overview, §XML Format).
+const CANONICAL_XML: &str = "application/xml";
+
+/// The Simplified Flat media type (ITS-REST 1.1.0 overview, §Simplified
+/// Formats).
+const SIMPLIFIED_FLAT: &str = "application/openehr.wt.flat+json";
+
+/// The Simplified Structured media type (ITS-REST 1.1.0 overview,
+/// §Simplified Formats).
+const SIMPLIFIED_STRUCTURED: &str = "application/openehr.wt.structured+json";
 
 /// What an ITS-REST operation routed to one node writes (§12.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,13 +179,19 @@ pub enum PrecedingInvalid {
         "the version the write amends is not one OBJECT_VERSION_ID, quoted in If-Match or written in the path of a DELETE, so its controlling CDR cannot be found (§12.4, N23)"
     )]
     Malformed,
-    /// The body is no canonical-JSON `CONTRIBUTION`, a version's
-    /// `preceding_version_uid` included, so the versions it amends are
-    /// unknown.
+    /// The body is no `CONTRIBUTION` in the JSON representation its
+    /// `Content-Type` selects, a version's `preceding_version_uid` included,
+    /// so the versions it amends are unknown.
     #[error(
-        "the body is not a CONTRIBUTION in canonical JSON whose every preceding_version_uid is one OBJECT_VERSION_ID, so the versions it amends, and their controlling CDR, are unknown (ITS-REST 1.1.0 contribution_create; §12.4, N23)"
+        "the body is not a CONTRIBUTION in the representation its Content-Type selects, canonical JSON or a canonical envelope whose data is FLAT or STRUCTURED, whose every preceding_version_uid is one OBJECT_VERSION_ID, so the versions it amends, and their controlling CDR, are unknown (ITS-REST 1.1.0 contribution_create; §12.4, N23)"
     )]
     Contribution,
+    /// The body is a `CONTRIBUTION` in canonical XML, which the gateway does
+    /// not read, so the versions it amends are unknown.
+    #[error(
+        "a CONTRIBUTION in canonical XML is not read, so the versions it amends, and their controlling CDR, are unknown; send it in canonical JSON or a Simplified Format (ITS-REST 1.1.0 contribution_create; §12.4, N23)"
+    )]
+    XmlContribution,
 }
 
 /// Where a versioned write names a version it amends, which a refusal points
@@ -250,7 +275,7 @@ pub fn controlled(
     let versions = match preceding {
         Preceding::IfMatch => vec![(Named::IfMatch, if_match(headers)?)],
         Preceding::Path => vec![(Named::Path, in_path(matched)?)],
-        Preceding::Contribution => amended(body)?,
+        Preceding::Contribution => amended(declared::content_type(matched, headers), body)?,
     };
     versions
         .iter()
@@ -296,22 +321,45 @@ fn controlled_at(
 /// `preceding_version_uid` (ITS-REST 1.1.0 EHR API, `contribution_create`,
 /// `NewContribution`), with its place in the body.
 ///
+/// `media` is the listed media type the request's `Content-Type` names, and
+/// `None` when it sends none, which reads as canonical JSON. Under a
+/// Simplified Format the envelope stays canonical and only each version's
+/// `data` is FLAT or STRUCTURED (ITS-REST 1.1.0 `contribution_create`), so
+/// the envelope is read as in canonical JSON and `data` is left to the node.
 /// A version with no `preceding_version_uid` creates an object, and amends
 /// none.
-fn amended(body: &[u8]) -> Result<Vec<(Named, ObjectVersionId)>, PrecedingInvalid> {
+fn amended(
+    media: Option<&str>,
+    body: &[u8],
+) -> Result<Vec<(Named, ObjectVersionId)>, PrecedingInvalid> {
     let text = std::str::from_utf8(body).map_err(|_not_utf8| PrecedingInvalid::Contribution)?;
-    // TODO(#297): a CONTRIBUTION in XML or a Simplified Format is refused 400 until openehr-its reads it.
-    let contribution: NewContribution =
+    let preceding = match media {
+        None | Some(CANONICAL_JSON) => preceding_of::<Versionable>(text)?,
+        Some(SIMPLIFIED_FLAT | SIMPLIFIED_STRUCTURED) => preceding_of::<IgnoredAny>(text)?,
+        // TODO(#308): a CONTRIBUTION in canonical XML is refused 400 until openehr-its reads it.
+        Some(CANONICAL_XML) => return Err(PrecedingInvalid::XmlContribution),
+        Some(_unlisted) => return Err(PrecedingInvalid::Contribution),
+    };
+    Ok(preceding
+        .into_iter()
+        .zip(1_usize..)
+        .filter_map(|(version, position)| {
+            version.map(|preceding| (Named::Contribution(position), preceding))
+        })
+        .collect())
+}
+
+/// Each version's `preceding_version_uid` of the `CONTRIBUTION` `text`, in
+/// body order, read with each version's `data` as a `T`.
+fn preceding_of<T: DeserializeOwned>(
+    text: &str,
+) -> Result<Vec<Option<ObjectVersionId>>, PrecedingInvalid> {
+    let contribution: NewContribution<T> =
         json::from_canonical_json(text).map_err(|_quoted| PrecedingInvalid::Contribution)?;
     Ok(contribution
         .versions
         .into_iter()
-        .zip(1_usize..)
-        .filter_map(|(version, position)| {
-            version
-                .preceding_version_uid
-                .map(|preceding| (Named::Contribution(position), preceding))
-        })
+        .map(|version| version.preceding_version_uid)
         .collect())
 }
 

@@ -63,10 +63,10 @@ fn composition() -> String {
     )
 }
 
-/// One version of a `CONTRIBUTION`: an amendment of `preceding` where given,
-/// a creation otherwise, written with its `preceding_version_uid` as the
-/// literal `uid` JSON.
-fn version_with(preceding: Option<&str>) -> String {
+/// One version of a `CONTRIBUTION` committing `data`: an amendment of
+/// `preceding` where given, a creation otherwise, written with its
+/// `preceding_version_uid` as the literal `uid` JSON.
+fn version_carrying(preceding: Option<&str>, data: &str) -> String {
     let (preceding, change) = match preceding {
         Some(uid) => (
             format!("\"preceding_version_uid\":{uid},\n     "),
@@ -75,21 +75,61 @@ fn version_with(preceding: Option<&str>) -> String {
         None => (String::new(), coded("creation", "249")),
     };
     format!(
-        "{{ {preceding}\"lifecycle_state\":{},\n     \"commit_audit\":{},\n     \"data\":{} }}",
+        "{{ {preceding}\"lifecycle_state\":{},\n     \"commit_audit\":{},\n     \"data\":{data} }}",
         coded("complete", "532"),
         audit(&change),
-        composition()
     )
+}
+
+/// One version of a `CONTRIBUTION` committing a canonical `COMPOSITION`,
+/// written with its `preceding_version_uid` as the literal `uid` JSON.
+fn version_with(preceding: Option<&str>) -> String {
+    version_carrying(preceding, &composition())
+}
+
+/// The `OBJECT_VERSION_ID` `uid` in canonical JSON.
+fn object_version_id(uid: &str) -> String {
+    format!(r#"{{"_type":"OBJECT_VERSION_ID","value":"{uid}"}}"#)
 }
 
 /// One version of a `CONTRIBUTION`, amending the version `preceding` names
 /// where given.
 fn version(preceding: Option<&str>) -> String {
-    version_with(
-        preceding
-            .map(|uid| format!(r#"{{"_type":"OBJECT_VERSION_ID","value":"{uid}"}}"#))
-            .as_deref(),
-    )
+    version_with(preceding.map(object_version_id).as_deref())
+}
+
+/// The Simplified Formats media types, each with the `data` of one version
+/// in that format, whose composer carries the patient's identifier
+/// (ITS-REST 1.1.0 overview, §Simplified Formats).
+fn simplified() -> [(&'static str, String); 2] {
+    [
+        (
+            "application/openehr.wt.flat+json",
+            format!(
+                "{{ \"report/composer|name\": \"Synthetic clinician é\",\n       \"report/composer|id\": \"{PATIENT}\" }}"
+            ),
+        ),
+        (
+            "application/openehr.wt.structured+json",
+            format!(
+                "{{ \"report\": {{ \"composer\": [ {{ \"|name\": \"Synthetic clinician é\",\n       \"|id\": \"{PATIENT}\" }} ] }} }}"
+            ),
+        ),
+    ]
+}
+
+/// One version of a `CONTRIBUTION` whose `data` is `data`, in a Simplified
+/// Format, amending the version `preceding` names where given.
+fn simplified_version(preceding: Option<&str>, data: &str) -> String {
+    version_carrying(preceding.map(object_version_id).as_deref(), data)
+}
+
+/// `sent` posted to `at` as `media`, naming `endpoint` as its target.
+fn posted(at: &str, media: &str, endpoint: &str, sent: &str) -> Result<Request<Body>, http::Error> {
+    Request::post(at)
+        .header(header::CONTENT_TYPE, media)
+        .header("openEHR-federation-endpoint", endpoint)
+        .body(Body::from(sent.to_owned()))
 }
 
 /// A `CONTRIBUTION` committing `versions` (ITS-REST 1.1.0 `NewContribution`).
@@ -296,34 +336,208 @@ async fn a_body_that_is_no_contribution_naming_object_version_ids_is_a_400_befor
     Ok(())
 }
 
-/// A `CONTRIBUTION` whose versions' `data` is in a Simplified Format keeps a
-/// canonical envelope (ITS-REST 1.1.0 `contribution_create`), but the
-/// published `NewContribution` reads canonical `data` only, so the gateway
-/// cannot read the versions it amends, and refuses a write it cannot
-/// unambiguously route (§12.4, N23).
+/// Asserts that the node `server` was sent `sent` once, byte-identical, as
+/// `media`, and nothing composed by the gateway carries the patient's
+/// identifier.
+async fn sent_once_as(server: &MockServer, media: &str, sent: &str) -> TestResult {
+    let requests = server.received_requests().await.ok_or("recording is on")?;
+    let [received] = requests.as_slice() else {
+        return Err(format!("{media}: one request, not {}", requests.len()).into());
+    };
+    assert_eq!(
+        sent.as_bytes(),
+        received.body.as_slice(),
+        "{media}: the body lands byte-identical, the patient's identifier in its data included (N22, track 10)"
+    );
+    assert_eq!(
+        Some(media),
+        received
+            .headers
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        "{media}: the node is told the representation the client declared"
+    );
+    let composed = outside_bodies(server).await?;
+    assert!(!composed.contains(PATIENT), "{media}: N33: {composed}");
+    Ok(())
+}
+
+/// A `CONTRIBUTION` whose versions' `data` is FLAT or STRUCTURED keeps a
+/// canonical envelope (ITS-REST 1.1.0 `contribution_create`), so one of
+/// creations alone routes by its path `ehr_id` as a canonical one does.
 // conformance: CP-15
 #[tokio::test]
-async fn a_contribution_the_gateway_cannot_read_is_never_forwarded() -> TestResult {
-    let flat = format!(
-        "{{\"versions\":[{{\"lifecycle_state\":{},\"commit_audit\":{},\"data\":{{\"report/composer|name\":\"Synthetic clinician\"}}}}],\"audit\":{}}}",
-        coded("complete", "532"),
-        audit(&coded("creation", "249")),
-        audit(&coded("creation", "249"))
+async fn a_simplified_contribution_of_creations_alone_routes_by_its_path_ehr_id() -> TestResult {
+    for (media, data) in simplified() {
+        let at = contribution_of(EHR_B);
+        let a = MockServer::start().await;
+        let b = MockServer::start().await;
+        mount(&b, "POST", at.clone(), ResponseTemplate::new(201)).await;
+        let dir = tempfile::tempdir()?;
+        let sent = contribution(&[
+            simplified_version(None, &data),
+            simplified_version(None, &data),
+        ]);
+        let request = posted(&at, media, ENDPOINT_B, &sent)?;
+        let (status, acting, text) = answer(over(dir.path(), &a, &b, "")?, request).await?;
+        assert_eq!(StatusCode::CREATED, status, "{media}: {text}");
+        assert_eq!(Some(ENDPOINT_B), acting.as_deref(), "{media}");
+        assert_eq!(vec![("POST".to_owned(), at)], asked(&b).await?, "{media}");
+        sent_once_as(&b, media, &sent).await?;
+        assert!(asked(&a).await?.is_empty(), "{media}");
+    }
+    Ok(())
+}
+
+/// A FLAT or STRUCTURED `CONTRIBUTION` whose amended versions the path node
+/// controls reaches it once, as a canonical one does (§12.4, §12a.1
+/// `route-write`, N23).
+// conformance: CP-15 CP-26
+#[tokio::test]
+async fn a_simplified_contribution_its_path_node_controls_reaches_it_once_byte_identical()
+-> TestResult {
+    for (media, data) in simplified() {
+        let at = contribution_of(EHR_A);
+        let a = MockServer::start().await;
+        mount(&a, "POST", at.clone(), ResponseTemplate::new(201)).await;
+        let b = MockServer::start().await;
+        let dir = tempfile::tempdir()?;
+        let sent = contribution(&[
+            simplified_version(Some(CREATED_AT_A), &data),
+            simplified_version(None, &data),
+        ]);
+        let request = posted(&at, media, ENDPOINT_A, &sent)?;
+        let (status, acting, text) = answer(over(dir.path(), &a, &b, "")?, request).await?;
+        assert_eq!(StatusCode::CREATED, status, "{media}: {text}");
+        assert_eq!(Some(ENDPOINT_A), acting.as_deref(), "{media}: N31");
+        assert_eq!(
+            vec![("POST".to_owned(), at)],
+            asked(&a).await?,
+            "{media}: the controlling CDR is sent the CONTRIBUTION once (§12.4, N23)"
+        );
+        sent_once_as(&a, media, &sent).await?;
+        assert!(
+            asked(&b).await?.is_empty(),
+            "{media}: no other node is contacted"
+        );
+    }
+    Ok(())
+}
+
+/// A FLAT or STRUCTURED `CONTRIBUTION` with one amended version another
+/// member controls is refused as a canonical one is (§10.3
+/// `copy-write-reject`, §12a.1 `route-write`, N23).
+// conformance: CP-15
+#[tokio::test]
+async fn a_simplified_contribution_with_one_version_another_member_controls_is_409() -> TestResult {
+    for (media, data) in simplified() {
+        let a = MockServer::start().await;
+        let b = MockServer::start().await;
+        let dir = tempfile::tempdir()?;
+        let sent = contribution(&[
+            simplified_version(Some(CREATED_AT_A), &data),
+            simplified_version(Some(CREATED_AT_B), &data),
+        ]);
+        let request = posted(&contribution_of(EHR_A), media, ENDPOINT_A, &sent)?;
+        let text = refused_at_neither(
+            over(dir.path(), &a, &b, "")?,
+            request,
+            (StatusCode::CONFLICT, "controlling-system-unreachable"),
+            (&a, &b),
+        )
+        .await
+        .map_err(|failed| format!("{media}: {failed}"))?;
+        assert!(
+            text.contains("cdr-b.example.org")
+                && text.contains("node-b")
+                && text.contains(ENDPOINT_B),
+            "{media}: the error identifies the controlling system (§10.3): {text}"
+        );
+        assert!(
+            !text.contains(EHR_A) && !text.contains("3f2e1d0c") && !text.contains(PATIENT),
+            "{media}: no value of the request is quoted: {text}"
+        );
+    }
+    Ok(())
+}
+
+/// A body declared FLAT that is no `CONTRIBUTION` with a canonical envelope
+/// names no versions the gateway can route by, so it is refused before any
+/// node (§12.4, N23).
+// conformance: CP-15
+#[tokio::test]
+async fn a_malformed_flat_contribution_is_a_400_before_any_node() -> TestResult {
+    let [(flat, data), _] = simplified();
+    let cases: Vec<(&str, String)> = vec![
+        (
+            "a preceding_version_uid that is no OBJECT_VERSION_ID",
+            contribution(&[simplified_version(Some("not a version"), &data)]),
+        ),
+        (
+            "a preceding_version_uid that is a string",
+            contribution(&[version_carrying(
+                Some(&format!("\"{CREATED_AT_A}\"")),
+                &data,
+            )]),
+        ),
+        ("FLAT data with no envelope", data.clone()),
+        (
+            "an envelope with no audit",
+            format!(
+                "{{\"versions\":[{}]}}",
+                simplified_version(Some(CREATED_AT_A), &data)
+            ),
+        ),
+        ("no JSON", "versions: none".to_owned()),
+        ("no body", String::new()),
+    ];
+    for (case, sent) in cases {
+        let a = MockServer::start().await;
+        let b = MockServer::start().await;
+        let dir = tempfile::tempdir()?;
+        let request = posted(&contribution_of(EHR_A), flat, ENDPOINT_A, &sent)?;
+        let text = refused_at_neither(
+            over(dir.path(), &a, &b, "")?,
+            request,
+            (StatusCode::BAD_REQUEST, "preceding-version-invalid"),
+            (&a, &b),
+        )
+        .await
+        .map_err(|failed| format!("{case}: {failed}"))?;
+        assert!(
+            !text.contains("not a version") && !text.contains(PATIENT),
+            "{case}: the body is not quoted: {text}"
+        );
+    }
+    Ok(())
+}
+
+/// A `CONTRIBUTION` in canonical XML is one the gateway does not read, so it
+/// cannot name the versions it amends, and refuses a write it cannot
+/// unambiguously route (§12.4, N23).
+// TODO(#308): this refusal holds until openehr-its reads a CONTRIBUTION in canonical XML.
+// conformance: CP-15
+#[tokio::test]
+async fn a_contribution_in_canonical_xml_is_never_forwarded() -> TestResult {
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<contribution xmlns=\"http://schemas.openehr.org/v1\">\n  <versions>\n    <preceding_version_uid><value>{CREATED_AT_A}</value></preceding_version_uid>\n  </versions>\n</contribution>\n"
     );
     let a = MockServer::start().await;
     let b = MockServer::start().await;
     let dir = tempfile::tempdir()?;
-    let request = Request::post(contribution_of(EHR_A))
-        .header(header::CONTENT_TYPE, "application/openehr.wt.flat+json")
-        .header("openEHR-federation-endpoint", ENDPOINT_A)
-        .body(Body::from(flat))?;
-    refused_at_neither(
+    let request = posted(&contribution_of(EHR_A), "application/xml", ENDPOINT_A, &xml)?;
+    let text = refused_at_neither(
         over(dir.path(), &a, &b, "")?,
         request,
         (StatusCode::BAD_REQUEST, "preceding-version-invalid"),
         (&a, &b),
     )
     .await?;
+    assert!(
+        text.contains("canonical XML"),
+        "the refusal says which form it does not read: {text}"
+    );
+    assert!(!text.contains("8849182c"), "the body is not quoted: {text}");
     Ok(())
 }
 
