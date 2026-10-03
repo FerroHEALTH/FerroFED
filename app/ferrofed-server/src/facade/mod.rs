@@ -111,7 +111,7 @@ pub async fn query_aql(
         outbound,
         started,
     };
-    answer(federation, arrived, Submitted::Body(&body)).await
+    answer(&federation, arrived, Submitted::Body(&body)).await
 }
 
 /// One federated query request, as it arrived.

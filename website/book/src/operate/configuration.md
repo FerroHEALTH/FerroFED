@@ -59,11 +59,11 @@ user = "ferrofed"
 password_file = "/run/secrets/clinic-b-password"
 ```
 
-Every secret has a `_file` sibling, read once at boot and trimmed, so a secret
+Every secret has a `_file` sibling, read at boot and trimmed, so a secret
 can come from a mounted file and never sit in the configuration or the
-environment. The credentials are read and checked at boot, and the node
-client of an endpoint with a credentials section sends them on every request
-to that endpoint.
+environment. The credentials are read and checked at boot and again on each
+[reload](#reloading-the-registry), and the node client of an endpoint with a
+credentials section sends them on every request to that endpoint.
 
 ## The registry document
 
@@ -447,6 +447,73 @@ A value reads as TOML syntax when it is one (`9`, `true`) and as the string it
 is otherwise. An override that names no key, or a key the file does not
 define, is refused like any other unknown key.
 
+## Reloading the registry
+
+Send `SIGHUP` to a running `ferrofed serve` to apply a changed registry
+document without a restart:
+
+```text
+kill -HUP <pid of ferrofed>
+docker kill --signal HUP <container>
+```
+
+The gateway reads the configuration again from where it read it at start:
+the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
+`FERROFED__` environment over it. It checks the result exactly as `serve` and
+`config check` do at start, secrets and `_file` siblings included. The
+gateway reloads on the signal only and never watches the file, so write the
+new document completely, then send the signal.
+
+Four sections take effect on a reload:
+
+| Reloaded | Needs a restart |
+|---|---|
+| `[registry]`: the document's contents, its path and its `format` | `profile` |
+| `[credentials]` | `[server]` |
+| `[dev]` | `[telemetry]` |
+| `[pixm]` | `[federation]` and `[stored_queries]` |
+
+A valid configuration replaces the running registry at once. A request that
+started before the reload finishes on the registry it started with, nodes
+and credentials included; every request that starts after it uses the new
+one. An added endpoint gets its node client and its credentials, and a
+removed endpoint is never called again. What the gateway has learned stays,
+held to the new document:
+
+- a learned `creating_system_id` route the new document maps to another node
+  is withdrawn and raises a `RegisteredCreatingSystemConflict` incident (see
+  [Integrity incidents](#integrity-incidents)), and stays withdrawn;
+- every `ehr_id` index entry and resolution binding that names a member the
+  document no longer holds is dropped. An entry that names such a member
+  beside others is dropped whole, so a collision is never narrowed to the
+  member that remains; a later read asks every member again.
+
+The reload logs `registry reloaded` at `INFO` with `members` (how many the
+registry now holds), `endpoints_added`, `endpoints_removed`,
+`members_removed`, `incidents`, `index_dropped` and `bindings_dropped`. A
+changed setting outside the four sections is logged at `WARN` under
+`settings`, by key (`server.listen`, `federation.binding_ttl_ms`), and keeps
+its running value until a restart; the rest of the reload applies.
+
+A configuration that does not load is refused, and the running registry
+stays. The gateway logs `registry reload refused` at `ERROR` with the failure
+`class`, the `config` file and the registry `document`, and never a value of
+either file, a credential or a header. Run `ferrofed config check` against
+the same file to see the fault. The classes are:
+
+| `class` | The fault |
+|---|---|
+| `configuration` | the configuration file does not read or resolve |
+| `registry-unreadable` | the registry document cannot be read |
+| `registry-invalid` | the registry document breaks a registry rule |
+| `credentials` | a `[credentials]` section names an endpoint the document does not declare |
+| `dev-cross-reference`, `pixm`, `resolvers` | the resolver refuses the new members, or both resolvers are set |
+| `node-clients`, `http-client`, `self-description` | the node clients or the `OPTIONS {base}/` body cannot be built |
+| `registry-presence` | `registry.document` was set or unset, which takes a restart |
+
+Reloading is built on Unix only; the container image is Linux. The gateway
+has no metrics endpoint yet, so the log lines are the record of each reload.
+
 ## The HTTP surface
 
 | Route | Answers |
@@ -600,6 +667,7 @@ reach the log today:
 | `EhrIdCollision` | A request addressed an `ehr_id` that two members or more claim, and was refused `409` (`ehr-id-collision`). One line per refused request. | `ehr_id`, `detection` (`binding`, `index` or `ask-all`: the routing step that found the claimants), `claimants` (their endpoint ids) |
 | `IndexInsertCollision` | The `ehr_id` index learned an `ehr_id` it already held at another member: the index-insert alarm of §12b.2. One line when the second claimant is learned, and one more for each further claimant. | `ehr_id`, `claimants` (the member node ids) |
 | `LearnedCreatingSystemConflict` | A `creating_system_id` the registry document does not map was seen at two nodes, so the route learned for it is withdrawn and neither node is routed on (§12.2, N21). One line when the route is withdrawn. | `creating_system_id`, `first_endpoint_id`, `second_endpoint_id` |
+| `RegisteredCreatingSystemConflict` | A route learned for a `creating_system_id` names another node than the registry document maps it to, seen in an answer or found when the registry is reloaded (see [Reloading the registry](#reloading-the-registry)). The learned route is withdrawn and the document's mapping is used. One line when the route is withdrawn. | `creating_system_id`, `node_id` (the node the document maps it to), `endpoint_id` (the endpoint the learned route named) |
 
 The `ehr_id` is node-local and names no patient (§5.2), so the line names it
 when it is a bare UUID. Any other form could be a patient identifier a client

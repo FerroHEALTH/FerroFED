@@ -77,6 +77,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   body. The command exits `0` when no condition failed, `1` when one did.
   The book's new page "Admitting a node" states what the check proves and
   what it cannot.
+- The registry reloads on `SIGHUP` (#282). `ferrofed serve` reads its
+  configuration again from where it started and checks it as at boot; a
+  valid one replaces the registry for every request that starts after it,
+  while a request in flight finishes on the registry it took. The
+  `[registry]`, `[credentials]`, `[dev]` and `[pixm]` sections take effect: an
+  added endpoint gets its node client and credentials, and a removed one is
+  never called again. A learned `creating_system_id` route the new document
+  maps elsewhere is withdrawn with a `RegisteredCreatingSystemConflict`
+  incident, and `ehr_id` index entries and resolution bindings naming a
+  member that left are dropped. A change to any other setting is logged as
+  needing a restart while the rest applies. A configuration that does not
+  load is refused, the running registry stays, and the `ERROR` line names
+  the failure class and the files, never their content. `config check` is
+  unchanged. There is no file watch.
 - Versioned writes reach only their controlling CDR, and a new EHR only an
   explicit target (#65; §12.4, §12a.1, §10.3, N23, N41, CP-15). An update of
   a composition, the `EHR_STATUS` or the directory, a directory delete (each

@@ -187,6 +187,44 @@ fn an_unscoped_identity_change_drops_every_binding() {
 }
 
 #[test]
+fn a_departed_member_takes_every_binding_that_names_it() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let one = SessionKey::new("session-1");
+    let two = SessionKey::new("session-2");
+    let now = Instant::now();
+    bindings.record(
+        &one,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_B)),
+        ],
+    );
+    bindings.record(
+        &two,
+        now,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-b"), &ehr(EHR_A)),
+        ],
+    );
+    let departed = std::collections::BTreeSet::from([node("node-b")]);
+    assert_eq!(2, bindings.forget_members(&departed));
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&one, now, &ehr(EHR_A)),
+        "a binding naming only a remaining member stays"
+    );
+    assert_eq!(Bound::None, bindings.lookup(&one, now, &ehr(EHR_B)));
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&two, now, &ehr(EHR_A)),
+        "a collision is dropped whole, never narrowed to node-a (N42)"
+    );
+    assert_eq!(0, bindings.forget_members(&departed), "nothing is left");
+}
+
+#[test]
 fn an_identity_change_naming_no_bound_ehr_id_drops_nothing() {
     let bindings = ResolutionBindings::new(Duration::from_secs(60));
     let session = SessionKey::new("session-1");

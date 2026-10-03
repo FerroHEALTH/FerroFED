@@ -203,6 +203,33 @@ impl EhrIndex {
         learning
     }
 
+    /// Forgets every `ehr_id` held at a member of `departed`, and returns how
+    /// many it forgot.
+    ///
+    /// A registry reload calls it with the members that left the
+    /// federation. An entry naming a departed member is forgotten whole,
+    /// with the members it also names: a collision is never narrowed to its
+    /// remaining claimant (§12.5.2, N42), so a later read asks every member
+    /// again and finds a collision that still stands.
+    pub fn forget_members(&self, departed: &BTreeSet<NodeId>) -> usize {
+        if departed.is_empty() {
+            return 0;
+        }
+        let mut held = self.lock();
+        let gone: Vec<(EhrId, u64)> = held
+            .entries
+            .iter()
+            .filter(|(_, entry)| !entry.owners.is_disjoint(departed))
+            .map(|(ehr_id, entry)| (ehr_id.clone(), entry.used))
+            .collect();
+        for (ehr_id, used) in &gone {
+            held.entries.remove(ehr_id);
+            held.recency.remove(used);
+        }
+        drop(held);
+        gone.len()
+    }
+
     /// How many `ehr_id`s the index holds.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -322,6 +349,37 @@ mod tests {
             "the entry used longest ago went"
         );
         assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_1)));
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_3)));
+    }
+
+    #[test]
+    fn a_departed_member_takes_its_entries_and_every_collision_it_claims() {
+        let index = EhrIndex::new(NonZeroUsize::new(3).unwrap());
+        index.learn(&ehr(EHR_1), &node("node-a"));
+        index.learn(&ehr(EHR_2), &node("node-b"));
+        index.learn(&ehr(EHR_3), &node("node-b"));
+        index.learn(&ehr(EHR_3), &node("node-a"));
+        let departed = std::collections::BTreeSet::from([node("node-b")]);
+        assert_eq!(2, index.forget_members(&departed));
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_1)));
+        assert_eq!(Indexed::None, index.lookup(&ehr(EHR_2)));
+        assert_eq!(
+            Indexed::None,
+            index.lookup(&ehr(EHR_3)),
+            "a collision is forgotten whole, never narrowed to node-a (N42)"
+        );
+        assert_eq!(0, index.forget_members(&departed), "nothing is left");
+    }
+
+    #[test]
+    fn a_forgotten_entry_leaves_the_recency_order_whole() {
+        let index = EhrIndex::new(NonZeroUsize::new(2).unwrap());
+        index.learn(&ehr(EHR_1), &node("node-b"));
+        index.learn(&ehr(EHR_2), &node("node-a"));
+        index.forget_members(&std::collections::BTreeSet::from([node("node-b")]));
+        index.learn(&ehr(EHR_3), &node("node-a"));
+        assert_eq!(2, index.len(), "the freed place is used, nothing evicted");
+        assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_2)));
         assert_eq!(Indexed::One(node("node-a")), index.lookup(&ehr(EHR_3)));
     }
 
