@@ -67,7 +67,7 @@ fn gateway(
     let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
     let overall_ms = per_node_ms.saturating_mul(2);
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {per_node_ms}\noverall_timeout_ms = {overall_ms}\nnode_selection = \"ask-all\"\nbest_effort = {best_effort}\n\n{rows}"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {per_node_ms}\noverall_timeout_ms = {overall_ms}\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = {best_effort}\n\n{rows}"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;

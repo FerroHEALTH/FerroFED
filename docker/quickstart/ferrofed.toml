@@ -14,6 +14,8 @@
 document = "/etc/ferrofed/registry.toml"
 
 [federation]
+# The federation's own identifier, which OPTIONS / names (§7a.2, N30).
+id = "quickstart"
 per_node_timeout_ms = 10000
 overall_timeout_ms = 25000
 # No localizer is configured, so every member's cross-reference decides where

@@ -20,6 +20,7 @@ mod facade;
 mod http;
 mod hygiene;
 mod no_destination;
+mod options;
 mod order;
 mod outbound;
 mod outbound_id;

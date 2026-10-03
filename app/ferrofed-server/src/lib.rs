@@ -210,6 +210,8 @@ fn chain(error: &dyn std::error::Error) -> String {
 /// Builds the HTTP application over `state`, with the shared middleware.
 ///
 /// `GET /` answers a small JSON document naming the product and its version,
+/// `OPTIONS /` the federation's self-description
+/// ([`facade::options::options_root`]),
 /// `GET /health` answers `200` while the process is up, and
 /// `GET /health/readiness` answers `200` when every registered indicator is up
 /// and `503` with each indicator's state otherwise. `POST /v1/query/aql` answers
@@ -219,7 +221,7 @@ fn chain(error: &dyn std::error::Error) -> String {
 /// `404`.
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let routes = Router::new()
-        .route("/", get(root))
+        .route("/", get(root).options(facade::options::options_root))
         .route("/health", get(liveness))
         .route("/health/readiness", get(readiness))
         .route(
@@ -281,8 +283,10 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 ///
 /// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface: a
 /// request to an EHR resource under a path `ehr_id` is routed to one node
-/// ([`facade::route`]; §7a.1), and every other path answers `501` (§7a.1,
-/// N32), because a `404` would claim the resource does not exist. Every other
+/// ([`facade::route`]; §7a.1), `OPTIONS` names the methods the gateway
+/// serves for the path ([`facade::options::allow`]; §7a.2), and every other
+/// path answers `501` (§7a.1, N32), because a `404` would claim the resource
+/// does not exist. Every other
 /// path answers `404`. No answer of the gateway's own echoes the path.
 ///
 /// A routed request reaches its node under the request's [`OutboundId`],
@@ -304,6 +308,9 @@ async fn unrouted(
     else {
         return error::fixed(error::Code::NotFound, request_id);
     };
+    if method == Method::OPTIONS {
+        return facade::options::allow(state.federation(), path, request_id);
+    }
     let arrived = facade::route::Arrived {
         method: &method,
         path,

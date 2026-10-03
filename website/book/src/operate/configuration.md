@@ -160,6 +160,20 @@ the resource, when:
 Reading the members from an mCSD directory itself, and keeping them in step,
 follows with its own issue (#86).
 
+## Federation id
+
+A gateway that federates names its federation, and refuses to boot without
+the name:
+
+```toml
+[federation]
+id = "rso-example"
+```
+
+The id is `federation.id` of the `OPTIONS {base}/` self-description (§7a.2,
+N30). It has no default, because it is the deployment's to choose, and an
+empty id is refused. It is named in the startup log line.
+
 ## Node selection
 
 A gateway that federates (`registry.document` is set) declares how an

@@ -257,6 +257,44 @@ follow-up to the gateway with the version uid instead.
 
 ## Self-description
 
-`OPTIONS {base}/` returns the gateway's self-description, including what it
-refuses rather than approximates, validated against the specification's
-`options-root.schema.json` (§7a.2).
+`OPTIONS {base}/` returns what the gateway does and which members stand
+behind it, as JSON that validates against the specification's
+`options-root.schema.json` (§7a.2, N30). It needs no patient identifier and
+carries none. Client authentication is not built yet, so it answers any
+caller; once it is, the body answers only an authenticated one (§7a.2, §13). Every value comes from the running configuration, so the body
+says what the gateway does, not what it was once meant to do:
+
+| Member | What FerroFED declares |
+|---|---|
+| `federation.id` | the deployment's `federation.id` |
+| `federation.spec_version` | `0.9`, the `major.minor` of the pinned specification release |
+| `aql.fan_out` | `true`: an undirected query asks every member (§4.3, N4) |
+| `dedup` | `default: "none"`, `modes: ["none", "version-identity"]`, and the request header `openEHR-federation-dedup` (§10, N15) |
+| `timeout` | the configured `per_node_ms` and `overall_ms`, with `policy: "abandon-and-mark"`: a node past its budget is abandoned and reported `time-out` (§11.5, N38) |
+| `completeness` | `default: "all-or-nothing"`; `best_effort` and, when it is offered, `opt_in` naming `openEHR-federation-completeness: partial` (§11.4, N37) |
+| `paging` | `offset_strategy: "bounded"` with the configured `max_window`, or `"reject"`; never `"cursor"`, because no cursor is offered (§11.6.2, N39) |
+| `aggregates.decomposable` | the configured functions, of `COUNT`, `SUM`, `MIN`, `MAX` and `AVG`; an empty list means none (§11.6.3) |
+| `definition` | all three `false`: no template fan-out upload, no stored-query registry, no definition fan-out (N43, N44) |
+| `localization.on_failure` | `"closed"`: the gateway never widens to ask-all when a localizer fails (§14.1) |
+| `its_rest` | `query` federated, `ehr` routed to the one node that owns the `ehr_id` (§12.5.1), `definition` and `demographic` unsupported (`501`) |
+| `endpoints[]` | every registry endpoint with its `id`, its managing `organisation`, its `status` (`active`, or `suspended` for one the operator took out of service), its `node_id` and `system_id`, and the node's `product` and `version` where the registry holds them |
+
+What is absent is absent on purpose:
+
+- No targeting mechanism and no patient-resolution carrier. Both forms of
+  each are mandatory at every gateway, so there is nothing to choose
+  (§7a.2, N33, N35).
+- No asynchronous queries. The schema has no member for them, and the gateway
+  does not offer them (§11.7).
+- No `auth.jwks_uri`. The gateway publishes no JWKS yet, and the schema says
+  a gateway with none configured omits the key (§13.1).
+- No latency. The gateway keeps no latency statistic per member.
+- `paging.max_window` is FerroFED's own member inside the open `paging`
+  object: the specification names no member for the bound of the `bounded`
+  strategy.
+
+`OPTIONS` on a path under `{base}/v1/` answers `204` with the methods served
+there in `Allow`: `POST, OPTIONS` for `/v1/query/aql`, and the ITS-REST
+methods of the resource for an EHR resource under a path `ehr_id`, such as
+`GET, PUT, OPTIONS` for `/v1/ehr/{ehr_id}`. The gateway answers it without
+asking a node. A path the gateway does not serve answers `501`.

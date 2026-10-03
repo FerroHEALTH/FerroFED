@@ -81,7 +81,7 @@ fn gateway(
     let document = toml::Value::String(document.display().to_string());
     let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {per_node_ms}\noverall_timeout_ms = {overall_ms}\nnode_selection = \"ask-all\"\nbest_effort = true\n\n{rows}"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {per_node_ms}\noverall_timeout_ms = {overall_ms}\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = true\n\n{rows}"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
@@ -466,7 +466,7 @@ fn configured(
     let document = toml::Value::String(document.display().to_string());
     let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
     let text = format!(
-        "profile = \"development\"\n\n[server]\n{server}\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\n{federation}\n\n{rows}"
+        "profile = \"development\"\n\n[server]\n{server}\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{federation}\n\n{rows}"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;

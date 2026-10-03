@@ -170,7 +170,7 @@ fn config_check_refuses_a_creating_system_mapping_to_an_undeclared_endpoint()
     let path = toml::Value::String(document.path().display().to_string());
     let toml = format!(
         "[server]\nlisten = \"127.0.0.1:1\"\n\n[registry]\ndocument = {path}\n\n\
-         [federation]\nnode_selection = \"ask-all\"\n"
+         [federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
     let output = binary(&["config", "check"], &toml)?;
     assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
