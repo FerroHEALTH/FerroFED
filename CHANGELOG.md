@@ -565,6 +565,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   identifier in a date-time parameter, an `Accept` parameter and a path
   uid. `ferrofed-engine` adds the `declared` module, which takes `mime` for
   the media types, and `ForwardError::Value`.
+- The `Debug` output of the configuration no longer prints an inline
+  credential (#364). An inline `bearer_token` or `password` of a
+  `[credentials]` section or of a PIX Manager was a plain string, so any
+  `{:?}` of the configuration, in a log line, a panic message or a test
+  failure, showed it in clear, and a PIX Manager URL or a registry endpoint
+  URL showed the user name and password of its userinfo. Every credential
+  is now held in one of two types of the new `ferrofed_registry::secret`
+  module: a `Secret`, which `Debug`, `Display` and `Serialize` render as
+  `***`, or a `SecretUrl`, which they render with the userinfo replaced by
+  `***`. A `_file` sibling resolves into the same type, so the resolved
+  settings, the composed PIXm configuration and the registry document carry
+  them too. What reaches a node or a PIX Manager is unchanged.
+  `ferrofed-identity` adds `PixmConfigError::BaseUrl` for a Manager base URL
+  that does not parse.
 
 ## [0.0.6] - 2026-10-03
 

@@ -8,7 +8,6 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::error::{BasicFault, Error};
 use ferrofed_server::config::settings::Scheme;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
-use secrecy::ExposeSecret;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 
@@ -70,7 +69,7 @@ fn a_secret_is_read_from_its_file_sibling_and_trimmed() -> Result<(), Box<dyn St
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     match settings.credentials.get(&EndpointId::new("hospital-a")?) {
-        Some(Scheme::Bearer(token)) => assert_eq!("synthetic-from-file", token.expose_secret()),
+        Some(Scheme::Bearer(token)) => assert_eq!("synthetic-from-file", token.expose()),
         other => return Err(format!("a bearer scheme: {other:?}").into()),
     }
     Ok(())

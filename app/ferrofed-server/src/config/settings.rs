@@ -12,10 +12,10 @@ use std::time::Duration;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
-use secrecy::SecretString;
 
 use crate::base_path::BasePath;
 use crate::config::stored_queries::Store;
@@ -61,8 +61,8 @@ pub struct PixmSettings {
 /// One PIX Manager, resolved.
 #[derive(Debug)]
 pub struct PixManagerSettings {
-    /// The Manager's FHIR base URL.
-    pub url: url::Url,
+    /// The Manager's FHIR base URL, already known to parse.
+    pub url: SecretUrl,
     /// Each member it resolves, mapped to that member's `ehr_id` domain.
     pub members: BTreeMap<String, String>,
     /// How the gateway authenticates to it.
@@ -144,18 +144,18 @@ pub struct MetricsSettings {
 
 /// The authentication scheme a credentials section resolves to.
 ///
-/// `Debug` redacts every secret, because [`SecretString`] does.
+/// `Debug` redacts every secret, because [`Secret`] does.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Scheme {
     /// An RFC 6750 bearer token.
-    Bearer(SecretString),
+    Bearer(Secret),
     /// RFC 7617 basic authentication.
     Basic {
         /// The user name, which is not a secret.
         user: String,
         /// The password.
-        password: SecretString,
+        password: Secret,
     },
 }
 

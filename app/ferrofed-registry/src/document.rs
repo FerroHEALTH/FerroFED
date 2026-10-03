@@ -13,6 +13,7 @@
 use serde::Deserialize;
 
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
+use crate::secret::SecretUrl;
 use crate::snapshot::{ConnectionType, EndpointStatus};
 
 /// The federation's members as a document declares them.
@@ -80,8 +81,9 @@ pub struct EndpointDoc {
     pub id: EndpointId,
     /// The node the endpoint belongs to.
     pub node: NodeId,
-    /// The endpoint's ITS-REST base URL, as written.
-    pub url: String,
+    /// The endpoint's ITS-REST base URL, as written; the snapshot refuses
+    /// one that carries userinfo.
+    pub url: SecretUrl,
     /// The endpoint's connection type (N19, §15.2).
     pub connection_type: ConnectionType,
     /// The one organisation that manages the endpoint (N20).

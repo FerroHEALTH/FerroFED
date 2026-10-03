@@ -212,7 +212,7 @@ fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
     let mut managers = Vec::with_capacity(pixm.manager.len());
     for (index, manager) in pixm.manager.iter().enumerate() {
         let key = format!("pixm.manager[{index}]");
-        let url = url::Url::parse(&manager.url).map_err(|source| Error::Url {
+        url::Url::parse(manager.url.expose()).map_err(|source| Error::Url {
             key: format!("{key}.url"),
             source,
         })?;
@@ -222,7 +222,7 @@ fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
             .map(|section| resolve_credentials(&format!("{key}.credentials"), section))
             .transpose()?;
         managers.push(PixManagerSettings {
-            url,
+            url: manager.url.clone(),
             members: manager.members.clone(),
             credentials,
         });

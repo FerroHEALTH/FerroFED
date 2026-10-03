@@ -84,6 +84,7 @@ use ferrofed_registry::document::{
 };
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
+use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus, RegistrySnapshot};
 use ihe_iti::mcsd::directory::{Directory, DirectoryEndpoint, Resolution};
 
@@ -271,7 +272,7 @@ fn member(
         endpoint: EndpointDoc {
             id,
             node,
-            url: url.to_owned(),
+            url: SecretUrl::new(url),
             connection_type,
             managing_organisation,
             status,
