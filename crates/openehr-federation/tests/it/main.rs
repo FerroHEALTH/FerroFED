@@ -3,7 +3,8 @@
 
 //! Integration tests: the wire types held to the vendored schemas and
 //! examples of the Federation Tier with AQL specification, in three layers
-//! (validation, drift, and the rules no schema states), and the crate's
+//! (validation, drift, and the rules no schema states), the result-set
+//! schema's ITS-REST subset against the ITS-REST document, and the crate's
 //! pinned specification version against the pin matrix; with the `aql`
 //! feature, the §7.1 rewrite; with the `merge` feature, the §11.6.1 merge.
 //!
@@ -26,6 +27,8 @@ mod drift;
 mod envelope;
 #[cfg(test)]
 mod examples;
+#[cfg(test)]
+mod its_rest;
 #[cfg(test)]
 mod merge;
 #[cfg(test)]

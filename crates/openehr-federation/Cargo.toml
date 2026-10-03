@@ -5,7 +5,7 @@ name = "openehr-federation"
 description = "The openEHR Federation Tier with AQL specification: the federation wire types held to the published schemas, the AQL rewrite with identifier hygiene (feature `aql`) and the federated result merge (feature `merge`)"
 # The crate line starts above the 0.0.0 name reservation on crates.io (no
 # specification governs this: our own design).
-version = "0.0.33"
+version = "0.0.34"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -47,6 +47,7 @@ url.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 proptest.workspace = true
+serde-saphyr.workspace = true
 
 [lints]
 workspace = true
