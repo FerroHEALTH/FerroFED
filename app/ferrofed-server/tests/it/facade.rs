@@ -147,6 +147,9 @@ pub(crate) fn crossref(rows: &[(&str, &str)]) -> String {
     })
 }
 
+/// The per-node timeout [`gateway`] configures, in milliseconds.
+pub(crate) const PER_NODE_TIMEOUT_MS: u64 = 2_000;
+
 /// The gateway configured by the top-level keys `top` and the tables
 /// `tables`, with the registry document `registry` written into `dir`.
 pub(crate) fn gateway(
@@ -155,11 +158,23 @@ pub(crate) fn gateway(
     top: &str,
     tables: &str,
 ) -> Result<Router, Box<dyn Error>> {
+    gateway_within(dir, registry, top, tables, (PER_NODE_TIMEOUT_MS, 3_000))
+}
+
+/// The gateway of [`gateway`], with a per-node timeout of `per_node_ms` and
+/// an overall budget of `overall_ms`.
+pub(crate) fn gateway_within(
+    dir: &Path,
+    registry: &str,
+    top: &str,
+    tables: &str,
+    (per_node_ms, overall_ms): (u64, u64),
+) -> Result<Router, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{tables}"
+        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {per_node_ms}\noverall_timeout_ms = {overall_ms}\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{tables}"
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;

@@ -17,8 +17,8 @@ use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 
 use super::{
-    TestResult, budget, clients, federation, json, node, plan_for, result_set, rows_text, run,
-    statuses, validated_body,
+    SLACK_MS, TestResult, budget, clients, federation, json, node, plan_for, result_set, rows_text,
+    run, statuses, validated_body,
 };
 
 #[tokio::test]
@@ -246,10 +246,11 @@ async fn a_not_resolved_node_beside_an_active_one_keeps_the_rows() -> TestResult
 // conformance: CP-31
 #[tokio::test]
 async fn a_node_answering_after_the_overall_budget_contributes_nothing() -> TestResult {
+    let overall_ms = SLACK_MS;
     let fast = node(json(200, &result_set(&["f1::cdr-0.example.org::1"]))).await;
     let late = node(
         json(200, &result_set(&["l1::cdr-1.example.org::1"]))
-            .set_delay(Duration::from_millis(1_500)),
+            .set_delay(Duration::from_millis(overall_ms + 2 * SLACK_MS)),
     )
     .await;
     let snapshot = federation(&[("node-f-pub", &fast.uri()), ("node-l-pub", &late.uri())])?;
@@ -257,13 +258,13 @@ async fn a_node_answering_after_the_overall_budget_contributes_nothing() -> Test
     let answer = run(
         &snapshot,
         plan_for(&["node-f-pub", "node-l-pub"])?,
-        budget(10_000, 400)?,
+        budget(10_000, overall_ms)?,
     )
     .await?;
     let waited = started.elapsed();
     assert!(
-        waited < Duration::from_millis(1_200),
-        "the fan-out waited {waited:?}, past the overall budget"
+        waited < Duration::from_millis(overall_ms + SLACK_MS),
+        "the fan-out waited {waited:?}, past the overall budget of {overall_ms} ms"
     );
     assert_eq!(
         statuses(&answer),
@@ -284,7 +285,7 @@ async fn a_node_answering_after_the_overall_budget_contributes_nothing() -> Test
         .latency_ms()
         .ok_or("the abandoned node carries no latency")?;
     assert!(
-        (300..1_200).contains(&latency),
+        (overall_ms - 100..overall_ms + SLACK_MS).contains(&latency),
         "the abandoned node's latency is {latency} ms"
     );
     assert!(

@@ -38,6 +38,14 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
+/// The time a loaded host may add to any wait a test makes, in milliseconds.
+///
+/// A bound on elapsed time sits this far past what the code under test
+/// should take, and a node meant to be abandoned stays silent at least this
+/// far past the bound, so neither side of the claim depends on how busy the
+/// machine is.
+const SLACK_MS: u64 = 3_000;
+
 /// A synthetic node query, scoped to an `ehr_id` under no real system.
 const NODE_AQL: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'";
 

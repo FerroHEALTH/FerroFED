@@ -14,8 +14,8 @@ use openehr_federation::status::EndpointStatus;
 use wiremock::MockServer;
 
 use super::{
-    TestResult, budget, clients, federation, json, node, plan_for, result_set, rows_text, statuses,
-    validated_body,
+    SLACK_MS, TestResult, budget, clients, federation, json, node, plan_for, result_set, rows_text,
+    statuses, validated_body,
 };
 
 /// A node answering one row after `delay_ms`.
@@ -44,31 +44,34 @@ fn reported(answer: &FederatedAnswer) -> Result<(u64, u64), Box<dyn std::error::
 // conformance: CP-31
 #[tokio::test]
 async fn time_spent_before_the_dispatch_comes_out_of_the_overall_budget() -> TestResult {
-    let slow = slow_node("s1::cdr-0.example.org::1", 3_000).await;
+    let spent_ms = SLACK_MS;
+    let overall_ms = spent_ms + 300;
+    let slow = slow_node("s1::cdr-0.example.org::1", overall_ms + SLACK_MS).await;
     let snapshot = federation(&[("node-s-pub", &slow.uri())])?;
     let arrived = Instant::now()
-        .checked_sub(Duration::from_millis(600))
-        .ok_or("the clock cannot go back 600 ms")?;
+        .checked_sub(Duration::from_millis(spent_ms))
+        .ok_or("the clock cannot go back by the time spent")?;
     let called = Instant::now();
     let answer = fan_out_within(
         &clients(&snapshot)?,
         &snapshot,
         plan_for(&["node-s-pub"])?,
-        budget(10_000, 1_000)?,
+        budget(10_000, overall_ms)?,
         arrived,
         None,
     )
     .await?;
     let waited = called.elapsed();
     assert!(
-        waited < Duration::from_millis(900),
-        "the fan-out waited {waited:?}, though 600 ms of the 1000 ms budget was spent before it"
+        waited < Duration::from_millis(overall_ms),
+        "the fan-out waited {waited:?}, though {spent_ms} ms of the {overall_ms} ms budget was \
+         spent before it"
     );
     assert_eq!(
         statuses(&answer),
         BTreeMap::from([("node-s-pub".to_owned(), EndpointStatus::TimeOut)])
     );
-    assert_eq!(reported(&answer)?, (1_000, 1_000));
+    assert_eq!(reported(&answer)?, (overall_ms, overall_ms));
     validated_body(answer)?;
     Ok(())
 }
@@ -76,23 +79,25 @@ async fn time_spent_before_the_dispatch_comes_out_of_the_overall_budget() -> Tes
 // conformance: CP-31
 #[tokio::test]
 async fn a_shortened_budget_abandons_a_node_the_configured_one_would_wait_for() -> TestResult {
-    let late = slow_node("l1::cdr-0.example.org::1", 900).await;
+    let wait_ms = 300;
+    let late_ms = wait_ms + 2 * SLACK_MS;
+    let late = slow_node("l1::cdr-0.example.org::1", late_ms).await;
     let snapshot = federation(&[("node-l-pub", &late.uri())])?;
-    let configured = budget(2_000, 5_000)?;
+    let configured = budget(late_ms + 1_000, late_ms + 2_000)?;
     let started = Instant::now();
     let answer = fan_out_within(
         &clients(&snapshot)?,
         &snapshot,
         plan_for(&["node-l-pub"])?,
-        configured.shortened_to(Duration::from_millis(300)),
+        configured.shortened_to(Duration::from_millis(wait_ms)),
         started,
         None,
     )
     .await?;
     let waited = started.elapsed();
     assert!(
-        waited < Duration::from_millis(800),
-        "the fan-out waited {waited:?}, past the client's 300 ms"
+        waited < Duration::from_millis(wait_ms + SLACK_MS),
+        "the fan-out waited {waited:?}, past the client's {wait_ms} ms"
     );
     assert_eq!(answer.status(), StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(
@@ -111,21 +116,22 @@ async fn a_shortened_budget_abandons_a_node_the_configured_one_would_wait_for() 
 // conformance: CP-31
 #[tokio::test]
 async fn a_longer_wait_leaves_the_configured_budget_in_force() -> TestResult {
-    let late = slow_node("l1::cdr-0.example.org::1", 3_000).await;
+    let overall_ms = 400;
+    let late = slow_node("l1::cdr-0.example.org::1", overall_ms + 2 * SLACK_MS).await;
     let snapshot = federation(&[("node-l-pub", &late.uri())])?;
     let started = Instant::now();
     let answer = fan_out_within(
         &clients(&snapshot)?,
         &snapshot,
         plan_for(&["node-l-pub"])?,
-        budget(300, 400)?.shortened_to(Duration::from_secs(60)),
+        budget(300, overall_ms)?.shortened_to(Duration::from_secs(60)),
         started,
         None,
     )
     .await?;
     let waited = started.elapsed();
     assert!(
-        waited < Duration::from_millis(1_200),
+        waited < Duration::from_millis(overall_ms + SLACK_MS),
         "the fan-out waited {waited:?}: a client wait extended the budget"
     );
     assert_eq!(
@@ -177,8 +183,9 @@ async fn a_zero_wait_asks_no_node_and_reports_every_node_time_out() -> TestResul
 #[tokio::test]
 async fn abandoning_one_node_never_aborts_another_in_flight() -> TestResult {
     let failing = node(json(500, r#"{"message":"synthetic failure"}"#)).await;
+    let per_node_ms = SLACK_MS;
     let steady = slow_node("m1::cdr-1.example.org::1", 250).await;
-    let stuck = slow_node("s1::cdr-2.example.org::1", 3_000).await;
+    let stuck = slow_node("s1::cdr-2.example.org::1", per_node_ms + 2 * SLACK_MS).await;
     let snapshot = federation(&[
         ("node-e-pub", &failing.uri()),
         ("node-m-pub", &steady.uri()),
@@ -189,14 +196,14 @@ async fn abandoning_one_node_never_aborts_another_in_flight() -> TestResult {
         &clients(&snapshot)?,
         &snapshot,
         plan_for(&["node-e-pub", "node-m-pub", "node-s-pub"])?.completing(Completion::BestEffort),
-        budget(600, 3_000)?,
+        budget(per_node_ms, per_node_ms + 2 * SLACK_MS)?,
         started,
         None,
     )
     .await?;
     let waited = started.elapsed();
     assert!(
-        waited < Duration::from_millis(1_500),
+        waited < Duration::from_millis(per_node_ms + SLACK_MS),
         "the fan-out waited {waited:?}, past the per-node timeout of the stuck node"
     );
     assert_eq!(answer.status(), StatusCode::OK);

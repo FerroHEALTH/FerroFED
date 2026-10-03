@@ -19,6 +19,14 @@ use std::time::Duration;
 use tower::ServiceExt as _;
 use tracing_subscriber::fmt::MakeWriter;
 
+/// The time a loaded host may add to any wait a test makes.
+///
+/// A bound on elapsed time sits this far past what the code under test
+/// should take, and a node meant to be abandoned stays silent at least this
+/// far past the bound, so neither side of the claim depends on how busy the
+/// machine is.
+pub(crate) const SLACK: Duration = Duration::from_secs(3);
+
 /// A `tracing` writer that keeps every line in memory.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Logs(Arc<Mutex<Vec<u8>>>);

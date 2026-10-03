@@ -24,8 +24,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::declared::composition_at;
-use crate::facade::{EHR_A, PATIENT, gateway, registry, wire};
-use crate::support::{error_body, send};
+use crate::facade::{EHR_A, PATIENT, PER_NODE_TIMEOUT_MS, gateway, registry, wire};
+use crate::support::{SLACK, error_body, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -693,7 +693,7 @@ async fn a_node_that_does_not_answer_in_time_is_a_504_naming_the_endpoint() -> T
     let a = node(
         "GET",
         format!("/v1/ehr/{EHR_A}"),
-        ResponseTemplate::new(200).set_delay(Duration::from_millis(2600)),
+        ResponseTemplate::new(200).set_delay(Duration::from_millis(PER_NODE_TIMEOUT_MS) + SLACK),
     )
     .await;
     let (status, code, headers) = failed_at(&a.uri()).await?;
