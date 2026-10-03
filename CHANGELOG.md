@@ -171,9 +171,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   the registry maps to that node, by the rule above, or the request is
   refused `409 controlling-system-unreachable` and no node is sent it. A
   `CONTRIBUTION` of creations alone routes as before. A body that is no
-  canonical-JSON `CONTRIBUTION`, a `preceding_version_uid` that is no
-  `OBJECT_VERSION_ID`, an XML body, or Simplified Formats `data`, is refused
-  `400 preceding-version-invalid`. The node receives the body byte for byte.
+  `CONTRIBUTION` in the representation its `Content-Type` selects, a
+  `preceding_version_uid` that is no `OBJECT_VERSION_ID`, or an XML body, is
+  refused `400 preceding-version-invalid`. The node receives the body byte
+  for byte.
+- A `CONTRIBUTION` whose versions' `data` is FLAT or STRUCTURED is routed
+  as a canonical-JSON one is (#297; §12.4, §12a.1, N23, CP-15). Under
+  `Content-Type: application/openehr.wt.flat+json` or
+  `application/openehr.wt.structured+json` the envelope stays canonical
+  (ITS-REST 1.1.0 `contribution_create`), and the gateway reads it with the
+  generic `NewContribution` of `openehr-its` 0.0.80 for each version's
+  `preceding_version_uid`, leaving `data` to the node. A `CONTRIBUTION` of
+  creations alone goes by its path `ehr_id`, one whose every amended version
+  the path node controls reaches that node, and one with a version another
+  member controls, or no member is known to, is
+  `409 controlling-system-unreachable` and no node is sent it. The node
+  receives the body byte for byte, under the declared media type. A
+  `CONTRIBUTION` in canonical XML is still refused
+  `400 preceding-version-invalid` (#308), now with a message that names the
+  XML form.
 - Integrity incidents for an `ehr_id` two members claim (#63; §12.5.2,
   §12b.2, N42, CP-33). A request whose `ehr_id` the session's resolution
   bindings, the `ehr_id` index or the ask-all probe finds at two members or

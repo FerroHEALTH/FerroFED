@@ -438,11 +438,24 @@ it. A version with no `preceding_version_uid` creates an object, so a
 `CONTRIBUTION` of creations alone goes where its path `ehr_id` routes it. The
 node receives the body byte for byte as you sent it.
 
-The gateway reads a `CONTRIBUTION` in canonical JSON only. A body it cannot
-read as one, a `preceding_version_uid` that is no `OBJECT_VERSION_ID`, an
-XML body, or versions whose `data` is in a Simplified Format, is a `400`
+The gateway reads a `CONTRIBUTION` in the representation its `Content-Type`
+selects:
+
+- `application/json`, or no `Content-Type`: canonical JSON;
+- `application/openehr.wt.flat+json` or
+  `application/openehr.wt.structured+json`: a canonical envelope whose
+  versions' `data` is FLAT or STRUCTURED (ITS-REST 1.1.0
+  `contribution_create`). The gateway reads the envelope for each
+  `preceding_version_uid` and leaves `data` to the node, so such a
+  `CONTRIBUTION` routes exactly as a canonical one does, and the node
+  receives it under the media type you declared.
+
+A body it cannot read as the representation you declared, or a
+`preceding_version_uid` that is no `OBJECT_VERSION_ID`, is a `400`
 (`preceding-version-invalid`), because the gateway cannot tell which
-versions it amends (§12.4), and nothing is sent.
+versions it amends (§12.4), and nothing is sent. A `CONTRIBUTION` in
+canonical XML (`application/xml`) is not read yet, so it is the same `400`
+(#308).
 
 The same rule covers a write against a row that de-duplication kept
 (§10.3, N36). Suppose node A created a composition and node B holds an

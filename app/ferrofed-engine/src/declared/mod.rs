@@ -90,6 +90,20 @@ pub fn fitting(operation: &RouteMatch, headers: &HeaderMap) -> HeaderMap {
     composed(operation, headers, Strictness::LeaveOut).unwrap_or_default()
 }
 
+/// The listed media type of `operation` that the `Content-Type` of `headers`
+/// names, as [`held`] composes it for the node.
+///
+/// Returns `None` when the request sends no `Content-Type`, when it names no
+/// listed media type, or when the operation declares no `Content-Type`.
+#[must_use]
+pub fn content_type(operation: &RouteMatch, headers: &HeaderMap) -> Option<&'static str> {
+    let ParamKind::Enum(accepted) = operation.header_param(CONTENT_TYPE.as_str())?.kind else {
+        return None;
+    };
+    let lines: Vec<&HeaderValue> = headers.get_all(CONTENT_TYPE).iter().collect();
+    negotiate::content_type(accepted, &lines)
+}
+
 /// What a header that does not fit its operation comes to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Strictness {
@@ -506,6 +520,47 @@ mod tests {
             let shown = refused.map_or_else(|refusal| refusal.to_string(), |_| String::new());
             assert!(!shown.contains("4711"), "{shown}");
         }
+    }
+
+    #[test]
+    fn the_content_type_names_the_listed_media_type_held_composes() {
+        let contribution = operation(&Method::POST, &format!("{EHR}/contribution"));
+        for (value, listed) in [
+            ("application/json", Some("application/json")),
+            ("Application/XML", Some("application/xml")),
+            (
+                "application/openehr.wt.flat+json; charset=UTF-8",
+                Some("application/openehr.wt.flat+json"),
+            ),
+            (
+                "application/openehr.wt.structured+json",
+                Some("application/openehr.wt.structured+json"),
+            ),
+            ("text/plain", None),
+        ] {
+            let lines = [("content-type", value)];
+            assert_eq!(
+                listed,
+                super::content_type(&contribution, &headers(&lines)),
+                "{value}"
+            );
+            if listed.is_some() {
+                assert_eq!(
+                    listed.map(str::to_owned),
+                    sent(&contribution, &lines, "content-type"),
+                    "{value}"
+                );
+            }
+        }
+        assert_eq!(None, super::content_type(&contribution, &HeaderMap::new()));
+        assert_eq!(
+            None,
+            super::content_type(
+                &directory(),
+                &headers(&[("content-type", "application/json")])
+            ),
+            "GET directory declares no Content-Type"
+        );
     }
 
     // conformance: CP-26
