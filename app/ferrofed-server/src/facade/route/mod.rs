@@ -44,10 +44,10 @@
 //! two nodes' answers are combined (§7a.1, §12.6, §12.7, N43).
 //!
 //! A request under `{base}/v1/demographic/` is never federated (§7a.1, N32).
-//! It answers `501` unless the deployment names one member endpoint for the
-//! area (`federation.demographic_endpoint`); then it goes to that endpoint
-//! alone by the same path, and a targeting header may name that endpoint and
-//! no other (§12.6, §8.4.1).
+//! It answers `501` unless the deployment declares one member endpoint for
+//! the area (`federation.demographic_endpoint`); then a request whose
+//! targeting header names that endpoint goes to it by the same path, and one
+//! naming no endpoint or another is refused (§12.4, §12.6, §8.4.1, N23).
 
 use std::time::{Duration, Instant};
 
@@ -120,7 +120,7 @@ pub struct Arrived<'a> {
 ///
 /// A request in the single-node EHR area, the creation of an EHR and a
 /// request in the definition area are each routed to one node, and so is a
-/// DEMOGRAPHIC request where the deployment names its endpoint; every other
+/// DEMOGRAPHIC request naming the endpoint the deployment declared; every other
 /// ITS-REST path answers `501`, because the gateway does not expose that
 /// area (§7a.1, N32), and so does every path when no federation is
 /// configured. The stored-query registry, where offered, answers its own
@@ -148,8 +148,8 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
         }
         Lookup::Matched(matched) if in_demographic_area(&matched) => {
             match federation.demographic_endpoint() {
-                Some(configured) => {
-                    let chooser = Chooser::Configured(configured);
+                Some(declared) => {
+                    let chooser = Chooser::Declared(declared);
                     named(federation, arrived, &matched, DEMOGRAPHIC_GROUP, chooser).await
                 }
                 None => error::fixed(Code::NotImplemented, arrived.request_id),

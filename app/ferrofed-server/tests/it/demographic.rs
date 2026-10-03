@@ -4,9 +4,10 @@
 //! The DEMOGRAPHIC area against two mock nodes (§7a.1, §12.6, N32, N31, N33;
 //! CP-25): it is never federated. By default every request under
 //! `{base}/v1/demographic/` answers `501` and no node is asked. With
-//! `federation.demographic_endpoint` set, every request goes to that one
-//! endpoint, byte-identical, and is answered as that node answered; a
-//! targeting header may name that endpoint and no other. `OPTIONS {base}/`
+//! `federation.demographic_endpoint` set, a request whose targeting header
+//! names that endpoint goes to it alone, byte-identical, and is answered as
+//! that node answered; one naming no endpoint or another is refused, because
+//! the request chooses its node (§12.4, §12.6, N23). `OPTIONS {base}/`
 //! declares whichever behaviour runs, and the behaviour matches it. Every
 //! assertion on what a node received reads the node's own capture (§16,
 //! track 10).
@@ -38,7 +39,7 @@ const ENDPOINT: &str = "openEHR-federation-endpoint";
 const ENDPOINT_A: &str = "node-a-pub";
 const ENDPOINT_B: &str = "node-b-pub";
 
-/// The `[federation]` line that routes the area to node B.
+/// The `[federation]` line that declares node B for the area.
 const ROUTED_TO_B: &str = "demographic_endpoint = \"node-b-pub\"";
 
 /// The PERSON collection (ITS-REST Demographic API).
@@ -78,9 +79,14 @@ fn read(target: Option<&str>) -> Result<Request<Body>, http::Error> {
         .body(Body::empty())
 }
 
-/// The creation of [`person`].
-fn create() -> Result<Request<Body>, http::Error> {
-    Request::post(PERSONS)
+/// The creation of [`person`], naming `target` in the endpoint header when
+/// given.
+fn create(target: Option<&str>) -> Result<Request<Body>, http::Error> {
+    let mut request = Request::post(PERSONS);
+    if let Some(target) = target {
+        request = request.header(ENDPOINT, target);
+    }
+    request
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(person()))
 }
@@ -117,7 +123,7 @@ async fn by_default_a_read_and_a_create_are_501_and_no_node_is_asked() -> TestRe
     let b = holder(&person()).await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), (&a, &b), "")?;
-    for request in [read(None)?, read(Some(ENDPOINT_B))?, create()?] {
+    for request in [read(None)?, read(Some(ENDPOINT_B))?, create(None)?] {
         let (status, _, body) = exchange(app.clone(), request).await?;
         let text = String::from_utf8(body)?;
         assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "§7a.1, N32: {text}");
@@ -135,7 +141,7 @@ async fn with_the_setting_a_party_read_reaches_only_that_node_byte_identical() -
     let a = MockServer::start().await;
     let b = holder(&answered).await;
     let dir = tempfile::tempdir()?;
-    let mut request = read(None)?;
+    let mut request = read(Some(ENDPOINT_B))?;
     let fields = request.headers_mut();
     fields.insert("x-patient", PATIENT.parse()?);
     fields.insert(
@@ -188,8 +194,11 @@ async fn with_the_setting_a_create_body_is_forwarded_unchanged() -> TestResult {
     .await;
     let a = MockServer::start().await;
     let dir = tempfile::tempdir()?;
-    let (status, headers, _) =
-        exchange(over(dir.path(), (&a, &b), ROUTED_TO_B)?, create()?).await?;
+    let (status, headers, _) = exchange(
+        over(dir.path(), (&a, &b), ROUTED_TO_B)?,
+        create(Some(ENDPOINT_B))?,
+    )
+    .await?;
     assert_eq!(StatusCode::CREATED, status);
     acted(&headers, ENDPOINT_B, "cdr-b.example.org");
     assert_eq!(
@@ -212,7 +221,7 @@ async fn with_the_setting_a_create_body_is_forwarded_unchanged() -> TestResult {
 
 // conformance: CP-25
 #[tokio::test]
-async fn a_header_naming_the_configured_endpoint_is_accepted() -> TestResult {
+async fn a_header_naming_the_declared_endpoint_is_accepted() -> TestResult {
     let a = MockServer::start().await;
     let b = holder(&person()).await;
     let dir = tempfile::tempdir()?;
@@ -221,6 +230,25 @@ async fn a_header_naming_the_configured_endpoint_is_accepted() -> TestResult {
     assert_eq!(StatusCode::OK, status);
     acted(&headers, ENDPOINT_B, "cdr-b.example.org");
     assert!(asked(&a).await?.is_empty(), "node A is never asked");
+    Ok(())
+}
+
+// conformance: CP-25
+#[tokio::test]
+async fn with_the_setting_a_request_naming_no_endpoint_is_refused_and_no_node_is_asked()
+-> TestResult {
+    for request in [read(None)?, create(None)?] {
+        let a = MockServer::start().await;
+        let b = holder(&person()).await;
+        let dir = tempfile::tempdir()?;
+        refused_at_neither(
+            over(dir.path(), (&a, &b), ROUTED_TO_B)?,
+            request,
+            "target-required",
+            (&a, &b),
+        )
+        .await?;
+    }
     Ok(())
 }
 
@@ -298,8 +326,11 @@ async fn options_declares_each_mode_and_the_behaviour_matches_it() -> TestResult
         "§7a.1, §12.6, N32: {routed}"
     );
     assert!(!routed.starts_with("federated"), "N32: {routed}");
-    let (status, headers, _) =
-        exchange(over(dir.path(), (&a, &b), ROUTED_TO_B)?, read(None)?).await?;
+    let (status, headers, _) = exchange(
+        over(dir.path(), (&a, &b), ROUTED_TO_B)?,
+        read(Some(ENDPOINT_B))?,
+    )
+    .await?;
     assert_eq!(StatusCode::OK, status, "as declared: {routed}");
     acted(&headers, ENDPOINT_B, "cdr-b.example.org");
     assert!(asked(&a).await?.is_empty(), "node A is never asked");

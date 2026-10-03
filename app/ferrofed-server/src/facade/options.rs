@@ -217,7 +217,7 @@ fn paging(strategy: OffsetStrategy) -> Result<Paging, DescribeError> {
 /// (§12.7) and every other definition request routed to one explicitly
 /// chosen node (§12.6, N43). The DEMOGRAPHIC area is never federated: it is
 /// `501`, or routed to the one `demographic` endpoint the deployment
-/// configured (§7a.1, §12.6, N32).
+/// declared, which each request names (§7a.1, §12.4, §12.6, N23, N32).
 fn its_rest(
     registry: bool,
     demographic: Option<&ferrofed_registry::id::EndpointId>,
@@ -248,8 +248,9 @@ fn its_rest(
         definition: definition.to_owned(),
         demographic: DemographicSupport::new(match demographic {
             Some(endpoint) => format!(
-                "routed-single-node: a request under {{base}}/v1/demographic/ goes to the \
-                 configured endpoint {endpoint} alone, never federated"
+                "routed-single-node: a request under {{base}}/v1/demographic/ names the \
+                 declared endpoint {endpoint} in the targeting headers and goes to it \
+                 alone, never federated"
             ),
             None => "unsupported: 501".to_owned(),
         })?,
