@@ -36,7 +36,7 @@ use crate::declared::composition_at;
 use crate::facade::{
     EHR_A, PATIENT, body, dev_gateway, gateway, gateway_within, patient_query, post, registry, wire,
 };
-use crate::support::{SLACK, error_body, send};
+use crate::support::{SLACK, error_body, millis, send};
 
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
@@ -598,11 +598,6 @@ async fn a_member_that_does_not_answer_the_probe_in_time_leaves_the_owner_unknow
         "the one claimant is not read"
     );
     Ok(())
-}
-
-/// `duration` in whole milliseconds, as the configuration spells it.
-fn millis(duration: Duration) -> Result<u64, Box<dyn Error>> {
-    Ok(u64::try_from(duration.as_millis())?)
 }
 
 // conformance: CP-33

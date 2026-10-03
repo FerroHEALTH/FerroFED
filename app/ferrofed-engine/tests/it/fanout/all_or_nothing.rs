@@ -74,14 +74,15 @@ async fn every_node_active_is_a_200_with_the_rows_in_endpoint_order() -> TestRes
 async fn one_node_timing_out_fails_the_query_504_with_the_envelope() -> TestResult {
     let a = node(json(200, &result_set(&["a1::cdr-0.example.org::1"]))).await;
     let slow = node(
-        json(200, &result_set(&["s1::cdr-1.example.org::1"])).set_delay(Duration::from_secs(3)),
+        json(200, &result_set(&["s1::cdr-1.example.org::1"]))
+            .set_delay(Duration::from_millis(2 * SLACK_MS)),
     )
     .await;
     let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-s-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,
         plan_for(&["node-a-pub", "node-s-pub"])?,
-        budget(300, 2_000)?,
+        budget(SLACK_MS, 2 * SLACK_MS)?,
     )
     .await?;
     assert_eq!(answer.status(), StatusCode::GATEWAY_TIMEOUT);
@@ -145,13 +146,14 @@ async fn one_node_error_fails_the_query_424_with_the_nodes_error() -> TestResult
 // conformance: CP-30
 #[tokio::test]
 async fn a_time_out_and_a_node_error_together_are_a_504() -> TestResult {
-    let slow = node(json(200, &result_set(&[])).set_delay(Duration::from_secs(3))).await;
+    let slow =
+        node(json(200, &result_set(&[])).set_delay(Duration::from_millis(2 * SLACK_MS))).await;
     let broken = node(json(503, "")).await;
     let snapshot = federation(&[("node-e-pub", &broken.uri()), ("node-s-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,
         plan_for(&["node-e-pub", "node-s-pub"])?,
-        budget(300, 2_000)?,
+        budget(SLACK_MS, 2 * SLACK_MS)?,
     )
     .await?;
     assert_eq!(answer.verdict(), Verdict::Unanswered);

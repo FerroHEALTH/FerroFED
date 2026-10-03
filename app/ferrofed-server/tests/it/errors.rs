@@ -39,7 +39,7 @@ use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, node_answering,
     node_failing, patient_query, received, registry, schema, settings_with_room, statuses,
 };
-use crate::support::{self, ErrorBody, call};
+use crate::support::{self, ErrorBody, SLACK, call, millis};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -351,9 +351,9 @@ async fn an_unreachable_node_under_all_or_nothing_is_a_504_carrying_the_envelope
 #[tokio::test]
 async fn a_node_timing_out_under_all_or_nothing_is_a_504_carrying_the_envelope() -> TestResult {
     let a = node_answering("uid-at-a").await;
-    let b = node_after(Duration::from_secs(5)).await;
+    let b = node_after(SLACK + SLACK).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &b.uri(), 200, true)?;
+    let app = gateway(dir.path(), &a.uri(), &b.uri(), millis(SLACK)?, true)?;
     let (status, text) = call(app, post(body(&patient_query())?, None)?).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, status, "§11.2, N37: {text}");
     let answer = failing_envelope(&text, &patient_query())?;
@@ -391,9 +391,9 @@ async fn a_424_and_a_504_echo_the_clients_q() -> TestResult {
 #[tokio::test]
 async fn a_node_timing_out_under_best_effort_is_a_200_reporting_it() -> TestResult {
     let a = node_answering("uid-at-a").await;
-    let b = node_after(Duration::from_secs(5)).await;
+    let b = node_after(SLACK + SLACK).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &b.uri(), 200, true)?;
+    let app = gateway(dir.path(), &a.uri(), &b.uri(), millis(SLACK)?, true)?;
     let (status, text) = call(app, post(body(&patient_query())?, Some("partial"))?).await?;
     assert_eq!(StatusCode::OK, status, "§11.2, §11.4: {text}");
     schema::validate(&text)?;

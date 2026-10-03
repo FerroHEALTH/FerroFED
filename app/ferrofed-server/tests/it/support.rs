@@ -14,6 +14,7 @@ use openehr_its::rest::generated::common::Error;
 use serde::Deserialize;
 use std::error::Error as StdError;
 use std::io::{self, Write};
+use std::num::TryFromIntError;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 use tower::ServiceExt as _;
@@ -26,6 +27,11 @@ use tracing_subscriber::fmt::MakeWriter;
 /// far past the bound, so neither side of the claim depends on how busy the
 /// machine is.
 pub(crate) const SLACK: Duration = Duration::from_secs(3);
+
+/// Returns `duration` in whole milliseconds, as the configuration spells it.
+pub(crate) fn millis(duration: Duration) -> Result<u64, TryFromIntError> {
+    u64::try_from(duration.as_millis())
+}
 
 /// A `tracing` writer that keeps every line in memory.
 #[derive(Debug, Clone, Default)]

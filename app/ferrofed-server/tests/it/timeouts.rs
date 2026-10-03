@@ -35,7 +35,7 @@ use crate::facade::{
     Answer, EHR_A, EHR_B, body, crossref, node_answering, patient_query, received, registry,
     schema, settings_with_room, statuses,
 };
-use crate::support::send;
+use crate::support::{SLACK, millis, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -47,6 +47,27 @@ const PREFERENCE_APPLIED: &str = "preference-applied";
 
 /// The timeout policy the gateway declares.
 const POLICY: &str = "abandon-and-mark";
+
+/// The client wait a shortening test sends: the slack, so the answering node
+/// always beats it.
+const WAIT: Duration = SLACK;
+
+/// The `Prefer` value asking for [`WAIT`] (RFC 7240 §4.3).
+fn wait_preference() -> String {
+    format!("wait={}", WAIT.as_secs())
+}
+
+/// Node A answering at once and node B silent one slack past [`WAIT`], behind
+/// a configured budget long enough to wait for node B.
+async fn shortened() -> Result<(MockServer, MockServer, tempfile::TempDir, Router), Box<dyn Error>>
+{
+    let a = node_answering("uid-at-a").await;
+    let b = node_after("uid-at-b", WAIT + SLACK).await;
+    let dir = tempfile::tempdir()?;
+    let per_node_ms = millis(WAIT + SLACK)? + 1_000;
+    let app = gateway(dir.path(), &a, &b, per_node_ms, per_node_ms + 1_000)?;
+    Ok((a, b, dir, app))
+}
 
 /// A node answering one row holding `uid` after `delay`.
 async fn node_after(uid: &str, delay: Duration) -> MockServer {
@@ -178,16 +199,14 @@ fn applied(reply: &Reply) -> Option<&str> {
 // conformance: CP-31
 #[tokio::test]
 async fn a_shorter_wait_shortens_the_budget_and_is_reported() -> TestResult {
-    let a = node_answering("uid-at-a").await;
-    let b = node_after("uid-at-b", Duration::from_millis(2_500)).await;
-    let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b, 2_800, 3_000)?;
+    let (_a, _b, _dir, app) = shortened().await?;
+    let wait = wait_preference();
 
-    let reply = timed(app, post(&["wait=1"], false)?).await?;
+    let reply = timed(app, post(&[wait.as_str()], false)?).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, reply.status, "{}", reply.text);
     assert!(
-        reply.took < Duration::from_millis(2_000),
-        "the gateway took {:?} under a 1 s client wait",
+        reply.took < WAIT + SLACK,
+        "the gateway took {:?} under a {WAIT:?} client wait",
         reply.took
     );
     schema::validate(&reply.text)?;
@@ -197,26 +216,20 @@ async fn a_shorter_wait_shortens_the_budget_and_is_reported() -> TestResult {
         statuses(&answer),
         "the node the configured budget would have waited for is abandoned"
     );
-    assert_eq!(budget(1_000, 1_000), reported(&reply.text)?);
-    assert_eq!(Some("wait=1"), applied(&reply));
+    let wait_ms = millis(WAIT)?;
+    assert_eq!(budget(wait_ms, wait_ms), reported(&reply.text)?);
+    assert_eq!(Some(wait.as_str()), applied(&reply));
     Ok(())
 }
 
 // conformance: CP-31
 #[tokio::test]
 async fn a_shorter_wait_under_partial_returns_the_answering_rows() -> TestResult {
-    let a = node_answering("uid-at-a").await;
-    let b = node_after("uid-at-b", Duration::from_millis(2_500)).await;
-    let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b, 2_800, 3_000)?;
+    let (_a, _b, _dir, app) = shortened().await?;
 
-    let reply = timed(app, post(&["wait=1"], true)?).await?;
+    let reply = timed(app, post(&[wait_preference().as_str()], true)?).await?;
     assert_eq!(StatusCode::OK, reply.status, "{}", reply.text);
-    assert!(
-        reply.took < Duration::from_millis(2_000),
-        "{:?}",
-        reply.took
-    );
+    assert!(reply.took < WAIT + SLACK, "{:?}", reply.took);
     schema::validate(&reply.text)?;
     let answer: Answer = serde_json::from_str(&reply.text)?;
     assert!(!answer.meta.federation.complete);
@@ -229,22 +242,24 @@ async fn a_shorter_wait_under_partial_returns_the_answering_rows() -> TestResult
         answer.rows.first().and_then(|row| row.get(1))
     );
     assert_eq!(1, answer.rows.len(), "nothing from the abandoned node");
-    assert_eq!(budget(1_000, 1_000), reported(&reply.text)?);
+    let wait_ms = millis(WAIT)?;
+    assert_eq!(budget(wait_ms, wait_ms), reported(&reply.text)?);
     Ok(())
 }
 
 // conformance: CP-31
 #[tokio::test]
 async fn a_longer_wait_never_extends_the_configured_budget() -> TestResult {
+    let overall = Duration::from_millis(500);
     let a = node_answering("uid-at-a").await;
-    let b = node_after("uid-at-b", Duration::from_secs(3)).await;
+    let b = node_after("uid-at-b", overall + SLACK).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b, 300, 500)?;
+    let app = gateway(dir.path(), &a, &b, 300, millis(overall)?)?;
 
     let reply = timed(app, post(&["wait=60"], false)?).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, reply.status, "{}", reply.text);
     assert!(
-        reply.took < Duration::from_millis(1_500),
+        reply.took < overall + SLACK,
         "the gateway took {:?}: a client wait extended its budget",
         reply.took
     );
@@ -389,15 +404,17 @@ async fn respond_async_is_ignored_and_answered_synchronously() -> TestResult {
 // conformance: CP-31
 #[tokio::test]
 async fn respond_async_never_exempts_a_request_from_the_overall_budget() -> TestResult {
+    let per_node_ms = millis(SLACK)?;
+    let overall = SLACK + Duration::from_millis(500);
     let a = node_answering("uid-at-a").await;
-    let b = node_after("uid-at-b", Duration::from_secs(3)).await;
+    let b = node_after("uid-at-b", overall + SLACK).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b, 300, 500)?;
+    let app = gateway(dir.path(), &a, &b, per_node_ms, millis(overall)?)?;
 
     let reply = timed(app, post(&[RESPOND_ASYNC], false)?).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, reply.status, "{}", reply.text);
     assert!(
-        reply.took < Duration::from_millis(1_500),
+        reply.took < overall + SLACK,
         "§11.7: respond-async does not exempt the gateway from its budget, took {:?}",
         reply.took
     );
@@ -407,20 +424,22 @@ async fn respond_async_never_exempts_a_request_from_the_overall_budget() -> Test
         vec![("node-a-pub", "active"), ("node-b-pub", "time-out")],
         statuses(&answer)
     );
-    assert_eq!(budget(300, 500), reported(&reply.text)?);
+    assert_eq!(
+        budget(per_node_ms, millis(overall)?),
+        reported(&reply.text)?
+    );
     Ok(())
 }
 
 // conformance: CP-31
 #[tokio::test]
 async fn respond_async_beside_a_shorter_wait_still_shortens_the_budget() -> TestResult {
-    let one_header: &[&str] = &["respond-async, wait=1"];
-    let two_headers: &[&str] = &[RESPOND_ASYNC, "wait=1"];
+    let wait = wait_preference();
+    let combined = format!("{RESPOND_ASYNC}, {wait}");
+    let one_header: &[&str] = &[&combined];
+    let two_headers: &[&str] = &[RESPOND_ASYNC, &wait];
     for prefer in [one_header, two_headers] {
-        let a = node_answering("uid-at-a").await;
-        let b = node_after("uid-at-b", Duration::from_millis(2_500)).await;
-        let dir = tempfile::tempdir()?;
-        let app = gateway(dir.path(), &a, &b, 2_800, 3_000)?;
+        let (_a, _b, _dir, app) = shortened().await?;
 
         let reply = timed(app, post(prefer, false)?).await?;
         assert_eq!(
@@ -430,8 +449,8 @@ async fn respond_async_beside_a_shorter_wait_still_shortens_the_budget() -> Test
             reply.text
         );
         assert!(
-            reply.took < Duration::from_millis(2_000),
-            "{prefer:?}: the gateway took {:?} under a 1 s client wait",
+            reply.took < WAIT + SLACK,
+            "{prefer:?}: the gateway took {:?} under a {WAIT:?} client wait",
             reply.took
         );
         assert_answered_synchronously(&reply)?;
@@ -441,9 +460,14 @@ async fn respond_async_beside_a_shorter_wait_still_shortens_the_budget() -> Test
             statuses(&answer),
             "{prefer:?}"
         );
-        assert_eq!(budget(1_000, 1_000), reported(&reply.text)?, "{prefer:?}");
+        let wait_ms = millis(WAIT)?;
         assert_eq!(
-            Some("wait=1"),
+            budget(wait_ms, wait_ms),
+            reported(&reply.text)?,
+            "{prefer:?}"
+        );
+        assert_eq!(
+            Some(wait.as_str()),
             applied(&reply),
             "{prefer:?}: only the wait was applied"
         );
@@ -523,7 +547,7 @@ async fn the_overall_budget_fires_before_the_tightest_accepted_request_timeout()
     let a = node_answering("uid-at-a").await;
     let b = node_after("uid-at-b", Duration::from_secs(10)).await;
     let dir = tempfile::tempdir()?;
-    let overall_ms = 300;
+    let overall_ms = millis(SLACK)?;
     let request_ms = overall_ms + COMBINING_MARGIN_MS + 1;
     let app = configured(
         dir.path(),
