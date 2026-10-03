@@ -104,7 +104,7 @@ the resource, when:
   URL, or a `creating_system_id` that is a member's own.
 
 Reading the members from an mCSD directory itself, and keeping them in step,
-follows with its own issue (#86).
+is planned for v0.0.8 ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)).
 
 ## Federation id
 
@@ -142,10 +142,16 @@ named in the startup log line.
 
 ## Resolution bindings
 
-A query that resolves a patient leaves a binding behind for the client
-session: which member holds which `ehr_id`, so a follow-up on a path `ehr_id`
-reaches the right node. A binding holds no patient identifier, lives in memory
-only, and expires after a lifetime you set:
+The specification lets a query's resolution leave a binding behind for the
+client session: which member holds which `ehr_id`, so a follow-up on a path
+`ehr_id` reaches the right node (§12.5.1 step 2). A session needs a client
+identity, and the gateway authenticates no client yet, so no request has a
+session and no binding is held. The routing step answers once
+client authentication lands, planned for v0.0.8
+([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)); until then the
+`ehr_id` index below carries what a resolution teaches.
+
+The lifetime a binding will have is already a setting, checked at boot:
 
 ```toml
 [federation]
@@ -155,9 +161,9 @@ binding_ttl_ms = 900000   # 15 minutes, the default; 0 is refused
 The lifetime is a correctness bound. An identity merge or split at the
 identity source can make a binding stale, and a binding never outlives its
 lifetime, so set it no longer than you would accept a follow-up being routed
-on a superseded identity. The gateway also has a hook that drops the affected
-bindings the moment a PMIR subscription reports a merge or split. No
-subscription is built yet, so the lifetime is the bound in practice; the
+on a superseded identity. A PMIR subscription that reports a merge or split
+as it happens is planned for v0.0.8
+([#147](https://github.com/FerroHEALTH/FerroFED/issues/147)); the
 specification marks this lifecycle track provisional.
 
 ## The `ehr_id` index

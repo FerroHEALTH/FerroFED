@@ -250,6 +250,16 @@ An aggregate across nodes comes back as one row in your query's columns
 the integer nearest the federation's mean, a tie going to the even one, and
 over reals, a real.
 
+Two more request headers shape the answer
+([Queries and API areas](../operate/queries-and-areas.md)):
+
+- `openEHR-federation-completeness: partial` asks for the rows of the nodes
+  that answered when another node failed, with `200` and
+  `complete: false`, where the deployment offers it; `all`, the default,
+  fails the query instead (§11.4, N37).
+- `Prefer: wait=<seconds>` shortens the time budget for this request, and
+  `Preference-Applied` names it when it did (§11.5, N38; RFC 7240 §4.3).
+
 Read whether an answer is complete from `meta.federation.complete`, never
 from the status code; the gateway emits no FHIR `OperationOutcome`, because
 its answer is an ITS-REST `RESULT_SET` (§11.4, N17).
@@ -322,9 +332,11 @@ of a stored query, is never copied.
 `OPTIONS {base}/` returns what the gateway does and which members stand
 behind it, as JSON that validates against the specification's
 `options-root.schema.json` (§7a.2, N30). It needs no patient identifier and
-carries none. Client authentication is not built yet, so it answers any
-caller; once it is, the body answers only an authenticated one (§7a.2, §13). Every value comes from the running configuration, so the body
-says what the gateway does, not what it was once meant to do:
+carries none. The gateway authenticates no client yet, so it answers any
+caller; with client authentication, planned for v0.0.8
+([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), it answers only
+an authenticated one (§7a.2, §13). Every value comes from the running
+configuration, so the body says what the gateway does today:
 
 | Member | What FerroFED declares |
 |---|---|

@@ -17,11 +17,13 @@
 # Operate
 
 - [What FerroFED runs beside](operate/deployment-shape.md)
+- [The container image and the quickstart](operate/container.md)
 - [Configuration](operate/configuration.md)
   - [The registry](operate/registry.md)
+  - [Identity resolution](operate/identity.md)
   - [Queries and API areas](operate/queries-and-areas.md)
-- [The container image and the quickstart](operate/container.md)
 - [Admitting a node](operate/admission.md)
+- [Health probes](operate/health.md)
 - [Metrics](operate/metrics.md)
 
 # Integrate

@@ -51,9 +51,10 @@ exactly one node (§12.5.1, N41):
    here either; it is one the operation does not declare, so it is a `400`
    (`query-parameter-refused`) and nothing is sent.
 2. A resolution binding of your client session: the node your earlier query
-   resolved that `ehr_id` at. Bindings belong to an authenticated session, so
-   this step answers once client authentication lands; until then it never
-   does.
+   resolved that `ehr_id` at. A session needs a client identity, so this
+   step answers once client authentication lands, planned for v0.0.8
+   ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)); until then it
+   never does.
 3. The gateway's `ehr_id` index, which it learns from resolutions and from
    the nodes' successful answers.
 4. For a read only, an ask-all probe: the gateway sends

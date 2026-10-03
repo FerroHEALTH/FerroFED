@@ -29,6 +29,7 @@ The first tier runs on every change, because it needs no Rust:
 | actionlint | workflow correctness |
 | shellcheck | every first-party shell script |
 | hadolint | every first-party Dockerfile |
+| kubeconform | the example Kubernetes manifests under `deploy/kubernetes/`, in strict mode |
 | comment-style | the comment budgets of the Rust sources |
 | file-length | no hand-written Rust file or book page over 1000 lines |
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |
@@ -39,12 +40,16 @@ The first tier runs on every change, because it needs no Rust:
 | tracker-helpers | the self-tests of the `scripts/gh` tracker helpers |
 | crate-version-guard self-test | the crate-version guard judges only what a pull request changes, against a stub repository |
 
-The second tier is the Rust lane: formatting, clippy, the tests, the
-end-to-end suite against two containerised nodes, rustdoc, `cargo deny`, the
-MSRV build, every feature of each published crate on its own, the packaging
-dry run, the crate-version guard and dependency review. A `detect` job gates
+The second tier is the Rust lane: formatting, the fuzz crate's lockfile,
+clippy, the tests, the end-to-end suite against two containerised nodes,
+rustdoc, `cargo deny`, the MSRV build, every feature of each published crate
+on its own, the packaging dry run, the crate-version guard and dependency
+review. A `detect` job gates
 it on the root `Cargo.toml`, which exists, so the tier runs on every change;
 the crate-version guard and dependency review run on pull requests only.
+
+The `Docs` workflow builds this book and the landing page on every pull
+request, and publishes them from `main`. A book that does not build fails it.
 
 ## Running them locally
 
@@ -65,6 +70,7 @@ for helper in fields labels migrate-fields rel; do bash "scripts/gh/$helper.sh" 
 find scripts .claude/hooks -name '*.sh' -exec shellcheck --severity=style {} +
 actionlint
 zizmor --min-severity=low .github/
+scripts/site/assemble.sh _site
 ```
 
 ## Advisory analyzers

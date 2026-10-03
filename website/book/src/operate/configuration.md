@@ -13,10 +13,11 @@ endpoint a request names to reach it, and every other path under
 `{base}/v1/` answers `501`. `{base}` is `/` unless you set
 [the base path](#the-base-path).
 
-Two pages carry the rest of the configuration: [the registry](registry.md),
-its document and the state learned from it, and [queries and API
-areas](queries-and-areas.md), the settings a federated query and each
-ITS-REST area run under.
+Three pages carry the rest of the configuration: [the registry](registry.md),
+its document and the state learned from it; [identity
+resolution](identity.md), the cross-reference that finds each member's
+`ehr_id`; and [queries and API areas](queries-and-areas.md), the settings a
+federated query and each ITS-REST area run under.
 
 ## Running it
 
@@ -33,13 +34,9 @@ a read-only stored-query directory, prints one line and exits, so a deployment
 pipeline can test a file without binding a socket. It opens no store file and
 connects to no database. `ferrofed admission check --endpoint <id>` checks
 one member against the admission conditions ([Admitting a node](admission.md)).
-`healthcheck` asks the gateway running on this host for its readiness: it
-connects to the port of `server.listen` (on `127.0.0.1` or `[::1]` when the
-address is a wildcard, and on the address itself otherwise), prints one line,
-and exits `0` only when `GET {base}/health/readiness` answers `200` within
-three seconds. Every other outcome, a configuration that does not load included,
-exits `1`, the two codes a container runtime's health check reads
-([The container image](container.md#the-health-probes)).
+`healthcheck` asks the gateway running on this host for its readiness and
+exits `0` or `1`, the two codes a container runtime's health check reads
+([Health probes](health.md#ferrofed-healthcheck)).
 
 A configuration the gateway refuses exits with code 78 (`EX_CONFIG`) and one
 line naming the key at fault. It refuses an unknown key, a value of the wrong
@@ -107,6 +104,18 @@ path and switches, and never a credential, a URL, a header value or anything
 from a request.
 
 ## The file
+
+The sections, and the page that covers each:
+
+| Key or section | What it sets | Page |
+|---|---|---|
+| `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
+| `[server]`, `[telemetry]`, `[credentials]` | the listener, the console, the onward credentials | this page |
+| `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
+| `[registry]` | the registry document and its form | [The registry](registry.md) |
+| `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
+| `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
+| `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
 
 ```toml
 [server]
