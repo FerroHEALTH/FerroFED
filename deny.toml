@@ -50,9 +50,11 @@ allow = [
 ]
 confidence-threshold = 0.9
 # The project's own crates are BUSL-1.1 (LICENSE). The openEHR model crates
-# join this list as each is first depended on: openehr-sdt and openehr-query
-# are BUSL-1.1, openehr-its is Apache-2.0, and openehr-term, under openehr-rm,
-# is Apache-2.0 with the CC-BY-SA-3.0 terminology data it redistributes.
+# join this list as each is first depended on: openehr-query is BUSL-1.1,
+# openehr-its is Apache-2.0, and openehr-term, under openehr-rm, is Apache-2.0
+# with the CC-BY-SA-3.0 terminology data it redistributes.
+# TODO(#80): add the BUSL-1.1 exception for openehr-sdt when client
+# authentication first depends on it.
 exceptions = [
   { allow = ["BUSL-1.1"], crate = "openehr-federation" },
   { allow = ["BUSL-1.1"], crate = "ihe-iti" },

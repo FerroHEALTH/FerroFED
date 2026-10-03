@@ -211,6 +211,24 @@ pub(crate) async fn mount(server: &MockServer, verb: &str, at: String, answer: R
         .await;
 }
 
+/// Drops `servers` on a thread of their own, outside the test's runtime, and
+/// re-raises a panic their drop raised.
+///
+/// Dropping a `MockServer` verifies its mocks through
+/// `futures::executor::block_on`, which takes a `tokio` lock. Inside a
+/// `tokio` task whose cooperative budget is spent, that lock answers
+/// `Pending` and leaves its wake-up to the runtime the drop is blocking, so
+/// the thread parks for good
+/// (<https://docs.rs/tokio/latest/tokio/task/coop/index.html>). A thread
+/// outside the runtime has no budget to spend.
+pub(crate) fn release<T: Send + 'static>(servers: T) {
+    if let Err(panic) = std::thread::spawn(move || drop(servers)).join()
+        && !std::thread::panicking()
+    {
+        std::panic::resume_unwind(panic);
+    }
+}
+
 /// The method and path of every request `server` received, in order.
 pub(crate) async fn asked(server: &MockServer) -> Result<Vec<(String, String)>, Box<dyn StdError>> {
     Ok(server

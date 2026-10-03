@@ -198,7 +198,7 @@ fn candidates<'a>(
     }
     Ok(snapshot
         .nodes()
-        .filter_map(|node| owner::reached_through(snapshot, node.id()))
+        .filter_map(|node| snapshot.asked_through(node.id()))
         .collect())
 }
 

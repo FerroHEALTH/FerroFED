@@ -281,6 +281,8 @@ impl EhrId {
     /// [`IdError::EhrId`] when the value is not a `HIER_OBJECT_ID`.
     pub fn new(value: impl Into<String>) -> Result<Self, IdError> {
         let value = value.into();
+        // NOTE: BASE 1.3.0 base_types §Syntaxes makes `extension` any string, the
+        // empty one included, so `a::` is a HIER_OBJECT_ID with no extension.
         match HierObjectId::new(value.as_str()) {
             Ok(id) => {
                 let key = composite_id_key(id.value());
