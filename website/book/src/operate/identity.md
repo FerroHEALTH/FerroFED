@@ -114,6 +114,52 @@ notice in its [startup banner](configuration.md#the-startup-banner) that it
 must not hold or reach real patient data. The
 [quickstart](container.md#the-quickstart) runs on this table.
 
+## Consent
+
+Each node checks consent before it releases data, whatever the gateway did
+first (N26, N27). The gateway never decides on release itself, and a node it
+dispatches to is not thereby cleared: a localization or consent service that
+named the node only means nothing upstream ruled it out (§14.3).
+
+**A node's own refusal.** ITS-REST defines no consent signal, so the gateway
+does not infer one from a status code. A node's answer is reported
+`consent-denied` only when it is a `403` whose ITS-REST `Error` body carries a
+`code` that the registry lists for that endpoint in `consent_refusal_codes`
+([The registry](registry.md#the-registry-document)). Every other refusal is
+`node-error`. The list is empty by default, so until you name the codes a
+node uses, its consent refusal fails the query `424` as any node error does.
+This key is FerroFED's own design, because no specification defines the
+signal. A refusing node contributes no rows, never fails the query in either
+completeness mode, clears `meta.federation.complete`, and its record carries
+the `latency_ms` of the request it refused (§11.3, N40).
+
+**The optional Step-1 pre-filter.** A deployment with a consent service may
+drop members before dispatch (N27a). The pre-filter runs after localization
+and before resolution. Each member it denies is reported `consent-denied` with
+no `latency_ms`, is never resolved and never sent a request, and any `ehr_id`
+the client session cached for it is dropped. A member it does not deny is
+asked, and its node decides. When the consent service cannot answer, Step 1
+carries no consent signal, which is the state of a deployment with no consent
+service at all, so every candidate is asked and each node checks consent
+itself (§13.2.1, N27a). This `pass-to-node` policy is FerroFED's own design.
+`OPTIONS {base}/` declares a configured pre-filter under `federation.consent`,
+with its mode and that policy; a deployment with no pre-filter declares
+nothing there.
+
+For development, rows under `[[dev.consent_denied]]` beside the
+cross-reference are a static pre-filter, accepted only under
+`profile = "development"` and declared as `development-static`:
+
+```toml
+[[dev.consent_denied]]
+namespace = "urn:oid:2.999.1.1"
+value = "ffd-test-0001"
+member = "node-b"        # this patient's consent denies asking node-b
+```
+
+The pre-filter of the Dutch binding, Mitz, is planned for v0.0.8
+([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
+
 ## Choosing one
 
 Set `[pixm]` or `[dev]`, never both: both refuse the configuration. With

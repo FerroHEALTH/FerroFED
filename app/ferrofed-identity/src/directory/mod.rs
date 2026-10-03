@@ -22,7 +22,10 @@
 //!   [`ConnectionType::SYSTEM`], and nothing else (N19, §15.2, CP-20);
 //! - its `managingOrganization` names its one managing organisation (N20),
 //!   and the one `Organization` whose `endpoint` list names it operates its
-//!   node.
+//!   node;
+//! - an `Endpoint` MAY carry one [`CONSENT_REFUSAL_CODE_EXTENSION`] extension
+//!   per ITS-REST `Error` `code` its node marks a consent refusal with, the
+//!   `consent_refusal_codes` of the native form (§11.1, N27).
 //!
 //! Every endpoint of a node agrees on the node's `system_id` and operator.
 //! The node's `product`, `version` and identifiers have no place in this form.
@@ -107,6 +110,14 @@ pub const SYSTEM_ID_SYSTEM: &str = "https://ferrofed.eu/fhir/sid/system-id";
 /// The identifier system of a `creating_system_id` an endpoint answers for,
 /// other than its node's own `system_id` (N21, §12.2).
 pub const CREATING_SYSTEM_ID_SYSTEM: &str = "https://ferrofed.eu/fhir/sid/creating-system-id";
+
+/// The extension of an `Endpoint` naming one consent refusal code.
+///
+/// Its `valueCode` is one ITS-REST `Error` `code` by which the endpoint's node
+/// marks a `403` as a consent refusal, repeated once per code (§11.1, N27; no
+/// specification governs the extension: our own design).
+pub const CONSENT_REFUSAL_CODE_EXTENSION: &str =
+    "https://ferrofed.eu/fhir/StructureDefinition/consent-refusal-code";
 
 /// Reads and validates the registry document in FHIR form at `path`.
 ///
@@ -250,6 +261,13 @@ fn member(
             endpoint: id.clone(),
         });
     }
+    let mut consent_refusal_codes = Vec::new();
+    for code in endpoint.extension_codes(CONSENT_REFUSAL_CODE_EXTENSION) {
+        let Some(code) = code else {
+            return Err(FhirFormError::ConsentRefusalCode(id));
+        };
+        consent_refusal_codes.push(code.to_owned());
+    }
     let operator = match operators.get(&endpoint.entry()).map(Vec::as_slice) {
         Some([operator]) => operator.clone(),
         Some([first, second, ..]) => {
@@ -276,6 +294,7 @@ fn member(
             connection_type,
             managing_organisation,
             status,
+            consent_refusal_codes,
         },
         operator,
         system_id,

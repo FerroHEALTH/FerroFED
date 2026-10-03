@@ -5,12 +5,13 @@
 //! endpoint status, or into a [`DispatchError`] when the failure was the
 //! gateway's own and nothing reached the node.
 
+use std::collections::BTreeSet;
 use std::time::Instant;
 
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
-use openehr_federation::outcome::{ErrorDetail, Outcome};
-use openehr_its::rest::client::{ClientError, TransportError};
+use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
+use openehr_its::rest::client::{ClientError, ErrorBody, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
 use super::reported::{self, excerpt_of};
@@ -80,10 +81,14 @@ pub(super) fn answered(
     }
 }
 
-/// The reply, or the gateway-side error, for a call that reached no
-/// documented answer, its `error` holding no identifier of `withheld`.
+/// The reply, or the gateway-side error, for a call to `endpoint` that
+/// reached no documented answer, its `error` holding no identifier of
+/// `withheld`.
+///
+/// A `403` whose body carries one of `refusal_codes`, the endpoint's
+/// consent refusal codes, is `consent-denied` ([`refused_on_consent`]).
 pub(super) fn failed(
-    endpoint: &EndpointId,
+    (endpoint, refusal_codes): (&EndpointId, &BTreeSet<String>),
     error: ClientError,
     latency_ms: u64,
     withheld: &Withheld,
@@ -131,10 +136,9 @@ pub(super) fn failed(
             (latency_ms, StatusCode::UNAUTHORIZED),
             reported::answered(StatusCode::UNAUTHORIZED, &body, withheld),
         )),
-        ClientError::Forbidden { body, .. } => Ok(node_error(
-            (latency_ms, StatusCode::FORBIDDEN),
-            reported::answered(StatusCode::FORBIDDEN, &body, withheld),
-        )),
+        ClientError::Forbidden { body, .. } => {
+            Ok(forbidden(latency_ms, &body, refusal_codes, withheld))
+        }
         ClientError::ServiceFailure { status, body, .. }
         | ClientError::UndocumentedStatus { status, body, .. } => Ok(node_error(
             (latency_ms, status),
@@ -161,6 +165,46 @@ pub(super) fn failed(
             source: Box::new(other),
         }),
     }
+}
+
+/// The reply of a node that answered `403` with `body`: `consent-denied`
+/// when the body names one of `refusal_codes`, `node-error` otherwise.
+fn forbidden(
+    latency_ms: u64,
+    body: &ErrorBody,
+    refusal_codes: &BTreeSet<String>,
+    withheld: &Withheld,
+) -> NodeReply {
+    let status = StatusCode::FORBIDDEN;
+    let Some(code) = refused_on_consent(body, refusal_codes) else {
+        return node_error(
+            (latency_ms, status),
+            reported::answered(status, body, withheld),
+        );
+    };
+    let lead = format!("the node answered {status} with the consent refusal code {code}");
+    NodeReply::Failed {
+        outcome: Outcome::ConsentDenied {
+            refused_by: ConsentRefusal::Node { latency_ms },
+            error: Some(reported::said(lead, body, withheld)),
+        },
+        contact: Contact::Answered(status),
+    }
+}
+
+/// The consent refusal code `body` carries, when it is an ITS-REST `Error`
+/// whose `code` member is one of `refusal_codes`.
+// NOTE: §11.1, N27; ITS-REST 1.1.0 defines no consent signal, so only a code the registry
+// lists for the endpoint marks a refusal (no specification governs this: our own design).
+pub(super) fn refused_on_consent<'a>(
+    body: &'a ErrorBody,
+    refusal_codes: &BTreeSet<String>,
+) -> Option<&'a str> {
+    body.error()?
+        .additional_properties
+        .get(reported::CODE_MEMBER)?
+        .as_str()
+        .filter(|code| refusal_codes.contains(*code))
 }
 
 /// A `node-error` reply carrying `error`, for a node that answered `status`.
@@ -192,6 +236,8 @@ fn chain(error: &(dyn std::error::Error + 'static)) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::failed;
     use crate::dispatch::DispatchError;
     use crate::hygiene::Withheld;
@@ -207,7 +253,7 @@ mod tests {
     fn is_compose(error: ClientError) -> Result<bool, Box<dyn std::error::Error>> {
         let endpoint = EndpointId::new("node-a-pub")?;
         Ok(matches!(
-            failed(&endpoint, error, 0, &Withheld::none()),
+            failed((&endpoint, &BTreeSet::new()), error, 0, &Withheld::none()),
             Err(DispatchError::Compose { .. })
         ))
     }

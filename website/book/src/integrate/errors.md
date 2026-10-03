@@ -68,7 +68,9 @@ same causes answer `200` with the rows of the nodes that did answer, and the
 failed nodes reported the same way.
 
 Two statuses are answers and never fail a query: `not-resolved` (the patient
-is not known at that node) and `consent-denied`. A query where no node knows
+is not known at that node) and `consent-denied` (a consent pre-filter dropped the
+node, or the node refused with a code the registry lists for it; see
+[Consent](../operate/identity.md#consent)). A query where no node knows
 the patient answers `200` with no rows (§11.3).
 
 ## A node's own answer

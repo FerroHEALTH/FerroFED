@@ -224,6 +224,10 @@ pub enum LoadError {
         /// The endpoint declared second.
         second: EndpointId,
     },
+    /// An endpoint lists an empty consent refusal code, which no node's
+    /// `Error` could carry as a refusal (§11.1, N27).
+    #[error("endpoint {0} lists an empty consent refusal code")]
+    EmptyConsentRefusalCode(EndpointId),
     /// A node with no endpoint, which nothing could reach (a node has 1..*
     /// endpoints, § The four identifiers).
     #[error("node {0} has no endpoint")]

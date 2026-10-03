@@ -21,6 +21,7 @@ use std::time::Instant;
 use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
+use ferrofed_identity::consent::{ConsentDecision, ConsentPrefilter, ON_UNAVAILABLE};
 use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError, OnFailure};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::Resolution;
@@ -29,7 +30,7 @@ use ferrofed_registry::snapshot::{EndpointStatus, RegistrySnapshot};
 use openehr_federation::aql::subject::Subject;
 use openehr_federation::aql::{ColumnSource, PatientQuery, UnscopedQuery};
 use openehr_federation::error::WireError;
-use openehr_federation::outcome::{ErrorDetail, Outcome};
+use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use secrecy::SecretString;
 
 use crate::federation::Federation;
@@ -52,6 +53,9 @@ pub struct Targets {
     /// The `{node, ehr_id}` set the resolution produced, for the session's
     /// resolution bindings (§12.5.1 step 2).
     pub resolved: Vec<(NodeId, EhrId)>,
+    /// The members the Step-1 consent pre-filter denied, whose cached
+    /// `ehr_id`s the session drops (N27a).
+    pub denied: BTreeSet<NodeId>,
     /// What the resolver showed of itself, when it was asked: up when it
     /// answered for every member, down when it could not answer for one.
     pub resolver: Option<Observed>,
@@ -144,13 +148,19 @@ struct Membership {
 /// candidate (§14.1, N4). A directed query is never localized, since the
 /// directive selects its node set (§8).
 ///
-/// The patient is then resolved at every candidate before `deadline`. A
-/// member that knows the patient is asked its node query; one that does not
-/// is `not-resolved`, which fails nothing (N6); one the resolver could not
-/// answer for is `not-resolved` with the resolver's error, which fails the
-/// query (§11.3 covers only an answered lookup; no specification governs
-/// this: our own design). Without a resolver, every candidate is the last
-/// case: the gateway fails closed.
+/// With a consent pre-filter configured, it is asked next about every
+/// candidate, and each candidate it denies is `consent-denied` with no
+/// `latency_ms`, never resolved and never sent a request (N27a, N40). A
+/// candidate it does not deny is not cleared by that, and neither is one
+/// localization named: its node checks consent itself (N26, N27, §14.3).
+///
+/// The patient is then resolved at every remaining candidate before
+/// `deadline`. A member that knows the patient is asked its node query; one
+/// that does not is `not-resolved`, which fails nothing (N6); one the
+/// resolver could not answer for is `not-resolved` with the resolver's error,
+/// which fails the query (§11.3 covers only an answered lookup; no
+/// specification governs this: our own design). Without a resolver, every
+/// candidate is the last case: the gateway fails closed.
 ///
 /// # Errors
 /// Returns a [`TargetsError`] when the subject is not a patient reference or
@@ -162,7 +172,8 @@ pub async fn patient(
     deadline: Instant,
 ) -> Result<Targets, TargetsError> {
     let resolver = federation.resolver();
-    let membership = membership(federation.snapshot(), selection);
+    let consent = federation.consent_prefilter();
+    let mut membership = membership(federation.snapshot(), selection);
     // NOTE: §5.4.1, the identifier resolution consumes is withheld from every
     // request the plan sends, the outbound gate's second layer.
     let withheld = Withheld::new([SecretString::from(query.subject().value())]);
@@ -173,7 +184,8 @@ pub async fn patient(
         Selection::Undirected => federation.localization().localizer(),
         Selection::Directed(_) | Selection::Owner(_) => None,
     };
-    let patient = if !members.is_empty() && (localizer.is_some() || resolver.is_some()) {
+    let consulted = localizer.is_some() || consent.is_some() || resolver.is_some();
+    let patient = if !members.is_empty() && consulted {
         Some(patient_ref(query.subject())?)
     } else {
         None
@@ -185,20 +197,15 @@ pub async fn patient(
         }
         _ => Localized::everyone(),
     };
-    for (member, endpoint, reason) in membership.alternates {
-        let outcome = if located.admits(&member) {
-            Outcome::Excluded {
-                error: Some(detail(&reason)?),
-            }
-        } else {
-            located.not_localized()
-        };
-        plan = settle(plan, endpoint, outcome)?;
-    }
-    let candidates: Vec<NodeId> = members
+    plan = located.settle_alternates(plan, membership.alternates)?;
+    let mut candidates: Vec<NodeId> = members
         .into_iter()
         .filter(|member| located.admits(member))
         .collect();
+    let denied;
+    (plan, denied) = consented(consent, patient.as_ref(), deadline)
+        .prefilter(plan, &mut membership.asked, &mut candidates)
+        .await?;
     let resolutions = match (resolver, &patient) {
         (Some(resolver), Some(patient)) if !candidates.is_empty() => {
             resolver.resolve(patient, &candidates, deadline).await
@@ -258,8 +265,102 @@ pub async fn patient(
         sources,
         resolution_failed,
         resolved: bound,
+        denied,
         resolver: Observed::of_resolutions(&resolutions),
     })
+}
+
+/// The Step-1 consent pre-filter of one query, with what it is asked about.
+struct Consented<'a> {
+    prefilter: Option<&'a dyn ConsentPrefilter>,
+    patient: Option<&'a PatientRef>,
+    deadline: Instant,
+}
+
+/// The pre-filter `prefilter`, asking about `patient` before `deadline`.
+fn consented<'a>(
+    prefilter: Option<&'a dyn ConsentPrefilter>,
+    patient: Option<&'a PatientRef>,
+    deadline: Instant,
+) -> Consented<'a> {
+    Consented {
+        prefilter,
+        patient,
+        deadline,
+    }
+}
+
+impl Consented<'_> {
+    /// `plan` with the `candidates` the pre-filter denies settled
+    /// `consent-denied`, and those members, which leave `asked` and
+    /// `candidates` (N27a, N40).
+    ///
+    /// A denied member is never resolved and never sent a request, so its
+    /// record carries no `latency_ms`. A candidate the decision does not name
+    /// stays, and its node checks consent itself (N27, §14.3); a pre-filter that
+    /// could not answer leaves every candidate there ([`ON_UNAVAILABLE`]).
+    async fn prefilter(
+        self,
+        plan: Plan,
+        asked: &mut BTreeMap<NodeId, EndpointId>,
+        candidates: &mut Vec<NodeId>,
+    ) -> Result<(Plan, BTreeSet<NodeId>), TargetsError> {
+        let decision = match (self.prefilter, self.patient) {
+            (Some(prefilter), Some(patient)) if !candidates.is_empty() => {
+                prefilter
+                    .prefilter(patient, candidates, self.deadline)
+                    .await
+            }
+            _ => ConsentDecision::NoSignal,
+        };
+        let (plan, denied) = prefiltered(plan, (asked, candidates), decision)?;
+        candidates.retain(|member| !denied.contains(member));
+        Ok((plan, denied))
+    }
+}
+
+/// `plan` with the `candidates` that `decision` denies settled
+/// `consent-denied`, and those members, which leave `asked`.
+fn prefiltered(
+    mut plan: Plan,
+    (asked, candidates): (&mut BTreeMap<NodeId, EndpointId>, &[NodeId]),
+    decision: ConsentDecision,
+) -> Result<(Plan, BTreeSet<NodeId>), TargetsError> {
+    let refused = match decision {
+        ConsentDecision::Denied(refused) => refused,
+        ConsentDecision::NoSignal => BTreeSet::new(),
+        ConsentDecision::Unavailable(failure) => {
+            // NOTE: N26, N27, N27a, §13.2.1: no consent signal leaves the node as the sole
+            // gate, so every candidate is asked; the event names the failure, never a value.
+            tracing::warn!(
+                error = %failure,
+                policy = ON_UNAVAILABLE,
+                "the consent pre-filter could not answer; every candidate is asked"
+            );
+            BTreeSet::new()
+        }
+    };
+    let mut denied = BTreeSet::new();
+    for member in refused {
+        // NOTE: N27a reports the candidates it excludes; a member named that was never a
+        // candidate is legitimately absent here (no specification governs this: our own design).
+        if !candidates.contains(&member) {
+            continue;
+        }
+        let Some(endpoint) = asked.remove(&member) else {
+            continue;
+        };
+        let error = Some(detail(
+            "the consent pre-filter does not permit asking this member (N27a)",
+        )?);
+        let outcome = Outcome::ConsentDenied {
+            refused_by: ConsentRefusal::PreFilter,
+            error,
+        };
+        plan = settle(plan, endpoint, outcome)?;
+        denied.insert(member);
+    }
+    Ok((plan, denied))
 }
 
 /// The plan of a query that names no patient, dispatched as written.
@@ -296,6 +397,7 @@ pub fn unscoped(
         sources: query.node_query().columns().to_vec(),
         resolution_failed: false,
         resolved: Vec::new(),
+        denied: BTreeSet::new(),
         resolver: None,
     })
 }
@@ -346,6 +448,27 @@ struct Localized {
 }
 
 impl Localized {
+    /// `plan` with every endpoint of `alternates` settled: `excluded` for a member
+    /// localization admitted, which is asked through another endpoint, and
+    /// `not-localized` for one it did not (§11.1).
+    fn settle_alternates(
+        &self,
+        mut plan: Plan,
+        alternates: Vec<(NodeId, EndpointId, String)>,
+    ) -> Result<Plan, TargetsError> {
+        for (member, endpoint, reason) in alternates {
+            let outcome = if self.admits(&member) {
+                Outcome::Excluded {
+                    error: Some(detail(&reason)?),
+                }
+            } else {
+                self.not_localized()
+            };
+            plan = settle(plan, endpoint, outcome)?;
+        }
+        Ok(plan)
+    }
+
     /// Every member a candidate: no localizer, or one that is not consulted.
     fn everyone() -> Self {
         Self {

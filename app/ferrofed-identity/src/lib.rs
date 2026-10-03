@@ -14,19 +14,22 @@
 //! - [`resolver`]: the [`Resolver`](resolver::Resolver) seam (N3, §5.2);
 //! - [`localizer`]: the [`Localizer`](localizer::Localizer) seam, which
 //!   members might hold a patient's data (N4, §14.1);
+//! - [`consent`]: the optional Step-1
+//!   [`ConsentPrefilter`](consent::ConsentPrefilter) seam (N27a, §13.2.1);
 //! - [`pixm`]: the [`Resolver`](resolver::Resolver) over PIXm ITI-83 (#43);
 //! - [`binding`]: the resolution bindings of §12.5.1 step 2, in memory and
 //!   scoped to the client session (§12.5.1 step 2);
-//! - [`dev`]: the static development cross-reference, FerroFED's own testing
-//!   device, enabled only under the development profile;
+//! - [`dev`]: the static development cross-reference and consent pre-filter,
+//!   FerroFED's own testing devices, enabled only under the development
+//!   profile;
 //! - [`directory`]: the registry document in FHIR form, `Organization` and
 //!   `Endpoint` resources read through `ihe_iti`'s mCSD reader (N19, N20).
 //!
-//! The consent pre-filter and onward-authentication seams land with their
-//! issues.
+//! The onward-authentication seam lands with its issue.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod binding;
+pub mod consent;
 pub mod dev;
 pub mod directory;
 pub mod localizer;
@@ -34,4 +37,4 @@ pub mod patient;
 pub mod pixm;
 pub mod resolver;
 
-// TODO(#83): the consent pre-filter seam, then the directory sync (#86).
+// TODO(#86): the directory sync.

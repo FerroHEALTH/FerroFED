@@ -17,5 +17,6 @@ mod directory;
 mod localizer;
 mod patient;
 mod pixm;
+mod static_consent;
 mod static_resolver;
 mod support;

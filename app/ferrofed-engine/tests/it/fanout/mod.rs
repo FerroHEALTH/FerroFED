@@ -15,6 +15,7 @@ mod aggregate;
 mod all_or_nothing;
 mod best_effort;
 mod budget;
+mod consent;
 mod decision;
 mod dedup;
 mod distinct;

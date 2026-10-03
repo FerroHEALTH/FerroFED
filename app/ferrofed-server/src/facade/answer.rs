@@ -217,13 +217,19 @@ struct Query<'a> {
     session: Option<&'a SessionKey>,
 }
 
-/// Holds the `{node, ehr_id}` set a resolution produced as the `session`'s
-/// resolution bindings (§12.5.1 step 2), teaches the `ehr_id` index where
+/// Drops the `session`'s bindings that name a member the consent pre-filter
+/// denied (N27a), holds the `{node, ehr_id}` set a resolution produced as the
+/// `session`'s resolution bindings (§12.5.1 step 2), teaches the `ehr_id` index where
 /// each `ehr_id` is held (step 3), and records the state the resolution
 /// showed of the resolver.
 fn remember(federation: &Federation, session: Option<&SessionKey>, targets: &plan::Targets) {
     let resolved = &targets.resolved;
     if let Some(session) = session {
+        // NOTE: N27a; a consent denial drops every `ehr_id` the session cached for a denied
+        // member before the new bindings are held (no specification governs this: our own design).
+        federation
+            .bindings()
+            .forget_denied(session, &targets.denied);
         federation.bindings().record(
             session,
             Instant::now(),

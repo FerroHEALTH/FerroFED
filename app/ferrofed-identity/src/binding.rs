@@ -197,6 +197,31 @@ impl ResolutionBindings {
         dropped
     }
 
+    /// Drops every binding of `session` that names a member of `denied`, and
+    /// returns how many `ehr_id` bindings it dropped.
+    ///
+    /// A Step-1 consent denial calls it, so no `ehr_id` cached for a denied
+    /// member outlives the denial (N27a). The bindings are keyed by `ehr_id`, never by the patient, so
+    /// every binding of the session naming a denied member goes, whole; the
+    /// cost is one re-resolution.
+    pub fn forget_denied(&self, session: &SessionKey, denied: &BTreeSet<NodeId>) -> usize {
+        if denied.is_empty() {
+            return 0;
+        }
+        let mut sessions = self.lock();
+        let Some(held) = sessions.get_mut(session) else {
+            return 0;
+        };
+        let before = held.by_ehr.len();
+        held.by_ehr.retain(|_, nodes| nodes.is_disjoint(denied));
+        let dropped = before.saturating_sub(held.by_ehr.len());
+        if held.by_ehr.is_empty() {
+            sessions.remove(session);
+        }
+        drop(sessions);
+        dropped
+    }
+
     /// Drops `session`'s binding of `ehr_id` when it names a member `present`
     /// says the registry no longer holds, and returns whether it did.
     ///

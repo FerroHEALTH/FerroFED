@@ -12,8 +12,8 @@ use ihe_iti::mcsd::error::DirectoryError;
 use thiserror::Error;
 
 use super::{
-    CREATING_SYSTEM_ID_SYSTEM, ENDPOINT_ID_SYSTEM, NODE_ID_SYSTEM, ORGANISATION_ID_SYSTEM,
-    SYSTEM_ID_SYSTEM,
+    CONSENT_REFUSAL_CODE_EXTENSION, CREATING_SYSTEM_ID_SYSTEM, ENDPOINT_ID_SYSTEM, NODE_ID_SYSTEM,
+    ORGANISATION_ID_SYSTEM, SYSTEM_ID_SYSTEM,
 };
 
 /// A Bundle entry, named before its registry id is known: its position, and
@@ -240,6 +240,10 @@ pub enum FhirFormError {
         #[source]
         fault: IdentifierFault,
     },
+    /// An endpoint carries a consent refusal code extension with no
+    /// `valueCode` (§11.1, N27).
+    #[error("endpoint {0} has a {url} extension with no valueCode", url = CONSENT_REFUSAL_CODE_EXTENSION)]
+    ConsentRefusalCode(EndpointId),
     /// An endpoint has no single operating organisation.
     #[error("endpoint {endpoint} has no single operating organisation")]
     Operator {
