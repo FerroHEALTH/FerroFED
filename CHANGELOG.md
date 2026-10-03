@@ -58,6 +58,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   gateway forwards through declares no `Content-Type` for it (#298).
   `OPTIONS {base}/` declares `its_rest.definition` as `routed-single-node`,
   and `OPTIONS` on a definition path names its ITS-REST methods.
+- `ferrofed admission check --endpoint <id>` exercises one configured
+  member against the identifier-integrity conditions of §12b.2 and writes a
+  report to standard output (#79; §12b.1, §12b.2, N42a, CP-33a). It creates
+  test EHRs on the node (3 by default, `--count` from 2 to 50) through
+  `POST {base}/v1/ehr`, each for a fresh synthetic subject in
+  `urn:oid:2.999.1.0`, reads each back, and reports every condition as
+  `pass`, `fail` or `cannot-check` with its evidence: `ehr_id` generation
+  (a version-4 UUID, and no `ehr_id` issued twice), `system_id` uniqueness
+  (the `system_id` the node reports is the one the registry records, which
+  the registry holds unique), and the `ehr_id` exchange (the configured
+  cross-reference maps each subject to the `ehr_id` the node created, or
+  `cannot-check` where the gateway cannot write to it). Reuse across
+  restores and adoption of foreign `ehr_id`s are always `cannot-check`, with
+  the reason. A node the check cannot reach fails every condition it
+  exercises. Every request passes the outbound gate with the run's subjects
+  withheld (§5.4.1, N33), and the report prints no subject and no node error
+  body. The command exits `0` when no condition failed, `1` when one did.
+  The book's new page "Admitting a node" states what the check proves and
+  what it cannot.
 - Versioned writes reach only their controlling CDR, and a new EHR only an
   explicit target (#65; §12.4, §12a.1, §10.3, N23, N41, CP-15). An update of
   a composition, the `EHR_STATUS` or the directory, a directory delete (each

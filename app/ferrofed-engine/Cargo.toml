@@ -26,6 +26,9 @@ openehr-its = { workspace = true, features = ["rest-client"] }
 # The outbound gate reads the AQL text with the printer's own string escaping
 # (#45).
 openehr-query.workspace = true
+# The EHR_STATUS an admission check creates an EHR with, and the EHR it reads
+# back (§12b.1, #79).
+openehr-rm.workspace = true
 # The identifiers the gate withholds are never printed (#45).
 secrecy.workspace = true
 http.workspace = true

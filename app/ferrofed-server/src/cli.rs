@@ -5,11 +5,16 @@
 //!
 //! `serve` runs the gateway and `config check` reads and resolves the
 //! configuration the same way `serve` would, then exits, so an operator or a
-//! deployment pipeline tests a configuration without binding a socket. No
-//! specification governs the command line: our own design.
+//! deployment pipeline tests a configuration without binding a socket.
+//! `admission check` exercises one configured member against the
+//! identifier-integrity conditions of §12b.2 and writes the report to
+//! standard output (§12b.1, N42a, CP-33a). No specification governs the
+//! command line: our own design.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+
+use crate::admission::DEFAULT_COUNT;
 
 /// The `ferrofed` command line.
 #[derive(Debug, Parser, PartialEq, Eq)]
@@ -38,6 +43,12 @@ pub enum Command {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    /// Works on the admission of a member (§12b.1).
+    Admission {
+        /// The job to run.
+        #[command(subcommand)]
+        command: AdmissionCommand,
+    },
 }
 
 /// The `config` jobs.
@@ -48,20 +59,68 @@ pub enum ConfigCommand {
     Check,
 }
 
+/// The `admission` jobs.
+#[derive(Debug, Subcommand, PartialEq, Eq)]
+pub enum AdmissionCommand {
+    /// Creates test EHRs with synthetic subjects on one configured member and
+    /// reports each identifier-integrity condition of §12b.2 as pass, fail or
+    /// cannot-check, with its evidence.
+    Check {
+        /// The registry endpoint of the member to check.
+        #[arg(long, value_name = "ENDPOINT_ID")]
+        endpoint: String,
+        /// How many test EHRs to create on the node, at least two so their
+        /// `ehr_id`s can be compared.
+        #[arg(
+            long,
+            value_name = "N",
+            default_value_t = DEFAULT_COUNT,
+            value_parser = clap::value_parser!(u8).range(2..=50)
+        )]
+        count: u8,
+    },
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Command, ConfigCommand};
+    use super::{AdmissionCommand, Cli, Command, ConfigCommand};
     use clap::Parser;
     use std::path::PathBuf;
 
     #[test]
     fn every_documented_subcommand_parses() {
-        let cases: [(&[&str], Command); 2] = [
+        let cases: [(&[&str], Command); 4] = [
             (&["ferrofed", "serve"], Command::Serve),
             (
                 &["ferrofed", "config", "check"],
                 Command::Config {
                     command: ConfigCommand::Check,
+                },
+            ),
+            (
+                &["ferrofed", "admission", "check", "--endpoint", "node-a-pub"],
+                Command::Admission {
+                    command: AdmissionCommand::Check {
+                        endpoint: "node-a-pub".to_owned(),
+                        count: 3,
+                    },
+                },
+            ),
+            (
+                &[
+                    "ferrofed",
+                    "admission",
+                    "check",
+                    "--endpoint",
+                    "node-a-pub",
+                    "--count",
+                    "5",
+                ],
+                Command::Admission {
+                    command: AdmissionCommand::Check {
+                        endpoint: "node-a-pub".to_owned(),
+                        count: 5,
+                    },
                 },
             ),
         ];
@@ -93,5 +152,28 @@ mod tests {
             Cli::try_parse_from(["ferrofed", "config"]).is_err(),
             "a job group needs its job"
         );
+    }
+
+    #[test]
+    fn an_admission_check_needs_an_endpoint_and_at_least_two_ehrs() {
+        assert!(
+            Cli::try_parse_from(["ferrofed", "admission", "check"]).is_err(),
+            "the member to check is named, never guessed"
+        );
+        for count in ["0", "1", "51", "many"] {
+            assert!(
+                Cli::try_parse_from([
+                    "ferrofed",
+                    "admission",
+                    "check",
+                    "--endpoint",
+                    "node-a-pub",
+                    "--count",
+                    count,
+                ])
+                .is_err(),
+                "--count {count} is refused"
+            );
+        }
     }
 }
