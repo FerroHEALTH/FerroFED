@@ -133,6 +133,47 @@ fn put(aql: &str, target: Option<&str>) -> Result<Request<Body>, http::Error> {
     request.body(Body::from(aql.to_owned()))
 }
 
+/// The targeting headers a request can name members in, each with a value
+/// that selects members of the registry or all of them (§8.4).
+const TARGETING: [(&str, &str); 4] = [
+    (ENDPOINT, "*"),
+    (ENDPOINT, "node-a-pub"),
+    (ENDPOINT, "node-a-pub, node-b-pub"),
+    ("openEHR-federation-organisation", "org-a"),
+];
+
+/// The gateway path of [`NAME`] at [`VERSION`].
+fn definition_uri() -> String {
+    format!("/v1/definition/query/{NAME}/{VERSION}")
+}
+
+/// `request` carrying the header `name` with `value`.
+fn targeted(request: http::request::Builder, name: &str, value: &str) -> http::request::Builder {
+    request.header(name, value)
+}
+
+/// Asserts that `app` refuses `request` with `400`
+/// `stored-query-fan-out-unsupported`, `case` naming the configuration and
+/// the header in the failure message.
+async fn refused_unoffered(
+    app: &Router,
+    request: Request<Body>,
+    case: (&str, &str, &str),
+) -> TestResult {
+    let (status, text) = call(app.clone(), request).await?;
+    assert_eq!(
+        StatusCode::BAD_REQUEST,
+        status,
+        "§12.7: a request for distribution is never answered as a plain one: {case:?}: {text}"
+    );
+    assert_eq!(
+        "stored-query-fan-out-unsupported",
+        error_body(&text)?.code,
+        "{case:?}"
+    );
+    Ok(())
+}
+
 /// `GET` of [`NAME`] at [`VERSION`], naming `target` when given.
 fn get(target: Option<&str>) -> Result<Request<Body>, http::Error> {
     let mut request = Request::get(format!("/v1/definition/query/{NAME}/{VERSION}"));
@@ -228,17 +269,49 @@ async fn stored_once(server: &MockServer, aql: &str) -> TestResult {
 
 // conformance: CP-40
 #[tokio::test]
-async fn with_the_setting_off_a_put_naming_members_stores_at_the_registry_only() -> TestResult {
+async fn with_the_setting_off_a_put_naming_members_is_refused_and_stores_nothing() -> TestResult {
     let (a, b, c) = (storing(200).await, storing(200).await, storing(200).await);
+    for federation in ["", "fan_out_stored_queries = false"] {
+        for (name, value) in TARGETING {
+            let dir = tempfile::tempdir()?;
+            let app = gateway(dir.path(), &three(&a, &b, &c), federation)?;
+            let request = targeted(Request::put(definition_uri()), name, value)
+                .header(header::CONTENT_TYPE, "text/plain")
+                .body(Body::from(definition()))?;
+            refused_unoffered(&app, request, (federation, name, value)).await?;
+            let (status, text) = call(app, get(None)?).await?;
+            assert_eq!(StatusCode::NOT_FOUND, status, "nothing was stored: {text}");
+        }
+    }
+    for node in [&a, &b, &c] {
+        assert!(
+            asked(node).await?.is_empty(),
+            "§12.7: nothing is distributed"
+        );
+    }
+    Ok(())
+}
+
+// conformance: CP-40
+#[tokio::test]
+async fn with_the_setting_off_a_get_naming_members_is_refused_and_reads_nothing() -> TestResult {
+    let (a, b, c) = (
+        holding(&definition()).await?,
+        storing(200).await,
+        storing(200).await,
+    );
     for federation in ["", "fan_out_stored_queries = false"] {
         let dir = tempfile::tempdir()?;
         let app = gateway(dir.path(), &three(&a, &b, &c), federation)?;
-        let (status, text) = call(app.clone(), put(&definition(), Some("*"))?).await?;
-        assert_eq!(StatusCode::OK, status, "§12.7: stored: {text}");
-        let (status, text) = call(app, get(Some("*"))?).await?;
-        assert_eq!(StatusCode::OK, status, "{text}");
-        let read: StoredQuery = serde_json::from_str(&text)?;
-        assert_eq!(VERSION, read.version, "the registry answers alone");
+        let (status, text) = call(app.clone(), put(&definition(), None)?).await?;
+        assert_eq!(StatusCode::OK, status, "a plain PUT stores: {text}");
+        for (name, value) in TARGETING {
+            let request =
+                targeted(Request::get(definition_uri()), name, value).body(Body::empty())?;
+            refused_unoffered(&app, request, (federation, name, value)).await?;
+        }
+        let (status, text) = call(app, get(None)?).await?;
+        assert_eq!(StatusCode::OK, status, "a plain GET reads: {text}");
     }
     for node in [&a, &b, &c] {
         assert!(

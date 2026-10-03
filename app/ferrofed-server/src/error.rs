@@ -170,6 +170,10 @@ pub enum Code {
     /// `ORGANISATION` directive is asked to be distributed to members, which
     /// cannot execute it; nothing is stored (§12.7, §8.1, N44).
     DefinitionEndpointTargeted,
+    /// A stored-query `PUT` or version `GET` at the registry carries a
+    /// targeting header, asking for distribution or a drift report, which
+    /// this gateway does not offer; nothing is stored or read (§12.7, N44).
+    StoredQueryFanOutUnsupported,
 }
 
 /// The code of a refused query: the refusal's stable kind
@@ -185,7 +189,7 @@ impl From<&Refusal> for RefusalCode {
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 39] = [
+    pub const GATEWAY: [Self; 40] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -225,6 +229,7 @@ impl Code {
         Self::ResolutionUnavailable,
         Self::EhrIdHeld,
         Self::DefinitionEndpointTargeted,
+        Self::StoredQueryFanOutUnsupported,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -280,6 +285,7 @@ impl Code {
             Self::ResolutionUnavailable => "resolution-unavailable",
             Self::EhrIdHeld => "ehr-id-held",
             Self::DefinitionEndpointTargeted => "definition-endpoint-targeted",
+            Self::StoredQueryFanOutUnsupported => "stored-query-fan-out-unsupported",
         }
     }
 
@@ -309,7 +315,8 @@ impl Code {
             | Self::SubjectLiteral
             | Self::PrecedingVersionInvalid
             | Self::ParameterValueInvalid
-            | Self::DefinitionEndpointTargeted => StatusCode::BAD_REQUEST,
+            | Self::DefinitionEndpointTargeted
+            | Self::StoredQueryFanOutUnsupported => StatusCode::BAD_REQUEST,
             Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
                 StatusCode::NOT_FOUND
             }
@@ -422,6 +429,9 @@ impl Code {
             Self::DefinitionEndpointTargeted => {
                 "a stored query whose AQL carries a FROM ENDPOINT or ORGANISATION directive is never distributed: a node cannot execute it. Nothing was stored; store it without naming members in the targeting headers, and it runs federated (§12.7, §8.1, N44)"
             }
+            Self::StoredQueryFanOutUnsupported => {
+                "this gateway does not distribute stored-query definitions to members or report their copies, and definition.stored_query_fan_out is false: nothing was stored or read; send the request without openEHR-federation-endpoint or openEHR-federation-organisation (§12.7, N44)"
+            }
         }
     }
 }
@@ -520,6 +530,7 @@ mod tests {
             Code::ResolutionUnavailable => Some(36),
             Code::EhrIdHeld => Some(37),
             Code::DefinitionEndpointTargeted => Some(38),
+            Code::StoredQueryFanOutUnsupported => Some(39),
         }
     }
 
@@ -606,6 +617,7 @@ mod tests {
             (Code::ResolutionUnavailable, StatusCode::FAILED_DEPENDENCY),
             (Code::EhrIdHeld, StatusCode::CONFLICT),
             (Code::DefinitionEndpointTargeted, StatusCode::BAD_REQUEST),
+            (Code::StoredQueryFanOutUnsupported, StatusCode::BAD_REQUEST),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

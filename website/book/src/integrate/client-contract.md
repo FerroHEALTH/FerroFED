@@ -773,7 +773,12 @@ A deployment that sets `federation.fan_out_stored_queries` beside the
 registry also distributes a definition to the members you name, and
 `OPTIONS {base}/` declares `definition.stored_query_fan_out: true` (§12.7,
 N44). It is off by default, and it is never declared without the registry.
-Where it is offered:
+Where the registry is offered without it, a stored-query `PUT` or a `GET` of
+a version that carries `openEHR-federation-endpoint` or
+`openEHR-federation-organisation` is a `400`
+(`stored-query-fan-out-unsupported`): nothing is stored or read, so a
+request for distribution is never answered as a plain one. Where it is
+offered:
 
 - Ask for it on the `PUT`: `openEHR-federation-endpoint: *` names every
   active member, and a header that selects endpoints names those. A `PUT`

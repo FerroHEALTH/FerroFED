@@ -495,7 +495,10 @@ path = "/var/lib/ferrofed/stored-queries.redb"
   name members. The registry stores the definition first; each named member
   is then sent the registry's copy independently, within the request's
   budget, and nothing is rolled back. A `PUT` naming no member stores at the
-  registry alone.
+  registry alone. With the setting off, a stored-query `PUT` or version
+  `GET` that carries a targeting header is refused `400`
+  (`stored-query-fan-out-unsupported`), so a client that asked for
+  distribution never mistakes a plain store for it.
 - A definition that carries a `FROM ENDPOINT` or `ORGANISATION` directive is
   refused for distribution, because no node can run it. Store it without the
   header, and it runs federated.

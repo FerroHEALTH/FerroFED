@@ -54,7 +54,11 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   where its copy is the same query, and `node-error` with
   `error.code` `definition-differs` or `definition-missing` otherwise, `207`
   unless every named member matches. An invocation always runs the
-  registry's AQL, never a member's copy.
+  registry's AQL, never a member's copy. With the setting off, a registry
+  `PUT` or version `GET` carrying `openEHR-federation-endpoint` or
+  `openEHR-federation-organisation` is refused with
+  `400 stored-query-fan-out-unsupported`, storing and reading nothing,
+  where the header was ignored before.
 - The federated AQL answer carries the provenance headers (#288; §7a.3,
   N31, CP-24). `openEHR-federation-endpoint` lists the endpoints that
   contributed rows and `openEHR-federation-system-id` their nodes'

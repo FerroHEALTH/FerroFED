@@ -10,6 +10,8 @@
 //! A registry request asks for either by naming `*` or members in its
 //! targeting headers: a distinct request, never the reading of a plain one,
 //! which the registry answers alone (§12.7 stored-query-fanout, §12.6 item 1).
+//! Where neither is offered, a targeting header on such a request is refused,
+//! so a request for distribution is never answered as a plain one.
 //!
 //! A distributed `PUT` is stored at the registry first, and the registry's
 //! copy, the canonical print it holds, is then sent to each named member
@@ -41,6 +43,7 @@ use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 use openehr_federation::aql::directive::FacadeQuery;
 use openehr_federation::error::WireError;
+use openehr_federation::headers;
 use openehr_federation::object::Extra;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
@@ -71,13 +74,22 @@ const MISSING: &str = "definition-missing";
 /// # Errors
 ///
 /// The `400` of targeting the registry cannot answer, and the `404` of a
-/// selection naming a suspended member (§8.4.1, §11.2).
+/// selection naming a suspended member (§8.4.1, §11.2). Where the deployment
+/// offers neither, a request carrying a targeting header is a `400`
+/// (`stored-query-fan-out-unsupported`), never answered as if it carried none.
 pub(super) fn requested(
     federation: &Federation,
     headers: &HeaderMap,
 ) -> Result<Option<BTreeSet<EndpointId>>, Refused> {
     if !federation.fans_out_stored_queries() {
-        return Ok(None);
+        let targeted = [headers::ENDPOINT, headers::ORGANISATION]
+            .into_iter()
+            .any(|name| headers.contains_key(name));
+        return if targeted {
+            Err(Refused::fixed(Code::StoredQueryFanOutUnsupported))
+        } else {
+            Ok(None)
+        };
     }
     let Some(selected) = fan_out::members(federation.snapshot(), headers)
         .map_err(|refused| Refused::with(refused.code(), &refused))?
