@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmResolver};
+use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmResolver, SHARED_CAPACITY};
 use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
@@ -151,6 +151,60 @@ async fn another_patient_never_reads_a_kept_answer() {
     assert!(
         !format!("{pixm:?}").contains(SENTINEL),
         "no rendering shows a kept identifier"
+    );
+}
+
+#[tokio::test]
+async fn a_localization_past_the_capacity_keeps_nothing_and_its_resolution_asks_again() {
+    let server = manager(200, &at_a(), Duration::ZERO).await;
+    let pixm = pixm(&server);
+    let kept = format!("shared: {SHARED_CAPACITY}");
+    for index in 0..SHARED_CAPACITY {
+        let named = pixm
+            .localize(
+                &patient(&format!("SENTINEL-CAP-{index}")),
+                &members(),
+                soon(),
+            )
+            .await;
+        assert!(matches!(named, Localization::Candidates(_)), "{named:?}");
+    }
+    assert!(format!("{pixm:?}").contains(&kept), "{pixm:?}");
+
+    let named = pixm
+        .localize(&patient("SENTINEL-OVER"), &members(), soon())
+        .await;
+    assert!(
+        matches!(&named, Localization::Candidates(set) if set.contains(&node("node-a"))),
+        "the localization answers past the capacity: {named:?}"
+    );
+    assert!(
+        format!("{pixm:?}").contains(&kept),
+        "the capacity holds: {pixm:?}"
+    );
+    let asked = calls(&server).await;
+    assert_eq!(SHARED_CAPACITY + 1, asked);
+
+    let resolutions = pixm
+        .resolve(&patient("SENTINEL-OVER"), &[node("node-a")], soon())
+        .await;
+    assert!(
+        matches!(resolutions.get(&node("node-a")), Some(Resolution::Resolved(ehr)) if ehr.as_str() == EHR_A),
+        "the resolution past the capacity resolves: {resolutions:?}"
+    );
+    assert_eq!(
+        asked + 1,
+        calls(&server).await,
+        "it asks the Manager itself"
+    );
+
+    let _first = pixm
+        .resolve(&patient("SENTINEL-CAP-0"), &[node("node-a")], soon())
+        .await;
+    assert_eq!(
+        asked + 1,
+        calls(&server).await,
+        "a kept answer still serves"
     );
 }
 

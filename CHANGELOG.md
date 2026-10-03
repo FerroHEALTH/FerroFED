@@ -140,7 +140,6 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   query asks each Manager once. A Manager that fails or stays silent fails
   the localization closed. `OPTIONS {base}/` declares
   `localization.mode = "pixm"`.
-
 - Client authentication at the gateway (§13.1, N25, CP-17 inbound half,
   #80). A request to the ITS-REST surface and `OPTIONS {base}/` carries an
   RFC 9068 access token from an issuer on the `[[auth.issuer]]` trust list,

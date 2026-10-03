@@ -406,6 +406,12 @@ impl std::error::Error for SharedExchange {
 /// resolves within its overall budget, well inside this window).
 const SHARED_WINDOW: Duration = Duration::from_secs(30);
 
+/// The most localizations whose ITI-83 answers are kept at once.
+///
+/// No specification governs this: our own design. A localization past it
+/// keeps nothing, so its resolution asks the Manager again.
+pub const SHARED_CAPACITY: usize = 1024;
+
 /// The ITI-83 answers one localization read, kept for the resolution of the
 /// same query so that it asks no Manager again (§14.2's
 /// "demographic-registration" localizer over the resolver's own call).
@@ -475,12 +481,16 @@ impl PixmResolver {
         out
     }
 
-    /// Keeps `lookups` for the resolution of the same query, and drops every
-    /// kept answer whose window has passed.
+    /// Keeps `lookups` for the resolution of the same query, unless
+    /// [`SHARED_CAPACITY`] answers are already kept, and drops every kept
+    /// answer whose window has passed.
     fn keep(&self, patient: &PatientRef, lookups: BTreeMap<NodeId, Lookup>) {
         let now = Instant::now();
         let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
         shared.retain(|kept| kept.until > now && !kept.is_for(patient));
+        if shared.len() >= SHARED_CAPACITY {
+            return;
+        }
         shared.push(Shared {
             namespace: patient.namespace().clone(),
             value: SecretString::from(patient.value()),
