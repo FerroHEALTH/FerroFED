@@ -624,6 +624,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- A slow or stalled disk under the audit spool no longer holds a patient
+  query past its budget (#512). Storing one record is bounded by the new
+  `spool_write_timeout_ms` (2000 by default) in `[audit.repository]` and
+  `[xcpd.audit_repository]`, and the record of an ITI-83, ITI-78, ITI-119
+  or ITI-55 exchange also by the time left to that exchange. A record
+  not stored in time is an audit failure under the policy already in
+  place (`424` for the query, `503` for an ITI-93 message), and is not
+  counted in the spool's depth. Its write goes on: a record it stores is
+  delivered like any other, and a write that fails is logged, with the
+  sequence number and never the record. One write runs at a time, so a
+  stalled disk holds one thread, and the audit metrics and
+  `GET /health/dependencies` read the spool's depth without waiting on the
+  disk.
 - The ITI-55 audit trail starts its delivery again when the runtime it was
   started on has ended, so audit messages recorded after that are delivered
   rather than left in the spool (#486).

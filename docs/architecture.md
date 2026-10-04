@@ -515,8 +515,9 @@ dispatched (N8).
   the gateway could not audit, so no answer is used without its audit. The server's `[xcpd] audit` has no default:
   `repository` sends the DICOM PS3.15 message over ITI-20 (RFC 5424 syslog
   over TLS) through a bounded on-disk spool, as §3.20.4.1.1 has a sender
-  store what it cannot deliver, so only a full or unwritable spool is an
-  audit failure (#418); `log` writes a structured event at the
+  store what it cannot deliver, so only a full or unwritable spool, or one
+  that does not store a message within its time bound, is an audit
+  failure (#418, #512); `log` writes a structured event at the
   `ferrofed::audit` target without the query parameters; and `off` is
   refused outside the development profile and declared in `OPTIONS` (#410).
 - **The audit of the FHIR profiles** (#486, #469). PIXm (§2:3.83.5.1.1),

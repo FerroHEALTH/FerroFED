@@ -80,6 +80,10 @@ pub struct FeedRepository {
     pub spool_max_bytes: u64,
     /// The most records the spool holds.
     pub spool_max_events: usize,
+    /// The longest storing one record in the spool may take; a record not
+    /// stored by then, or by the end of its exchange's time if that comes
+    /// first, is an audit failure.
+    pub spool_write_timeout_ms: u64,
     /// How long one delivery may take.
     pub timeout_ms: u64,
     /// The longest wait between two delivery attempts.
@@ -104,6 +108,7 @@ impl Default for FeedRepository {
             spool_dir: None,
             spool_max_bytes: 64 * 1024 * 1024,
             spool_max_events: 100_000,
+            spool_write_timeout_ms: 2_000,
             timeout_ms: 5_000,
             retry_max_ms: 60_000,
             client_identity: None,
@@ -236,6 +241,7 @@ fn resolve_repository(
     for (field, zero) in [
         ("spool_max_bytes", table.spool_max_bytes == 0),
         ("spool_max_events", table.spool_max_events == 0),
+        ("spool_write_timeout_ms", table.spool_write_timeout_ms == 0),
         ("timeout_ms", table.timeout_ms == 0),
         ("retry_max_ms", table.retry_max_ms == 0),
     ] {
@@ -274,6 +280,7 @@ fn resolve_repository(
         bounds: Bounds {
             max_messages: table.spool_max_events,
             max_bytes: table.spool_max_bytes,
+            write_timeout: Duration::from_millis(table.spool_write_timeout_ms),
         },
         timeout: Duration::from_millis(table.timeout_ms),
         retry_max: Duration::from_millis(table.retry_max_ms),

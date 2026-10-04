@@ -36,6 +36,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 const ROOMY: Bounds = Bounds {
     max_messages: 64,
     max_bytes: 1 << 20,
+    write_timeout: Duration::from_secs(10),
 };
 
 /// The recorder sending to `repository` over TLS, trusting its CA, through
@@ -171,6 +172,7 @@ async fn a_full_spool_fails_the_discovery_closed() -> TestResult {
     let spool = Spool::in_memory(Bounds {
         max_messages: 1,
         max_bytes: 1 << 20,
+        write_timeout: Duration::from_secs(10),
     });
     let audit = Arc::new(recorder(&repository, spool)?);
     let stub = RespondingGateway::answering(holds(COMMUNITY_A)).await;

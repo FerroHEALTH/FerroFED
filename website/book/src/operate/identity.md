@@ -501,6 +501,7 @@ spool_dir = "/var/lib/ferrofed/audit-spool"
 # enterprise_site = "2.999.40"         # AuditEnterpriseSiteID
 # spool_max_bytes = 67108864
 # spool_max_events = 100000
+# spool_write_timeout_ms = 2000       # storing one message in the spool
 # connect_timeout_ms = 5000           # opening the TCP connection
 # send_timeout_ms = 5000              # the TLS handshake, each write and flush
 # retry_max_ms = 60000                # the longest wait between two attempts
@@ -514,10 +515,12 @@ on disk. ITI-20 has a sender that cannot reach its repository store the
 record and send it when it can (ITI TF-2 §3.20.4.1.1): while the repository
 is down, discovery goes on and the messages wait in the spool, and a restart
 keeps them. Only a message the gateway can neither deliver nor store is an
-audit failure: a full spool (`spool_max_events` or `spool_max_bytes`) or one
-that cannot be written fails the discovery closed, as any audit failure does
-above. Recording an exchange only ever writes to the spool, so a slow or
-hung repository never holds a query.
+audit failure: a full spool (`spool_max_events` or `spool_max_bytes`), one
+that cannot be written, or one that does not store the message in time
+fails the discovery closed, as any audit failure does above. Recording an
+exchange only ever writes to the spool, so a slow or hung repository never
+holds a query, and a slow disk holds it for a bounded time
+([A slow disk](audit.md#a-slow-disk)).
 
 Delivery is bounded at every step: the TCP connection by
 `connect_timeout_ms`, and the TLS handshake, each write and each flush by

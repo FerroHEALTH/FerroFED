@@ -8,8 +8,9 @@
 //! syslog message, stored in the spool, and delivered from there in order
 //! by `ihe_iti`'s forwarder. The event counts as recorded once it is stored:
 //! a repository that cannot be reached delays its delivery (ITI TF-2
-//! §3.20.4.1.1), and a spool that is full or cannot be written refuses the
-//! event, which fails the discovery closed.
+//! §3.20.4.1.1), and a spool that is full, cannot be written, or does not
+//! store the message within its write bound refuses the event, which fails
+//! the discovery closed.
 //!
 //! The message names the patient, inside the base64 query parameters, so it
 //! leaves this module only for the spool and the repository connection; no
