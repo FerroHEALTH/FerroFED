@@ -93,6 +93,13 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/no-nhn/`: the NHN developer portal pages, cache only.
   - `docs/specs/fi-kanta/`: the Kanta documents and packages, cache only.
   - `docs/specs/fi-hl7/`: `hl7.fhir.fi.base` (CC0-1.0).
+- `docs/specs/mitz/`: the Mitz documents that define the closed
+  authorization question of Annex B §B.6 (the VZVZ implementation guide
+  Open en gesloten autorisatievraag 3.8.2, the PvE AMC and the message
+  authentication guide 3.8.1.ad1). No licence is stated, so only
+  `PROVENANCE.md` is committed: `scripts/vendor/mitz.sh` pins each document
+  by its Confluence attachment version and sha256 and fetches it into the
+  git-ignored `docs/specs/mitz/cache/`.
 - `website/book/vendor/mermaid/`: the mermaid browser bundle and the
   mdbook-mermaid init script the book loads, fetched by
   `scripts/vendor/mdbook-mermaid-assets.sh` (MIT and MPL 2.0).

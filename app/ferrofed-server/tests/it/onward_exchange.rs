@@ -321,6 +321,7 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
             patient: None,
+            requester: None,
         }],
         ..AuthSettings::default()
     };

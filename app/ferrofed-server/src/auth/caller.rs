@@ -14,6 +14,7 @@
 use std::fmt;
 
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::consent::Requester;
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use openehr_sdt::smart_scopes::SmartScope;
@@ -52,6 +53,10 @@ pub struct Caller {
     /// The patient the caller's grant is confined to, when only a
     /// `patient/` grant covers the operation.
     patient: Option<PatientContext>,
+    /// Who asks for the data, as the claims the issuer's
+    /// `[auth.issuer.requester]` names state it, when the token carries them
+    /// all (§13.4).
+    requester: Option<Requester>,
 }
 
 /// The patient a caller's `patient/` grant is confined to: the token's
@@ -170,7 +175,21 @@ impl Caller {
             covering: String::new(),
             launch_ehr_id: None,
             patient: None,
+            requester: None,
         }
+    }
+
+    /// Returns this caller, asking for the data as `requester` states.
+    #[must_use]
+    pub fn with_requester(mut self, requester: Option<Requester>) -> Self {
+        self.requester = requester;
+        self
+    }
+
+    /// Returns who asks for the data, when the caller's token states it.
+    #[must_use]
+    pub fn requester(&self) -> Option<&Requester> {
+        self.requester.as_ref()
     }
 
     /// Returns this caller with `claim`, its token's `ehrId` claim as

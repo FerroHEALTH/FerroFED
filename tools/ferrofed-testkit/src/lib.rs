@@ -42,9 +42,10 @@
 //! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
 //!   feeds the PIX Manager over ITI-104, and names patients only inside the
 //!   `urn:oid:2.999` example arc;
-//! - [`xcpd`]: a stub XCPD Responding Gateway answering ITI-55 (#85).
-//!
-//! The consent pre-filter fake arrives with the issue that first needs it.
+//! - [`xcpd`]: a stub XCPD Responding Gateway answering ITI-55 (#85);
+//! - [`mitz`](mod@mitz): a stub Mitz answering the closed authorization
+//!   question of the Dutch Generic Functions, the consent pre-filter of
+//!   Annex B §B.6 (#475).
 #![doc(test(attr(deny(warnings))))]
 
 pub mod atna;
@@ -53,6 +54,7 @@ pub mod dpop;
 pub mod issuer;
 pub mod leak;
 pub mod mcsd;
+pub mod mitz;
 pub mod mock;
 pub mod nvi;
 pub mod oauth;

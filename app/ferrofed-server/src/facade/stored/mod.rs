@@ -160,6 +160,10 @@ const READ_ONLY_ALLOW: &str = "GET, OPTIONS";
 /// # Errors
 ///
 /// The request, unanswered, when `matched` is no registry operation.
+#[expect(
+    clippy::result_large_err,
+    reason = "the error hands the request back by value to the next route, once per request"
+)]
 pub(crate) async fn serve<'a>(
     federation: &Federation,
     definitions: &Arc<Definitions>,
@@ -636,6 +640,7 @@ async fn execute(
         conveyance: &arrived.conveyance,
         started,
         session: arrived.session,
+        requester: arrived.requester,
     };
     let submitted = Submitted::Stored {
         request,

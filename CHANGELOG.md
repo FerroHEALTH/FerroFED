@@ -33,6 +33,30 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Mitz as the consent pre-filter of the Dutch binding (Annex B §B.6,
+  N27a), configured under `[nl_gf.mitz]`. Before resolution the gateway asks
+  Mitz's closed authorization question once for each candidate's care
+  provider: may this data holder make the patient's data of the configured
+  categories available to the verified caller, for `TREAT` or `COC`? The
+  caller's professional (UZI number and role) and organisation (URA and
+  type) come from the token claims each trusted issuer maps under
+  `[auth.issuer.requester]`; a caller whose token lacks them is not asked
+  about, and nothing is filtered for it. A member whose holder Mitz denies
+  for every category is
+  `consent-denied`, never asked, and clears `complete` while the query
+  succeeds; every other member is asked and its node still checks consent
+  (N27, §14.3). `Indeterminate`, a fault, a timeout or a malformed answer is
+  no decision: those members are asked and the failure is carried in
+  `meta.federation.consent.error`, and a pre-filter that denied some members
+  and failed for others is counted as `partial` in
+  `ferrofed_consent_prefilter_requests_total`. Mitz is asked by BSN, so a
+  patient named by the pseudonymised BSN gets no signal. `OPTIONS {base}/`
+  declares the pre-filter as `nl-gf-mitz`. The client is the new `mitz`
+  feature of `nl-generic-functions` 0.0.8, which follows the VZVZ
+  Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2: SOAP 1.2
+  with an XACML 3.0 decision query over mutual TLS. VZVZ states no licence
+  for the document, so `scripts/vendor/mitz.sh` pins it by sha256 and
+  fetches it into an ignored directory (#475).
 - The registry keeps the identifiers a care services directory publishes
   for each organisation (mCSD `Organization.identifier`), and the NVI
   localizer reads its custodian map from them: each member organisation's

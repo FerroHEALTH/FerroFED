@@ -22,6 +22,8 @@
 //!   (Annex A.3);
 //! - [`nvi`]: the [`Localizer`](localizer::Localizer) over the NVI
 //!   Localization Service of the Dutch Generic Functions (Annex B §B.1);
+//! - [`mitz`]: the [`ConsentPrefilter`](consent::ConsentPrefilter) over
+//!   Mitz's closed authorization question (Annex B §B.6);
 //! - [`binding`]: the resolution bindings of §12.5.1 step 2, in memory and
 //!   scoped to the client session (§12.5.1 step 2);
 //! - [`lifecycle`]: what a PMIR ITI-93 message does to those bindings, and
@@ -45,6 +47,7 @@ pub mod dev;
 pub mod directory;
 pub mod lifecycle;
 pub mod localizer;
+pub mod mitz;
 pub mod nvi;
 pub mod patient;
 pub mod pixm;

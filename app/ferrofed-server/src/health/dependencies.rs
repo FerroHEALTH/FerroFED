@@ -130,7 +130,8 @@ impl Observed {
     pub fn of_consent(decision: &ConsentDecision) -> Self {
         match decision {
             ConsentDecision::Denied(_) | ConsentDecision::NoSignal => Self::Up,
-            ConsentDecision::Unavailable(error) => {
+            ConsentDecision::Unavailable(error)
+            | ConsentDecision::Partial { failure: error, .. } => {
                 error.status().map_or(Self::Down, Self::of_answer)
             }
         }

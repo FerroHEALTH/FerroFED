@@ -77,6 +77,7 @@ async fn an_edge_assertion_is_never_kept_as_a_token() -> TestResult {
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
             patient: None,
+            requester: None,
         }],
         ..AuthSettings::default()
     });

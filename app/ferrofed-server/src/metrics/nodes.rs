@@ -174,6 +174,7 @@ impl NodeRequests {
             ConsentDecision::Denied(_) => "denied",
             ConsentDecision::NoSignal => "no-signal",
             ConsentDecision::Unavailable(_) => "unavailable",
+            ConsentDecision::Partial { .. } => "partial",
         };
         instruments
             .prefilter

@@ -64,6 +64,87 @@ pub enum ConsentDecision {
     NoSignal,
     /// The service could not answer.
     Unavailable(ConsentError),
+    /// The service denied asking `denied` and could not answer for some
+    /// other candidate, for the reason `failure` gives. A candidate it could
+    /// not answer for is asked, as under [`ConsentDecision::Unavailable`].
+    Partial {
+        /// The candidates consent does not permit asking.
+        denied: BTreeSet<NodeId>,
+        /// Why the service could not answer for the others.
+        failure: ConsentError,
+    },
+}
+
+/// Who asks for the patient's data, as the verified caller's token states it
+/// (§13.1, §13.4): the professional and their role, and the organisation and
+/// its type.
+///
+/// Every value comes from the caller's own verified token, never from the
+/// gateway's configuration. `Debug` shows the role and the organisation and
+/// leaves out the professional's number.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Requester {
+    professional: String,
+    role: String,
+    organisation: String,
+    organisation_type: String,
+}
+
+impl Requester {
+    /// Returns the requester the four values name, or `None` when one is
+    /// empty: a caller whose token does not state them all names no
+    /// requester.
+    #[must_use]
+    pub fn new(
+        professional: String,
+        role: String,
+        organisation: String,
+        organisation_type: String,
+    ) -> Option<Self> {
+        let complete = [&professional, &role, &organisation, &organisation_type]
+            .iter()
+            .all(|value| !value.is_empty());
+        complete.then_some(Self {
+            professional,
+            role,
+            organisation,
+            organisation_type,
+        })
+    }
+
+    /// Returns the professional's identification number (UZI).
+    #[must_use]
+    pub fn professional(&self) -> &str {
+        &self.professional
+    }
+
+    /// Returns the professional's role code (UZI role).
+    #[must_use]
+    pub fn role(&self) -> &str {
+        &self.role
+    }
+
+    /// Returns the organisation's identifier (URA).
+    #[must_use]
+    pub fn organisation(&self) -> &str {
+        &self.organisation
+    }
+
+    /// Returns the organisation's type.
+    #[must_use]
+    pub fn organisation_type(&self) -> &str {
+        &self.organisation_type
+    }
+}
+
+impl std::fmt::Debug for Requester {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Requester")
+            .field("role", &self.role)
+            .field("organisation", &self.organisation)
+            .field("organisation_type", &self.organisation_type)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Answers which candidate members may not be asked about a patient.
@@ -75,10 +156,12 @@ pub enum ConsentDecision {
 #[async_trait]
 pub trait ConsentPrefilter: Send + Sync {
     /// Decides, before `deadline`, which of `candidates` may not be asked
-    /// about `patient`.
+    /// about `patient` on behalf of `requester`, the verified caller, when
+    /// the caller's token names one.
     async fn prefilter(
         &self,
         patient: &PatientRef,
+        requester: Option<&Requester>,
         candidates: &[NodeId],
         deadline: Instant,
     ) -> ConsentDecision;

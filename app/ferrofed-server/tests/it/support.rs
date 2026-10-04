@@ -182,6 +182,7 @@ pub(crate) fn auth() -> AuthSettings {
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::from([claims().client_id]),
             patient: None,
+            requester: None,
         }],
         ..AuthSettings::default()
     }

@@ -476,6 +476,7 @@ impl ferrofed_identity::consent::ConsentPrefilter for Down {
     async fn prefilter(
         &self,
         _patient: &ferrofed_identity::patient::PatientRef,
+        _requester: Option<&ferrofed_identity::consent::Requester>,
         _candidates: &[ferrofed_registry::id::NodeId],
         _deadline: std::time::Instant,
     ) -> ferrofed_identity::consent::ConsentDecision {

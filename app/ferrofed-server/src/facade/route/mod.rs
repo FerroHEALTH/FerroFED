@@ -63,6 +63,7 @@ use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded, HeldReque
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::consent::Requester;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, Method, Uri};
@@ -124,6 +125,9 @@ pub struct Arrived<'a> {
     /// The verified caller's session, whose resolution bindings route a
     /// path `ehr_id` (§12.5.1 step 2); `None` when no caller was verified.
     pub session: Option<&'a SessionKey>,
+    /// Who asks for the data, as the verified caller's token states it,
+    /// which the consent pre-filter asks about (§13.4).
+    pub requester: Option<&'a Requester>,
     /// Whom the request is on behalf of, conveyed to every node it reaches
     /// (§13.1, N24).
     pub conveyance: Conveyance,
@@ -190,6 +194,7 @@ pub(crate) async fn unrouted(
         request_id,
         outbound,
         session: session.as_ref(),
+        requester: caller.as_deref().and_then(Caller::requester),
         conveyance,
     };
     if let Some(definitions) = state.definitions()
