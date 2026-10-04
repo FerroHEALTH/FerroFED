@@ -130,8 +130,9 @@ pub enum FederationError {
     /// (§15.1, §15.2, N19, N20).
     #[error("the registry could not be read from the care services directory")]
     Directory(#[source] Box<DirectoryFailure>),
-    /// The `[dev]` table is set but no registry document is, so its rows name
-    /// members that do not exist.
+    /// The `[dev]` table is set but no registry is, neither
+    /// `registry.document` nor `[registry.mcsd]`, so its rows name members
+    /// that do not exist.
     #[error(
         "the [dev] cross-reference needs a registry, registry.document or [registry.mcsd], whose members its rows name"
     )]
@@ -142,8 +143,9 @@ pub enum FederationError {
     /// The static cross-reference refuses its rows or the profile.
     #[error("the [dev] cross-reference cannot be enabled")]
     DevCrossRef(#[source] DevCrossRefError),
-    /// `federation.demographic_endpoint` is set but no registry document is,
-    /// so it names an endpoint that does not exist.
+    /// `federation.demographic_endpoint` is set but no registry is, neither
+    /// `registry.document` nor `[registry.mcsd]`, so it names an endpoint
+    /// that does not exist.
     #[error(
         "federation.demographic_endpoint needs a registry, registry.document or [registry.mcsd], whose endpoint it names"
     )]
@@ -157,8 +159,8 @@ pub enum FederationError {
         /// The endpoint id that was given.
         endpoint: EndpointId,
     },
-    /// `[pixm]` is set but no registry document is, so it names members that
-    /// do not exist.
+    /// `[pixm]` is set but no registry is, neither `registry.document` nor
+    /// `[registry.mcsd]`, so it names members that do not exist.
     #[error(
         "the [pixm] resolver needs a registry, registry.document or [registry.mcsd], whose members it names"
     )]

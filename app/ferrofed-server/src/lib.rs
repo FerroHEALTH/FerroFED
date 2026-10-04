@@ -285,7 +285,7 @@ fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode
         Ok(Some(federation)) => federation,
         Ok(None) => {
             eprintln!(
-                "ferrofed: cannot check admission: set registry.document, whose members the check exercises"
+                "ferrofed: cannot check admission: set a registry, registry.document or [registry.mcsd], whose members the check exercises"
             );
             return ExitCode::from(EXIT_CONFIG);
         }

@@ -226,6 +226,17 @@ fn a_listing_of_an_endpoint_outside_the_bundle_is_refused() {
     );
 }
 
+/// A refused listing reads as one of an endpoint, never as a reference to an
+/// organisation.
+#[test]
+fn a_refused_listing_names_the_reference_and_no_organization_type() {
+    let message = ReferenceFault::Outside("Endpoint/node-z".to_owned()).to_string();
+    assert_eq!(
+        "the reference \"Endpoint/node-z\" names no resource of the Bundle",
+        message
+    );
+}
+
 #[test]
 fn the_same_organisation_listing_an_endpoint_twice_is_one_operator() {
     let mut bundle = fhir();
