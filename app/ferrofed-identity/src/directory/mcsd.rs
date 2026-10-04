@@ -30,19 +30,19 @@ use std::time::{Duration, Instant};
 
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use http::header::{AUTHORIZATION, HeaderMap};
 use ihe_iti::mcsd::budget::{Budget, Limits};
 use ihe_iti::mcsd::client::McsdClient;
 use ihe_iti::mcsd::error::{InvalidBase, McsdError};
 use ihe_iti::mcsd::replica::{Refresh, Replica, Scope};
 use jiff::fmt::rfc2822::DateTimeParser;
 use jiff::{SignedDuration, Timestamp};
-use openehr_its::rest::client::{Credentials, InvalidCredentials};
+use openehr_its::rest::client::InvalidCredentials;
 use thiserror::Error;
 use url::Url;
 
 use super::error::FhirFormError;
 use super::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM, selection_document};
+use crate::fhir::{self, Authentication, ClientError, Tls};
 
 /// The directory a registry is read from, as the configuration names it.
 #[derive(Debug)]
@@ -52,7 +52,7 @@ pub struct DirectoryConfig {
     pub base: SecretUrl,
     /// The credentials the gateway sends, when the transport does not
     /// authenticate it (ITI TF-2 Appendix Z.8).
-    pub credentials: Option<Credentials>,
+    pub credentials: Authentication,
     /// How long one whole read or refresh may take, over every page of both
     /// resource types.
     pub deadline: Duration,
@@ -81,6 +81,15 @@ pub enum DirectoryConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for the directory could not be built")]
     Client(#[source] reqwest::Error),
+}
+
+impl From<ClientError> for DirectoryConfigError {
+    fn from(error: ClientError) -> Self {
+        match error {
+            ClientError::Credentials(source) => Self::Credentials(source),
+            ClientError::Build(source) => Self::Client(source),
+        }
+    }
 }
 
 /// Why the directory gave no registry.
@@ -201,27 +210,24 @@ impl DirectorySource {
     /// the client refuses, credentials no header can carry, or an HTTP client
     /// that cannot be built.
     pub fn new(config: DirectoryConfig) -> Result<Self, DirectoryConfigError> {
-        let mut headers = HeaderMap::new();
-        if let Some(credentials) = config.credentials {
-            let header = credentials
-                .header_value()
-                .map_err(DirectoryConfigError::Credentials)?;
-            headers.insert(AUTHORIZATION, header);
-        }
-        let http = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .default_headers(headers)
-            .build()
-            .map_err(DirectoryConfigError::Client)?;
-        let base = Url::parse(config.base.expose()).map_err(DirectoryConfigError::BaseUrl)?;
+        let DirectoryConfig {
+            base,
+            credentials,
+            deadline,
+            pages,
+            bytes,
+            entries,
+        } = config;
+        let http = fhir::http_client(&credentials, &Tls::default())?;
+        let base = Url::parse(base.expose()).map_err(DirectoryConfigError::BaseUrl)?;
         let client = McsdClient::new(base, http).map_err(DirectoryConfigError::Base)?;
         Ok(Self {
             client,
-            deadline: config.deadline,
+            deadline,
             limits: Limits {
-                pages: config.pages,
-                bytes: config.bytes,
-                entries: config.entries,
+                pages,
+                bytes,
+                entries,
             },
         })
     }

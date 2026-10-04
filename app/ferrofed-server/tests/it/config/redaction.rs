@@ -14,7 +14,8 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
 
-use ferrofed_identity::pixm::{ManagerConfig, PixAuth};
+use ferrofed_identity::fhir::Authentication;
+use ferrofed_identity::pixm::ManagerConfig;
 use ferrofed_registry::document::Document;
 use ferrofed_registry::secret::{REDACTED, Secret, SecretUrl};
 use ferrofed_server::config::Config;
@@ -154,7 +155,7 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
     shows_placeholder("StoredQueries", &config.stored_queries);
     let composed = ManagerConfig {
         base: SecretUrl::new(pix_url_with_userinfo()),
-        auth: PixAuth::Basic {
+        auth: Authentication::Basic {
             user: String::from("gateway"),
             password: Secret::new(PASSWORD).to_secret_string(),
         },
@@ -198,7 +199,7 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
     for manager in &pixm.managers {
         redacted("PixManagerSettings", manager);
         let auth = match &manager.credentials {
-            Some(Scheme::Bearer(token)) => PixAuth::Bearer(token.to_secret_string()),
+            Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
             _ => return Err("the PIX Manager resolves to its bearer token".into()),
         };
         let composed = ManagerConfig {

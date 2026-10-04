@@ -18,16 +18,16 @@ use std::collections::BTreeSet;
 
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::secret::SecretUrl;
-use http::header::{AUTHORIZATION, HeaderMap};
 use ihe_iti::pmir::PmirSubscriber;
 use ihe_iti::pmir::error::InvalidInput;
 use ihe_iti::pmir::feed::{Event, Feed, PatientIdentity};
-use openehr_its::rest::client::{Credentials, InvalidCredentials};
-use secrecy::{ExposeSecret, SecretString};
+use openehr_its::rest::client::InvalidCredentials;
+use secrecy::ExposeSecret;
 use thiserror::Error;
 use url::Url;
 
 use crate::binding::IdentityChange;
+use crate::fhir::{self, Authentication, ClientError, Tls};
 
 /// What one change touches.
 enum Touched {
@@ -99,26 +99,6 @@ fn carried(identity: &PatientIdentity, domains: &BTreeSet<String>) -> Touched {
     }
 }
 
-/// How the gateway authenticates to the Patient Identity Registry, by which
-/// the Registry authorizes the subscription (§2:3.94.5).
-///
-/// `Debug` redacts every secret, because [`SecretString`] does.
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum RegistryAuth {
-    /// No `Authorization` header: the transport authenticates the gateway.
-    None,
-    /// An RFC 6750 bearer token.
-    Bearer(SecretString),
-    /// RFC 7617 basic authentication.
-    Basic {
-        /// The user name, which is not a secret.
-        user: String,
-        /// The password.
-        password: SecretString,
-    },
-}
-
 /// A subscriber that cannot be built.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -142,9 +122,18 @@ pub enum LifecycleConfigError {
     Client(#[source] reqwest::Error),
 }
 
+impl From<ClientError> for LifecycleConfigError {
+    fn from(error: ClientError) -> Self {
+        match error {
+            ClientError::Credentials(source) => Self::Credentials(source),
+            ClientError::Build(source) => Self::Client(source),
+        }
+    }
+}
+
 /// The ITI-94 subscriber of the Registry at `base`, authenticating with
-/// `auth`, over an HTTP client that follows no redirect so its credentials go
-/// nowhere the base does not name.
+/// `auth`, by which the Registry authorizes the subscription (§2:3.94.5),
+/// over the IHE FHIR client of [`fhir::http_client`].
 ///
 /// # Errors
 /// A [`LifecycleConfigError`] for a base that is no `http(s)` URL, a
@@ -152,27 +141,9 @@ pub enum LifecycleConfigError {
 /// built.
 pub fn subscriber(
     base: &SecretUrl,
-    auth: &RegistryAuth,
+    auth: &Authentication,
 ) -> Result<PmirSubscriber, LifecycleConfigError> {
     let base = Url::parse(base.expose()).map_err(LifecycleConfigError::BaseUrl)?;
-    let mut headers = HeaderMap::new();
-    let credentials = match auth {
-        RegistryAuth::None => None,
-        RegistryAuth::Bearer(token) => Some(Credentials::bearer(token.clone())),
-        RegistryAuth::Basic { user, password } => {
-            Some(Credentials::basic(user.as_str(), password.clone()))
-        }
-    };
-    if let Some(credentials) = credentials {
-        let header = credentials
-            .header_value()
-            .map_err(LifecycleConfigError::Credentials)?;
-        headers.insert(AUTHORIZATION, header);
-    }
-    let http = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .default_headers(headers)
-        .build()
-        .map_err(LifecycleConfigError::Client)?;
+    let http = fhir::http_client(auth, &Tls::default())?;
     PmirSubscriber::new(base, http).map_err(LifecycleConfigError::Base)
 }
