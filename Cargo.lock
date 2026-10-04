@@ -1099,6 +1099,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-prometheus",
+ "opentelemetry-proto",
  "opentelemetry_sdk",
  "prometheus",
  "redb",
@@ -1128,6 +1129,7 @@ dependencies = [
 name = "ferrofed-testkit"
 version = "0.0.7"
 dependencies = [
+ "async-trait",
  "aws-lc-rs",
  "bytes",
  "fhir-types",
@@ -1141,6 +1143,7 @@ dependencies = [
  "openehr-base",
  "openehr-its",
  "openehr-rm",
+ "opentelemetry-proto",
  "pem",
  "reqwest",
  "secrecy",
@@ -1149,6 +1152,7 @@ dependencies = [
  "testcontainers",
  "thiserror",
  "tokio",
+ "tonic",
  "url",
  "uuid",
  "wiremock",

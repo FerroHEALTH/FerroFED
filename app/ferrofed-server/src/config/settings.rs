@@ -26,7 +26,7 @@ use crate::base_path::BasePath;
 use crate::config::auth::AuthSettings;
 use crate::config::stored_queries::Store;
 use crate::config::{DevSection, NodeSelection, RegistryFormat};
-use crate::telemetry::Format;
+use crate::telemetry::{Format, SampleRatio};
 
 /// The settings the run path holds, with every secret already read.
 #[derive(Debug)]
@@ -224,6 +224,8 @@ pub struct TelemetrySettings {
     /// The OTLP collector the spans are exported to, already known to be an
     /// `http://` URL; `None` exports nothing.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The share of the gateway's traces that are sampled.
+    pub trace_sample_ratio: SampleRatio,
 }
 
 /// The metrics surface, resolved.
@@ -309,6 +311,7 @@ impl Settings {
             metrics_listen = self.metrics.listen.map(|address| address.to_string()),
             metrics_otlp_push = self.metrics.otlp_endpoint.is_some(),
             traces_otlp_export = self.telemetry.otlp_endpoint.is_some(),
+            trace_sample_ratio = self.telemetry.trace_sample_ratio.get(),
             credentials = endpoints.join(","),
             auth_issuers = self.server.auth.issuers.len(),
             auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),

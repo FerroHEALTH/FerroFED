@@ -97,6 +97,9 @@ jsonwebtoken.workspace = true
 # The in-memory span exporter the trace tests read every exported span from
 # (#353).
 opentelemetry_sdk = { workspace = true, features = ["testing"] }
+# The OTLP messages the testkit's collector received, read by the export
+# test over the wire (#437).
+opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
 wiremock.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util"] }

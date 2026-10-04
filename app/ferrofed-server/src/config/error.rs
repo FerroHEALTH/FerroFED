@@ -179,6 +179,12 @@ pub enum Error {
         /// The key that holds it.
         key: String,
     },
+    /// `telemetry.trace_sample_ratio` is not a number from `0.0` to `1.0`.
+    #[error("telemetry.trace_sample_ratio is {value}; it must be a number from 0.0 to 1.0")]
+    SampleRatio {
+        /// The value the key holds.
+        value: f64,
+    },
     /// The log filter does not parse.
     #[error("telemetry.filter is not a valid tracing filter")]
     Filter {

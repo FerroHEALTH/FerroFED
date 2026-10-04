@@ -34,6 +34,11 @@ jiff.workspace = true
 jsonwebtoken.workspace = true
 # A generated signing key is written as PKCS#8 PEM (#81).
 pem.workspace = true
+# The in-process OTLP collector (#437): the OTLP trace service, its gRPC
+# server, and the async trait the generated service is.
+async-trait.workspace = true
+opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
+tonic = { workspace = true, features = ["server", "router"] }
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true
 # The canonical JSON writer the seed's EHR_STATUS is written with.

@@ -223,7 +223,7 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     // is a tonic client, which is built inside the runtime it will run on.
     let traces = match settings.telemetry.otlp_endpoint.as_ref().map(|endpoint| {
         let _entered = runtime.enter();
-        telemetry::Traces::new(endpoint)
+        telemetry::Traces::new(endpoint, settings.telemetry.trace_sample_ratio)
     }) {
         None => None,
         Some(Ok(traces)) => Some(traces),

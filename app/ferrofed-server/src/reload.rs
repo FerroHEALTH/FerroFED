@@ -435,6 +435,7 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
 /// one the process started with.
 fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
     let (was, now) = (&boot.federation, &fresh.federation);
+    let (booted, reread) = (&boot.telemetry, &fresh.telemetry);
     [
         (
             "registry.mcsd",
@@ -462,17 +463,15 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             "server.body_limit_bytes",
             boot.server.body_limit != fresh.server.body_limit,
         ),
-        (
-            "telemetry.format",
-            boot.telemetry.format != fresh.telemetry.format,
-        ),
-        (
-            "telemetry.filter",
-            boot.telemetry.filter != fresh.telemetry.filter,
-        ),
+        ("telemetry.format", booted.format != reread.format),
+        ("telemetry.filter", booted.filter != reread.filter),
         (
             "telemetry.otlp_endpoint",
-            boot.telemetry.otlp_endpoint != fresh.telemetry.otlp_endpoint,
+            booted.otlp_endpoint != reread.otlp_endpoint,
+        ),
+        (
+            "telemetry.trace_sample_ratio",
+            booted.trace_sample_ratio != reread.trace_sample_ratio,
         ),
         ("federation.id", was.id != now.id),
         ("federation.timeouts", was.budget != now.budget),

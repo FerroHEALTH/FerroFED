@@ -138,6 +138,7 @@ body_limit_bytes = 1048576    # a body past this answers 413
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
 filter = "info,hyper=warn,tower=warn,h2=warn"   # what the console logs; never what is traced
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the spans are exported to; see Tracing
+trace_sample_ratio = 1.0   # the share of requests whose spans are exported, 0.0 to 1.0
 
 # The metrics surface, off by default; see Metrics.
 [metrics]
