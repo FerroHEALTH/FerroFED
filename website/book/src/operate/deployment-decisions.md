@@ -132,7 +132,11 @@ authenticates that connection the same way.
 - the gateway's keys rotate with an overlap window, and each node verifies
   against the published key set;
 - consent is never inferred from localization: each node makes its own
-  consent decision, whatever a pre-filter answered (§13.2, N27).
+  consent decision, whatever a pre-filter answered (§13.2, N27);
+- a `patient/` grant admits nothing, so a patient-facing app cannot use the
+  gateway with a patient-confined token. A deployment that instead issues
+  `user/` or `system/` scopes to patient users widens what those users can
+  reach to everything those scopes cover; record that choice here.
 
 **Addressed by agreement, outside the gateway:**
 

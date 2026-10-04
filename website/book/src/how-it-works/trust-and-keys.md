@@ -109,9 +109,10 @@ that covers the operation is a `403`. A token without a purpose of use is a
 deployment whose proxy already authenticates callers, the edge mode is
 configured explicitly: the proxy signs an assertion of the caller, the
 gateway verifies it like a token and records which identity the proxy
-asserted. A `patient/` scope grants nothing at the gateway until
-[#413](https://github.com/FerroHEALTH/FerroFED/issues/413) decides how a
-patient context is confined across a federation.
+asserted. A `patient/` scope grants nothing at the gateway, because no
+token claim defines the patient in a form the gateway can confine across
+nodes; an issuer-bound opt-in is planned
+([#443](https://github.com/FerroHEALTH/FerroFED/issues/443)).
 
 **Authenticating to the node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
 §13.1, N25). The gateway sends the node's token endpoint an OAuth 2.0 client

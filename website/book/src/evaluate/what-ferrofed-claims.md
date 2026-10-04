@@ -152,9 +152,9 @@ The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
 
 - the XCPD audit sent to an ATNA Audit Record Repository with ITI-20
   ([#418](https://github.com/FerroHEALTH/FerroFED/issues/418));
-- how a `patient/` scope is confined to its patient across a federation,
-  which grants nothing at the gateway until then
-  ([#413](https://github.com/FerroHEALTH/FerroFED/issues/413)), and the
+- an opt-in that accepts a `patient/` scope through an issuer-bound
+  `ehrId` resolved by §5.2; without it a `patient/` grant admits nothing
+  ([#443](https://github.com/FerroHEALTH/FerroFED/issues/443)), and the
   SMART on openEHR pages the client authentication cites, vendored
   ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414));
 - in-scope deletions recorded in the mCSD directory replica, so a dangling
