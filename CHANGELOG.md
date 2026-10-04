@@ -558,6 +558,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- The ITI-55 audit trail starts its delivery again when the runtime it was
+  started on has ended, so audit messages recorded after that are delivered
+  rather than left in the spool (#486).
 - A `[[pixm.manager]]` URL that is not `https` outside
   `profile = "development"` is refused while the configuration loads, as an
   XCPD gateway URL already was, naming its key; before, only `serve`,
