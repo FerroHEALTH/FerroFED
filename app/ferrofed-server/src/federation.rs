@@ -132,7 +132,9 @@ pub enum FederationError {
     Directory(#[source] Box<DirectoryFailure>),
     /// The `[dev]` table is set but no registry document is, so its rows name
     /// members that do not exist.
-    #[error("the [dev] cross-reference needs registry.document, whose members its rows name")]
+    #[error(
+        "the [dev] cross-reference needs a registry, registry.document or [registry.mcsd], whose members its rows name"
+    )]
     DevWithoutRegistry,
     /// The `[dev]` table does not read as the static cross-reference.
     #[error("the [dev] cross-reference is not valid")]
@@ -142,7 +144,9 @@ pub enum FederationError {
     DevCrossRef(#[source] DevCrossRefError),
     /// `federation.demographic_endpoint` is set but no registry document is,
     /// so it names an endpoint that does not exist.
-    #[error("federation.demographic_endpoint needs registry.document, whose endpoint it names")]
+    #[error(
+        "federation.demographic_endpoint needs a registry, registry.document or [registry.mcsd], whose endpoint it names"
+    )]
     DemographicWithoutRegistry,
     /// `federation.demographic_endpoint` names no endpoint of the registry
     /// (§7a.1, §12.6, N32).
@@ -155,7 +159,9 @@ pub enum FederationError {
     },
     /// `[pixm]` is set but no registry document is, so it names members that
     /// do not exist.
-    #[error("the [pixm] resolver needs registry.document, whose members it names")]
+    #[error(
+        "the [pixm] resolver needs a registry, registry.document or [registry.mcsd], whose members it names"
+    )]
     PixmWithoutRegistry,
     /// Both `[dev]` and `[pixm]` are set, and exactly one resolver is active
     /// (no specification governs this: our own design).
@@ -165,14 +171,14 @@ pub enum FederationError {
     /// an undirected patient query finds its nodes is a deployment decision,
     /// declared and never defaulted (§4.3, N4).
     #[error(
-        "set federation.node_selection when registry.document is set: \"ask-all\" asks every member's cross-reference (§4.3, N4)"
+        "set federation.node_selection when a registry, registry.document or [registry.mcsd], is set: \"ask-all\" asks every member's cross-reference (§4.3, N4)"
     )]
     NodeSelectionUndeclared,
     /// A registry is configured, but `federation.id` is not: the
     /// `OPTIONS {base}/` body names the federation (§7a.2, N30), and the
     /// identifier is the deployment's to choose, never defaulted.
     #[error(
-        "set federation.id when registry.document is set: the OPTIONS {{base}}/ self-description names the federation (§7a.2, N30)"
+        "set federation.id when a registry, registry.document or [registry.mcsd], is set: the OPTIONS {{base}}/ self-description names the federation (§7a.2, N30)"
     )]
     IdUndeclared,
     /// The `OPTIONS {base}/` self-description cannot be built from the

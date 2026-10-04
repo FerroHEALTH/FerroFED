@@ -421,6 +421,25 @@ fn a_pix_manager_without_a_registry_refuses_to_boot() -> TestResult {
     }
 }
 
+/// A refusal that asks for a registry names both of its sources, the
+/// document and the care services directory.
+#[test]
+fn a_refusal_asking_for_a_registry_names_both_sources() {
+    for refused in [
+        FederationError::DevWithoutRegistry,
+        FederationError::PixmWithoutRegistry,
+        FederationError::DemographicWithoutRegistry,
+        FederationError::NodeSelectionUndeclared,
+        FederationError::IdUndeclared,
+    ] {
+        let message = refused.to_string();
+        assert!(
+            message.contains("registry.document") && message.contains("[registry.mcsd]"),
+            "{message}"
+        );
+    }
+}
+
 #[test]
 fn a_pix_manager_url_that_does_not_parse_refuses_to_boot_naming_its_key() -> TestResult {
     let text = "[[pixm.manager]]\nurl = \"not a url\"\n";

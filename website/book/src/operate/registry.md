@@ -147,7 +147,11 @@ The members are the directory's `Organization`s that carry an
 `https://ferrofed.eu/fhir/sid/organisation-id` identifier and its `Endpoint`s
 that carry an `https://ferrofed.eu/fhir/sid/endpoint-id` identifier, written
 exactly as the FHIR form above. The rest of the directory is not the
-federation's and is never read into the registry. The URL is `http` or
+federation's and is never read into the registry. A member organisation may
+also list endpoints of other services, such as its XCA endpoints: the
+gateway ignores a listing of an `Endpoint` that is no member, where the
+document refuses it, and logs the listing's reference, never the endpoint,
+once each time it reads the directory's content. The URL is `http` or
 `https` with no user name or password; the credentials take a bearer token or
 basic credentials, each through its `_file` sibling, and never an OAuth 2.0
 grant. A directory with credentials is `https` outside
@@ -182,8 +186,10 @@ A refresh that changed something goes through the same checks as a reload:
   effects of a reload (learned routes held to it, entries for a member that
   left dropped). It logs `registry reloaded` and counts as an applied reload.
 - When it breaks a rule (an endpoint relying on `hl7-fhir-rest`, a `system_id`
-  given to two nodes, an endpoint deleted while an organisation still lists
-  it, a member the resolver does not cover), it is refused. The running
+  given to two nodes, an endpoint deleted or taken out of the selection while
+  an organisation still lists it, a member the resolver does not cover), it
+  is refused. A listing that named a member endpoint when the running
+  registry was read must still name one. The running
   registry stays, the gateway logs `registry reload refused` with
   `class = "registry-invalid"`, and the refusal counts as a refused reload.
   The next refresh asks again from the same instant, so the registry follows
