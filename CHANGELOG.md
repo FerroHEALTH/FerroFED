@@ -227,6 +227,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 - `scripts/quickstart/signing-key.sh` writes the compose quickstart's
   development signing key before the first `docker compose up`, and the
   quickstart and the release example configuration carry `[signing]`.
+- The book's
+  [§13.4 deployment decisions](https://ferrofed.eu/docs/operate/deployment-decisions.html)
+  page (#84; §13.4, N25, CP-39): FerroFED's own answer to each of the five
+  obligations §13.4 puts on a deployment (the identity verified at each
+  boundary, who authenticates the end user, how purpose of use travels, what
+  the tokens are bound to, and which risks are carried technically and which
+  by agreement), the configuration that changes each answer, and a template
+  an operator fills in for what only a deployment can answer. A test holds
+  the page to one section per obligation.
 
 ### Changed
 

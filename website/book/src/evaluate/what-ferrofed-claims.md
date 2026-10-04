@@ -115,7 +115,9 @@ v0.0.8, security and the bindings (§13 to §15, Annex A, Annex B):
   ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81));
 - consent left to the node with the optional Step-1 pre-filter
   ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)), and the §13.4
-  deployment decisions ([#84](https://github.com/FerroHEALTH/FerroFED/issues/84));
+  deployment decisions, documented with an operator's template
+  ([#84](https://github.com/FerroHEALTH/FerroFED/issues/84),
+  [The §13.4 deployment decisions](../operate/deployment-decisions.md));
 - the registry read from an mCSD directory
   ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)), and PMIR
   identity-lifecycle notifications
