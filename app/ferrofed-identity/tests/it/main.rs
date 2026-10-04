@@ -21,6 +21,7 @@ mod mitz;
 mod nvi_directory;
 mod nvi_localizer;
 mod patient;
+mod pdqm;
 mod pixm;
 mod pixm_localizer;
 mod static_consent;
