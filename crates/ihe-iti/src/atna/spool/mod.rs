@@ -10,10 +10,10 @@
 //! caller can fail the exchange it audits. Storing one message is bounded in
 //! time too: one not stored within [`Bounds::write_timeout`], the wait for a
 //! write before it included, is refused with [`SpoolError::Late`] and is not
-//! counted. That write goes on, and once it ends the message is stored and
-//! delivered like any other, or its failure is logged, so a slow disk
-//! neither loses nor repeats a message. Messages leave in the order they
-//! were stored.
+//! counted. That write goes on, or still waits its turn, and once it ends
+//! the message is stored and delivered like any other, or its failure is
+//! logged, so a slow disk neither loses nor repeats a message. Messages
+//! leave in the order they were stored.
 //!
 //! On disk ([`Spool::open`]), each message is one file named by its sequence
 //! number. It is written to a temporary file, flushed to the device, renamed,
@@ -356,9 +356,9 @@ impl Spool {
     ///
     /// It waits at most [`Bounds::write_timeout`], the wait for a write before
     /// it included. A message not stored by then is refused with
-    /// [`SpoolError::Late`] and is not counted. Its write goes on: once it
-    /// ends, the message is stored and delivered like any other, or the
-    /// failure is logged with no part of the message.
+    /// [`SpoolError::Late`] and is not counted. Its write goes on, or waits
+    /// on for its turn: once it ends, the message is stored and delivered
+    /// like any other, or the failure is logged with no part of the message.
     ///
     /// # Errors
     ///
@@ -384,22 +384,33 @@ impl Spool {
 
     /// Stores `message` once every write before it has ended, so a stalled
     /// write holds one blocking thread however many messages wait behind it.
+    ///
+    /// The write is its own task from the start, waiting for its turn there:
+    /// a caller that stops waiting while the message is still queued leaves
+    /// it queued, and it is written once the writes before it end.
+    // NOTE: ITI TF-2 §3.20.4.1.1 has a record stored locally and sent when the sender
+    // is able, so a queued record its exchange gave up on is still written, never dropped.
     async fn store(&self, message: SecretSlice<u8>) -> Result<(), SpoolError> {
-        let turn = Arc::clone(&self.turn).lock_owned().await;
+        let turn = Arc::clone(&self.turn);
         let inner = Arc::clone(&self.inner);
         let arrived = Arc::clone(&self.arrived);
-        let write = InFlight::new(tokio::task::spawn_blocking(move || {
-            let stored = {
-                let mut inner = lock(&inner);
-                let stored = inner.push(message);
-                inner.publish();
+        let write = InFlight::new(tokio::spawn(async move {
+            let turn = turn.lock_owned().await;
+            tokio::task::spawn_blocking(move || {
+                let stored = {
+                    let mut inner = lock(&inner);
+                    let stored = inner.push(message);
+                    inner.publish();
+                    stored
+                };
+                drop(turn);
+                if stored.is_ok() {
+                    arrived.notify_one();
+                }
                 stored
-            };
-            drop(turn);
-            if stored.is_ok() {
-                arrived.notify_one();
-            }
-            stored
+            })
+            .await
+            .map_err(SpoolError::Task)?
         }));
         write.await.map_err(SpoolError::Task)?.map(|_sequence| ())
     }
