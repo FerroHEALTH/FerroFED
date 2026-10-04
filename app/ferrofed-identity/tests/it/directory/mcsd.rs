@@ -8,11 +8,12 @@
 use std::error::Error;
 use std::time::Duration;
 
+use ferrofed_identity::directory::error::{FhirFormError, ReferenceFault};
 use ferrofed_identity::directory::mcsd::{
     DirectoryConfig, DirectoryReadError, DirectorySource, Refreshed,
 };
 use ferrofed_identity::directory::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM};
-use ferrofed_registry::id::NodeId;
+use ferrofed_registry::id::{NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mcsd::{self, HarnessDirectory, Member};
 
@@ -161,5 +162,104 @@ async fn a_directory_past_a_cap_gives_no_registry() -> TestResult {
         return Err(format!("an exchange error: {refused:?}").into());
     };
     assert!(error.exceeded(), "{error:?}");
+    Ok(())
+}
+
+/// The IG's XCA query endpoint, an endpoint of another service the shared
+/// directory holds.
+const XCA_QUERY: &str = "Endpoint/ex-endpointXCAquery";
+
+/// A member organisation of a shared directory that also lists another
+/// service's endpoint, one the selection did not take, is read: the listing is
+/// ignored, never a refusal (no specification governs this: our own design).
+#[tokio::test]
+async fn a_member_listing_an_endpoint_outside_the_selection_is_read() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish_examples()?;
+    let a = member("a");
+    harness.publish(&[a.clone(), member("b")])?;
+    harness.put_organization(a.organisation_also_listing(&[XCA_QUERY, "Endpoint/node-gone"])?);
+    let read = source(&harness)?.read().await?;
+    let nodes: Vec<&NodeId> = read
+        .snapshot()
+        .nodes()
+        .map(ferrofed_registry::snapshot::Node::id)
+        .collect();
+    assert_eq!(
+        vec![&"node-a".parse::<NodeId>()?, &"node-b".parse::<NodeId>()?],
+        nodes
+    );
+    Ok(())
+}
+
+/// A refresh in which a member organisation starts listing another service's
+/// endpoint changes the content, and is never refused for it.
+#[tokio::test]
+async fn a_refresh_that_adds_a_listing_outside_the_selection_is_applied() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish_examples()?;
+    let a = member("a");
+    harness.publish(&[a.clone(), member("b")])?;
+    let source = source(&harness)?;
+    let read = source.read().await?;
+    harness.put_organization(a.organisation_also_listing(&[XCA_QUERY])?);
+    let refreshed = source.refresh(read.content()).await?;
+    let Refreshed::Changed(changed) = &refreshed else {
+        return Err(format!("the changed organisation is read: {refreshed:?}").into());
+    };
+    assert_eq!(read.snapshot(), changed.snapshot());
+    Ok(())
+}
+
+/// A refresh that deletes a member's endpoint while its organisation still
+/// lists it leaves a listing of an endpoint the selection took dangling, and
+/// is refused naming the organisation and the reference.
+#[tokio::test]
+async fn a_dangling_listing_of_a_selected_endpoint_is_refused() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&[member("a"), member("b")])?;
+    let source = source(&harness)?;
+    let read = source.read().await?;
+    harness.delete_endpoint("node-b-pub");
+    let refreshed = source.refresh(read.content()).await?;
+    let Refreshed::Refused(FhirFormError::OrganisationEndpoint {
+        organisation,
+        fault,
+    }) = &refreshed
+    else {
+        return Err(format!("the dangling listing is refused: {refreshed:?}").into());
+    };
+    assert_eq!(&"org-b".parse::<OrganisationId>()?, organisation);
+    assert_eq!(
+        &ReferenceFault::Outside("Endpoint/node-b-pub".to_owned()),
+        fault
+    );
+    Ok(())
+}
+
+/// An endpoint that leaves the selection while its organisation still lists
+/// it cannot be told from one that was deleted, so the refresh is refused as
+/// a dangling listing is.
+#[tokio::test]
+async fn a_listed_endpoint_that_leaves_the_selection_is_refused() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    let b = member("b");
+    harness.publish(&[member("a"), b.clone()])?;
+    let source = source(&harness)?;
+    let read = source.read().await?;
+    let mut unselected = b.endpoint()?;
+    unselected.identifier.clear();
+    harness.put_endpoint(unselected);
+    let refreshed = source.refresh(read.content()).await?;
+    assert!(
+        matches!(
+            &refreshed,
+            Refreshed::Refused(FhirFormError::OrganisationEndpoint {
+                fault: ReferenceFault::Outside(reference),
+                ..
+            }) if reference == "Endpoint/node-b-pub"
+        ),
+        "{refreshed:?}"
+    );
     Ok(())
 }

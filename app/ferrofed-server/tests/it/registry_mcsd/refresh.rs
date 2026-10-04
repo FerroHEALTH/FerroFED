@@ -222,6 +222,53 @@ async fn a_refresh_that_deletes_a_listed_endpoint_is_refused_and_the_registry_ke
     Ok(())
 }
 
+/// A member organisation of a shared directory that starts listing another
+/// service's endpoint changes nothing the gateway routes by: the refresh is
+/// applied, and the listing is logged once, by its reference alone (no
+/// specification governs this: our own design).
+#[tokio::test]
+async fn a_listing_outside_the_selection_is_applied_and_logged_once() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish_examples()?;
+    let [a, b] = members(
+        "https://cdr-a.example.org/openehr",
+        "https://cdr-b.example.org/openehr",
+    );
+    harness.publish(&[a.clone(), b])?;
+    let gateway = Gateway::boot(&harness, 5_000)?;
+    let before = gateway.addresses()?;
+    harness.put_organization(a.organisation_also_listing(&["Endpoint/ex-endpointXCAquery"])?);
+
+    let logs = crate::support::Logs::default();
+    let capture = ferrofed_server::telemetry::subscriber(
+        ferrofed_server::telemetry::Rendering::Json,
+        "info",
+        false,
+        logs.clone(),
+    )?;
+    let guard = tracing::subscriber::set_default(capture);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    let again = gateway.directory.refresh(&gateway.reloader).await;
+    drop(guard);
+
+    assert!(matches!(outcome, RefreshOutcome::Applied(_)), "{outcome:?}");
+    assert!(matches!(again, RefreshOutcome::Unchanged), "{again:?}");
+    assert_eq!(before, gateway.addresses()?, "no endpoint changed");
+    let text = logs.text();
+    let ignored: Vec<&str> = text
+        .lines()
+        .filter(|line| line.contains("ex-endpointXCAquery"))
+        .collect();
+    assert_eq!(1, ignored.len(), "one line for the refresh: {text}");
+    assert!(
+        ignored
+            .iter()
+            .all(|line| line.contains("Endpoint/ex-endpointXCAquery")),
+        "the line names the reference: {text}"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_directory_that_does_not_answer_in_time_keeps_the_snapshot_and_shows_down() -> TestResult
 {
