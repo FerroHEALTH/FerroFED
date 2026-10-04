@@ -1,0 +1,755 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE HTML>
+<html xml:lang="en" xmlns="http://www.w3.org/1999/xhtml" lang="en">
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <title>Appel d&#39;une API ProSantéConnectée depuis une application web - Sécurisation de la couche transport API REST Pro Santé Connectée v1.2.0</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="author" content="http://hl7.org/fhir"/>
+
+    <link href="fhir.css" rel="stylesheet"/>
+
+    <!-- Bootstrap core CSS -->
+    <link href="assets/css/bootstrap-fhir.css" rel="stylesheet"/>
+
+    <!-- Project extras -->
+    <link href="assets/css/project.css" rel="stylesheet"/>
+    <link href="assets/css/pygments-manni.css" rel="stylesheet"/>
+    <link href="assets/css/jquery-ui.css" rel="stylesheet"/>
+  	<link href="assets/css/prism.css" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/style-ans.css"/>
+    <link rel="stylesheet" href="assets/css/style-add-ans.css"/>
+    <!-- Placeholder for child template CSS declarations -->
+
+    <script type="text/javascript" src="fhir-table-scripts.js"> </script>
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+    <script src="assets/js/html5shiv.js"></script>
+    <script src="assets/js/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- Favicons -->
+    <link rel="fhir-logo" sizes="144x144" href="assets/ico/icon-fhir-144.png"/>
+    <link rel="fhir-logo" sizes="114x114" href="assets/ico/icon-fhir-114.png"/>
+    <link rel="fhir-logo" sizes="72x72" href="assets/ico/icon-fhir-72.png"/>
+    <link rel="fhir-logo" href="assets/ico/icon-fhir-57.png"/>
+    <link rel="shortcut icon" href="assets/ico/favicon.png"/>
+  </head>
+  <body onload="document.body.style.opacity='1'">
+
+	  <script src="assets/js/prism.js"></script>
+
+    <style type="text/css">h2{--heading-prefix:"3.1"}
+    h3,h4,h5,h6{--heading-prefix:"3.1"}</style>
+    <div id="segment-header" class="segment">  <!-- segment-header -->
+      <div class="container">  <!-- container -->
+        <!-- Placeholder for child template header declarations -->
+<div id="family-nav">
+  <a id="hl7-search-lnk" no-external="true" href="http://hl7.org/fhir"><img height="50" alt="Visit the FHIR website" src="assets/images/fhir-logo-www.png"/> </a>
+</div>
+<div id="ans-nav" style="line-height: 50px; float: left; margin-top: 4px; margin-bottom: 8px; color: #808080; ">
+  <a id="hl7-logo" no-external="true" href="https://esante.gouv.fr/"><img height="50" alt="ANS Logo" src="assets/images/logo-ANS.svg"/></a>
+</div>
+
+        <div id="ig-status">
+          <p><span style="font-size:12pt;font-weight:bold">Sécurisation de la couche transport API REST Pro Santé Connectée</span>
+            <br/>
+            <span style="display:inline-block;">1.2.0 - ci-build
+
+
+
+  <img alt="France flag" src="assets/images/fra.svg" height="16" title="France"/>
+
+
+            </span>
+          </p>
+        </div>
+      </div> <!-- /container -->
+    </div>  <!-- /segment-header -->
+
+    <div id="segment-navbar" class="segment">  <!-- segment-navbar -->
+      <div id="stripe"> </div>
+      <div class="container">  <!-- container -->
+        <!-- HEADER CONTENT -->
+
+        <nav class="navbar navbar-inverse">
+          <!--status-bar-->
+          <div class="container">
+            <button data-target=".navbar-inverse-collapse" class="navbar-toggle" data-toggle="collapse" type="button">
+              <span class="icon-bar"> </span>
+              <span class="icon-bar"> </span>
+              <span class="icon-bar"> </span>
+            </button>
+            <a class="navbar-brand hidden" href="http://hl7.org/fhir/R4/index.html">FHIR</a>
+            <div class="nav-collapse collapse navbar-inverse-collapse">
+              <!-- menu.xml  -->
+
+<ul xmlns="http://www.w3.org/1999/xhtml" class="nav navbar-nav">
+  <li>
+    <a href="index.html">Accueil</a>
+  </li>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">Description générale des flux
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="principes_generaux_du_volet.html">Principes généraux de ce volet</a>
+      </li>
+      <li>
+        <a href="archi_documentaire.html">Architecture documentaire</a>
+      </li>
+      <li>
+        <a href="standards.html">Standards utilisés (REST, OAUTH 2.0 ET OIDC)</a>
+      </li>
+      <li>
+        <a href="principes_securisation.html">Principes de sécurisation</a>
+      </li>
+    </ul>
+  </li>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">API ProSantéConnectée
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="api_prosanteconnectee.html">Description générale</a>
+      </li>
+      <li>
+        <a href="api_prosanteconnectee_web.html">Application web</a>
+      </li>
+      <li>
+        <a href="api_prosanteconnectee_web_erreurs.html">Application web - cas d&apos;erreurs</a>
+      </li>
+      <li>
+        <a href="api_prosanteconnectee_client_lourd.html">Application client lourd ou mobile</a>
+      </li>
+      <li>
+        <a href="api_prosanteconnectee_userinfo.html">Récupération et utilisation du jeton userinfo PSC</a>
+      </li>
+      <li>
+        <a href="api_prosanteconnectee_donnees_metiers.html">Passage de données métiers de l&apos;application cliente vers l&apos;API</a>
+      </li>
+    </ul>
+  </li>
+  <li class="dropdown">
+    <a data-toggle="dropdown" href="#" class="dropdown-toggle">Glossaire et documents de référence
+      <b class="caret"></b>
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a href="glossaire.html">Glossaire</a>
+      </li>
+      <li>
+        <a href="documents_de_reference.html">Documents de référence</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <a target="_blank" href="https://interop.esante.gouv.fr/ig/">Liste des guides</a>
+  </li>
+</ul>
+            </div>  <!-- /.nav-collapse -->
+          </div>  <!-- /.container -->
+        </nav>  <!-- /.navbar -->
+      <!-- /HEADER CONTENT -->
+      </div>  <!-- /container -->
+    </div>  <!-- /segment-navbar -->
+    <!--status-bar-->
+
+    <div id="segment-breadcrumb" class="segment">  <!-- segment-breadcrumb -->
+      <div class="container">  <!-- container -->
+        <ul class="breadcrumb">
+          <li><a href='toc.html'><b>Table of Contents</b></a></li><li><a href='api_prosanteconnectee.html'><b>API ProSantéConnectée</b></a></li><li><b>Appel d'une API ProSantéConnectée depuis une application web</b></li>
+
+          <span style="float:right;">
+
+            <a href="api_prosanteconnectee.html">&lt;prev</a> | 
+
+            <a href="#bottom">bottom</a>
+
+          | <a href="api_prosanteconnectee_web_erreurs.html">next&gt;</a>
+
+          </span>
+
+        </ul>
+      </div>  <!-- /container -->
+    </div>  <!-- /segment-breadcrumb -->
+
+    <a name="top"> </a>
+    <div id="segment-content" class="segment">  <!-- segment-content -->
+      <div class="container">  <!-- container -->
+        <div class="row">
+          <div class="inner-wrapper">
+
+<style type="text/css">
+h2:before{color:silver;counter-increment:section;content:var(--heading-prefix) " ";}
+h3:before{color:silver;counter-increment:sub-section;content:var(--heading-prefix) "." counter(sub-section) " ";}
+h4:before{color:silver;counter-increment:composite;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) " ";}
+h5:before{color:silver;counter-increment:detail;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) "." counter(detail) " ";}
+h6:before{color:silver;counter-increment:more-detail;content:var(--heading-prefix) "." counter(sub-section) "." counter(composite) "." counter(detail) "." counter(more-detail)" ";}
+</style>
+<div class="col-12">
+  <!--ReleaseHeader--><p id="publish-box">This page is part of the Sécurisation de la couche transport API REST (v1.2.0: Release) based on <a no-external="true" href="http://hl7.org/fhir/R4">FHIR (HL7® FHIR® Standard) R4</a>. This is the current published version.  For a full list of available versions, see the <a no-external="true" href="https://interop.esante.gouv.fr/ig/securisation-transport/history.html">Directory of published versions</a></p><!--EndReleaseHeader-->
+  <h2>Appel d&#39;une API ProSantéConnectée depuis une application web</h2>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+    <p><!-- white space is critical inside of capture --></p>
+<div>
+<!-- do not remove - needed to prevent Jekyll from adding a p tag to any non block level element in the markdown.-->
+</div>
+
+<ul>
+  <li>L’utilisateur souhaite, via l’application web de son navigateur, accéder à des données protégées d’un service cible.</li>
+  <li>L’utilisateur s’authentifie premièrement auprès de Pro Santé Connect via le proxy LPS/API de son fournisseur de services.</li>
+  <li>Une fois authentifié, le proxy LPS/API du fournisseur de services émet une requête auprès du serveur d’autorisation du service cible (<code class="language-plaintext highlighter-rouge">subject_token + scope</code>) pour accéder à ses ressources protégées.</li>
+</ul>
+
+<p>Si le <code class="language-plaintext highlighter-rouge">subject_token</code> et les <code class="language-plaintext highlighter-rouge">scopes</code> sont jugés valides par le serveur d’autorisation, ce dernier fournit un <code class="language-plaintext highlighter-rouge">access_token</code> au proxy LPS/API du fournisseur de services.</p>
+
+<p>Le proxy LPS/API du fournisseur de services, s’assure de la validité de <code class="language-plaintext highlighter-rouge">l'access_token</code> à sa réception puis envoie une requête auprès du service cible avec <code class="language-plaintext highlighter-rouge">l'access_token</code> contenu dans l’entête. Le service cible introspecte <code class="language-plaintext highlighter-rouge">l'access_token</code> auprès du serveur d’autorisation afin vérifier la validité de l’access_token et des scopes.<br /></p>
+
+<p>Le proxy LPS/API du fournisseur de services utilise <code class="language-plaintext highlighter-rouge">l'access_token</code> et les <code class="language-plaintext highlighter-rouge">scopes</code> auprès du service cible pour accéder aux ressources protégées.</p>
+
+<div style="text-align: center;"><?xml version="1.0" encoding="us-ascii" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="595.8919px" preserveAspectRatio="none" style="width:1024px;height:595px;background:#FFFFFF;" version="1.1" viewBox="0 0 1024 595" width="1024.8649px" zoomAndPan="magnify"><defs /><g><rect fill="#98FB98" height="586.25" style="stroke:#181818;stroke-width:0.43243243243243246;" width="345.0811" x="13.8378" y="5.1892" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" font-weight="bold" lengthAdjust="spacing" textLength="185.9459" x="93.4054" y="15.6254">Systeme appelant / initiateur</text><rect fill="#AFEEEE" height="586.25" style="stroke:#181818;stroke-width:0.43243243243243246;" width="361.5135" x="658.1622" y="5.1892" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" font-weight="bold" lengthAdjust="spacing" textLength="89.0811" x="794.3784" y="15.6254">Systeme cible</text><rect fill="#FFFFFF" height="72.0135" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="50.5946" y="100.9257" /><rect fill="#FFFFFF" height="76.3378" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="50.5946" y="198.1351" /><rect fill="#FFFFFF" height="128.4595" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="224" y="248.527" /><rect fill="#FFFFFF" height="57.1959" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="224" y="489.0135" /><rect fill="#FFFFFF" height="76.3378" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="521.5135" y="146.9932" /><rect fill="#FFFFFF" height="25.1959" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="521.5135" y="299.6689" /><rect fill="#FFFFFF" height="25.1959" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="521.5135" y="402.1824" /><rect fill="#FFFFFF" height="137.973" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="728.2162" y="376.9865" /><rect fill="none" height="217.8851" style="stroke:#000000;stroke-width:1.2972972972972974;" width="588.1081" x="8.6486" y="113.8986" /><rect fill="none" height="177.9865" style="stroke:#000000;stroke-width:1.2972972972972974;" width="880.4324" x="92.5405" y="343.8919" /><line style="stroke:#181818;stroke-width:0.43243243243243246;stroke-dasharray:5.0,5.0;" x1="54.4865" x2="54.4865" y1="48.8041" y2="561.777" /><line style="stroke:#181818;stroke-width:0.43243243243243246;stroke-dasharray:5.0,5.0;" x1="228.3243" x2="228.3243" y1="48.8041" y2="561.777" /><line style="stroke:#181818;stroke-width:0.43243243243243246;stroke-dasharray:5.0,5.0;" x1="525.8378" x2="525.8378" y1="48.8041" y2="561.777" /><line style="stroke:#181818;stroke-width:0.43243243243243246;stroke-dasharray:5.0,5.0;" x1="732.5405" x2="732.5405" y1="48.8041" y2="561.777" /><line style="stroke:#181818;stroke-width:0.43243243243243246;stroke-dasharray:5.0,5.0;" x1="972.973" x2="972.973" y1="48.8041" y2="561.777" /><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="75.2432" x="17.2973" y="21.7365" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="63.1351" x="23.3514" y="39.0296">Navigateur</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="75.2432" x="17.2973" y="560.9122" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="63.1351" x="23.3514" y="578.2052">Navigateur</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="254.2703" x="101.1892" y="21.7365" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="242.1622" x="107.2432" y="39.0296">Fournisseur de Services et proxy LPS/API</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="254.2703" x="101.1892" y="560.9122" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="242.1622" x="107.2432" y="578.2052">Fournisseur de Services et proxy LPS/API</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="124.5405" x="463.5676" y="21.7365" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="112.4324" x="469.6216" y="39.0296">Pro Sante Connect</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="124.5405" x="463.5676" y="560.9122" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="112.4324" x="469.6216" y="578.2052">Pro Sante Connect</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="141.8378" x="661.6216" y="21.7365" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="129.7297" x="667.6757" y="39.0296">Serveur d'autorisation</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="141.8378" x="661.6216" y="560.9122" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="129.7297" x="667.6757" y="578.2052">Serveur d'autorisation</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="86.4865" x="929.7297" y="21.7365" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="74.3784" x="935.7838" y="39.0296">Service cible</text><rect fill="#E2E2F0" height="26.2027" rx="2.1622" ry="2.1622" style="stroke:#181818;stroke-width:0.43243243243243246;" width="86.4865" x="929.7297" y="560.9122" /><text fill="#000000" font-family="sans-serif" font-size="12.1081" lengthAdjust="spacing" textLength="74.3784" x="935.7838" y="578.2052">Service cible</text><rect fill="#FFFFFF" height="72.0135" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="50.5946" y="100.9257" /><rect fill="#FFFFFF" height="76.3378" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="50.5946" y="198.1351" /><rect fill="#FFFFFF" height="128.4595" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="224" y="248.527" /><rect fill="#FFFFFF" height="57.1959" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="224" y="489.0135" /><rect fill="#FFFFFF" height="76.3378" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="521.5135" y="146.9932" /><rect fill="#FFFFFF" height="25.1959" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="521.5135" y="299.6689" /><rect fill="#FFFFFF" height="25.1959" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="521.5135" y="402.1824" /><rect fill="#FFFFFF" height="137.973" style="stroke:#181818;stroke-width:0.8648648648648649;" width="8.6486" x="728.2162" y="376.9865" /><polygon fill="#181818" points="217.9459,72.2703,226.5946,75.7297,217.9459,79.1892,221.4054,75.7297" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="54.9189" x2="223.1351" y1="75.7297" y2="75.7297" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="81.2973" x="60.973" y="71.3484">1. acces initial&#160;</text><polygon fill="#181818" points="68.7568,97.4662,60.1081,100.9257,68.7568,104.3851,65.2973,100.9257" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="63.5676" x2="227.4595" y1="100.9257" y2="100.9257" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="56.2162" x="73.9459" y="96.5443">2. redirect</text><path d="M8.6486,113.8986 L271.5676,113.8986 L271.5676,120.0676 L262.9189,128.7162 L8.6486,128.7162 L8.6486,113.8986 " fill="#EEEEEE" style="stroke:#000000;stroke-width:1.2972972972972974;" /><rect fill="none" height="217.8851" style="stroke:#000000;stroke-width:1.2972972972972974;" width="588.1081" x="8.6486" y="113.8986" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" font-weight="bold" lengthAdjust="spacing" textLength="224" x="21.6216" y="125.1997">Authentification Pro Sante Connect</text><polygon fill="#181818" points="511.1351,143.5338,519.7838,146.9932,511.1351,150.4527,514.5946,146.9932" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="59.2432" x2="516.3243" y1="146.9932" y2="146.9932" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="148.7568" x="65.2973" y="142.6119">3  client_id, scope "all" PSC</text><polygon fill="#181818" points="68.7568,194.6757,60.1081,198.1351,68.7568,201.5946,65.2973,198.1351" style="stroke:#181818;stroke-width:0.8648648648648649;" /><polygon fill="#181818" points="511.1351,194.6757,519.7838,198.1351,511.1351,201.5946,514.5946,198.1351" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="63.5676" x2="516.3243" y1="198.1351" y2="198.1351" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="194.5946" x="73.9459" y="193.7538">4. authentification user (CPS/eCPS)</text><polygon fill="#181818" points="68.7568,219.8716,60.1081,223.3311,68.7568,226.7905,65.2973,223.3311" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="63.5676" x2="524.973" y1="223.3311" y2="223.3311" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="142.7027" x="73.9459" y="218.9497">5. authorization code PSC</text><polygon fill="#181818" points="213.6216,245.0676,222.2703,248.527,213.6216,251.9865,217.0811,248.527" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="59.2432" x2="218.8108" y1="248.527" y2="248.527" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="142.7027" x="65.2973" y="244.1457">6. authorization code PSC</text><polygon fill="#181818" points="511.1351,296.2095,519.7838,299.6689,511.1351,303.1284,514.5946,299.6689" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="232.6486" x2="516.3243" y1="299.6689" y2="299.6689" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="155.6757" x="238.7027" y="295.2876">7. authorization code PSC +</text><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="106.3784" x="404.7568" y="295.2876">Client_ID_FS/secret</text><polygon fill="#181818" points="242.1622,321.4054,233.5135,324.8649,242.1622,328.3243,238.7027,324.8649" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="236.973" x2="524.973" y1="324.8649" y2="324.8649" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="220.5405" x="247.3514" y="320.4835">8. ID Token + AT + Refresh Token (PSC)</text><path d="M92.5405,343.8919 L225.7297,343.8919 L225.7297,350.0608 L217.0811,358.7095 L92.5405,358.7095 L92.5405,343.8919 " fill="#EEEEEE" style="stroke:#000000;stroke-width:1.2972972972972974;" /><rect fill="none" height="177.9865" style="stroke:#000000;stroke-width:1.2972972972972974;" width="880.4324" x="92.5405" y="343.8919" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" font-weight="bold" lengthAdjust="spacing" textLength="94.2703" x="105.5135" y="355.193">OAUTH2.0 flow</text><polygon fill="#181818" points="717.8378,373.527,726.4865,376.9865,717.8378,380.4459,721.2973,376.9865" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="228.3243" x2="723.027" y1="376.9865" y2="376.9865" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="419.4595" x="234.3784" y="372.6052">9. subject_token (param&#232;tre) + Client_ID_AS (header) + scope (parametre)</text><polygon fill="#181818" points="539.6757,398.723,531.027,402.1824,539.6757,405.6419,536.2162,402.1824" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="534.4865" x2="727.3514" y1="402.1824" y2="402.1824" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="181.6216" x="544.8649" y="397.8011">10. subject_token (introspection)</text><polygon fill="#181818" points="717.8378,423.9189,726.4865,427.3784,717.8378,430.8378,721.2973,427.3784" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="525.8378" x2="723.027" y1="427.3784" y2="427.3784" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="15.5676" x="531.8919" y="422.997">OK</text><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="736.8649" x2="773.1892" y1="452.5743" y2="452.5743" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="773.1892" x2="773.1892" y1="452.5743" y2="463.8176" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="737.7297" x2="773.1892" y1="463.8176" y2="463.8176" /><polygon fill="#181818" points="746.3784,460.3581,737.7297,463.8176,746.3784,467.277,742.9189,463.8176" style="stroke:#181818;stroke-width:0.8648648648648649;" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="219.6757" x="742.9189" y="448.193">Controle d'acc&#232;s (Client_ID_AS x scope)</text><polygon fill="#181818" points="242.1622,485.5541,233.5135,489.0135,242.1622,492.473,238.7027,489.0135" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="236.973" x2="727.3514" y1="489.0135" y2="489.0135" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="96" x="247.3514" y="484.6322">11. access_token</text><polygon fill="#181818" points="962.5946,542.75,971.2432,546.2095,962.5946,549.6689,966.0541,546.2095" style="stroke:#181818;stroke-width:0.8648648648648649;" /><line style="stroke:#181818;stroke-width:0.8648648648648649;" x1="228.3243" x2="967.7838" y1="546.2095" y2="546.2095" /><text fill="#000000" font-family="sans-serif" font-size="11.2432" lengthAdjust="spacing" textLength="218.8108" x="234.3784" y="541.8281">12. access_token + acc&#232;s aux donnees</text></g></svg></div>
+
+<p><strong>Description du workflow :</strong></p>
+
+<p><strong>1.	Depuis le navigateur, l’utilisateur souhaite accéder aux ressources protégées d’un service cible</strong></p>
+
+<p>Origine : Navigateur
+Cible : proxy LPS/API du Fournisseur de services
+Méthode : GET</p>
+
+<p><strong>Exemple de requête :</strong>
+ <code class="language-plaintext highlighter-rouge">GET /application/ressource_privee
+Host: applicationserver.appelant.org
+</code></p>
+
+<p><strong>2.	Le proxy LPS/API du fournisseur de services redirige le navigateur vers Pro Santé Connect pour authentifier l’utilisateur</strong></p>
+
+<p>Origine : proxy LPS/API du Fournisseur de services
+Cible : Navigateur</p>
+
+<p>Le proxy LPS/API du fournisseur de services renvoie un code de redirection 302 avec l’URL de Pro Santé Connect</p>
+
+<p><strong>Exemple de requête :</strong></p>
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>302 
+Location: https://wallet.esw.esante.gouv.fr/auth?client_id<span class="o">=</span><span class="k">${</span><span class="nv">client</span><span class="p"> id</span><span class="k">}</span>&amp;redirect_uri<span class="o">=</span> <span class="k">${</span><span class="nv">callback</span><span class="p"> uri</span><span class="k">}</span> &amp;response_type<span class="o">=</span>code&amp;state<span class="o">=</span>&lt;random string&gt;&amp;scope<span class="o">=</span> openid+scope_all&amp;acr<span class="o">=</span>eidas1&amp;nonce<span class="o">=</span>&lt;random string&gt; 
+</code></pre></div></div>
+
+<p><strong>3.	L’utilisateur accède à la mire d’authentification Pro Santé Connect</strong></p>
+
+<p>L’authentification est décrite dans la documentation officielle de PSC [4]</p>
+
+<p><strong>4.	Authentification de l’utilisateur sur Pro Santé Connect au moyen du MIE PSC</strong></p>
+
+<p>L’authentification est décrite dans la documentation officielle de PSC [4]</p>
+
+<p><strong>5.	Pro Santé Connect génère un authorization code PSC et redirige l’utilisateur vers le navigateur</strong></p>
+
+<p>Origine : Pro Santé Connect
+Cible : Navigateur</p>
+
+<p>Une fois l’authentification terminée, PSC renvoie un code HTTP 302 pour demander au navigateur d’envoyer l’authorization code au FS.</p>
+
+<p><strong>Exemple de requête :</strong></p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>302 Location: https://applicationserver.appelant.fr/application/callback?code<span class="o">=</span>3159339c2f1326f9fa128&amp;state<span class="o">=</span> &lt;random_string&gt;
+</code></pre></div></div>
+
+<p>Pro Santé Connect redirige l’utilisateur vers la callback URI avec en paramètre de la requête :</p>
+
+<table width="628">
+<tbody>
+<tr>
+<td width="83">
+<p>Param&egrave;tres</p>
+</td>
+<td width="141">
+<p>Obligatoire d&rsquo;apr&egrave;s la documentation officielle PSC</p>
+</td>
+<td width="141">
+<p>Obligatoire pour l&rsquo;interop&eacute;rabilit&eacute; des SIS</p>
+</td>
+<td width="262">
+<p>Valeur</p>
+</td>
+</tr>
+<tr>
+<td width="83">
+<p>Code</p>
+</td>
+<td width="141">
+<p>Oui</p>
+</td>
+<td width="141">
+<p>Oui</p>
+</td>
+<td width="262">
+<p>&lsquo;code&rsquo;</p>
+</td>
+</tr>
+<tr>
+<td width="83">
+<p>State</p>
+</td>
+<td width="141">
+<p>Oui</p>
+</td>
+<td width="141">
+<p>Oui</p>
+</td>
+<td width="262">
+<p>Valeur envoy&eacute;e par le proxy LPS/API du Fournisseur de services lors de la demande d&rsquo;autorisation</p>
+</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>6.	Le navigateur envoie l’authorization code vers le proxy LPS/API du fournisseur de services</strong></p>
+
+<p>Origine : Navigateur
+Cible : proxy LPS/API du Fournisseur de services
+Méthode : GET</p>
+
+<p><strong>Exemple de requête :</strong></p>
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GET /application/callback ?code<span class="o">=</span>3159339c2f1326f9fa128&amp;state<span class="o">=</span>&lt;random string&gt;
+Host: applicationserver.appelant.fr
+</code></pre></div></div>
+
+<p><strong>7.	Le proxy LPS/API du fournisseur de services s’authentifie auprès de PSC avec l’authorization code PSC et son Client_ID_FS et certificat TLS</strong></p>
+
+<p>Origine : proxy LPS/API du Fournisseur de services
+Cible : Pro Santé Connect</p>
+
+<p>L’authentification du proxy LPS/API est décrite dans la documentation [4]</p>
+
+<p><strong>8.	Pro Santé Connect vérifie l’authorization code et génère un ID Token, un access token PSC et un Refresh Token (PSC)</strong></p>
+
+<p>Origine : Pro Santé Connect
+Cible : Proxy LPS/API du Fournisseur de services</p>
+
+<p>Les détails de cette étape et des jetons délivrés sont dans la documentation [4]</p>
+
+<p><strong>exemple de réponse :</strong></p>
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>{
+'access_token': ${access_token},
+'token_type': 'Bearer',
+'refresh_token': ${refresh_token},
+‘expires_in': ${expiration},
+ 'id_token': ${id_token}
+}
+</code></pre></div></div>
+
+<p><strong>9.	Le proxy LPS/API du fournisseur de services s’authentifie et demande un échange de jetons auprès du serveur d’autorisation avec un subject_token, certificat de structure et scopes métier</strong>
+NB : La section OAUTH2.0 Flow n’est pas dépendante du type de FS</p>
+
+<p>Origine : Proxy LPS/API du Fournisseur de services 
+Cible : Serveur d’autorisation
+Méthode : POST</p>
+
+<p>Lors de ce flux, le proxy LPS/API du fournisseur de services effectue une connexion mTLs avec le certificat de structure, auprès du serveur d’autorisation puis s’authentifie et envoie sa requête d’échange de jetons selon le protocole OAuth 2.0.</p>
+
+<p>Concernant l’échange de jetons, il suit le cadre définit par le Token Exchange dans la <strong>RFC 8693 [12].</strong> Elle est nativement <strong>en voie d’adoption par les éditeurs du marché (méthode Delegation Token Exchange).</strong></p>
+
+<p>Le proxy LPS/API du fournisseur de services envoie dans les paramètres de sa requête le subject_token et les scopes métiers auxquels il souhaite accéder.
+Ces derniers permettent d’authentifier la personne physique ou la personne morale appelante et de contrôler l’accès aux ressources requêtées.
+Une fois ces éléments introspectés et validés, <strong>le serveur d’autorisation renvoie un access_token pour permettre au proxy LPS/API du fournisseur de services d’accéder aux ressources du service cible.</strong></p>
+
+<table width="633">
+<tbody>
+<tr>
+<td width="132">
+<p>Param&egrave;tres</p>
+</td>
+<td width="102">
+<p>Obligatoire d&rsquo;apr&egrave;s la documentation officielle (OAuth 2.0)</p>
+</td>
+<td width="106">
+<p>Obligatoire dans ce volet du CI-SIS</p>
+</td>
+<td width="293">
+<p>Valeur</p>
+</td>
+</tr>
+<tr>
+<td width="132">
+<p>grant_type</p>
+</td>
+<td width="102">
+<p>Oui</p>
+</td>
+<td width="106">
+<p>Oui</p>
+</td>
+<td width="293">
+<p>urn:ietf:params:oauth:grant-type:token-exchange</p>
+</td>
+</tr>
+<tr>
+<td width="132">
+<p>subject_token</p>
+</td>
+<td width="102">
+<p>Oui</p>
+</td>
+<td width="106">
+<p>Oui</p>
+</td>
+<td width="293">
+<p>Access Token PSC</p>
+</td>
+</tr>
+<tr>
+<td width="132">
+<p>subject_token_type</p>
+</td>
+<td width="102">
+<p>Oui</p>
+</td>
+<td width="106">
+<p>Oui</p>
+</td>
+<td width="293">
+<p>urn:ietf:params:oauth:token-type:jwt<br /></p>
+<p><b>ou bien</b> urn:ietf:params:oauth:token-type:access_token</p>
+</td>
+</tr>
+<tr>
+<td width="132">
+<p>Scope</p>
+</td>
+<td width="102">
+<p>Non</p>
+</td>
+<td width="106">
+<p>Oui</p>
+</td>
+<td width="293">
+<p>A d&eacute;terminer par les &eacute;quipes m&eacute;tiers</p>
+<p>= scopes m&eacute;tier</p>
+</td>
+</tr>
+<tr>
+<td width="132">
+<p>cnf</p>
+</td>
+<td width="102">
+<p>Non</p>
+</td>
+<td width="106">
+<p>Oui</p>
+</td>
+<td width="293">
+<p>Empreinte du certificat TLS client utilis&eacute; pour la requ&ecirc;te token exchange et pour la requ&ecirc;te m&eacute;tier</p>
+</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Exemple d’attribut cnf :</strong></p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+</span><span class="nl">"x5t#S256"</span><span class="p">:</span><span class="w"> </span><span class="s2">"YTIzYThiYThjNWNmNTYyZWVkMjE3YmRhM2Y1OWM1MzA3NzAyOWQyMWY4YzY4MjZiYzU2OGY4ODU0ODZhN2RhMA=="</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p><strong>Exemple de requête :</strong></p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code> POST /as/token.oauth2 HTTP/1.1
+ Host: systemecible.example.com
+ Content-Type: application/x-www-form-urlencoded
+&amp;grant_type<span class="o">=</span>urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange
+&amp;subject_token<span class="o">=</span>accVkjcJyb4BWCxGsndESCJQbdFMogUC5PbRDqceLTC
+&amp;subject_token_type<span class="o">=</span> urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token
+&amp;scope<span class="o">=</span>
+</code></pre></div></div>
+
+<p>Concernant la connexion mTLS, elle se réalise dans le cadre d’une authentification OAuth 2.0 et suit la <strong>RFC 8705 [13].</strong><br />
+Le proxy LPS/API du fournisseur de service établit une <strong>connexion TLS mutuelle (mTLS)</strong> avec le serveur d’autorisation en présentant son certificat client, préalablement aux échanges applicatifs.</p>
+
+<p>Le <code class="language-plaintext highlighter-rouge">client_secret</code> est remplacé par la preuve de possession de la clé privée qui est assurée par le mTLS. En effet, le mTLS permet d’authentifier le client par un <code class="language-plaintext highlighter-rouge">Client_ID_AS</code> + <strong>mTLS</strong> au lieu de s’authentifier avec son <code class="language-plaintext highlighter-rouge">client_secret</code>/<code class="language-plaintext highlighter-rouge">Client_ID_AS</code>. 
+Dans ce cas le <code class="language-plaintext highlighter-rouge">client_secret</code> n’est pas nécessaire car l’authentification est portée par le mTLS (certificat client IGC Santé).</p>
+
+<p>Dans la pratique, il est envisagé d’utiliser <strong>Certificat IGC Santé ORG AUTH_CLI</strong> qui identifiera le fournisseur de services auprès du serveur d’autorisation (<code class="language-plaintext highlighter-rouge">Client_ID_AS</code>) lors de la requête.</p>
+
+<p>Le contenu du certificat, en particulier le <strong>DN</strong>, est accessible au serveur d’autorisation.
+Le <strong>DN</strong> sujet du certificat client possède un attribut <strong>OU (Organizational Unit)</strong> qui lui contient :</p>
+<ul>
+  <li>L’identifiant de la structure porteuse du fournisseur de services (Structure_ID) issu du référentiel d’identité utilisé par l’IGC Santé</li>
+  <li>Un attribut <strong>CN (Common Name)</strong> qui a une valeur libre, et qui fera le lien entre la structure et le certificat</li>
+</ul>
+
+<p>L’attribut CN du certificat peut permettre de lier un certificat à un service d’une structure.</p>
+
+<p>Afin de garantir la cohérence et la bonne gestion des accès, le serveur d’autorisation aura la charge de faire le mapping entre le <strong>DN sujet du certificat TLS client</strong> et le <code class="language-plaintext highlighter-rouge">Client_ID_AS</code> (créé à l’enrôlement auprès du serveur d’autorisation). Si la corrélation échoue alors il doit y avoir un retour d’erreur.</p>
+
+<p><strong>10.	Le serveur d’autorisation vérifie auprès de PSC la validité du <code class="language-plaintext highlighter-rouge">subject_token</code> (introspection)</strong></p>
+
+<p>Origine : Serveur d’autorisation
+Cible : Pro Santé Connect
+Méthode : POST</p>
+
+<p>L’introspection du subject_token est définie dans la documentation PSC [8]. La réponse de l’introspection est définie par une structure de code HTTP standard.</p>
+
+<p><strong>11.	Le serveur d’autorisation contrôle l’accès aux ressources selon le Client_ID_AS et les scopes du proxy LPS/API du fournisseur de services puis lui délivre l’access_token</strong></p>
+
+<p>Origine : Serveur d’autorisation
+Cible : Proxy LPS/API du Fournisseur de services</p>
+
+<p>Le contrôle d’accès est basé sur le contrôle de l’association entre <code class="language-plaintext highlighter-rouge">scopes</code> et <code class="language-plaintext highlighter-rouge">Client_ID_AS</code> contenus dans le serveur d’autorisation.</p>
+
+<p>Une fois le contrôle d’accès effectué et validé, le serveur d’autorisation émet un <code class="language-plaintext highlighter-rouge">access_token</code> permettant d’accéder au service cible et le délivre au fournisseur de services appelant.</p>
+
+<p><strong>Exemple de réponse :</strong></p>
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-cache, no-store
+{
+"access_token":"eyJhbGciOiJFUzI1NiIsImtpZCI6IjllciJ9.eyJhdWQiOiJodHRwczovL2JhY2tlbmQuZXhhbXBsZS5jb20iLCJpc3MiOiJodHRwczovL2FzLmV.40y3ZgQedw6rxEQgU85AI9x3KmsPottVMLPIWvmDCMy5-kdXjwhw",
+ "issued_token_type":
+ 	"urn:ietf:params:oauth:token-type:access_token",
+ "token_type":"Bearer",
+ "expires_in":60
+}
+</code></pre></div></div>
+
+<p>La requête vers le serveur d’autorisation et la réponse doivent suivre la section 2.2 du RFC Token Exchange [12]
+ </p>
+
+<p><strong>12.	Le proxy LPS/API du fournisseur de services requête la ressource protégée auprès du service cible</strong></p>
+
+<p>Origine : Proxy LPS/API du Fournisseur de services
+Cible : Service cible
+Type d’appel :  Requête de ressources protégées
+Méthode : GET</p>
+
+<p>Le proxy LPS/API du fournisseur de services envoie une requête auprès du service cible avec l’<code class="language-plaintext highlighter-rouge">access_token</code> contenu dans l’entête. Le service cible réalise les contrôles suivants :</p>
+<ul>
+  <li>introspection de l’<code class="language-plaintext highlighter-rouge">access_token</code> auprès du serveur d’autorisation afin vérifier la validité de ce dernier,</li>
+  <li>vérification des <code class="language-plaintext highlighter-rouge">scopes</code> associés à l’<code class="language-plaintext highlighter-rouge">access_token</code>,</li>
+  <li>vérification du lien entre le certificat TLS client utilisé pour la requête au ressources protégées et l’<code class="language-plaintext highlighter-rouge">access_token</code> via l’attribut cnf selon la RFC 7519 [3].</li>
+</ul>
+
+<p><strong>Exemple de requête :</strong></p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GET /resource/v1 HTTP/1.1
+Host: 
+Authorization: Bearer oab3thieWohyai0eoxibaequ0Owae9oh
+</code></pre></div></div>
+
+<p>Une fois l’introspection validée, le proxy LPS/API du fournisseur de services a accès aux ressources protégées du service cible.</p>
+
+
+
+
+</div>
+        </div>  <!-- /inner-wrapper -->
+      </div>  <!-- /row -->
+    </div>  <!-- /container -->
+  </div>  <!-- /segment-content -->
+
+  <script type="text/javascript" src="assets/js/jquery.js"> </script>     <!-- note keep space here, otherwise it will be transformed to empty tag -> fails -->
+  <script type="text/javascript" src="assets/js/jquery-ui.min.js"> </script>
+
+  <script type="text/javascript">
+    $(document).ready(function(){
+      if(window.location.hash != "") {
+          $('a[href="' + window.location.hash + '"]').click()
+      }
+    });
+  </script>
+  <a name="bottom"> </a>
+  <div id="segment-footer" igtool="footer" class="segment">  <!-- segment-footer -->
+    <div class="container">  <!-- container -->
+
+      <div style="background-color:var(--footer-nav-bg-color)">
+        <table style="width:100%">
+          <tbody>
+            <tr>
+              <td style="text-align:left">&#xA0;
+
+                <a href="api_prosanteconnectee.html">&lt;prev</a>
+
+              </td>
+              <td style="text-align:center">
+                <a href="#top">top</a>
+              </td>
+              <td style="text-align:right">&#xA0;
+
+                <a href="api_prosanteconnectee_web_erreurs.html">next&gt;</a>
+
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="inner-wrapper">
+        <p>
+          IG &#169; 2020+ <a style="color:var(--footer-hyperlink-text-color)" href="https://esante.gouv.fr">ANS</a>.  Package ans.fr.securisation-transport#1.2.0 based on <a style="color: var(--footer-hyperlink-text-color)" href="http://hl7.org/fhir/R4/">FHIR 4.0.1</a>. Generated <span title="Tue, Dec 5, 2023 14:30+0000">2023-12-05</span>
+          <br/>
+          <span style="color: var(--footer-highlight-text-color)"></span>
+                      Liens: <a style="color: var(--footer-hyperlink-text-color)" href="toc.html">Table des matières </a> |
+                 <a style="color: var(--footer-hyperlink-text-color)" href="qa.html">QA </a> |
+                 <a style="color: var(--footer-hyperlink-text-color)" target="_blank" href="https://interop.esante.gouv.fr/ig/securisation-transport/history.html">Historique des versions </a>
+                  | <a style="color: var(--footer-hyperlink-text-color)" target="_blank" href="https://github.com/ansforge/IG-securisation-transport-api-rest/issues/new">New Issue</a>
+                
+
+          </span>
+        </p>
+      </div>  <!-- /inner-wrapper -->
+    </div>  <!-- /container -->
+  </div>  <!-- /segment-footer -->
+  
+  <div id="segment-post-footer" class="segment hidden">  <!-- segment-post-footer -->
+    <div class="container">  <!-- container -->
+    </div>  <!-- /container -->
+  </div>  <!-- /segment-post-footer -->
+  
+  <!-- JS and analytics only. -->
+  <!-- Bootstrap core JavaScript
+  ================================================== -->
+  <!-- Placed at the end of the document so the pages load faster -->
+  <script type="text/javascript" src="assets/js/bootstrap.min.js"> </script>
+  <script type="text/javascript" src="assets/js/respond.min.js"> </script>
+  <script type="text/javascript" src="assets/js/anchor.min.js"> </script>
+  <script type="text/javascript" src="assets/js/clipboard.min.js"> </script>
+  <script type="text/javascript" src="assets/js/clipboard-btn.js"> </script>
+
+  <!-- Ajout ANS -->
+  <script src="assets/js/app.js" type="text/javascript"> </script>
+  <script src="assets/js/vendor.js" type="text/javascript"> </script>
+  <!-- Fin ajout ANS -->
+
+  <script>anchors.options.visible = 'hover'
+anchors.add()</script>
+  
+<!-- feedback form - Google forms -->
+<!-- v0.1, 2021-01-09 -->
+
+
+  
+    
+  
+
+
+
+<!-- / feedback form  -->
+
+  <!-- Analytics Below
+  ================================================== -->
+
+
+  <!-- AJOUT ANS -->
+
+<footer class="footer footer-principal" role="contentinfo">
+  <div class="footer__region1">
+    <div class="container">
+      <div class="row">
+
+        <div class="col-md-6 col-lg-4 text-center text-md-left">
+          <div class="logos">        
+            <div class="logo logo--0">
+              <a href="https://solidarites-sante.gouv.fr" title="Ministère des Solidarités et de la Santé (nouvelle fenêtre)" target="_blank" rel="nofollow">
+                
+                <img src="assets/images/logo-ministere.svg" alt="Ministère des Solidarités et de la Santé" width="133" height="77" loading="lazy" />
+                
+              </a>
+            </div>
+        
+            <div class="logo logo--1">
+              <a href="https://esante.gouv.fr/" title="Agence du numérique en santé (nouvelle fenêtre)" target="_blank" rel="nofollow">
+                
+                <img src="assets/images/logo-ANS-footer.svg" alt="Agence du numérique en santé" width="106" height="74" loading="lazy" />
+              </a>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6 col-lg-4 text-center text-md-left">
+          <p class="footer__title">Agence du Numérique en Santé</p>
+          <p>2-10 Rue d'Oradour-sur-Glane 75015 Paris</p>
+
+          <!-- <div class="m-social">
+            <ul class="m-social__list">        
+              <li class="m-social__item">
+                <a class="m-social__link" href="https://www.linkedin.com/company/agence-du-numerique-en-sante/" target="_blank" rel="nofollow">
+                  <div class="m-social__icon">
+                    <svg class="svg-icon svg-linkedin" aria-hidden="true" focusable="false"><use href="assets/images/icon-sprite.svg#linkedin"></use></svg>
+                  </div>
+                  <span class="sr-only">linkedin</span>
+                </a>
+              </li>
+              <li class="m-social__item">
+                <a class="m-social__link" href="https://twitter.com/esante_gouv_fr" target="_blank" rel="nofollow">
+                  <div class="m-social__icon">
+                    <svg class="svg-icon svg-twitter" aria-hidden="true" focusable="false"><use href="assets/images/icon-sprite.svg#twitter"></use></svg>
+                  </div>
+                  <span class="sr-only">twitter</span>
+                </a>
+              </li>
+              <li class="m-social__item">
+                <a class="m-social__link" href="https://www.youtube.com/channel/UCd1zuSaU5cE1lRCpwv_HSMA" target="_blank" rel="nofollow">
+                  <div class="m-social__icon">
+                    <svg class="svg-icon svg-youtube" aria-hidden="true" focusable="false"><use href="assets/images/icon-sprite.svg#youtube"></use></svg>
+                  </div>
+                  <span class="sr-only">youtube</span>
+                </a>
+              </li>
+              <li class="m-social__item">
+                <a class="m-social__link" href="https://esante.gouv.fr/rss.xml" target="_blank" rel="nofollow">
+                  <div class="m-social__icon">
+                    <svg class="svg-icon svg-rss" aria-hidden="true" focusable="false"><use href="assets/images/icon-sprite.svg#rss"></use></svg>
+                  </div>
+                  <span class="sr-only">rss</span>
+                </a>
+              </li>
+            </ul>
+          </div> -->
+        </div>
+        
+        <div class="col-6 col-lg-4">
+          <ul class="footer-list">
+            <li class="footer-list__item footer-list__item--hasIcon">
+              <a href="mailto:ci-sis@esante.gouv.fr" class="mailto-link">
+                <svg class="svg-icon svg-angle-right" aria-hidden="true" focusable="false"><use href="assets/images/icon-sprite.svg#angle-right"></use></svg>Contact</a>
+              </li>
+              <!-- <li class="footer-list__item">
+                <a href="https://interop-pprod.esante.gouv.fr/ci-sis-specifications/wp-content/uploads/CGU_espace_de_tests_v1.1.pdf" class="file-link">Mentions légales</a>
+              </li>
+               -->
+            </ul>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    
+    <!-- <div class="footer__region2">
+      <div class="container">
+        <div class="footer-contentinfo">
+          <ul class="footer-list footer-list--inline">
+
+          </ul>
+        </div>
+      </div>
+    </div> -->
+  </footer>
+  </body>
+</html>
+

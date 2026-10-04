@@ -43,6 +43,11 @@
 # Coverage output from the instrumented test run.
 lcov.info
 
+# Vendored artefacts whose licence does not allow redistribution, or is
+# unclear: the scripts under scripts/vendor/ fetch them here by URL and
+# sha256, and the repository carries only their provenance.
+/.vendor-cache/
+
 # Node tooling pulled in by a local Antora or mermaid-cli run.
 node_modules/
 

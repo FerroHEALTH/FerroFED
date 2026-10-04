@@ -40,6 +40,59 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   and identification pages, their FSH profiles, capability statements and
   examples, pinned by tag and commit, since the IG has no package on the
   FHIR package registry.
+- The country research corpora of #488, each artefact pinned by URL and
+  sha256 through `scripts/vendor/lib/pinned.sh`, one script per country
+  (`de.sh`, `at.sh`, `ch.sh`, `eu.sh`, `be.sh`, `fr.sh`, `dk.sh`, `se.sh`,
+  `no.sh`, `fi.sh`) plus `ihe-iti-tf.sh`. Material that may not be
+  redistributed, or whose licence is unclear, is cache only: fetched into
+  `.vendor-cache/` and recorded in the corpus's `PROVENANCE.md` alone.
+  - `docs/specs/de-gematik-epa/`: the ePA-Basic OpenAPI documents
+    (Apache-2.0); the gematik ePA specification pages are cache only.
+  - `docs/specs/de-gematik-vzd/`: the VZD FHIR package and connectionType
+    code system (Apache-2.0 from their source repository); the VZD
+    specification page is cache only.
+  - `docs/specs/de-gematik-zeta/`: gemSpec_ZETA, cache only.
+  - `docs/specs/de-hl7-basisprofil/`: `de.basisprofil.r4`, cache only (no
+    licence stated).
+  - `docs/specs/de-gematik-isik/`: `de.gematik.isik`, cache only (no
+    licence stated).
+  - `docs/specs/de-mii-consent/`: the MII consent package, cache only (no
+    package licence stated).
+  - `docs/specs/de-sgb5/`: SGB V §§290, 339 and 342, official texts (UrhG
+    §5).
+  - `docs/specs/at-gtelg/`: the GTelG 2012, an official text (Austrian UrhG
+    §7).
+  - `docs/specs/at-elga-bes/`: the ELGA Berechtigungssystem pages, cache
+    only.
+  - `docs/specs/at-elga/`: the ELGA overview and standards catalogue, cache
+    only.
+  - `docs/specs/at-hl7-core/`: `hl7.at.fhir.core.r4` (CC0-1.0).
+  - `docs/specs/ch-fedlex-epr/`: the EPR acts, ordinances, annexes and the
+    EGDG draft, official texts (URG Art. 5).
+  - `docs/specs/ch-epr-fhir/`: `ch.fhir.ig.ch-epr-fhir` (CC0-1.0).
+  - `docs/specs/ch-ehs-central-services/`: the EPR central services
+    interface pack, cache only.
+  - `docs/specs/ihe-pixm-ch/`, `docs/specs/ihe-pdqm-ch/`,
+    `docs/specs/ihe-iua-ch/`: IHE PIXm 3.0.4, PDQm 3.1.0 and IUA 2.3, the
+    revisions Swiss Annex 5 pins (CC-BY-4.0).
+  - `docs/specs/eu-ehds/`: Regulation (EU) 2025/327 (an official EU act),
+    the eHealth Network guidelines and the Commission legal notice (CC BY
+    4.0); the eHDSI wiki needs manual retrieval.
+  - `docs/specs/ehdsi/`: the NCPeH API package and page (CC0-1.0); the
+    guide index and OpenNCP (evidence only) are cache only.
+  - `docs/specs/ihe-iti-tf/`: ITI TF Volume 1 chapters 13, 18 and 27
+    (General Introduction §9).
+  - `docs/specs/be-ehealth/`: the eHealth platform cookbooks, cache only
+    until the owner settles their licence.
+  - `docs/specs/be-fhir/`: `hl7.fhir.be.core` (CC0-1.0).
+  - `docs/specs/fr-ans/`: the ANS FHIR packages and guide page (CC0-1.0)
+    and two ANS repositories (MIT); the INSi pages need manual retrieval.
+  - `docs/specs/dk-nsp/`: the NSPOP pages, cache only.
+  - `docs/specs/se-inera/`: RIV-TA Basic Profile 2.1 (CC BY-SA 2.5 SE); the
+    service contract archives and the FAQ are cache only.
+  - `docs/specs/no-nhn/`: the NHN developer portal pages, cache only.
+  - `docs/specs/fi-kanta/`: the Kanta documents and packages, cache only.
+  - `docs/specs/fi-hl7/`: `hl7.fhir.fi.base` (CC0-1.0).
 - `website/book/vendor/mermaid/`: the mermaid browser bundle and the
   mdbook-mermaid init script the book loads, fetched by
   `scripts/vendor/mdbook-mermaid-assets.sh` (MIT and MPL 2.0).
@@ -80,7 +133,10 @@ Vendored material keeps its upstream terms, and those terms are recorded in the
 under the Business Source License 1.1 (`CLAUDE.md` §Licence); a vendored tree
 is not, and the two are never conflated. If a corpus's licence does not permit redistribution, it is
 not vendored: the fetch script pulls it into an ignored directory at build time
-and the repository ships none of it.
+and the repository ships none of it. That directory is `.vendor-cache/<corpus>/`,
+and the same holds for material whose licence is unclear: the committed
+`PROVENANCE.md` records its URL, version, sha256, fetch date and licence
+statement, and no excerpt, quote or converted copy of its content.
 
 ## Never commit clinical or patient data
 
