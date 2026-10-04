@@ -1123,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.17"
+version = "0.0.18"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
