@@ -34,6 +34,8 @@ use ferrofed_registry::id::{EndpointId, NodeId};
 use ihe_iti::atna::forwarder::Status;
 use serde::Serialize;
 
+use crate::pmir::subscription::RegistryFault;
+
 /// The last state observed of one dependency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -295,6 +297,7 @@ impl Dependencies {
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
             directory: None,
             identity_registry: None,
+            identity_registry_fault: None,
             audit_repository: self
                 .audit_repository
                 .as_ref()
@@ -332,6 +335,11 @@ pub struct Report {
     /// `down` when it did not answer.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity_registry: Option<Observed>,
+    /// Why the PMIR Patient Identity Registry is not up: `unreachable`,
+    /// `refused`, `malformed`, or `unmanageable` after a create the gateway
+    /// cannot locate; absent while it is up, not yet asked, or not configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_registry_fault: Option<RegistryFault>,
     /// The audit repository's state, absent when no audit message goes to
     /// one.
     #[serde(skip_serializing_if = "Option::is_none")]

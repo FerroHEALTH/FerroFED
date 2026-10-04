@@ -117,6 +117,14 @@ pub enum SubscriptionMalformation {
     /// The answer is not a `Subscription` resource.
     #[error("the answer is not a Subscription")]
     NotASubscription,
+    /// A search answer is not a `searchset` Bundle, or holds an entry that is
+    /// neither a `Subscription` nor an outcome.
+    #[error("the search answer is not a searchset of Subscriptions")]
+    NotASearchset,
+    /// A `Subscription` the search listed has no `id`, so it cannot be read
+    /// or deleted.
+    #[error("a listed Subscription has no id")]
+    NoId,
     /// The resource does not decode as FHIR R4.
     #[error("the resource does not decode as FHIR R4: {kind}")]
     Decode {

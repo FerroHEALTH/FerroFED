@@ -96,7 +96,7 @@ pub(crate) fn text(
     )?;
     let document = toml::Value::String(document.display().to_string());
     Ok(format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pmir]\nurl = \"{registry_url}\"\ncallback_url = \"{callback_url}\"\npath = \"{PATH}\"\nfeed_token = \"{TOKEN}\"\ntimeout_ms = 2000\n{extra}"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pmir]\nurl = \"{registry_url}\"\ncallback_url = \"{callback_url}\"\npath = \"{PATH}\"\nfeed_token = \"{TOKEN}\"\n{extra}"
     ))
 }
 

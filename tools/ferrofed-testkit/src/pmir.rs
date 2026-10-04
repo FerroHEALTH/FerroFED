@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use bytes::Bytes;
 use fhir_types::codec::{Json, Path, Value, expect_object};
@@ -99,6 +100,28 @@ struct State {
     refusing: Option<StatusCode>,
     /// How many subscriptions were deleted.
     deleted: usize,
+    /// How many creates arrived, refused ones included.
+    creates: usize,
+    /// How long a create waits, after the subscription is held, before it
+    /// answers.
+    create_delay: Option<Duration>,
+    /// The `Location` a create answers with.
+    location: LocationMode,
+    /// Whether a search by `url` is refused with `400`.
+    search_refused: bool,
+}
+
+/// The `Location` the device answers a create with.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LocationMode {
+    /// `Subscription/<id>/_history/1`, under the device's base.
+    #[default]
+    Relative,
+    /// No `Location` at all.
+    Missing,
+    /// A `Subscription` under another base.
+    Elsewhere,
 }
 
 /// The state the accept loop shares.
@@ -188,6 +211,30 @@ impl PatientIdentityRegistry {
     /// Forgets every subscription, as a Registry that lost them would.
     pub fn forget_subscriptions(&self) {
         self.shared.lock().subscriptions.clear();
+    }
+
+    /// Returns how many creates arrived, refused ones included.
+    #[must_use]
+    pub fn creates(&self) -> usize {
+        self.shared.lock().creates
+    }
+
+    /// Holds every later subscription at once and answers its create only
+    /// after `delay`, as a Registry that answers late would; `None` answers
+    /// at once again.
+    pub fn delay_creates(&self, delay: Option<Duration>) {
+        self.shared.lock().create_delay = delay;
+    }
+
+    /// Answers every later create with the `Location` `mode` names.
+    pub fn locate_creates(&self, mode: LocationMode) {
+        self.shared.lock().location = mode;
+    }
+
+    /// Refuses every later search by `url` with `400`, as a Registry that
+    /// does not support the parameter would, when `refused`.
+    pub fn refuse_search(&self, refused: bool) {
+        self.shared.lock().search_refused = refused;
     }
 
     /// Sends the ITI-93 message `body` to the channel endpoint of every
@@ -376,7 +423,8 @@ async fn handle(
         .and_then(|rest| rest.strip_prefix("/Subscription/"))
         .filter(|id| !id.is_empty() && !id.contains('/'));
     let answer = match (&parts.method, path, id) {
-        (&Method::POST, "/fhir/Subscription", _) => create(&shared, &body),
+        (&Method::POST, "/fhir/Subscription", _) => create(&shared, &body).await,
+        (&Method::GET, "/fhir/Subscription", _) => search(&shared, parts.uri.query()),
         (&Method::GET, _, Some(id)) => read(&shared, id),
         (&Method::DELETE, _, Some(id)) => delete(&shared, id),
         _ => outcome(StatusCode::NOT_FOUND, "not-supported"),
@@ -386,8 +434,13 @@ async fn handle(
 
 /// ITI-94: a `Subscription` that holds to the request profile is created
 /// (§2:3.94.4.1.2.1).
-fn create(shared: &Shared, body: &[u8]) -> Response<Full<Bytes>> {
-    if let Some(status) = shared.lock().refusing {
+async fn create(shared: &Shared, body: &[u8]) -> Response<Full<Bytes>> {
+    let refusing = {
+        let mut state = shared.lock();
+        state.creates = state.creates.saturating_add(1);
+        state.refusing
+    };
+    if let Some(status) = refusing {
         return outcome(status, "forbidden");
     }
     let Some(subscription) = decode(body) else {
@@ -415,24 +468,33 @@ fn create(shared: &Shared, body: &[u8]) -> Response<Full<Bytes>> {
     if !conformant {
         return outcome(StatusCode::BAD_REQUEST, "invalid");
     }
-    let mut state = shared.lock();
-    state.next = state.next.saturating_add(1);
-    let id = format!("subscription-{}", state.next);
-    state.subscriptions.insert(id.clone(), held);
-    drop(state);
+    let (id, delay, mode) = {
+        let mut state = shared.lock();
+        state.next = state.next.saturating_add(1);
+        let id = format!("subscription-{}", state.next);
+        state.subscriptions.insert(id.clone(), held);
+        (id, state.create_delay, state.location)
+    };
+    if let Some(delay) = delay {
+        tokio::time::sleep(delay).await;
+    }
     let mut answer = Response::new(Full::new(Bytes::new()));
     *answer.status_mut() = StatusCode::CREATED;
-    if let Ok(location) = HeaderValue::from_str(&format!("Subscription/{id}/_history/1")) {
+    let location = match mode {
+        LocationMode::Relative => Some(format!("Subscription/{id}/_history/1")),
+        LocationMode::Elsewhere => Some(format!(
+            "http://elsewhere.example.test{BASE}/Subscription/{id}"
+        )),
+        LocationMode::Missing => None,
+    };
+    if let Some(location) = location.and_then(|text| HeaderValue::from_str(&text).ok()) {
         answer.headers_mut().insert(LOCATION, location);
     }
     answer
 }
 
-/// ITI-94: the `Subscription` with its current status (§2:3.94.4.3).
-fn read(shared: &Shared, id: &str) -> Response<Full<Bytes>> {
-    let Some(held) = shared.lock().subscriptions.get(id).cloned() else {
-        return outcome(StatusCode::NOT_FOUND, "not-found");
-    };
+/// The `Subscription` resource of `held` with the id `id`.
+fn resource(id: &str, held: &Held) -> Subscription {
     let mut subscription = Subscription {
         id: Some(id.to_owned()),
         status: held.status.as_str().into(),
@@ -443,7 +505,55 @@ fn read(shared: &Shared, id: &str) -> Response<Full<Bytes>> {
     subscription.channel.r#type = "message".into();
     subscription.channel.endpoint = Some(held.endpoint.as_str().into());
     subscription.channel.payload = Some(held.payload.as_str().into());
-    match serde_json::to_vec(&subscription) {
+    subscription
+}
+
+/// FHIR R4 search: the subscriptions whose channel endpoint is the `url`
+/// parameter, as a `searchset` Bundle, or `400` when search is refused.
+fn search(shared: &Shared, query: Option<&str>) -> Response<Full<Bytes>> {
+    let url = query.and_then(|query| {
+        url::form_urlencoded::parse(query.as_bytes())
+            .find(|(name, _)| name == "url")
+            .map(|(_, value)| value.into_owned())
+    });
+    let state = shared.lock();
+    if state.search_refused {
+        return outcome(StatusCode::BAD_REQUEST, "not-supported");
+    }
+    let entry = state
+        .subscriptions
+        .iter()
+        .filter(|(_, held)| url.as_deref().is_none_or(|url| held.endpoint == url))
+        .map(|(id, held)| BundleEntry {
+            full_url: Some(format!("http://pmir.example.test{BASE}/Subscription/{id}").into()),
+            resource: Some(Resource::Subscription(Box::new(resource(id, held)))),
+            ..BundleEntry::default()
+        })
+        .collect();
+    drop(state);
+    let bundle = Bundle {
+        r#type: "searchset".into(),
+        entry,
+        ..Bundle::default()
+    };
+    match serde_json::to_vec(&bundle) {
+        Ok(bytes) => {
+            let mut answer = Response::new(Full::new(Bytes::from(bytes)));
+            answer
+                .headers_mut()
+                .insert(CONTENT_TYPE, HeaderValue::from_static(FHIR_JSON));
+            answer
+        }
+        Err(_unwritable) => outcome(StatusCode::INTERNAL_SERVER_ERROR, "exception"),
+    }
+}
+
+/// ITI-94: the `Subscription` with its current status (§2:3.94.4.3).
+fn read(shared: &Shared, id: &str) -> Response<Full<Bytes>> {
+    let Some(held) = shared.lock().subscriptions.get(id).cloned() else {
+        return outcome(StatusCode::NOT_FOUND, "not-found");
+    };
+    match serde_json::to_vec(&resource(id, &held)) {
         Ok(bytes) => {
             let mut answer = Response::new(Full::new(Bytes::from(bytes)));
             answer

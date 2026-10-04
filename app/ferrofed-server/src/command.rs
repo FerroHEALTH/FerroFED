@@ -19,6 +19,7 @@ use crate::config::Config;
 use crate::config::settings::Settings;
 use crate::directory::DirectoryRegistry;
 use crate::federation::Federation;
+use crate::pmir::IdentityFeed;
 use crate::state::AppState;
 use crate::{
     EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, body, chain, config, directory, healthcheck,
@@ -351,15 +352,13 @@ fn serve_command(
         if let Some(directory) = directory {
             tokio::spawn(directory.keep_in_step(Arc::clone(&reloader)));
         }
-        if let Some(feed) = state.identity_feed() {
-            tokio::spawn(Arc::clone(feed).keep_subscribed());
-        }
+        let subscription = state.identity_feed().map(IdentityFeed::start);
         tokio::spawn(reload::on_hangup(reloader));
         let app = router(Arc::clone(state), &server);
         state.lifecycle().booted();
         let stopped = serve(listener, app, &server, state.lifecycle().clone()).await;
-        if let Some(feed) = state.identity_feed() {
-            feed.unsubscribe().await;
+        if let Some(subscription) = subscription {
+            subscription.drain().await;
         }
         stopped.context("serving HTTP")?;
         tracing::info!("ferrofed stopped");

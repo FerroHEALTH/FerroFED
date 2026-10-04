@@ -167,7 +167,7 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     // NOTE: PMIR §2:3.93.5: the feed authenticates its Supplier with its own token,
     // so its route sits outside the ITS-REST surface and its client authentication.
     let surface = match state.identity_feed() {
-        Some(feed) => surface.route(feed.path(), post(pmir::feed)),
+        Some(feed) => surface.route(feed.path(), post(pmir::route::feed)),
         None => surface,
     };
     let routes = if server.base_path.is_root() {

@@ -109,6 +109,55 @@ impl PmirSubscriber {
         &self.endpoint
     }
 
+    /// Searches the Registry for the subscriptions `request` describes: an
+    /// HTTP `GET [base]/Subscription?url=<endpoint>`, the R4 `Subscription`
+    /// search parameter on the channel endpoint (FHIR R4 subscription.html,
+    /// Search Parameters).
+    ///
+    /// A subscriber finds with it a subscription it created and never learned
+    /// the location of, so it adopts that one in place of creating another.
+    /// Only the subscriptions whose criteria, `message` channel and endpoint
+    /// are the request's are listed.
+    ///
+    /// # Errors
+    /// [`SubscribeError::Rejected`] for any status but `200`, `400` and `404`,
+    /// the last two being [`subscription::Search::Unsupported`];
+    /// [`SubscribeError::Malformed`] for an answer that is no searchset of
+    /// `Subscription`s with ids and statuses; and [`SubscribeError::Timeout`]
+    /// or [`SubscribeError::Transport`] when no answer arrives.
+    pub async fn find(
+        &self,
+        request: &SubscriptionRequest,
+        timeout: Duration,
+    ) -> Result<subscription::Search, SubscribeError> {
+        let mut url = self.endpoint.clone();
+        url.query_pairs_mut()
+            .append_pair("url", request.endpoint().as_str());
+        let response = self
+            .http
+            .get(url)
+            .header(ACCEPT, FHIR_JSON)
+            .timeout(timeout)
+            .send()
+            .await
+            .map_err(error::transport)?;
+        let status = response.status();
+        let media = media(&response);
+        let body = read_body(response).await?;
+        if matches!(status, StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND) {
+            return Ok(subscription::Search::Unsupported);
+        }
+        if status != StatusCode::OK {
+            return Err(rejected(status, media.as_deref(), &body));
+        }
+        Ok(subscription::Search::Found(subscription::listed(
+            media.as_deref(),
+            &body,
+            request,
+            &self.endpoint,
+        )?))
+    }
+
     /// Creates the subscription `request` describes: an HTTP `POST` of the
     /// `Subscription` resource, answered `201` with its `Location`
     /// (§2:3.94.4.1.2, §2:3.94.4.2.2).

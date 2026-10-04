@@ -243,6 +243,7 @@ impl AppState {
             .unwrap_or_default();
         report.directory = self.directory().map(|directory| directory.observed());
         report.identity_registry = self.identity_feed().map(|feed| feed.observed());
+        report.identity_registry_fault = self.identity_feed().and_then(|feed| feed.fault());
         report
     }
 

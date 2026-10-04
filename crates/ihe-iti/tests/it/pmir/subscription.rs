@@ -11,7 +11,7 @@ use http::StatusCode;
 use ihe_iti::outcome::IssueType;
 use ihe_iti::pmir::PmirSubscriber;
 use ihe_iti::pmir::error::{SubscribeError, SubscriptionMalformation};
-use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest, SubscriptionStatus};
+use ihe_iti::pmir::subscription::{Criteria, Search, SubscriptionRequest, SubscriptionStatus};
 use url::Url;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -208,4 +208,116 @@ async fn a_delete_of_a_gone_subscription_is_a_deletion() {
         .await
         .expect_err("500");
     assert_eq!(Some(StatusCode::INTERNAL_SERVER_ERROR), error.status());
+}
+
+/// A searchset answer listing `subscriptions`, each `(id, criteria, endpoint,
+/// status)`.
+fn searchset(subscriptions: &[(&str, &str, &str, &str)]) -> String {
+    let entries: Vec<String> = subscriptions
+        .iter()
+        .map(|(id, criteria, endpoint, status)| {
+            format!(
+                r#"{{"resource":{{"resourceType":"Subscription","id":"{id}","status":"{status}","reason":"x","criteria":"{criteria}","channel":{{"type":"message","endpoint":"{endpoint}","payload":"application/fhir+json"}}}}}}"#
+            )
+        })
+        .collect();
+    format!(
+        r#"{{"resourceType":"Bundle","type":"searchset","entry":[{}]}}"#,
+        entries.join(",")
+    )
+}
+
+#[tokio::test]
+async fn a_search_lists_only_the_requests_own_subscriptions() {
+    let server = MockServer::start().await;
+    let criteria = format!("Patient?identifier={DOMAIN}|");
+    Mock::given(method("GET"))
+        .and(path("/fhir/Subscription"))
+        .and(wiremock::matchers::query_param(
+            "url",
+            "https://gateway.example.org/pmir/feed",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            searchset(&[
+                (
+                    "other",
+                    "Patient",
+                    "https://gateway.example.org/pmir/feed",
+                    "active",
+                ),
+                (
+                    "elsewhere",
+                    &criteria,
+                    "https://other.example.org/feed",
+                    "active",
+                ),
+                (
+                    "s-1",
+                    &criteria,
+                    "https://gateway.example.org/pmir/feed",
+                    "off",
+                ),
+            ]),
+            FHIR_JSON,
+        ))
+        .mount(&server)
+        .await;
+    let Search::Found(found) = subscriber(&server)
+        .find(&request(), PROMPT)
+        .await
+        .expect("a search")
+    else {
+        panic!("the search is supported");
+    };
+    let [listed] = found.as_slice() else {
+        panic!("one of the three is the request's: {found:?}");
+    };
+    assert_eq!(SubscriptionStatus::Off, listed.status);
+    assert_eq!(
+        format!("{}/fhir/Subscription/s-1", server.uri()),
+        listed.subscribed.location().as_str()
+    );
+}
+
+#[tokio::test]
+async fn a_registry_that_cannot_search_by_url_is_unsupported() {
+    for status in [400, 404] {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(status))
+            .mount(&server)
+            .await;
+        assert_eq!(
+            Search::Unsupported,
+            subscriber(&server)
+                .find(&request(), PROMPT)
+                .await
+                .expect("an answer"),
+            "{status}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_listed_subscription_without_an_id_is_malformed() {
+    let server = MockServer::start().await;
+    let body = searchset(&[(
+        "",
+        &format!("Patient?identifier={DOMAIN}|"),
+        "https://gateway.example.org/pmir/feed",
+        "active",
+    )])
+    .replacen(r#""id":"","#, "", 1);
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(body, FHIR_JSON))
+        .mount(&server)
+        .await;
+    let error = subscriber(&server)
+        .find(&request(), PROMPT)
+        .await
+        .expect_err("no id");
+    assert!(matches!(
+        error,
+        SubscribeError::Malformed(SubscriptionMalformation::NoId)
+    ));
 }

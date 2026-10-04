@@ -7,6 +7,8 @@
 use std::fmt;
 
 use fhir_types::codec::{Json, Object, Path, Value};
+use fhir_types::r4::bundle::Bundle;
+use fhir_types::r4::resource::Resource;
 use fhir_types::r4::subscription::{Subscription, SubscriptionChannel};
 use url::Url;
 
@@ -243,6 +245,101 @@ pub(super) fn status(
         .as_deref()
         .and_then(SubscriptionStatus::from_code)
         .ok_or(SubscriptionMalformation::Status)
+}
+
+/// A subscription a search found: where it is, and its status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Listed {
+    /// Where the subscription can be read, updated and deleted.
+    pub subscribed: Subscribed,
+    /// Its status.
+    pub status: SubscriptionStatus,
+}
+
+/// What a search for a request's subscriptions found (FHIR R4 search, the
+/// `Subscription` search parameter `url`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Search {
+    /// The subscriptions whose criteria, `message` channel and endpoint are
+    /// the request's, in the answer's order; empty when the Registry holds
+    /// none.
+    Found(Vec<Listed>),
+    /// The Registry does not search `Subscription` by `url`: it answered `400`
+    /// or `404` (FHIR R4 search, Handling Errors).
+    Unsupported,
+}
+
+/// The subscriptions of `request` a search answer with `media` and `body`
+/// lists, each located under `endpoint`, the `[base]/Subscription` it was
+/// asked at.
+///
+/// A Registry that ignores the `url` parameter lists other subscriptions as
+/// well, so each is matched on its criteria, its channel type and its
+/// endpoint; only the first page is read.
+pub(super) fn listed(
+    media: Option<&str>,
+    body: &[u8],
+    request: &SubscriptionRequest,
+    endpoint: &Url,
+) -> Result<Vec<Listed>, SubscriptionMalformation> {
+    if !outcome::fhir_json(media) {
+        return Err(SubscriptionMalformation::NotFhirJson);
+    }
+    let value: Value =
+        serde_json::from_slice(body).map_err(|error| SubscriptionMalformation::NotJson {
+            line: error.line(),
+            column: error.column(),
+        })?;
+    let object: &Object = value
+        .as_object()
+        .ok_or(SubscriptionMalformation::NotASearchset)?;
+    if object.get("resourceType").and_then(Value::as_str) != Some("Bundle") {
+        return Err(SubscriptionMalformation::NotASearchset);
+    }
+    let bundle = Bundle::from_json(object, &mut Path::root("Bundle"))
+        .map_err(|error| SubscriptionMalformation::Decode { kind: error.kind })?;
+    if bundle.r#type.value.as_deref() != Some("searchset") {
+        return Err(SubscriptionMalformation::NotASearchset);
+    }
+    let criteria = request.criteria.text();
+    let mut found = Vec::new();
+    for entry in bundle.entry {
+        let subscription = match entry.resource {
+            Some(Resource::Subscription(subscription)) => subscription,
+            // NOTE: FHIR R4 search, search.mode `outcome`: an OperationOutcome in a
+            // searchset tells about the search and lists no subscription.
+            Some(Resource::OperationOutcome(_)) => continue,
+            _ => return Err(SubscriptionMalformation::NotASearchset),
+        };
+        let channel = &subscription.channel;
+        let ours = subscription.criteria.value.as_deref() == Some(criteria.as_str())
+            && channel.r#type.value.as_deref() == Some("message")
+            && channel
+                .endpoint
+                .as_ref()
+                .and_then(|url| url.value.as_deref())
+                == Some(request.endpoint.as_str());
+        if !ours {
+            continue;
+        }
+        let id = subscription
+            .id
+            .as_deref()
+            .filter(|id| !id.is_empty())
+            .ok_or(SubscriptionMalformation::NoId)?;
+        let status = subscription
+            .status
+            .value
+            .as_deref()
+            .and_then(SubscriptionStatus::from_code)
+            .ok_or(SubscriptionMalformation::Status)?;
+        found.push(Listed {
+            subscribed: Subscribed::at(endpoint, &format!("Subscription/{id}"))?,
+            status,
+        });
+    }
+    Ok(found)
 }
 
 #[cfg(test)]
