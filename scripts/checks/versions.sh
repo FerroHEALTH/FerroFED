@@ -922,6 +922,9 @@ docs/specs/ihe-pdqm|IHE PDQm FHIR package
 docs/specs/ihe-mcsd|IHE mCSD FHIR package
 docs/specs/ihe-pmir|IHE PMIR FHIR package
 docs/specs/ihe-iua|IHE IUA supplement
+docs/specs/ihe-balp|IHE BALP FHIR package
+docs/specs/ihe-atna|IHE ITI-20 Record Audit Event
+docs/specs/ihe-atna|IHE RESTful ATNA supplement
 docs/specs/nl-gf|Netherlands Generic Functions IG source
 docs/specs/de-gematik-epa|German ePA für alle (gematik)
 docs/specs/de-gematik-vzd|German VZD FHIR-Directory (gematik)

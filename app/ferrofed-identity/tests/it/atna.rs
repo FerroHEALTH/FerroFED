@@ -196,3 +196,56 @@ async fn a_full_spool_fails_the_discovery_closed() -> TestResult {
         other => Err(format!("no answer without its audit record (§14.1): {other:?}").into()),
     }
 }
+
+/// A forwarder started on a runtime that has since shut down is started
+/// again on the next runtime, so the spool never stays undelivered (ITI
+/// TF-2 §3.20.4.1.1).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forwarder_whose_runtime_ended_is_started_again() -> TestResult {
+    let repository = AuditRepository::start().await?;
+    let tls = TlsSettings {
+        roots: Some(repository.trust_roots().as_bytes().to_vec()),
+        identity: None,
+    };
+    let timeouts = Timeouts {
+        connect: Duration::from_secs(2),
+        send: Duration::from_millis(500),
+    };
+    let connection = Repository::tls(&Url::parse(&repository.url())?, &tls, timeouts)?;
+    let sender = Sender::new("gateway.example.org", "ferrofed", "4242")?;
+    let forwarder = Forwarder::new(
+        Spool::in_memory(ROOMY),
+        connection,
+        Duration::from_millis(500),
+    );
+    let audit = Arc::new(RepositoryAudit::new(
+        Arc::clone(&forwarder),
+        sender.clone(),
+        AuditSource {
+            id: "gateway.example.org".to_owned(),
+            enterprise_site: None,
+        },
+    ));
+    let short = Arc::clone(&audit);
+    std::thread::spawn(move || -> Result<(), std::io::Error> {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        runtime.block_on(async {
+            short.start();
+            tokio::task::yield_now().await;
+        });
+        Ok(())
+    })
+    .join()
+    .map_err(|_panic| "the short-lived runtime's thread")??;
+    audit.start();
+    let frame = sender.frame(
+        jiff::Timestamp::now(),
+        &secrecy::SecretSlice::from(b"<AuditMessage/>".to_vec()),
+    );
+    forwarder.submit(frame).await?;
+    let messages = repository.wait_for(1, Duration::from_secs(5)).await;
+    assert_eq!(1, messages.len(), "the restarted forwarder delivers");
+    Ok(())
+}

@@ -151,6 +151,12 @@ gateway's user `65532:65532` with mode `0700`, so a named Docker volume
 mounted at `/var/lib/ferrofed` starts with that owner and mode, and the
 release `compose.yaml` mounts one, `audit-spool`, with no step on the host.
 
+With `[audit] destination = "repository"`, the PIXm, mCSD and PMIR audit
+records wait in a spool of their own until the repository takes them
+([The audit trail](audit.md)). Set
+`audit.repository.spool_dir = "/var/lib/ferrofed/audit-feed-spool"` on the
+same volume.
+
 The spool holds audit records that name patients: each message carries the
 query parameters, the patient identifier among them. Keep the volume on an
 encrypted disk; the gateway holds no key to encrypt it with. Each replica

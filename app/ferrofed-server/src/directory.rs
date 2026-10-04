@@ -330,7 +330,7 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
             });
         }
     };
-    DirectorySource::new(DirectoryConfig {
+    let source = DirectorySource::new(DirectoryConfig {
         base: settings.url.clone(),
         credentials,
         deadline: settings.deadline,
@@ -338,7 +338,15 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
         bytes: settings.max_bytes,
         entries: settings.max_entries,
     })
-    .map_err(|source| directory_error(DirectoryFailure::Source(source)))
+    .map_err(|source| directory_error(DirectoryFailure::Source(source)))?;
+    // NOTE: mCSD §2:3.90.5.1 and §2:3.91.5.1: each search and history is audited,
+    // and one whose record is refused fails like a directory that did not answer.
+    Ok(
+        match crate::audit::recorder(&settings.audit).map_err(FederationError::Audit)? {
+            Some(recorder) => source.audited(recorder),
+            None => source,
+        },
+    )
 }
 
 /// Reads `source` on a current-thread runtime of a thread of its own, so the

@@ -87,12 +87,15 @@ registry is a document
 delivery succeeded and nothing waits, `degraded` while the gateway retries a
 failed delivery, while audit messages wait in the spool and while any sits in
 its quarantine, and `unknown` before the first message. It is absent when the audit messages go elsewhere. The
+FHIR Feed repository of `[audit]` shows as `audit_feed` in the same states,
+absent unless `destination = "repository"` ([The audit trail](audit.md)). The
 PMIR Patient Identity Registry shows as `identity_registry`, from the
 identity feed's last check: `up` while the gateway holds a subscription in
 `requested` or `active`, `failing` after a refusal, an answer that breaks
 ITI-94, or a create the gateway cannot manage, and `down` when the Registry
 did not answer. `identity_registry_fault` names why it is not up:
-`unreachable`, `refused`, `malformed` or `unmanageable`. Both are absent
+`unreachable`, `refused`, `malformed`, `unmanageable`, or `audit-failed`
+when an exchange's audit record could not be stored. Both are absent
 without `[pmir]`
 ([The identity feed](identity.md#the-identity-feed-pmir)). The
 body names endpoint ids and states only, never a URL, a credential or a

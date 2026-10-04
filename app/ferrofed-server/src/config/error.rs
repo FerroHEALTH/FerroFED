@@ -418,6 +418,19 @@ pub enum Error {
         /// The key that turned the audit off.
         key: String,
     },
+    /// `[audit] destination = "off"` outside development.
+    #[error(
+        "{key} = \"off\" records no PIXm, mCSD or PMIR audit record, which only profile = \"development\" accepts; set it to \"log\" or \"repository\" (PIXm §2:3.83.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1)"
+    )]
+    FeedAuditOff {
+        /// The key that turned the audit off.
+        key: String,
+    },
+    /// `[audit.repository]` is set while the records go elsewhere.
+    #[error(
+        "[audit.repository] applies only under audit.destination = \"repository\"; remove it, or send the audit records there"
+    )]
+    FeedAuditRepositoryUnused,
     /// `[xcpd.audit_repository]` is set while the audit messages go
     /// elsewhere.
     #[error(

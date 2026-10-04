@@ -48,7 +48,7 @@ ferrofed-registry.workspace = true
 # The ITI-20 audit repository of the XCPD localizer (#418): its syslog
 # header, spool, connection and forwarder, and the PMIR
 # ITI-94 subscriber and ITI-93 feed reader of the identity feed (#147).
-ihe-iti = { workspace = true, features = ["atna", "pmir", "xcpd"] }
+ihe-iti = { workspace = true, features = ["atna", "balp", "pmir", "xcpd"] }
 # The Nuts grant of an endpoint's onward credentials, Annex B §B.4 (#88):
 # its grant, holder and client are built from the configuration.
 nl-generic-functions = { workspace = true, features = ["nuts-auth"] }

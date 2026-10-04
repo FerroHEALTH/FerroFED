@@ -49,9 +49,11 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 # Care Services Updates transactions over Organization, Endpoint and Location,
 # at their upstream paths inside the package. The Practitioner,
 # HealthcareService and OrganizationAffiliation profiles, the Feed and Location
-# Distance options, the audit (BALP) profiles and examples, and the transaction
-# Bundle example, which holds every resource type, serve no reader here and are
-# not taken.
+# Distance options, the audit (BALP) profiles and examples of the other
+# interactions, and the transaction Bundle example, which holds every resource
+# type, serve no reader here and are not taken. The ITI-90 Query and ITI-91
+# Updates audit profiles and examples are taken: the audit records of
+# crates/ihe-iti (feature `balp`, #486) are held to them.
 paths=(
   package/ImplementationGuide-ihe.iti.mcsd.json
   package/CapabilityStatement-IHE.mCSD.Directory.json
@@ -74,6 +76,10 @@ paths=(
   package/example/Endpoint-ex-endpointDicom.json
   package/example/Endpoint-ex-endpointXCAquery.json
   package/example/Endpoint-ex-endpointXCAretrieve.json
+  package/StructureDefinition-IHE.mCSD.Audit.CareServices.Query.json
+  package/StructureDefinition-IHE.mCSD.Audit.CareServices.Updates.json
+  package/example/AuditEvent-ex-AuditMcsdCareServicesQuery.json
+  package/example/AuditEvent-ex-AuditMcsdCareServicesUpdates.json
 )
 
 tmp="$(mktemp -d)"
@@ -140,7 +146,9 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Read by: #86 (the ITI-90 and ITI-91 client of \`crates/ihe-iti\`, whose
   tests hold its interactions to the capability statements and decode the
   example Organizations and Endpoints, and the harness directory of
-  \`tools/ferrofed-testkit\`, which publishes the example Organizations)
+  \`tools/ferrofed-testkit\`, which publishes the example Organizations) and
+  #486 (the ITI-90 and ITI-91 audit records of \`crates/ihe-iti\`, held to
+  the Query and Updates audit profiles and their examples)
 
 ## What is here
 
@@ -152,10 +160,12 @@ Update Client capability statements of ITI-91 (\`history-type\` with
 \`_since\`), the Organization, Endpoint, Endpoint for Document Sharing and
 Location profiles, the endpoint-specific-type extension, the mCSD endpoint
 type code system and its value sets, the two search parameters the IG
-defines, and the IG's example Organizations and Endpoints. The package's
-other files serve no reader here: the Practitioner, PractitionerRole,
-HealthcareService and OrganizationAffiliation profiles, the Feed and Location
-Distance options, the BALP audit profiles and examples, the transaction
+defines, and the IG's example Organizations and Endpoints. The audit records
+of the two transactions (§2:3.90.5.1, §2:3.91.5.1): the BALP-based Query and
+Updates audit profiles and their examples. The package's other files serve no
+reader here: the Practitioner, PractitionerRole, HealthcareService and
+OrganizationAffiliation profiles, the Feed and Location Distance options, the
+BALP audit profiles and examples of the other interactions, the transaction
 Bundle example, the Schematron renderings, the OpenAPI renderings and the
 registry's \`.index.db\`, a SQLite file. They are not taken.
 

@@ -125,6 +125,7 @@ The sections, and the page that covers each:
 | `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](identity.md#xcpd-localization-xcpd), [The audit repository](identity.md#the-audit-repository) |
 | `[nl_gf.nvi]` | the NVI localizer of the Dutch Generic Functions | [Dutch localization](identity.md#dutch-localization-nl_gfnvi) |
 | `[pmir]` | the PMIR identity feed: the subscription and the route the Registry sends to | [The identity feed](identity.md#the-identity-feed-pmir) |
+| `[audit]` | where the audit records of the PIXm, mCSD and PMIR transactions go | [The audit trail](audit.md) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
 

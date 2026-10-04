@@ -483,8 +483,9 @@ banner says so. `GET /health/dependencies` reports the repository as
 delivery, while messages wait in the spool and while any sits in
 quarantine, and `unknown` before the first message. The metrics carry the
 spool's depth, its quarantine, the deliveries and the retries
-([Metrics](metrics.md)). The audit FHIR feed of RESTful ATNA is an option
-of ITI-20 this gateway does not send.
+([Metrics](metrics.md)). The PIXm, mCSD and PMIR transactions are audited
+over the other option of ITI-20, the FHIR Feed of RESTful ATNA, under
+`[audit]` ([The audit trail](audit.md)).
 
 ## Dutch localization: `[nl_gf.nvi]`
 

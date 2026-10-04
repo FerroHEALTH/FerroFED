@@ -143,11 +143,19 @@ pub enum FeedResult {
     Refused,
     /// The message did not carry the feed token, and nothing was applied.
     Unauthenticated,
+    /// The message's audit record could not be stored, and nothing was
+    /// applied (PMIR §2:3.93.5.1).
+    AuditFailed,
 }
 
 impl FeedResult {
     /// Every result, in declaration order.
-    pub const ALL: [Self; 3] = [Self::Applied, Self::Refused, Self::Unauthenticated];
+    pub const ALL: [Self; 4] = [
+        Self::Applied,
+        Self::Refused,
+        Self::Unauthenticated,
+        Self::AuditFailed,
+    ];
 
     /// The label value.
     #[must_use]
@@ -156,6 +164,7 @@ impl FeedResult {
             Self::Applied => "applied",
             Self::Refused => "refused",
             Self::Unauthenticated => "unauthenticated",
+            Self::AuditFailed => "audit-failed",
         }
     }
 }

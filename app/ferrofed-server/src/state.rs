@@ -89,6 +89,9 @@ pub enum StateError {
     /// The PMIR identity feed cannot be built.
     #[error(transparent)]
     IdentityFeed(#[from] IdentityFeedError),
+    /// The audit trail of the PMIR transactions cannot start (`[audit]`).
+    #[error("the [audit] trail cannot start")]
+    Audit(#[source] crate::audit::AuditTrailError),
 }
 
 impl AppState {
@@ -318,7 +321,8 @@ fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, State
         .flat_map(|pixm| pixm.managers.iter())
         .flat_map(|manager| manager.members.values().cloned())
         .collect();
-    Ok(Some(Arc::new(IdentityFeed::new(pmir, domains)?)))
+    let audit = crate::audit::recorder(&settings.audit).map_err(StateError::Audit)?;
+    Ok(Some(Arc::new(IdentityFeed::new(pmir, domains, audit)?)))
 }
 
 /// Refuses a federating gateway whose `[auth]` trusts no issuer, which would

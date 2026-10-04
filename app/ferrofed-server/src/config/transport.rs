@@ -199,6 +199,55 @@ pub fn trust_anchor(key: &str, url: &Url) -> Result<(), TrustAnchorError> {
         }),
     }
 }
+/// The sites each endpoint's onward credentials send to: the endpoint's own
+/// URL in `registry`, an OAuth 2.0 grant's token endpoint and a Nuts grant's
+/// authorization server, in key order.
+fn credential_sites(
+    settings: &Settings,
+    registry: Option<&RegistrySnapshot>,
+) -> Vec<(String, ProtectedSite)> {
+    let site = |url_key: String, payload: String| ProtectedSite {
+        url_key,
+        payload,
+        requires: Encryption::Https,
+    };
+    let mut sites = Vec::new();
+    for (endpoint, scheme) in &settings.credentials {
+        let section = format!("credentials.{endpoint}");
+        // NOTE: no specification governs this: our own design; an endpoint the
+        // registry lacks is legitimately absent here, and the client build refuses it.
+        if let Some(declared) = registry.and_then(|registry| registry.endpoint(endpoint)) {
+            sites.push((
+                declared.url().as_str().to_owned(),
+                site(
+                    format!("the url of endpoint {endpoint} in registry.document"),
+                    section.clone(),
+                ),
+            ));
+        }
+        if let Scheme::OAuth2(grant) = scheme {
+            sites.push((
+                grant.token_endpoint().as_str().to_owned(),
+                site(
+                    format!("{section}.oauth2.token_endpoint"),
+                    format!("{section}.oauth2"),
+                ),
+            ));
+        }
+        // NOTE: Nuts RFC021 §7, every endpoint is TLS-protected; the token and
+        // definition endpoints the metadata names are held to it by the client.
+        if let Scheme::Nuts(grant) = scheme {
+            sites.push((
+                grant.grant().authorization_server().to_owned(),
+                site(
+                    format!("{section}.nuts.authorization_server"),
+                    format!("{section}.nuts credentials and presentation"),
+                ),
+            ));
+        }
+    }
+    sites
+}
 
 /// Holds every protected payload `settings` send to [`protected_payload`].
 ///
@@ -227,39 +276,8 @@ pub fn check(
         payload,
         requires: Encryption::Https,
     };
-    for (endpoint, scheme) in &settings.credentials {
-        let section = format!("credentials.{endpoint}");
-        // NOTE: no specification governs this: our own design; an endpoint the
-        // registry lacks is legitimately absent here, and the client build refuses it.
-        if let Some(declared) = registry.and_then(|registry| registry.endpoint(endpoint)) {
-            hold(
-                declared.url().as_str(),
-                site(
-                    format!("the url of endpoint {endpoint} in registry.document"),
-                    section.clone(),
-                ),
-            )?;
-        }
-        if let Scheme::OAuth2(grant) = scheme {
-            hold(
-                grant.token_endpoint().as_str(),
-                site(
-                    format!("{section}.oauth2.token_endpoint"),
-                    format!("{section}.oauth2"),
-                ),
-            )?;
-        }
-        // NOTE: Nuts RFC021 §7, every endpoint is TLS-protected; the token and
-        // definition endpoints the metadata names are held to it by the client.
-        if let Scheme::Nuts(grant) = scheme {
-            hold(
-                grant.grant().authorization_server(),
-                site(
-                    format!("{section}.nuts.authorization_server"),
-                    format!("{section}.nuts credentials and presentation"),
-                ),
-            )?;
-        }
+    for (url, site) in credential_sites(settings, registry) {
+        hold(&url, site)?;
     }
     for (url, site) in identity_services(settings) {
         hold(url, site)?;
@@ -285,6 +303,15 @@ pub fn check(
         .filter(|directory| directory.credentials.is_some())
     {
         hold(directory.url.expose(), directory_site())?;
+    }
+    if let Some(repository) = &settings.audit.repository {
+        hold(
+            repository.url.as_str(),
+            site(
+                String::from("audit.repository.url"),
+                String::from("the PIXm, mCSD and PMIR audit records, which name the patient"),
+            ),
+        )?;
     }
     let collectors = [
         ("metrics.otlp_endpoint", &settings.metrics.otlp_endpoint),

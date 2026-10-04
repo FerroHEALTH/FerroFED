@@ -11,6 +11,7 @@ use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmResolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::config::audit::AuditSettings;
 use crate::config::settings::{PixmSettings, Scheme};
 
 use super::error::FederationError;
@@ -18,6 +19,7 @@ use super::error::FederationError;
 /// The PIXm resolver `[pixm]` describes over the members of `snapshot`.
 pub(super) fn pixm_resolver(
     pixm: &PixmSettings,
+    audit: &AuditSettings,
     snapshot: &RegistrySnapshot,
 ) -> Result<Arc<PixmResolver>, FederationError> {
     let mut managers = Vec::with_capacity(pixm.managers.len());
@@ -59,5 +61,12 @@ pub(super) fn pixm_resolver(
     }
     let resolver =
         PixmResolver::from_config(managers, namespaces, snapshot).map_err(FederationError::Pixm)?;
-    Ok(Arc::new(resolver))
+    // NOTE: PIXm §2:3.83.5.1.1: each ITI-83 exchange is audited, and one whose
+    // record is refused fails, so the query fails closed.
+    Ok(Arc::new(
+        match crate::audit::recorder(audit).map_err(FederationError::Audit)? {
+            Some(recorder) => resolver.audited(&recorder),
+            None => resolver,
+        },
+    ))
 }

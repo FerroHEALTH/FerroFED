@@ -10,6 +10,8 @@
 //!
 //! - [`atna`]: a harness ATNA Audit Record Repository that reads ITI-20
 //!   syslog over TLS (#418);
+//! - [`atna_feed`]: a harness Audit Record Repository that takes the BALP
+//!   `AuditEvent` records ITI-20 posts over the FHIR Feed (#486);
 //! - [`containers`]: the two CDR products behind the `FERROFED_E2E` gate,
 //!   pinned by digest;
 //! - [`proxy`]: the capturing and fault proxy in front of each node, whose
@@ -52,6 +54,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod atna;
+pub mod atna_feed;
 pub mod containers;
 pub mod dpop;
 pub mod issuer;

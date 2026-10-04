@@ -25,7 +25,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 /// The `[registry.mcsd]` section over `base`, with the federation it needs.
 fn section(base: &str, extra: &str) -> String {
     format!(
-        "[server]\nlisten = \"127.0.0.1:1\"\n\n[registry.mcsd]\nurl = \"{base}\"\ndeadline_ms = 2000\n{extra}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
+        "[server]\nlisten = \"127.0.0.1:1\"\n\n[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"{base}\"\ndeadline_ms = 2000\n{extra}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     )
 }
 
@@ -118,7 +118,7 @@ async fn the_credentials_reach_the_directory_and_no_rendering() -> TestResult {
 #[test]
 fn a_document_and_a_directory_together_are_refused() -> TestResult {
     let refused = settings(
-        "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n",
+        "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n",
     );
     let error = refused.err().ok_or("two sources are refused")?;
     assert!(
@@ -137,7 +137,9 @@ fn a_directory_url_with_a_credential_or_another_scheme_is_refused() -> TestResul
         "https://user:Qz7Sentinel@directory.example.org/fhir",
         "ftp://directory.example.org/fhir",
     ] {
-        let refused = settings(&format!("[registry.mcsd]\nurl = \"{url}\"\n"));
+        let refused = settings(&format!(
+            "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"{url}\"\n"
+        ));
         let error = refused.err().ok_or("the URL is refused")?;
         assert!(
             matches!(
@@ -154,7 +156,7 @@ fn a_directory_url_with_a_credential_or_another_scheme_is_refused() -> TestResul
 #[test]
 fn a_grant_and_a_zero_interval_are_refused() {
     let grant = settings(
-        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n\n[registry.mcsd.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://auth.example.org/token\"\nclient_id = \"ferrofed\"\nscope = \"system/aql-*.s\"\n",
+        "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n\n[registry.mcsd.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://auth.example.org/token\"\nclient_id = \"ferrofed\"\nscope = \"system/aql-*.s\"\n",
     );
     assert!(
         matches!(
@@ -167,7 +169,7 @@ fn a_grant_and_a_zero_interval_are_refused() {
         "a grant is refused"
     );
     let zero = settings(
-        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nrefresh_interval_s = 0\n",
+        "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nrefresh_interval_s = 0\n",
     );
     assert!(
         matches!(
@@ -184,7 +186,7 @@ fn a_grant_and_a_zero_interval_are_refused() {
 /// our own design).
 #[test]
 fn directory_credentials_over_plain_http_are_refused_outside_development() -> TestResult {
-    let section = "[registry.mcsd]\nurl = \"http://directory.example.org/fhir\"\n\n[registry.mcsd.credentials]\nbearer_token = \"synthetic-directory-token\"\n";
+    let section = "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"http://directory.example.org/fhir\"\n\n[registry.mcsd.credentials]\nbearer_token = \"synthetic-directory-token\"\n";
     let refused = settings(section);
     let error = refused.err().ok_or("cleartext credentials are refused")?;
     let text = error.to_string();
@@ -202,7 +204,9 @@ fn directory_credentials_over_plain_http_are_refused_outside_development() -> Te
             .map(|site| site.url_key.as_str())
             .collect::<Vec<_>>()
     );
-    let without = settings("[registry.mcsd]\nurl = \"http://directory.example.org/fhir\"\n")?;
+    let without = settings(
+        "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"http://directory.example.org/fhir\"\n",
+    )?;
     assert!(
         ferrofed_server::config::transport::check(&without, None)?.is_empty(),
         "a directory asked with no credential sends nothing protected"
@@ -214,7 +218,7 @@ fn directory_credentials_over_plain_http_are_refused_outside_development() -> Te
 fn a_zero_deadline_or_cap_is_refused_and_the_defaults_hold() -> TestResult {
     for key in ["deadline_ms", "max_pages", "max_bytes", "max_entries"] {
         let refused = settings(&format!(
-            "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{key} = 0\n"
+            "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{key} = 0\n"
         ));
         let full = format!("registry.mcsd.{key}");
         assert!(
@@ -225,7 +229,9 @@ fn a_zero_deadline_or_cap_is_refused_and_the_defaults_hold() -> TestResult {
             "a zero {key} is refused"
         );
     }
-    let resolved = settings("[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n")?;
+    let resolved = settings(
+        "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n",
+    )?;
     let directory = resolved
         .registry_directory
         .as_ref()

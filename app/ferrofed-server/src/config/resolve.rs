@@ -118,6 +118,7 @@ impl Config {
         let xcpd = crate::config::xcpd::resolve(self)?;
         let nl_gf = crate::config::nl_gf::resolve(self)?;
         let pmir = crate::config::pmir::resolve(self)?;
+        let audit = crate::config::audit::resolve(self)?;
         if self.registry.document.is_some() && self.registry.mcsd.is_some() {
             return Err(Error::TwoRegistrySources);
         }
@@ -127,6 +128,10 @@ impl Config {
             .as_ref()
             .map(|directory| resolve_directory(directory, self.profile))
             .transpose()?;
+        let registry_directory = registry_directory.map(|mut directory| {
+            directory.audit = audit.clone();
+            directory
+        });
         let stored_queries = stored_queries::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen)?;
         // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
@@ -164,6 +169,7 @@ impl Config {
             stored_queries,
             metrics,
             signing,
+            audit,
         })
     }
 
@@ -386,6 +392,7 @@ fn resolve_directory(
         max_pages: positive("registry.mcsd.max_pages", directory.max_pages)?,
         max_bytes: positive("registry.mcsd.max_bytes", directory.max_bytes)?,
         max_entries: positive("registry.mcsd.max_entries", directory.max_entries)?,
+        audit: crate::config::audit::AuditSettings::default(),
     })
 }
 
