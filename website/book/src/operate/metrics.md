@@ -66,6 +66,7 @@ the unit after a histogram.
 | `ferrofed_consent_prefilter_requests_total` | `ferrofed.consent.prefilter.requests` | counter | `outcome` | the calls to the [consent pre-filter](identity.md#consent), by `denied`, `no-signal` or `unavailable` |
 | `ferrofed_localizer_requests_total` | `ferrofed.localizer.requests` | counter | `outcome` | the calls to the [localizer](registry.md#node-selection), by `candidates`, `no-records`, `not-configured`, `unavailable`, or `audit-failed` for an XCPD exchange whose audit message could not be recorded |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
+| `ferrofed_identity_feed_messages_total` | `ferrofed.identity_feed.messages` | counter | `result` | the ITI-93 messages the [identity feed](identity.md#the-identity-feed-pmir) received, by `applied`, `refused` (not held to the PMIR profiles) or `unauthenticated` (no feed token) |
 | `ferrofed_audit_spool_events` | `ferrofed.audit.spool.events` | gauge | none | the ITI-20 audit messages waiting in the spool for the [audit repository](identity.md#the-audit-repository); present only with one configured |
 | `ferrofed_audit_spool_bytes` | `ferrofed.audit.spool.bytes` | gauge | none | the bytes the spool holds, its quarantine included |
 | `ferrofed_audit_quarantined` | `ferrofed.audit.quarantined` | gauge | none | the audit messages in the spool's quarantine, which could not be read or were no whole frame |

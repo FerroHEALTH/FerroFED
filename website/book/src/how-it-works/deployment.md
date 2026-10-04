@@ -89,8 +89,10 @@ flowchart TB
     gw -->|"XCPD audit<br/>messages"| spool
     spool -->|"ITI-20, syslog<br/>over TLS"| arr
     gw -->|"serves"| admin
+    pmir["PMIR Patient<br/>Identity Registry"] -->|"ITI-93 feed"| gw
+    gw -->|"ITI-94<br/>subscription"| pmir
     prom["Prometheus"] -->|"scrapes"| admin
-    gw -.->|"planned"| planned["Dutch Generic Functions (#87)<br/>PMIR identity feed (#147)"]:::planned
+    gw -.->|"planned"| planned["Dutch Generic Functions (#87)"]:::planned
 ```
 
 - **The proxy** terminates TLS. The gateway authenticates each caller
@@ -119,15 +121,19 @@ flowchart TB
   patients, so it belongs on an encrypted volume
   ([The audit repository](../operate/identity.md#the-audit-repository)).
   Under `audit = "log"` it goes to the log target `ferrofed::audit` instead.
+- **The PMIR Patient Identity Registry**, under `[pmir]`, takes the
+  gateway's ITI-94 subscription and sends each identity change to the
+  gateway's feed route, which drops the resolution bindings the change could
+  have made stale
+  ([The identity feed](../operate/identity.md#the-identity-feed-pmir)).
 - **The admin listener** is a second listener for your operators, off unless
   `[metrics] listen` is set and on loopback unless you allow otherwise
   ([Metrics](../operate/metrics.md)).
 - **The planned services** are the Dutch
   Generic Functions, NVI localization, the Mitz consent pre-filter and LRZa
   addressing
-  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), and PMIR
-  identity-lifecycle notifications from a Patient Identity Source
-  ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147)). The
+ 
+  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)). The
   localization, pre-filter and directory seams they plug into are built.
 
 ## Several replicas

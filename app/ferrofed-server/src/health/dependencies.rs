@@ -35,6 +35,7 @@ use ihe_iti::atna::forwarder::Status;
 use serde::Serialize;
 
 use crate::directory::DirectoryFault;
+use crate::pmir::subscription::RegistryFault;
 
 /// The last state observed of one dependency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -297,6 +298,8 @@ impl Dependencies {
                 .as_ref()
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
             directory: None,
+            identity_registry: None,
+            identity_registry_fault: None,
             directory_fault: None,
             audit_repository: self
                 .audit_repository
@@ -329,6 +332,18 @@ pub struct Report {
     /// ITI-91, and `down` when it did not answer.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<Observed>,
+    /// The state of the PMIR Patient Identity Registry the identity feed
+    /// subscribes at, absent without `[pmir]`: `up` while it holds the
+    /// subscription `requested` or `active`, `failing` after a refusal, an
+    /// answer that breaks ITI-94, or a subscription in `error` or `off`, and
+    /// `down` when it did not answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_registry: Option<Observed>,
+    /// Why the PMIR Patient Identity Registry is not up: `unreachable`,
+    /// `refused`, `malformed`, or `unmanageable` after a create the gateway
+    /// cannot locate; absent while it is up, not yet asked, or not configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_registry_fault: Option<RegistryFault>,
     /// Why the care services directory's last answer was not accepted:
     /// `registry-invalid` or `configuration-mismatch` while it is `degraded`,
     /// and `refused-credentials` while it is `failing` after a `401` or a

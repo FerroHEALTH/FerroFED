@@ -81,7 +81,11 @@ lists what each release shipped and what is planned.
 - IHE XCPD ITI-55 for localization: the `xcpd` feature of `ihe-iti` is an
   Initiating Gateway, and an undirected patient query asks only the members
   whose communities it discovers, failing closed when a gateway does not
-  answer. PMIR and the Dutch Generic Functions are planned for v0.0.8.
+  answer.
+- IHE PMIR ITI-94 and ITI-93 for the identity lifecycle: the gateway
+  subscribes at a Patient Identity Registry, and an authenticated merge drops
+  the resolution bindings it could have made stale. The Dutch Generic
+  Functions are planned for v0.0.8.
 
 ## Quickstart
 

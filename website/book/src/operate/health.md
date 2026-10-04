@@ -14,7 +14,7 @@ No specification governs health probes: our own design.
 |---|---|---|
 | `GET {base}/health` | `200` while the process serves; it checks nothing else | liveness |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives | readiness, startup, the image `HEALTHCHECK` |
-| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter, of the localizer, of the mCSD directory and of the audit repository | monitoring, never a probe |
+| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter, of the localizer, of the mCSD directory, of the audit repository and of the PMIR Patient Identity Registry | monitoring, never a probe |
 
 Readiness reports the gateway's own subsystems by name: the configuration,
 the registry and the outbound clients when a registry is configured, and the
@@ -87,6 +87,14 @@ registry is a document
 delivery succeeded and nothing waits, `degraded` while the gateway retries a
 failed delivery, while audit messages wait in the spool and while any sits in
 its quarantine, and `unknown` before the first message. It is absent when the audit messages go elsewhere. The
+PMIR Patient Identity Registry shows as `identity_registry`, from the
+identity feed's last check: `up` while the gateway holds a subscription in
+`requested` or `active`, `failing` after a refusal, an answer that breaks
+ITI-94, or a create the gateway cannot manage, and `down` when the Registry
+did not answer. `identity_registry_fault` names why it is not up:
+`unreachable`, `refused`, `malformed` or `unmanageable`. Both are absent
+without `[pmir]`
+([The identity feed](identity.md#the-identity-feed-pmir)). The
 body names endpoint ids and states only, never a URL, a credential or a
 body.
 

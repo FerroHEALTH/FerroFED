@@ -26,6 +26,7 @@ pub mod auth;
 pub mod error;
 mod load;
 pub mod nl_gf;
+pub mod pmir;
 mod resolve;
 mod secrets;
 pub mod settings;
@@ -85,6 +86,10 @@ pub struct Config {
     /// The Dutch Generic Functions (`[nl_gf]`): the NVI localizer and the
     /// care provider each member holds the data of (Annex B, #87).
     pub nl_gf: Option<nl_gf::NlGf>,
+    /// The PMIR identity feed (`[pmir]`): the Patient Identity Registry the
+    /// gateway subscribes to with ITI-94, and the path its ITI-93 messages
+    /// arrive at (track 8 of §16.3, Annex A.4).
+    pub pmir: Option<pmir::Pmir>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
@@ -111,6 +116,7 @@ impl Default for Config {
             pixm: None,
             xcpd: None,
             nl_gf: None,
+            pmir: None,
             stored_queries: stored_queries::StoredQueries::default(),
             metrics: Metrics::default(),
             signing: None,

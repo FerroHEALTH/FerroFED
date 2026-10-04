@@ -649,6 +649,7 @@ name = "ferrofed-server"
 version = "0.0.7"
 dependencies = [
  "anyhow",
+ "aws-lc-rs",
  "axum",
  "clap",
  "ferrofed-engine",
@@ -1122,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "async-trait",
  "base64 0.23.1",

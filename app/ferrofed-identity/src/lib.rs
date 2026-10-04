@@ -24,6 +24,8 @@
 //!   Localization Service of the Dutch Generic Functions (Annex B §B.1);
 //! - [`binding`]: the resolution bindings of §12.5.1 step 2, in memory and
 //!   scoped to the client session (§12.5.1 step 2);
+//! - [`lifecycle`]: what a PMIR ITI-93 message does to those bindings, and
+//!   the ITI-94 subscriber that asks for the messages (track 8, Annex A.4);
 //! - [`dev`]: the static development cross-reference and consent pre-filter,
 //!   FerroFED's own testing devices, enabled only under the development
 //!   profile;
@@ -41,6 +43,7 @@ pub mod binding;
 pub mod consent;
 pub mod dev;
 pub mod directory;
+pub mod lifecycle;
 pub mod localizer;
 pub mod nvi;
 pub mod patient;

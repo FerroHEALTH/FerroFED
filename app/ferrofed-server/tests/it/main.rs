@@ -55,6 +55,7 @@ mod outbound;
 mod outbound_id;
 mod path_ehr_id;
 mod pixm_localizer;
+mod pmir;
 mod probed_ehr_id;
 mod provenance;
 mod query_get;
