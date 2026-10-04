@@ -20,6 +20,8 @@
 //! - [`pixm`]: the [`Resolver`](resolver::Resolver) over PIXm ITI-83 (#43);
 //! - [`xcpd`]: the [`Localizer`](localizer::Localizer) over XCPD ITI-55
 //!   (Annex A.3);
+//! - [`nvi`]: the [`Localizer`](localizer::Localizer) over the NVI
+//!   Localization Service of the Dutch Generic Functions (Annex B §B.1);
 //! - [`binding`]: the resolution bindings of §12.5.1 step 2, in memory and
 //!   scoped to the client session (§12.5.1 step 2);
 //! - [`dev`]: the static development cross-reference and consent pre-filter,
@@ -40,6 +42,7 @@ pub mod consent;
 pub mod dev;
 pub mod directory;
 pub mod localizer;
+pub mod nvi;
 pub mod patient;
 pub mod pixm;
 pub mod resolver;

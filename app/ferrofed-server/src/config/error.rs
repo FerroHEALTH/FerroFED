@@ -391,6 +391,15 @@ pub enum Error {
         "[xcpd.audit_repository] applies only under xcpd.audit = \"repository\"; remove it, or send the audit messages there"
     )]
     AuditRepositoryUnused,
+    /// `nl_gf.nvi.namespaces` lists a BSN system as standing for the
+    /// pseudonymised BSN, which would send a BSN to the NVI.
+    #[error(
+        "nl_gf.nvi.namespaces lists {namespace}, a BSN system: the NVI is keyed on the pseudonymised BSN, and the gateway never sends it a BSN"
+    )]
+    BsnAsPseudonym {
+        /// The namespace as written, a naming system and never a value.
+        namespace: String,
+    },
     /// A syslog header value is empty, too long, or holds a character
     /// syslog cannot carry (RFC 5424 §6).
     #[error("{key} cannot be a syslog header field")]

@@ -594,12 +594,14 @@ never blocks on FerroPIX.
 
 **Choosing the localizer.** Under `federation.node_selection = "localized"`
 exactly one localizer is active, chosen by the configuration: the XCPD
-localizer when `[xcpd]` is set, otherwise the PIXm resolver when `[pixm]` is,
-otherwise the development cross-reference under `profile = "development"`.
-`OPTIONS {base}/` declares it as `localization.mode`: `"xcpd"`, `"pixm"` or
-`"development-static"`. With `[xcpd]` set, `[pixm]` only resolves. Under
-`node_selection = "ask-all"` no localizer runs, and `[xcpd]` there refuses the
-configuration.
+localizer when `[xcpd]` is set, the NVI localizer of Annex B §B.1 when
+`[nl_gf.nvi]` is (#87; the two together are refused), otherwise the PIXm
+resolver when `[pixm]` is, otherwise the development cross-reference under
+`profile = "development"`. `OPTIONS {base}/` declares it as
+`localization.mode`: `"xcpd"`, `"nl-gf-nvi"`, `"pixm"` or
+`"development-static"`. With `[xcpd]` or `[nl_gf.nvi]` set, `[pixm]` only
+resolves. Under `node_selection = "ask-all"` no localizer runs, and `[xcpd]`
+or `[nl_gf.nvi]` there refuses the configuration.
 
 **XCPD** (decision A15). ITI-55 is built with the localization seam (#85) as
 the `xcpd` feature of `ihe-iti`, so the SOAP 1.2, HL7 v3 and SAML XUA

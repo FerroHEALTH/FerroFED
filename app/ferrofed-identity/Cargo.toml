@@ -27,6 +27,9 @@ ihe-iti = { workspace = true, features = ["atna", "mcsd", "pixm", "xcpd"] }
 # The instant an ITI-91 refresh asks from, read off the directory's `Date`
 # (#86), and the time an ITI-20 syslog message is written at (#418).
 jiff.workspace = true
+# The NVI localizer (#87) over the GF-Localization client of the Dutch binding
+# crate (Annex B §B.1).
+nl-generic-functions = { workspace = true, features = ["nvi"] }
 # The Authorization value of the PIX Manager credentials, composed as the
 # node client composes it (RFC 7617 §2, RFC 6750 §2.1).
 openehr-its = { workspace = true, features = ["rest-client"] }
