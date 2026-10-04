@@ -151,29 +151,31 @@ STUB
   # and every label of the taxonomy is created in place with --force.
   labels='[{"name":"documentation"}]'
   create=ok
-  run "a repository without the retired labels" 0
-  said "a repository without the retired labels" "$out" "ok: documentation"
-  said "a repository without the retired labels" "$out" "ok: spec:federation"
-  said "a repository without the retired labels" "$out" "ok: upstream-report"
-  said "a repository without the retired labels" "$out" "ok: no-crate-bump"
-  said "a repository without the retired labels" "$calls" "label create spec:NL-GF --color 0e8a16"
-  said "a repository without the retired labels" "$calls" "label create documentation --color 0075ca"
-  said "a repository without the retired labels" "$calls" "--force"
-  never "a repository without the retired labels" "$out" "retired:"
-  never "a repository without the retired labels" "$calls" "label delete"
-  never "a repository without the retired labels" "$calls" "label create bug"
-  never "a repository without the retired labels" "$calls" "label create P1"
+  local clean_case="a repository without the retired labels"
+  run "$clean_case" 0
+  said "$clean_case" "$out" "ok: documentation"
+  said "$clean_case" "$out" "ok: spec:federation"
+  said "$clean_case" "$out" "ok: upstream-report"
+  said "$clean_case" "$out" "ok: no-crate-bump"
+  said "$clean_case" "$calls" "label create spec:NL-GF --color 0e8a16"
+  said "$clean_case" "$calls" "label create documentation --color 0075ca"
+  said "$clean_case" "$calls" "--force"
+  never "$clean_case" "$out" "retired:"
+  never "$clean_case" "$calls" "label delete"
+  never "$clean_case" "$calls" "label create bug"
+  never "$clean_case" "$calls" "label create P1"
 
   # The same repository with two of the six the native issue type and the
   # Priority field replaced on 2026-10-02: both go, and no other name does.
   labels='[{"name":"enhancement"},{"name":"P1"},{"name":"documentation"}]'
-  run "a repository that still carries two retired labels" 0
-  said "a repository that still carries two retired labels" "$out" "retired: enhancement"
-  said "a repository that still carries two retired labels" "$out" "retired: P1"
-  said "a repository that still carries two retired labels" "$calls" "label delete enhancement --yes"
-  said "a repository that still carries two retired labels" "$calls" "label delete P1 --yes"
-  never "a repository that still carries two retired labels" "$out" "retired: P0"
-  never "a repository that still carries two retired labels" "$calls" "label delete documentation"
+  local retired_case="a repository that still carries two retired labels"
+  run "$retired_case" 0
+  said "$retired_case" "$out" "retired: enhancement"
+  said "$retired_case" "$out" "retired: P1"
+  said "$retired_case" "$calls" "label delete enhancement --yes"
+  said "$retired_case" "$calls" "label delete P1 --yes"
+  never "$retired_case" "$out" "retired: P0"
+  never "$retired_case" "$calls" "label delete documentation"
 
   # A gh that refuses the first create stops the run rather than reporting a
   # taxonomy it did not write.
