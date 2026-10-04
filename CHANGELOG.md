@@ -23,6 +23,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- `[telemetry] trace_sample_ratio` sets the share of client requests whose
+  spans the trace export sends, from `0.0` to `1.0`, `1.0` unless set, and
+  refused at load outside that range. The decision is made once at the
+  request span, from the gateway's own trace id, and the whole span tree
+  follows it; a node request of a trace not kept still carries a
+  `traceparent`, with its sampled flag off. The export over the OTLP wire is
+  tested end to end against an in-process OTLP collector in the testkit: a
+  `serve` process's spans arrive under the gateway's resource, are flushed
+  on the drain, and carry no synthetic patient identifier (#437).
 - The gateway exports its own spans as OpenTelemetry traces over OTLP when
   `[telemetry] otlp_endpoint` names an `http://` collector; off by default.
   A federated query is one trace: the request, the resolution, the fan-out,

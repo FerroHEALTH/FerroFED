@@ -54,8 +54,9 @@
 #                          website/book/src/evaluate/versions.md restates
 #                          the docs/VERSIONS.md rows its Item cell names.
 #  13. metrics crates      the opentelemetry group moves as one, and each of
-#                          its rows, the prometheus row and the
-#                          tracing-opentelemetry row matches the root
+#                          its rows, the prometheus row, the
+#                          tracing-opentelemetry row and the tonic row
+#                          matches the root
 #                          Cargo.toml [workspace.dependencies] requirement.
 #
 # FerroFED's own database image gets a check of its own in the change that adds
@@ -853,16 +854,16 @@ fi
 
 echo "== metrics crates ($matrix <-> Cargo.toml)"
 # The opentelemetry crates are released in lockstep, so their rows are one
-# group, as the openehr-* family's are; prometheus and tracing-opentelemetry
-# are on release lines of their own, each held to its own row.
+# group, as the openehr-* family's are; prometheus, tracing-opentelemetry and
+# tonic are on release lines of their own, each held to its own row.
 otel_pin=""
-for crate in opentelemetry opentelemetry_sdk opentelemetry-prometheus opentelemetry-otlp prometheus tracing-opentelemetry; do
+for crate in opentelemetry opentelemetry_sdk opentelemetry-prometheus opentelemetry-otlp opentelemetry-proto prometheus tracing-opentelemetry tonic; do
   want="$(pin_of "$crate" "$matrix")"
   if [ -z "$want" ]; then
     bad "$matrix has no $crate row"
     continue
   fi
-  if [ "$crate" != prometheus ] && [ "$crate" != tracing-opentelemetry ]; then
+  if [ "$crate" != prometheus ] && [ "$crate" != tracing-opentelemetry ] && [ "$crate" != tonic ]; then
     if [ -z "$otel_pin" ]; then
       otel_pin="$want"
     elif [ "$want" != "$otel_pin" ]; then

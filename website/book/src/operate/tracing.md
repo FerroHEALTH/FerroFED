@@ -16,6 +16,7 @@ off no node request carries a `traceparent`.
 ```toml
 [telemetry]
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; unset, no span is exported
+trace_sample_ratio = 1.0                   # the share of requests whose spans are exported, 0.0 to 1.0
 ```
 
 The export shares the resource of the [metrics](metrics.md) push
@@ -36,7 +37,20 @@ on a restart only: a [reload](registry.md#reloading-the-registry) that
 changes it logs `telemetry.otlp_endpoint` as needing a restart.
 
 `telemetry.filter` decides what the console logs and nothing else, so a
-quieter log never thins a trace. Every trace is sampled.
+quieter log never thins a trace.
+
+## Sampling
+
+`trace_sample_ratio` sets the share of client requests whose spans are
+exported, from `0.0`, none, to `1.0`, every one. It is `1.0` unless set,
+and `serve` and `config check` refuse a value outside `0.0` to `1.0`. Every
+trace is the gateway's own, so the decision is made once, at the request
+span, from its random trace id, and every span under it follows that
+decision: a request's span tree is exported whole or not at all. A node
+request of a trace that is not sampled still carries a `traceparent`, with
+its sampled flag off (`-00`), so a node that traces knows the gateway did
+not keep that trace. Like the export itself, the ratio takes effect on a
+restart only.
 
 ## The spans
 

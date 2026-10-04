@@ -24,6 +24,8 @@
 //! - [`oauth`]: the harness OAuth 2.0 token endpoint, which verifies the
 //!   gateway's client assertion against its published JWK Set and issues
 //!   the token a mock node then requires (#81);
+//! - [`otlp`]: an in-process OTLP/gRPC trace collector, which keeps every
+//!   span the gateway exports (#437);
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
 //!   what an ITI-104 feed delivered (#47);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
@@ -42,6 +44,7 @@ pub mod leak;
 pub mod mcsd;
 pub mod mock;
 pub mod oauth;
+pub mod otlp;
 pub mod pix;
 pub mod proxy;
 pub mod seed;

@@ -100,7 +100,7 @@ async fn the_export_builds_inside_the_runtime_and_flushes_on_shutdown() -> TestR
         .otlp_endpoint
         .as_ref()
         .ok_or("a collector is configured")?;
-    let traces = Traces::new(endpoint)?;
+    let traces = Traces::new(endpoint, settings.telemetry.trace_sample_ratio)?;
     let _tracer = traces.tracer();
     tokio::task::spawn_blocking(move || traces.shutdown()).await??;
     Ok(())

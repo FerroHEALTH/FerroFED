@@ -9,6 +9,8 @@
 
 mod config;
 mod hygiene;
+mod otlp;
+mod sampling;
 mod spans;
 mod traceparent;
 
@@ -16,7 +18,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::Write as _;
 
-use ferrofed_server::telemetry::{Rendering, traced};
+use ferrofed_server::telemetry::{Rendering, SampleRatio, sampler, traced};
 use opentelemetry::trace::{SpanId, TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use tracing::subscriber::DefaultGuard;
@@ -59,11 +61,19 @@ pub(crate) struct Exported {
 
 impl Exported {
     /// Installs the export layer over a fresh in-memory exporter as this
-    /// thread's default subscriber, beside the console at `info`.
+    /// thread's default subscriber, beside the console at `info`, sampling
+    /// every trace.
     pub(crate) fn install() -> Result<Self, Box<dyn Error>> {
+        Self::sampled(SampleRatio::ALL)
+    }
+
+    /// Installs the export layer as [`Exported::install`] does, sampling as
+    /// the gateway's own sampler does at `ratio`.
+    pub(crate) fn sampled(ratio: SampleRatio) -> Result<Self, Box<dyn Error>> {
         let exporter = InMemorySpanExporter::default();
         let provider = SdkTracerProvider::builder()
             .with_simple_exporter(exporter.clone())
+            .with_sampler(sampler(ratio))
             .build();
         let subscriber = traced(
             Rendering::Json,

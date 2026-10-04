@@ -157,7 +157,7 @@ from the same set.
 
 The metrics surface (#281) is one OpenTelemetry `MeterProvider` read by the
 Prometheus pull reader and the optional OTLP push, the stack FerroEHR runs.
-The four `opentelemetry` crates are released in lockstep, so their rows are
+The five `opentelemetry` crates are released in lockstep, so their rows are
 one group: they move together, and `scripts/checks/versions.sh` fails when
 one member moves alone, here or in the root `Cargo.toml`
 `[workspace.dependencies]`. `prometheus` is the registry and text encoder
@@ -166,8 +166,13 @@ the root `Cargo.toml` alone. The trace export (#353) bridges the gateway's
 `tracing` spans to the same OpenTelemetry stack through
 `tracing-opentelemetry`, whose release line is paired with the
 `opentelemetry` one (0.34 with 0.33) and is checked against the root
-`Cargo.toml` alone too. Every version was the latest on crates.io on
-2026-10-03, and `tracing-opentelemetry` on 2026-10-04.
+`Cargo.toml` alone too. The testkit's in-process OTLP collector (#437)
+answers the OTLP trace service of `opentelemetry-proto`, a member of the
+group, on a `tonic` gRPC server, whose release line is the one
+`opentelemetry-otlp` sends with, checked against the root `Cargo.toml`
+alone; both are test-only. Every version was the latest on crates.io on
+2026-10-03, and `tracing-opentelemetry`, `opentelemetry-proto` and `tonic`
+on 2026-10-04.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -175,8 +180,10 @@ the root `Cargo.toml` alone. The trace export (#353) bridges the gateway's
 | `opentelemetry_sdk` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `opentelemetry-prometheus` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `opentelemetry-otlp` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `opentelemetry-proto` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `prometheus` | 0.14.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `tracing-opentelemetry` | 0.34.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `tonic` | 0.14.6 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Language and runtime
 

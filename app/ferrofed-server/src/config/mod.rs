@@ -486,7 +486,7 @@ impl Default for Server {
 ///
 /// The export is off by default. No specification governs telemetry: our own
 /// design.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Telemetry {
     /// The rendering: `auto`, `json` or `pretty`.
@@ -497,6 +497,9 @@ pub struct Telemetry {
     /// exported to over gRPC. Unset, no span is exported and no node
     /// request carries a `traceparent`.
     pub otlp_endpoint: Option<SecretUrl>,
+    /// The share of the gateway's traces that are sampled, from `0.0`, none,
+    /// to `1.0`, every one; `1.0` unless set.
+    pub trace_sample_ratio: f64,
 }
 
 impl Default for Telemetry {
@@ -505,6 +508,7 @@ impl Default for Telemetry {
             format: Format::Auto,
             filter: String::from(DEFAULT_FILTER),
             otlp_endpoint: None,
+            trace_sample_ratio: 1.0,
         }
     }
 }

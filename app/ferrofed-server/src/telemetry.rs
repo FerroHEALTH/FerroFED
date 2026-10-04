@@ -140,6 +140,49 @@ pub fn resource() -> Resource {
         .build()
 }
 
+/// The share of the gateway's traces that are sampled: a finite number from
+/// `0.0`, none, to `1.0`, every one.
+#[derive(Debug, Clone, Copy)]
+pub struct SampleRatio(f64);
+
+impl SampleRatio {
+    /// Every trace is sampled.
+    pub const ALL: Self = Self(1.0);
+
+    /// Returns `ratio` as a sample ratio, or `None` when it is not a finite
+    /// number from `0.0` to `1.0`.
+    #[must_use]
+    pub fn new(ratio: f64) -> Option<Self> {
+        (ratio.is_finite() && (0.0..=1.0).contains(&ratio)).then_some(Self(ratio))
+    }
+
+    /// The ratio.
+    #[must_use]
+    pub const fn get(self) -> f64 {
+        self.0
+    }
+}
+
+impl PartialEq for SampleRatio {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_bits() == other.0.to_bits()
+    }
+}
+
+impl Eq for SampleRatio {}
+
+/// Returns the sampler of the trace export: a root span is sampled by its
+/// trace id at `ratio`, and every other span as its parent was.
+///
+/// Every root is the gateway's own request span, since a client's trace is
+/// only ever a link, so `ratio` is the share of the gateway's requests whose
+/// spans are exported, and a request's whole span tree is exported or none
+/// of it is.
+#[must_use]
+pub fn sampler(ratio: SampleRatio) -> Sampler {
+    Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(ratio.get())))
+}
+
 /// The trace export: one tracer provider that sends the gateway's spans to
 /// an OTLP collector in batches.
 pub struct Traces {
@@ -147,15 +190,15 @@ pub struct Traces {
 }
 
 impl Traces {
-    /// Returns the export to the OTLP collector at `endpoint`, over gRPC.
+    /// Returns the export to the OTLP collector at `endpoint`, over gRPC,
+    /// sampling as [`sampler`] does at `ratio`.
     ///
     /// The exporter speaks gRPC through `tonic`, so this runs inside the
-    /// Tokio runtime that will carry the export. Every trace is sampled: each
-    /// starts at the gateway, so no client decides it.
+    /// Tokio runtime that will carry the export.
     ///
     /// # Errors
     /// Returns [`Error::Exporter`] when the exporter cannot be built.
-    pub fn new(endpoint: &SecretUrl) -> Result<Self, Error> {
+    pub fn new(endpoint: &SecretUrl, ratio: SampleRatio) -> Result<Self, Error> {
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
             .with_endpoint(endpoint.expose())
@@ -164,7 +207,7 @@ impl Traces {
         let provider = SdkTracerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(resource())
-            .with_sampler(Sampler::AlwaysOn)
+            .with_sampler(sampler(ratio))
             .build();
         Ok(Self { provider })
     }

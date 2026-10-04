@@ -30,6 +30,7 @@ use crate::config::{
     COMBINING_MARGIN_MS, Config, Federation, Localization, McsdDirectory, Metrics, NodeSelection,
     OffsetPaging, Pixm, Telemetry, stored_queries,
 };
+use crate::telemetry::SampleRatio;
 
 impl Config {
     /// Resolves this tree into the settings the run path holds.
@@ -394,15 +395,20 @@ fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSetti
     })
 }
 
-/// Resolves `[telemetry]`: a filter that parses and a trace collector that is
-/// an `http://` URL.
+/// Resolves `[telemetry]`: a filter that parses, a trace collector that is
+/// an `http://` URL, and a sample ratio from `0.0` to `1.0`.
 fn resolve_telemetry(telemetry: &Telemetry) -> Result<TelemetrySettings, Error> {
     tracing_subscriber::EnvFilter::try_new(&telemetry.filter)
         .map_err(|source| Error::Filter { source })?;
+    let trace_sample_ratio =
+        SampleRatio::new(telemetry.trace_sample_ratio).ok_or(Error::SampleRatio {
+            value: telemetry.trace_sample_ratio,
+        })?;
     Ok(TelemetrySettings {
         format: telemetry.format,
         filter: telemetry.filter.clone(),
         otlp_endpoint: otlp_collector("telemetry.otlp_endpoint", telemetry.otlp_endpoint.as_ref())?,
+        trace_sample_ratio,
     })
 }
 
