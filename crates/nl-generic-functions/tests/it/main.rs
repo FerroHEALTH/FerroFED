@@ -14,5 +14,8 @@ mod ig;
 #[cfg(feature = "lrza")]
 mod lrza;
 #[cfg(test)]
+#[cfg(feature = "nuts-auth")]
+mod nuts_auth;
+#[cfg(test)]
 #[cfg(feature = "nvi")]
 mod nvi;

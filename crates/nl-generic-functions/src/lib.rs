@@ -10,7 +10,9 @@
 //! - `mitz`: GF-Consent through Mitz.
 //! - `lrza`: GF-Addressing through the national address book (LRZa): the
 //!   care provider identifier (URA) of an NL-GF `Organization`.
-//! - `nuts-auth`: GF-Authentication on the Nuts profile.
+//! - `nuts-auth`: GF-Authentication on the Nuts profile: a `DPoP`-bound
+//!   access token for a Verifiable Presentation of the holder's credentials
+//!   (Nuts RFC021).
 //!
 //! The identifier systems the functions share, GF-Identification, are in
 //! the `identification` module, built whenever `nvi` or `lrza` is on.

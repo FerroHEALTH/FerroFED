@@ -25,6 +25,9 @@
 //!   (#86);
 //! - [`mock`]: the wiremock server every suite stands its nodes up with,
 //!   dropped outside the test's runtime;
+//! - [`nuts`]: the harness Nuts node, a test device that answers the
+//!   GF-Authentication access token request (Nuts RFC021) with a
+//!   `DPoP`-bound token for a valid Verifiable Presentation (#88);
 //! - [`nvi`]: a stub NVI Localization Service answering the GF-Localization
 //!   search of the Dutch Generic Functions (#87);
 //! - [`oauth`]: the harness OAuth 2.0 token endpoint, which verifies the
@@ -54,6 +57,7 @@ pub mod issuer;
 pub mod leak;
 pub mod mcsd;
 pub mod mock;
+pub mod nuts;
 pub mod nvi;
 pub mod oauth;
 pub mod otlp;
