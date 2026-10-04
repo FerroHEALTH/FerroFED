@@ -93,6 +93,10 @@ impl ConsentPrefilter for Script {
     fn mode(&self) -> &'static str {
         "test-scripted"
     }
+
+    fn budget(&self) -> Option<Duration> {
+        None
+    }
 }
 
 /// A resolver that knows the patient at the members `at` names.

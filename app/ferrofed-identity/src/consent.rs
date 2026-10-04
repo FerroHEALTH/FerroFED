@@ -12,7 +12,7 @@
 //! the gate (N26, N27, §13.2.1).
 
 use std::collections::BTreeSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
@@ -168,6 +168,10 @@ pub trait ConsentPrefilter: Send + Sync {
 
     /// The name `OPTIONS {base}/` declares the pre-filter under.
     fn mode(&self) -> &'static str;
+
+    /// The longest one pre-filter decision may take, a part of the overall
+    /// budget, or `None` for a pre-filter that asks no remote service.
+    fn budget(&self) -> Option<Duration>;
 }
 
 /// What the gateway does with the candidates when the consent pre-filter

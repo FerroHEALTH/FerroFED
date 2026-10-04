@@ -309,6 +309,12 @@ organisation = "ura"              # the organisation's URA
 organisation_type = "organisation_type"
 ```
 
+`timeout_ms` bounds one round of questions, and it is a part of
+`federation.overall_timeout_ms`: with `pdqm.timeout_ms` and the localizer's
+budget it must end before the overall budget, or the configuration is
+refused, naming the keys (§11.5). `OPTIONS {base}/` declares it as
+`timeout.consent_ms`.
+
 What a deployment must provide:
 
 - **The BSN.** Mitz is asked by BSN. A client names the patient in a BSN

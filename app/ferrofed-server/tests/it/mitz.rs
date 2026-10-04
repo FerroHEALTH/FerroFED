@@ -453,6 +453,10 @@ async fn the_prefilter_is_declared_in_options_as_mitz() -> TestResult {
         ("nl-gf-mitz", "pass-to-node"),
         (consent.prefilter.as_str(), consent.on_unavailable.as_str())
     );
+    assert!(
+        text.contains(r#""consent_ms":1000"#),
+        "§11.5: the pre-filter's budget is declared with the others: {text}"
+    );
     assert!(mitz.questions().await.is_empty(), "OPTIONS asks nothing");
     Ok(())
 }
@@ -671,5 +675,55 @@ fn development_consent_rows_and_mitz_together_refuse_to_boot() -> TestResult {
     match Federation::load(&resolved(&text)?) {
         Err(FederationError::TwoConsentPrefilters) => Ok(()),
         other => Err(format!("N27a: at most one pre-filter is active: {other:?}").into()),
+    }
+}
+
+#[test]
+fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let tables = format!(
+        "overall_timeout_ms = 3000\n\n[federation.localization]\ntimeout_ms = 1500\n\n[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\ntimeout_ms = 500\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{}",
+        mitz_table("https://mitz.example.org/vraag", &holders())
+    );
+    match resolved(&configuration(dir.path(), "production", &tables)?) {
+        Err(
+            refused @ error::Error::PrefilterBudget {
+                timeout_ms: 1000,
+                demographics_ms: 500,
+                localization_ms: 1500,
+                overall_ms: 3000,
+            },
+        ) => {
+            let text = refused.to_string();
+            for key in [
+                "nl_gf.mitz.timeout_ms",
+                "pdqm.timeout_ms",
+                "federation.localization.timeout_ms",
+                "federation.overall_timeout_ms",
+            ] {
+                assert!(text.contains(key), "{text}");
+            }
+            Ok(())
+        }
+        other => {
+            Err(format!("§11.5: the three budgets end before the overall one: {other:?}").into())
+        }
+    }
+}
+
+#[test]
+fn a_prefilter_budget_alone_past_the_overall_budget_is_refused() -> TestResult {
+    let (_dir, text) = edited(|table| table.replace("timeout_ms = 1000", "timeout_ms = 25000"))?;
+    match resolved(&text) {
+        Err(error::Error::PrefilterBudget {
+            timeout_ms: 25_000,
+            demographics_ms: 0,
+            localization_ms: 0,
+            overall_ms: 25_000,
+        }) => Ok(()),
+        other => Err(format!(
+            "§11.5: the pre-filter's budget is a part of the overall one: {other:?}"
+        )
+        .into()),
     }
 }

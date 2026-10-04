@@ -384,6 +384,10 @@ impl ConsentPrefilter for MitzPrefilter {
     fn mode(&self) -> &'static str {
         MITZ_MODE
     }
+
+    fn budget(&self) -> Option<Duration> {
+        Some(self.timeout)
+    }
 }
 
 /// The consent error a closed authorization question's failure is.

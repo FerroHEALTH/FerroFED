@@ -481,15 +481,18 @@ whether); the core never assumes it does.
 
 No seam returns an error to the core. A backend that did not answer is an
 `Unavailable` outcome carrying its reason. Every seam a request awaits is
-cut at the request's overall deadline. The localizer's budget
-(`federation.localization.timeout_ms`) and the demographics step's
-(`pdqm.timeout_ms`) are declared in `OPTIONS` beside the N38 timeouts and held
-to the overall budget at load: a configuration whose localizer budget, or
-whose demographics and localizer budgets together, reach the overall budget is
-refused. The consent pre-filter's own bound (`nl_gf.mitz.timeout_ms`) caps
-each exchange with Mitz and is neither declared in `OPTIONS` nor checked
-against the overall budget. No specification governs the seam budgets: our
-own design. The order is `Directory`, then
+cut at the request's overall deadline, and the three Step-1 seams that ask a
+remote service each run inside a budget of their own: the localizer's
+(`federation.localization.timeout_ms`, its default under
+`node_selection = "localized"` when the section is not written), the
+demographics step's (`pdqm.timeout_ms`) and the consent pre-filter's
+(`nl_gf.mitz.timeout_ms`; the development table asks no service and has
+none). Each is declared in `OPTIONS` beside the N38 timeouts
+(`timeout.localization_ms`, `demographics_ms`, `consent_ms`) and is a strict
+part of the overall budget: a configuration whose localizer budget alone,
+or whose configured budgets together, reach the overall budget is refused
+at load with an error naming the keys (#538). No specification governs the
+seam budgets: our own design. The order is `Directory`, then
 `Demographics` for an identifier in a namespace it handles, then `Localizer`,
 then `ConsentPrefilter`, then `Resolver`; only `Resolved` members are
 dispatched (N8).

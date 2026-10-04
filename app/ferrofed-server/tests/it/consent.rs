@@ -396,6 +396,10 @@ async fn the_prefilter_is_declared_in_options_as_development() -> TestResult {
         )
     );
     assert!(!text.contains(PATIENT), "§7a.2: no patient data");
+    assert!(
+        !text.contains("consent_ms"),
+        "a table asks no service, so it takes no part of the budget: {text}"
+    );
     Ok(())
 }
 
@@ -487,6 +491,10 @@ impl ferrofed_identity::consent::ConsentPrefilter for Down {
 
     fn mode(&self) -> &'static str {
         "test-down"
+    }
+
+    fn budget(&self) -> Option<std::time::Duration> {
+        None
     }
 }
 

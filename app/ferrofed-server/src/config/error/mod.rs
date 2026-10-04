@@ -532,6 +532,24 @@ pub enum Error {
         /// The overall fan-out budget.
         overall_ms: u64,
     },
+    /// The consent pre-filter's budget, the demographics step's and the
+    /// localizer's do not end before the overall budget, of which each is a
+    /// part, so the three could leave no time to resolve and ask the members
+    /// (§11.5; no specification governs the pre-filter's budget: our own
+    /// design).
+    #[error(
+        "nl_gf.mitz.timeout_ms ({timeout_ms}) plus pdqm.timeout_ms ({demographics_ms}) plus federation.localization.timeout_ms ({localization_ms}) must be below federation.overall_timeout_ms ({overall_ms}), of which all three are a part (§11.5)"
+    )]
+    PrefilterBudget {
+        /// The consent pre-filter's budget.
+        timeout_ms: u64,
+        /// The demographics step's budget, zero with no `[pdqm]`.
+        demographics_ms: u64,
+        /// The localizer's budget, zero with no localizer.
+        localization_ms: u64,
+        /// The overall fan-out budget.
+        overall_ms: u64,
+    },
 }
 
 impl Error {

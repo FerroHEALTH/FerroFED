@@ -190,6 +190,26 @@ fn a_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn the_default_localizer_budget_counts_when_no_section_is_written() -> TestResult {
+    let error = refusal(&format!(
+        "profile = \"development\"\n[federation]\noverall_timeout_ms = 6000\nnode_selection = \"localized\"\n\n{}",
+        with("timeout_ms", "1000")
+    ))?;
+    assert!(
+        matches!(
+            error,
+            error::Error::DemographicsBudget {
+                timeout_ms: 1000,
+                localization_ms: 5000,
+                overall_ms: 6000
+            }
+        ),
+        "§11.5: the localizer runs within its default budget: {error:?}"
+    );
+    Ok(())
+}
+
 /// The settings of the development configuration `tables` over a registry
 /// of two members written into `dir`.
 fn settings(dir: &Path, tables: &str) -> Result<Settings, Box<dyn Error>> {

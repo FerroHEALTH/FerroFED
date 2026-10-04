@@ -41,6 +41,7 @@ use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
 use crate::config::error::Error;
+use crate::config::resolve::localization_budget_ms;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::Scheme;
 use crate::config::{Config, Credentials, transport};
@@ -144,7 +145,9 @@ impl fmt::Debug for MitzSettings {
 
 /// Resolves `[nl_gf.mitz]`: a URL that parses, carries no userinfo and is
 /// `https` outside development, a bearer token or basic credentials, a
-/// purpose and data categories, a data user, and every secret and file read.
+/// purpose and data categories, a positive timeout that, with the
+/// demographics step's and the localizer's, ends before the overall budget
+/// (§11.5), a data user, and every secret and file read.
 ///
 /// # Errors
 /// [`Error::Missing`] for no registry, no `url`, no `purpose`, no
@@ -152,7 +155,9 @@ impl fmt::Debug for MitzSettings {
 /// [`Error::Mitz`] for a purpose other than `TREAT` or `COC` or the
 /// pseudonymised BSN listed in `namespaces`, [`Error::Url`],
 /// [`Error::UrlCredentials`] and [`Error::Cleartext`] for the URL,
-/// [`Error::GrantNotHere`] for an OAuth 2.0 grant, and the errors of a
+/// [`Error::GrantNotHere`] for an OAuth 2.0 grant,
+/// [`Error::PrefilterBudget`] for a budget that, with the demographics
+/// step's and the localizer's, leaves no time to resolve, and the errors of a
 /// secret or a file that cannot be read.
 pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Error> {
     let missing = |key: &str| Error::Missing {
@@ -180,6 +185,7 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         });
     }
     question(mitz)?;
+    budget(config, mitz)?;
     let section = format!("{MITZ_KEY}.credentials");
     let credentials = mitz
         .credentials
@@ -226,6 +232,28 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         timeout: Duration::from_millis(mitz.timeout_ms),
         holders: mitz.holders.clone(),
     })
+}
+
+/// Holds the pre-filter's budget, with the demographics step's and the
+/// localizer's, below the overall budget, of which each is a part (§11.5).
+fn budget(config: &Config, mitz: &Mitz) -> Result<(), Error> {
+    let demographics_ms = config.pdqm.as_ref().map_or(0, |pdqm| pdqm.timeout_ms);
+    let localization_ms = localization_budget_ms(config);
+    let overall_ms = config.federation.overall_timeout_ms;
+    if mitz
+        .timeout_ms
+        .saturating_add(demographics_ms)
+        .saturating_add(localization_ms)
+        >= overall_ms
+    {
+        return Err(Error::PrefilterBudget {
+            timeout_ms: mitz.timeout_ms,
+            demographics_ms,
+            localization_ms,
+            overall_ms,
+        });
+    }
+    Ok(())
 }
 
 /// Holds the question's own keys to what the closed authorization question

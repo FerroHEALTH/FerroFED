@@ -693,6 +693,16 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- The Mitz consent pre-filter's budget, `nl_gf.mitz.timeout_ms`, is now a
+  part of the overall budget, as the localizer's and the PDQm step's are:
+  `config check`, `serve` and a reload refuse a configuration whose
+  pre-filter, PDQm and localizer budgets together reach
+  `federation.overall_timeout_ms`, naming the keys, and `OPTIONS {base}/`
+  declares the budget as `timeout.consent_ms` (§11.5, #538). Before, a long
+  Mitz timeout could take the time left to resolve and ask the members with
+  no refusal at startup. The PDQm check now also counts the localizer's
+  default budget under `node_selection = "localized"` when
+  `[federation.localization]` is not written, where it counted none.
 - An XCPD discovery whose audit message is still being stored when the
   localization budget runs out now fails closed under
   `on_failure = "ask-all"` too, as every exchange the gateway could not
