@@ -36,18 +36,24 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::pdqm::Transaction;
+use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_identity::pdqm::{PdqmConfig, PdqmDemographics, Transaction};
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
+use crate::binding::ihe::audit::config::AuditSettings;
 use crate::config::error::Error;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::{Config, Credentials, transport};
+use crate::federation::DemographicsStep;
+use crate::federation::error::FederationError;
+use crate::service;
 
 /// The key of the table.
 pub const PDQM_KEY: &str = "pdqm";
@@ -191,10 +197,7 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PdqmSettings>, Error> {
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(
-        credentials,
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
-    ) {
+    if credentials.as_ref().is_some_and(Scheme::is_grant) {
         return Err(Error::GrantNotHere { section });
     }
     // NOTE: no specification governs this: our own design; the Supplier is sent
@@ -219,4 +222,35 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PdqmSettings>, Error> {
         namespaces: pdqm.namespaces.clone(),
         timeout: Duration::from_millis(pdqm.timeout_ms),
     }))
+}
+
+/// The demographics step `pdqm` describes, audited through `[audit]`.
+pub(super) fn step(
+    pdqm: &PdqmSettings,
+    audit: &AuditSettings,
+) -> Result<DemographicsStep, FederationError> {
+    let auth = service::authentication("pdqm.credentials", pdqm.credentials.as_ref())?;
+    let tls = service::tls_of("pdqm", &pdqm.tls).map_err(FederationError::Tls)?;
+    let mut namespaces = BTreeMap::new();
+    for (namespace, system) in &pdqm.namespaces {
+        let namespace =
+            IdentifierNamespace::new(namespace.as_str()).map_err(FederationError::PdqmNamespace)?;
+        namespaces.insert(namespace, system.clone());
+    }
+    let step = PdqmDemographics::from_config(PdqmConfig {
+        base: pdqm.url.clone(),
+        auth,
+        tls,
+        transaction: pdqm.transaction,
+        master: pdqm.master.clone(),
+        namespaces,
+    })
+    .map_err(FederationError::Pdqm)?;
+    // NOTE: PDQm §2:3.78.5.1 and §2:3.119.5.1.1: each exchange is audited, and one
+    // whose record is refused fails, so the patient's resolution fails closed.
+    let step = match super::audit::recorder(audit).map_err(FederationError::Audit)? {
+        Some(recorder) => step.audited(&recorder),
+        None => step,
+    };
+    Ok(DemographicsStep::new(Arc::new(step), pdqm.timeout))
 }

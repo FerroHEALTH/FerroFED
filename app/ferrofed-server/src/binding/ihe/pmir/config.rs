@@ -221,7 +221,7 @@ pub fn sites(
 /// [`Error::Authorization`] for a feed token that is no RFC 6750 `b64token`;
 /// [`Error::FeedPath`]; [`Error::GrantNotHere`] for OAuth 2.0 credentials;
 /// [`Error::Zero`]; and the errors of a secret that cannot be read.
-pub(super) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
+pub(crate) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
     let Some(pmir) = &config.pmir else {
         return Ok(None);
     };
@@ -275,10 +275,7 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(
-        credentials,
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
-    ) {
+    if credentials.as_ref().is_some_and(Scheme::is_grant) {
         return Err(Error::GrantNotHere { section });
     }
     if let Some(system) = &pmir.identifier_system {

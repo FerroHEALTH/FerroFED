@@ -19,6 +19,7 @@ use std::path::Path;
 
 use axum::Router;
 use ferrofed_identity::pixm::PixmConfigError;
+use ferrofed_server::binding::Role;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
 use ferrofed_server::federation::{Federation, error::FederationError};
@@ -355,7 +356,11 @@ fn a_pix_manager_and_the_dev_cross_reference_together_refuse_to_boot() -> TestRe
         &format!("{dev}\n{}", pixm("https://127.0.0.1:9")),
     )?;
     assert!(
-        matches!(error, FederationError::TwoResolvers),
+        matches!(
+            &error,
+            FederationError::Conflict(conflict)
+                if conflict.role == Role::Resolver && conflict.sections == ["[pixm]", "[dev]"]
+        ),
         "exactly one resolver is active (no specification governs this: our own design): {error:?}"
     );
     Ok(())

@@ -9,36 +9,27 @@
 //! read at boot, and a bad value refuses to boot rather than falling back. No
 //! specification governs the configuration: our own design.
 
-use ferrofed_identity::dev::{DevTable, Profile};
+use ferrofed_identity::dev::Profile;
 use ferrofed_identity::localizer::OnFailure;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::path::PathBuf;
 
-use crate::config::error::Error;
+use crate::binding::development::DevSection;
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
-pub mod audit;
-pub mod audit_repository;
 pub mod auth;
 pub mod error;
 pub mod grant;
 mod load;
-pub mod mcsd;
-pub mod mitz;
-pub mod nl_gf;
-pub mod pdqm;
-pub mod pmir;
-mod resolve;
-mod secrets;
+pub(crate) mod resolve;
+pub(crate) mod secrets;
 pub mod settings;
 pub mod stored_queries;
 pub mod tls;
 pub mod transport;
-pub mod xcpd;
 
 /// The prefix of every environment override.
 ///
@@ -85,21 +76,21 @@ pub struct Config {
     pub dev: Option<DevSection>,
     /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
     /// `ehr_id` domain there (#43).
-    pub pixm: Option<Pixm>,
+    pub pixm: Option<crate::binding::ihe::pixm::Pixm>,
     /// The XCPD localizer (`[xcpd]`): the responding gateways and the
     /// community each member serves (Annex A.3, #85).
-    pub xcpd: Option<xcpd::Xcpd>,
+    pub xcpd: Option<crate::binding::ihe::xcpd::Xcpd>,
     /// The Dutch Generic Functions (`[nl_gf]`): the NVI localizer and the
     /// care provider each member holds the data of (Annex B, #87).
-    pub nl_gf: Option<nl_gf::NlGf>,
+    pub nl_gf: Option<crate::binding::nl::NlGf>,
     /// The PMIR identity feed (`[pmir]`): the Patient Identity Registry the
     /// gateway subscribes to with ITI-94, and the path its ITI-93 messages
     /// arrive at (track 8 of §16.3, Annex A.4).
-    pub pmir: Option<pmir::Pmir>,
+    pub pmir: Option<crate::binding::ihe::pmir::config::Pmir>,
     /// The PDQm demographics step (`[pdqm]`): the Patient Demographics
     /// Supplier asked for the master identity of an identifier the
     /// cross-reference does not map (Annex A §A.2, #487).
-    pub pdqm: Option<pdqm::Pdqm>,
+    pub pdqm: Option<crate::binding::ihe::pdqm::Pdqm>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
@@ -113,7 +104,7 @@ pub struct Config {
     pub auth: auth::Auth,
     /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go
     /// (`[audit]`, #486).
-    pub audit: audit::Audit,
+    pub audit: crate::binding::ihe::audit::config::Audit,
 }
 
 impl Default for Config {
@@ -135,64 +126,9 @@ impl Default for Config {
             metrics: Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),
-            audit: audit::Audit::default(),
+            audit: crate::binding::ihe::audit::config::Audit::default(),
         }
     }
-}
-
-/// The PIXm resolver: the identity binding of N3 over ITI-83 (Annex A.1).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Pixm {
-    /// The PIX Managers, one `[[pixm.manager]]` each; every registry member is
-    /// resolved by exactly one of them.
-    pub manager: Vec<PixManager>,
-    /// A client's issuing namespace mapped to the PIX assigning authority it
-    /// stands for (`"2.999.1" = "urn:oid:2.999.1"`). A namespace that is
-    /// itself an absolute URI needs no entry.
-    pub namespaces: BTreeMap<String, String>,
-}
-
-/// One PIX Manager.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct PixManager {
-    /// The Manager's FHIR base URL, which no rendering shows with its
-    /// userinfo.
-    pub url: SecretUrl,
-    /// Each member this Manager resolves, mapped to its `ehr_id` domain: the
-    /// assigning authority whose identifiers are that member's `ehr_id`s
-    /// (Annex A.1).
-    pub members: BTreeMap<String, String>,
-    /// How the gateway authenticates to the Manager, when the transport does
-    /// not.
-    pub credentials: Option<Credentials>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS, inline or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the Manager's certificate chains to, beside
-    /// the platform's.
-    pub trust_roots_file: Option<PathBuf>,
-    /// How the gateway asks the Manager: `"get"` or `"post"`.
-    pub method: PixmMethod,
-}
-
-/// How the gateway invokes ITI-83 at a PIX Manager (`method`).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PixmMethod {
-    /// `GET [base]/Patient/$ihe-pix?sourceIdentifier=…`: the patient identifier
-    /// is in the request URL.
-    // NOTE: PIXm 3.1.0 §2:3.83.4.1.2 says "the HTTP GET operation shall be used", and
-    // FHIR R4 Operations §3.2.0.1 requires a server to support that GET, with no such rule for POST.
-    #[default]
-    Get,
-    /// `POST [base]/Patient/$ihe-pix` with the parameters in a `Parameters`
-    /// body (FHIR R4 Operations §3.2.0.1), which keeps the patient identifier
-    /// out of the request URL; for a Manager that accepts it.
-    Post,
 }
 
 /// The federation's membership.
@@ -208,7 +144,7 @@ pub struct Registry {
     /// The mCSD care services directory the registry is read from and kept
     /// in step with (`[registry.mcsd]`, §15.1, Annex A.5), in place of a
     /// document.
-    pub mcsd: Option<mcsd::McsdDirectory>,
+    pub mcsd: Option<crate::binding::ihe::mcsd::McsdDirectory>,
 }
 
 impl Registry {
@@ -422,41 +358,6 @@ impl Default for Federation {
     }
 }
 
-/// The `[dev]` table, held as written until the registry it refers to is
-/// loaded.
-///
-/// Its rows carry patient identifier values, so `Debug` shows how many rows
-/// there are and none of them.
-#[derive(Clone, PartialEq, Deserialize)]
-#[serde(transparent)]
-pub struct DevSection(toml::Table);
-
-impl DevSection {
-    /// Reads the table as the static cross-reference's configuration.
-    ///
-    /// # Errors
-    /// Returns [`Error::DevTable`] when the table does not have the shape of
-    /// `[[dev.crossref]]` rows. The error names the shape, never a value.
-    pub fn table(&self) -> Result<DevTable, Error> {
-        toml::Value::Table(self.0.clone())
-            .try_into::<DevTable>()
-            .map_err(|_shape| Error::DevTable)
-    }
-}
-
-impl fmt::Debug for DevSection {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let rows = self
-            .0
-            .get("crossref")
-            .and_then(toml::Value::as_array)
-            .map_or(0, Vec::len);
-        f.debug_struct("DevSection")
-            .field("crossref_rows", &rows)
-            .finish()
-    }
-}
-
 /// The HTTP surface.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -566,57 +467,11 @@ pub struct Credentials {
     /// The Nuts grant of the Dutch Generic Functions
     /// (`[credentials."<endpoint id>".nuts]`), the regional realisation of
     /// §13.3 (Annex B §B.4).
-    pub nuts: Option<Nuts>,
+    pub nuts: Option<crate::binding::nl::nuts::Nuts>,
     /// A grant under the FAPI 2.0 Security Profile
     /// (`[credentials."<endpoint id>".fapi2]`), the BgZ/eOverdracht track of
     /// Annex B §B.4a.
     pub fapi2: Option<grant::Fapi2>,
-}
-
-/// The Nuts grant at one node's authorization server (Annex B §B.4).
-///
-/// The gateway presents its Verifiable Credentials, signed as a presentation
-/// with its `did:web` key, and binds the token with `DPoP` (Nuts RFC021).
-///
-/// No field has a default but `client_id`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Nuts {
-    /// The authorization server's issuer identifier (RFC 8414 §2); `https`
-    /// outside the development profile.
-    pub authorization_server: Option<SecretUrl>,
-    /// The scope the token is asked for, the one the authorization server
-    /// maps to its Presentation Definition (Nuts RFC021 §5).
-    pub scope: String,
-    /// The `client_id` the token request carries (RFC 6749 §3.2.1), when the
-    /// authorization server identifies its clients by one.
-    pub client_id: Option<String>,
-    /// The gateway's own `did:web` identifier, the holder of the credentials.
-    pub did: String,
-    /// The DID URL of the key the presentation is signed with, `<did>#<id>`,
-    /// published in the holder's DID document.
-    pub kid: String,
-    /// A file holding that key, a P-256 or P-384 private key in PKCS#8 PEM,
-    /// read at boot.
-    pub key_file: Option<PathBuf>,
-    /// The credentials the gateway presents, each with the input descriptor
-    /// it answers (`[[credentials."<endpoint id>".nuts.credential]]`).
-    pub credential: Vec<NutsCredential>,
-    /// A file holding the private key the tokens are bound to with `DPoP`
-    /// (RFC 9449), a P-256 or P-384 key in PKCS#8 PEM, read at boot.
-    pub dpop_key_file: Option<PathBuf>,
-}
-
-/// One Verifiable Credential the gateway presents in the Nuts grant.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct NutsCredential {
-    /// The input descriptor of the authorization server's Presentation
-    /// Definition the credential answers (Presentation Exchange 2.0.0).
-    pub input_descriptor: String,
-    /// A file holding the credential, JWT-encoded (VC Data Model 1.1
-    /// §6.3.1), read at boot.
-    pub file: Option<PathBuf>,
 }
 
 /// An OAuth 2.0 grant at one node's token endpoint.

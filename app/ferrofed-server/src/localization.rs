@@ -5,40 +5,35 @@
 //! gateway does when it does not answer (N4, N10, §14.1).
 //!
 //! Under `federation.node_selection = "localized"` exactly one localizer is
-//! active: the XCPD localizer when `[xcpd]` is set (Annex A.3), the NVI
-//! localizer when `[nl_gf.nvi]` is (Annex B §B.1), the PIXm
-//! resolver when `[pixm]` is (§14.2), and the static development
-//! cross-reference under `profile = "development"` otherwise. A configured
+//! active, built from the configured bindings
+//! ([`crate::binding`]): a binding's own localizer when one is configured,
+//! such as the XCPD localizer of `[xcpd]` (Annex A.3) or the NVI localizer of
+//! `[nl_gf.nvi]` (Annex B §B.1), and otherwise the resolver itself where it
+//! localizes, such as the PIXm resolver of `[pixm]` (§14.2) or the static
+//! development cross-reference under `profile = "development"`. Two
+//! localizers of their own are refused, naming both sections. A configured
 //! localizer that does not answer fails closed unless
 //! `[federation.localization] on_failure = "ask-all"` declares otherwise, and
-//! `OPTIONS {base}/` declares the policy either way (§7a.2, N30). Under `node_selection = "ask-all"` there is no localizer and
-//! every member is a candidate (§4.3, N4 last sentence).
+//! `OPTIONS {base}/` declares the policy either way (§7a.2, N30). Under
+//! `node_selection = "ask-all"` there is no localizer and every member is a
+//! candidate (§4.3, N4 last sentence).
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::atna::RepositoryAudit;
-use ferrofed_identity::dev::{Profile, StaticResolver};
 use ferrofed_identity::localizer::{Localizer, OnFailure};
-use ferrofed_identity::nvi::{NviConfig, NviConfigError, NviLocalizer};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
-use ferrofed_identity::pixm::PixmResolver;
-use ferrofed_identity::xcpd::{
-    AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Transport, XcpdConfig,
-    XcpdConfigError, XcpdLocalizer,
-};
+use ferrofed_identity::nvi::NviConfigError;
+use ferrofed_identity::patient::PatientRefError;
+use ferrofed_identity::xcpd::XcpdConfigError;
 use ferrofed_registry::error::IdError;
-use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
-use crate::audit::{self, AuditTrailError};
-use crate::config::nl_gf::NviSettings;
+use crate::binding::ihe::audit::AuditTrailError;
+use crate::binding::{self, Indicator, LocalizerSeam, Offer, ResolverSeam, Role};
 use crate::config::settings::{LocalizationSettings, Settings};
-use crate::config::xcpd::{AuditDestination, XcpdSettings};
 use crate::config::{self, NodeSelection};
-use crate::service::{self, GrantRefused, TlsRefused};
+use crate::service::{GrantRefused, TlsRefused};
 
 /// The localizer of a federation, with its failure policy and budget.
 #[derive(Clone)]
@@ -46,17 +41,17 @@ pub struct LocalizationPolicy {
     localizer: Option<Arc<dyn Localizer>>,
     mode: Option<&'static str>,
     audit: Option<&'static str>,
-    repository: Option<Arc<RepositoryAudit>>,
+    indicators: Vec<Arc<dyn Indicator>>,
     on_failure: OnFailure,
     timeout: Duration,
 }
 
 impl LocalizationPolicy {
-    /// The recorder that sends the localizer's audit messages to an ATNA
-    /// Audit Record Repository, when one is configured.
+    /// The health indicators of what the localizer records through, such as
+    /// the ATNA Audit Record Repository its audit messages go to.
     #[must_use]
-    pub fn repository(&self) -> Option<&Arc<RepositoryAudit>> {
-        self.repository.as_ref()
+    pub fn indicators(&self) -> &[Arc<dyn Indicator>] {
+        &self.indicators
     }
 
     /// The policy of a deployment with no localizer: every member is a
@@ -67,7 +62,7 @@ impl LocalizationPolicy {
             localizer: None,
             mode: None,
             audit: None,
-            repository: None,
+            indicators: Vec::new(),
             on_failure: OnFailure::Closed,
             timeout: Duration::ZERO,
         }
@@ -86,7 +81,7 @@ impl LocalizationPolicy {
             localizer: Some(localizer),
             mode: Some(mode),
             audit: None,
-            repository: None,
+            indicators: Vec::new(),
             on_failure,
             timeout,
         }
@@ -143,19 +138,6 @@ impl fmt::Debug for LocalizationPolicy {
     }
 }
 
-/// The `localization.mode` of the static development cross-reference.
-pub const DEVELOPMENT_STATIC: &str = "development-static";
-
-/// The `localization.mode` of the XCPD localizer (Annex A.3).
-pub const XCPD: &str = "xcpd";
-
-/// The `localization.mode` of the PIXm localizer (§14.2, Annex A.1).
-pub const PIXM: &str = "pixm";
-
-/// The `localization.mode` of the NVI localizer of the Dutch Generic
-/// Functions (Annex B §B.1).
-pub const NL_GF_NVI: &str = "nl-gf-nvi";
-
 /// A localization configuration that cannot be set up.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -164,7 +146,8 @@ pub enum LocalizationError {
     /// configured, so no undirected patient query could find its node set
     /// (N4).
     #[error(
-        "federation.node_selection = \"localized\" needs a localizer: [xcpd], [nl_gf.nvi], [pixm], or the [dev] cross-reference under profile = \"development\" (N4, §14.1)"
+        "federation.node_selection = \"localized\" needs a localizer: {} (N4, §14.1)",
+        binding::localizer_list()
     )]
     NoLocalizer,
     /// `[federation.localization]` is set under a node selection that uses
@@ -173,20 +156,15 @@ pub enum LocalizationError {
         "[federation.localization] applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
     )]
     NotLocalized,
-    /// `[xcpd]` is set under a node selection that uses no localizer.
+    /// A binding's own localizer is configured under a node selection that
+    /// uses no localizer.
     #[error(
-        "[xcpd] is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
+        "{section} is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
     )]
-    XcpdUnused,
-    /// `[nl_gf.nvi]` is set under a node selection that uses no localizer.
-    #[error(
-        "[nl_gf.nvi] is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
-    )]
-    NviUnused,
-    /// `[xcpd]` and `[nl_gf.nvi]` are both set, and exactly one localizer is
-    /// active.
-    #[error("[xcpd] and [nl_gf.nvi] are both localizers; set one")]
-    TwoLocalizers,
+    Unused {
+        /// The localizer's section, such as `[xcpd]`.
+        section: &'static str,
+    },
     /// An `[nl_gf.nvi.custodians]` value is not a node id.
     #[error("nl_gf.nvi.custodians.{ura:?} is not a node id")]
     NviMember {
@@ -237,48 +215,39 @@ pub enum LocalizationError {
     NoAuditRepository,
 }
 
-/// The resolver the federation runs, as a localizer it can also be.
-#[derive(Debug, Default)]
-pub struct Resolving {
-    /// The static development cross-reference, when `[dev]` is set.
-    pub development: Option<Arc<StaticResolver>>,
-    /// The PIXm resolver, when `[pixm]` is set.
-    pub pixm: Option<Arc<PixmResolver>>,
-}
-
 /// The localization policy `settings` declare under `selection` over the
-/// members of `snapshot`, with the resolver the federation runs, `resolving`.
+/// members of `snapshot`, from the roles the bindings `offers` and the
+/// resolver the federation runs, `resolving`.
 ///
-/// The localizer is the XCPD one when `[xcpd]` is set, and the NVI one when
-/// `[nl_gf.nvi]` is (Annex B §B.1); never both. Otherwise it is the
-/// resolver itself: the PIXm resolver, which names the members whose domain
-/// holds the patient over the ITI-83 call its resolution reuses (§14.2), or
-/// the development cross-reference.
+/// The localizer is a binding's own when one offers it (one at most, which
+/// the caller holds), and otherwise the resolver itself where it localizes:
+/// the PIXm resolver names the members whose domain holds the patient over
+/// the ITI-83 call its resolution reuses (§14.2), the development
+/// cross-reference the members that hold a row.
 ///
 /// # Errors
 ///
 /// Returns [`LocalizationError::NoLocalizer`] for the localized selection
 /// with no localizer, [`LocalizationError::NotLocalized`] and
-/// [`LocalizationError::XcpdUnused`] for a localization table under the
-/// ask-all selection, [`LocalizationError::TwoLocalizers`] for `[xcpd]` and
-/// `[nl_gf.nvi]` together, and the XCPD and NVI errors for a table its
-/// localizer refuses.
+/// [`LocalizationError::Unused`] for a localization table or a binding's own
+/// localizer under the ask-all selection, and the binding's errors for a
+/// table its localizer refuses.
 pub fn policy(
     settings: &Settings,
     selection: NodeSelection,
-    resolving: Resolving,
+    offers: &[Offer],
+    resolving: Option<&ResolverSeam>,
     snapshot: &RegistrySnapshot,
 ) -> Result<LocalizationPolicy, LocalizationError> {
     let federation = &settings.federation;
+    let own = offers.iter().find(|offer| offer.role == Role::Localizer);
     match selection {
         NodeSelection::AskAll if federation.localization.is_some() => {
             Err(LocalizationError::NotLocalized)
         }
-        NodeSelection::AskAll if settings.xcpd.is_some() => Err(LocalizationError::XcpdUnused),
-        NodeSelection::AskAll if nvi(settings).is_some() => Err(LocalizationError::NviUnused),
-        NodeSelection::Localized if settings.xcpd.is_some() && nvi(settings).is_some() => {
-            Err(LocalizationError::TwoLocalizers)
-        }
+        NodeSelection::AskAll if let Some(offer) = own => Err(LocalizationError::Unused {
+            section: offer.section,
+        }),
         NodeSelection::AskAll => Ok(LocalizationPolicy::none()),
         NodeSelection::Localized => {
             let declared = federation.localization.unwrap_or_else(|| {
@@ -288,151 +257,29 @@ pub fn policy(
                     timeout: Duration::from_millis(default.timeout_ms),
                 }
             });
-            let Resolving { development, pixm } = resolving;
-            let mut repository = None;
-            let (localizer, mode): (Arc<dyn Localizer>, _) =
-                match (&settings.xcpd, pixm, development) {
-                    (None, _, _) if let Some(nvi) = nvi(settings) => {
-                        (Arc::new(nvi_localizer(nvi, snapshot)?), NL_GF_NVI)
-                    }
-                    (Some(xcpd), _, _) => {
-                        let (localizer, trail) = xcpd_localizer(xcpd, settings.profile, snapshot)?;
-                        repository = trail;
-                        (Arc::new(localizer), XCPD)
-                    }
-                    (None, Some(pixm), _) => (pixm, PIXM),
-                    (None, None, Some(development)) => (development, DEVELOPMENT_STATIC),
-                    (None, None, None) => return Err(LocalizationError::NoLocalizer),
+            let seam =
+                match own {
+                    Some(_) => binding::localizer(settings, snapshot)?,
+                    None => resolving.and_then(|seam| seam.localizer.clone()).map(
+                        |(localizer, mode)| LocalizerSeam {
+                            localizer,
+                            mode,
+                            audit: None,
+                            indicators: Vec::new(),
+                        },
+                    ),
                 };
-            let mut policy =
-                LocalizationPolicy::new(localizer, mode, declared.on_failure, declared.timeout);
-            policy.repository = repository;
-            Ok(match &settings.xcpd {
-                Some(xcpd) => policy.audited(xcpd.audit.as_str()),
-                None => policy,
+            let Some(seam) = seam else {
+                return Err(LocalizationError::NoLocalizer);
+            };
+            Ok(LocalizationPolicy {
+                localizer: Some(seam.localizer),
+                mode: Some(seam.mode),
+                audit: seam.audit,
+                indicators: seam.indicators,
+                on_failure: declared.on_failure,
+                timeout: declared.timeout,
             })
         }
     }
-}
-
-/// The XCPD localizer `xcpd` describes over the members of `snapshot`, which
-/// admits an `http` gateway only when `profile` is development.
-fn xcpd_localizer(
-    xcpd: &XcpdSettings,
-    profile: Profile,
-    snapshot: &RegistrySnapshot,
-) -> Result<(XcpdLocalizer, Option<Arc<RepositoryAudit>>), LocalizationError> {
-    let assertion = xcpd
-        .assertion
-        .as_ref()
-        .map(|written| {
-            FixedAssertion::from_xml(&written.to_secret_string()).map_err(|_refused| {
-                LocalizationError::XcpdAssertion {
-                    key: xcpd.assertion_key,
-                }
-            })
-        })
-        .transpose()?
-        .map(|assertion| -> Arc<dyn AssertionSource> { Arc::new(assertion) });
-    let mut communities = BTreeMap::new();
-    for (community, member) in &xcpd.communities {
-        let member =
-            NodeId::new(member.as_str()).map_err(|source| LocalizationError::XcpdMember {
-                community: community.clone(),
-                source,
-            })?;
-        communities.insert(community.clone(), member);
-    }
-    let mut namespaces = BTreeMap::new();
-    for (namespace, authority) in &xcpd.namespaces {
-        let namespace = IdentifierNamespace::new(namespace.as_str())
-            .map_err(LocalizationError::XcpdNamespace)?;
-        namespaces.insert(namespace, authority.clone());
-    }
-    let config = XcpdConfig {
-        sender_device: xcpd.sender_device.clone(),
-        home_community: xcpd.home_community.clone(),
-        gateways: xcpd
-            .gateways
-            .iter()
-            .map(|gateway| GatewayConfig {
-                endpoint: gateway.url.clone(),
-                device: gateway.device.clone(),
-                community: gateway.community.clone(),
-            })
-            .collect(),
-        communities,
-        namespaces,
-        transport: if profile == Profile::Development {
-            Transport::UnencryptedForDevelopment
-        } else {
-            Transport::Encrypted
-        },
-        tls: service::tls(
-            "xcpd",
-            xcpd.client_identity.as_ref(),
-            xcpd.trust_roots.as_deref(),
-        )
-        .map_err(LocalizationError::Tls)?,
-    };
-    let localizer =
-        XcpdLocalizer::from_config(config, assertion, snapshot).map_err(LocalizationError::Xcpd)?;
-    Ok(match (xcpd.audit, &xcpd.audit_repository) {
-        (AuditDestination::Repository, Some(repository)) => {
-            let trail = audit::trail(repository).map_err(LocalizationError::AuditTrail)?;
-            (localizer.audited(trail.clone()), Some(trail))
-        }
-        (AuditDestination::Repository, None) => return Err(LocalizationError::NoAuditRepository),
-        (AuditDestination::Log, _) => (localizer.audited(Arc::new(LogAudit)), None),
-        (AuditDestination::Off, _) => {
-            tracing::warn!(
-                "[xcpd] audit = \"off\": no ITI-55 audit message is recorded (development only)"
-            );
-            (localizer, None)
-        }
-    })
-}
-
-/// The `[nl_gf.nvi]` table of `settings`, when it is set.
-fn nvi(settings: &Settings) -> Option<&NviSettings> {
-    settings.nl_gf.as_ref().and_then(|nl_gf| nl_gf.nvi.as_ref())
-}
-
-/// The NVI localizer `nvi` describes over the members of `snapshot`
-/// (Annex B §B.1).
-fn nvi_localizer(
-    nvi: &NviSettings,
-    snapshot: &RegistrySnapshot,
-) -> Result<NviLocalizer, LocalizationError> {
-    let mut custodians = BTreeMap::new();
-    for (ura, member) in &nvi.custodians {
-        let member =
-            NodeId::new(member.as_str()).map_err(|source| LocalizationError::NviMember {
-                ura: ura.clone(),
-                source,
-            })?;
-        custodians.insert(ura.clone(), member);
-    }
-    let namespaces = nvi
-        .namespaces
-        .iter()
-        .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
-        .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(LocalizationError::NviNamespace)?;
-    let auth = service::authentication("nl_gf.nvi.credentials", nvi.credentials.as_ref())
-        .map_err(LocalizationError::Grant)?;
-    let tls = service::tls(
-        "nl_gf.nvi",
-        nvi.client_identity.as_ref(),
-        nvi.trust_roots.as_deref(),
-    )
-    .map_err(LocalizationError::Tls)?;
-    let config = NviConfig {
-        base: nvi.url.clone(),
-        auth,
-        custodians,
-        namespaces,
-        tls,
-    };
-    NviLocalizer::from_config(config, snapshot).map_err(LocalizationError::Nvi)
 }

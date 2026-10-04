@@ -3,8 +3,9 @@
 
 //! The refusals that name their key, line and file, and never echo a value.
 
+use ferrofed_server::binding::ihe::pixm::PixmMethod;
+use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
-use ferrofed_server::config::{Config, PixmMethod};
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 

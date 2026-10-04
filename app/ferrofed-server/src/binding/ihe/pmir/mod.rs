@@ -20,6 +20,7 @@
 //! and their counts, never an identifier. The bindings' time-to-live bounds
 //! every change the gateway never hears of.
 
+pub mod config;
 pub mod route;
 pub mod subscription;
 
@@ -42,7 +43,7 @@ use ihe_iti::pmir::feed::Feed;
 use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
 use url::Url;
 
-use crate::config::pmir::PmirSettings;
+use crate::binding::ihe::pmir::config::PmirSettings;
 use crate::health::dependencies::Observed;
 use crate::service::{self, GrantRefused, TlsRefused};
 use subscription::{RegistryFault, Watch};

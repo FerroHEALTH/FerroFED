@@ -25,11 +25,12 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
+use ferrofed_server::binding::ihe::XCPD;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::PatientBinding;
 use ferrofed_server::config::error;
 use ferrofed_server::federation::{Federation, error::FederationError};
-use ferrofed_server::localization::{LocalizationError, XCPD};
+use ferrofed_server::localization::LocalizationError;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::xcpd::{Answer, Community, RespondingGateway};
@@ -372,7 +373,9 @@ fn xcpd_under_the_ask_all_selection_refuses_to_boot() -> TestResult {
     )
     .replace("[federation.localization]\ntimeout_ms = 1000\n", "");
     match load(&text)? {
-        Err(FederationError::Localization(LocalizationError::XcpdUnused)) => Ok(()),
+        Err(FederationError::Localization(LocalizationError::Unused { section: "[xcpd]" })) => {
+            Ok(())
+        }
         other => Err(format!("a localizer no query uses is refused: {other:?}").into()),
     }
 }

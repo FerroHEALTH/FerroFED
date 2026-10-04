@@ -46,17 +46,15 @@ compile_error!(
 
 pub mod admin;
 pub mod admission;
-pub mod audit;
 pub mod auth;
 pub mod banner;
 pub mod base_path;
+pub mod binding;
 pub mod body;
 pub mod cli;
 pub mod command;
 pub mod config;
 pub mod conveyed;
-mod development;
-pub mod directory;
 pub mod error;
 pub mod facade;
 pub mod federation;
@@ -67,7 +65,6 @@ pub mod localization;
 pub mod metrics;
 mod onward;
 pub mod panic;
-pub mod pmir;
 pub mod reload;
 pub mod request_id;
 pub mod request_log;
@@ -82,7 +79,7 @@ use std::time::Duration;
 
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::{Json, Router};
 use http::{HeaderMap, StatusCode};
 use tokio::net::TcpListener;
@@ -165,12 +162,7 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
                 .fallback(facade::route::unrouted),
         )
         .fallback(facade::route::unrouted);
-    // NOTE: PMIR §2:3.93.5: the feed authenticates its Supplier with its own token,
-    // so its route sits outside the ITS-REST surface and its client authentication.
-    let surface = match state.identity_feed() {
-        Some(feed) => surface.route(feed.path(), post(pmir::route::feed)),
-        None => surface,
-    };
+    let surface = state.processes().routes(surface);
     let routes = if server.base_path.is_root() {
         surface.route("/", base_root())
     } else {

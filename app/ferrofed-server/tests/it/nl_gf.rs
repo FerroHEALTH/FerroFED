@@ -25,11 +25,13 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_server::binding::Role;
+use ferrofed_server::binding::nl::nvi::NL_GF_NVI;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::{Config, error, transport};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
-use ferrofed_server::localization::{LocalizationError, NL_GF_NVI};
+use ferrofed_server::localization::LocalizationError;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::nvi::LocalizationService;
@@ -459,7 +461,9 @@ fn the_nvi_under_the_ask_all_selection_refuses_to_boot() -> TestResult {
         },
     )?;
     match Federation::load(&resolved(&text)?) {
-        Err(FederationError::Localization(LocalizationError::NviUnused)) => Ok(()),
+        Err(FederationError::Localization(LocalizationError::Unused {
+            section: "[nl_gf.nvi]",
+        })) => Ok(()),
         other => Err(format!("a localizer no query uses is refused: {other:?}").into()),
     }
 }
@@ -481,7 +485,12 @@ fn the_nvi_and_xcpd_together_refuse_to_boot() -> TestResult {
         },
     )?;
     match Federation::load(&resolved(&text)?) {
-        Err(FederationError::Localization(LocalizationError::TwoLocalizers)) => Ok(()),
+        Err(FederationError::Conflict(conflict))
+            if conflict.role == Role::Localizer
+                && conflict.sections == ["[nl_gf.nvi]", "[xcpd]"] =>
+        {
+            Ok(())
+        }
         other => Err(format!("exactly one localizer is active: {other:?}").into()),
     }
 }

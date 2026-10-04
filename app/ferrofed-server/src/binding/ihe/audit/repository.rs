@@ -141,7 +141,7 @@ pub struct AuditRepositorySettings {
 /// [`Error::SyslogHeader`] for a `hostname` or `app_name` syslog cannot
 /// carry; [`Error::Zero`] for a zero bound or timeout; and the errors of a
 /// secret or a file that cannot be read.
-pub(super) fn resolve(
+pub(crate) fn resolve(
     profile: Profile,
     table: &AuditRepository,
 ) -> Result<AuditRepositorySettings, Error> {

@@ -17,8 +17,8 @@ use ihe_iti::balp::AuditError;
 use ihe_iti::pmir::error::FeedError;
 use ihe_iti::pmir::feed::{EventKind, Feed, ResponseId, refusal};
 
+use crate::binding::ihe::metrics::FeedResult;
 use crate::facade::security::TARGET;
-use crate::metrics::FeedResult;
 use crate::state::AppState;
 
 /// The media type of every FHIR answer the route gives (ITI TF-2 Appendix

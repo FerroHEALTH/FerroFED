@@ -15,7 +15,8 @@ use ferrofed_identity::pixm::PixmConfigError;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::EndpointId;
 
-use crate::directory::DirectoryFailure;
+use crate::binding::RoleConflict;
+use crate::binding::ihe::mcsd::registry::DirectoryFailure;
 use crate::facade::options::DescribeError;
 use crate::localization;
 use crate::service::{GrantRefused, TlsRefused};
@@ -109,16 +110,12 @@ pub enum FederationError {
         "the [pixm] resolver needs a registry, registry.document or [registry.mcsd], whose members it names"
     )]
     PixmWithoutRegistry,
-    /// Both `[dev]` and `[pixm]` are set, and exactly one resolver is active
-    /// (no specification governs this: our own design).
-    #[error("set one resolver: [dev] and [pixm] are both configured")]
-    TwoResolvers,
-    /// Both `[[dev.consent_denied]]` and `[nl_gf.mitz]` are set, and at most
-    /// one consent pre-filter is active (N27a).
-    #[error(
-        "set one consent pre-filter: [[dev.consent_denied]] and [nl_gf.mitz] are both configured"
-    )]
-    TwoConsentPrefilters,
+    /// More than one configured section fills a role exactly one may: at
+    /// most one resolver and one localizer of a binding's own are active (no
+    /// specification governs this: our own design), and at most one consent
+    /// pre-filter (N27a).
+    #[error(transparent)]
+    Conflict(#[from] RoleConflict),
     /// A key of `[nl_gf.mitz.holders]` or `[nl_gf.nvi.custodians]` is not a
     /// node id.
     #[error("{key} is not a node id")]
@@ -185,7 +182,7 @@ pub enum FederationError {
     /// The audit trail of the PIXm, mCSD and PMIR transactions cannot start
     /// (`[audit]`).
     #[error("the [audit] trail cannot start")]
-    Audit(#[source] crate::audit::AuditTrailError),
+    Audit(#[source] crate::binding::ihe::audit::AuditTrailError),
     /// The localizer of `node_selection = "localized"` cannot be set up
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]

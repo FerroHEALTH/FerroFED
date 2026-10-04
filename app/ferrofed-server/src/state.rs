@@ -4,22 +4,21 @@
 //! What every handler shares: the phase of the process, the health registry,
 //! the federation, and the stored-query registry.
 
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreError};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::binding::ihe::pmir::IdentityFeedError;
+use crate::binding::process::{Processes, Sources};
 use crate::config::settings::Settings;
 use crate::config::stored_queries::{Backend, Store};
 use crate::config::transport::{self, CleartextError, ProtectedSite};
-use crate::directory::DirectoryRegistry;
 use crate::federation::{Federation, error::FederationError, registry::read_registry};
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
 use crate::metrics::{Metrics, MetricsError};
-use crate::pmir::{IdentityFeed, IdentityFeedError};
 use crate::stored;
 
 /// The state the router is built over.
@@ -43,12 +42,10 @@ pub struct AppState {
     /// The metrics surface every recording site and the admin listener
     /// share; it outlives every federation a reload builds.
     metrics: Arc<Metrics>,
-    /// The care services directory the registry is kept in step with, when
-    /// it is read from one; it outlives every federation a refresh builds.
-    directory: Option<Arc<DirectoryRegistry>>,
-    /// The PMIR identity feed, when `[pmir]` is set; it outlives every
-    /// federation a reload builds, whose bindings it drives.
-    identity_feed: Option<Arc<IdentityFeed>>,
+    /// What the bindings run for the life of the process, such as a care
+    /// services directory or an identity feed; it outlives every federation
+    /// a reload or a refresh builds.
+    processes: Processes,
 }
 
 /// A state that cannot be built from the settings.
@@ -91,7 +88,7 @@ pub enum StateError {
     IdentityFeed(#[from] IdentityFeedError),
     /// The audit trail of the PMIR transactions cannot start (`[audit]`).
     #[error("the [audit] trail cannot start")]
-    Audit(#[source] crate::audit::AuditTrailError),
+    Audit(#[source] crate::binding::ihe::audit::AuditTrailError),
 }
 
 impl AppState {
@@ -152,8 +149,7 @@ impl AppState {
             federation: RwLock::new(federation.map(Arc::new)),
             definitions: definitions.map(Arc::new),
             metrics,
-            directory: None,
-            identity_feed: identity_feed(settings)?,
+            processes: Processes::build(settings)?,
         })
     }
 
@@ -172,7 +168,7 @@ impl AppState {
     pub fn check(settings: &Settings) -> Result<Vec<ProtectedSite>, StateError> {
         let federation = Federation::load(settings)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
-        identity_feed(settings)?;
+        Processes::build(settings)?;
         if let (Some(store @ Store::Files(_)), Some(federation)) =
             (&settings.stored_queries, federation.as_ref())
         {
@@ -191,8 +187,7 @@ impl AppState {
             federation: RwLock::new(None),
             definitions: None,
             metrics: Arc::default(),
-            directory: None,
-            identity_feed: None,
+            processes: Processes::default(),
         }
     }
 
@@ -207,55 +202,23 @@ impl AppState {
             federation: RwLock::new(Some(Arc::new(federation.metered(metrics.nodes())))),
             definitions: None,
             metrics,
-            directory: None,
-            identity_feed: None,
+            processes: Processes::default(),
         }
-    }
-
-    /// Returns this state keeping its registry in step with `directory`,
-    /// whose last observed state `/health/dependencies` reports.
-    #[must_use]
-    pub fn watching(mut self, directory: Arc<DirectoryRegistry>) -> Self {
-        self.directory = Some(directory);
-        self
-    }
-
-    /// Returns this state applying the ITI-93 messages of `feed` to its
-    /// federation's resolution bindings.
-    #[must_use]
-    pub fn with_identity_feed(mut self, feed: Arc<IdentityFeed>) -> Self {
-        self.identity_feed = Some(feed);
-        self
-    }
-
-    /// Returns the PMIR identity feed, when `[pmir]` is set.
-    #[must_use]
-    pub fn identity_feed(&self) -> Option<&Arc<IdentityFeed>> {
-        self.identity_feed.as_ref()
     }
 
     /// Returns the report `GET /health/dependencies` answers with: the last
     /// observed state of each member endpoint, of the resolver, of the
-    /// consent pre-filter, of the localizer and of the care services
-    /// directory, with why the directory is degraded.
+    /// consent pre-filter, of the localizer, and what each binding's
+    /// processes indicate, such as a care services directory with why it is
+    /// degraded.
     #[must_use]
     pub fn dependencies(&self) -> crate::health::dependencies::Report {
         let mut report = self
             .federation()
             .map(|federation| federation.dependencies().report())
             .unwrap_or_default();
-        report.directory = self.directory().map(|directory| directory.observed());
-        report.identity_registry = self.identity_feed().map(|feed| feed.observed());
-        report.identity_registry_fault = self.identity_feed().and_then(|feed| feed.fault());
-        report.directory_fault = self.directory().and_then(|directory| directory.fault());
+        report.bindings.extend(self.processes.indicate());
         report
-    }
-
-    /// Returns the care services directory the registry is kept in step
-    /// with, when it is read from one.
-    #[must_use]
-    pub fn directory(&self) -> Option<&Arc<DirectoryRegistry>> {
-        self.directory.as_ref()
     }
 
     /// Returns where the process is in its life, which gates readiness.
@@ -307,22 +270,24 @@ impl AppState {
     pub fn definitions(&self) -> Option<&Arc<Definitions>> {
         self.definitions.as_ref()
     }
-}
 
-/// The PMIR identity feed `settings` describe, scoped by the `ehr_id`
-/// domain of every member `[pixm]` maps (Annex A.1).
-fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, StateError> {
-    let Some(pmir) = &settings.pmir else {
-        return Ok(None);
-    };
-    let domains: BTreeSet<String> = settings
-        .pixm
-        .iter()
-        .flat_map(|pixm| pixm.managers.iter())
-        .flat_map(|manager| manager.members.values().cloned())
-        .collect();
-    let audit = crate::audit::recorder(&settings.audit).map_err(StateError::Audit)?;
-    Ok(Some(Arc::new(IdentityFeed::new(pmir, domains, audit)?)))
+    /// Returns what the bindings run for the life of the process.
+    pub(crate) fn processes(&self) -> &Processes {
+        &self.processes
+    }
+
+    /// Returns what the bindings run, to put a process in place.
+    pub(crate) fn processes_mut(&mut self) -> &mut Processes {
+        &mut self.processes
+    }
+
+    /// Returns this state keeping its registry in step with the `sources`
+    /// the boot opened ([`read_source`](crate::binding::process::read_source)).
+    #[must_use]
+    pub fn with_sources(mut self, sources: Sources) -> Self {
+        self.processes.watch(sources);
+        self
+    }
 }
 
 /// Refuses a federating gateway whose `[auth]` trusts no issuer, which would

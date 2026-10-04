@@ -17,7 +17,10 @@
 //! entries and resolution bindings naming a member that left are dropped.
 //! A configuration that does not load leaves the running registry in place.
 //!
-//! The sections in [`RELOADABLE`] take effect on a reload. A changed
+//! The sections [`reloadable`](crate::binding::reloadable) names take effect
+//! on a reload: the registry, the onward credentials, and each section a
+//! binding declares as one a reload applies
+//! ([`Binding::sections`](crate::binding::Binding::sections)). A changed
 //! `profile` refuses the reload, so every decision the development profile
 //! admits reads the profile the process started with. Every other setting is
 //! compared with the value the process started with, and a change is logged
@@ -30,43 +33,26 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use ferrofed_engine::dispatch::SetupError;
 use ferrofed_identity::directory::error::FhirFormError;
-use ferrofed_identity::directory::mcsd::DirectoryReadError;
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::binding::{self, Role, RoleConflict};
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
-use crate::directory::DirectoryFailure;
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::metrics::ReloadResult;
 use crate::state::AppState;
 
-/// The configuration sections a reload applies.
-///
-/// `registry` is the registry document, its path and its form, `credentials`
-/// the outbound credentials of each endpoint, `dev` and `pixm` the
-/// resolver, `pdqm` the demographics step ahead of it, `xcpd` and `nl_gf` the
-/// localizer, and `dev` and `nl_gf` the consent pre-filter, all of which
-/// serve the resolution of the members. A
-/// registry read from a care services directory changes with the directory,
-/// never with a reload: a reload rebuilds the federation over the registry in
-/// place, and a change to `[registry.mcsd]` takes a restart.
-pub const RELOADABLE: [&str; 7] = [
-    "registry",
-    "credentials",
-    "dev",
-    "pixm",
-    "pdqm",
-    "xcpd",
-    "nl_gf",
-];
-
 /// Reloads the registry the server started with.
 ///
 /// It holds the settings the process started with, so a reload applies only
-/// the [`RELOADABLE`] sections and reports a change to any other one.
+/// the sections [`reloadable`](crate::binding::reloadable) names and reports
+/// a change to any other one. A registry a binding reads from its own
+/// source, such as a care services directory, changes with that source,
+/// never with a reload: a reload rebuilds the federation over the registry in
+/// place.
 pub struct Reloader {
     config: Option<PathBuf>,
     boot: Settings,
@@ -249,9 +235,9 @@ impl Reloader {
                 effective,
             ));
         };
-        // NOTE: no specification governs this: our own design; the directory, not
-        // the configuration, changes a directory's registry, so a reload keeps it.
-        let document = if effective.registry_directory.is_some() {
+        // NOTE: no specification governs this: our own design; the source, not the
+        // configuration, changes a binding source's registry, so a reload keeps it.
+        let document = if binding::sources_registry(&effective) {
             Some(Ok(running.snapshot().clone()))
         } else {
             read_registry(&effective)
@@ -357,12 +343,12 @@ impl Reloader {
     }
 }
 
-/// Where `settings` read the registry from: a document, a directory, or
-/// nowhere.
+/// Where `settings` read the registry from: a document, a binding's source,
+/// or nowhere.
 fn source_kind(settings: &Settings) -> (bool, bool) {
     (
         settings.registry_document.is_some(),
-        settings.registry_directory.is_some(),
+        binding::sources_registry(settings),
     )
 }
 
@@ -403,50 +389,24 @@ pub async fn on_hangup(reloader: Arc<Reloader>) {
     }
 }
 
-/// The settings a reload builds the federation from: the [`RELOADABLE`]
-/// sections of `fresh`, and every other setting as the process started.
+/// The settings a reload builds the federation from: the sections of `fresh`
+/// a reload applies, and every other setting as the process started, each
+/// binding keeping the boot's value of what it does not reload.
 fn effective(boot: &Settings, fresh: Settings) -> Settings {
-    Settings {
+    let mut effective = Settings {
         profile: boot.profile,
         server: boot.server.clone(),
         telemetry: boot.telemetry.clone(),
-        registry_document: fresh.registry_document,
-        registry_format: fresh.registry_format,
-        registry_directory: fresh.registry_directory,
         federation: boot.federation.clone(),
-        credentials: fresh.credentials,
-        dev: fresh.dev,
-        pixm: fresh.pixm,
-        // NOTE: no specification governs this: our own design; one forwarder
-        // drains each audit spool, so where the audit messages go takes a restart.
-        xcpd: fresh.xcpd.map(|mut xcpd| {
-            if let Some(started) = &boot.xcpd {
-                xcpd.audit = started.audit;
-                xcpd.audit_repository.clone_from(&started.audit_repository);
-            }
-            xcpd
-        }),
-        nl_gf: fresh.nl_gf,
-        // NOTE: no specification governs this: our own design; the identity feed
-        // outlives every federation a reload builds, so a change to it takes a restart.
-        pmir: None,
-        pdqm: fresh.pdqm,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
-        // NOTE: no specification governs this: our own design; one forwarder drains
-        // each audit spool, so where the audit records go takes a restart.
-        audit: boot.audit.clone(),
+        ..fresh
+    };
+    for binding in binding::compiled() {
+        binding.effective(boot, &mut effective);
     }
-}
-
-/// Whether `fresh` sets, unsets or changes `[pmir]`.
-fn pmir_changed(boot: &Settings, fresh: &Settings) -> bool {
-    match (&boot.pmir, &fresh.pmir) {
-        (Some(was), Some(now)) => !was.same_as(now),
-        (None, None) => false,
-        (Some(_), None) | (None, Some(_)) => true,
-    }
+    effective
 }
 
 /// Whether `fresh` names another stored-query store than the process
@@ -456,17 +416,6 @@ fn stored_queries_changed(boot: &Settings, fresh: &Settings) -> bool {
         (Some(was), Some(now)) => !was.same_as(now),
         (None, None) => false,
         (Some(_), None) | (None, Some(_)) => true,
-    }
-}
-
-/// Whether `fresh` sends the XCPD audit messages elsewhere than the process
-/// started with, while both configure the XCPD localizer.
-fn audit_changed(boot: &Settings, fresh: &Settings) -> bool {
-    match (&boot.xcpd, &fresh.xcpd) {
-        (Some(was), Some(now)) => {
-            was.audit != now.audit || was.audit_repository != now.audit_repository
-        }
-        _ => false,
     }
 }
 
@@ -487,20 +436,12 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
     shape(boot) != shape(fresh)
 }
 
-/// The keys outside [`RELOADABLE`] whose value in `fresh` differs from the
-/// one the process started with.
+/// The keys a reload does not apply whose value in `fresh` differs from the
+/// one the process started with: the core's, then each binding's.
 fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
     let (was, now) = (&boot.federation, &fresh.federation);
     let (booted, reread) = (&boot.telemetry, &fresh.telemetry);
-    [
-        (
-            "registry.mcsd",
-            match (&boot.registry_directory, &fresh.registry_directory) {
-                (Some(was), Some(now)) => !was.same_as(now),
-                (None, None) => false,
-                (Some(_), None) | (None, Some(_)) => true,
-            },
-        ),
+    let core = [
         ("signing", signing_changed(boot, fresh)),
         ("server.listen", boot.server.listen != fresh.server.listen),
         (
@@ -570,9 +511,6 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             was.demographic_endpoint != now.demographic_endpoint,
         ),
         ("stored_queries", stored_queries_changed(boot, fresh)),
-        ("xcpd.audit", audit_changed(boot, fresh)),
-        ("audit", boot.audit != fresh.audit),
-        ("pmir", pmir_changed(boot, fresh)),
         (
             "metrics.listen",
             boot.metrics.listen != fresh.metrics.listen,
@@ -581,13 +519,19 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             "metrics.otlp_endpoint",
             boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint,
         ),
-    ]
-    .into_iter()
-    .filter_map(|(key, changed)| changed.then_some(key))
-    .collect()
+    ];
+    core.into_iter()
+        .filter_map(|(key, changed)| changed.then_some(key))
+        .chain(
+            binding::compiled()
+                .iter()
+                .flat_map(|binding| binding.needs_restart(boot, fresh)),
+        )
+        .collect()
 }
 
-/// The class a refused federation is logged under.
+/// The class a refused federation is logged under: the core's own, or the
+/// class the binding whose error it is names.
 fn federation_class(error: &FederationError) -> &'static str {
     match error {
         FederationError::Registry { source, .. } => match **source {
@@ -598,31 +542,13 @@ fn federation_class(error: &FederationError) -> &'static str {
             FhirFormError::Read { .. } => "registry-unreadable",
             _ => "registry-invalid",
         },
-        FederationError::Directory(failure) => match &**failure {
-            DirectoryFailure::Read(DirectoryReadError::Exchange(error)) if error.exceeded() => {
-                "registry-budget"
-            }
-            DirectoryFailure::Read(DirectoryReadError::Exchange(_)) => "registry-unreadable",
-            DirectoryFailure::Read(_) => "registry-invalid",
-            _ => "registry-directory",
+        FederationError::Conflict(RoleConflict { role, .. }) => match role {
+            Role::Resolver => "resolvers",
+            Role::ConsentPrefilter => "consent-prefilter",
+            Role::Localizer => "localization",
+            _ => "bindings",
         },
-        FederationError::DevWithoutRegistry
-        | FederationError::DevTable(_)
-        | FederationError::DevCrossRef(_) => "dev-cross-reference",
-        FederationError::PixmWithoutRegistry
-        | FederationError::PixmMember { .. }
-        | FederationError::PixmNamespace(_)
-        | FederationError::Pixm(_) => "pixm",
-        FederationError::PdqmWithoutResolver
-        | FederationError::PdqmNamespace(_)
-        | FederationError::Pdqm(_) => "pdqm",
-        FederationError::TwoResolvers => "resolvers",
-        FederationError::TwoConsentPrefilters
-        | FederationError::MitzMember { .. }
-        | FederationError::MitzNamespace(_)
-        | FederationError::Mitz(_) => "consent-prefilter",
         FederationError::Localization(_) => "localization",
-        FederationError::Audit(_) => "audit",
         FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
         FederationError::DemographicWithoutRegistry
         | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",
@@ -634,8 +560,9 @@ fn federation_class(error: &FederationError) -> &'static str {
         | FederationError::Grant { .. } => "credentials",
         FederationError::Tls(_) => "tls",
         FederationError::Clients(_) => "node-clients",
-        FederationError::Transport(_) | FederationError::NutsClient { .. } => "http-client",
+        FederationError::Transport(_) => "http-client",
         FederationError::Unsigned => "signing",
+        _ => binding::class(error).unwrap_or("binding"),
     }
 }
 
@@ -649,9 +576,9 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{effective, needs_restart};
+    use crate::binding::ihe::xcpd::AuditDestination;
     use crate::config::Config;
     use crate::config::settings::Settings;
-    use crate::config::xcpd::AuditDestination;
 
     /// The settings of a development gateway whose XCPD audit messages go
     /// to `audit`, with the `[xcpd.audit_repository]` keys `repository`.

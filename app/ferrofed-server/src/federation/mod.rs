@@ -16,9 +16,6 @@
 
 mod build;
 pub mod error;
-mod mitz;
-mod pdqm;
-mod pixm;
 pub mod registry;
 
 use std::collections::BTreeSet;

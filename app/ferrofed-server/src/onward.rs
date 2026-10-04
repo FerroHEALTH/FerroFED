@@ -5,10 +5,10 @@
 //! or basic credentials, a provider that obtains a token with the OAuth 2.0
 //! client-credentials grant, or one that exchanges each verified caller's
 //! token (RFC 8693), each authenticated by a signed JWT client assertion
-//! (§13.1, N25), a provider that obtains a token with the Nuts grant of
-//! Annex B §B.4, one that obtains it under the FAPI 2.0 Security Profile, as
-//! the track of Annex B §B.4a does, and the `DPoP` key of a grant whose
-//! tokens are bound to one (RFC 9449).
+//! (§13.1, N25), one that obtains it under the FAPI 2.0 Security Profile, as
+//! the track of Annex B §B.4a does, the provider a binding's grant builds,
+//! such as the Nuts grant of Annex B §B.4, and the `DPoP` key of a grant
+//! whose tokens are bound to one (RFC 9449).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -17,11 +17,9 @@ use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::exchange::{Exchange, SharedOnBehalf};
 use ferrofed_engine::onward::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
-use ferrofed_engine::onward::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_engine::onward::provider::ClientCredentials;
 use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
 use ferrofed_registry::id::EndpointId;
-use nl_generic_functions::nuts_auth::NutsClient;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::settings::{Scheme, Settings};
@@ -98,16 +96,12 @@ pub(crate) fn onward(
                 }
                 continue;
             }
-            Scheme::Nuts(grant) => {
-                dpop.insert(endpoint.clone(), Arc::clone(grant.dpop()));
-                let provider: SharedCredentials = Arc::new(NutsCredentials::new(
-                    endpoint.clone(),
-                    NutsGrant::clone(grant),
-                    nuts_client(endpoint)?,
-                    settings.federation.budget.per_node(),
-                    Arc::new(SystemClock),
-                ));
-                credentials.insert(endpoint.clone(), provider);
+            Scheme::Binding(grant) => {
+                let provided = grant.provide(endpoint, settings)?;
+                if let Some(prover) = provided.dpop {
+                    dpop.insert(endpoint.clone(), prover);
+                }
+                credentials.insert(endpoint.clone(), provided.credentials);
                 continue;
             }
         };
@@ -200,19 +194,4 @@ fn fapi2(
             Arc::new(SystemClock),
         )))
     })
-}
-
-/// The client the Nuts grant of `endpoint` sends its requests through.
-///
-/// It follows no redirect, since the token request carries the gateway's
-/// credentials (no specification governs the client: our own design).
-fn nuts_client(endpoint: &EndpointId) -> Result<NutsClient, FederationError> {
-    reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map(NutsClient::new)
-        .map_err(|source| FederationError::NutsClient {
-            section: format!("credentials.{endpoint}.nuts"),
-            source,
-        })
 }

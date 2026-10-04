@@ -102,7 +102,8 @@ async fn the_credentials_reach_the_directory_and_no_rendering() -> TestResult {
         .registry_directory
         .as_ref()
         .ok_or("a directory is configured")?;
-    let (registry, _snapshot) = ferrofed_server::directory::DirectoryRegistry::open(directory)?;
+    let (registry, _snapshot) =
+        ferrofed_server::binding::ihe::mcsd::registry::DirectoryRegistry::open(directory)?;
     assert!(!format!("{registry:?}").contains(TOKEN));
     let sent = harness.authorizations().await;
     assert!(!sent.is_empty());

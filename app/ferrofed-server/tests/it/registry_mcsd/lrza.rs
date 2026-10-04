@@ -17,7 +17,7 @@
 
 use std::error::Error;
 
-use ferrofed_server::directory::RefreshOutcome;
+use ferrofed_server::binding::ihe::mcsd::registry::RefreshOutcome;
 use ferrofed_server::federation::error::FederationError;
 use ferrofed_server::localization::LocalizationError;
 use ferrofed_server::reload::ReloadError;

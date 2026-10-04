@@ -55,7 +55,7 @@ pub fn authentication(
             user: user.clone(),
             password: password.to_secret_string(),
         }),
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => Err(GrantRefused {
+        Some(Scheme::OAuth2(_) | Scheme::Fapi2(_) | Scheme::Binding(_)) => Err(GrantRefused {
             section: section.to_owned(),
         }),
     }
