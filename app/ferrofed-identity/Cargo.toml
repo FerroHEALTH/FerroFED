@@ -24,7 +24,7 @@ http.workspace = true
 # XCPD localizer (#85) over its ITI-55 client, with its audit messages sent
 # over ITI-20 (#418), and the identity lifecycle (#147) over its PMIR ITI-94
 # subscriber and ITI-93 feed reader.
-ihe-iti = { workspace = true, features = ["atna", "mcsd", "pixm", "pmir", "xcpd"] }
+ihe-iti = { workspace = true, features = ["atna", "balp", "mcsd", "pixm", "pmir", "xcpd"] }
 # The instant an ITI-91 refresh asks from, read off the directory's `Date`
 # (#86), and the time an ITI-20 syslog message is written at (#418).
 jiff.workspace = true

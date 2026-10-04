@@ -65,6 +65,8 @@ pub struct Settings {
     /// The gateway's signing keys and where they are published, when
     /// `[signing]` is set (§13.1, N25).
     pub signing: Option<SigningSettings>,
+    /// Where the audit records of the PIXm, mCSD and PMIR transactions go.
+    pub audit: crate::config::audit::AuditSettings,
 }
 
 /// The gateway's signing keys, resolved.
@@ -97,6 +99,9 @@ pub struct DirectorySettings {
     pub max_bytes: usize,
     /// The most Bundle entries one read or refresh may read.
     pub max_entries: usize,
+    /// Where the audit records of its ITI-90 searches and ITI-91 histories
+    /// go: `[audit]`, as the whole configuration resolves it.
+    pub audit: crate::config::audit::AuditSettings,
 }
 
 impl DirectorySettings {

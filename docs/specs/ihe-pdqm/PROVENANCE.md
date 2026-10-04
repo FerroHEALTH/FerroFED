@@ -9,7 +9,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Source: <https://packages.fhir.org/ihe.iti.pdqm/3.2.0>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/PDQm/3.2.0/>
 - Pin: package `ihe.iti.pdqm` version `3.2.0`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`
-- Fetched: 2026-10-02
+- Fetched: 2026-10-04
 - Upstream licence: Creative Commons Attribution 4.0 International
   (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
   left out;
@@ -18,12 +18,13 @@ change the pin in docs/VERSIONS.md and re-run the script.
   Committee, *Patient Demographics Query for Mobile (PDQm)* 3.2.0.
 - FHIR version: 4.0.1
 - Layout: the upstream paths inside the package, unchanged
-- Files: 8 of the package's 53, listed below
+- Files: 10 of the package's 53, listed below
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `14dc6eee3086cda0a4f54e181a77f65fa3abc40f1c1f4aec0636d3a58e3f2cb9`
+  `PROVENANCE.md` excluded): `8e7b1083e604e218d598ac002ba4c8285beace1dc20ccd440327e4957c28a06b`
 - Read by: #119 (the ITI-78 client of `crates/ihe-iti`, whose tests hold the
   query to the Supplier's Patient search parameters and decode the example
-  response Bundle and Patients)
+  response Bundle and Patients) and #486 (the ITI-78 audit record of
+  `crates/ihe-iti`, held to the Consumer's audit profile and its example)
 
 ## What is here
 
@@ -32,9 +33,11 @@ Demographics Consumer (Query) and Supplier capability statements, which list
 the Patient search parameters a Supplier processes, the Query Patient Resource
 Response Message profile of the `searchset` Bundle, the PDQm Patient profile,
 the ImplementationGuide, and the IG's examples of a response Bundle and two
-Patients. The package's other files serve no reader here: the ITI-119
-`$match` OperationDefinition, its parameter profiles, capability statements
-and examples, the BALP audit profiles and examples, the XML renderings, and the
+Patients, with the Consumer's ITI-78 audit profile, built on the BALP Patient
+Query pattern, and its example. The package's other files serve no reader
+here: the ITI-119 `$match` OperationDefinition, its parameter profiles,
+capability statements and examples, the Supplier's and the ITI-119 BALP audit
+profiles and examples, the XML renderings, and the
 registry's validation output. They are not taken.
 
 | File | sha256 |
@@ -43,7 +46,9 @@ registry's validation output. They are not taken.
 | `package/CapabilityStatement-IHE.PDQm.PatientDemographicsSupplier.json` | `b5a57396695b4ada78474d47e2a77b6d7f82f79a89a3f9d3ff4735fda885406f` |
 | `package/ImplementationGuide-ihe.iti.pdqm.json` | `05acdb5bf6b8e021b99b8fc845484c938dd3e2c4abba4e0c9b836979065c0c5f` |
 | `package/StructureDefinition-IHE.PDQm.Patient.json` | `d184b3cfb58b91eecb87e6ee865c7108a779a2efe942a580c166776d8d704549` |
+| `package/StructureDefinition-IHE.PDQm.Query.Audit.Consumer.json` | `52742d6b2081eda2a3589cc985c12d3ac345325456e5929001ca2bd8c3903453` |
 | `package/StructureDefinition-IHE.PDQm.QueryPatientResourceResponseMessage.json` | `0488cf89754f6c914463789758919bec63f3ce297dc6d11088c0eafe0f31f590` |
+| `package/example/AuditEvent-ex-auditPdqmQuery-consumer.json` | `9f6e1844440b6d2399204c1c6d701cd0106c2a847b9f4e9a26921c698ad97d38` |
 | `package/example/Bundle-ex-QueryPatientResourceResponseMessage.json` | `851a55358466f91e261ee90c3f03c3de605679f1b3d8abe19d082bf8da6a9f39` |
 | `package/example/Patient-ex-patient-mothers-maiden-name.json` | `3b8396d82d2cb858c0b2124d75809156ca4f516b8c74636098201f64546a3e09` |
 | `package/example/Patient-ex-patient.json` | `83f68fd6bf11e0efd8c12bea2e4536c4415c1ee77f22cfbc91cc30768d6f1014` |

@@ -9,8 +9,10 @@
 # whose Patient search parameters the client's query is held to, the Query
 # Patient Resource Response Message Bundle profile and the PDQm Patient profile,
 # the ImplementationGuide, and the IG's own response Bundle and Patient
-# examples, which the client's tests decode. The `$match` (ITI-119) artefacts
-# serve no reader here and are not taken. The package manifest is read for its
+# examples, which the client's tests decode, and the Consumer's ITI-78 BALP
+# audit profile and example, which the ITI-78 audit record of crates/ihe-iti
+# (feature `balp`, #486) is held to. The `$match` (ITI-119) artefacts serve no
+# reader here and are not taken. The package manifest is read for its
 # name, version and licence and left out of the tree (the dependency-manifest
 # rule of scripts/vendor/lib/corpus.sh).
 #
@@ -44,9 +46,10 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 [ -n "$want" ] || die "the pin names no package sha256"
 
 # The artefacts of the ITI-78 Mobile Patient Demographics Query transaction, at
-# their upstream paths inside the package. The ITI-119 `$match` operation, its
-# parameter profiles and examples, and the audit (BALP) profiles and examples
-# serve no reader here and are not taken.
+# their upstream paths inside the package, with the Consumer's ITI-78 audit
+# (BALP) profile and example. The ITI-119 `$match` operation, its parameter
+# profiles and examples, and the other audit profiles and examples serve no
+# reader here and are not taken.
 paths=(
   package/ImplementationGuide-ihe.iti.pdqm.json
   package/CapabilityStatement-IHE.PDQm.PatientDemographicsConsumerQuery.json
@@ -56,6 +59,8 @@ paths=(
   package/example/Bundle-ex-QueryPatientResourceResponseMessage.json
   package/example/Patient-ex-patient.json
   package/example/Patient-ex-patient-mothers-maiden-name.json
+  package/StructureDefinition-IHE.PDQm.Query.Audit.Consumer.json
+  package/example/AuditEvent-ex-auditPdqmQuery-consumer.json
 )
 
 tmp="$(mktemp -d)"
@@ -121,7 +126,8 @@ change the pin in docs/VERSIONS.md and re-run the script.
   \`PROVENANCE.md\` excluded): \`$digest\`
 - Read by: #119 (the ITI-78 client of \`crates/ihe-iti\`, whose tests hold the
   query to the Supplier's Patient search parameters and decode the example
-  response Bundle and Patients)
+  response Bundle and Patients) and #486 (the ITI-78 audit record of
+  \`crates/ihe-iti\`, held to the Consumer's audit profile and its example)
 
 ## What is here
 
@@ -130,9 +136,11 @@ Demographics Consumer (Query) and Supplier capability statements, which list
 the Patient search parameters a Supplier processes, the Query Patient Resource
 Response Message profile of the \`searchset\` Bundle, the PDQm Patient profile,
 the ImplementationGuide, and the IG's examples of a response Bundle and two
-Patients. The package's other files serve no reader here: the ITI-119
-\`\$match\` OperationDefinition, its parameter profiles, capability statements
-and examples, the BALP audit profiles and examples, the XML renderings, and the
+Patients, with the Consumer's ITI-78 audit profile, built on the BALP Patient
+Query pattern, and its example. The package's other files serve no reader
+here: the ITI-119 \`\$match\` OperationDefinition, its parameter profiles,
+capability statements and examples, the Supplier's and the ITI-119 BALP audit
+profiles and examples, the XML renderings, and the
 registry's validation output. They are not taken.
 
 | File | sha256 |

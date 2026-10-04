@@ -160,7 +160,7 @@ impl Federation {
                 development.clone().map(|it| -> Arc<dyn Resolver> { it })
             }
             (None, Some(section)) => {
-                pixm = Some(pixm_resolver(section, &snapshot)?);
+                pixm = Some(pixm_resolver(section, &settings.audit, &snapshot)?);
                 pixm.clone().map(|it| -> Arc<dyn Resolver> { it })
             }
         };
@@ -192,11 +192,8 @@ impl Federation {
         if let Some(namespace) = &settings.federation.default_namespace {
             context = context.with_default_namespace(namespace.clone());
         }
-        let dependencies =
-            Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some())
-                .with_consent(consent.is_some())
-                .with_localizer(localization.localizer().is_some())
-                .with_audit_repository(localization.repository().cloned());
+        let seams = (resolver.is_some(), consent.is_some());
+        let dependencies = dependencies(settings, &snapshot, seams, &localization)?;
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
         let federation = Self {
             id,
@@ -308,6 +305,26 @@ fn patient_bound(
         }
     }
     Ok(())
+}
+
+/// The health record of the members of `snapshot`, of the resolver and the
+/// consent pre-filter when `(resolver, consent)` say they are configured, of
+/// the localizer and its audit repository, and of the FHIR Feed trail the
+/// PIXm, mCSD and PMIR audit records of `settings` go to.
+fn dependencies(
+    settings: &Settings,
+    snapshot: &RegistrySnapshot,
+    (resolver, consent): (bool, bool),
+    localization: &LocalizationPolicy,
+) -> Result<Dependencies, FederationError> {
+    let feed = crate::audit::feed(&settings.audit).map_err(FederationError::Audit)?;
+    Ok(
+        Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver)
+            .with_consent(consent)
+            .with_localizer(localization.localizer().is_some())
+            .with_audit_repository(localization.repository().cloned())
+            .with_audit_feed(feed),
+    )
 }
 
 /// Every `[auth.issuer.patient]` binding of `settings`, with its key.

@@ -27,6 +27,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use ferrofed_engine::dispatch::Contact;
 use ferrofed_identity::atna::RepositoryAudit;
+use ferrofed_identity::balp::FeedAudit;
 use ferrofed_identity::consent::ConsentDecision;
 use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_identity::resolver::Resolution;
@@ -188,6 +189,9 @@ pub struct Dependencies {
     localizer: Option<AtomicU8>,
     /// The recorder of the audit repository, when one is configured.
     audit_repository: Option<Arc<RepositoryAudit>>,
+    /// The recorder of the FHIR Feed audit repository, when one is
+    /// configured.
+    audit_feed: Option<Arc<FeedAudit>>,
 }
 
 impl Dependencies {
@@ -204,7 +208,16 @@ impl Dependencies {
             consent: None,
             localizer: None,
             audit_repository: None,
+            audit_feed: None,
         }
+    }
+
+    /// Returns this record with the FHIR Feed audit repository `recorder`
+    /// sends to, when one is configured.
+    #[must_use]
+    pub fn with_audit_feed(mut self, recorder: Option<Arc<FeedAudit>>) -> Self {
+        self.audit_feed = recorder;
+        self
     }
 
     /// Returns this record with the audit repository `recorder` sends to,
@@ -306,6 +319,10 @@ impl Dependencies {
                 .audit_repository
                 .as_ref()
                 .map(|recorder| Observed::of_audit(&recorder.status())),
+            audit_feed: self
+                .audit_feed
+                .as_ref()
+                .map(|recorder| Observed::of_audit(&recorder.status())),
         }
     }
 }
@@ -341,8 +358,9 @@ pub struct Report {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity_registry: Option<Observed>,
     /// Why the PMIR Patient Identity Registry is not up: `unreachable`,
-    /// `refused`, `malformed`, or `unmanageable` after a create the gateway
-    /// cannot locate; absent while it is up, not yet asked, or not configured.
+    /// `refused`, `malformed`, `unmanageable` after a create the gateway
+    /// cannot locate, or `audit-failed` when an exchange's audit record could
+    /// not be stored; absent while it is up, not yet asked, or not configured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity_registry_fault: Option<RegistryFault>,
     /// Why the care services directory's last answer was not accepted:
@@ -355,6 +373,11 @@ pub struct Report {
     /// one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audit_repository: Option<Observed>,
+    /// The state of the audit repository the PIXm, mCSD and PMIR audit
+    /// records are posted to over the FHIR Feed, absent when none goes to
+    /// one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit_feed: Option<Observed>,
 }
 
 #[cfg(test)]

@@ -1,0 +1,227 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The audit recorders of the FHIR profiles' transactions.
+//!
+//! PIXm ITI-83, mCSD ITI-90 and ITI-91, and PMIR ITI-93 and ITI-94 are each
+//! recorded as the BALP `AuditEvent` its profile fixes (PIXm §2:3.83.5.1.1,
+//! mCSD §2:3.90.5.1 and §2:3.91.5.1, PMIR §2:3.93.5.1 and §2:3.94.5.1).
+//!
+//! [`FeedAudit`] sends each record to an ATNA Audit Record Repository over
+//! the ATX: FHIR Feed Option of ITI-20 (BALP §1:52.1.1.1; the `RESTful` ATNA
+//! supplement, ITI TF-2 §3.20.4.2). The record is stored in the spool and
+//! delivered from there in order by `ihe_iti`'s forwarder; it counts as
+//! recorded once it is stored, a repository that cannot be reached delays
+//! its delivery, and a spool that is full or cannot be written refuses the
+//! record, which fails the transaction closed, as the ITI-55 audit trail
+//! does.
+//!
+//! [`LogFeedAudit`] writes each record as a structured event at the
+//! [`AUDIT_TARGET`] log target, for a deployment
+//! that routes its log to its audit repository, without a patient identifier
+//! or the request that carries one.
+//!
+//! A record names the patient, so it leaves this module only for the spool
+//! and the repository connection; no log line and no error carries it.
+
+use std::fmt;
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
+
+use async_trait::async_trait;
+use ihe_iti::atna::feed::{FeedAddressError, FeedRepository};
+use ihe_iti::atna::forwarder::{Forwarder, Status};
+use ihe_iti::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer};
+use secrecy::{ExposeSecret as _, SecretString};
+use tokio::task::JoinHandle;
+use url::Url;
+
+use crate::xcpd::AUDIT_TARGET;
+
+/// The TLS material the gateway reaches a FHIR Feed repository with, beside
+/// the platform's trust roots: the ATNA secure channel authenticates both
+/// sides (ITI TF-2 §3.19).
+///
+/// `Debug` redacts the client identity, because [`SecretString`] does.
+#[derive(Debug, Clone, Default)]
+pub struct FeedTls {
+    /// The gateway's client certificate chain and private key, PEM.
+    pub identity: Option<SecretString>,
+    /// PEM trust roots the repository's certificate chains to.
+    pub roots: Option<String>,
+}
+
+/// Why a FHIR Feed repository could not be built.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum FeedConfigError {
+    /// The client identity does not read as a PEM certificate and key.
+    #[error("the audit repository client identity is no PEM certificate and key")]
+    Identity(#[source] reqwest::Error),
+    /// The trust roots do not read as PEM certificates.
+    #[error("the audit repository trust roots are no PEM certificates")]
+    Roots(#[source] reqwest::Error),
+    /// The HTTP client could not be built.
+    #[error("the HTTP client for the audit repository could not be built")]
+    Client(#[source] reqwest::Error),
+    /// The repository's FHIR base was refused.
+    #[error("the audit repository FHIR base was refused")]
+    Address(#[source] FeedAddressError),
+}
+
+/// Returns the FHIR Feed repository at `base`.
+///
+/// It is reached over `https`, or over clear text when `cleartext` is set,
+/// which a development deployment alone asks for; each request is bounded by
+/// `timeout`, and no redirect is followed, because a record names the
+/// patient.
+///
+/// # Errors
+///
+/// A [`FeedConfigError`] for TLS material that does not read, an HTTP
+/// client that cannot be built, or a base the feed refuses.
+pub fn feed_repository(
+    base: Url,
+    cleartext: bool,
+    tls: &FeedTls,
+    timeout: Duration,
+) -> Result<FeedRepository, FeedConfigError> {
+    let mut builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
+    if let Some(identity) = &tls.identity {
+        let identity = reqwest::Identity::from_pem(identity.expose_secret().as_bytes())
+            .map_err(FeedConfigError::Identity)?;
+        builder = builder.identity(identity);
+    }
+    if let Some(roots) = &tls.roots {
+        let roots = reqwest::Certificate::from_pem_bundle(roots.as_bytes())
+            .map_err(FeedConfigError::Roots)?;
+        builder = builder.tls_certs_merge(roots);
+    }
+    let http = builder.build().map_err(FeedConfigError::Client)?;
+    if cleartext {
+        FeedRepository::cleartext_for_development(base, http, timeout)
+    } else {
+        FeedRepository::new(base, http, timeout)
+    }
+    .map_err(FeedConfigError::Address)
+}
+
+/// The recorder over one FHIR Feed repository and its spool.
+pub struct FeedAudit {
+    forwarder: Arc<Forwarder>,
+    observer: Observer,
+    running: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl fmt::Debug for FeedAudit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FeedAudit")
+            .field("observer", &self.observer)
+            .field("status", &self.forwarder.status())
+            .finish_non_exhaustive()
+    }
+}
+
+impl FeedAudit {
+    /// The recorder that writes each record as `observer`, delivering
+    /// through `forwarder`.
+    #[must_use]
+    pub fn new(forwarder: Arc<Forwarder>, observer: Observer) -> Self {
+        Self {
+            forwarder,
+            observer,
+            running: Mutex::new(None),
+        }
+    }
+
+    /// Starts delivering the spooled records on the Tokio runtime the caller
+    /// runs on, unless a delivery is running already; without a runtime it
+    /// does nothing, and the next record starts it.
+    ///
+    /// A delivery started on a runtime that has since shut down has ended,
+    /// so it is started again: a read on a short-lived runtime of its own
+    /// never leaves the spool undelivered.
+    pub fn start(&self) {
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
+        if running.as_ref().is_some_and(|task| !task.is_finished()) {
+            return;
+        }
+        *running = Some(runtime.spawn(Arc::clone(&self.forwarder).run()));
+    }
+
+    /// What the spool holds and how the deliveries went.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        self.forwarder.status()
+    }
+}
+
+#[async_trait]
+impl AuditRecorder for FeedAudit {
+    async fn record(&self, exchange: Exchange) -> Result<(), AuditError> {
+        self.start();
+        let record = exchange
+            .audit_event(&self.observer)
+            .map_err(|error| AuditError(Box::new(error)))?;
+        self.forwarder
+            .submit(record.into_bytes())
+            .await
+            .map_err(|error| AuditError(Box::new(error)))
+    }
+}
+
+/// The recorder that writes each record as a structured `tracing` event at
+/// [`AUDIT_TARGET`].
+///
+/// The event carries the record's profile, subtypes, action, outcome and
+/// the other party's name, with the count of each kind of entity; it never
+/// carries a patient identifier, a patient reference or the request, which
+/// may name one. It accepts every record.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogFeedAudit;
+
+#[async_trait]
+impl AuditRecorder for LogFeedAudit {
+    async fn record(&self, exchange: Exchange) -> Result<(), AuditError> {
+        let subtypes: Vec<&str> = exchange
+            .kind
+            .subtypes
+            .iter()
+            .map(|subtype| subtype.code)
+            .collect();
+        let (direction, peer) = match &exchange.direction {
+            Direction::Sent { server } => ("sent", server.who.as_str()),
+            Direction::Received { client, .. } => ("received", client.who.as_str()),
+            _ => ("other", ""),
+        };
+        let (mut patients, mut queries, mut resources) = (0_usize, 0_usize, 0_usize);
+        for entity in &exchange.entities {
+            match entity {
+                Entity::Patient { .. } | Entity::PatientReference(_) => {
+                    patients = patients.saturating_add(1);
+                }
+                Entity::Query(_) => queries = queries.saturating_add(1),
+                _ => resources = resources.saturating_add(1),
+            }
+        }
+        tracing::info!(
+            target: AUDIT_TARGET,
+            profile = exchange.kind.profile,
+            subtypes = ?subtypes,
+            action = exchange.kind.action,
+            recorded = %exchange.recorded,
+            outcome = exchange.outcome.code(),
+            direction,
+            peer,
+            patients,
+            queries,
+            resources,
+            entities = "recorded, not logged",
+            "BALP audit record"
+        );
+        Ok(())
+    }
+}

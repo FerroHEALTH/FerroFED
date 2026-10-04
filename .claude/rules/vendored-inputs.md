@@ -23,18 +23,30 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   and the grammar `.g4` files (CC-BY-SA 3.0).
 - `docs/specs/ihe-pixm/`: the ITI-83 artefacts of the IHE PIXm 3.1.0 FHIR
   package (CC-BY-4.0): the `$ihe-pix` OperationDefinition, the Query
-  Parameters profiles, the capability statements and the IG's examples,
-  pinned by package version and tarball sha256.
+  Parameters profiles, the capability statements, the Consumer's audit
+  profile and the IG's examples, pinned by package version and tarball
+  sha256.
 - `docs/specs/ihe-pdqm/`: the ITI-78 artefacts of the IHE PDQm 3.2.0 FHIR
   package (CC-BY-4.0): the Consumer and Supplier capability statements, the
-  Query Patient Resource Response Message and Patient profiles and the IG's
-  examples, pinned by package version and tarball sha256.
+  Query Patient Resource Response Message and Patient profiles, the
+  Consumer's audit profile and the IG's examples, pinned by package version
+  and tarball sha256.
 - `docs/specs/ihe-mcsd/`: the ITI-90 and ITI-91 artefacts of the IHE mCSD
   4.0.0 FHIR package (CC-BY-4.0): the Directory, Query Client and Update
   Client capability statements, the Organization, Endpoint and Location
-  profiles, the endpoint type code system and value sets and the IG's
-  Organization and Endpoint examples, pinned by package version and tarball
+  profiles, the endpoint type code system and value sets, the Query and
+  Updates audit profiles and the IG's Organization, Endpoint and audit
+  examples, pinned by package version and tarball sha256.
+- `docs/specs/ihe-balp/`: the RESTful Query, Read, Create and Delete
+  patterns of the IHE Basic Audit Log Patterns 1.1.4 FHIR package
+  (CC-BY-4.0), the profiles' audit records are built on, with the Audit
+  Creator and Audit Record Repository capability statements and the IG's
+  client-side example of a search, pinned by package version and tarball
   sha256.
+- `docs/specs/ihe-atna/`: the Record Audit Event [ITI-20] page of the IHE
+  ITI Technical Framework Volume 2 (Revision 20.2) with its figure, and the
+  RESTful ATNA supplement (Rev. 3.6), IHE International's own text under
+  General Introduction §9, each pinned by its sha256.
 - `docs/specs/nl-gf/`: the source of the Netherlands Generic Functions IG
   `fhir.nl.gf` 0.3.0 (EUPL-1.2): the localization, consent, care services
   and identification pages, their FSH profiles, capability statements and

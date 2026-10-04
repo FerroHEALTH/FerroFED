@@ -18,13 +18,15 @@ change the pin in docs/VERSIONS.md and re-run the script.
   Committee, *Patient Master Identity Registry (PMIR)* 1.6.0.
 - FHIR version: 4.0.1
 - Layout: the upstream paths inside the package, unchanged
-- Files: 21 of the package's 87, listed below
+- Files: 29 of the package's 87, listed below
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `9b51017fcbaf6eec6846c91972407841c5163936348d910b9778099d6cd40069`
+  `PROVENANCE.md` excluded): `5370ae99fe47215e2dcae2d42b1949b20c587627c10b89f8499fb145364e0fd1`
 - Read by: #147 (the ITI-94 subscriber and the ITI-93 feed reader of
   `crates/ihe-iti`, whose tests decode the example message Bundles and hold
   the subscription and the feed response to the profiles, and the harness
-  Patient Identity Registry of `tools/ferrofed-testkit`)
+  Patient Identity Registry of `tools/ferrofed-testkit`) and #469 (the
+  ITI-93 and ITI-94 audit records of `crates/ihe-iti`, held to the Feed and
+  Subscription audit profiles and their examples)
 
 ## What is here
 
@@ -35,8 +37,12 @@ the message Bundle, history Bundle, MessageHeader, MessageHeader response and
 merged Patient profiles, the Subscription and Subscription request profiles,
 the ImplementationGuide, and the IG's examples of the create, update, delete
 and merge message Bundles, a response MessageHeader and the two
-Subscriptions. The package's other files serve no reader here: the BALP audit
-profiles and examples, the related-person profiles and examples, the
+Subscriptions, with the audit records of the two transactions (§2:3.93.5.1,
+§2:3.94.5.1): the Feed audit profile and the Consumer's example, and the
+Subscription Create, Read and Delete audit profiles and the Subscriber's
+examples. The package's other files serve no reader here: the Subscription
+Update audit profile and the other BALP audit examples, the related-person
+profiles and examples, the
 standalone history Bundle and Patient examples, which the message Bundle
 examples taken here inline, the OpenAPI and XML renderings, and the registry's
 validation output. They are not taken.
@@ -50,13 +56,21 @@ validation output. They are not taken.
 | `package/ImplementationGuide-ihe.iti.pmir.json` | `e444ef5502e4870413152fe0982ea23b904b4274d7cdc76daa6fb64f715d026d` |
 | `package/MessageDefinition-IHE.PMIR.MessageDefinition.Response.json` | `0da4d5bcc6dd34a0712d84d796aaf1c8f80cd1d1416c280e417e045152d5665a` |
 | `package/MessageDefinition-IHE.PMIR.MessageDefinition.json` | `de2170c3047f68185ba6c07251e87f9feb44ee9bc1d2b4418572102f3056db7c` |
+| `package/StructureDefinition-IHE.PMIR.Audit.Subscription.Create.json` | `b182b1000316e34f2f3e0e0c43628e11dd8cdbab26b1455b0cdf3ac9718eacbf` |
+| `package/StructureDefinition-IHE.PMIR.Audit.Subscription.Delete.json` | `66aaa37cfe2835cac9901ffb9f565db1263ef0e727d325587415de649f6e88f4` |
+| `package/StructureDefinition-IHE.PMIR.Audit.Subscription.Read.json` | `37ed29e9bbeae27d204b4002a80d11f8b32afdbab263a49d87e50446406ad318` |
 | `package/StructureDefinition-IHE.PMIR.Bundle.History.json` | `88fd05bfe3e2e1ec28312de304b9f003db03323755d0cdc0b2843f4a3c785fe8` |
 | `package/StructureDefinition-IHE.PMIR.Bundle.json` | `d664d22f6c472ed569721be5406974a5b76a7de7088062714e643d7e9bc22e3b` |
+| `package/StructureDefinition-IHE.PMIR.Feed.Audit.json` | `fa9ff77d60a7659c11e7a8508e63a8d976769e23224261cc33c03193ca90567c` |
 | `package/StructureDefinition-IHE.PMIR.MessageHeader.Response.json` | `9d40d477a9a922614bdf2869cab06d6a7a8befd8ed3a174e947104fe717abffe` |
 | `package/StructureDefinition-IHE.PMIR.MessageHeader.json` | `edc788acb8f5a7ebb224e200387e995c53cafeed7801bfa9c68d71055bf2f756` |
 | `package/StructureDefinition-IHE.PMIR.Patient.Merge.json` | `38b590ebe68b7c42d1f82fb2b12f1e0b7b7ebbf241546aabd8619d2bf00d68d4` |
 | `package/StructureDefinition-IHE.PMIR.Subscription.Request.json` | `978e2ecd778a37613bc8de49c72106e0b073f084f1a99824261370f1cf1a1ca8` |
 | `package/StructureDefinition-IHE.PMIR.Subscription.json` | `9b993f76527ceaebd3e7a1f0bbd28600aaec75644f88ad3164fc22795beb0e69` |
+| `package/example/AuditEvent-ex-auditPmirFeed-consumer.json` | `505712635ef541a227af3d7fd09e6d231788d2eaaa5fd05561ff87f6181caf1a` |
+| `package/example/AuditEvent-ex-auditPmirSubscription-subscriber-create.json` | `649fff0569b6cd07ffbd19afecef0497d442dccd68a7eb8e86f21bbab98e70e2` |
+| `package/example/AuditEvent-ex-auditPmirSubscription-subscriber-delete.json` | `ce6e6253f58d123f94c772085ad6fed607d022064b0fe33159d743d0349f1bd0` |
+| `package/example/AuditEvent-ex-auditPmirSubscription-subscriber-read.json` | `89ac10caaec48f1b04853c2af0beea60159662b1f4ea093782aed893e0b09356` |
 | `package/example/Bundle-ex-PMIRBundleCreate.json` | `07081c55732b390b80c7533828b4808ca601c55b7bcc1e3ae67427a6d29aa3af` |
 | `package/example/Bundle-ex-PMIRBundleDelete.json` | `b18ef3da015f688d7cd13fe1ff34c6300fba278cba944ee9489087bd22d1716f` |
 | `package/example/Bundle-ex-PMIRBundleMerge.json` | `56327f5cb3c268e72e4b274918f60aa066b8090af8560759fbdeb9b937012e1c` |

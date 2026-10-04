@@ -9,8 +9,10 @@
 # OperationDefinition, the Query Parameters In and Out profiles, the Consumer,
 # Manager and Source capability statements, the ImplementationGuide, the IG's
 # own ITI-83 request, response and error examples, which the client's tests
-# decode, and the ITI-104 Patient Identity Feed's Patient profiles and example
-# Patients, which the harness Manager's feed is held to. The package manifest is
+# decode, the ITI-104 Patient Identity Feed's Patient profiles and example
+# Patients, which the harness Manager's feed is held to, and the ITI-83
+# Consumer's BALP audit profile and example, which the ITI-83 audit record of
+# crates/ihe-iti (feature `balp`, #486) is held to. The package manifest is
 # read for its name, version and licence and left out of the tree (the
 # dependency-manifest rule of scripts/vendor/lib/corpus.sh).
 #
@@ -45,7 +47,8 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 
 # The artefacts of the ITI-83 Get Corresponding Identifiers and ITI-104 Patient
 # Identity Feed FHIR transactions, at their upstream paths inside the package.
-# The audit (BALP) profiles and examples serve no reader here and are not taken.
+# The Consumer's audit (BALP) profile and example are taken; the Manager's and
+# the ITI-104 audit profiles and examples serve no reader here and are not.
 paths=(
   package/ImplementationGuide-ihe.iti.pixm.json
   package/OperationDefinition-IHE.PIXm.pix.json
@@ -69,6 +72,8 @@ paths=(
   package/example/Patient-Patient-MohrAlissa-Red.json
   package/example/Patient-Patient-MohrMaidenResolvedByMohrMalice-Red.json
   package/example/Patient-ex-patient.json
+  package/StructureDefinition-IHE.PIXm.Query.Audit.Consumer.json
+  package/example/AuditEvent-ex-auditPixmQuery-consumer.json
 )
 
 tmp="$(mktemp -d)"
@@ -136,7 +141,9 @@ change the pin in docs/VERSIONS.md and re-run the script.
   examples and hold the request and response to the OperationDefinition) and
   #47 (the harness PIX Manager of \`tools/ferrofed-testkit\`, whose ITI-104 feed
   accepts the example Patients and holds every fed Patient to the Patient
-  profile, and whose ITI-83 answers are held to the OperationDefinition)
+  profile, and whose ITI-83 answers are held to the OperationDefinition) and
+  #486 (the ITI-83 audit record of \`crates/ihe-iti\`, held to the Consumer's
+  audit profile and its example)
 
 ## What is here
 
@@ -146,9 +153,12 @@ and Out profiles, the Consumer and Manager capability statements, and the
 IG's examples of an ITI-83 request, a response and the not-found error. The
 artefacts of ITI-104, Patient Identity Feed FHIR: the Source capability
 statement, the Patient profile and its birth-date variant, and the IG's
-example Patients. The package's other files serve no reader here: the BALP
-audit profiles and examples, the Schematron renderings, the OpenAPI renderings
-and the registry's \`.index.db\`, a SQLite file. They are not taken.
+example Patients. The audit record of ITI-83 as the Consumer records it
+(§2:3.83.5.1.1): the PIXm Query Consumer audit profile, built on the BALP
+Patient Query pattern, and its example. The package's other files serve no
+reader here: the Manager's and the ITI-104 BALP audit profiles and examples,
+the Schematron renderings, the OpenAPI renderings and the registry's
+\`.index.db\`, a SQLite file. They are not taken.
 
 | File | sha256 |
 |---|---|$rows

@@ -123,6 +123,22 @@ bearer_token_file = "/run/secrets/ferrofed/pix-token"
 # [pixm.namespaces]
 # "2.999.1" = "urn:oid:2.999.1"
 
+# Where the audit record of each PIXm, mCSD and PMIR transaction goes, as the
+# BALP AuditEvent each profile defines: "log" writes it to the ferrofed::audit
+# log target without a patient identifier; "repository" posts it to your ATNA
+# Audit Record Repository over the FHIR Feed of ITI-20, from a spool that
+# compose.yaml mounts at /var/lib/ferrofed.
+# https://ferrofed.eu/docs/operate/audit.html
+[audit]
+destination = "log"
+#
+# [audit.repository]
+# url = "https://arr.example.org/fhir"          # EDIT
+# hostname = "gateway.example.org"              # EDIT
+# spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+# client_identity_file = "/run/secrets/ferrofed/atna-client.pem"
+# trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
+
 # Or localize through IHE XCPD responding gateways, with
 # federation.node_selection = "localized", and send each exchange's audit
 # message to your ATNA Audit Record Repository over ITI-20. That message

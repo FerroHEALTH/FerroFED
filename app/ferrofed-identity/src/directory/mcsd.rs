@@ -226,6 +226,18 @@ impl DirectorySource {
         })
     }
 
+    /// This source, every ITI-90 search and ITI-91 history of which is
+    /// recorded through `recorder` as the mCSD audit record (§2:3.90.5.1,
+    /// §2:3.91.5.1).
+    ///
+    /// A read or a refresh whose record the recorder refuses fails, and the
+    /// registry in place stays.
+    #[must_use]
+    pub fn audited(mut self, recorder: std::sync::Arc<dyn ihe_iti::balp::AuditRecorder>) -> Self {
+        self.client = self.client.audited(recorder);
+        self
+    }
+
     /// Reads the members from the directory with ITI-90 and checks them as a
     /// registry, within the deadline and the caps.
     ///

@@ -58,6 +58,16 @@ used by the gateway; its ITI-78 client is a capability of `crates/ihe-iti`
 for other callers (#119), vendored with it. The versions are what the FHIR
 package registry listed as latest on 2026-10-01.
 
+The FHIR profiles audit each transaction as a FHIR `AuditEvent` built on the
+IHE Basic Audit Log Patterns (BALP), which travel to the Audit Record
+Repository over the ATX: FHIR Feed Option of ITI-20 the RESTful ATNA
+supplement defines (#486). BALP is vendored as a FHIR package, each profile's
+audit profiles with its own package, and the ATNA text (the ITI-20 page of
+Volume 2 and the RESTful ATNA supplement, IHE International's own text under
+General Introduction ch. 9, which refers to DICOM PS3.15 by link) by the
+sha256 of each file, since neither carries a revision in its URL. BALP 1.1.4
+is what the FHIR package registry listed as latest on 2026-10-04.
+
 | Binding | Package | Latest on 2026-10-01 |
 |---|---|---|
 | PIXm (ITI-83, ITI-104) | `ihe.iti.pixm` | 3.1.0, vendored by #42 (the corpus table below) |
@@ -65,7 +75,9 @@ package registry listed as latest on 2026-10-01.
 | PMIR (ITI-93, ITI-94) | `ihe.iti.pmir` | 1.6.0, vendored by #147 (the corpus table below) |
 | mCSD (ITI-90, ITI-91) | `ihe.iti.mcsd` | 4.0.0, vendored by #86 (the corpus table below) |
 | XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | Vol 2 Rev 20.1 (2024-12-12, Final Text) |
-| ATNA (ITI-20, syslog with the DICOM message) | the IHE ITI Technical Framework, cited and not vendored, with DICOM PS3.15 Annex A.5 (NEMA, reproduction by permission only) and RFC 5424 and RFC 5425 | Vol 2 Rev 20.1 §3.20; no 2024-25 change proposal touched ITI-20, so Rev 20.2's text is the same |
+| ATNA (ITI-20, syslog with the DICOM message) | the IHE ITI Technical Framework, with DICOM PS3.15 Annex A.5 (NEMA, reproduction by permission only, cited and not vendored) and RFC 5424 and RFC 5425 | Vol 2 Rev 20.2 §3.20 (2025-11-11, Final Text), vendored by #486 (the corpus table below) |
+| ATNA (ITI-20, the ATX: FHIR Feed Option) | the IHE ITI Technical Framework Supplement *Add RESTful ATNA*, no FHIR package | Rev 3.6 (2025-11-25, Trial Implementation), vendored by #486 (the corpus table below) |
+| BALP (the `AuditEvent` patterns) | `ihe.iti.balp` | 1.1.4, vendored by #486 (the corpus table below) |
 | IUA (ITI-71, ITI-72) | the IHE ITI Technical Framework Supplement, no FHIR package | Rev 2.5 (2026-06-18, Trial Implementation), vendored by #414 (the corpus table below) |
 | Netherlands Generic Functions | `fhir.nl.gf` | 0.3.0, as Annex B names it; released as a git tag with no package on the registry, so #87 vendors its source (the corpus table below) |
 | Mitz closed authorization question (Annex B §B.6) | VZVZ architecture documents, no package and no licence stated | Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2 (2024-05-27), pinned and not redistributed by #475 (the corpus table below) |
@@ -90,6 +102,9 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
 | IHE PMIR FHIR package | `ihe.iti.pmir` version `1.6.0` from `packages.fhir.org`, tarball sha256 `ec9d25fc64ac2f3087f921c14c0da56afc7e794caa80298db3f130bc0a40fe70`, the ITI-93 and ITI-94 artefacts | `scripts/vendor/ihe-pmir.sh`, `docs/specs/ihe-pmir/PROVENANCE.md` |
 | IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
+| IHE BALP FHIR package | `ihe.iti.balp` version `1.1.4` from `packages.fhir.org`, tarball sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90`, the RESTful Query, Read, Create and Delete patterns | `scripts/vendor/ihe-balp.sh`, `docs/specs/ihe-balp/PROVENANCE.md` |
+| IHE ITI-20 Record Audit Event | `profiles.ihe.net/ITI/TF/Volume2/ITI-20.html`, Revision 20.2, page sha256 `881c7d6423fdf5ecaf4f9f50f8d25be61c3ed8ef97c87eff9591bd7fdf51570d` and its figure `media/Figure_3.20.4-1.png` sha256 `7aba1a2437e3492202460e150a6dda85b8a1886035bd2aa8daa4c892a579b734` | `scripts/vendor/ihe-atna.sh`, `docs/specs/ihe-atna/PROVENANCE.md` |
+| IHE RESTful ATNA supplement | `IHE_ITI_Suppl_RESTful-ATNA.pdf` from `www.ihe.net`, Rev. 3.6, sha256 `d8451a4a0d951662b6a04b745084c33afff6196db5647f2cf79d9149dfa7265a` | `scripts/vendor/ihe-atna.sh`, `docs/specs/ihe-atna/PROVENANCE.md` |
 | Netherlands Generic Functions IG source | `nuts-foundation/nl-generic-functions-ig` tag `v0.3.0`, commit `5367430787042c218996f11570f904bd3cd37a83`, the source of package `fhir.nl.gf` version `0.3.0`: the localization, consent, care services and identification pages with their FSH profiles, capability statements and examples | `scripts/vendor/nl-gf.sh`, `docs/specs/nl-gf/PROVENANCE.md` |
 | Mitz closed authorization question | pin-set digest `1f0196ab826e5093f6f7b8cbb935b106c22e19b6f9b246d4cce8c157602a14cd` over the VZVZ Confluence page `828314367` (space `MA11`, "Bijlage Architectuurdocumenten"), attachment version `1` of each document: `VZVZ_Mitz_Implementatiehandleiding_OpenGesloten_v3.8.2.pdf` sha256 `a5ce8f0d7eba8969a395a8560cf69f9e359f9da4c76145adc0748b9907ac0cf3`, `VZVZ_Mitz_PvE_AMC_Aansluiting_Mitz-connector_v3.8.1.ad1.pdf` sha256 `b1f18b48969475ce969472299179b37663cdcf67b067e9275532e0fa35bb59cb`, `VZVZ_Mitz_Implementatiehandleiding_Berichtauthenticatie_v3.8.1.ad1.pdf` sha256 `9659bdcd20a4deebc699357a455aaca7b3643c78a53b078329edcb899ef02f01`; no licence is stated, so the documents are pinned and fetched into the git-ignored `.vendor-cache/mitz/`, never committed | `scripts/vendor/mitz.sh`, `docs/specs/mitz/PROVENANCE.md` |
 

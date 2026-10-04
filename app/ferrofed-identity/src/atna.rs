@@ -16,13 +16,14 @@
 //! log line and no error carries it.
 
 use std::fmt;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
 use ihe_iti::atna::forwarder::{Forwarder, Status};
 use ihe_iti::atna::message::{AccessPoint, AuditSource};
 use ihe_iti::atna::syslog::Sender;
 use ihe_iti::xcpd::audit::{AuditError, AuditEvent, AuditRecorder};
+use tokio::task::JoinHandle;
 
 /// The recorder over one repository and its spool.
 pub struct RepositoryAudit {
@@ -30,7 +31,7 @@ pub struct RepositoryAudit {
     sender: Sender,
     source: AuditSource,
     host: AccessPoint,
-    running: OnceLock<()>,
+    running: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl fmt::Debug for RepositoryAudit {
@@ -66,18 +67,25 @@ impl RepositoryAudit {
                 type_code,
                 id: hostname,
             },
-            running: OnceLock::new(),
+            running: Mutex::new(None),
         }
     }
 
-    /// Starts delivering the spooled messages, once, when a Tokio runtime is
-    /// running; otherwise the first recorded event starts it.
+    /// Starts delivering the spooled messages on the Tokio runtime the caller
+    /// runs on, unless a delivery is running already; without a runtime it
+    /// does nothing, and the next recorded event starts it.
+    ///
+    /// A delivery started on a runtime that has since shut down has ended,
+    /// so it is started again: the spool is never left undelivered.
     pub fn start(&self) {
-        if tokio::runtime::Handle::try_current().is_ok() {
-            self.running.get_or_init(|| {
-                drop(tokio::spawn(Arc::clone(&self.forwarder).run()));
-            });
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
+        if running.as_ref().is_some_and(|task| !task.is_finished()) {
+            return;
         }
+        *running = Some(runtime.spawn(Arc::clone(&self.forwarder).run()));
     }
 
     /// What the spool holds and how the deliveries went.

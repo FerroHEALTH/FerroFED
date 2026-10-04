@@ -63,6 +63,9 @@ pub enum RegistryFault {
     /// base, which the gateway can neither read nor delete; it creates no
     /// other until a restart.
     Unmanageable,
+    /// The audit record of an exchange with the Registry could not be
+    /// stored, so its answer was not used (PMIR §2:3.94.5.1).
+    AuditFailed,
 }
 
 impl RegistryFault {
@@ -72,7 +75,9 @@ impl RegistryFault {
     pub const fn observed(self) -> Observed {
         match self {
             Self::Unreachable => Observed::Down,
-            Self::Refused | Self::Malformed | Self::Unmanageable => Observed::Failing,
+            Self::Refused | Self::Malformed | Self::Unmanageable | Self::AuditFailed => {
+                Observed::Failing
+            }
         }
     }
 }
@@ -129,6 +134,7 @@ fn fault_of(message: &'static str, error: &SubscribeError) -> RegistryFault {
     match error {
         SubscribeError::Rejected { .. } => RegistryFault::Refused,
         SubscribeError::Malformed(_) => RegistryFault::Malformed,
+        SubscribeError::Audit(_) => RegistryFault::AuditFailed,
         _ => RegistryFault::Unreachable,
     }
 }

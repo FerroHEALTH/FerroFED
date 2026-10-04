@@ -57,6 +57,24 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   with an XACML 3.0 decision query over mutual TLS. VZVZ states no licence
   for the document, so `scripts/vendor/mitz.sh` pins it by sha256 and
   fetches it into an ignored directory (#475).
+- Every IHE transaction the gateway makes or receives is audited as its
+  profile requires. The PIXm ITI-83 query, the mCSD ITI-90 search and
+  ITI-91 history, the PMIR ITI-93 message received and each ITI-94
+  subscription create, read and delete are recorded as their profile's BALP
+  `AuditEvent` and, under the new `[audit]` table, posted to an ATNA Audit
+  Record Repository over the FHIR Feed of ITI-20 (`destination =
+  "repository"`) or written to the `ferrofed::audit` log target without a
+  patient identifier (`"log"`). Each record is stored in a spool before it
+  is delivered: a repository that is down delays the records, one that
+  refuses a record has it quarantined, and a record the spool cannot store
+  fails its transaction closed, as the ITI-55 audit does: an ITI-83 query
+  fails `424`, a directory read is refused, an ITI-93 message is answered
+  `503` unapplied. The repository shows on `GET /health/dependencies` as
+  `audit_feed`, and the identity Registry's fault can be `audit-failed`.
+  `ihe-iti` 0.0.18 adds the `balp` feature, with an audited mode for its
+  PIXm, PDQm, mCSD and PMIR clients. BALP 1.1.4, the RESTful ATNA
+  supplement, the ITI-20 page and each profile's audit profiles are vendored
+  (#486, #469).
 - The registry keeps the identifiers a care services directory publishes
   for each organisation (mCSD `Organization.identifier`), and the NVI
   localizer reads its custodian map from them: each member organisation's
@@ -440,7 +458,11 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 - The container image names FerroHEALTH, the organisation that distributes
   it, as its OCI `vendor`, and FerroHEALTH as its `authors`, in the image
   labels and in the release index annotations (#490).
-
+- A production gateway with `[pixm]`, `[registry.mcsd]` or `[pmir]` set
+  needs `[audit] destination`: `config check`, `serve` and a reload refuse
+  the configuration without it, naming `audit.destination`, and refuse
+  `"off"` outside development. Set `destination = "log"` to keep a
+  deployment's behaviour while it adds an Audit Record Repository (#486).
 - The quickstart's node database roles have new development passwords (#452):
   each role's password is its name followed by `_example`
   (`ferroehr_a_example`), set by `docker/postgres/20-ferrofed-node-databases.sh`
@@ -536,6 +558,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- The ITI-55 audit trail starts its delivery again when the runtime it was
+  started on has ended, so audit messages recorded after that are delivered
+  rather than left in the spool (#486).
 - A `[[pixm.manager]]` URL that is not `https` outside
   `profile = "development"` is refused while the configuration loads, as an
   XCPD gateway URL already was, naming its key; before, only `serve`,

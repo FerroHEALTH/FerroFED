@@ -13,6 +13,7 @@ use axum::response::{IntoResponse, Response};
 use ferrofed_identity::lifecycle;
 use http::header::{CONTENT_TYPE, WWW_AUTHENTICATE};
 use http::{HeaderMap, HeaderValue, StatusCode};
+use ihe_iti::balp::AuditError;
 use ihe_iti::pmir::error::FeedError;
 use ihe_iti::pmir::feed::{EventKind, Feed, ResponseId, refusal};
 
@@ -50,10 +51,20 @@ pub async fn feed(State(state): State<Arc<AppState>>, headers: HeaderMap, body: 
     let media = headers
         .get(CONTENT_TYPE)
         .and_then(|value| value.to_str().ok());
+    // NOTE: PMIR §2:3.93.5.1: the Consumer records each message; one whose record
+    // is refused is neither applied nor answered, so the Supplier sends it again.
     let message = match Feed::read(media, &body) {
         Ok(message) => message,
-        Err(error) => return refused(&state, &error),
+        Err(error) => {
+            if let Err(failure) = identity_feed.record(None).await {
+                return unrecorded(&state, &failure);
+            }
+            return refused(&state, &error);
+        }
     };
+    if let Err(failure) = identity_feed.record(Some(&message)).await {
+        return unrecorded(&state, &failure);
+    }
     let Some(federation) = state.federation() else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
@@ -103,6 +114,20 @@ fn refused(state: &AppState, error: &FeedError) -> Response {
         Ok(bytes) => fhir(status, bytes),
         Err(_unwritable) => status.into_response(),
     }
+}
+
+/// The answer to a message whose audit record could not be stored: `503`,
+/// with nothing applied, so the Supplier sends it again.
+fn unrecorded(state: &AppState, failure: &AuditError) -> Response {
+    tracing::error!(
+        target: TARGET,
+        event = "identity-feed-refused",
+        reason = "audit-failed",
+        error = crate::chain(failure),
+        "the audit record of an ITI-93 message could not be stored, and nothing was applied"
+    );
+    state.metrics().identity_feed(FeedResult::AuditFailed);
+    StatusCode::SERVICE_UNAVAILABLE.into_response()
 }
 
 /// `bytes` as a FHIR JSON answer of `status`.

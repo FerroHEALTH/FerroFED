@@ -29,6 +29,7 @@ use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::header::{AUTHORIZATION, HeaderMap};
+use ihe_iti::balp::AuditRecorder;
 use ihe_iti::pixm::PixmClient;
 use ihe_iti::pixm::error::{InvalidInput, PixmError};
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
@@ -233,6 +234,26 @@ impl PixmResolver {
             namespaces,
             shared: Mutex::new(Vec::new()),
         })
+    }
+
+    /// This resolver, every ITI-83 exchange of which is recorded through
+    /// `recorder` as the PIXm Query Consumer audit record (§2:3.83.5.1.1).
+    ///
+    /// An exchange whose record the recorder refuses fails, so the member's
+    /// resolution is [`Resolution::Unavailable`] and the query fails closed.
+    #[must_use]
+    pub fn audited(mut self, recorder: &Arc<dyn AuditRecorder>) -> Self {
+        self.managers = self
+            .managers
+            .into_iter()
+            .map(|manager| {
+                Arc::new(Manager {
+                    client: manager.client.clone().audited(Arc::clone(recorder)),
+                    members: manager.members.clone(),
+                })
+            })
+            .collect();
+        self
     }
 
     /// The PIX assigning authority `namespace` stands for.

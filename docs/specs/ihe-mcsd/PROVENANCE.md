@@ -9,7 +9,7 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Source: <https://packages.fhir.org/ihe.iti.mcsd/4.0.0>, the FHIR package registry's copy of the IG published at
   <https://profiles.ihe.net/ITI/mCSD/4.0.0/>
 - Pin: package `ihe.iti.mcsd` version `4.0.0`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`
-- Fetched: 2026-10-03
+- Fetched: 2026-10-04
 - Upstream licence: Creative Commons Attribution 4.0 International
   (`CC-BY-4.0`, the `license` of the package manifest, listed under What is
   left out;
@@ -18,13 +18,15 @@ change the pin in docs/VERSIONS.md and re-run the script.
   Committee, *Mobile Care Services Discovery (mCSD)* 4.0.0.
 - FHIR version: 4.0.1
 - Layout: the upstream paths inside the package, unchanged
-- Files: 21 of the package's 114, listed below
+- Files: 25 of the package's 114, listed below
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `3bad4f6ee360f86321ef633a07c0e32c385901034539f2654eef03e4d0fabf27`
+  `PROVENANCE.md` excluded): `cc7d601f4f64cba29ed6575a31225a69858aa26f5b5884c391138bd52b9c6c27`
 - Read by: #86 (the ITI-90 and ITI-91 client of `crates/ihe-iti`, whose
   tests hold its interactions to the capability statements and decode the
   example Organizations and Endpoints, and the harness directory of
-  `tools/ferrofed-testkit`, which publishes the example Organizations)
+  `tools/ferrofed-testkit`, which publishes the example Organizations) and
+  #486 (the ITI-90 and ITI-91 audit records of `crates/ihe-iti`, held to
+  the Query and Updates audit profiles and their examples)
 
 ## What is here
 
@@ -36,10 +38,12 @@ Update Client capability statements of ITI-91 (`history-type` with
 `_since`), the Organization, Endpoint, Endpoint for Document Sharing and
 Location profiles, the endpoint-specific-type extension, the mCSD endpoint
 type code system and its value sets, the two search parameters the IG
-defines, and the IG's example Organizations and Endpoints. The package's
-other files serve no reader here: the Practitioner, PractitionerRole,
-HealthcareService and OrganizationAffiliation profiles, the Feed and Location
-Distance options, the BALP audit profiles and examples, the transaction
+defines, and the IG's example Organizations and Endpoints. The audit records
+of the two transactions (§2:3.90.5.1, §2:3.91.5.1): the BALP-based Query and
+Updates audit profiles and their examples. The package's other files serve no
+reader here: the Practitioner, PractitionerRole, HealthcareService and
+OrganizationAffiliation profiles, the Feed and Location Distance options, the
+BALP audit profiles and examples of the other interactions, the transaction
 Bundle example, the Schematron renderings, the OpenAPI renderings and the
 registry's `.index.db`, a SQLite file. They are not taken.
 
@@ -53,6 +57,8 @@ registry's `.index.db`, a SQLite file. They are not taken.
 | `package/ImplementationGuide-ihe.iti.mcsd.json` | `0ba7381110649e8dd9d119504ff913e2224fdb93e8fb7f45dc2eb3b7c47cfbcc` |
 | `package/SearchParameter-Endpoint-EndpointSpecificType.json` | `dafb1944c3cb8d114784cbe43263e538c61b0f6598eee44c8b5e39ec9fecfde7` |
 | `package/SearchParameter-IHE.mCSD.Search.PurposeOfUse.json` | `a2d0b9703cd1ef90d83cdace8ad792234391f35b8c08e66ef27af2a6c28943ea` |
+| `package/StructureDefinition-IHE.mCSD.Audit.CareServices.Query.json` | `cbd72a54a247b1ce95e01260f5e536666f51ee63a878f5cb814fd84417ab6f53` |
+| `package/StructureDefinition-IHE.mCSD.Audit.CareServices.Updates.json` | `3cccb41ad8bcf6e9da705e953a168abb3e062d6e4b969ea891ff8ad3162d50d8` |
 | `package/StructureDefinition-IHE.mCSD.Endpoint.DocShare.json` | `95eb43cb0f14b95aa91411609e41566f5f92576600ba325501ba456364676521` |
 | `package/StructureDefinition-IHE.mCSD.Endpoint.json` | `2fff4be00066b541d47f3c823e7b34e163e3d8b5c5815a0a85f8485eefa9052d` |
 | `package/StructureDefinition-IHE.mCSD.Location.json` | `ae8ad9f6a9524145b8085e92b6c79316dcfb4345707d1e658871ae87e35d31fd` |
@@ -60,6 +66,8 @@ registry's `.index.db`, a SQLite file. They are not taken.
 | `package/StructureDefinition-ihe-endpointspecifictype.json` | `8abe32adb51d9fa26a59953c6f9bdbd68f81eeb3d9714e9b38351e85ca1b8e44` |
 | `package/ValueSet-MCSDEndpointTypesCoreDocShareVS.json` | `56b7f7df04909fbfa203de6e32c7215060e3a0511482ddea9dd939ceff136aad` |
 | `package/ValueSet-MCSDEndpointTypesVS.json` | `072a19970baad85dc736c48bfd53e062ca605a5dfd973c2fab8a91b952b13893` |
+| `package/example/AuditEvent-ex-AuditMcsdCareServicesQuery.json` | `41092d407e151aabfcd7e441a017d31286b84cd83237191a0e61dd48fce90d92` |
+| `package/example/AuditEvent-ex-AuditMcsdCareServicesUpdates.json` | `862e75437a8ec31664cf07af38eef21db2d276b18e4cf2f39a360dc953aa47ed` |
 | `package/example/Endpoint-ex-endpointDicom.json` | `5dc772a6f3c1841f40728e643d14510c72c6f47498787b48f4a401f4fd70b3cc` |
 | `package/example/Endpoint-ex-endpointXCAquery.json` | `8fa1eae19a1ca295bf7a9953eaf826c210b2b66064dbfc37e97bc08c5f4b8764` |
 | `package/example/Endpoint-ex-endpointXCAretrieve.json` | `223b80ab0fda4bcfec9843d37aada9d32070d13f305a7a5970e867f69f6c8ced` |

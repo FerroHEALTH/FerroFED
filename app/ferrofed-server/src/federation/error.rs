@@ -168,6 +168,10 @@ pub enum FederationError {
     /// The PIXm resolver refuses its Managers or members.
     #[error("the [pixm] resolver cannot be enabled")]
     Pixm(#[source] PixmConfigError),
+    /// The audit trail of the PIXm, mCSD and PMIR transactions cannot start
+    /// (`[audit]`).
+    #[error("the [audit] trail cannot start")]
+    Audit(#[source] crate::audit::AuditTrailError),
     /// The localizer of `node_selection = "localized"` cannot be set up
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]
