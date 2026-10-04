@@ -11,8 +11,11 @@
 # MessageHeader, MessageHeader response and merged Patient profiles, the
 # Subscription and Subscription request profiles of ITI-94, the
 # ImplementationGuide, and the IG's own message Bundle, response MessageHeader
-# and Subscription examples, which the tests decode. The audit (BALP) and
-# related-person artefacts serve no reader here and are not taken. The package
+# and Subscription examples, which the tests decode, and the Consumer's ITI-93
+# and the Subscriber's ITI-94 audit (BALP) profiles and examples, which the
+# audit records of crates/ihe-iti (feature `balp`, #469) are held to. The
+# Update audit profile and the related-person artefacts serve no reader here
+# and are not taken. The package
 # manifest is read for its name, version and licence and left out of the tree
 # (the dependency-manifest rule of scripts/vendor/lib/corpus.sh).
 #
@@ -47,8 +50,11 @@ want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t
 
 # The artefacts of the ITI-93 Mobile Patient Identity Feed and ITI-94
 # Subscribe to Patient Updates transactions, at their upstream paths inside
-# the package. The audit (BALP) profiles and examples, the related-person
-# profiles and examples, the standalone history Bundle and Patient examples
+# the package, with the Feed and Subscription Create, Read and Delete audit
+# (BALP) profiles and the Consumer's and the Subscriber's examples of them. The
+# Subscription Update audit profile, the other audit examples, the
+# related-person profiles and examples, the standalone history Bundle and
+# Patient examples
 # (each is inlined in a message Bundle example taken here), the OpenAPI and
 # XML renderings and the registry's validation output serve no reader here and
 # are not taken.
@@ -74,6 +80,14 @@ paths=(
   package/example/MessageHeader-ex-messageheader-create-response.json
   package/example/Subscription-ex-subscription-request.json
   package/example/Subscription-ex-subscription.json
+  package/StructureDefinition-IHE.PMIR.Feed.Audit.json
+  package/StructureDefinition-IHE.PMIR.Audit.Subscription.Create.json
+  package/StructureDefinition-IHE.PMIR.Audit.Subscription.Read.json
+  package/StructureDefinition-IHE.PMIR.Audit.Subscription.Delete.json
+  package/example/AuditEvent-ex-auditPmirFeed-consumer.json
+  package/example/AuditEvent-ex-auditPmirSubscription-subscriber-create.json
+  package/example/AuditEvent-ex-auditPmirSubscription-subscriber-read.json
+  package/example/AuditEvent-ex-auditPmirSubscription-subscriber-delete.json
 )
 
 tmp="$(mktemp -d)"
@@ -140,7 +154,9 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Read by: #147 (the ITI-94 subscriber and the ITI-93 feed reader of
   \`crates/ihe-iti\`, whose tests decode the example message Bundles and hold
   the subscription and the feed response to the profiles, and the harness
-  Patient Identity Registry of \`tools/ferrofed-testkit\`)
+  Patient Identity Registry of \`tools/ferrofed-testkit\`) and #469 (the
+  ITI-93 and ITI-94 audit records of \`crates/ihe-iti\`, held to the Feed and
+  Subscription audit profiles and their examples)
 
 ## What is here
 
@@ -151,8 +167,12 @@ the message Bundle, history Bundle, MessageHeader, MessageHeader response and
 merged Patient profiles, the Subscription and Subscription request profiles,
 the ImplementationGuide, and the IG's examples of the create, update, delete
 and merge message Bundles, a response MessageHeader and the two
-Subscriptions. The package's other files serve no reader here: the BALP audit
-profiles and examples, the related-person profiles and examples, the
+Subscriptions, with the audit records of the two transactions (§2:3.93.5.1,
+§2:3.94.5.1): the Feed audit profile and the Consumer's example, and the
+Subscription Create, Read and Delete audit profiles and the Subscriber's
+examples. The package's other files serve no reader here: the Subscription
+Update audit profile and the other BALP audit examples, the related-person
+profiles and examples, the
 standalone history Bundle and Patient examples, which the message Bundle
 examples taken here inline, the OpenAPI and XML renderings, and the registry's
 validation output. They are not taken.
