@@ -47,11 +47,12 @@ use crate::state::AppState;
 ///
 /// `registry` is the registry document, its path and its form, `credentials`
 /// the outbound credentials of each endpoint, `dev` and `pixm` the
-/// resolver, and `xcpd` the localizer, both of which name the members. A
+/// resolver, and `xcpd` and `nl_gf` the localizer, all of which name the
+/// members. A
 /// registry read from a care services directory changes with the directory,
 /// never with a reload: a reload rebuilds the federation over the registry in
 /// place, and a change to `[registry.mcsd]` takes a restart.
-pub const RELOADABLE: [&str; 5] = ["registry", "credentials", "dev", "pixm", "xcpd"];
+pub const RELOADABLE: [&str; 6] = ["registry", "credentials", "dev", "pixm", "xcpd", "nl_gf"];
 
 /// Reloads the registry the server started with.
 ///
@@ -416,6 +417,7 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
             }
             xcpd
         }),
+        nl_gf: fresh.nl_gf,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),

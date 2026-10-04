@@ -19,8 +19,9 @@
 //!
 //! The protected-payload sites are a registry endpoint with a
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
-//! 2.0 grant, every PIX Manager and every XCPD responding gateway (each is
-//! sent the patient identifier, and a credential when one is configured), the
+//! 2.0 grant, every PIX Manager, every XCPD responding gateway and the NVI
+//! Localization Service of `[nl_gf.nvi]` (each is sent the patient
+//! identifier, and a credential when one is configured), the
 //! care services directory of `[registry.mcsd]` when it has credentials,
 //! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
 //! a user name or a password, and the ATNA Audit Record Repository the XCPD
@@ -246,20 +247,8 @@ pub fn check(
             )?;
         }
     }
-    for (index, manager) in settings
-        .pixm
-        .iter()
-        .flat_map(|pixm| pixm.managers.iter().enumerate())
-    {
-        let key = format!("pixm.manager[{index}]");
-        let credentials = manager
-            .credentials
-            .is_some()
-            .then(|| format!("{key}.credentials"));
-        hold(
-            manager.url.expose(),
-            identity_site(&key, credentials.as_deref()),
-        )?;
+    for (url, site) in identity_services(settings) {
+        hold(url, site)?;
     }
     if let Some(xcpd) = &settings.xcpd {
         let assertion = xcpd.assertion.as_ref().map(|_| xcpd.assertion_key);
@@ -312,6 +301,35 @@ pub fn check(
     }
     cleartext.extend(audit);
     Ok(cleartext)
+}
+
+/// The URL and the site of every identity service `settings` ask about a
+/// patient over HTTP with a credential of their own: each PIX Manager and
+/// the NVI Localization Service.
+fn identity_services(settings: &Settings) -> Vec<(&str, ProtectedSite)> {
+    let mut services = Vec::new();
+    for (index, manager) in settings
+        .pixm
+        .iter()
+        .flat_map(|pixm| pixm.managers.iter().enumerate())
+    {
+        let key = format!("pixm.manager[{index}]");
+        let credentials = manager
+            .credentials
+            .is_some()
+            .then(|| format!("{key}.credentials"));
+        let site = identity_site(&key, credentials.as_deref());
+        services.push((manager.url.expose(), site));
+    }
+    if let Some(nvi) = settings.nl_gf.as_ref().and_then(|nl_gf| nl_gf.nvi.as_ref()) {
+        let key = crate::config::nl_gf::NVI_KEY;
+        let credentials = nvi
+            .credentials
+            .is_some()
+            .then(|| format!("{key}.credentials"));
+        services.push((nvi.url.expose(), identity_site(key, credentials.as_deref())));
+    }
+    services
 }
 
 /// The site of the care services directory of `[registry.mcsd]`: its `url`,

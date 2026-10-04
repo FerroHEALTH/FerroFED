@@ -619,6 +619,7 @@ dependencies = [
  "http",
  "ihe-iti",
  "jiff",
+ "nl-generic-functions",
  "openehr-its",
  "reqwest",
  "secrecy",
@@ -1433,6 +1434,19 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "nl-generic-functions"
+version = "0.0.5"
+dependencies = [
+ "fhir-types",
+ "http",
+ "reqwest",
+ "secrecy",
+ "serde_json",
+ "thiserror",
+ "url",
 ]
 
 [[package]]

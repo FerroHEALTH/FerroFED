@@ -122,6 +122,7 @@ impl Config {
         let federation = self.resolve_federation(request_timeout)?;
         let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
         let xcpd = crate::config::xcpd::resolve(self)?;
+        let nl_gf = crate::config::nl_gf::resolve(self)?;
         if self.registry.document.is_some() && self.registry.mcsd.is_some() {
             return Err(Error::TwoRegistrySources);
         }
@@ -163,6 +164,7 @@ impl Config {
             dev: self.dev.clone(),
             pixm,
             xcpd,
+            nl_gf,
             stored_queries,
             metrics,
             signing,
