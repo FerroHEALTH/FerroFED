@@ -384,6 +384,11 @@ async fn a_full_spool_fails_the_query_closed_and_asks_no_member() -> TestResult 
         received(&servers[0]).await?.len(),
         "no member is asked without the audit record (§14.1)"
     );
+    let samples = parse(&Metrics::default().render()?)?;
+    let refused: u64 = count(&samples, "ferrofed_audit_refused_total", &[])
+        .ok_or("the refusals are counted")?
+        .parse()?;
+    assert_eq!(1, refused, "the refused message is counted");
     Ok(())
 }
 
