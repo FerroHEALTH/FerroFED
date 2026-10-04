@@ -123,6 +123,7 @@ The sections, and the page that covers each:
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
 | `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
 | `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](identity.md#xcpd-localization-xcpd), [The audit repository](identity.md#the-audit-repository) |
+| `[nl_gf.nvi]` | the NVI localizer of the Dutch Generic Functions | [Dutch localization](identity.md#dutch-localization-nl_gfnvi) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
 
@@ -218,6 +219,8 @@ never a value. The rule covers:
   with or without `[pixm.manager.credentials]`;
 - the `url` of every XCPD responding gateway, which is sent the patient
   identifier and, when one is configured, the XUA assertion;
+- the `url` of `[nl_gf.nvi]`, which is sent the pseudonymised BSN and, when
+  one is configured, its credentials;
 - `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries a
   user name or a password.
 

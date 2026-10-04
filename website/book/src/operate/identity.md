@@ -190,7 +190,8 @@ value = "ffd-test-0001"
 member = "node-b"        # this patient's consent denies asking node-b
 ```
 
-The pre-filter of the Dutch binding, Mitz, is planned for v0.0.8
+The pre-filter of the Dutch binding, Mitz, is not built: the Generic
+Functions IG defines no interface for it
 ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
 
 ## Choosing one
@@ -403,3 +404,88 @@ of ITI-20 this gateway does not send.
 
 PMIR notifications of a merge or split are planned for v0.0.8
 ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147)).
+
+## Dutch localization: `[nl_gf.nvi]`
+
+A deployment in the Netherlands can localize through the national index of
+the Dutch Generic Functions, the NVI, in place of XCPD (Annex B §B.1,
+GF-Localization of the Generic Functions IG `fhir.nl.gf` 0.3.0). Under
+`federation.node_selection = "localized"`, each undirected patient query
+first asks the NVI's Localization Service which care providers hold data
+for the patient: `GET [url]/DocumentReference?patient.identifier=<pseudonym>
+&type=http://loinc.org|55188-7`. The service answers with one localization
+record per care provider, named by its URA, and the members that hold those
+providers' data are the candidates. Every other member is `not-localized`
+and is not asked.
+
+```toml
+profile = "production"
+
+[federation]
+node_selection = "localized"
+
+[federation.localization]
+on_failure = "closed"   # the default (§14.1)
+timeout_ms = 5000
+
+[nl_gf.nvi]
+url = "https://nvi.example.org/fhir"
+credentials = { bearer_token_file = "/run/secrets/nvi-token" }  # optional
+client_identity_file = "/run/secrets/nvi-client.pem"            # optional, mutual TLS
+trust_roots_file = "/etc/ferrofed/nvi-roots.pem"                # optional
+namespaces = ["pseudo-bsn"]   # client namespaces that stand for the pseudonym
+
+[nl_gf.nvi.custodians]        # every member needs one
+"ura-test-0001" = "node-a"
+"ura-test-0002" = "node-b"
+"ura-test-0003" = "node-b"    # one member may hold several providers' data
+
+[[pixm.manager]]              # resolution, Step 1c of Annex B §B.7
+url = "https://pix.example.org/fhir/"
+
+[pixm.manager.members]
+"node-a" = "urn:oid:2.999.21"
+"node-b" = "urn:oid:2.999.22"
+```
+
+The NVI is keyed on a pseudonymised BSN, never on the BSN. A client names
+the patient by the pseudonym, in the namespace
+`http://fhir.nl/fhir/NamingSystem/pseudo-bsn` or in one `namespaces` lists,
+as in the walkthrough of Annex B §B.7. The gateway never pseudonymises: a
+patient in any other namespace, a BSN included, cannot be localized, so the
+query fails closed and the NVI is never asked. The pseudonym is personal
+data like the BSN it stands for, so it is handled as every patient
+identifier is: it reaches the NVI and the PIX Manager, never a node, a log
+line or an error.
+
+What a deployment must provide:
+
+- **The custodian map.** Every registry member must be mapped from at least
+  one URA, or boot is refused, since no localization could ever name it. A
+  care provider the NVI returns that the map does not name is outside the
+  federation and adds no candidate.
+- **TLS and credentials.** The `url` must be `https` outside
+  `profile = "development"`; a plain `http` URL is refused at boot, naming
+  its key. `credentials` takes a bearer token or basic credentials, never an
+  OAuth 2.0 grant, and a URL that carries a user name or a password is
+  refused. The IG asks a requester for authorization attributes (its
+  organization, practitioner and role); the gateway sends only the
+  credential configured here, and GF-Authentication on the Nuts profile is
+  tracked in [#88](https://github.com/FerroHEALTH/FerroFED/issues/88).
+- **A resolver.** The NVI answers where; the PIX Manager of `[pixm]` still
+  answers under which `ehr_id` each candidate knows the patient.
+
+The NVI checks the requester's access at each data holder before it
+returns a record, so its answer is consent-aware. It is still only a list of
+candidates: each node checks consent before it releases data (§14.3, N27).
+The localization fails closed as a whole. A service that answers a failure,
+answers outside the IG, or stays silent past `timeout_ms` leaves every
+member `not-localized` with the error, and the query asks no node.
+`on_failure = "ask-all"` asks every member instead. `OPTIONS {base}/`
+declares `localization.mode` as `"nl-gf-nvi"`.
+
+Set `[nl_gf.nvi]` or `[xcpd]`, never both: both refuse the configuration.
+`[nl_gf.nvi]` takes effect on a reload; under `node_selection = "ask-all"`
+it refuses the configuration. The Mitz consent pre-filter of the Dutch
+binding is not built: the IG defines no interface for it
+([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).

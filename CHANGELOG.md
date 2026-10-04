@@ -33,6 +33,17 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- `[nl_gf.nvi]` localizes undirected patient queries through the NVI, the
+  national localization index of the Dutch Generic Functions (Annex B
+  §B.1). The client names the patient by a pseudonymised BSN; the NVI's
+  care providers, by URA, map to the members that hold their data, and
+  every other member is `not-localized`. A patient named in any other
+  namespace, an NVI that refuses, answers outside the IG or stays silent
+  fails the query closed. The URL is `https` outside development, the
+  section is refused beside `[xcpd]` and under `ask-all`, and
+  `OPTIONS {base}/` declares `localization.mode = "nl-gf-nvi"`. The
+  pseudonymised walkthrough of Annex B §B.7 runs end to end in the test
+  harness, and no node receives the pseudonym (#87).
 - The Dutch Generic Functions binding of Annex B starts in
   `nl-generic-functions`: feature `nvi` asks the national localization index
   which care providers, by URA, hold data for a patient named by a
