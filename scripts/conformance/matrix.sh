@@ -69,7 +69,8 @@ die() {
 #   kind=cp:    CP-n <TAB> actor <TAB> N-ids <TAB> track numbers
 #   kind=track: n <TAB> title <TAB> N-ids
 table_rows() {
-  awk -v kind="$1" '
+  local kind="$1" file="$2"
+  awk -v kind="$kind" '
     function ids(s, pat, prefix, skip,   out) {
       out = ""
       while (match(s, pat)) {
@@ -102,7 +103,7 @@ table_rows() {
     /^\| / { n++; cell[n] = substr($0, 3); next }
     { if (n > 0) cell[n] = cell[n] " " $0 }
     END { flush() }
-  ' "$2"
+  ' "$file"
 }
 
 # Every requirement anchor in requirements.adoc, in specification order.
@@ -113,13 +114,13 @@ requirement_ids() {
 # Write the three derived tables into a directory.
 derive_into() {
   local dir="$1"
-  [ -f "$PAGES/conformance.adoc" ] || die "the vendored specification is missing ($PAGES)"
+  [[ -f "$PAGES/conformance.adoc" ]] || die "the vendored specification is missing ($PAGES)"
   table_rows cp "$PAGES/conformance.adoc" > "$dir/cps.raw"
   table_rows track "$PAGES/testing.adoc" > "$dir/tracks.raw"
   requirement_ids > "$dir/requirements.raw"
-  [ -s "$dir/cps.raw" ] || die "no conformance point parsed from $PAGES/conformance.adoc"
-  [ -s "$dir/tracks.raw" ] || die "no test track parsed from $PAGES/testing.adoc"
-  [ -s "$dir/requirements.raw" ] || die "no requirement parsed from $PAGES/requirements.adoc"
+  [[ -s "$dir/cps.raw" ]] || die "no conformance point parsed from $PAGES/conformance.adoc"
+  [[ -s "$dir/tracks.raw" ]] || die "no test track parsed from $PAGES/testing.adoc"
+  [[ -s "$dir/requirements.raw" ]] || die "no requirement parsed from $PAGES/requirements.adoc"
 
   {
     printf 'cp\tactor\trequirements\ttracks\n'
@@ -165,7 +166,7 @@ refresh() {
   local derived="$1" target="$2" header="$3"
   local tmp existing=/dev/null
   tmp="$(mktemp)"
-  if [ -f "$target" ]; then existing="$target"; fi
+  if [[ -f "$target" ]]; then existing="$target"; fi
   {
     awk '/^#/ { print; next } { exit }' "$existing"
     printf '%s\n' "$header"
@@ -282,7 +283,7 @@ spec_version() {
       if (k == "Federation Tier with AQL") { split(v, w, /[[:space:]]/); print w[1]; exit }
     }
   ' docs/VERSIONS.md)"
-  [ -n "$version" ] || die "docs/VERSIONS.md has no Federation Tier with AQL pin row"
+  [[ -n "$version" ]] || die "docs/VERSIONS.md has no Federation Tier with AQL pin row"
   printf '%s\n' "$version"
 }
 
@@ -299,15 +300,15 @@ spec_site() {
 # The badge colour of k out of n, by the share in quarters.
 colour_of() {
   local passed="$1" total="$2" share
-  if [ "$total" -eq 0 ]; then
+  if [[ "$total" -eq 0 ]]; then
     echo lightgrey
     return
   fi
   share=$((passed * 100 / total))
-  if [ "$passed" -eq "$total" ]; then echo brightgreen
-  elif [ "$share" -ge 75 ]; then echo green
-  elif [ "$share" -ge 50 ]; then echo yellow
-  elif [ "$share" -ge 25 ]; then echo orange
+  if [[ "$passed" -eq "$total" ]]; then echo brightgreen
+  elif [[ "$share" -ge 75 ]]; then echo green
+  elif [[ "$share" -ge 50 ]]; then echo yellow
+  elif [[ "$share" -ge 25 ]]; then echo orange
   else echo red
   fi
 }
@@ -315,12 +316,15 @@ colour_of() {
 # One endpoint badge file: label, message, colour. The labels and messages
 # are written here and carry no character JSON escapes.
 badge_json() {
-  printf '{"schemaVersion":1,"label":"%s","message":"%s","color":"%s"}\n' "$1" "$2" "$3"
+  local label="$1" message="$2" colour="$3"
+  printf '{"schemaVersion":1,"label":"%s","message":"%s","color":"%s"}\n' "$label" "$message" "$colour"
 }
 
-# The number of matrix rows with actor $1, and with actor $1 and status $2.
+# matrix_count ACTOR [STATUS]: the number of matrix rows with ACTOR, and with
+# ACTOR and STATUS.
 matrix_count() {
-  awk -F'\t' -v actor="$1" -v status="${2:-}" '
+  local actor="$1" status="${2:-}"
+  awk -F'\t' -v actor="$actor" -v status="$status" '
     /^#/ { next }
     ++row == 1 { next }
     $2 == actor && (status == "" || $5 == status) { n++ }
@@ -330,28 +334,28 @@ matrix_count() {
 
 # The badge labels, by badge name.
 label_of() {
-  local version
+  local name="$1" version
   version="$(spec_version)"
-  case "$1" in
+  case "$name" in
   federation-gateway) echo "Federation Tier $version gateway points" ;;
   federation-node) echo "Federation Tier $version node points" ;;
   federation-operator) echo "Federation Tier $version operator points" ;;
   aql-golden) echo "AQL golden cases" ;;
-  *) die "no badge named $1" ;;
+  *) die "no badge named $name" ;;
   esac
 }
 
 # Write every badge file into a directory.
 write_badges() {
   local dir="$1" gateway covered node operator passed total
-  [ -f "$PASS_LIST" ] || die "$PASS_LIST is missing"
+  [[ -f "$PASS_LIST" ]] || die "$PASS_LIST is missing"
   gateway="$(matrix_count Gateway)"
   covered="$(matrix_count Gateway covered)"
   node="$(matrix_count Node)"
   operator="$(matrix_count Operator)"
   passed="$(grep -cvE '^(#|total |$)' "$PASS_LIST" || true)"
   total="$(sed -n 's/^total \([0-9][0-9]*\)$/\1/p' "$PASS_LIST")"
-  [ -n "$total" ] || die "$PASS_LIST has no total line"
+  [[ -n "$total" ]] || die "$PASS_LIST has no total line"
   mkdir -p "$dir"
   badge_json "$(label_of federation-gateway)" "$covered / $gateway covered" "$(colour_of "$covered" "$gateway")" > "$dir/federation-gateway.json"
   badge_json "$(label_of federation-node)" "$node, a member node's to meet" blue > "$dir/federation-node.json"
@@ -390,7 +394,7 @@ write_block() {
 
 case "${1:-}" in
 --badges)
-  [ -n "${2:-}" ] || die "usage: $0 --badges DIR"
+  [[ -n "${2:-}" ]] || die "usage: $0 --badges DIR"
   write_badges "$2"
   ;;
 --readme-block)
@@ -403,7 +407,7 @@ case "${1:-}" in
   echo "conformance-matrix: wrote $BADGES/ and the $README conformance block."
   ;;
 --derived)
-  [ -n "${2:-}" ] || die "usage: $0 --derived DIR"
+  [[ -n "${2:-}" ]] || die "usage: $0 --derived DIR"
   mkdir -p "$2"
   derive_into "$2"
   ;;
@@ -414,7 +418,7 @@ case "${1:-}" in
   refresh "$work/cps.tsv" "$MATRIX" "$(printf 'cp\tactor\trequirements\ttracks\tstatus\tissue\treason')"
   refresh "$work/tracks.tsv" "$TRACKS" "$(printf 'track\ttitle\trequirements\tcps\tstatus\tissue\treason')"
   {
-    if [ -f "$REQUIREMENTS" ]; then awk '/^#/ { print; next } { exit }' "$REQUIREMENTS"; fi
+    if [[ -f "$REQUIREMENTS" ]]; then awk '/^#/ { print; next } { exit }' "$REQUIREMENTS"; fi
     cat "$work/requirements.tsv"
   } > "$work/requirements.out"
   mv "$work/requirements.out" "$REQUIREMENTS"

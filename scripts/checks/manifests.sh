@@ -22,7 +22,8 @@ cd "$(dirname "$0")/../.."
 
 # check MANIFEST: cargo metadata over the manifest at MANIFEST.
 check() {
-  cargo metadata --locked --format-version 1 --no-deps --manifest-path "$1" > /dev/null
+  local manifest="$1"
+  cargo metadata --locked --format-version 1 --no-deps --manifest-path "$manifest" > /dev/null
 }
 
 self_test() {

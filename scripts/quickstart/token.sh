@@ -27,6 +27,7 @@ readonly KEY="$DIR/key.pem"
 readonly JWKS="$DIR/jwks.json"
 readonly ISSUER=ferrofed-quickstart-issuer
 readonly AUDIENCE=ferrofed-quickstart
+# The HL7 code system's canonical URI, an identifier nothing fetches: http is its spelling.
 readonly ACT_REASON=http://terminology.hl7.org/CodeSystem/v3-ActReason
 
 die() {
@@ -56,7 +57,7 @@ unhex() {
   done
 }
 
-if [ ! -s "$KEY" ] || [ ! -s "$JWKS" ]; then
+if [[ ! -s "$KEY" ]] || [[ ! -s "$JWKS" ]]; then
   umask 077
   openssl genrsa -out "$KEY" 2048 2>/dev/null || die "the key pair could not be generated"
   umask 022

@@ -8,13 +8,13 @@
 
 use std::error::Error;
 use std::path::Path;
-use std::process::Command;
 
 use axum::Router;
 use axum::routing::get;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::proxy::CapturingProxy;
 use http::{Request, StatusCode};
+use tokio::process::Command;
 use wiremock::matchers::{method, path_regex};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -203,7 +203,8 @@ async fn a_panicking_handler_holding_the_identifier_leaves_it_on_neither_stderr_
             "1",
         ])
         .env(PANIC_CHILD_LOG, &log)
-        .output()?;
+        .output()
+        .await?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(

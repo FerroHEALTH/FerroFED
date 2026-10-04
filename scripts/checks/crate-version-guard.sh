@@ -54,15 +54,18 @@ self_test() {
       -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"
   }
   crate() {
-    mkdir -p "$work/crates/$1/src"
-    printf '[package]\nname = "%s"\nversion = "%s"\n' "$1" "$2" > "$work/crates/$1/Cargo.toml"
+    local name="$1" version="$2"
+    mkdir -p "$work/crates/$name/src"
+    printf '[package]\nname = "%s"\nversion = "%s"\n' "$name" "$version" > "$work/crates/$name/Cargo.toml"
   }
   lock() {
-    printf '[[package]]\nname = "x"\nversion = "%s"\n\n[[package]]\nname = "y"\nversion = "%s"\n' "$1" "$2" > "$work/Cargo.lock"
+    local x="$1" y="$2"
+    printf '[[package]]\nname = "x"\nversion = "%s"\n\n[[package]]\nname = "y"\nversion = "%s"\n' "$x" "$y" > "$work/Cargo.lock"
   }
   commit() {
+    local message="$1"
     stub_git add -A
-    stub_git commit -q -m "$1"
+    stub_git commit -q -m "$message"
   }
   # expect NAME WANT BRANCH: the guard over BRANCH merged into main exits WANT.
   expect() {
@@ -135,11 +138,13 @@ if [[ $# -lt 1 || $# -gt 2 || -z "${1:-}" ]]; then
 fi
 base="$1"
 head="${2:-HEAD}"
+# The head that names the working tree instead of a commit.
+readonly WORKTREE=WORKTREE
 
 # The commit the change forked from the base at; the worktree forks where its
 # HEAD does.
 tip="$head"
-[[ "$head" != "WORKTREE" ]] || tip=HEAD
+[[ "$head" != "$WORKTREE" ]] || tip=HEAD
 if ! fork="$(git merge-base "$base" "$tip")"; then
   echo "crate-version-guard: $base and $head have no merge base; check out the full history (fetch-depth: 0)." >&2
   exit 2
@@ -148,13 +153,14 @@ fi
 # `git diff <fork> -- …` with no second ref reads the working tree, which is
 # the WORKTREE head; everything else names two commits.
 changed_paths() {
-  if [[ "$head" = "WORKTREE" ]]; then git diff --name-only "$fork" --; else git diff --name-only "$fork" "$head" --; fi
+  if [[ "$head" = "$WORKTREE" ]]; then git diff --name-only "$fork" --; else git diff --name-only "$fork" "$head" --; fi
 }
 diff_text() {
-  if [[ "$head" = "WORKTREE" ]]; then git diff "$fork" -- "$@"; else git diff "$fork" "$head" -- "$@"; fi
+  if [[ "$head" = "$WORKTREE" ]]; then git diff "$fork" -- "$@"; else git diff "$fork" "$head" -- "$@"; fi
 }
 head_file() {
-  if [[ "$head" = "WORKTREE" ]]; then cat "$1"; else git show "$head:$1"; fi
+  local path="$1"
+  if [[ "$head" = "$WORKTREE" ]]; then cat "$path"; else git show "$head:$path"; fi
 }
 
 # No `crates/*` member yet (the repository before its Cargo workspace) means no
@@ -190,7 +196,8 @@ if grep -qx 'Cargo.toml' <<<"$changed"; then
 fi
 
 package_field() {
-  awk -F'"' -v key="$1" '/^\[package\]/{p=1} p && $0 ~ "^" key " = " {print $2; exit}'
+  local key="$1"
+  awk -F'"' -v key="$key" '/^\[package\]/{p=1} p && $0 ~ "^" key " = " {print $2; exit}'
 }
 
 fail=0

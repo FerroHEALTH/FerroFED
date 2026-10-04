@@ -174,7 +174,7 @@ pub struct DedupDefault;
 
 impl DedupDefault {
     /// The only conformant value.
-    pub const VALUE: &'static str = "none";
+    pub const VALUE: &str = "none";
 }
 
 impl Serialize for DedupDefault {
@@ -376,10 +376,10 @@ pub struct Completeness {
 
 impl Completeness {
     /// The member names this type models, as the schema spells them.
-    pub const MEMBERS: &'static [&'static str] = &["default", "best_effort", "opt_in"];
+    pub const MEMBERS: &[&str] = &["default", "best_effort", "opt_in"];
 
     /// The only conformant `default`.
-    pub const DEFAULT: &'static str = "all-or-nothing";
+    pub const DEFAULT: &str = "all-or-nothing";
 
     /// A gateway that offers no best-effort mode.
     #[must_use]
@@ -506,7 +506,7 @@ pub struct DefinitionBehaviour {
 
 impl DefinitionBehaviour {
     /// The member names this type models, as the schema spells them.
-    pub const MEMBERS: &'static [&'static str] = &[
+    pub const MEMBERS: &[&str] = &[
         "fan_out_template_upload",
         "stored_query_registry",
         "stored_query_fan_out",

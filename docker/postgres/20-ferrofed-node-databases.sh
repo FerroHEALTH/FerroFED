@@ -26,7 +26,7 @@ set -Eeuo pipefail
 
 readonly IMAGE_INIT=/docker-entrypoint-initdb.d/10-ferroehr-init.sh
 
-if [ ! -x "$IMAGE_INIT" ]; then
+if [[ ! -x "$IMAGE_INIT" ]]; then
   echo "ferrofed init: $IMAGE_INIT is missing or not executable" >&2
   exit 1
 fi
@@ -34,7 +34,8 @@ fi
 # is_identifier NAME: whether NAME is a plain lower-case PostgreSQL identifier,
 # the only form spliced into SQL here and by the image's script.
 is_identifier() {
-  [[ "$1" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]
+  local name="$1"
+  [[ "$name" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]
 }
 
 # The first node's role and database, as the image's script defaults them.

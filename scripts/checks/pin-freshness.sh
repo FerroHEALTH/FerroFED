@@ -35,10 +35,12 @@ hadolint	hadolint/hadolint
 kubeconform	yannh/kubeconform
 lychee	lycheeverse/lychee"
 
-# The second cell of the matrix row whose first cell is $1, with the backticks
-# stripped and only the first token kept, the same shape versions.sh reads.
+# matrix_pin LABEL: the second cell of the matrix row whose first cell is
+# LABEL, with the backticks stripped and only the first token kept, the same
+# shape versions.sh reads.
 matrix_pin() {
-  awk -F'|' -v want="$1" '
+  local label="$1"
+  awk -F'|' -v want="$label" '
     NF >= 3 {
       label = $2; value = $3
       gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
@@ -50,10 +52,10 @@ matrix_pin() {
 stale=0
 unreadable=0
 while IFS=$'\t' read -r label repo; do
-  [ -n "$label" ] || continue
+  [[ -n "$label" ]] || continue
 
   pinned="$(matrix_pin "$label")"
-  if [ -z "$pinned" ]; then
+  if [[ -z "$pinned" ]]; then
     printf 'UNREADABLE %s: no pin row in %s\n' "$label" "$MATRIX"
     unreadable=1
     continue
@@ -69,7 +71,7 @@ while IFS=$'\t' read -r label repo; do
   latest="${tag#"${repo##*/}"-}"
   latest="${latest#v}"
 
-  if [ "$pinned" = "$latest" ]; then
+  if [[ "$pinned" = "$latest" ]]; then
     printf 'current    %s %s (%s)\n' "$label" "$pinned" "$repo"
   else
     printf 'STALE      %s: pinned %s, newest upstream release %s (https://github.com/%s/releases/tag/%s)\n' \
@@ -85,10 +87,11 @@ readonly WATCHED_COMMITS="\
 Federation Tier with AQL specification	syntaric/openehr-federation-spec	main
 Federation Tier reference implementation	syntaric/openehr-federation-ref	main"
 
-# The first 40-hex commit in the second cell of the matrix row whose first cell
-# is $1.
+# matrix_commit LABEL: the first 40-hex commit in the second cell of the
+# matrix row whose first cell is LABEL.
 matrix_commit() {
-  awk -F'|' -v want="$1" '
+  local label="$1"
+  awk -F'|' -v want="$label" '
     NF >= 3 {
       label = $2; value = $3
       gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
@@ -97,10 +100,10 @@ matrix_commit() {
 }
 
 while IFS=$'\t' read -r label repo branch; do
-  [ -n "$label" ] || continue
+  [[ -n "$label" ]] || continue
 
   pinned="$(matrix_commit "$label")"
-  if [ -z "$pinned" ]; then
+  if [[ -z "$pinned" ]]; then
     printf 'UNREADABLE %s: no commit pin in %s\n' "$label" "$MATRIX"
     unreadable=1
     continue
@@ -112,7 +115,7 @@ while IFS=$'\t' read -r label repo branch; do
     continue
   fi
 
-  if [ "$pinned" = "$head" ]; then
+  if [[ "$pinned" = "$head" ]]; then
     printf 'current    %s %s (%s %s)\n' "$label" "$pinned" "$repo" "$branch"
   else
     printf 'STALE      %s: pinned %s, newest commit on %s %s (https://github.com/%s/commit/%s)\n' \
@@ -121,5 +124,5 @@ while IFS=$'\t' read -r label repo branch; do
   fi
 done <<< "$WATCHED_COMMITS"
 
-[ "$unreadable" -eq 0 ] || exit 2
+[[ "$unreadable" -eq 0 ]] || exit 2
 exit "$stale"

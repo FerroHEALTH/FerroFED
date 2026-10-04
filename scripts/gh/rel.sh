@@ -78,12 +78,12 @@ preflight() {
 # Resolve an issue #number to its database id (the value every write endpoint
 # wants). Fails loud if the issue does not exist.
 dbid() {
-  need_int "$1"
-  local id
-  id="$(gh api "repos/$REPO/issues/$1" --jq '.id' 2>/dev/null)" ||
-    die "issue #$1 not found in $REPO"
+  local number="$1" id
+  need_int "$number"
+  id="$(gh api "repos/$REPO/issues/$number" --jq '.id' 2>/dev/null)" ||
+    die "issue #$number not found in $REPO"
   case "$id" in
-    '' | *[!0-9]*) die "could not resolve the database id for #$1" ;;
+    '' | *[!0-9]*) die "could not resolve the database id for #$number" ;;
     *) ;;
   esac
   printf '%s' "$id"
@@ -91,8 +91,8 @@ dbid() {
 
 # Print a jq-formatted list from an endpoint, or "    —" when empty/absent.
 list_or_dash() {
-  local out
-  out="$(gh api "$1" --jq "$2" 2>/dev/null || true)"
+  local endpoint="$1" filter="$2" out
+  out="$(gh api "$endpoint" --jq "$filter" 2>/dev/null || true)"
   if [[ -n "$out" ]]; then echo "$out"; else echo "    —"; fi
 }
 
@@ -217,7 +217,7 @@ case "${1:-} ${2:-}" in
     printf '%s\n' "$((1000 + ${2##*/}))"
     ;;
   "api --method")
-    if [ "${4:-}" = --input ] || [ "${5:-}" = --input ]; then
+    if [[ "${4:-}" = "--input" ]] || [[ "${5:-}" = "--input" ]]; then
       printf 'body: %s\n' "$(cat)" >> "$GH_STUB_CALLS"
     fi
     ;;
@@ -258,7 +258,7 @@ STUB
   }
   # untouched NAME: the case made no gh call at all.
   untouched() {
-    if [ -s "$calls" ]; then
+    if [[ -s "$calls" ]]; then
       echo "gh-rel: self-test failed: $1 called gh." >&2
       cat "$work/out" "$work/err" "$calls" >&2
       exit 1
@@ -340,6 +340,7 @@ main() {
     unblocking) cmd_unblocking "$@" ;;
     tree) cmd_tree "$@" ;;
     id) cmd_id "$@" ;;
+    *) usage ;;
   esac
 }
 

@@ -16,6 +16,7 @@
 //! never quoting its content. No specification governs the layout: our own
 //! design.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::Utf8Error;
@@ -197,7 +198,7 @@ fn is_directory(path: &Path) -> Result<bool, FilesError> {
 /// The last component of `path` as text.
 fn file_name(path: &Path) -> Result<String, FilesError> {
     path.file_name()
-        .and_then(|name| name.to_str())
+        .and_then(OsStr::to_str)
         .map(str::to_owned)
         .ok_or_else(|| FilesError::Layout {
             file: path.to_path_buf(),

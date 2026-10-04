@@ -1854,7 +1854,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -2487,7 +2487,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.35"
+version = "0.0.36"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema",
