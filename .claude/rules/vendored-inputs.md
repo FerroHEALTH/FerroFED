@@ -96,10 +96,11 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
 - `docs/specs/mitz/`: the Mitz documents that define the closed
   authorization question of Annex B §B.6 (the VZVZ implementation guide
   Open en gesloten autorisatievraag 3.8.2, the PvE AMC and the message
-  authentication guide 3.8.1.ad1). No licence is stated, so only
-  `PROVENANCE.md` is committed: `scripts/vendor/mitz.sh` pins each document
-  by its Confluence attachment version and sha256 and fetches it into the
-  git-ignored `docs/specs/mitz/cache/`.
+  authentication guide 3.8.1.ad1). No licence is stated, so each document
+  is cache only and only `PROVENANCE.md` is committed:
+  `scripts/vendor/mitz.sh` pins each by its Confluence attachment URL and
+  sha256 through `scripts/vendor/lib/pinned.sh` and fetches it into
+  `.vendor-cache/mitz/`.
 - `website/book/vendor/mermaid/`: the mermaid browser bundle and the
   mdbook-mermaid init script the book loads, fetched by
   `scripts/vendor/mdbook-mermaid-assets.sh` (MIT and MPL 2.0).
