@@ -4,10 +4,11 @@
 //! The `traceparent` a node receives (W3C Trace Context): the gateway starts
 //! a trace of its own for every client request, with the export on each node
 //! request carries that trace's id and the span id of its own `node_request`
-//! span, and a client's `traceparent` is recorded only as a span link the
-//! operator's collector reads. No value a client chose reaches a node: a
-//! trace id can encode any identifier, so no check on it could stop one
-//! (§5.4.1, N33). With the export off, no node receives a `traceparent`.
+//! span. A client's `traceparent` and `tracestate` are recorded nowhere: no
+//! node receives them and no exported span carries them, as parent, link,
+//! attribute, event or status, since a trace id can encode any identifier
+//! and no check on it could stop one (§5.4.1, N33). With the export off, no
+//! node receives a `traceparent`.
 //! Every assertion on a node reads what the mock node received.
 #![allow(
     clippy::panic_in_result_fn,
@@ -88,10 +89,9 @@ async fn none_of_the_clients(server: &Server, client: &[&str]) -> TestResult {
     Ok(())
 }
 
-/// Asserts that `request` is the root of a trace of the gateway's own, and
-/// that its one link names the client's span `client` in the client's
-/// trace `trace`; returns the gateway's trace id.
-fn linked_root(request: &SpanData, trace: &str, client: &str) -> Result<TraceId, Box<dyn Error>> {
+/// Asserts that `request` is the root of a trace of the gateway's own, not
+/// the client's trace `trace`, and returns the gateway's trace id.
+fn own_root(request: &SpanData, trace: &str) -> Result<TraceId, Box<dyn Error>> {
     assert_eq!(
         SpanId::INVALID,
         request.parent_span_id,
@@ -103,22 +103,37 @@ fn linked_root(request: &SpanData, trace: &str, client: &str) -> Result<TraceId,
         gateway,
         "the gateway starts its own trace"
     );
-    let links: Vec<_> = request
-        .links
-        .iter()
-        .map(|link| {
-            (
-                link.span_context.trace_id().to_string(),
-                link.span_context.span_id().to_string(),
-            )
-        })
-        .collect();
-    assert_eq!(
-        vec![(trace.to_owned(), client.to_owned())],
-        links,
-        "the client's span is a link"
-    );
     Ok(gateway)
+}
+
+/// Asserts that no span of `spans` records any of `client`, the values of
+/// the client's trace context: not in its ids, its name, an attribute, an
+/// event, a link or its status, and that no span has a link at all.
+fn recorded_nowhere(spans: &[SpanData], client: &[&str]) {
+    for span in spans {
+        assert!(
+            span.links.links.is_empty(),
+            "{} carries a link: {:?}",
+            span.name,
+            span.links
+        );
+        let carried = format!(
+            "{} {} {} {:?} {:?} {:?}",
+            span.span_context.trace_id(),
+            span.span_context.span_id(),
+            span.name,
+            span.attributes,
+            span.events,
+            span.status
+        );
+        for fragment in client {
+            assert!(
+                !carried.contains(fragment),
+                "{} records {fragment}: {carried}",
+                span.name
+            );
+        }
+    }
 }
 
 /// The façade query of the facade fixtures, with the client's trace context.
@@ -142,7 +157,8 @@ async fn each_node_joins_the_gateways_own_trace_under_its_own_span() -> TestResu
     assert_eq!(StatusCode::OK, response.status());
     let spans = exported.spans()?;
     let request = the(&spans, "POST /v1/query/aql")?;
-    let trace = linked_root(request, CLIENT_TRACE, CLIENT_SPAN)?;
+    let trace = own_root(request, CLIENT_TRACE)?;
+    recorded_nowhere(&spans, &[CLIENT_TRACE, CLIENT_SPAN, CLIENT_STATE]);
     for (server, endpoint) in [(&a, "node-a-pub"), (&b, "node-b-pub")] {
         let node = named(&spans, "node_request")
             .into_iter()
@@ -173,11 +189,8 @@ async fn a_routed_read_sends_the_gateways_trace_never_the_clients() -> TestResul
     let (status, _, text) = answer(over(dir.path(), &a, &b)?, read).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let spans = exported.spans()?;
-    let trace = linked_root(
-        the(&spans, "GET /v1/ehr/{ehr_id}")?,
-        CLIENT_TRACE,
-        CLIENT_SPAN,
-    )?;
+    let trace = own_root(the(&spans, "GET /v1/ehr/{ehr_id}")?, CLIENT_TRACE)?;
+    recorded_nowhere(&spans, &[CLIENT_TRACE, CLIENT_SPAN, CLIENT_STATE]);
     let node = the(&spans, "node_request")?;
     let expected = format!("00-{trace}-{}-01", id(node));
     assert_eq!(vec![vec![expected]], traceparents(&a).await?);
@@ -185,7 +198,7 @@ async fn a_routed_read_sends_the_gateways_trace_never_the_clients() -> TestResul
 }
 
 #[tokio::test]
-async fn a_traceparent_that_does_not_parse_leaves_no_link() -> TestResult {
+async fn a_traceparent_that_does_not_parse_is_recorded_nowhere() -> TestResult {
     let exported = Exported::install()?;
     let a = holder().await;
     let b = stranger().await;
@@ -197,8 +210,7 @@ async fn a_traceparent_that_does_not_parse_leaves_no_link() -> TestResult {
     let (status, _, text) = answer(over(dir.path(), &a, &b)?, read).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let spans = exported.spans()?;
-    let request = the(&spans, "GET /v1/ehr/{ehr_id}")?;
-    assert!(request.links.links.is_empty(), "{:?}", request.links);
+    recorded_nowhere(&spans, &["synthetic-not-a-trace"]);
     none_of_the_clients(&a, &["synthetic-not-a-trace"]).await
 }
 
@@ -229,7 +241,7 @@ const HEX_DIGITS: &str = "3132333435";
 
 // conformance: CP-26 track-10
 #[tokio::test]
-async fn an_identifier_hidden_in_the_clients_trace_id_never_reaches_a_node() -> TestResult {
+async fn an_identifier_hidden_in_the_clients_trace_id_reaches_no_node_and_no_span() -> TestResult {
     let exported = Exported::install()?;
     let a = node_answering("uid-at-a").await;
     let b = node_answering("uid-at-b").await;
@@ -253,16 +265,15 @@ async fn an_identifier_hidden_in_the_clients_trace_id_never_reaches_a_node() -> 
     let response = send(app, request).await?;
     assert_eq!(StatusCode::OK, response.status());
     let spans = exported.spans()?;
-    let gateway_trace = linked_root(the(&spans, "POST /v1/query/aql")?, &trace, CLIENT_SPAN)?;
+    let gateway_trace = own_root(the(&spans, "POST /v1/query/aql")?, &trace)?;
     for span in &spans {
         assert_eq!(
             gateway_trace,
             span.span_context.trace_id(),
             "one gateway trace"
         );
-        let carried = format!("{:?}{:?}", span.attributes, span.events);
-        assert!(!carried.contains(HEX_DIGITS), "{}: {carried}", span.name);
     }
+    recorded_nowhere(&spans, &[trace.as_str(), HEX_DIGITS, CLIENT_SPAN]);
     for server in [&a, &b] {
         assert_eq!(
             1,

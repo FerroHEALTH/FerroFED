@@ -24,15 +24,14 @@
 //! The same middleware opens the `request` span every other span of the
 //! request sits under, with the same fields as the line: the method, the
 //! route template, the status and the gateway's request id. It is the root
-//! of a trace of the gateway's own, linked to a client's `traceparent` and
-//! never its child ([`trace_context::link_from`]).
+//! of a trace of the gateway's own; a client's `traceparent` and
+//! `tracestate` are never read ([`ferrofed_engine::trace_context`]).
 //!
 //! [`OutboundId`]: ferrofed_engine::outbound_id::OutboundId
 
 use axum::extract::{MatchedPath, OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
-use ferrofed_engine::trace_context;
 use http::Method;
 use openehr_its::rest::routes::{self, Lookup};
 use std::sync::Arc;
@@ -81,7 +80,6 @@ pub async fn log(State(base): State<Arc<BasePath>>, request: Request, next: Next
         otel.status_code = Empty,
         request_id = id.as_str(),
     );
-    trace_context::link_from(&span, request.headers());
     let started = Instant::now();
     let response = next.run(request).instrument(span.clone()).await;
     let status = response.status();

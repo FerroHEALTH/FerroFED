@@ -21,6 +21,16 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+### Security
+
+- The trace export records nothing of a client's `traceparent` or
+  `tracestate`. The request span recorded the client's trace id and span id
+  as a span link, and a client chooses its trace id freely, so a patient
+  identifier hex-encoded in it reached the operator's trace collector. The
+  gateway now reads neither header: it starts its own trace for every
+  request, as before, and every trace id and span id an exported span
+  carries is one it generated (#446).
+
 ### Added
 
 - `[telemetry] trace_sample_ratio` sets the share of client requests whose
@@ -63,9 +73,8 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   event is exported. Every client request starts a trace of the gateway's
   own with a random trace id, and each node request carries a W3C
   `traceparent` from its own span in that trace. A client's `traceparent`
-  is recorded only as a span link the collector sees, never as the parent,
-  so no trace id a client chose reaches a node; its `tracestate` is never
-  read or forwarded (#353).
+  and `tracestate` are never read, so no trace id a client chose reaches a
+  node or an exported span (#353, #446).
 
 - The resolution bindings of §12.5.1 step 2 are kept per verified caller,
   the token's issuer, subject and client together. A federated query and a
