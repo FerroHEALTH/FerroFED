@@ -32,10 +32,9 @@
 //!   (N27a; no specification governs the answer: our own design);
 //! - the localizer could not answer and the deployment fails closed: `424`
 //!   with no member asked, because a holder may be among them (§14.1);
-//! - the demographics step, which a subject in a namespace it handles is
-//!   taken to first, knows no patient for it: `404`; its answer names no one
-//!   master identity or it could not answer: `424`, as a localizer outage
-//!   when an undirected read fails closed (Annex A §A.2, §14.1);
+//! - the demographics step knows no patient for the subject: `404`; it names
+//!   no one master identity or could not answer: `424`, as a localizer
+//!   outage when an undirected read fails closed (Annex A §A.2, §14.1);
 //! - no member knows it: `404`, the operation's own answer for a subject with
 //!   no EHR (ITS-REST 1.1.0 `404_EHR_subject`, §11.2).
 //!
