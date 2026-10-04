@@ -1,0 +1,279 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! How a federation is built: at boot from the settings, after a registry
+//! reload over what the process learned, and from parts for a test.
+
+use std::collections::BTreeSet;
+use std::num::NonZeroU32;
+use std::sync::Arc;
+
+use ferrofed_engine::dispatch::NodeClients;
+use ferrofed_engine::fanout::Budget;
+use ferrofed_identity::binding::ResolutionBindings;
+use ferrofed_identity::resolver::Resolver;
+use ferrofed_registry::id::NodeId;
+use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
+use openehr_federation::aql::{Context, Targeting};
+use openehr_federation::id::FederationId;
+use openehr_its::rest::client::ReqwestTransport;
+
+use crate::config::NodeSelection;
+use crate::config::settings::Settings;
+use crate::facade::options;
+use crate::health::dependencies::Dependencies;
+use crate::localization::{self, LocalizationPolicy};
+use crate::metrics::nodes::NodeRequests;
+use crate::onward::NodeTransport;
+
+use super::error::FederationError;
+use super::pixm::pixm_resolver;
+use super::registry::read_registry;
+use super::{Federation, Observed, Reconciled, widened};
+
+impl Federation {
+    /// Builds the federation `settings` describe, or `None` when no registry
+    /// document is configured.
+    ///
+    /// The registry document is read and checked, every endpoint gets a node
+    /// client over one shared connection pool, an endpoint with a
+    /// `[credentials]` section sends them on every request, and the static
+    /// cross-reference is enabled when `[dev]` is set under the development
+    /// profile. Without a resolver, a query that names a patient fails closed
+    /// (§11.3 covers only an answered lookup; no specification governs this:
+    /// our own design).
+    ///
+    /// # Errors
+    /// Returns a [`FederationError`] for a registry document that does not
+    /// load, a `[dev]` table that is refused, a credentials key or a
+    /// `federation.demographic_endpoint` that names no endpoint of the
+    /// registry, and an HTTP client that cannot be built.
+    pub fn load(settings: &Settings) -> Result<Option<Self>, FederationError> {
+        Self::assemble(settings, read_registry(settings), None)
+    }
+
+    /// Builds the federation `settings` describe over `document`, the
+    /// registry document [`read_registry`] read from the same settings.
+    ///
+    /// The boot reads the document once, describes it in the startup banner,
+    /// and builds over it here, so the gateway serves the document the banner
+    /// described. The checks are [`Federation::load`]'s, in the same order.
+    ///
+    /// # Errors
+    /// Returns the [`FederationError`] [`Federation::load`] returns, the
+    /// read's own error included.
+    pub fn load_read(
+        settings: &Settings,
+        document: Option<Result<RegistrySnapshot, FederationError>>,
+    ) -> Result<Option<Self>, FederationError> {
+        Self::assemble(settings, document, None)
+    }
+
+    /// Builds the federation `settings` describe after a registry reload over
+    /// `document`, the registry [`read_registry`] read again or a refresh of
+    /// the care services directory read, checked as [`Federation::load_read`]
+    /// checks it at boot.
+    ///
+    /// The new federation has its own snapshot, node clients and resolver,
+    /// and keeps what this one learned: the resolution bindings, the `ehr_id`
+    /// index and the learned `creating_system_id` map, which
+    /// [`Federation::reconcile`] then holds to the new snapshot, and records
+    /// its node requests through this one's instruments. This federation is
+    /// unchanged, so a request that took it finishes on it.
+    ///
+    /// # Errors
+    /// Returns the [`FederationError`] [`Federation::load_read`] returns for
+    /// the same settings and document.
+    pub fn reloaded(
+        &self,
+        settings: &Settings,
+        document: Option<Result<RegistrySnapshot, FederationError>>,
+    ) -> Result<Option<Self>, FederationError> {
+        let mut next = Self::assemble(settings, document, Some(Arc::clone(&self.observed)))?;
+        if let (Some(next), Some(instruments)) = (next.as_mut(), self.requests.instruments()) {
+            next.requests.metered(instruments.clone());
+        }
+        Ok(next)
+    }
+
+    /// Holds what the process learned to this federation's snapshot, after a
+    /// reload in which the members `departed` left the registry.
+    ///
+    /// Every learned `creating_system_id` route the new document contradicts
+    /// is withdrawn with its incident ([`LearnedMap::reconcile`](ferrofed_registry::creating_system::LearnedMap::reconcile)), and every
+    /// `ehr_id` index entry and resolution binding naming a member that left
+    /// is dropped.
+    #[must_use]
+    pub fn reconcile(&self, departed: &BTreeSet<NodeId>) -> Reconciled {
+        let incidents = self.learned().reconcile(&self.snapshot);
+        Reconciled {
+            incidents,
+            index_dropped: self.observed.index.forget_members(departed),
+            bindings_dropped: self.observed.bindings.forget_members(departed),
+        }
+    }
+
+    /// Builds the federation over `document`, and over `observed` when a
+    /// reload carries it over.
+    fn assemble(
+        settings: &Settings,
+        document: Option<Result<RegistrySnapshot, FederationError>>,
+        observed: Option<Arc<Observed>>,
+    ) -> Result<Option<Self>, FederationError> {
+        let Some(document) = document else {
+            if settings.dev.is_some() {
+                return Err(FederationError::DevWithoutRegistry);
+            }
+            if settings.pixm.is_some() {
+                return Err(FederationError::PixmWithoutRegistry);
+            }
+            if settings.federation.demographic_endpoint.is_some() {
+                return Err(FederationError::DemographicWithoutRegistry);
+            }
+            return Ok(None);
+        };
+        let Some(selection) = settings.federation.node_selection else {
+            return Err(FederationError::NodeSelectionUndeclared);
+        };
+        let Some(id) = settings.federation.id.clone() else {
+            return Err(FederationError::IdUndeclared);
+        };
+        let snapshot = document?;
+        if let Some(endpoint) = &settings.federation.demographic_endpoint
+            && snapshot.endpoint(endpoint).is_none()
+        {
+            return Err(FederationError::DemographicEndpointUnknown {
+                endpoint: endpoint.clone(),
+            });
+        }
+        let (mut development, mut consent, mut pixm) = (None, None, None);
+        let resolver = match (&settings.dev, &settings.pixm) {
+            (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
+            (None, None) => None,
+            (Some(section), None) => {
+                (development, consent) = crate::development::seams(settings, section, &snapshot)?;
+                development.clone().map(|it| -> Arc<dyn Resolver> { it })
+            }
+            (None, Some(section)) => {
+                pixm = Some(pixm_resolver(section, &snapshot)?);
+                pixm.clone().map(|it| -> Arc<dyn Resolver> { it })
+            }
+        };
+        let resolving = localization::Resolving { development, pixm };
+        let localization = localization::policy(settings, selection, resolving, &snapshot)
+            .map_err(FederationError::Localization)?;
+        // NOTE: §11.5 deadlines live on each call; the client's own timeout
+        // only backstops a connection the call deadline cannot reach.
+        let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
+            .map_err(|source| FederationError::Transport(Box::new(source)))?;
+        let onward = crate::onward::onward(settings, &snapshot, transport)?;
+        let signer = Arc::new(crate::conveyed::signer(settings, &id)?);
+        let clients = NodeClients::from_snapshot(&snapshot, &onward.transport, &onward.credentials)
+            .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
+            .map_err(FederationError::Clients)?;
+        let mut context = Context::new(targeting(selection))
+            .with_offset_strategy(settings.federation.offset)
+            .with_decomposable_aggregates(settings.federation.decomposable.iter().copied());
+        if let Some(namespace) = &settings.federation.default_namespace {
+            context = context.with_default_namespace(namespace.clone());
+        }
+        let dependencies =
+            Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some())
+                .with_consent(consent.is_some())
+                .with_localizer(localization.localizer().is_some())
+                .with_audit_repository(localization.repository().cloned());
+        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
+        let federation = Self {
+            id,
+            snapshot: Arc::new(snapshot),
+            clients,
+            resolver,
+            localization,
+            consent,
+            observed: observed.unwrap_or_else(|| {
+                let federation = &settings.federation;
+                Arc::new(Observed::new(
+                    ResolutionBindings::new(federation.binding_ttl)
+                        .with_capacity(widened(federation.binding_capacity)),
+                    federation.ehr_index_capacity,
+                ))
+            }),
+            context,
+            budget: settings.federation.budget,
+            best_effort: settings.federation.best_effort,
+            demographic: settings.federation.demographic_endpoint.clone(),
+            dependencies,
+            requests,
+            template_fan_out: settings.federation.fan_out_template_upload,
+            stored_query_fan_out: settings.federation.fan_out_stored_queries,
+            signing: settings.signing.clone(),
+            signer: Some(signer),
+        };
+        options::describe(&federation, false).map_err(FederationError::Describe)?;
+        Ok(Some(federation))
+    }
+
+    /// Assembles a federation from parts, for a test that builds its own.
+    ///
+    /// It offers best-effort completion, as the configuration does by
+    /// default; [`Federation::with_best_effort`] withdraws it. It fans no
+    /// template upload out, as the configuration does not by default;
+    /// [`Federation::with_template_fan_out`] offers it.
+    #[must_use]
+    pub fn new(
+        id: FederationId,
+        snapshot: RegistrySnapshot,
+        clients: NodeClients<NodeTransport>,
+        resolver: Option<Arc<dyn Resolver>>,
+        context: Context,
+        budget: Budget,
+    ) -> Self {
+        let dependencies =
+            Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
+        let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
+        Self {
+            id,
+            snapshot: Arc::new(snapshot),
+            clients,
+            resolver,
+            localization: LocalizationPolicy::none(),
+            consent: None,
+            observed: Arc::new(Observed::new(
+                ResolutionBindings::new(std::time::Duration::from_millis(
+                    crate::config::Federation::default().binding_ttl_ms,
+                )),
+                default_index_capacity(),
+            )),
+            context,
+            budget,
+            best_effort: crate::config::Federation::default().best_effort,
+            demographic: None,
+            dependencies,
+            requests,
+            template_fan_out: crate::config::Federation::default().fan_out_template_upload,
+            stored_query_fan_out: crate::config::Federation::default().fan_out_stored_queries,
+            signing: None,
+            signer: None,
+        }
+    }
+}
+
+/// The configuration's default `ehr_id` index capacity.
+#[expect(
+    clippy::expect_used,
+    reason = "the default capacity is a positive literal in the Federation Default impl"
+)]
+fn default_index_capacity() -> NonZeroU32 {
+    NonZeroU32::new(crate::config::Federation::default().ehr_index_capacity)
+        .expect("the default ehr_id index capacity should be positive")
+}
+
+/// The rewrite's targeting for an undirected query under the declared node
+/// selection (§4.3, N4), which `OPTIONS {base}/` declares as `aql.fan_out`
+/// (§7a.2).
+fn targeting(selection: NodeSelection) -> Targeting {
+    match selection {
+        NodeSelection::AskAll => Targeting::AskAll,
+        NodeSelection::Localized => Targeting::Localized,
+    }
+}

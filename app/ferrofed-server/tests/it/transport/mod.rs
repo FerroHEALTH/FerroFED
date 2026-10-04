@@ -28,7 +28,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::Store;
 use ferrofed_server::config::transport::{self, CleartextError, Encryption, ProtectedSite};
-use ferrofed_server::federation::read_registry;
+use ferrofed_server::federation::registry::read_registry;
 use ferrofed_server::reload::{ReloadError, Reloader};
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::telemetry::{Rendering, subscriber};

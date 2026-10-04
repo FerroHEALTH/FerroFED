@@ -1,0 +1,50 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The registry a federation is built over: the document or the care
+//! services directory the settings name.
+
+use std::path::Path;
+
+use ferrofed_identity::directory;
+use ferrofed_registry::snapshot::RegistrySnapshot;
+
+use crate::config::RegistryFormat;
+use crate::config::settings::Settings;
+
+use super::error::FederationError;
+
+/// Reads and checks the registry document or the care services directory
+/// `settings` name, blocking the caller, or returns `None` for neither.
+///
+/// The read fails with [`FederationError::Registry`] or
+/// [`FederationError::FhirRegistry`] for a document that cannot be read or
+/// refuses to load, and with [`FederationError::Directory`] for a directory
+/// that cannot be read or holds no valid registry; [`Federation::load_read`](super::Federation::load_read)
+/// stops on that error.
+#[must_use]
+pub fn read_registry(settings: &Settings) -> Option<Result<RegistrySnapshot, FederationError>> {
+    if let Some(directory) = &settings.registry_directory {
+        return Some(crate::directory::read(directory));
+    }
+    let path = settings.registry_document.as_deref()?;
+    Some(read_document(path, settings.registry_format))
+}
+
+/// Reads the registry document at `path`, written in `format`.
+fn read_document(path: &Path, format: RegistryFormat) -> Result<RegistrySnapshot, FederationError> {
+    match format {
+        RegistryFormat::Toml => {
+            RegistrySnapshot::read(path).map_err(|source| FederationError::Registry {
+                path: path.to_path_buf(),
+                source: Box::new(source),
+            })
+        }
+        RegistryFormat::Fhir => {
+            directory::read(path).map_err(|source| FederationError::FhirRegistry {
+                path: path.to_path_buf(),
+                source: Box::new(source),
+            })
+        }
+    }
+}

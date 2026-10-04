@@ -26,7 +26,7 @@ use openehr_federation::id::FederationId;
 use crate::auth::caller::{Caller, VerifiedBy};
 use crate::config::settings::{Scheme, Settings};
 use crate::error::{self, Code};
-use crate::federation::{Federation, FederationError};
+use crate::federation::{Federation, error::FederationError};
 
 /// A request that cannot convey whom it is on behalf of, so nothing is sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

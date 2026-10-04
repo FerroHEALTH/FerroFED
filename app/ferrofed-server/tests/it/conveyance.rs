@@ -409,7 +409,7 @@ async fn a_registry_from_either_source_without_a_signing_key_does_not_load() -> 
         assert!(
             matches!(
                 refused,
-                Some(ferrofed_server::federation::FederationError::Unsigned)
+                Some(ferrofed_server::federation::error::FederationError::Unsigned)
             ),
             "§13.1, N24: {source}: {refused:?}"
         );

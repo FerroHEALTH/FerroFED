@@ -14,7 +14,7 @@ use crate::config::settings::Settings;
 use crate::config::stored_queries::{Backend, Store};
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::directory::DirectoryRegistry;
-use crate::federation::{Federation, FederationError, read_registry};
+use crate::federation::{Federation, error::FederationError, registry::read_registry};
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
 use crate::metrics::{Metrics, MetricsError};

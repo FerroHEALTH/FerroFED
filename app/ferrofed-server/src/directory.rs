@@ -32,7 +32,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::Credentials;
 
 use crate::config::settings::{DirectorySettings, Scheme, Settings};
-use crate::federation::{FederationError, read_registry};
+use crate::federation::{error::FederationError, registry::read_registry};
 use crate::health::dependencies::Observed;
 use crate::reload::{Applied, ReloadError, Reloader};
 

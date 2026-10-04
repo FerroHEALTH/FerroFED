@@ -20,7 +20,7 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::facade::options::MAX_WINDOW;
-use ferrofed_server::federation::{Federation, FederationError};
+use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};

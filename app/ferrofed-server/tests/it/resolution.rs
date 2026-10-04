@@ -21,7 +21,7 @@ use axum::Router;
 use ferrofed_identity::pixm::PixmConfigError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
-use ferrofed_server::federation::{Federation, FederationError};
+use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
 use http::StatusCode;
