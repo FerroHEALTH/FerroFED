@@ -24,6 +24,9 @@
 #   registry.toml  the registry document      /etc/ferrofed/registry.toml
 #   secrets/       one file per credential    /run/secrets/ferrofed/
 #
+# and, writable, the named volume audit-spool at /var/lib/ferrofed, where
+# the ITI-20 audit spool lives.
+#
 # A missing ferrofed.toml or registry.toml stops `docker compose up`; a
 # missing secrets/ is created empty. A configuration the gateway refuses
 # stops it with exit code 78 and one line naming the key, which
@@ -80,20 +83,21 @@ services:
         read_only: true
         bind:
           create_host_path: true
-      # The ITI-20 audit spool, with [xcpd] audit = "repository": the one
-      # directory the gateway writes. Create it for the image's user first
-      # (install -d -m 0700 -o 65532 -g 65532 audit-spool) and set
-      # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool".
-      # It holds audit messages that name a patient until the repository
-      # takes them, so keep it on an encrypted disk.
-      # - type: bind
-      #   source: ./audit-spool
-      #   target: /var/lib/ferrofed/audit-spool
+      # The ITI-20 audit spool of [xcpd] audit = "repository", with
+      # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool":
+      # the one directory the gateway writes. Docker fills a new named volume
+      # from the image's /var/lib/ferrofed, which is owned by the gateway
+      # user with mode 0700, so it needs no step on the host. It holds audit
+      # messages that name a patient until the repository takes them, so put
+      # Docker's volume storage on an encrypted disk.
+      - type: volume
+        source: audit-spool
+        target: /var/lib/ferrofed
     # Lets a registry URL name a CDR on the Docker host itself as
     # host.docker.internal.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # The gateway writes nothing but the optional audit spool above: no cache,
+    # The gateway writes nothing but the audit spool volume above: no cache,
     # no scratch file, and every secret is read at boot. So the root
     # filesystem is read-only with no tmpfs beside it.
     # The image runs as the numeric user 65532 and has no shell.
@@ -123,3 +127,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+# The audit spool's named volume (see the ferrofed service).
+volumes:
+  audit-spool:

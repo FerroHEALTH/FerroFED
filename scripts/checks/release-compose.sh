@@ -95,7 +95,8 @@ if [ -z "$binary" ]; then
   echo "no ferrofed binary given: config check skipped"
 elif [ -n "$rendered" ]; then
   echo "== config check over the attached examples"
-  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | head -n1)"
+  # The image the gateway runs in is the Dockerfile's last stage.
+  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | tail -n1)"
   config="$(jq -r '.services.ferrofed.environment.FERROFED_CONFIG // empty' <<< "$rendered")"
   mounts=()
   while IFS= read -r mount; do

@@ -119,7 +119,8 @@ bearer_token_file = "/run/secrets/ferrofed/pix-token"
 # federation.node_selection = "localized", and send each exchange's audit
 # message to your ATNA Audit Record Repository over ITI-20. That message
 # names this gateway's homeCommunityID, so home_community is required with
-# audit = "repository". Mount a spool volume (compose.yaml shows one).
+# audit = "repository". compose.yaml mounts the spool's volume at
+# /var/lib/ferrofed.
 # https://ferrofed.eu/docs/operate/identity.html#the-audit-repository
 # [xcpd]
 # sender_device = "2.999.40.1"                  # EDIT
