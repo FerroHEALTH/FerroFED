@@ -524,7 +524,8 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint,
                 source: Box::new(error),
             },
-            ClientError::Credentials { ref source, .. } => ForwardError::Credentials {
+            ClientError::Credentials { ref source, .. }
+            | ClientError::DpopProof { ref source, .. } => ForwardError::Credentials {
                 error: reported::unauthenticated(source, &endpoint, options.request_id()),
                 endpoint,
                 source: Box::new(error),

@@ -157,7 +157,7 @@ pub(super) fn failed(
             },
             Contact::Answered(status),
         ),
-        ClientError::Credentials { source, .. } => failure(
+        ClientError::Credentials { source, .. } | ClientError::DpopProof { source, .. } => failure(
             Outcome::NodeError {
                 latency_ms,
                 error: reported::unauthenticated(&source, endpoint, options.request_id()),

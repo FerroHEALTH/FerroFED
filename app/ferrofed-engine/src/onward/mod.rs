@@ -23,8 +23,9 @@
 //! ([`conveyance`]; N24).
 //!
 //! A grant may bind its tokens to a key of the gateway's with `DPoP` (RFC
-//! 9449): [`dpop::DpopTransport`] adds a proof to every request to that
-//! endpoint and to its token endpoint.
+//! 9449): its [`dpop::Prover`] proves every request to its token endpoint,
+//! and every request to its node through the node client's
+//! [`dpop::NodeProver`].
 
 use std::fmt;
 use std::sync::Arc;
@@ -102,7 +103,6 @@ impl Scope {
     /// scope of the `system` compartment.
     pub fn parse(text: &str) -> Result<Self, ScopeError> {
         let mut scopes = Vec::new();
-        let mut written = Vec::new();
         for raw in text.split_whitespace() {
             let scope = SmartScope::parse(raw);
             match &scope {
@@ -114,17 +114,12 @@ impl Scope {
                 }
             }
             scopes.push(scope);
-            written.push(raw);
         }
         if scopes.is_empty() {
             return Err(ScopeError::Empty);
         }
-        // NOTE: no specification governs this: our own design; openehr-sdt prints
-        // no SmartScope, so each scope travels as written once it parsed.
-        Ok(Self {
-            scopes,
-            text: written.join(" "),
-        })
+        let text = SmartScope::format_all(&scopes);
+        Ok(Self { scopes, text })
     }
 
     /// The scopes, as `openehr-sdt` read them.
@@ -133,8 +128,9 @@ impl Scope {
         &self.scopes
     }
 
-    /// The `scope` parameter the token request carries: each scope as
-    /// written, one space apart (RFC 6749 §3.3).
+    /// The `scope` parameter the token request carries: each scope in the
+    /// canonical form of the SMART on openEHR grammar, as `openehr-sdt`
+    /// prints it, one space apart (RFC 6749 §3.3).
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.text
@@ -250,7 +246,7 @@ impl Grant {
     /// This grant, binding its tokens to `prover`'s key with `DPoP` (RFC
     /// 9449): the token endpoint must answer `token_type` `DPoP` (§5), and
     /// the requests to the token endpoint and to the node carry proofs of
-    /// that key ([`dpop::DpopTransport`]).
+    /// that key ([`dpop::NodeProver`] for the node's).
     #[must_use]
     pub fn with_dpop(mut self, prover: Arc<Prover>) -> Self {
         self.dpop = Some(prover);

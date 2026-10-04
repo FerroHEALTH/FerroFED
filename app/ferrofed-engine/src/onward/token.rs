@@ -10,9 +10,11 @@
 //!
 //! The request is composed here and sent through the same HTTP engine as
 //! the node requests. The token endpoint is no ITS-REST resource, so no
-//! `openehr-its` operation describes it.
+//! `openehr-its` operation describes it. A grant whose tokens are bound with
+//! `DPoP` proves each token request with its [`Prover`], and answers a
+//! demanded nonce by sending the request once more (RFC 9449 §8).
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use http::header::{ACCEPT, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
@@ -26,6 +28,7 @@ use url::form_urlencoded;
 
 use crate::dispatch::reported::MESSAGE_LIMIT;
 use crate::onward::Grant;
+use crate::onward::dpop::{self, Prover};
 use crate::onward::keys::{ALGORITHM, SigningKey};
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
@@ -49,9 +52,9 @@ pub const JWT_TOKEN_TYPE: &str = "urn:ietf:params:oauth:token-type:jwt";
 /// A token the endpoint issued: the access token, ready to send as a
 /// credential, and its lifetime when the endpoint stated one.
 ///
-/// A `DPoP`-bound token is held as a bearer credential too: the
-/// [`DpopTransport`](crate::onward::dpop::DpopTransport) of its endpoint
-/// sends it under the `DPoP` scheme with a proof (RFC 9449 §7.1).
+/// A `DPoP`-bound token is a `Credentials::Dpop`, which the node's client
+/// sends under the `DPoP` scheme with a proof (RFC 9449 §7.1), and never
+/// under `Bearer`.
 #[derive(Debug)]
 pub struct Issued {
     /// The access token as the `Authorization` credential.
@@ -73,6 +76,10 @@ pub enum TokenError {
     /// The token request could not be composed.
     #[error("the token request could not be composed")]
     Compose(#[source] http::Error),
+    /// The `DPoP` proof of the token request could not be signed (RFC 9449
+    /// §4.2); nothing was sent.
+    #[error("the DPoP proof of the token request could not be signed")]
+    Proof(#[source] jsonwebtoken::errors::Error),
     /// The token endpoint did not answer before the timeout.
     #[error("the token endpoint did not answer in time")]
     TimeOut(#[source] TransportError),
@@ -377,27 +384,92 @@ fn targeted(form: &mut form_urlencoded::Serializer<'_, String>, grant: &Grant) {
 
 /// Posts the `application/x-www-form-urlencoded` `body` to `grant`'s token
 /// endpoint and reads the token response.
+///
+/// Under a `DPoP` grant each send carries a proof, a nonce the endpoint
+/// sends is kept for the next proof, and a `400` [`dpop::USE_NONCE`] that
+/// carries one is answered by sending the request once more, within the
+/// time `timeout` left (RFC 9449 §8).
 async fn send<T: Transport>(
     grant: &Grant,
     body: String,
     transport: &T,
     timeout: Duration,
 ) -> Result<TokenResponse, TokenError> {
-    let mut built = http::Request::builder()
+    let started = Instant::now();
+    let body = body.into_bytes();
+    let mut resend = grant.dpop().is_some();
+    let answer = loop {
+        let left = timeout.saturating_sub(started.elapsed());
+        let answer = post(grant, &body, transport, left).await?;
+        let Some((prover, nonce)) = grant.dpop().zip(nonce_of(&answer)) else {
+            break answer;
+        };
+        prover.remember(grant.token_endpoint(), &nonce);
+        if !(resend && demands_nonce(&answer)) {
+            break answer;
+        }
+        resend = false;
+    };
+    read(&answer)
+}
+
+/// Sends `body` to `grant`'s token endpoint once, with a `DPoP` proof under
+/// a `DPoP` grant, waiting at most `timeout`.
+async fn post<T: Transport>(
+    grant: &Grant,
+    body: &[u8],
+    transport: &T,
+    timeout: Duration,
+) -> Result<http::Response<Vec<u8>>, TokenError> {
+    let mut builder = http::Request::builder()
         .method(Method::POST)
         .uri(grant.token_endpoint().as_str())
         .header(
             CONTENT_TYPE,
             HeaderValue::from_static("application/x-www-form-urlencoded"),
         )
-        .header(ACCEPT, HeaderValue::from_static("application/json"))
-        .body(body.into_bytes())
-        .map_err(TokenError::Compose)?;
+        .header(ACCEPT, HeaderValue::from_static("application/json"));
+    if let Some(prover) = grant.dpop() {
+        builder = builder.header(dpop::HEADER, proof(prover, grant)?);
+    }
+    let mut built = builder.body(body.to_vec()).map_err(TokenError::Compose)?;
     built.extensions_mut().insert(RequestTimeout(timeout));
-    let answer = transport.send(built).await.map_err(|error| match error {
+    transport.send(built).await.map_err(|error| match error {
         TransportError::Timeout { .. } => TokenError::TimeOut(error),
         TransportError::Send { .. } => TokenError::Unreachable(error),
-    })?;
+    })
+}
+
+/// The `DPoP` proof of a token request to `grant`'s token endpoint, which
+/// carries no access token, so no `ath` (RFC 9449 §4.2).
+fn proof(prover: &Prover, grant: &Grant) -> Result<String, TokenError> {
+    prover
+        .prove(&Method::POST, grant.token_endpoint(), None)
+        .map_err(TokenError::Proof)
+}
+
+/// The nonce `answer` carries in [`dpop::NONCE_HEADER`], when it carries
+/// one.
+fn nonce_of(answer: &http::Response<Vec<u8>>) -> Option<String> {
+    // NOTE: RFC 9449 §8, a nonce is visible ASCII; one that is not is
+    // legitimately unusable, and the endpoint is answered as if it sent none.
+    answer
+        .headers()
+        .get(dpop::NONCE_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
+}
+
+/// Whether `answer` is the token endpoint's demand for a nonce: a `400`
+/// whose RFC 6749 §5.2 error is [`dpop::USE_NONCE`] (RFC 9449 §8).
+fn demands_nonce(answer: &http::Response<Vec<u8>>) -> bool {
+    answer.status() == StatusCode::BAD_REQUEST
+        && serde_json::from_slice::<ErrorResponse>(answer.body())
+            .is_ok_and(|refused| refused.error == dpop::USE_NONCE)
+}
+
+/// The token response `answer` carries, or the refusal it states.
+fn read(answer: &http::Response<Vec<u8>>) -> Result<TokenResponse, TokenError> {
     let status = answer.status();
     let body = answer.body();
     if status == StatusCode::OK {
@@ -433,7 +505,12 @@ fn issued(grant: &Grant, token: TokenResponse) -> Result<Issued, TokenError> {
             expected,
         });
     }
-    let credentials = Credentials::bearer(SecretString::from(token.access_token));
+    let access = SecretString::from(token.access_token);
+    let credentials = if grant.dpop().is_some() {
+        Credentials::dpop(access)
+    } else {
+        Credentials::bearer(access)
+    };
     credentials.header_value().map_err(TokenError::Token)?;
     Ok(Issued {
         credentials,

@@ -116,12 +116,12 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
             fault: BasicFault::ControlCharacter,
             source,
         },
-        InvalidCredentials::NotB64Token | InvalidCredentials::NotAHeaderValue(_) => {
-            Error::Authorization {
-                key: password(),
-                source,
-            }
-        }
+        InvalidCredentials::NotB64Token
+        | InvalidCredentials::NotToken68
+        | InvalidCredentials::NotAHeaderValue(_) => Error::Authorization {
+            key: password(),
+            source,
+        },
     }
 }
 

@@ -62,6 +62,7 @@ use url::Url;
 
 mod classify;
 pub mod definition;
+mod dpop;
 mod gate;
 mod on_behalf;
 mod query;
@@ -353,6 +354,7 @@ impl Contact {
             ClientError::BaseUrl { .. }
             | ClientError::DeadlineElapsed { .. }
             | ClientError::Credentials { .. }
+            | ClientError::DpopProof { .. }
             | ClientError::Build { .. }
             | ClientError::HeaderName { .. }
             | ClientError::InvalidCredentials { .. }

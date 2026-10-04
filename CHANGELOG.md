@@ -350,6 +350,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   databases: run `docker compose down -v` once before the next
   `docker compose up --wait`, which removes the quickstart's data and its
   synthetic patients, then run `scripts/quickstart/seed.sh` again.
+- The `openehr-*` family moves from 0.0.81 to 0.0.82 (FerroEHR #3557,
+  #3558). An onward OAuth 2.0 grant now requests its configured `scope` in
+  the canonical form of the SMART on openEHR grammar, as `openehr-sdt`
+  prints it (#456): the permissions in `c`, `r`, `u`, `d`, `s` order and one
+  space between scopes, so `system/aql-*.sr` is requested as
+  `system/aql-*.rs`. A token exchange asks for the caller's covering scopes
+  in the same form. An authorization server that compares scope strings
+  sees the canonical form, not the text in the configuration or the
+  caller's token.
+- A `DPoP`-bound onward token is sent by the `openehr-its` client itself
+  (#448): the client writes the `DPoP` scheme and asks the endpoint's key
+  for each request's proof, and answers a node's `use_dpop_nonce` challenge
+  with one re-send; when the request's deadline passes before that re-send,
+  the node is `time-out`. The token request proves itself and answers a
+  token endpoint's `use_dpop_nonce` the same way.
 - The Kubernetes example bounds the gateway's ephemeral storage (#452): the
   container requests `128Mi` and is limited to `1Gi`, and the audit-spool
   `emptyDir` has a `sizeLimit` of `512Mi`, which holds the default spool

@@ -287,13 +287,19 @@ impl<T: Transport + Clone> NodeClient<T> {
                     "the node answered {status} with a body that is not an ITS-REST StoredQuery"
                 )),
             )),
-            ClientError::Credentials { source, .. } => Ok(Stored {
-                outcome: Outcome::NodeError {
-                    latency_ms,
-                    error: reported::unauthenticated(&source, &self.endpoint, options.request_id()),
-                },
-                contact: Contact::Unsent,
-            }),
+            ClientError::Credentials { source, .. } | ClientError::DpopProof { source, .. } => {
+                Ok(Stored {
+                    outcome: Outcome::NodeError {
+                        latency_ms,
+                        error: reported::unauthenticated(
+                            &source,
+                            &self.endpoint,
+                            options.request_id(),
+                        ),
+                    },
+                    contact: Contact::Unsent,
+                })
+            }
             other => Err(DispatchError::Compose {
                 endpoint: self.endpoint.clone(),
                 source: Box::new(other),

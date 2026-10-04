@@ -69,7 +69,7 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
   Federation Tier  0.9.0
   ITS-REST         1.1.0
   AQL              1.1.0
-  openehr-*        0.0.81
+  openehr-*        0.0.82
 
   Base path        /
   Listen           0.0.0.0:8080
@@ -277,7 +277,10 @@ section is required except those two:
 
 - `scope` is space-separated SMART on openEHR scopes, each a resource scope
   of the `system` compartment (`system/aql-*.s`, `system/composition-*.cru`);
-  anything else is refused at load.
+  anything else is refused at load. The token request carries each scope in
+  the canonical form of the grammar, its permissions in `c`, `r`, `u`, `d`,
+  `s` order and one space between scopes: `system/aql-*.sr` is requested as
+  `system/aql-*.rs`.
 - `token_endpoint` is an `https` URL with no user name, password, query or
   fragment; `http` is accepted only under `profile = "development"`
   ([What must travel encrypted](#what-must-travel-encrypted)).
@@ -315,9 +318,10 @@ For a request on behalf of a caller, the gateway sends the token endpoint
 the caller's verified access token as `subject_token`, an assertion of its
 own as `actor_token`, with its own `jti`, and the client assertion as
 above. It asks for the caller's granted scopes that cover the operation,
-and never the rest (N26), and names the node with `resource`. The answer
-must issue an access token (`issued_token_type`, RFC 8693 §2.2.1). The
-token is cached per caller's token and scope, at most 1024 per endpoint,
+and never the rest (N26), each in the canonical form, and names the node
+with `resource`. The answer must issue an access token
+(`issued_token_type`, RFC 8693 §2.2.1). The token is cached per caller's
+token and scope, at most 1024 per endpoint,
 until 30 seconds before it expires, and dropped when the node answers
 `401`. The cache keys on a SHA-256 of the caller's token, never the token.
 

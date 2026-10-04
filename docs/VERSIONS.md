@@ -97,7 +97,7 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.81 since 2026-10-03.
+pin is the latest version on crates.io, 0.0.82 since 2026-10-04.
 `openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
 family pin with its default features off, so only the grammar is compiled:
 the onward grant (#81) writes and checks the scope it requests with it, and client
@@ -105,11 +105,11 @@ authentication (#80) reads every caller's scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.81 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.81 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-sdt` | 0.0.81 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.82 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.82 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.82 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.82 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-sdt` | 0.0.82 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -141,6 +141,17 @@ params, #287, #292), #3541 (a reader for a Simplified Formats CONTRIBUTION,
 `ehr_create` typed), #3551 (the request-body media-type picker made public)
 and #3552 (`ROUTE_REQUEST_MEDIA` agreeing with each operation's `Content-Type`
 parameter); #329 drops the three workarounds they replace.
+0.0.82, published on 2026-10-04, carries FerroEHR #3557 and #3558. The first
+is a `Display` for `openehr_sdt::smart_scopes::SmartScope` and its parts that
+prints the canonical form of the SMART on openEHR grammar, with
+`SmartScope::format_all` as the printer that matches `parse_all`. The onward
+grant (#81) and the token exchange's covering scope (#439) now send that
+form (#456). The second is a DPoP credential on the generated client
+(RFC 9449): `Credentials::Dpop` writes the `DPoP` scheme, and
+`Client::with_dpop_prover` takes a `DpopProver` that signs each request's
+proof and answers a `use_dpop_nonce` challenge with one re-send. The node
+clients prove their requests through it, so the `Transport` decorator that
+rewrote the scheme is gone (#448).
 
 ## FHIR model crate (crates.io)
 
