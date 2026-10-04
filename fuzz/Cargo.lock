@@ -1443,11 +1443,13 @@ version = "0.0.8"
 dependencies = [
  "fhir-types",
  "http",
+ "quick-xml",
  "reqwest",
  "secrecy",
  "serde_json",
  "thiserror",
  "url",
+ "uuid",
 ]
 
 [[package]]
