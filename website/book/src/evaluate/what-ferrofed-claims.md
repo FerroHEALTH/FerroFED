@@ -135,10 +135,13 @@ once the milestone closes.
   [#418](https://github.com/FerroHEALTH/FerroFED/issues/418),
   [The audit repository](../operate/identity.md#the-audit-repository)).
 - The registry read from an IHE mCSD care services directory with ITI-90 and
-  kept in step with ITI-91, a shared directory included (§15.1, §15.2, N21,
-  Annex A.5;
+  kept in step with ITI-91, a shared directory included, with in-scope
+  deletions recorded in the replica so a dangling listing is judged the same
+  at a start and on a refresh, and a deleted endpoint dropped (§15.1, §15.2,
+  N21, Annex A.5;
   [#86](https://github.com/FerroHEALTH/FerroFED/issues/86),
-  [#423](https://github.com/FerroHEALTH/FerroFED/issues/423)).
+  [#423](https://github.com/FerroHEALTH/FerroFED/issues/423),
+  [#433](https://github.com/FerroHEALTH/FerroFED/issues/433)).
 - The §12.5.1 resolution bindings kept per verified caller (N41;
   [#412](https://github.com/FerroHEALTH/FerroFED/issues/412)).
 - A credential or a patient identifier sent only over `https` outside the
@@ -162,10 +165,7 @@ The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
   ([#443](https://github.com/FerroHEALTH/FerroFED/issues/443)), and the
   SMART on openEHR pages the client authentication cites, vendored
   ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414));
-- in-scope deletions recorded in the mCSD directory replica, so a dangling
-  listing is judged the same at boot and on refresh
-  ([#433](https://github.com/FerroHEALTH/FerroFED/issues/433)), and PMIR
-  identity-lifecycle notifications
+- PMIR identity-lifecycle notifications
   ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147));
 - the Dutch Generic Functions as optional regional adapters, NVI
   localization, the Mitz consent pre-filter and LRZa addressing

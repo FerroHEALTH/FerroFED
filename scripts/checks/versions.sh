@@ -941,7 +941,8 @@ fi
 
 echo "== container images (docker/Dockerfile, compose.yaml <-> $matrix)"
 if [ -f docker/Dockerfile ]; then
-  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | head -n1)"
+  # The base is the last stage; an earlier one only stages files for it.
+  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | tail -n1)"
   want_base="$(pin_of "Container base image" "$matrix")"
   if [ -z "$base" ]; then
     bad "docker/Dockerfile has no FROM"

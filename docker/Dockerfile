@@ -12,6 +12,18 @@
 # Build from a staged dist/ tree, at the repository root:
 #   docker buildx build -f docker/Dockerfile --platform linux/arm64 .
 
+# The ITI-20 audit spool's directories (#442), made in an empty stage because
+# distroless has no shell to make them: /var/lib/ferrofed and the spool path
+# under it. The final stage copies them owned by the gateway user with mode
+# 0700, so a named volume mounted at /var/lib/ferrofed starts with that owner
+# and mode and needs no step on the host. The spool holds audit records that
+# name patients, so the volume belongs on an encrypted disk.
+FROM scratch AS spool
+WORKDIR /spool/ferrofed/audit-spool
+
+# The image the gateway runs on, the last stage: what versions.sh holds to
+# docs/VERSIONS.md and release-compose.sh runs `config check` in.
+#
 # distroless static: ca-certificates, tzdata, an /etc/passwd carrying the
 # nonroot user (uid 65532), a /tmp, no shell and no package manager. Pinned by
 # the digest of its image index, which is what Docker resolves for a
@@ -27,6 +39,11 @@ ARG TARGETARCH
 
 # Root-owned, executable, and not writable by the runtime user.
 COPY --chmod=0555 dist/${TARGETOS}_${TARGETARCH}/ferrofed /usr/local/bin/ferrofed
+
+# The audit spool's directories, /var/lib/ferrofed/audit-spool, owned by the
+# runtime user and closed to everyone else: the gateway refuses a spool its
+# group or other users can enter.
+COPY --from=spool --chown=65532:65532 --chmod=0700 /spool/ /var/lib/
 
 # The binary's own default is loopback, which no container can publish, so the
 # image default is every interface on the documented port. The configuration

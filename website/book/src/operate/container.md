@@ -62,8 +62,10 @@ Compose and no checkout of the repository.
 A credential is never written in `ferrofed.toml`: each one is a file, named by
 a `bearer_token_file` or `password_file` key, and so is the signing key,
 named by `key_file`. Compose mounts `ferrofed.toml`, `registry.toml` and
-`secrets/` read-only at `/etc/ferrofed/` and `/run/secrets/ferrofed/`. A missing `ferrofed.toml` or `registry.toml` stops
-`docker compose up`; a missing `secrets/` is created empty.
+`secrets/` read-only at `/etc/ferrofed/` and `/run/secrets/ferrofed/`, and
+the named volume `audit-spool` at `/var/lib/ferrofed` for the
+[audit spool](#the-audit-spool). A missing `ferrofed.toml` or `registry.toml`
+stops `docker compose up`; a missing `secrets/` is created empty.
 
 A configuration the gateway refuses stops it with exit code 78, and
 `docker compose up --wait` reports the container unhealthy. `docker compose
@@ -117,12 +119,9 @@ digest of its image index. The image:
 - runs as the numeric user `65532:65532`, so an orchestrator's
   `runAsNonRoot` accepts it;
 - has no shell and no package manager;
-- needs no writable path, so it runs with a read-only root filesystem and every
-  capability dropped; the one exception is the
-  [audit spool](identity.md#the-audit-repository) of
-  `[xcpd] audit = "repository"`, a volume you mount, which
-  `deploy/compose/compose.yaml` and `deploy/kubernetes/deployment.yaml` show
-  commented out;
+- runs with a read-only root filesystem and every capability dropped, and
+  writes only to the [audit spool](#the-audit-spool) volume at
+  `/var/lib/ferrofed`;
 - binds `0.0.0.0:8080` (the binary's own default is loopback, which no
   container can publish), set through `FERROFED__SERVER__LISTEN`;
 - starts `ferrofed serve` as PID 1, so `SIGTERM` reaches the server and it
@@ -141,6 +140,23 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 `docker inspect --format '{{.State.Health.Status}}' <container>` shows the
 outcome.
 
+### The audit spool
+
+With `[xcpd] audit = "repository"`, the gateway keeps each ITI-55 audit
+message in a spool until the ATNA Audit Record Repository takes it
+([The audit repository](identity.md#the-audit-repository)). Set
+`xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool"`. The
+image ships `/var/lib/ferrofed` and that spool directory owned by the
+gateway's user `65532:65532` with mode `0700`, so a named Docker volume
+mounted at `/var/lib/ferrofed` starts with that owner and mode, and the
+release `compose.yaml` mounts one, `audit-spool`, with no step on the host.
+
+The spool holds audit records that name patients: each message carries the
+query parameters, the patient identifier among them. Keep the volume on an
+encrypted disk; the gateway holds no key to encrypt it with. Each replica
+needs a spool of its own, since two gateways must never drain one
+directory.
+
 ## Kubernetes
 
 `deploy/kubernetes/` holds an example: a ConfigMap with the configuration and
@@ -156,6 +172,12 @@ Secret, which you create before you apply the manifests. The Deployment:
 - mounts the ConfigMap at `/etc/ferrofed` and the `ferrofed-secrets` Secret
   at `/run/secrets/ferrofed`, readable by the gateway's group (`fsGroup`
   `65532`, mode `0440`);
+- mounts an `emptyDir` at `/var/lib/ferrofed` for the
+  [audit spool](#the-audit-spool), writable through the same `fsGroup`; the
+  gateway creates the spool under it with mode `0700`. An `emptyDir` keeps
+  the spool across a container restart only: for a spool that outlives the
+  pod, run a StatefulSet with a `volumeClaimTemplate` on an encrypted
+  storage class;
 - runs as the numeric user `65532` with `runAsNonRoot`, a read-only root
   filesystem, `allowPrivilegeEscalation: false`, every capability dropped and
   the `RuntimeDefault` seccomp profile;

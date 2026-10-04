@@ -296,6 +296,14 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The image ships `/var/lib/ferrofed/audit-spool`, owned by the gateway
+  user `65532:65532` with mode `0700` (#442), so the ITI-20 audit spool
+  needs no step on the host. The release `compose.yaml` mounts the named
+  volume `audit-spool` at `/var/lib/ferrofed`, and the Kubernetes example an
+  `emptyDir` there, writable through `fsGroup` `65532`. Set
+  `xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool"`; the
+  spool holds audit records that name patients, so keep the volume on an
+  encrypted disk.
 - A `patient/` scope grant admits nothing at the gateway, now as a decision
   (#413): an `ehrId` names no namespace and an `ehr_id` means nothing outside
   its CDR (§12.5), so a bare match could admit another patient's EHR at
