@@ -624,6 +624,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- An XCPD discovery whose audit message is still being stored when the
+  localization budget runs out now fails closed under
+  `on_failure = "ask-all"` too, as every exchange the gateway could not
+  audit does (#529). The gateway stopped waiting at the very instant the
+  discovery's own bound fired, so it read the discovery as a localizer that
+  did not answer, and ask-all widened the query to every member. The
+  localizer and the `[pdqm]` step are now given a deadline a tenth of their
+  time short of the gateway's, so the audit failure reaches the gateway
+  first and leaves every member `not-localized`.
 - A slow or stalled disk under the audit spool no longer holds a patient
   query past its budget (#512). Storing one record is bounded by the new
   `spool_write_timeout_ms` (2000 by default) in `[audit.repository]` and
