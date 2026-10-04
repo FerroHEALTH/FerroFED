@@ -905,6 +905,36 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   node's `time-out` or `node-error` with the node counted as asked
   (`Contact::Silent`), never as a request never sent (#470).
 
+**The Nuts track** (built with #88; Annex B §B.4, §13.3). An endpoint whose
+`[credentials]` name a `nuts` grant authenticates on the Dutch Generic
+Functions' GF-Authentication track instead of `oauth2`. The gateway is the
+holder: its `did:web` identifier, a P-256 or P-384 key its DID document
+publishes under a DID URL, and the JWT Verifiable Credentials its
+authoritative sources issued it, each configured with the input descriptor it
+answers. The wire is Nuts RFC021, the VP Token Grant Type, built in `nl-generic-functions`
+feature `nuts-auth` (`nuts_auth::NutsClient`): RFC 8414 metadata held to the
+issuer, a `presentation_definition_endpoint` and `vp_formats` naming `jwt_vp`
+(RFC021 §3.1, §5); the Presentation Definition for the scope, against which
+the configured mapping is checked before any credential leaves (Presentation
+Exchange 2.0.0; the authorization server evaluates the constraints, RFC021
+§4.1); a JWT presentation (VC Data Model 1.1 §6.3.1) with `iss` and `sub`
+the DID, `aud` the issuer, `nbf` to `exp` five seconds, a fresh `nonce`
+(RFC021 §4.2); and `grant_type=vp_token-bearer` with the presentation, the
+submission and the scope. The token is always `DPoP`-bound (GFI-005): the
+crate takes a `DpopProver` trait, which the engine implements over the
+endpoint's `Prover` in the authorization server's role
+(`ferrofed_engine::onward::nuts::AuthorizationProver`), so the same key and
+the same `DPoP` code prove the token request and every node request through
+the endpoint's `NodeProver`. A demanded nonce is answered once with a new
+presentation. The token is cached as the client-credentials token is
+(`ferrofed_engine::onward::nuts::NutsCredentials`). The IG's own
+GFI-004 names the RFC 7523 JWT bearer grant with a presentation in both
+`assertion` and `client_assertion`; Nuts RFC021 defines the
+`vp_token-bearer` grant with no client assertion instead, and FerroFED speaks
+RFC021 (recorded on #88). The gateway does not serve its
+DID document. The harmonised BgZ/eOverdracht track of §B.4a (FAPI 2.0,
+`private_key_jwt`, RFC 9396 `authorization_details`) is #497.
+
 **Scope attenuation.** The gateway never requests onward more than the caller
 holds. Under token exchange the requested scope is the caller's granted
 scopes that cover the operation, as the gate's permission table reads them,

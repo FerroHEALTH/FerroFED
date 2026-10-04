@@ -183,6 +183,11 @@ answered for the gateway, with a template for the rest, in
 [The §13.4 deployment decisions](../operate/deployment-decisions.md)
 ([#84](https://github.com/FerroHEALTH/FerroFED/issues/84), CP-39).
 
-The authentication tracks of the Dutch binding, the Nuts profile and the
-harmonised BgZ and eOverdracht track (Annex B.4, B.4a), are planned for
-v0.0.8 ([#88](https://github.com/FerroHEALTH/FerroFED/issues/88)).
+The Nuts track of the Dutch binding (Annex B §B.4) is built: an endpoint
+whose `[credentials]` name a `nuts` grant obtains its token with a
+Verifiable Presentation of the gateway's credentials, bound to a key of the
+gateway's with `DPoP` ([The Nuts grant](../operate/configuration.md#the-nuts-grant-annex-b-b4),
+[#88](https://github.com/FerroHEALTH/FerroFED/issues/88)). The harmonised
+BgZ and eOverdracht track (Annex B §B.4a), FAPI 2.0 with Rich Authorization
+Requests, is planned
+([#497](https://github.com/FerroHEALTH/FerroFED/issues/497)).
