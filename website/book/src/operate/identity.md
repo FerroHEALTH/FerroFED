@@ -518,9 +518,21 @@ bearer_token_file = "/run/secrets/pmir-registry-token"
   `url` with a `message` channel to `callback_url` and a FHIR JSON payload.
   Its criteria is `Patient`, or `Patient?identifier=<system>|` with
   `identifier_system` set, so the Registry sends only the Patients that
-  carry an identifier from that authority. Every `check_interval_s` the
-  gateway reads the subscription back, and it subscribes again when the
-  Registry no longer holds it. On a drain it deletes the subscription.
+  carry an identifier from that authority. Before it creates one, the
+  gateway searches the Registry for its own (`GET
+  [base]/Subscription?url=<callback_url>`) and adopts the one it finds, so a
+  create the Registry answered late is never made twice. A Registry that
+  answers that search `400` or `404` does not support it, and the gateway
+  creates. Every `check_interval_s` the gateway reads the subscription back.
+  It deletes and recreates one the Registry reports `error` or `off`, and
+  recreates one the Registry no longer holds. Each failed check doubles the
+  wait before the next, up to 32 times `check_interval_s`, and a check that
+  succeeds resets it. If the Registry answers a create `201` with no
+  `Location`, or with one outside `url`, the gateway cannot manage that
+  subscription. It creates no other until a restart and reports the fault as
+  `unmanageable`; delete that subscription at the Registry. On a drain the
+  gateway stops checking, lets the check in flight end, and then deletes its
+  subscription, found by search when it never learned where it was.
 - **Authenticating the feed.** The subscription carries no credential for the
   feed (PMIR §2:3.94.5), so you agree the feed token with the Registry's
   operator and configure it on both sides. The Registry sends it as
@@ -546,10 +558,10 @@ bearer_token_file = "/run/secrets/pmir-registry-token"
 `url` and `callback_url` carry patient identities, so both are `https`
 outside `profile = "development"`, and neither may carry a user name or a
 password. `GET /health/dependencies` reports the Registry as
-`identity_registry`: `up` while it holds the subscription `requested` or
-`active`; `failing` after a refusal, an answer that breaks ITI-94, or a
-subscription in `error` or `off`; and `down` when it did not answer
-([Health](health.md)). Each message is counted by result in
+`identity_registry`: `up` while the gateway holds a subscription in
+`requested` or `active`; `failing` after a refusal, an answer that breaks
+ITI-94, or a create it cannot manage; and `down` when the Registry did not
+answer. `identity_registry_fault` names the reason ([Health](health.md)). Each message is counted by result in
 `ferrofed_identity_feed_messages_total` ([Metrics](metrics.md)). A change to
 `[pmir]` takes a restart.
 

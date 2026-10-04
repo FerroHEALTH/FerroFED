@@ -63,7 +63,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   every binding. The log and the new `ferrofed_identity_feed_messages_total`
   counter carry the change kinds, counts and results, never an identifier.
   `GET /health/dependencies` reports the Registry as `identity_registry`, and
-  the subscription is checked, renewed when lost, and deleted on a drain.
+  the subscription is found by search before it is created, so a create
+  answered late is adopted and never made twice; one in `error` or `off`, or
+  one the Registry lost, is replaced; failed checks back off up to 32 times
+  `check_interval_s`; a create answered with no usable `Location` stops
+  further creates and shows as `identity_registry_fault = "unmanageable"`;
+  and the drain stops the loop before it deletes the subscription.
   The Registry URL and the callback URL are `https` outside the development
   profile. The `ihe-iti` crate gains the `pmir` feature: the ITI-94
   subscriber and the ITI-93 feed reader and response, held to the PMIR 1.6.0

@@ -674,8 +674,13 @@ misrouted follow-up.
 
 **The PMIR identity feed** (#147). Under `[pmir]` the gateway creates an
 ITI-94 `Subscription` at the Patient Identity Registry with a `message`
-channel to its own feed route, reads it back every check interval and
-subscribes again when the Registry has lost it, and deletes it on a drain.
+channel to its own feed route. Before creating, it searches for its own by
+the channel endpoint and adopts it, so a create answered late is never made
+twice; a create answered with no `Location` under the base stops every
+later create until a restart. It reads the subscription back every check
+interval, replaces one in `error` or `off` (§2:3.94.4.4) or one the Registry
+has lost, doubles the wait after each failed check up to 32 times the
+interval, and on a drain stops the loop before it deletes the subscription.
 The route sits under `{base}` outside the ITS-REST surface. The subscription
 carries no credential for the feed (PMIR §2:3.94.5) and ITI-93 leaves the
 client authentication to an agreement between the two parties (§2:3.93.5),
