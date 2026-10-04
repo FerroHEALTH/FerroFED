@@ -56,7 +56,7 @@ restart only.
 
 | Span | Under | Attributes |
 |---|---|---|
-| `{method} {route}`, such as `POST /v1/query/aql` | nothing: the root of the trace, with a link to the client's span when the client sent a `traceparent` | `http.request.method`, `http.route` (the route template), `http.response.status_code`, `request_id` (the id the gateway minted) |
+| `{method} {route}`, such as `POST /v1/query/aql` | nothing: the root of the gateway's own trace | `http.request.method`, `http.route` (the route template), `http.response.status_code`, `request_id` (the id the gateway minted) |
 | `localize` | the request | `members` |
 | `consent_prefilter` | the request | `members` |
 | `resolve` | the request | `members`, `resolved` |
@@ -79,15 +79,15 @@ which resource was read.
 
 Every client request starts a trace of the gateway's own, with a random
 trace id, as W3C Trace Context §3.4 and §6.1 allow a service to do. The
-gateway never continues a client's trace. A client chooses the trace id it
-sends, and 32 hexadecimal characters can encode anything, a patient
-identifier included, so a trace id taken from a client would carry it to
-every node (§5.4.1, N33).
-
-A client that sends a `traceparent` still finds its trace: the request span
-records the client's trace id and span id as a span link. Only your
-collector receives that link. A `traceparent` that does not parse leaves no
-link. The gateway never reads the client's `tracestate`, which is free text.
+gateway never reads a client's `traceparent` or `tracestate`: it neither
+continues the client's trace nor links to it, and no exported span records
+any part of it. A client chooses the trace id it sends, and 32 hexadecimal
+characters can encode anything, a patient identifier included
+(`3132333435` is `12345`). A trace id taken from a client would carry that
+identifier to every node, and a link to the client's span would carry it
+into your collector, and the gateway lets no patient identifier into a span
+any more than into a node request (§5.4.1, N33). Every trace id and span id
+your collector receives is one the gateway generated.
 
 ITS-REST declares no trace header, and a node that does not trace ignores
 it (RFC 9110 §5.1). With the export on, each node request carries a
