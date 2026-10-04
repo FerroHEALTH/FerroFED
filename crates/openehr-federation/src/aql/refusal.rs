@@ -330,7 +330,7 @@ impl Refusal {
     ///
     /// The names are API: a gateway answers them as the stable code of its
     /// error body, so a name is only ever added, never renamed or removed.
-    pub const KINDS: &'static [&'static str] = &[
+    pub const KINDS: &[&str] = &[
         "not-aql",
         "parameters",
         "unreducible",

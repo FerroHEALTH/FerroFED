@@ -27,28 +27,32 @@ readonly PAGE_SIZE=500
 readonly MAX_PAGES=20
 : "${SONAR_TOKEN:?sonar-sarif: SONAR_TOKEN is required}"
 
-if [ ! -f "$TASK_FILE" ]; then
+if [[ ! -f "$TASK_FILE" ]]; then
   echo "sonar-sarif: $TASK_FILE is missing; run this after the scanner." >&2
   exit 1
 fi
 
-prop() { grep -m1 "^$1=" "$2" | cut -d= -f2- || true; }
+prop() {
+  local name="$1" file="$2"
+  grep -m1 "^$name=" "$file" | cut -d= -f2- || true
+}
 
 server="$(prop serverUrl "$TASK_FILE")"
 key="$(prop projectKey "$TASK_FILE")"
 task="$(prop ceTaskId "$TASK_FILE")"
 org="$(prop sonar.organization sonar-project.properties)"
 for name in server key task org; do
-  if [ -z "${!name}" ]; then
+  if [[ -z "${!name}" ]]; then
     echo "sonar-sarif: no $name in $TASK_FILE or sonar-project.properties." >&2
     exit 1
   fi
 done
 
 api() {
+  local path="$1"
   printf 'header = "Authorization: Bearer %s"\n' "$SONAR_TOKEN" \
     | curl --fail --silent --show-error --retry 3 --user-agent ferrofed-ci \
-      --config - "$server/api/$1"
+      --config - "$server/api/$path"
 }
 
 # The scanner only submits the report; the issues exist once the server has
@@ -62,10 +66,11 @@ for _ in $(seq 1 120); do
       echo "sonar-sarif: analysis $task ended $status." >&2
       exit 1
       ;;
+    *) ;; # PENDING or IN_PROGRESS: the analysis is still queued or running.
   esac
   sleep 5
 done
-if [ "$status" != SUCCESS ]; then
+if [[ "$status" != "SUCCESS" ]]; then
   echo "sonar-sarif: analysis $task still $status after ten minutes." >&2
   exit 1
 fi
@@ -77,10 +82,16 @@ while :; do
   body="$(api "issues/search?componentKeys=$key&resolved=false&ps=$PAGE_SIZE&p=$page")"
   jq -c '.issues[]' <<<"$body" >>"$issues"
   total="$(jq -r '.paging.total' <<<"$body")"
-  if [ $((page * PAGE_SIZE)) -ge "$total" ]; then
+  # [[ -ge ]] evaluates its operands as arithmetic, so the API's total is held
+  # to digits first.
+  if [[ ! "$total" =~ ^[0-9]+$ ]]; then
+    echo "sonar-sarif: the issue search answered no numeric paging total." >&2
+    exit 1
+  fi
+  if [[ $((page * PAGE_SIZE)) -ge "$total" ]]; then
     break
   fi
-  if [ "$page" -ge "$MAX_PAGES" ]; then
+  if [[ "$page" -ge "$MAX_PAGES" ]]; then
     echo "sonar-sarif: $total open issues exceed the API's $((MAX_PAGES * PAGE_SIZE)); no partial log is written." >&2
     exit 1
   fi

@@ -43,7 +43,7 @@ case "${file_path:-}" in
 *.rs | *.sh | *.toml | *.yml | *.yaml | *.tsv) ;;
 *) exit 0 ;;
 esac
-[ -f "$file_path" ] || exit 0
+[[ -f "$file_path" ]] || exit 0
 
 # The checkout that holds the file, so an edit inside a git worktree is
 # checked by that worktree's own guard, against that worktree's root.
@@ -64,12 +64,13 @@ case "$file_path" in
     }
   fi
   ;;
+*) ;;
 esac
 
 # The comment-style guard reads the file when it is one of the kinds CI
 # checks and passes any other. Exit 2 feeds its findings back as a correction.
 guard="$file_root/scripts/checks/comment-style.sh"
-if [ -x "$guard" ]; then
+if [[ -x "$guard" ]]; then
   findings="$("$guard" --files "$file_path" 2>&1)" || {
     printf '%s\n' "$findings" >&2
     exit 2

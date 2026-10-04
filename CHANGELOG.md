@@ -334,6 +334,11 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The Kubernetes example bounds the gateway's ephemeral storage (#452): the
+  container requests `128Mi` and is limited to `1Gi`, and the audit-spool
+  `emptyDir` has a `sizeLimit` of `512Mi`, which holds the default spool
+  bounds (`spool_max_bytes` 64 MiB, `spool_max_events` 100000). The kubelet
+  evicts a pod past either limit, so raise both with the spool bounds.
 - The image ships `/var/lib/ferrofed/audit-spool`, owned by the gateway
   user `65532:65532` with mode `0700` (#442), so the ITI-20 audit spool
   needs no step on the host. The release `compose.yaml` mounts the named

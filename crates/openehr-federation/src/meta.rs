@@ -74,7 +74,7 @@ pub struct FederationMeta {
 
 impl FederationMeta {
     /// The member names this type models, as the schema spells them.
-    pub const MEMBERS: &'static [&'static str] = &["complete", "endpoints", "timeout", "dedup"];
+    pub const MEMBERS: &[&str] = &["complete", "endpoints", "timeout", "dedup"];
 
     /// The federation record of a query whose endpoints ended as `endpoints`.
     ///

@@ -82,12 +82,17 @@ matrix=docs/VERSIONS.md
 
 fail=0
 note() { printf '  %s\n' "$*"; }
+# line_count TEXT: the number of lines TEXT holds, as bare digits.
+line_count() {
+  local text="$1"
+  printf '%s\n' "$text" | wc -l | tr -d '[:space:]'
+}
 bad() {
   printf '  DRIFT: %s\n' "$*" >&2
   fail=1
 }
 
-if [ ! -f "$matrix" ]; then
+if [[ ! -f "$matrix" ]]; then
   echo "versions: $matrix is missing, and it is the source of truth" >&2
   exit 1
 fi
@@ -95,7 +100,8 @@ fi
 # The first whitespace-separated token of the second cell of the markdown table
 # row whose first cell is ITEM, with surrounding spaces and backticks removed.
 pin_of() {
-  awk -F'|' -v item="$1" '
+  local item="$1" file="$2"
+  awk -F'|' -v item="$item" '
     NF >= 3 {
       k = $2; v = $3
       gsub(/`/, "", k); gsub(/`/, "", v)
@@ -103,12 +109,13 @@ pin_of() {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
       if (k == item) { split(v, w, /[[:space:]]/); print w[1]; exit }
     }
-  ' "$2"
+  ' "$file"
 }
 
 # The whole second cell of the row whose first cell is ITEM, backticks removed.
 pin_cell_of() {
-  awk -F'|' -v item="$1" '
+  local item="$1" file="$2"
+  awk -F'|' -v item="$item" '
     NF >= 3 {
       k = $2; v = $3
       gsub(/`/, "", k); gsub(/`/, "", v)
@@ -116,12 +123,13 @@ pin_cell_of() {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
       if (k == item) { print v; exit }
     }
-  ' "$2"
+  ' "$file"
 }
 
 # The value of KEY inside TOML table TABLE, unquoted.
 toml_val() {
-  awk -v table="$1" -v key="$2" '
+  local table="$1" key="$2" file="$3"
+  awk -v table="$table" -v key="$key" '
     /^[[:space:]]*\[/ { h = $0; gsub(/[[:space:]]/, "", h); f = (h == table); next }
     f && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
       if (match($0, /"[^"]*"/)) { print substr($0, RSTART + 1, RLENGTH - 2); exit }
@@ -129,13 +137,14 @@ toml_val() {
       gsub(/[[:space:]]/, "")
       print; exit
     }
-  ' "$3"
+  ' "$file"
 }
 
 # The version requirement of dependency NAME in the root Cargo.toml, in either
 # the `name = "x.y.z"` or the `name = { version = "x.y.z" }` form.
 manifest_req() {
-  awk -v name="$1" '
+  local name="$1" file="${2:-Cargo.toml}"
+  awk -v name="$name" '
     $0 ~ "^[[:space:]]*" name "[[:space:]]*=" {
       if (match($0, /version[[:space:]]*=[[:space:]]*"[^"]+"/)) {
         s = substr($0, RSTART, RLENGTH)
@@ -145,14 +154,15 @@ manifest_req() {
       match(s, /"[^"]+"/)
       print substr(s, RSTART + 1, RLENGTH - 2); exit
     }
-  ' "${2:-Cargo.toml}"
+  ' "$file"
 }
 
 # The `default:` of composite-action input KEY, unquoted. An input key sits at
 # two spaces of indentation and its own keys at four, which is what the exact
 # prefix comparisons below rely on.
 action_default() {
-  awk -v key="  $1:" '
+  local key="$1" file="$2"
+  awk -v key="  $key:" '
     $0 == key { inside = 1; next }
     inside && index($0, "    default:") == 1 {
       sub(/^[[:space:]]*default:[[:space:]]*/, "")
@@ -162,13 +172,14 @@ action_default() {
       exit
     }
     inside && $0 ~ /^[^[:space:]]/ { exit }
-  ' "$2"
+  ' "$file"
 }
 
 # The whole third cell of the row whose first cell is ITEM: where the pin is
 # repeated.
 where_of() {
-  awk -F'|' -v item="$1" '
+  local item="$1" file="$2"
+  awk -F'|' -v item="$item" '
     NF >= 4 {
       k = $2; v = $4
       gsub(/`/, "", k)
@@ -176,7 +187,7 @@ where_of() {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
       if (k == item) { print v; exit }
     }
-  ' "$2"
+  ' "$file"
 }
 
 # spec_constant ITEM MATRIX BASE: the specification row ITEM names "the `NAME`
@@ -190,28 +201,28 @@ spec_constant() {
   local named="s/.*the \`([A-Z][A-Z0-9_]*)\` constant of \`([a-z0-9-]+)\`.*/"
   name="$(sed -nE "${named}\\1/p" <<< "$cell")"
   crate="$(sed -nE "${named}\\2/p" <<< "$cell")"
-  if [ -z "$want" ]; then
+  if [[ -z "$want" ]]; then
     bad "$file has no '$item' pin row"
     return
   fi
-  if [ -z "$name" ] || [ -z "$crate" ]; then
+  if [[ -z "$name" ]] || [[ -z "$crate" ]]; then
     bad "$item: the $file row names no constant (the \`NAME\` constant of \`crate\`)"
     return
   fi
   dir=""
-  [ -d "$base/crates/$crate/src" ] && dir="$base/crates/$crate/src"
-  [ -d "$base/app/$crate/src" ] && dir="$base/app/$crate/src"
-  if [ -z "$dir" ]; then
+  [[ -d "$base/crates/$crate/src" ]] && dir="$base/crates/$crate/src"
+  [[ -d "$base/app/$crate/src" ]] && dir="$base/app/$crate/src"
+  if [[ -z "$dir" ]]; then
     bad "$item: $file names the $name constant of $crate, and no crate $crate exists"
     return
   fi
   found="$(grep -rhE "^pub const $name: &str = \"[^\"]*\";" "$dir" |
     sed -E 's/.*= "([^"]*)";.*/\1/' | sort -u || true)"
-  if [ -z "$found" ]; then
+  if [[ -z "$found" ]]; then
     bad "$item: $crate has no pub const $name: &str"
-  elif [ "$(printf '%s\n' "$found" | wc -l | tr -d '[:space:]')" != "1" ]; then
+  elif [[ "$(line_count "$found")" != "1" ]]; then
     bad "$item: $crate defines $name more than once ($(printf '%s' "$found" | tr '\n' ' '))"
-  elif [ "$found" != "$want" ]; then
+  elif [[ "$found" != "$want" ]]; then
     bad "$item: $crate's $name is $found, $file pins $want"
   else
     note "OK: $item $want ($crate's $name agrees)"
@@ -221,7 +232,8 @@ spec_constant() {
 # The newest released version of a Keep a Changelog file: its first
 # `## [x.y.z]` heading, so `## [Unreleased]` never counts.
 newest_release() {
-  sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' "$1" | head -n1
+  local changelog="$1"
+  sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' "$changelog" | head -n1
 }
 
 # landing_release PAGE CHANGELOG: every "vX.Y.Z released" and "vX.Y.Z is the
@@ -231,24 +243,24 @@ newest_release() {
 landing_release() {
   local page=$1 log=$2 want found v count=0 stale=0
   want="$(newest_release "$log")"
-  if [ -z "$want" ]; then
+  if [[ -z "$want" ]]; then
     bad "$log has no ## [x.y.z] release heading"
     return
   fi
   found="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+ (released|is the current release)' "$page" |
     sed -E 's/^v([0-9.]+) .*/\1/' || true)"
-  if [ -z "$found" ]; then
+  if [[ -z "$found" ]]; then
     bad "$page names no current release; it should say v$want, the newest release in $log"
     return
   fi
   while IFS= read -r v; do
     count=$((count + 1))
-    if [ "$v" != "$want" ]; then
+    if [[ "$v" != "$want" ]]; then
       bad "$page says v$v is the current release, the newest release in $log is $want"
       stale=1
     fi
   done <<< "$found"
-  [ "$stale" -eq 0 ] && note "OK: $page names v$want, the newest release, $count times"
+  [[ "$stale" -eq 0 ]] && note "OK: $page names v$want, the newest release, $count times"
   return 0
 }
 
@@ -257,7 +269,8 @@ landing_release() {
 # matches as the prefix of the 40-hex commit that follows LABEL, so the book
 # may abbreviate a commit.
 claim_holds() {
-  awk -v label="$2" -v value="$3" '
+  local cell="$1" label="$2" value="$3"
+  awk -v label="$label" -v value="$value" '
     {
       for (i = 1; i < NF; i++) {
         if ($i != label) continue
@@ -268,7 +281,7 @@ claim_holds() {
       }
     }
     END { exit !found }
-  ' <<< "$1"
+  ' <<< "$cell"
 }
 
 # book_pins PAGE MATRIX: every row of the `| Item | Pin | Why |` table on PAGE
@@ -288,7 +301,7 @@ book_pins() {
     table && /^\|/ { print $2 "|" $3; next }
     table { exit }
   ' "$page")"
-  if [ -z "$rows" ]; then
+  if [[ -z "$rows" ]]; then
     bad "$page has no | Item | Pin | table to hold to $file"
     return 0
   fi
@@ -302,7 +315,7 @@ book_pins() {
     for i in "${!names[@]}"; do
       item="$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<< "${names[$i]}")"
       names[i]="$item"
-      if [ -z "$(pin_cell_of "$item" "$file")" ]; then
+      if [[ -z "$(pin_cell_of "$item" "$file")" ]]; then
         bad "$page names '$item', which $file has no row for"
         stale=1
       fi
@@ -320,7 +333,7 @@ book_pins() {
       1)
         for item in "${names[@]}"; do
           value="$(pin_of "$item" "$file")"
-          if [ -n "$value" ] && [ "$value" != "${words[0]}" ]; then
+          if [[ -n "$value" ]] && [[ "$value" != "${words[0]}" ]]; then
             bad "$page pins $item at ${words[0]}, $file pins $value"
             stale=1
           fi
@@ -330,8 +343,8 @@ book_pins() {
         label="${words[0]}"
         value="${words[1]}"
         cap="$(printf '%s' "${label:0:1}" | tr '[:lower:]' '[:upper:]')${label:1}"
-        if [ -n "$(pin_cell_of "$cap" "$file")" ]; then
-          if [ "$(pin_of "$cap" "$file")" != "$value" ]; then
+        if [[ -n "$(pin_cell_of "$cap" "$file")" ]]; then
+          if [[ "$(pin_of "$cap" "$file")" != "$value" ]]; then
             bad "$page says $label $value, $file pins $cap at $(pin_of "$cap" "$file")"
             stale=1
           fi
@@ -350,12 +363,12 @@ book_pins() {
         ;;
       esac
     done < <(tr ',' '\n' <<< "$pin_cell")
-    if [ "$claims" -eq 0 ]; then
+    if [[ "$claims" -eq 0 ]]; then
       bad "$page has a row for '${names[*]}' that pins nothing"
       stale=1
     fi
   done <<< "$rows"
-  [ "$stale" -eq 0 ] && note "OK: all $count rows of $page agree with $file"
+  [[ "$stale" -eq 0 ]] && note "OK: all $count rows of $page agree with $file"
   return 0
 }
 
@@ -373,12 +386,12 @@ self_test() {
     shift 2
     fail=0
     "$@" > "$out" 2>&1
-    if [ "$fail" -ne "$want" ]; then
+    if [[ "$fail" -ne "$want" ]]; then
       echo "versions: self-test failed: $name left fail=$fail, wanted $want." >&2
       cat "$out" >&2
       exit 1
     fi
-    if [ "$want" -eq 1 ] && ! grep -q 'DRIFT:' "$out"; then
+    if [[ "$want" -eq 1 ]] && ! grep -q 'DRIFT:' "$out"; then
       echo "versions: self-test failed: $name failed without a DRIFT line." >&2
       exit 1
     fi
@@ -446,7 +459,7 @@ ROWS
     {
       printf '%s\n' '# Pinned versions' '' '| Item | Pin | Why |' '|---|---|---|'
       cat "$work/book-rows"
-      [ -z "$extra" ] || printf '%s\n' "$extra"
+      [[ -z "$extra" ]] || printf '%s\n' "$extra"
       printf '%s\n' '' 'Prose after the table names 9.9.9 and is not a row.'
     } > "$work/$name.md"
   done <<'PAGES'
@@ -494,25 +507,25 @@ esac
 
 echo "== specification pins (docs/architecture.md <-> $matrix)"
 specs=("Federation Tier with AQL" "openEHR ITS-REST" "openEHR AQL")
-if [ -f docs/architecture.md ]; then
+if [[ -f docs/architecture.md ]]; then
   agreed=0
   for item in "${specs[@]}"; do
     arch="$(pin_of "$item" docs/architecture.md)"
     want="$(pin_of "$item" "$matrix")"
-    if [ -z "$arch" ]; then
+    if [[ -z "$arch" ]]; then
       bad "docs/architecture.md has no '$item' pin row"
-    elif [ -z "$want" ]; then
+    elif [[ -z "$want" ]]; then
       bad "$matrix has no '$item' pin row"
-    elif [ "$arch" != "$want" ]; then
+    elif [[ "$arch" != "$want" ]]; then
       bad "$item: docs/architecture.md says $arch, $matrix pins $want"
     else
       agreed=$((agreed + 1))
     fi
   done
-  [ "$agreed" -eq "${#specs[@]}" ] && note "OK: all ${#specs[@]} specification pins agree"
+  [[ "$agreed" -eq "${#specs[@]}" ]] && note "OK: all ${#specs[@]} specification pins agree"
 else
   for item in "${specs[@]}"; do
-    [ -n "$(pin_of "$item" "$matrix")" ] || bad "$matrix has no '$item' pin row"
+    [[ -n "$(pin_of "$item" "$matrix")" ]] || bad "$matrix has no '$item' pin row"
   done
   note "no docs/architecture.md, skipped the comparison"
 fi
@@ -528,13 +541,13 @@ echo "== model crate pins (docs/architecture.md <-> $matrix <-> Cargo.toml)"
 family_pin=""
 for crate in openehr-query openehr-its openehr-base openehr-rm openehr-sdt; do
   want="$(pin_of "$crate" "$matrix")"
-  if [ -z "$want" ]; then
+  if [[ -z "$want" ]]; then
     bad "$matrix has no $crate row"
     continue
   fi
-  if [ -z "$family_pin" ]; then
+  if [[ -z "$family_pin" ]]; then
     family_pin="$want"
-  elif [ "$want" != "$family_pin" ]; then
+  elif [[ "$want" != "$family_pin" ]]; then
     bad "$crate: $matrix pins $want, the rest of the openehr-* family $family_pin; the family moves together"
   fi
   # The startup banner prints the family version from a crate constant,
@@ -543,11 +556,11 @@ for crate in openehr-query openehr-its openehr-base openehr-rm openehr-sdt; do
   case "$crate" in
   openehr-query | openehr-its) ;;
   *)
-    if [ -f Cargo.toml ]; then
+    if [[ -f Cargo.toml ]]; then
       req="$(manifest_req "$crate")"
-      if [ -z "$req" ]; then
+      if [[ -z "$req" ]]; then
         note "root Cargo.toml has no $crate requirement yet, skipped"
-      elif [ "$req" != "$want" ]; then
+      elif [[ "$req" != "$want" ]]; then
         bad "$crate: root Cargo.toml requires $req, $matrix pins $want"
       else
         note "OK: $crate $want (root Cargo.toml agrees)"
@@ -556,21 +569,21 @@ for crate in openehr-query openehr-its openehr-base openehr-rm openehr-sdt; do
     continue
     ;;
   esac
-  if [ -f docs/architecture.md ]; then
+  if [[ -f docs/architecture.md ]]; then
     arch="$(pin_of "$crate" docs/architecture.md)"
-    if [ -z "$arch" ]; then
+    if [[ -z "$arch" ]]; then
       bad "docs/architecture.md has no $crate row"
       continue
-    elif [ "$arch" != "$want" ]; then
+    elif [[ "$arch" != "$want" ]]; then
       bad "$crate: docs/architecture.md says $arch, $matrix pins $want"
       continue
     fi
   fi
-  if [ -f Cargo.toml ]; then
+  if [[ -f Cargo.toml ]]; then
     req="$(manifest_req "$crate")"
-    if [ -z "$req" ]; then
+    if [[ -z "$req" ]]; then
       note "root Cargo.toml has no $crate requirement yet, skipped"
-    elif [ "$req" != "$want" ]; then
+    elif [[ "$req" != "$want" ]]; then
       bad "$crate: root Cargo.toml requires $req, $matrix pins $want"
     else
       note "OK: $crate $want (root Cargo.toml agrees)"
@@ -581,12 +594,12 @@ for crate in openehr-query openehr-its openehr-base openehr-rm openehr-sdt; do
 done
 # The fuzz crate sits outside the workspace with its own lockfile, so it names
 # the family by version and drifts unseen unless it is held to the same pin.
-if [ -f fuzz/Cargo.toml ] && [ -n "$family_pin" ]; then
+if [[ -f fuzz/Cargo.toml ]] && [[ -n "$family_pin" ]]; then
   for crate in openehr-query openehr-its openehr-base openehr-rm openehr-sdt; do
     req="$(manifest_req "$crate" fuzz/Cargo.toml)"
-    if [ -z "$req" ]; then
+    if [[ -z "$req" ]]; then
       continue
-    elif [ "$req" != "$family_pin" ]; then
+    elif [[ "$req" != "$family_pin" ]]; then
       bad "$crate: fuzz/Cargo.toml requires $req, the openehr-* family is pinned at $family_pin"
     else
       note "OK: $crate $req (fuzz/Cargo.toml agrees)"
@@ -595,14 +608,14 @@ if [ -f fuzz/Cargo.toml ] && [ -n "$family_pin" ]; then
 fi
 
 echo "== toolchain (rust-toolchain.toml and Cargo.toml <-> $matrix)"
-if [ -f rust-toolchain.toml ]; then
+if [[ -f rust-toolchain.toml ]]; then
   chan="$(toml_val "[toolchain]" channel rust-toolchain.toml)"
   want="$(pin_of "Rust toolchain" "$matrix")"
-  if [ -z "$chan" ]; then
+  if [[ -z "$chan" ]]; then
     bad "rust-toolchain.toml has no [toolchain] channel"
-  elif [ -z "$want" ]; then
+  elif [[ -z "$want" ]]; then
     bad "$matrix has no 'Rust toolchain' row"
-  elif [ "$chan" != "$want" ]; then
+  elif [[ "$chan" != "$want" ]]; then
     bad "toolchain: rust-toolchain.toml channel is $chan, $matrix pins $want"
   else
     note "OK: the toolchain is $chan"
@@ -611,15 +624,15 @@ else
   note "no rust-toolchain.toml yet, skipped"
 fi
 
-if [ -f Cargo.toml ]; then
+if [[ -f Cargo.toml ]]; then
   check_row() {
     local label="$1" found="$2" row="$3" want
     want="$(pin_of "$row" "$matrix")"
-    if [ -z "$found" ]; then
+    if [[ -z "$found" ]]; then
       note "root Cargo.toml has no $label yet, skipped"
-    elif [ -z "$want" ]; then
+    elif [[ -z "$want" ]]; then
       bad "$matrix has no '$row' row"
-    elif [ "$found" != "$want" ]; then
+    elif [[ "$found" != "$want" ]]; then
       bad "$label: root Cargo.toml says $found, $matrix pins $want"
     else
       note "OK: $label is $found"
@@ -634,12 +647,12 @@ fi
 
 echo "== product version (CITATION.cff <-> $matrix <-> Cargo.toml)"
 want_product="$(pin_of "Product version" "$matrix")"
-[ -n "$want_product" ] || bad "$matrix has no 'Product version' row"
-if [ -f CITATION.cff ]; then
+[[ -n "$want_product" ]] || bad "$matrix has no 'Product version' row"
+if [[ -f CITATION.cff ]]; then
   cff="$(sed -nE 's/^version:[[:space:]]*//p' CITATION.cff | head -n1 | tr -d '"'\''[:space:]')"
-  if [ -z "$cff" ]; then
+  if [[ -z "$cff" ]]; then
     bad "CITATION.cff has no version"
-  elif [ "$cff" != "$want_product" ]; then
+  elif [[ "$cff" != "$want_product" ]]; then
     bad "product version: CITATION.cff says $cff, $matrix pins $want_product"
   else
     note "OK: CITATION.cff and $matrix both name $cff"
@@ -647,11 +660,11 @@ if [ -f CITATION.cff ]; then
 else
   note "no CITATION.cff yet, skipped"
 fi
-if [ -f Cargo.toml ]; then
+if [[ -f Cargo.toml ]]; then
   cargo_ver="$(toml_val "[workspace.package]" version Cargo.toml)"
-  if [ -z "$cargo_ver" ]; then
+  if [[ -z "$cargo_ver" ]]; then
     bad "root Cargo.toml has no [workspace.package] version"
-  elif [ "$cargo_ver" != "$want_product" ]; then
+  elif [[ "$cargo_ver" != "$want_product" ]]; then
     bad "product version: root Cargo.toml says $cargo_ver, $matrix pins $want_product"
   else
     note "OK: root Cargo.toml names $cargo_ver"
@@ -661,7 +674,7 @@ else
 fi
 
 echo "== landing-page release (website/landing/index.html <-> CHANGELOG.md)"
-if [ -f website/landing/index.html ] && [ -f CHANGELOG.md ]; then
+if [[ -f website/landing/index.html ]] && [[ -f CHANGELOG.md ]]; then
   landing_release website/landing/index.html CHANGELOG.md
 else
   note "no website/landing/index.html or CHANGELOG.md yet, skipped"
@@ -669,7 +682,7 @@ fi
 
 book_page=website/book/src/evaluate/versions.md
 echo "== book pins ($book_page <-> $matrix)"
-if [ -f "$book_page" ]; then
+if [[ -f "$book_page" ]]; then
   book_pins "$book_page" "$matrix"
 else
   note "no $book_page yet, skipped"
@@ -677,13 +690,14 @@ fi
 
 echo "== CI tool pins (.github/workflows/ci.yml <-> $matrix)"
 ci=.github/workflows/ci.yml
-if [ -f "$ci" ]; then
+if [[ -f "$ci" ]]; then
   # The version each analyzer is pinned to in the workflow: an installer
   # `tool: name@version` line, or the tag of a digest-pinned image.
   ci_tool_pin() {
-    case "$1" in
+    local tool="$1"
+    case "$tool" in
     zizmor | shellcheck)
-      sed -nE "s|^[[:space:]]*tool:[[:space:]]*$1@([^[:space:]]+).*|\1|p" "$ci" | sort -u
+      sed -nE "s|^[[:space:]]*tool:[[:space:]]*$tool@([^[:space:]]+).*|\1|p" "$ci" | sort -u
       ;;
     actionlint)
       sed -nE 's|.*rhysd/actionlint:([^@[:space:]]+)@sha256:.*|\1|p' "$ci" | sort -u
@@ -703,25 +717,26 @@ if [ -f "$ci" ]; then
     kubernetes-json-schema)
       sed -nE 's|.*yannh/kubernetes-json-schema/([0-9a-f]{40})/.*|\1|p' "$ci" | sort -u
       ;;
+    *) ;;
     esac
   }
   ci_tools=(zizmor actionlint shellcheck hadolint kubeconform 'kubeconform schema version' kubernetes-json-schema lychee)
   for tool in "${ci_tools[@]}"; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(ci_tool_pin "$tool")"
-    if [ -z "$want" ]; then
+    if [[ -z "$want" ]]; then
       bad "$matrix has no '$tool' row"
-    elif [ -z "$found" ]; then
+    elif [[ -z "$found" ]]; then
       # hadolint has nothing to lint until a Dockerfile exists, so its absence
       # from the workflow is a skip; the other three always run.
-      if [ "$tool" = hadolint ] && ! grep -q hadolint "$ci"; then
+      if [[ "$tool" = "hadolint" ]] && ! grep -q hadolint "$ci"; then
         note "$ci runs no hadolint yet, skipped"
       else
         bad "$ci pins no $tool version"
       fi
-    elif [ "$(printf '%s\n' "$found" | wc -l | tr -d '[:space:]')" != "1" ]; then
+    elif [[ "$(line_count "$found")" != "1" ]]; then
       bad "$tool: $ci pins more than one version ($(printf '%s' "$found" | tr '\n' ' '))"
-    elif [ "$found" != "$want" ]; then
+    elif [[ "$found" != "$want" ]]; then
       bad "$tool: $ci pins $found, $matrix pins $want"
     else
       note "OK: $tool $found"
@@ -735,23 +750,23 @@ release_workflows=(.github/workflows/release-build.yml .github/workflows/release
 # Every version of TOOL the release and fuzz workflows install, deduplicated, so a tool
 # named in both files has to carry the same pin in both.
 release_tool_pins() {
-  local wf
+  local tool="$1" wf
   for wf in "${release_workflows[@]}"; do
-    [ -f "$wf" ] || continue
-    sed -nE "s|^[[:space:]]*tool:[[:space:]]*$1@([^[:space:]]+).*|\1|p" "$wf"
+    [[ -f "$wf" ]] || continue
+    sed -nE "s|^[[:space:]]*tool:[[:space:]]*$tool@([^[:space:]]+).*|\1|p" "$wf"
   done | sort -u
 }
-if [ -f "${release_workflows[0]}" ] || [ -f "${release_workflows[1]}" ]; then
+if [[ -f "${release_workflows[0]}" ]] || [[ -f "${release_workflows[1]}" ]]; then
   for tool in cargo-auditable cargo-cyclonedx syft cargo-fuzz; do
     want="$(pin_of "$tool" "$matrix")"
     found="$(release_tool_pins "$tool")"
-    if [ -z "$want" ]; then
+    if [[ -z "$want" ]]; then
       bad "$matrix has no '$tool' row"
-    elif [ -z "$found" ]; then
+    elif [[ -z "$found" ]]; then
       bad "the release workflows pin no $tool version"
-    elif [ "$(printf '%s\n' "$found" | wc -l | tr -d '[:space:]')" != "1" ]; then
+    elif [[ "$(line_count "$found")" != "1" ]]; then
       bad "$tool: the release workflows disagree ($(printf '%s' "$found" | tr '\n' ' '))"
-    elif [ "$found" != "$want" ]; then
+    elif [[ "$found" != "$want" ]]; then
       bad "$tool: the release workflows pin $found, $matrix pins $want"
     else
       note "OK: $tool $found"
@@ -763,34 +778,35 @@ fi
 
 echo "== docs toolchain (.github/actions/docs-toolchain <-> $matrix)"
 action=.github/actions/docs-toolchain/action.yml
-if [ -f "$action" ]; then
+if [[ -f "$action" ]]; then
   agreed=0
   for tool in mdbook mdbook-toc mdbook-mermaid; do
-    if [ "$tool" = mdbook ]; then row=mdBook; else row="$tool"; fi
+    if [[ "$tool" = "mdbook" ]]; then row=mdBook; else row="$tool"; fi
     found="$(action_default "$tool-version" "$action")"
     want="$(pin_of "$row" "$matrix")"
-    if [ -z "$found" ]; then
+    if [[ -z "$found" ]]; then
       bad "$action has no $tool-version default"
-    elif [ -z "$want" ]; then
+    elif [[ -z "$want" ]]; then
       bad "$matrix has no '$row' row"
-    elif [ "$found" != "$want" ]; then
+    elif [[ "$found" != "$want" ]]; then
       bad "$tool: $action installs $found, $matrix pins $want"
     else
       agreed=$((agreed + 1))
     fi
   done
-  [ "$agreed" -eq 3 ] && note "OK: the three docs-toolchain pins agree"
+  [[ "$agreed" -eq 3 ]] && note "OK: the three docs-toolchain pins agree"
 else
   note "no $action yet, skipped"
 fi
 
 echo "== testkit images (tools/ferrofed-testkit <-> $matrix)"
 harness=tools/ferrofed-testkit/src/containers.rs
-if [ -f "$harness" ]; then
+if [[ -f "$harness" ]]; then
   # The repository, tag and digest of the PinnedImage literal named CONST,
   # composed into the one reference the matrix row carries.
   image_pin_of() {
-    awk -v name="$1" '
+    local name="$1" file="$2"
+    awk -v name="$name" '
       $0 ~ "^pub const " name ": PinnedImage = PinnedImage \\{" { inside = 1; next }
       inside {
         if ($0 ~ /^\};/) { exit }
@@ -799,7 +815,7 @@ if [ -f "$harness" ]; then
         if (match($0, /digest: "[^"]+"/)) { digest = substr($0, RSTART + 9, RLENGTH - 10) }
       }
       END { if (repo != "" && tag != "" && digest != "") print repo ":" tag "@" digest }
-    ' "$2"
+    ' "$file"
   }
 
   agreed=0
@@ -812,39 +828,39 @@ if [ -f "$harness" ]; then
     expected=$((expected + 1))
     want="$(pin_of "$item" "$matrix")"
     found="$(image_pin_of "$constant" "$harness")"
-    if [ -z "$want" ]; then
+    if [[ -z "$want" ]]; then
       bad "$matrix has no '$item' row"
-    elif [ -z "$found" ]; then
+    elif [[ -z "$found" ]]; then
       bad "$harness has no $constant PinnedImage with a repository, tag and digest"
-    elif [ "$found" != "$want" ]; then
+    elif [[ "$found" != "$want" ]]; then
       bad "$item: $harness pins $found, $matrix pins $want"
     else
       agreed=$((agreed + 1))
     fi
   done
-  [ "$agreed" -eq "$expected" ] && note "OK: all $expected container image pins agree"
+  [[ "$agreed" -eq "$expected" ]] && note "OK: all $expected container image pins agree"
 else
   note "no $harness yet, skipped"
 fi
 
 echo "== FHIR model crate (docs/architecture.md <-> $matrix <-> Cargo.toml)"
 want="$(pin_of fhir-types "$matrix")"
-if [ -z "$want" ]; then
+if [[ -z "$want" ]]; then
   bad "$matrix has no fhir-types row"
 else
-  if [ -f docs/architecture.md ]; then
+  if [[ -f docs/architecture.md ]]; then
     arch="$(pin_of fhir-types docs/architecture.md)"
-    if [ -z "$arch" ]; then
+    if [[ -z "$arch" ]]; then
       bad "docs/architecture.md has no fhir-types row"
-    elif [ "$arch" != "$want" ]; then
+    elif [[ "$arch" != "$want" ]]; then
       bad "fhir-types: docs/architecture.md says $arch, $matrix pins $want"
     fi
   fi
-  if [ -f Cargo.toml ]; then
+  if [[ -f Cargo.toml ]]; then
     req="$(manifest_req fhir-types)"
-    if [ -z "$req" ]; then
+    if [[ -z "$req" ]]; then
       note "root Cargo.toml has no fhir-types requirement yet, skipped"
-    elif [ "$req" != "$want" ]; then
+    elif [[ "$req" != "$want" ]]; then
       bad "fhir-types: root Cargo.toml requires $req, $matrix pins $want"
     else
       note "OK: fhir-types $want (docs/architecture.md and the root Cargo.toml agree)"
@@ -859,22 +875,22 @@ echo "== metrics crates ($matrix <-> Cargo.toml)"
 otel_pin=""
 for crate in opentelemetry opentelemetry_sdk opentelemetry-prometheus opentelemetry-otlp opentelemetry-proto prometheus tracing-opentelemetry tonic; do
   want="$(pin_of "$crate" "$matrix")"
-  if [ -z "$want" ]; then
+  if [[ -z "$want" ]]; then
     bad "$matrix has no $crate row"
     continue
   fi
-  if [ "$crate" != prometheus ] && [ "$crate" != tracing-opentelemetry ] && [ "$crate" != tonic ]; then
-    if [ -z "$otel_pin" ]; then
+  if [[ "$crate" != "prometheus" ]] && [[ "$crate" != "tracing-opentelemetry" ]] && [[ "$crate" != "tonic" ]]; then
+    if [[ -z "$otel_pin" ]]; then
       otel_pin="$want"
-    elif [ "$want" != "$otel_pin" ]; then
+    elif [[ "$want" != "$otel_pin" ]]; then
       bad "$crate: $matrix pins $want, the rest of the opentelemetry group $otel_pin; the group moves together"
     fi
   fi
-  if [ -f Cargo.toml ]; then
+  if [[ -f Cargo.toml ]]; then
     req="$(manifest_req "$crate")"
-    if [ -z "$req" ]; then
+    if [[ -z "$req" ]]; then
       bad "$crate: root Cargo.toml has no requirement, $matrix pins $want"
-    elif [ "$req" != "$want" ]; then
+    elif [[ "$req" != "$want" ]]; then
       bad "$crate: root Cargo.toml requires $req, $matrix pins $want"
     else
       note "OK: $crate $want (root Cargo.toml agrees)"
@@ -887,11 +903,12 @@ echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"
 # first 64-hex token (the sha256 of a FHIR package tarball), else the token
 # after the word `tag`.
 pinned_ref_of() {
+  local cell="$1"
   awk '{
     for (i = 1; i <= NF; i++) if ($i ~ /^[0-9a-f]{40}$/) { print $i; exit }
     for (i = 1; i <= NF; i++) { t = $i; gsub(/[,.;:]+$/, "", t); if (t ~ /^[0-9a-f]{64}$/) { print t; exit } }
     for (i = 1; i < NF; i++) if ($i == "tag") { t = $(i + 1); gsub(/[,.;:]+$/, "", t); print t; exit }
-  }' <<< "$1"
+  }' <<< "$cell"
 }
 
 corpora="docs/specs/federation-spec|Federation Tier with AQL specification
@@ -906,15 +923,15 @@ docs/specs/ihe-iua|IHE IUA supplement"
 agreed=0
 expected=0
 while IFS='|' read -r dir item; do
-  [ -n "$dir" ] || continue
+  [[ -n "$dir" ]] || continue
   expected=$((expected + 1))
   cell="$(pin_cell_of "$item" "$matrix")"
   want="$(pinned_ref_of "$cell")"
-  if [ -z "$cell" ]; then
+  if [[ -z "$cell" ]]; then
     bad "$matrix has no '$item' row"
-  elif [ -z "$want" ]; then
+  elif [[ -z "$want" ]]; then
     bad "the $matrix pin for '$item' names no commit and no tag"
-  elif [ ! -f "$dir/PROVENANCE.md" ]; then
+  elif [[ ! -f "$dir/PROVENANCE.md" ]]; then
     bad "$dir/PROVENANCE.md is missing; run the vendor script that $matrix names for '$item'"
   elif ! grep -qF "$want" "$dir/PROVENANCE.md"; then
     bad "$dir/PROVENANCE.md does not name the pin $want that $matrix records for '$item'"
@@ -922,18 +939,18 @@ while IFS='|' read -r dir item; do
     agreed=$((agreed + 1))
   fi
 done <<< "$corpora"
-[ "$agreed" -eq "$expected" ] && note "OK: all $expected corpus provenance stamps name their pin"
+[[ "$agreed" -eq "$expected" ]] && note "OK: all $expected corpus provenance stamps name their pin"
 
 # The specification row pins a version and the corpus row a commit; the
 # provenance records the version that commit's antora.yml declares, so a re-pin
 # that moves one and not the other is caught here.
 spec_prov=docs/specs/federation-spec/PROVENANCE.md
-if [ -f "$spec_prov" ]; then
+if [[ -f "$spec_prov" ]]; then
   want="$(pin_of "Federation Tier with AQL" "$matrix")"
   found="$(sed -nE "s/.*spec-version: '([^']+)'.*/\1/p" "$spec_prov" | head -n1)"
-  if [ -z "$found" ]; then
+  if [[ -z "$found" ]]; then
     bad "$spec_prov records no spec-version"
-  elif [ "$found" != "$want" ]; then
+  elif [[ "$found" != "$want" ]]; then
     bad "Federation Tier with AQL: the vendored source declares $found, $matrix pins $want"
   else
     note "OK: the vendored federation specification declares $found"
@@ -941,15 +958,15 @@ if [ -f "$spec_prov" ]; then
 fi
 
 echo "== container images (docker/Dockerfile, compose.yaml <-> $matrix)"
-if [ -f docker/Dockerfile ]; then
+if [[ -f docker/Dockerfile ]]; then
   # The base is the last stage; an earlier one only stages files for it.
   base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | tail -n1)"
   want_base="$(pin_of "Container base image" "$matrix")"
-  if [ -z "$base" ]; then
+  if [[ -z "$base" ]]; then
     bad "docker/Dockerfile has no FROM"
-  elif [ -z "$want_base" ]; then
+  elif [[ -z "$want_base" ]]; then
     bad "$matrix has no 'Container base image' row"
-  elif [ "$base" != "$want_base" ]; then
+  elif [[ "$base" != "$want_base" ]]; then
     bad "base image: docker/Dockerfile builds on $base, $matrix pins $want_base"
   else
     note "OK: docker/Dockerfile builds on the pinned base"
@@ -957,40 +974,40 @@ if [ -f docker/Dockerfile ]; then
   # The digest belongs to the FROM alone; the base.name label names the tag it
   # was resolved from, and the two must name the same image.
   label_base="$(sed -nE 's|.*org\.opencontainers\.image\.base\.name="([^"]+)".*|\1|p' docker/Dockerfile | head -n1)"
-  if [ -n "$base" ] && [ "${base%@*}" != "$label_base" ]; then
+  if [[ -n "$base" ]] && [[ "${base%@*}" != "$label_base" ]]; then
     bad "docker/Dockerfile labels its base as '$label_base' but builds on ${base%@*}"
   fi
 else
   note "no docker/Dockerfile yet, skipped"
 fi
-if [ -f compose.yaml ]; then
+if [[ -f compose.yaml ]]; then
   # Every digest-pinned image is one of the matrix's pin cells, verbatim.
   pinned="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+@sha256:[0-9a-f]{64})[[:space:]]*$|\1|p' compose.yaml | sort -u)"
   agreed=0
   while IFS= read -r ref; do
-    [ -n "$ref" ] || continue
+    [[ -n "$ref" ]] || continue
     if grep -qF "\`$ref\`" "$matrix"; then
       agreed=$((agreed + 1))
     else
       bad "compose.yaml runs $ref, which no $matrix row pins"
     fi
   done <<< "$pinned"
-  [ "$agreed" -gt 0 ] && note "OK: all $agreed digest-pinned compose.yaml images are rows of $matrix"
+  [[ "$agreed" -gt 0 ]] && note "OK: all $agreed digest-pinned compose.yaml images are rows of $matrix"
   # An image that is neither digest-pinned nor the gateway's own is a drift
   # the line above cannot see.
   while IFS= read -r ref; do
-    [ -n "$ref" ] || continue
+    [[ -n "$ref" ]] || continue
     case "$ref" in
     *@sha256:* | ghcr.io/ferrohealth/ferrofed:*) ;;
     *) bad "compose.yaml runs $ref, which is not pinned by digest" ;;
     esac
   done < <(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p' compose.yaml)
   tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{[A-Za-z_][A-Za-z0-9_]*:-([^}]+)\}[[:space:]]*$|\1|p' compose.yaml | sort -u)"
-  if [ -z "$tags" ]; then
+  if [[ -z "$tags" ]]; then
     bad "compose.yaml has no ghcr.io/ferrohealth/ferrofed image tag default"
-  elif [ "$(printf '%s\n' "$tags" | wc -l | tr -d '[:space:]')" -gt 1 ]; then
+  elif [[ "$(line_count "$tags")" -gt 1 ]]; then
     bad "compose.yaml names more than one ferrofed tag default: $(printf '%s' "$tags" | tr '\n' ' ')"
-  elif [ "$tags" != "$want_product" ]; then
+  elif [[ "$tags" != "$want_product" ]]; then
     bad "quickstart tag: compose.yaml runs $tags, $matrix pins the product version $want_product"
   else
     note "OK: the compose.yaml gateway tag is the product version $tags"
@@ -1001,22 +1018,22 @@ fi
 # The compose.yaml every release carries runs the gateway image alone, at the
 # version of the release, so its one tag default moves with the cut.
 release_compose=deploy/compose/compose.yaml
-if [ -f "$release_compose" ]; then
+if [[ -f "$release_compose" ]]; then
   images="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+)[[:space:]]*$|\1|p' "$release_compose" | sort -u)"
-  [ -n "$images" ] || bad "$release_compose runs no image"
+  [[ -n "$images" ]] || bad "$release_compose runs no image"
   while IFS= read -r ref; do
-    [ -n "$ref" ] || continue
+    [[ -n "$ref" ]] || continue
     case "$ref" in
     "ghcr.io/ferrohealth/ferrofed:\${FERROFED_VERSION:-"*"}") ;;
     *) bad "$release_compose runs $ref, which is not ghcr.io/ferrohealth/ferrofed:\${FERROFED_VERSION:-<version>}" ;;
     esac
   done <<< "$images"
   tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([^}]+)\}[[:space:]]*$|\1|p' "$release_compose" | sort -u)"
-  if [ -z "$tags" ]; then
+  if [[ -z "$tags" ]]; then
     bad "$release_compose has no ghcr.io/ferrohealth/ferrofed image tag default"
-  elif [ "$(printf '%s\n' "$tags" | wc -l | tr -d '[:space:]')" -gt 1 ]; then
+  elif [[ "$(line_count "$tags")" -gt 1 ]]; then
     bad "$release_compose names more than one ferrofed tag default: $(printf '%s' "$tags" | tr '\n' ' ')"
-  elif [ "$tags" != "$want_product" ]; then
+  elif [[ "$tags" != "$want_product" ]]; then
     bad "release compose tag: $release_compose runs $tags, $matrix pins the product version $want_product"
   else
     note "OK: the $release_compose gateway tag is the product version $tags"
@@ -1025,13 +1042,13 @@ else
   note "no $release_compose yet, skipped"
 fi
 deployment=deploy/kubernetes/deployment.yaml
-if [ -f "$deployment" ]; then
+if [[ -f "$deployment" ]]; then
   tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:([^@[:space:]]+)[[:space:]]*$|\1|p' "$deployment" | sort -u)"
-  if [ -z "$tags" ]; then
+  if [[ -z "$tags" ]]; then
     bad "$deployment has no ghcr.io/ferrohealth/ferrofed image tag"
-  elif [ "$(printf '%s\n' "$tags" | wc -l | tr -d '[:space:]')" -gt 1 ]; then
+  elif [[ "$(line_count "$tags")" -gt 1 ]]; then
     bad "$deployment names more than one ferrofed tag: $(printf '%s' "$tags" | tr '\n' ' ')"
-  elif [ "$tags" != "$want_product" ]; then
+  elif [[ "$tags" != "$want_product" ]]; then
     bad "example manifest: $deployment runs $tags, $matrix pins the product version $want_product"
   else
     note "OK: the $deployment gateway tag is the product version $tags"
@@ -1041,7 +1058,7 @@ else
 fi
 
 echo "== licence (LICENSE <-> SPDX headers, manifests, badges, labels)"
-if [ -f LICENSE ]; then
+if [[ -f LICENSE ]]; then
   stale=0
   if ! grep -q 'Business Source License 1.1' LICENSE; then
     bad "LICENSE is not the Business Source License 1.1"
@@ -1052,19 +1069,19 @@ if [ -f LICENSE ]; then
   # inside a string literal is not. Vendored trees keep their upstream terms
   # and are outside the check.
   while IFS= read -r hit; do
-    [ -n "$hit" ] || continue
+    [[ -n "$hit" ]] || continue
     bad "stale licence claim at $hit"
     stale=1
   done < <(git grep -n -E '^[[:space:]]*([/#*]+|<!--)?[[:space:]]*SPDX-License-Identifier: (MIT|Apache-2\.0)|License-MIT|License-Apache|^license = "(MIT|Apache-2\.0)"|^license: (MIT|Apache-2\.0)|image\.licenses="?(MIT|Apache)' \
     -- ':!LICENSE' ':!CHANGELOG.md' ':!scripts/checks/versions.sh' ':(glob,exclude)**/vendor/**' \
     ':(glob,exclude)docs/specs/**' || true)
-  [ "$stale" -eq 0 ] && note "OK: every first-party file names BUSL-1.1"
+  [[ "$stale" -eq 0 ]] && note "OK: every first-party file names BUSL-1.1"
 else
   bad "LICENSE is missing"
 fi
 
 echo
-if [ "$fail" -ne 0 ]; then
+if [[ "$fail" -ne 0 ]]; then
   echo "versions: DRIFT detected" >&2
   exit 1
 fi

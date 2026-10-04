@@ -25,17 +25,24 @@ die() {
   exit 1
 }
 
-[ "$#" -eq 1 ] || die "usage: $0 <version>"
+[[ "$#" -eq 1 ]] || die "usage: $0 <version>"
 version="${1#v}"
 case "$version" in
 '' | *[!0-9A-Za-z.+-]*) die "'$1' is not a version" ;;
+*) ;;
 esac
 
 command -v gh >/dev/null 2>&1 || die "the GitHub CLI (gh) is not installed"
 if command -v sha256sum >/dev/null 2>&1; then
-  sha() { sha256sum "$1" | awk '{print $1}'; }
+  sha() {
+    local file="$1"
+    sha256sum "$file" | awk '{print $1}'
+  }
 elif command -v shasum >/dev/null 2>&1; then
-  sha() { shasum -a 256 "$1" | awk '{print $1}'; }
+  sha() {
+    local file="$1"
+    shasum -a 256 "$file" | awk '{print $1}'
+  }
 else
   die "neither sha256sum nor shasum is installed"
 fi
@@ -58,7 +65,7 @@ while IFS='|' read -r target platform; do
 
   want="$(awk '{print $1; exit}' "$work/$asset.sha256sum")"
   got="$(sha "$work/$asset")"
-  [ -n "$want" ] && [ "$want" = "$got" ] ||
+  [[ -n "$want" ]] && [[ "$want" = "$got" ]] ||
     die "$asset: sha256 $got does not match the published $want"
 
   mkdir -p "dist/$platform"

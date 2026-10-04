@@ -50,34 +50,37 @@ rust_sources() {
   else
     find . -name '*.rs' -not -path './docs/specs/*' -not -path './target/*' | sed 's|^\./||'
   fi
+  return
 }
 
 # check_tree DIR: runs every check against the tree rooted at DIR and prints
 # each problem on stderr. Returns 1 when there is any.
 check_tree() {
+  local dir="$1"
   (
-    cd "$1" || exit 2
+    cd "$dir" || exit 2
     work="$(mktemp -d)"
     trap 'rm -rf "$work"' EXIT
     fail=0
     problem() {
       echo "obligations: $*" >&2
       fail=1
+      return 0
     }
     for f in "$OBLIGATIONS" "$SOURCES" "$MATRIX" "$REQUIREMENTS" "$PAGE" "$GENERATOR"; do
-      [ -f "$f" ] || problem "$f is missing"
+      [[ -f "$f" ]] || problem "$f is missing"
     done
-    [ "$fail" -eq 0 ] || exit 1
+    [[ "$fail" -eq 0 ]] || exit 1
 
     grep -v '^#' "$OBLIGATIONS" > "$work/rows"
-    if [ "$(head -n 1 "$work/rows")" != "$HEADER" ]; then
+    if [[ "$(head -n 1 "$work/rows")" != "$HEADER" ]]; then
       problem "$OBLIGATIONS: the header row is not: ${HEADER//$'\t'/ }"
     fi
     grep -v '^#' "$MATRIX" | tail -n +2 | cut -f1 > "$work/cps"
     grep -v '^#' "$REQUIREMENTS" | tail -n +2 | cut -f1 > "$work/ns"
     grep -v '^#' "$SOURCES" | tail -n +2 > "$work/sources"
     rust_sources | while IFS= read -r src; do
-      [ -f "$src" ] && grep -h -o -E '\bfn [a-z_][a-z0-9_]*' "$src"
+      [[ -f "$src" ]] && grep -h -o -E '\bfn [a-z_][a-z0-9_]*' "$src"
     done | sed 's/^fn //' | LC_ALL=C sort -u > "$work/fns"
 
     # Checks 1 to 7, one message per line.
@@ -136,7 +139,7 @@ check_tree() {
         }
       ' "$work/cps" "$work/ns" "$work/sources" "$work/fns" "$work/rows" | LC_ALL=C sort
     )"
-    if [ -n "$findings" ]; then
+    if [[ -n "$findings" ]]; then
       while IFS= read -r line; do problem "$line"; done <<< "$findings"
     fi
 
@@ -161,7 +164,7 @@ check_tree() {
       problem "the book page could not be rendered"
     fi
 
-    [ "$fail" -eq 0 ] || exit 1
+    [[ "$fail" -eq 0 ]] || exit 1
     total="$(tail -n +2 "$work/rows" | wc -l | tr -d '[:space:]')"
     tested="$(tail -n +2 "$work/rows" | cut -f8 | grep -c -x tested)"
     echo "obligations: OK ($total statements, $tested tested)"
@@ -200,23 +203,27 @@ self_test() {
     printf '# comment\nsource\tlines\tsha256\n' > "$dir/$SOURCES"
     bash "$dir/$GENERATOR" --derive > /dev/null
     bash "$dir/$GENERATOR" --render-write > /dev/null
+    return
   }
 
   # expect WANT NAME: check_tree over the fixture exits WANT.
   expect() {
-    local want=$1 status=0
+    local want="$1" name="$2" status=0
     check_tree "$work/tree" > /dev/null 2>&1 || status=$?
-    if [ "$status" -ne "$want" ]; then
-      echo "obligations: self-test failed: $2 exited $status, wanted $want." >&2
+    if [[ "$status" -ne "$want" ]]; then
+      echo "obligations: self-test failed: $name exited $status, wanted $want." >&2
       failed=1
     fi
+    return 0
   }
   # edit SED: rewrites the checklist of a fresh fixture and renders it again,
   # so only the edit can fail.
   edit() {
+    local script="$1"
     fixture "$work/tree"
-    sed -i.bak "$1" "$work/tree/$OBLIGATIONS" && rm -f "$work/tree/$OBLIGATIONS.bak"
+    sed -i.bak "$script" "$work/tree/$OBLIGATIONS" && rm -f "$work/tree/$OBLIGATIONS.bak"
     bash "$work/tree/$GENERATOR" --render-write > /dev/null
+    return
   }
 
   fixture "$work/tree"
@@ -264,7 +271,7 @@ self_test() {
   printf '\nA hand edit.\n' >> "$work/tree/$PAGE"
   expect 1 "a stale book page"
 
-  if [ "$failed" -ne 0 ]; then
+  if [[ "$failed" -ne 0 ]]; then
     exit 1
   fi
   echo "obligations: self-test OK."

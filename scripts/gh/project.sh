@@ -103,15 +103,16 @@ status_option_id() {
 
 # Resolve the board item id for issue #n ("" when the issue is not on the board).
 item_id_for_issue() {
+  local number="$1"
   resolve_project
-  need_int "$1"
+  need_int "$number"
   # Looked up from the ISSUE side (one cheap node query), never by listing the
   # whole project: the board keeps every closed item, so `gh project
   # item-list --limit 1000` costs enough GraphQL points that GitHub's
   # secondary rate limit rejects it once the board is large.
   # shellcheck disable=SC2016 # $owner/$name/$number are GraphQL variables, bound by the -f flags
   gh api graphql \
-    -f owner="${REPO%%/*}" -f name="${REPO##*/}" -F number="$1" \
+    -f owner="${REPO%%/*}" -f name="${REPO##*/}" -F number="$number" \
     -f query='query($owner:String!,$name:String!,$number:Int!){
       repository(owner:$owner,name:$name){issue(number:$number){
         projectItems(first:20){nodes{id project{id}}}}}}' \
@@ -119,11 +120,12 @@ item_id_for_issue() {
 }
 
 canonical_status() {
-  case "$1" in
+  local status="$1"
+  case "$status" in
     todo | Todo) echo "Todo" ;;
     in-progress | in_progress | 'In Progress') echo "In Progress" ;;
     done | Done) echo "Done" ;;
-    *) die "unknown status '$1' (use todo | in-progress | done)" ;;
+    *) die "unknown status '$status' (use todo | in-progress | done)" ;;
   esac
 }
 
@@ -237,12 +239,13 @@ cmd_update() {
   local status="${1:?status (on-track|at-risk|off-track|complete|inactive)}"
   local body="${2:?message body (markdown)}"
   shift 2
-  local start="" target="" enum
+  local start="" target="" enum flag
   while [[ $# -gt 0 ]]; do
-    case "$1" in
+    flag="$1"
+    case "$flag" in
       --start) start="${2:?--start needs YYYY-MM-DD}"; shift 2 ;;
       --target) target="${2:?--target needs YYYY-MM-DD}"; shift 2 ;;
-      *) die "unknown flag '$1' (only --start/--target)" ;;
+      *) die "unknown flag '$flag' (only --start/--target)" ;;
     esac
   done
   case "$status" in

@@ -33,7 +33,7 @@ pub enum ConnectionType {
 
 impl ConnectionType {
     /// The code system the codes belong to, as a FHIR `Coding.system` names it.
-    pub const SYSTEM: &'static str = "https://ferrofed.eu/fhir/CodeSystem/connection-type";
+    pub const SYSTEM: &str = "https://ferrofed.eu/fhir/CodeSystem/connection-type";
 
     /// The connection type `code` names in [`ConnectionType::SYSTEM`], or
     /// `None` when the code system defines no such code.

@@ -23,13 +23,13 @@ website/book/theme/favicon.png	assets/brand/favicon-32.png"
 
 fail=0
 while IFS=$'\t' read -r copy source; do
-  [ -n "$copy" ] || continue
-  if [ ! -f "$source" ]; then
+  [[ -n "$copy" ]] || continue
+  if [[ ! -f "$source" ]]; then
     echo "favicon-sync: $source is missing; the brand directory is the source of both copies." >&2
     fail=1
     continue
   fi
-  if [ ! -f "$copy" ]; then
+  if [[ ! -f "$copy" ]]; then
     echo "favicon-sync: $copy is missing; regenerate it from $source (assets/brand/README.md)." >&2
     fail=1
     continue

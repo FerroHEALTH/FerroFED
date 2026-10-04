@@ -29,7 +29,7 @@ die() {
   exit 1
 }
 
-if [ -s "$KEY" ]; then
+if [[ -s "$KEY" ]]; then
   echo "signing-key: $KEY exists, kept" >&2
   exit 0
 fi

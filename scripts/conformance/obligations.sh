@@ -52,7 +52,7 @@ sha256() {
 # with the number of keyword lines and their digest.
 derive_into() {
   local out="$1" file lines
-  [ -d "$SPEC/pages" ] || die "the vendored specification is missing ($SPEC)"
+  [[ -d "$SPEC/pages" ]] || die "the vendored specification is missing ($SPEC)"
   {
     printf 'source\tlines\tsha256\n'
     find "$SPEC/pages" "$SPEC/attachments" -type f \( -name '*.adoc' -o -name '*.json' \) | LC_ALL=C sort |
@@ -212,7 +212,7 @@ render_page() {
 
 case "${1:-}" in
 --derived)
-  [ -n "${2:-}" ] || die "usage: $0 --derived FILE"
+  [[ -n "${2:-}" ]] || die "usage: $0 --derived FILE"
   derive_into "$2"
   ;;
 --derive)
@@ -220,7 +220,7 @@ case "${1:-}" in
   trap 'rm -f "$work"' EXIT
   derive_into "$work"
   {
-    if [ -f "$SOURCES" ]; then awk '/^#/ { print; next } { exit }' "$SOURCES"; fi
+    if [[ -f "$SOURCES" ]]; then awk '/^#/ { print; next } { exit }' "$SOURCES"; fi
     cat "$work"
   } > "$work.out"
   mv "$work.out" "$SOURCES"

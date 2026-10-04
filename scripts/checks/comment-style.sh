@@ -163,6 +163,7 @@ CITE_AWK='
 
 # Prints the violations of one .rs file, one `:LINE: message` per line.
 check_rs() {
+  local file="$1"
   awk -v NOTE_MAX="$NOTE_MAX" -v RUN_MAX="$RUN_MAX" "$CITE_AWK"'
     function flush_note() {
       if (note_len > NOTE_MAX)
@@ -293,7 +294,7 @@ check_rs() {
       flush_note(); flush_run(); flush_doc_note(); flush_sec()
     }
     END { flush_note(); flush_run(); flush_doc_note(); flush_sec() }
-  ' "$1"
+  ' "$file"
 }
 
 # Prints the check 9 and 10 violations of one HASH file, one `:LINE: message`
@@ -303,10 +304,11 @@ check_rs() {
 # escapes removed, and every `description:` scalar and trailing comment read)
 # or `toml` (every `reason = "…"` string and trailing comment read as well).
 check_hash() {
-  local kind="toml"
-  case "$1" in
+  local file="$1" kind
+  case "$file" in
   *.sh) kind="sh" ;;
   *.yml | *.yaml) kind="yml" ;;
+  *) kind="toml" ;;
   esac
   awk -v kind="$kind" -v sq="'" "$CITE_AWK"'
     BEGIN {
@@ -424,13 +426,14 @@ check_hash() {
         heredoc = tok
       }
     }
-  ' "$1"
+  ' "$file"
 }
 
 # Prints the check 9 and 10 violations of one conformance table, one
 # `:LINE: message` per line: its `#` comment lines, then the `reason` and
 # `evidence` cells of every row after the header row that names the columns.
 check_tsv() {
+  local file="$1"
   awk -F'\t' "$CITE_AWK"'
     /^#/ { cite_check($0, "comment", 1, 0); next }
     !seen_header {
@@ -441,7 +444,7 @@ check_tsv() {
     {
       for (i = 1; i <= NF; i++) if (i in read_col) cite_check($i, read_col[i] " cell", 1, 0)
     }
-  ' "$1"
+  ' "$file"
 }
 
 # Runs the right pass over one file and prints its violations prefixed with
@@ -515,6 +518,10 @@ self_test() {
         fails=$((fails + 1))
       fi
       ;;
+    *)
+      echo "self-test: unknown verdict $verdict: $*" >&2
+      fails=$((fails + 1))
+      ;;
     esac
   }
   local internal="cites an internal markdown file"
@@ -555,13 +562,14 @@ self_test() {
   expect i.sh accepted "" '#!/usr/bin/env bash' '# A plain comment.'
 
   local steps=('jobs:' '  x:' '    runs-on: ubuntu-latest' '    steps:')
+  local run='      - run: |'
   expect a.yml refused "$internal" '  # through env:, never spliced into run: (.claude/rules/ci-cd.md).'
   expect b.yml refused "$internal" '  # The guard (docs/architecture.md section 12): the matrix.'
   expect c.yml refused "$marker" '# Nothing is published (decision A35).'
   # shellcheck disable=SC2016 # a literal workflow fixture: the backticks are Markdown the echo prints
-  expect d.yml refused "$internal" "${steps[@]}" '      - run: |' \
+  expect d.yml refused "$internal" "${steps[@]}" "$run" \
     '          echo "a no-op (\`docs/architecture.md\` section 11)."'
-  expect e.yml refused "$marker" "${steps[@]}" '      - run: |' '          set -euo pipefail' \
+  expect e.yml refused "$marker" "${steps[@]}" "$run" '          set -euo pipefail' \
     '          { echo "### Nothing"; echo "a no-op (decision A35)."; } >> out.md'
   expect f.yml refused "$internal" "${steps[@]}" '      - run: echo "rules: .claude/rules/ci-cd.md"'
   expect g.yml refused "$marker" "${steps[@]}" '      - name: Print' '        run: >-' \
@@ -569,10 +577,10 @@ self_test() {
   expect action.yaml refused "$internal" 'runs:' '  using: composite' '  steps:' \
     '    # A publishing lane restores no cache (.claude/rules/ci-cd.md).'
 
-  expect h.yml accepted "" "${steps[@]}" '      - run: |' '          echo "the pin table of docs/architecture.md"'
+  expect h.yml accepted "" "${steps[@]}" "$run" '          echo "the pin table of docs/architecture.md"'
   expect i.yml accepted "" "${steps[@]}" '      - name: Print' '        run: |' '          echo "ok"' \
     '      - name: echo the summary (A35) is a step name, not a run line'
-  expect j.yml accepted "" "${steps[@]}" '      - run: |' "          cat > out.md <<EOF" \
+  expect j.yml accepted "" "${steps[@]}" "$run" "          cat > out.md <<EOF" \
     '          # Provenance (.claude/rules/vendored-inputs.md)' '          EOF' '          echo "done"'
   expect k.yml accepted "" "${steps[@]}" '      - run: echo "the byte 0xA1; Annex A §A.1; HbA1c"'
   expect l.yml accepted "" '# Pinned in docs/VERSIONS.md (the GitHub Actions security hardening guide).'

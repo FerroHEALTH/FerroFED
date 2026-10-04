@@ -40,7 +40,7 @@ case "$#" in
     exit 2
     ;;
 esac
-if [ -n "$binary" ] && [ ! -x "$binary" ]; then
+if [[ -n "$binary" ]] && [[ ! -x "$binary" ]]; then
   echo "::error::$binary is not an executable ferrofed binary." >&2
   exit 2
 fi
@@ -54,13 +54,13 @@ bad() {
 echo "== no compose file builds the image"
 built=0
 while IFS= read -r file; do
-  [ -n "$file" ] || continue
+  [[ -n "$file" ]] || continue
   if grep -n -E '^[[:space:]]*build:' "$file" >&2; then
     bad "$file carries build:; every compose file runs the published image, which only release-image.yml builds"
     built=1
   fi
 done < <(git ls-files -- '*compose*.yaml' '*compose*.yml' ':(exclude)docs/specs/**' ':(glob,exclude)**/vendor/**')
-[ "$built" -eq 0 ] && echo "OK: no compose file carries build:"
+[[ "$built" -eq 0 ]] && echo "OK: no compose file carries build:"
 
 docker compose version
 
@@ -91,9 +91,9 @@ else
   rendered=""
 fi
 
-if [ -z "$binary" ]; then
+if [[ -z "$binary" ]]; then
   echo "no ferrofed binary given: config check skipped"
-elif [ -n "$rendered" ]; then
+elif [[ -n "$rendered" ]]; then
   echo "== config check over the attached examples"
   # The image the gateway runs in is the Dockerfile's last stage.
   base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | tail -n1)"
@@ -111,7 +111,7 @@ elif [ -n "$rendered" ]; then
       "${mounts[@]}" --entrypoint /usr/local/bin/ferrofed "$base" config check
   }
   docker pull --quiet "$base" > /dev/null
-  if [ -z "$config" ] || [ "${#mounts[@]}" -eq 0 ]; then
+  if [[ -z "$config" ]] || [[ "${#mounts[@]}" -eq 0 ]]; then
     bad "the rendered compose file names no FERROFED_CONFIG or no bind mount"
   elif out="$(check 2>&1)"; then
     echo "OK: $out"
@@ -130,6 +130,7 @@ elif [ -n "$rendered" ]; then
     echo "OK: a member no PIX Manager resolves is refused by name"
   fi
   # A credential sent over plain http is refused under the production profile.
+  # The http URL is the refused input under test; nothing connects to it.
   sed -E 's|^url = "https://(pix\.[^"]*)"$|url = "http://\1"|' "$RELEASE/ferrofed.toml" > "$work/refused.toml"
   cat "$work/refused.toml" > "$work/ferrofed.toml"
   if cmp -s "$RELEASE/ferrofed.toml" "$work/ferrofed.toml"; then
@@ -143,7 +144,7 @@ elif [ -n "$rendered" ]; then
   fi
 fi
 
-if [ "$fail" -ne 0 ]; then
+if [[ "$fail" -ne 0 ]]; then
   echo "release compose: FAILED" >&2
   exit 1
 fi

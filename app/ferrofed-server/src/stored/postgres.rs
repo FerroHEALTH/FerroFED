@@ -410,7 +410,7 @@ mod tests {
 
     #[test]
     fn an_unparsable_url_is_refused_without_quoting_it() {
-        let refused = PostgresStore::open(&SecretUrl::new("postgres://u:s3cr3t@h:x/d"));
+        let refused = PostgresStore::open(&SecretUrl::new("postgres://u:example-s3cr3t@h:x/d"));
         let Err(StoreError::Backend(error)) = refused else {
             panic!("refused: {refused:?}");
         };
