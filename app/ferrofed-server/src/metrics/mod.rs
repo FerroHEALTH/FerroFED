@@ -146,6 +146,13 @@ pub struct Metrics {
     _incidents: ObservableCounter<u64>,
     /// The instruments each binding records through, kept for the life of
     /// the provider.
+    #[cfg_attr(
+        not(feature = "binding-ihe"),
+        expect(
+            dead_code,
+            reason = "no compiled binding records through instruments of its own"
+        )
+    )]
     bindings: crate::binding::process::Instruments,
 }
 
@@ -240,6 +247,7 @@ impl Metrics {
     }
 
     /// Returns the instruments the bindings record through.
+    #[cfg(feature = "binding-ihe")]
     pub(crate) fn bindings(&self) -> &crate::binding::process::Instruments {
         &self.bindings
     }

@@ -24,11 +24,11 @@ use ihe_iti::pixm::Invocation;
 use serde::Deserialize;
 
 use crate::binding::ihe::audit::config::AuditSettings;
+use crate::binding::ihe::tls::TlsSettings;
 use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::Scheme;
-use crate::config::tls::TlsSettings;
 use crate::config::transport;
 use crate::federation::error::FederationError;
 use crate::service;
@@ -147,7 +147,7 @@ pub(super) fn resolve(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Err
             manager.url.expose(),
             transport::identity_site(&key, carried),
         )?;
-        let tls = crate::config::tls::resolve(
+        let tls = crate::binding::ihe::tls::resolve(
             &key,
             manager.client_identity.as_ref(),
             manager.client_identity_file.as_deref(),

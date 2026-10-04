@@ -16,7 +16,9 @@ use axum::Router;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use opentelemetry::metrics::Meter;
 
-use crate::binding::{Indication, ihe};
+use crate::binding::Indication;
+#[cfg(feature = "binding-ihe")]
+use crate::binding::ihe;
 use crate::config::settings::Settings;
 use crate::federation::error::FederationError;
 use crate::reload::Reloader;
@@ -27,13 +29,21 @@ use crate::state::{AppState, StateError};
 #[derive(Debug)]
 pub struct Instruments {
     /// The IHE binding's identity feed and audit spool instruments.
+    #[cfg(feature = "binding-ihe")]
     pub(crate) ihe: ihe::metrics::Instruments,
 }
 
 impl Instruments {
     /// Returns every binding's instruments over `meter`.
-    pub(crate) fn new(meter: &Meter) -> Self {
+    pub(crate) fn new(
+        #[cfg_attr(
+            not(feature = "binding-ihe"),
+            expect(unused_variables, reason = "no compiled binding has instruments")
+        )]
+        meter: &Meter,
+    ) -> Self {
         Self {
+            #[cfg(feature = "binding-ihe")]
             ihe: ihe::metrics::Instruments::new(meter),
         }
     }
@@ -44,23 +54,48 @@ impl Instruments {
 #[derive(Debug, Default)]
 pub struct Processes {
     /// The IHE binding's care services directory and identity feed.
+    #[cfg(feature = "binding-ihe")]
     pub(crate) ihe: ihe::process::Processes,
 }
 
+#[cfg_attr(
+    not(feature = "binding-ihe"),
+    expect(
+        clippy::unused_self,
+        clippy::unnecessary_wraps,
+        clippy::needless_pass_by_value,
+        reason = "with no binding that runs a process compiled in, every method is a no-op"
+    )
+)]
 impl Processes {
     /// Returns what `settings` describe for the bindings to run.
     ///
     /// # Errors
     ///
     /// The [`StateError`] of a process that cannot be built.
-    pub(crate) fn build(settings: &Settings) -> Result<Self, StateError> {
+    pub(crate) fn build(
+        #[cfg_attr(
+            not(feature = "binding-ihe"),
+            expect(unused_variables, reason = "no compiled binding runs a process")
+        )]
+        settings: &Settings,
+    ) -> Result<Self, StateError> {
         Ok(Self {
+            #[cfg(feature = "binding-ihe")]
             ihe: ihe::process::Processes::build(settings)?,
         })
     }
 
     /// Takes over the registry sources the boot opened.
-    pub(crate) fn watch(&mut self, sources: Sources) {
+    pub(crate) fn watch(
+        &mut self,
+        #[cfg_attr(
+            not(feature = "binding-ihe"),
+            expect(unused_variables, reason = "no compiled binding has a registry source")
+        )]
+        sources: Sources,
+    ) {
+        #[cfg(feature = "binding-ihe")]
         if let Some(directory) = sources.ihe {
             self.ihe.directory = Some(directory);
         }
@@ -68,18 +103,40 @@ impl Processes {
 
     /// Returns what each process indicates on `GET /health/dependencies`.
     pub(crate) fn indicate(&self) -> Vec<(&'static str, Indication)> {
-        self.ihe.indicate()
+        #[cfg(feature = "binding-ihe")]
+        {
+            self.ihe.indicate()
+        }
+        #[cfg(not(feature = "binding-ihe"))]
+        {
+            Vec::new()
+        }
     }
 
     /// Returns `surface` with the routes the processes serve.
     pub(crate) fn routes(&self, surface: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
-        self.ihe.routes(surface)
+        #[cfg(feature = "binding-ihe")]
+        {
+            self.ihe.routes(surface)
+        }
+        #[cfg(not(feature = "binding-ihe"))]
+        {
+            surface
+        }
     }
 
     /// Starts every process, `reloader` replacing the registry a source
     /// changes.
-    pub(crate) fn start(&self, reloader: &Arc<Reloader>) -> Running {
+    pub(crate) fn start(
+        &self,
+        #[cfg_attr(
+            not(feature = "binding-ihe"),
+            expect(unused_variables, reason = "no compiled binding runs a process")
+        )]
+        reloader: &Arc<Reloader>,
+    ) -> Running {
         Running {
+            #[cfg(feature = "binding-ihe")]
             ihe: self.ihe.start(reloader),
         }
     }
@@ -89,12 +146,18 @@ impl Processes {
 #[derive(Debug)]
 pub struct Running {
     /// The IHE binding's identity feed subscription.
+    #[cfg(feature = "binding-ihe")]
     ihe: ihe::process::Running,
 }
 
 impl Running {
     /// Stops every process that holds something at a remote service.
+    #[cfg_attr(
+        not(feature = "binding-ihe"),
+        expect(clippy::unused_async, reason = "no compiled binding runs a process")
+    )]
     pub(crate) async fn drain(self) {
+        #[cfg(feature = "binding-ihe")]
         self.ihe.drain().await;
     }
 }
@@ -104,6 +167,7 @@ impl Running {
 #[derive(Debug, Default)]
 pub struct Sources {
     /// The IHE binding's care services directory.
+    #[cfg(feature = "binding-ihe")]
     ihe: Option<Arc<ihe::mcsd::registry::DirectoryRegistry>>,
 }
 
@@ -117,6 +181,16 @@ pub struct Sources {
 pub fn read_source(
     settings: &Settings,
 ) -> (Option<Result<RegistrySnapshot, FederationError>>, Sources) {
-    let (read, directory) = ihe::mcsd::registry::read_source(settings);
-    (read, Sources { ihe: directory })
+    #[cfg(feature = "binding-ihe")]
+    {
+        let (read, directory) = ihe::mcsd::registry::read_source(settings);
+        (read, Sources { ihe: directory })
+    }
+    #[cfg(not(feature = "binding-ihe"))]
+    {
+        (
+            crate::federation::registry::read_registry(settings),
+            Sources::default(),
+        )
+    }
 }

@@ -22,7 +22,7 @@
 //! ```
 //!
 //! `client_identity_file` and `trust_roots_file` give the mutual TLS the
-//! Supplier asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
+//! Supplier asks for, as `[xcpd]` does ([`tls`](crate::binding::ihe::tls)).
 //!
 //! `transaction` is `iti-78`, the Mobile Patient Demographics Query, or
 //! `iti-119`, the Patient Demographics Match, where the deployment declares
@@ -45,11 +45,11 @@ use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
 use crate::binding::ihe::audit::config::AuditSettings;
+use crate::binding::ihe::tls::TlsSettings;
 use crate::config::error::Error;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::Scheme;
-use crate::config::tls::TlsSettings;
 use crate::config::{Config, Credentials, transport};
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
@@ -207,7 +207,7 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PdqmSettings>, Error> {
         pdqm.url.expose(),
         transport::identity_site(PDQM_KEY, credentials.is_some().then_some(section.as_str())),
     )?;
-    let tls = crate::config::tls::resolve(
+    let tls = crate::binding::ihe::tls::resolve(
         PDQM_KEY,
         pdqm.client_identity.as_ref(),
         pdqm.client_identity_file.as_deref(),

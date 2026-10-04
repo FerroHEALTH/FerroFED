@@ -25,7 +25,9 @@
 //! design.
 
 pub mod development;
+#[cfg(feature = "binding-ihe")]
 pub mod ihe;
+#[cfg(feature = "binding-nl")]
 pub mod nl;
 pub mod process;
 
@@ -56,7 +58,13 @@ use crate::localization::LocalizationError;
 /// are resolved and reported first, and the development binding comes last:
 /// its cross-reference is the localizer of last resort, under the
 /// development profile alone.
-static COMPILED: &[&dyn Binding] = &[&nl::Nl, &ihe::Ihe, &development::Development];
+static COMPILED: &[&dyn Binding] = &[
+    #[cfg(feature = "binding-nl")]
+    &nl::Nl,
+    #[cfg(feature = "binding-ihe")]
+    &ihe::Ihe,
+    &development::Development,
+];
 
 /// The configuration sections every reload applies whatever the bindings:
 /// the registry and the onward credentials of each endpoint.

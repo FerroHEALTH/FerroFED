@@ -21,6 +21,7 @@ pub mod pdqm;
 pub mod pixm;
 pub mod pmir;
 pub mod process;
+pub mod tls;
 pub mod xcpd;
 
 use std::sync::Arc;

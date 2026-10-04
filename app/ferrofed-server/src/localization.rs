@@ -23,12 +23,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::localizer::{Localizer, OnFailure};
+#[cfg(feature = "binding-nl")]
 use ferrofed_identity::nvi::NviConfigError;
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 use ferrofed_identity::patient::PatientRefError;
+#[cfg(feature = "binding-ihe")]
 use ferrofed_identity::xcpd::XcpdConfigError;
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+#[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::audit::AuditTrailError;
 use crate::binding::{self, Indicator, LocalizerSeam, Offer, ResolverSeam, Role};
 use crate::config::settings::{LocalizationSettings, Settings};
@@ -167,6 +172,7 @@ pub enum LocalizationError {
     },
     /// An `[nl_gf.nvi.custodians]` value is not a node id.
     #[error("nl_gf.nvi.custodians.{ura:?} is not a node id")]
+    #[cfg(feature = "binding-nl")]
     NviMember {
         /// The custodian key, a URA and never a patient value.
         ura: String,
@@ -176,6 +182,7 @@ pub enum LocalizationError {
     },
     /// An `nl_gf.nvi.namespaces` entry is empty.
     #[error("nl_gf.nvi.namespaces has an empty namespace")]
+    #[cfg(feature = "binding-nl")]
     NviNamespace(#[source] PatientRefError),
     /// A credentials section names a grant, which only a node takes.
     #[error("the localizer's credentials cannot be used")]
@@ -185,15 +192,18 @@ pub enum LocalizationError {
     Tls(#[source] TlsRefused),
     /// The NVI localizer refuses its configuration.
     #[error("the [nl_gf.nvi] localizer cannot be enabled")]
+    #[cfg(feature = "binding-nl")]
     Nvi(#[source] NviConfigError),
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("{key} is not one SAML 2.0 Assertion element")]
+    #[cfg(feature = "binding-ihe")]
     XcpdAssertion {
         /// The key the assertion was read from.
         key: &'static str,
     },
     /// An `[xcpd.communities]` value is not a node id.
     #[error("xcpd.communities.{community:?} is not a node id")]
+    #[cfg(feature = "binding-ihe")]
     XcpdMember {
         /// The community key, an OID.
         community: String,
@@ -203,15 +213,19 @@ pub enum LocalizationError {
     },
     /// An `[xcpd.namespaces]` key is empty.
     #[error("xcpd.namespaces has an empty namespace")]
+    #[cfg(feature = "binding-ihe")]
     XcpdNamespace(#[source] PatientRefError),
     /// The XCPD localizer refuses its configuration.
     #[error("the [xcpd] localizer cannot be enabled")]
+    #[cfg(feature = "binding-ihe")]
     Xcpd(#[source] XcpdConfigError),
     /// The audit trail to the ATNA Audit Record Repository cannot start.
     #[error("the ITI-20 audit trail of the [xcpd] localizer cannot start")]
+    #[cfg(feature = "binding-ihe")]
     AuditTrail(#[source] AuditTrailError),
     /// `audit = "repository"` names no `[xcpd.audit_repository]`.
     #[error("xcpd.audit = \"repository\" needs [xcpd.audit_repository]")]
+    #[cfg(feature = "binding-ihe")]
     NoAuditRepository,
 }
 

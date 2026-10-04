@@ -572,6 +572,7 @@ fn joined<T>(ids: &[T], name: impl Fn(&T) -> &str) -> String {
 }
 
 #[cfg(test)]
+#[cfg(feature = "binding-ihe")]
 mod tests {
     use std::collections::BTreeMap;
 

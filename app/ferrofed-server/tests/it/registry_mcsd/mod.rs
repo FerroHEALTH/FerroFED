@@ -9,6 +9,7 @@
 //! registry and shows on `/health/dependencies`.
 
 mod config;
+#[cfg(feature = "binding-nl")]
 mod lrza;
 mod refresh;
 mod routing;

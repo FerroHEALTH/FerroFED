@@ -134,18 +134,25 @@ impl Config {
             telemetry,
             registry_document: self.registry.document.clone(),
             registry_format: self.registry.format,
+            #[cfg(feature = "binding-ihe")]
             registry_directory: None,
             federation,
             credentials,
             dev: None,
+            #[cfg(feature = "binding-ihe")]
             pixm: None,
+            #[cfg(feature = "binding-ihe")]
             xcpd: None,
+            #[cfg(feature = "binding-nl")]
             nl_gf: None,
+            #[cfg(feature = "binding-ihe")]
             pmir: None,
+            #[cfg(feature = "binding-ihe")]
             pdqm: None,
             stored_queries,
             metrics,
             signing,
+            #[cfg(feature = "binding-ihe")]
             audit: crate::binding::ihe::audit::config::AuditSettings::default(),
         };
         for binding in crate::binding::compiled() {
@@ -351,6 +358,7 @@ fn otlp_collector(key: &str, endpoint: Option<&SecretUrl>) -> Result<Option<Secr
 }
 
 /// Returns `count`, refusing zero under `key`.
+#[cfg(feature = "binding-ihe")]
 pub(crate) fn positive(key: &str, count: usize) -> Result<usize, Error> {
     if count == 0 {
         return Err(Error::Zero {
@@ -374,6 +382,7 @@ pub(crate) fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
 /// `[federation.localization]` budget when the section is written, its
 /// default under `node_selection = "localized"` without it, and zero with no
 /// localizer, as `resolve_federation` resolves it.
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub(crate) fn localization_budget_ms(config: &Config) -> u64 {
     match (
         &config.federation.localization,

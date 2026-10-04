@@ -6,6 +6,7 @@
 mod admission;
 mod aggregate;
 mod ask_all;
+#[cfg(feature = "binding-ihe")]
 mod audit_repository;
 mod auth;
 mod banner;
@@ -35,6 +36,7 @@ mod endpoint_attributes;
 mod endpoint_report;
 mod errors;
 mod facade;
+#[cfg(feature = "binding-ihe")]
 mod feed_audit;
 mod follow_up;
 mod healthcheck;
@@ -43,16 +45,21 @@ mod hygiene;
 mod its_rest_areas;
 mod lifecycle;
 mod localization;
+#[cfg(feature = "binding-ihe")]
 mod localizer_audit;
 mod localizer_surface;
 mod metrics;
+#[cfg(feature = "binding-nl")]
 mod mitz;
+#[cfg(feature = "binding-ihe")]
 mod mutual_tls;
+#[cfg(feature = "binding-nl")]
 mod nl_gf;
 mod no_destination;
 mod onward;
 mod onward_exchange;
 mod onward_fapi2;
+#[cfg(feature = "binding-nl")]
 mod onward_nuts;
 mod options;
 mod order;
@@ -60,8 +67,11 @@ mod order_key;
 mod outbound;
 mod outbound_id;
 mod path_ehr_id;
+#[cfg(feature = "binding-ihe")]
 mod pdqm;
+#[cfg(feature = "binding-ihe")]
 mod pixm_localizer;
+#[cfg(feature = "binding-ihe")]
 mod pmir;
 mod probed_ehr_id;
 mod provenance;
@@ -69,9 +79,11 @@ mod query_get;
 mod query_media;
 mod readiness;
 mod registry_fhir;
+#[cfg(feature = "binding-ihe")]
 mod registry_mcsd;
 mod reload;
 mod request_log;
+#[cfg(feature = "binding-ihe")]
 mod resolution;
 mod route_log;
 mod routing;
@@ -90,4 +102,5 @@ mod traces;
 mod track10;
 mod transport;
 mod versioned_write;
+#[cfg(feature = "binding-ihe")]
 mod xcpd;

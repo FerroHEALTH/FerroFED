@@ -313,6 +313,7 @@ pub fn check(
 /// The site of the identity service configured at `key`, such as
 /// `pixm.manager[0]`: its `url`, sent the patient identifiers it is asked
 /// for, with the credential `credential` names when one is configured.
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub(crate) fn identity_site(key: &str, credential: Option<&str>) -> ProtectedSite {
     let payload = match credential {
         Some(credential) => format!("{credential} and patient identifiers"),

@@ -28,7 +28,6 @@ pub(crate) mod resolve;
 pub(crate) mod secrets;
 pub mod settings;
 pub mod stored_queries;
-pub mod tls;
 pub mod transport;
 
 /// The prefix of every environment override.
@@ -76,20 +75,25 @@ pub struct Config {
     pub dev: Option<DevSection>,
     /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
     /// `ehr_id` domain there (#43).
+    #[cfg(feature = "binding-ihe")]
     pub pixm: Option<crate::binding::ihe::pixm::Pixm>,
     /// The XCPD localizer (`[xcpd]`): the responding gateways and the
     /// community each member serves (Annex A.3, #85).
+    #[cfg(feature = "binding-ihe")]
     pub xcpd: Option<crate::binding::ihe::xcpd::Xcpd>,
     /// The Dutch Generic Functions (`[nl_gf]`): the NVI localizer and the
     /// care provider each member holds the data of (Annex B, #87).
+    #[cfg(feature = "binding-nl")]
     pub nl_gf: Option<crate::binding::nl::NlGf>,
     /// The PMIR identity feed (`[pmir]`): the Patient Identity Registry the
     /// gateway subscribes to with ITI-94, and the path its ITI-93 messages
     /// arrive at (track 8 of §16.3, Annex A.4).
+    #[cfg(feature = "binding-ihe")]
     pub pmir: Option<crate::binding::ihe::pmir::config::Pmir>,
     /// The PDQm demographics step (`[pdqm]`): the Patient Demographics
     /// Supplier asked for the master identity of an identifier the
     /// cross-reference does not map (Annex A §A.2, #487).
+    #[cfg(feature = "binding-ihe")]
     pub pdqm: Option<crate::binding::ihe::pdqm::Pdqm>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
@@ -104,6 +108,7 @@ pub struct Config {
     pub auth: auth::Auth,
     /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go
     /// (`[audit]`, #486).
+    #[cfg(feature = "binding-ihe")]
     pub audit: crate::binding::ihe::audit::config::Audit,
 }
 
@@ -117,15 +122,21 @@ impl Default for Config {
             federation: Federation::default(),
             credentials: BTreeMap::new(),
             dev: None,
+            #[cfg(feature = "binding-ihe")]
             pixm: None,
+            #[cfg(feature = "binding-ihe")]
             xcpd: None,
+            #[cfg(feature = "binding-nl")]
             nl_gf: None,
+            #[cfg(feature = "binding-ihe")]
             pmir: None,
+            #[cfg(feature = "binding-ihe")]
             pdqm: None,
             stored_queries: stored_queries::StoredQueries::default(),
             metrics: Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),
+            #[cfg(feature = "binding-ihe")]
             audit: crate::binding::ihe::audit::config::Audit::default(),
         }
     }
@@ -144,6 +155,7 @@ pub struct Registry {
     /// The mCSD care services directory the registry is read from and kept
     /// in step with (`[registry.mcsd]`, §15.1, Annex A.5), in place of a
     /// document.
+    #[cfg(feature = "binding-ihe")]
     pub mcsd: Option<crate::binding::ihe::mcsd::McsdDirectory>,
 }
 
@@ -151,7 +163,11 @@ impl Registry {
     /// Whether a registry is configured, as a document or as a directory.
     #[must_use]
     pub fn configured(&self) -> bool {
-        self.document.is_some() || self.mcsd.is_some()
+        #[cfg(feature = "binding-ihe")]
+        if self.mcsd.is_some() {
+            return true;
+        }
+        self.document.is_some()
     }
 }
 
@@ -467,6 +483,7 @@ pub struct Credentials {
     /// The Nuts grant of the Dutch Generic Functions
     /// (`[credentials."<endpoint id>".nuts]`), the regional realisation of
     /// §13.3 (Annex B §B.4).
+    #[cfg(feature = "binding-nl")]
     pub nuts: Option<crate::binding::nl::nuts::Nuts>,
     /// A grant under the FAPI 2.0 Security Profile
     /// (`[credentials."<endpoint id>".fapi2]`), the BgZ/eOverdracht track of

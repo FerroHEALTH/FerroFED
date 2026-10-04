@@ -10,6 +10,7 @@ use std::sync::{Arc, PoisonError, RwLock};
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreError};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+#[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::pmir::IdentityFeedError;
 use crate::binding::process::{Processes, Sources};
 use crate::config::settings::Settings;
@@ -85,9 +86,11 @@ pub enum StateError {
     Cleartext(#[from] CleartextError),
     /// The PMIR identity feed cannot be built.
     #[error(transparent)]
+    #[cfg(feature = "binding-ihe")]
     IdentityFeed(#[from] IdentityFeedError),
     /// The audit trail of the PMIR transactions cannot start (`[audit]`).
     #[error("the [audit] trail cannot start")]
+    #[cfg(feature = "binding-ihe")]
     Audit(#[source] crate::binding::ihe::audit::AuditTrailError),
 }
 
@@ -277,6 +280,7 @@ impl AppState {
     }
 
     /// Returns what the bindings run, to put a process in place.
+    #[cfg(feature = "binding-ihe")]
     pub(crate) fn processes_mut(&mut self) -> &mut Processes {
         &mut self.processes
     }

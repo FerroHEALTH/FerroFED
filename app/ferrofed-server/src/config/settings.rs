@@ -50,6 +50,7 @@ pub struct Settings {
     pub registry_format: RegistryFormat,
     /// The mCSD care services directory the registry is read from, when it
     /// is read from one (§15.1, Annex A.5).
+    #[cfg(feature = "binding-ihe")]
     pub registry_directory: Option<crate::binding::ihe::mcsd::DirectorySettings>,
     /// The federated query.
     pub federation: FederationSettings,
@@ -58,14 +59,19 @@ pub struct Settings {
     /// The static development cross-reference, as written.
     pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
+    #[cfg(feature = "binding-ihe")]
     pub pixm: Option<crate::binding::ihe::pixm::PixmSettings>,
     /// The XCPD localizer, with every secret and file read.
+    #[cfg(feature = "binding-ihe")]
     pub xcpd: Option<crate::binding::ihe::xcpd::XcpdSettings>,
     /// The Dutch Generic Functions, with every secret and file read.
+    #[cfg(feature = "binding-nl")]
     pub nl_gf: Option<crate::binding::nl::NlGfSettings>,
     /// The PMIR identity feed, with every secret read.
+    #[cfg(feature = "binding-ihe")]
     pub pmir: Option<crate::binding::ihe::pmir::config::PmirSettings>,
     /// The PDQm demographics step, with every secret read.
+    #[cfg(feature = "binding-ihe")]
     pub pdqm: Option<crate::binding::ihe::pdqm::PdqmSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
@@ -75,6 +81,7 @@ pub struct Settings {
     /// `[signing]` is set (§13.1, N25).
     pub signing: Option<SigningSettings>,
     /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go.
+    #[cfg(feature = "binding-ihe")]
     pub audit: crate::binding::ihe::audit::config::AuditSettings,
 }
 

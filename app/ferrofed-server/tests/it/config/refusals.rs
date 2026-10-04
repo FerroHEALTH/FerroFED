@@ -3,9 +3,11 @@
 
 //! The refusals that name their key, line and file, and never echo a value.
 
+#[cfg(feature = "binding-ihe")]
 use ferrofed_server::binding::ihe::pixm::PixmMethod;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+#[cfg(feature = "binding-ihe")]
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 
@@ -157,10 +159,12 @@ fn a_parse_fault_names_the_file_it_is_in() -> Result<(), Box<dyn StdError>> {
 
 /// A `[[pixm.manager]]` table asking with `method`, or the default when it
 /// is empty.
+#[cfg(feature = "binding-ihe")]
 fn pix_manager(method: &str) -> String {
     format!("[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n{method}\n")
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 #[expect(
     clippy::panic_in_result_fn,
@@ -180,6 +184,7 @@ fn a_pixm_method_other_than_get_or_post_refuses_to_boot_naming_its_key()
     Ok(())
 }
 
+#[cfg(feature = "binding-ihe")]
 #[test]
 #[expect(
     clippy::panic_in_result_fn,

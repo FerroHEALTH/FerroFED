@@ -8,14 +8,21 @@ use std::path::PathBuf;
 use ferrofed_engine::dispatch::SetupError;
 use ferrofed_identity::dev::DevCrossRefError;
 use ferrofed_identity::directory::error::FhirFormError;
+#[cfg(feature = "binding-nl")]
 use ferrofed_identity::mitz::MitzConfigError;
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 use ferrofed_identity::patient::PatientRefError;
+#[cfg(feature = "binding-ihe")]
 use ferrofed_identity::pdqm::PdqmConfigError;
+#[cfg(feature = "binding-ihe")]
 use ferrofed_identity::pixm::PixmConfigError;
-use ferrofed_registry::error::{IdError, LoadError};
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
+use ferrofed_registry::error::IdError;
+use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::EndpointId;
 
 use crate::binding::RoleConflict;
+#[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
 use crate::facade::options::DescribeError;
 use crate::localization;
@@ -47,6 +54,7 @@ pub enum FederationError {
     /// The registry could not be read from the directory of `[registry.mcsd]`
     /// (§15.1, §15.2, N19, N20).
     #[error("the registry could not be read from the care services directory")]
+    #[cfg(feature = "binding-ihe")]
     Directory(#[source] Box<DirectoryFailure>),
     /// The `[dev]` table is set but no registry is, neither
     /// `registry.document` nor `[registry.mcsd]`, so its rows name members
@@ -109,6 +117,7 @@ pub enum FederationError {
     #[error(
         "the [pixm] resolver needs a registry, registry.document or [registry.mcsd], whose members it names"
     )]
+    #[cfg(feature = "binding-ihe")]
     PixmWithoutRegistry,
     /// More than one configured section fills a role exactly one may: at
     /// most one resolver and one localizer of a binding's own are active (no
@@ -119,6 +128,7 @@ pub enum FederationError {
     /// A key of `[nl_gf.mitz.holders]` or `[nl_gf.nvi.custodians]` is not a
     /// node id.
     #[error("{key} is not a node id")]
+    #[cfg(feature = "binding-nl")]
     MitzMember {
         /// The key, a member or a URA and never a patient value.
         key: String,
@@ -128,9 +138,11 @@ pub enum FederationError {
     },
     /// A `nl_gf.mitz.namespaces` entry is empty.
     #[error("nl_gf.mitz.namespaces has an empty namespace")]
+    #[cfg(feature = "binding-nl")]
     MitzNamespace(#[source] PatientRefError),
     /// The Mitz consent pre-filter refuses its configuration.
     #[error("the [nl_gf.mitz] consent pre-filter cannot be enabled")]
+    #[cfg(feature = "binding-nl")]
     Mitz(#[source] MitzConfigError),
     /// A registry is configured, but `federation.node_selection` is not: how
     /// an undirected patient query finds its nodes is a deployment decision,
@@ -152,6 +164,7 @@ pub enum FederationError {
     Describe(#[source] DescribeError),
     /// A `[pixm]` member key is not a node id.
     #[error("pixm.manager[{manager}].members.{key:?} is not a node id")]
+    #[cfg(feature = "binding-ihe")]
     PixmMember {
         /// The Manager's index.
         manager: usize,
@@ -163,25 +176,31 @@ pub enum FederationError {
     },
     /// A `[pixm.namespaces]` key is not a namespace.
     #[error("pixm.namespaces has an empty namespace")]
+    #[cfg(feature = "binding-ihe")]
     PixmNamespace(#[source] PatientRefError),
     /// The PIXm resolver refuses its Managers or members.
     #[error("the [pixm] resolver cannot be enabled")]
+    #[cfg(feature = "binding-ihe")]
     Pixm(#[source] PixmConfigError),
     /// `[pdqm]` is set but no cross-reference resolver is, so the master
     /// identity it finds could never be resolved (Annex A §A.2, §5.2).
     #[error(
         "the [pdqm] demographics step needs a cross-reference resolver, [dev] or [pixm], to resolve the master identity it finds (Annex A §A.2, §5.2)"
     )]
+    #[cfg(feature = "binding-ihe")]
     PdqmWithoutResolver,
     /// A `[pdqm.namespaces]` key is not a namespace.
     #[error("pdqm.namespaces has an empty namespace")]
+    #[cfg(feature = "binding-ihe")]
     PdqmNamespace(#[source] PatientRefError),
     /// The PDQm demographics step refuses its Supplier or its domains.
     #[error("the [pdqm] demographics step cannot be enabled")]
+    #[cfg(feature = "binding-ihe")]
     Pdqm(#[source] PdqmConfigError),
     /// The audit trail of the PIXm, mCSD and PMIR transactions cannot start
     /// (`[audit]`).
     #[error("the [audit] trail cannot start")]
+    #[cfg(feature = "binding-ihe")]
     Audit(#[source] crate::binding::ihe::audit::AuditTrailError),
     /// The localizer of `node_selection = "localized"` cannot be set up
     /// (§14.1, N4).
@@ -201,6 +220,7 @@ pub enum FederationError {
     Tls(#[source] TlsRefused),
     /// The HTTP client of an endpoint's Nuts grant could not be built.
     #[error("the HTTP client of the Nuts grant of {section} could not be built")]
+    #[cfg(feature = "binding-nl")]
     NutsClient {
         /// The credentials section.
         section: String,
