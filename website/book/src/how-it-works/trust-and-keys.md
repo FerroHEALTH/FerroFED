@@ -157,5 +157,6 @@ decision either way (§13.2, N27).
 
 The §13.4 decisions a deployment must publish, such as which identity is
 verified across each boundary and who authenticates the end user, are
-planned for v0.0.8
+answered for the gateway, with a template for the rest, in
+[The §13.4 deployment decisions](../operate/deployment-decisions.md)
 ([#84](https://github.com/FerroHEALTH/FerroFED/issues/84), CP-39).

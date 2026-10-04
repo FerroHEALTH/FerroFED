@@ -32,6 +32,7 @@
   - [The registry](operate/registry.md)
   - [Identity resolution](operate/identity.md)
   - [Client authentication](operate/authentication.md)
+    - [The §13.4 deployment decisions](operate/deployment-decisions.md)
   - [Queries and API areas](operate/queries-and-areas.md)
 - [Admitting a node](operate/admission.md)
 - [Health probes](operate/health.md)
