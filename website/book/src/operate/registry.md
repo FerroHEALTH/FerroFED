@@ -148,10 +148,12 @@ The members are the directory's `Organization`s that carry an
 that carry an `https://ferrofed.eu/fhir/sid/endpoint-id` identifier, written
 exactly as the FHIR form above. The rest of the directory is not the
 federation's and is never read into the registry. A member organisation may
-also list endpoints of other services, such as its XCA endpoints: the
-gateway ignores a listing of an `Endpoint` that is no member, where the
-document refuses it, and logs the listing's reference, never the endpoint,
-once each time it reads the directory's content. The URL is `http` or
+also list endpoints that are no member: endpoints of other services, such as
+its XCA endpoints, one that lost the federation's identifier, or one the
+directory deleted. The gateway ignores such a listing, where the document
+refuses it, and logs the listing's reference, never the endpoint, once each
+time it reads the directory's content. A start and a refresh over the same
+content give the same registry. The URL is `http` or
 `https` with no user name or password; the credentials take a bearer token or
 basic credentials, each through its `_file` sibling, and never an OAuth 2.0
 grant. A directory with credentials is `https` outside
@@ -186,10 +188,10 @@ A refresh that changed something goes through the same checks as a reload:
   effects of a reload (learned routes held to it, entries for a member that
   left dropped). It logs `registry reloaded` and counts as an applied reload.
 - When it breaks a rule (an endpoint relying on `hl7-fhir-rest`, a `system_id`
-  given to two nodes, an endpoint deleted or taken out of the selection while
-  an organisation still lists it, a member the resolver does not cover), it
-  is refused. A listing that named a member endpoint when the running
-  registry was read must still name one. The running
+  given to two nodes, a registry left with no node, a member the resolver
+  does not cover), it is refused. A deleted endpoint is no such break: its
+  organisation's listing is ignored and the endpoint leaves the registry.
+  The running
   registry stays, the gateway logs `registry reload refused` with
   `class = "registry-invalid"`, and the refusal counts as a refused reload.
   The next refresh asks again from the same instant, so the registry follows

@@ -162,35 +162,32 @@ pub fn snapshot_from_directory(directory: &Directory) -> Result<RegistrySnapshot
 
 /// How an organisation's listing of an `Endpoint` the content does not hold
 /// is read.
-#[derive(Debug, Clone, Copy)]
-enum Listings<'a> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Listings {
     /// The content is the whole registry, so every listing has to name one of
     /// its endpoints.
     Complete,
     /// The content is the federation's selection from a shared directory, so a
-    /// listing outside it names an endpoint the selection did not take, unless
-    /// it names an endpoint of the selection the running registry was read
-    /// from, given when there is one.
-    Selected(Option<&'a Directory>),
+    /// listing outside it names an endpoint that is no member: one of another
+    /// service, one that left the selection, or one the directory deleted.
+    Selected,
 }
 
 /// The registry document the federation's selection from a shared directory
-/// makes, with the reference of each listing it ignored: one that names an
-/// `Endpoint` the selection did not take.
+/// makes, with the reference of each listing it ignored: one that names no
+/// `Endpoint` of the selection.
 ///
-/// `held` is the selection the running registry was read from, when there is
-/// one: a listing that named an endpoint of it and names none now is refused,
-/// as it is in a whole registry.
+/// The same content gives the same registry whether it was read whole or
+/// kept in step, so a start and a refresh agree.
 fn selection_document(
     selection: &Directory,
-    held: Option<&Directory>,
 ) -> Result<(Document, BTreeSet<String>), FhirFormError> {
-    document(selection, Listings::Selected(held))
+    document(selection, Listings::Selected)
 }
 
 fn document(
     directory: &Directory,
-    listings: Listings<'_>,
+    listings: Listings,
 ) -> Result<(Document, BTreeSet<String>), FhirFormError> {
     let mut organisations = Vec::new();
     let mut organisation_at: BTreeMap<usize, OrganisationId> = BTreeMap::new();
@@ -355,7 +352,7 @@ fn member(
 fn operators(
     directory: &Directory,
     organisation_at: &BTreeMap<usize, OrganisationId>,
-    listings: Listings<'_>,
+    listings: Listings,
     ignored: &mut BTreeSet<String>,
 ) -> Result<BTreeMap<usize, Vec<OrganisationId>>, FhirFormError> {
     let mut operators: BTreeMap<usize, Vec<OrganisationId>> = BTreeMap::new();
@@ -364,23 +361,12 @@ fn operators(
             continue;
         };
         let mut listed = BTreeSet::new();
-        // The held selection answers the same list, reference for reference.
-        let mut before = match listings {
-            Listings::Selected(Some(held)) => Some(held.endpoints_of(organisation)),
-            Listings::Selected(None) | Listings::Complete => None,
-        };
         for resolution in directory.endpoints_of(organisation) {
-            let named_before = before
-                .as_mut()
-                .and_then(Iterator::next)
-                .is_some_and(|before| matches!(before, Resolution::Found(_)));
             let endpoint = match resolution {
                 Resolution::Found(endpoint) => endpoint,
-                // NOTE: no specification governs this: our own design; a shared directory
-                // holds endpoints of other services, which are not the federation's (§15.1).
-                Resolution::Outside(reference)
-                    if matches!(listings, Listings::Selected(_)) && !named_before =>
-                {
+                // NOTE: no specification governs this: our own design; N20 binds an
+                // endpoint's manager, never an organisation's list, and a non-member is not ours.
+                Resolution::Outside(reference) if listings == Listings::Selected => {
                     ignored.insert(reference.to_owned());
                     continue;
                 }

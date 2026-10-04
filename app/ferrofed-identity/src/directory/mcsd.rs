@@ -14,13 +14,16 @@
 //! connection-type rule of §15.2 (N19, CP-20), one managing organisation per
 //! endpoint (N20), and every membership rule the native form holds.
 //!
-//! One check differs. A member organisation may list an `Endpoint` the
-//! selection did not take, another service's endpoint in a shared directory:
-//! that listing is ignored and logged by its reference, where the document
-//! refuses it. A listing that named an endpoint of the content the running
-//! registry was read from, and names none now, is still refused, so an
-//! endpoint deleted while its organisation lists it breaks a refresh. No
-//! specification governs the selection by identifier system: our own design.
+//! One check differs. A member organisation's `endpoint` list may name an
+//! `Endpoint` that is no member: another service's endpoint in a shared
+//! directory, one that left the selection, or one the directory deleted. That
+//! listing is ignored and logged by its reference, where the document refuses
+//! it. ITI-91 reports a deletion as a history entry whose `request.method` is
+//! `DELETE` (FHIR R4 `Bundle.entry.request`, the `history-type` interaction of
+//! the ITI-91 capability statements), and the [`Replica`] drops the resource,
+//! so a deleted endpoint leaves the registry. A start and a refresh over the
+//! same content give the same registry. No specification governs the
+//! selection by identifier system: our own design.
 
 use std::fmt;
 use std::time::{Duration, Instant};
@@ -234,7 +237,7 @@ impl DirectorySource {
         let replica = Replica::read(&self.client, scope(), &mut self.budget())
             .await
             .map_err(|error| DirectoryReadError::Exchange(ExchangeError(error)))?;
-        let snapshot = snapshot_of(&replica, None).map_err(DirectoryReadError::Registry)?;
+        let snapshot = snapshot_of(&replica).map_err(DirectoryReadError::Registry)?;
         Ok(Materialised {
             content: Content(replica),
             snapshot,
@@ -266,7 +269,7 @@ impl DirectorySource {
             Refresh::Unchanged(replica) => Ok(Refreshed::Unchanged(Content(replica))),
             refresh => {
                 let replica = refresh.into_replica();
-                Ok(match snapshot_of(&replica, Some(&held.0)) {
+                Ok(match snapshot_of(&replica) {
                     Ok(snapshot) => Refreshed::Changed(Box::new(Materialised {
                         content: Content(replica),
                         snapshot,
@@ -324,26 +327,18 @@ fn scope() -> Scope {
     Scope::identified(ORGANISATION_ID_SYSTEM, ENDPOINT_ID_SYSTEM)
 }
 
-/// The registry `replica` makes, over `held`, the content the running
-/// registry was read from, when there is one.
+/// The registry `replica` makes.
 ///
 /// Each listing of an endpoint outside the selection is logged once, by its
 /// reference alone.
-fn snapshot_of(
-    replica: &Replica,
-    held: Option<&Replica>,
-) -> Result<RegistrySnapshot, FhirFormError> {
+fn snapshot_of(replica: &Replica) -> Result<RegistrySnapshot, FhirFormError> {
     let selection = replica.directory().map_err(FhirFormError::Directory)?;
-    let held = held
-        .map(Replica::directory)
-        .transpose()
-        .map_err(FhirFormError::Directory)?;
-    let (document, ignored) = selection_document(&selection, held.as_ref())?;
+    let (document, ignored) = selection_document(&selection)?;
     if !ignored.is_empty() {
         tracing::info!(
             listings = ignored.len(),
             references = ?ignored,
-            "organisations of the federation list endpoints the directory selection did not take; the listings are ignored"
+            "organisations of the federation list endpoints that are no member of the directory selection; the listings are ignored"
         );
     }
     RegistrySnapshot::from_document(document).map_err(FhirFormError::Registry)
