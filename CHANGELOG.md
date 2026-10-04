@@ -413,6 +413,10 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The container image names FerroHEALTH, the organisation that distributes
+  it, as its OCI `vendor`, and FerroHEALTH as its `authors`, in the image
+  labels and in the release index annotations (#490).
+
 - The quickstart's node database roles have new development passwords (#452):
   each role's password is its name followed by `_example`
   (`ferroehr_a_example`), set by `docker/postgres/20-ferrofed-node-databases.sh`
