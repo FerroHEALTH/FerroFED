@@ -17,6 +17,9 @@
 //!   members might hold a patient's data (N4, §14.1);
 //! - [`consent`]: the optional Step-1
 //!   [`ConsentPrefilter`](consent::ConsentPrefilter) seam (N27a, §13.2.1);
+//! - [`fhir`]: the HTTP client every IHE FHIR server is asked through, with
+//!   its [`Authentication`](fhir::Authentication) and [`Tls`](fhir::Tls)
+//!   material;
 //! - [`pixm`]: the [`Resolver`](resolver::Resolver) over PIXm ITI-83 (#43);
 //! - [`xcpd`]: the [`Localizer`](localizer::Localizer) over XCPD ITI-55
 //!   (Annex A.3);
@@ -49,6 +52,7 @@ pub mod binding;
 pub mod consent;
 pub mod dev;
 pub mod directory;
+pub mod fhir;
 pub mod lifecycle;
 pub mod localizer;
 pub mod mitz;

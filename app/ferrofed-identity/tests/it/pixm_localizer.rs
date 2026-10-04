@@ -13,9 +13,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmResolver, SHARED_CAPACITY};
+use ferrofed_identity::pixm::{ManagerConfig, PixmResolver, SHARED_CAPACITY};
 use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
@@ -59,7 +60,7 @@ fn pixm(server: &Server) -> PixmResolver {
     PixmResolver::from_config(
         vec![ManagerConfig {
             base: SecretUrl::new(format!("{}/fhir/", server.uri())),
-            auth: PixAuth::None,
+            auth: Authentication::None,
             members: BTreeMap::from([
                 (node("node-a"), DOMAIN_A.to_owned()),
                 (node("node-b"), DOMAIN_B.to_owned()),
