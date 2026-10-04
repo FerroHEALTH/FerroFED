@@ -267,6 +267,16 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and `federation.id` missing beside one) name both of its sources,
   `registry.document` and `[registry.mcsd]` (#425).
 
+### Fixed
+
+- The example Kubernetes manifests start a gateway again (#428): the
+  ConfigMap trusts an example issuer in `[auth]` and names the gateway's
+  signing key in `[signing]`, read from the `ferrofed-secrets` Secret the
+  Deployment now mounts at `/run/secrets/ferrofed`. CI runs
+  `ferrofed config check` over the ConfigMap's configuration with synthetic
+  secrets (`scripts/checks/kubernetes-example.sh`), so the example cannot
+  drift from what the gateway accepts.
+
 ### Security
 
 - A node is never sent a request without its configured onward credential,

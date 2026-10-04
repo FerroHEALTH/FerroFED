@@ -117,7 +117,14 @@ mounted where the compose file mounts them, in the pinned base image of
 member is left out of the PIX Manager. It sits in this tier because the check
 needs the binary. Locally, with Docker running, pass a static Linux build of
 `ferrofed` for the host's architecture; without one the script runs the
-first two checks.
+first two checks. The same job runs `scripts/checks/kubernetes-example.sh`
+with that binary: it reads `ferrofed.toml` and `registry.toml` out of the
+example ConfigMap under `deploy/kubernetes/`, checks that the Deployment
+mounts the ConfigMap and the `ferrofed-secrets` Secret where the
+configuration names them, and runs `ferrofed config check` over it with a
+synthetic file for each secret and a synthetic ES384 signing key, then
+without the `[signing]` table, which it must refuse. Locally, pass any
+`ferrofed` build for the host.
 
 `features (cargo-hack)` lints every feature of the three published crates on
 its own: `cargo hack clippy --each-feature --all-targets` over

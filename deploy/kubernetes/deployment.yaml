@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # An example Deployment of the gateway, over the configuration in
-# configmap.yaml. The probes:
+# configmap.yaml and the ferrofed-secrets Secret it names, mounted read-only
+# at /run/secrets/ferrofed. The probes:
 #
 #   startup    GET /health/readiness until boot completes; the gateway opens
 #              its port only once the registry and its clients are built.
@@ -46,6 +47,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 65532
         runAsGroup: 65532
+        # The Secret's files belong to this group, so the gateway can read them.
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -97,7 +100,16 @@ spec:
             - name: config
               mountPath: /etc/ferrofed
               readOnly: true
+            - name: secrets
+              mountPath: /run/secrets/ferrofed
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: ferrofed-config
+        # Every secret configmap.yaml names by a `_file` key, the signing key
+        # among them; readable by the owner and the group alone.
+        - name: secrets
+          secret:
+            secretName: ferrofed-secrets
+            defaultMode: 0440

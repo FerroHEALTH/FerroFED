@@ -142,10 +142,16 @@ outcome.
 `deploy/kubernetes/` holds an example: a ConfigMap with the configuration and
 the registry document and no secret, a Deployment, a Service and a
 PodDisruptionBudget. CI validates every manifest with `kubeconform` in strict
-mode. The Deployment:
+mode, and runs `ferrofed config check` over the ConfigMap's configuration
+with synthetic secrets. The configuration trusts one example issuer in
+`[auth]` and reads the gateway's signing key from the `ferrofed-secrets`
+Secret, which you create before you apply the manifests. The Deployment:
 
 - probes startup and readiness on `GET /health/readiness` and liveness on
   `GET /health`;
+- mounts the ConfigMap at `/etc/ferrofed` and the `ferrofed-secrets` Secret
+  at `/run/secrets/ferrofed`, readable by the gateway's group (`fsGroup`
+  `65532`, mode `0440`);
 - runs as the numeric user `65532` with `runAsNonRoot`, a read-only root
   filesystem, `allowPrivilegeEscalation: false`, every capability dropped and
   the `RuntimeDefault` seccomp profile;
@@ -157,10 +163,13 @@ mode. The Deployment:
   the drain if you change either.
 
 The PodDisruptionBudget keeps one of the two replicas serving through a
-voluntary disruption. Credentials belong in a Secret mounted beside the
-ConfigMap and named by a `_file` key ([Configuration](configuration.md)).
+voluntary disruption. Every secret is a key of the `ferrofed-secrets`
+Secret, named by a `_file` key ([Configuration](configuration.md)): the
+signing key, and any credential an endpoint needs.
 
 ```sh
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out signing-key.pem
+kubectl create secret generic ferrofed-secrets --from-file=signing-key.pem
 kubectl apply -f deploy/kubernetes/
 ```
 
