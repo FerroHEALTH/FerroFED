@@ -735,8 +735,13 @@ rules are FerroFED's own design, decided with #80 after a security review:
   (master07 §Context Selection); no claim the specifications define names the
   patient as the identifier and namespace the gateway resolves, so the
   gateway cannot prove a request stays inside the context, on a query, on
-  `GET {base}/v1/ehr?subject_id=` or on a route addressed by `ehr_id`. Until
-  #413 decides how to bind a patient context, the grant admits nothing.
+  `GET {base}/v1/ehr?subject_id=` or on a route addressed by `ehr_id`. The
+  grant admits nothing (decided on #413, 2026-10-04): an `ehrId` names no
+  namespace, and §12.5 says an `ehr_id` "is meaningless outside the CDR that
+  issued it", so matching a bare `ehrId` against the resolved set could admit
+  another patient's EHR at another node (§12.5.2). An opt-in that binds each
+  patient-token issuer to one member and resolves its `ehrId` through §5.2 is
+  planned (#443); the silence is reported upstream (#212, T176 and T177).
 - **The DEMOGRAPHIC API admits only listed clients.** The grammar defines no
   demographic family, so each issuer entry lists its `demographic_clients`,
   empty by default, and no scope grants the area.

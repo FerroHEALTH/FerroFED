@@ -239,6 +239,11 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- A `patient/` scope grant admits nothing at the gateway, now as a decision
+  (#413): an `ehrId` names no namespace and an `ehr_id` means nothing outside
+  its CDR (§12.5), so a bare match could admit another patient's EHR at
+  another node. The authentication, How it works and deployment-decision
+  pages say so, and an issuer-bound opt-in is planned (#443).
 - `[signing]` is required whenever a registry is configured, by
   `registry.document` or by `[registry.mcsd]`: a federating gateway without a
   signing key refuses to start, and `config check` refuses
