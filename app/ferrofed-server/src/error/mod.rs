@@ -199,6 +199,18 @@ pub enum Code {
     /// no member was asked and whether the subject has an EHR is unknown
     /// (§14.1, N4). The body never names the subject.
     LocalizationUnavailable,
+    /// Only a `patient/` grant covers the operation, and the access token
+    /// carries no `ehrId` the grant can be confined to (SMART on openEHR,
+    /// master07 §Context Selection).
+    PatientContextMissing,
+    /// The request reaches an EHR, a member or an area outside the patient
+    /// the access token's `patient/` grant is confined to, or names no
+    /// patient at all; nothing is sent (§5.2, §12.5).
+    PatientConfinement,
+    /// The cross-reference could not resolve the patient of the access
+    /// token's `patient/` grant at every member, so the grant cannot be
+    /// confined and nothing is sent (§5.2, §11.2).
+    PatientContextUnavailable,
 }
 
 /// The code of a refused query: the refusal's stable kind

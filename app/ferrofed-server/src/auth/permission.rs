@@ -20,8 +20,12 @@
 //! CONTRIBUTIONs) have no family of their own, and are held to the
 //! `composition-` family with the operation's permission, over every
 //! template. A `patient/` grant is confined to the patient of the token's
-//! launch context (master07 §Context Selection), which the gateway cannot
-//! match to a request, so it grants nothing here. The DEMOGRAPHIC API has no
+//! launch context (master07 §Context Selection), an `ehrId` that means
+//! nothing outside the platform that issued it (§12.5). It grants nothing
+//! unless the deployment binds its issuer to that platform's member, and
+//! then only on an EHR's data: a `composition-` grant, or an `aql-` search,
+//! confined to the patient the gateway resolves the `ehrId` to (§5.2). The
+//! DEMOGRAPHIC API has no
 //! family either: only a client the issuer's entry lists as a demographic
 //! client reaches it. The admin operations, and any operation the table does
 //! not list, are refused to every caller. Where the
@@ -461,26 +465,49 @@ pub fn of(matched: &RouteMatch) -> Option<Requirement> {
         .map(|&(_, _, requirement)| requirement)
 }
 
+/// What a caller's issuer entry lets the gateway honour beyond a `user/`
+/// grant.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Honoured {
+    /// The caller is a backend client the entry lists, so a `system/aql-*`
+    /// grant counts.
+    pub backend: bool,
+    /// The entry binds the issuer's patient tokens to one member, so a
+    /// `patient/` grant counts on an EHR's data, confined to its patient.
+    pub patient: bool,
+}
+
 /// Whether `scopes` grant `permission` on a resource of `family`.
 ///
 /// `named` is the resource a [`Resource::Path`] names, read from the request
-/// path, and `backend` says whether the caller is a listed backend client.
+/// path, and `honoured` says what the caller's issuer entry lets count.
 #[must_use]
 pub fn granted(
     scopes: &[SmartScope],
     (family, permission): (ResourceFamily, Permission),
     named: Option<&str>,
-    backend: bool,
+    honoured: Honoured,
 ) -> bool {
     scopes.iter().any(|scope| match scope {
         SmartScope::Resource(resource) => {
-            covers(resource, family, permission, named) && honoured(resource, backend)
+            covers(resource, family, permission, named)
+                && counts(resource, (family, permission), honoured)
         }
         SmartScope::Launch
         | SmartScope::LaunchContext(_)
         | SmartScope::Identity(_)
         | SmartScope::Other(_) => false,
     })
+}
+
+/// Whether every one of `covering`, the scopes that cover an operation, is
+/// a `patient/` grant, so the operation is confined to the token's patient.
+#[must_use]
+pub fn confined(covering: &[SmartScope]) -> bool {
+    !covering.is_empty()
+        && covering.iter().all(|scope| {
+            matches!(scope, SmartScope::Resource(resource) if resource.compartment == Compartment::Patient)
+        })
 }
 
 /// Whether `scope` is of `family`, holds `permission` and covers the
@@ -506,20 +533,41 @@ fn every(scope: &ResourceScope) -> bool {
     matches!(scope.resource.pattern().as_str(), "*" | "**")
 }
 
-/// Whether the gateway honours `scope` for this caller: never a `patient/`
-/// grant, and a `system/aql-*` grant only for a backend client the
-/// deployment lists.
-fn honoured(scope: &ResourceScope, backend: bool) -> bool {
-    // NOTE: SMART on openEHR (DEVELOPMENT) master07 §Context Selection, Federation Tier §12.5; an
-    // `ehrId` names no namespace and means nothing outside its CDR, so no patient grant can
-    // be shown confined across nodes and none is honoured (opt-in planned, #443).
+/// Whether the gateway honours `scope` for this caller on an operation of
+/// `family` needing `permission`: a `patient/` grant only where the issuer
+/// is bound to a member and only on an EHR's data, and a `system/aql-*`
+/// grant only for a backend client the deployment lists.
+fn counts(
+    scope: &ResourceScope,
+    (family, permission): (ResourceFamily, Permission),
+    honoured: Honoured,
+) -> bool {
+    // NOTE: SMART on openEHR master07 §Context Selection, Federation Tier §5.2, §12.5; a bare
+    // `ehrId` means nothing outside its CDR, so a patient grant counts only once its issuer is
+    // bound to one member whose `ehrId` the cross-reference resolves.
     if scope.compartment == Compartment::Patient {
-        return false;
+        return honoured.patient && on_ehr_data(family, permission);
     }
     let system_wide_aql = scope.compartment == Compartment::System
         && matches!(scope.resource, ResourceSelector::Aql(_))
         && every(scope);
-    !system_wide_aql || backend
+    !system_wide_aql || honoured.backend
+}
+
+/// Whether an operation of `family` needing `permission` reaches a
+/// patient's EHR data, the only data a `patient/` grant covers: "access is
+/// restricted to data within that patient's EHR" (master08 §Resource
+/// Scopes).
+///
+/// The `composition-` family covers an EHR's resources, and an `aql-` grant
+/// covers running a query; reading or storing a query definition, and
+/// every template, is no EHR's data.
+fn on_ehr_data(family: ResourceFamily, permission: Permission) -> bool {
+    match family {
+        ResourceFamily::Composition => true,
+        ResourceFamily::Aql => permission == Permission::Search,
+        ResourceFamily::Template => false,
+    }
 }
 
 /// Whether `client_id` is one of `backend_clients`.
@@ -532,7 +580,7 @@ pub fn backend(backend_clients: &BTreeSet<String>, client_id: &str) -> bool {
 mod tests {
     use std::collections::BTreeSet;
 
-    use super::{Permission, ResourceFamily, TABLE, granted};
+    use super::{Honoured, Permission, ResourceFamily, TABLE, confined, granted};
     use openehr_its::rest::generated::{admin, definition, demographic, ehr, query, system};
     use openehr_sdt::smart_scopes::SmartScope;
 
@@ -571,7 +619,7 @@ mod tests {
     fn an_ad_hoc_query_needs_a_wildcard_aql_search_scope_for_a_user_or_a_system() {
         for scope in ["user/aql-*.rs", "user/aql-**.cruds"] {
             assert!(
-                granted(&SmartScope::parse_all(scope), AQL_SEARCH, None, false),
+                granted(&SmartScope::parse_all(scope), AQL_SEARCH, None, NONE),
                 "{scope}"
             );
         }
@@ -584,7 +632,7 @@ mod tests {
             "openid",
         ] {
             assert!(
-                !granted(&SmartScope::parse_all(scope), AQL_SEARCH, None, false),
+                !granted(&SmartScope::parse_all(scope), AQL_SEARCH, None, NONE),
                 "{scope}"
             );
         }
@@ -597,27 +645,67 @@ mod tests {
             &scopes,
             AQL_SEARCH,
             Some("org.example::vitals"),
-            false
+            NONE
         ));
         assert!(!granted(
             &scopes,
             AQL_SEARCH,
             Some("org.other::vitals"),
-            false
+            NONE
         ));
     }
 
     #[test]
     fn a_system_wide_aql_grant_counts_only_for_a_backend_client() {
         let scopes = SmartScope::parse_all("system/aql-*.s");
-        assert!(!granted(&scopes, AQL_SEARCH, None, false));
-        assert!(granted(&scopes, AQL_SEARCH, None, true));
+        assert!(!granted(&scopes, AQL_SEARCH, None, NONE));
+        assert!(granted(&scopes, AQL_SEARCH, None, BACKEND));
         let named = SmartScope::parse_all("system/aql-org.example::vitals.s");
         assert!(granted(
             &named,
             AQL_SEARCH,
             Some("org.example::vitals"),
-            false
+            NONE
         ));
     }
+
+    // NOTE: SMART on openEHR master08 §Resource Scopes: a patient grant reaches "data within
+    // that patient's EHR", so only with a bound issuer and never a template or a definition.
+    #[test]
+    fn a_patient_grant_counts_only_for_a_bound_issuer_and_only_on_ehr_data() {
+        let patient = Honoured {
+            patient: true,
+            ..NONE
+        };
+        let scopes = SmartScope::parse_all("patient/aql-*.rs patient/composition-*.crud");
+        assert!(!granted(&scopes, AQL_SEARCH, None, NONE), "unbound issuer");
+        assert!(granted(&scopes, AQL_SEARCH, None, patient));
+        let composition_read = (ResourceFamily::Composition, Permission::Read);
+        assert!(granted(&scopes, composition_read, None, patient));
+        let definition_read = (ResourceFamily::Aql, Permission::Read);
+        assert!(!granted(&scopes, definition_read, None, patient));
+        let template = SmartScope::parse_all("patient/template-*.cruds");
+        let template_read = (ResourceFamily::Template, Permission::Read);
+        assert!(!granted(&template, template_read, None, patient));
+    }
+
+    #[test]
+    fn only_covering_patient_grants_confine_an_operation() {
+        assert!(confined(&SmartScope::parse_all("patient/aql-*.s")));
+        assert!(!confined(&SmartScope::parse_all(
+            "patient/aql-*.s user/aql-*.s"
+        )));
+        assert!(!confined(&SmartScope::parse_all("user/aql-*.s")));
+        assert!(!confined(&[]));
+    }
+
+    const NONE: Honoured = Honoured {
+        backend: false,
+        patient: false,
+    };
+
+    const BACKEND: Honoured = Honoured {
+        backend: true,
+        patient: false,
+    };
 }

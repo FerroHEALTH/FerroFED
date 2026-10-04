@@ -48,6 +48,7 @@ fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
             }),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            patient: None,
         }],
         ..AuthSettings::default()
     })

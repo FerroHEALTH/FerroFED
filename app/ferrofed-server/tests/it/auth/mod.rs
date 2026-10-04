@@ -18,6 +18,7 @@ mod edge;
 mod introspection;
 mod kept_token;
 mod keys;
+mod patient;
 mod purpose;
 mod scope;
 mod token;
@@ -63,13 +64,19 @@ impl Gateway {
     /// The gateway over node A and node B, both holding the patient,
     /// authenticating its callers as `auth` says.
     pub(crate) async fn with(auth: AuthSettings) -> Result<Self, Box<dyn Error>> {
+        Self::with_rows(auth, "").await
+    }
+
+    /// The gateway of [`Gateway::with`], its cross-reference also holding
+    /// the `[[dev.crossref]]` rows `extra`.
+    pub(crate) async fn with_rows(auth: AuthSettings, extra: &str) -> Result<Self, Box<dyn Error>> {
         let a = node_answering("8849182c-82ad-4088-a07f-48ead4180515::node-a::1").await;
         let b = node_answering("6cb19121-4307-4a29-9c1c-b6d6a2ab3b77::node-b::1").await;
         let dir = tempfile::tempdir()?;
         let document = dir.path().join("registry.toml");
         std::fs::write(&document, registry(&a.uri(), &b.uri(), ""))?;
         let document = toml::Value::String(document.display().to_string());
-        let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
+        let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]) + extra;
         let text = format!(
             "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{rows}"
         );

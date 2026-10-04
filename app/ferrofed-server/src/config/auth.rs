@@ -17,6 +17,8 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::Secret;
 use http::HeaderName;
 use jsonwebtoken::jwk::JwkSet;
@@ -138,6 +140,28 @@ pub struct TrustedIssuer {
     /// The `client_id`s of the clients admitted to the DEMOGRAPHIC API,
     /// which no SMART on openEHR resource scope covers; none by default.
     pub demographic_clients: Vec<String>,
+    /// The opt-in that honours this issuer's `patient/` grants
+    /// (`[auth.issuer.patient]`); absent by default, and then a `patient/`
+    /// grant of this issuer admits nothing.
+    pub patient: Option<PatientIssuer>,
+}
+
+/// `[auth.issuer.patient]`: the one member endpoint whose platform issues
+/// this issuer's patient tokens, and the identifier system of that member's
+/// `ehr_id`s at the cross-reference.
+///
+/// A token's `ehrId` claim (SMART on openEHR, master04 §Capabilities,
+/// master07 §Context Selection) is read as an identifier in that system and
+/// resolved through the cross-reference to each member's `ehr_id` (§5.2).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PatientIssuer {
+    /// The registry endpoint id of the member whose platform issues the
+    /// tokens.
+    pub endpoint: String,
+    /// The identifier system whose values are that member's `ehr_id`s, as
+    /// the cross-reference names it.
+    pub ehr_id_system: String,
 }
 
 /// `[auth.edge]`.
@@ -208,6 +232,19 @@ pub struct IssuerSettings {
     pub backend_clients: BTreeSet<String>,
     /// The clients admitted to the DEMOGRAPHIC API.
     pub demographic_clients: BTreeSet<String>,
+    /// Where this issuer's `patient/` grants are confined, when they are
+    /// honoured at all.
+    pub patient: Option<PatientBinding>,
+}
+
+/// An issuer's patient tokens bound to one member, resolved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatientBinding {
+    /// The endpoint of the member whose platform issues the tokens.
+    pub endpoint: EndpointId,
+    /// The identifier system of that member's `ehr_id`s at the
+    /// cross-reference.
+    pub ehr_id_system: IdentifierNamespace,
 }
 
 /// How an issuer's tokens are verified.
@@ -299,7 +336,9 @@ impl Auth {
     /// # Errors
     /// Returns [`Error::Auth`] naming the key and the [`AuthFault`],
     /// [`Error::Missing`] for an audience, an issuer identifier, an edge
-    /// header or an introspection client credential that is not set,
+    /// header, an introspection client credential or a patient binding's
+    /// endpoint or system that is not set, [`Error::PatientEndpoint`] for a
+    /// patient binding's endpoint that is no endpoint id,
     /// [`Error::Zero`] for a zero duration, [`Error::Url`] and
     /// [`Error::UrlCredentials`] for a URL that does not parse or carries
     /// credentials, and the secret errors of a `_file`.
@@ -440,11 +479,45 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
             AuthFault::ClientWithoutIntrospection,
         ));
     }
+    let patient = written
+        .patient
+        .as_ref()
+        .map(|patient| resolve_patient(&format!("{key}.patient"), patient))
+        .transpose()?;
     Ok(IssuerSettings {
         issuer: written.issuer.clone(),
         verification,
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
+        patient,
+    })
+}
+
+/// Resolves one `[auth.issuer.patient]` at `key`: an endpoint id and a
+/// system, both set.
+///
+/// Whether the registry holds the endpoint is checked where the registry is
+/// read, as for every other endpoint the configuration names.
+fn resolve_patient(key: &str, written: &PatientIssuer) -> Result<PatientBinding, Error> {
+    if written.endpoint.is_empty() {
+        return Err(Error::Missing {
+            key: format!("{key}.endpoint"),
+        });
+    }
+    let endpoint =
+        EndpointId::new(written.endpoint.as_str()).map_err(|source| Error::PatientEndpoint {
+            key: format!("{key}.endpoint"),
+            source,
+        })?;
+    let ehr_id_system =
+        IdentifierNamespace::new(written.ehr_id_system.as_str()).map_err(|_empty| {
+            Error::Missing {
+                key: format!("{key}.ehr_id_system"),
+            }
+        })?;
+    Ok(PatientBinding {
+        endpoint,
+        ehr_id_system,
     })
 }
 

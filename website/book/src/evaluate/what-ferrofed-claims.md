@@ -99,6 +99,14 @@ once the milestone closes.
   signed ES384, the node tokens cached, and the gateway's JWK Set published
   at `{base}/.well-known/jwks.json` (§13.1, N25, N30, CP-17;
   [#81](https://github.com/FerroHEALTH/FerroFED/issues/81)).
+- A `patient/` grant honoured only for an issuer the deployment binds to one
+  member: the token's `ehrId` resolved through the cross-reference at every
+  member (§5.2), every request held to the patient's own `{node, ehr_id}`
+  pairs with nothing sent beyond them, and each node told the patient's
+  `ehr_id` there; a bare `ehrId` is never compared across members (§12.5,
+  N26;
+  [#443](https://github.com/FerroHEALTH/FerroFED/issues/443),
+  [Patient grants](../operate/authentication.md#patient-grants)).
 - The caller's identity conveyed on every request to a node, in a token the
   gateway signs for that node and a node verifies against the published JWK
   Set (§13.1, N24, CP-16;
@@ -160,10 +168,7 @@ release, and every issue in it names the sections it answers.
 
 The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
 
-- an opt-in that accepts a `patient/` scope through an issuer-bound
-  `ehrId` resolved by §5.2; without it a `patient/` grant admits nothing
-  ([#443](https://github.com/FerroHEALTH/FerroFED/issues/443)), and the
-  SMART on openEHR pages the client authentication cites, vendored
+- the SMART on openEHR pages the client authentication cites, vendored
   ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414));
 - PMIR identity-lifecycle notifications
   ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147));

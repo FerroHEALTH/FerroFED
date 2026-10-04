@@ -32,7 +32,7 @@ use openehr_federation::aql::Analysis;
 
 use crate::error::Code;
 use crate::facade::route::ehr;
-use crate::facade::{owner, security};
+use crate::facade::{confined, owner, security};
 use crate::federation::Federation;
 
 /// The member an `ehr_id`-scoped query is sent to, and the step of §12.5.1
@@ -70,6 +70,12 @@ pub(crate) enum Unrouted {
         "the member that holds the ehr_id has no endpoint, so the query has no destination (§11.2)"
     )]
     NoEndpoint,
+    /// The caller's grant is confined to one patient, and the `ehr_id` is
+    /// none of that patient's at the member it would go to (§12.5).
+    #[error(
+        "the ehr_id the query is scoped to is not the confined patient's at any member it could go to (§5.2, §12.5)"
+    )]
+    Confined,
     /// The ask-all probe named no owner.
     #[error("{message}")]
     Probe {
@@ -89,6 +95,7 @@ impl Unrouted {
             Self::Untargeted(untargeted) => untargeted.code(),
             Self::Claimed(unsettled) => unsettled.code(),
             Self::NoEndpoint => Code::NoDestination,
+            Self::Confined => Code::PatientConfinement,
             Self::Probe { code, .. } => *code,
         }
     }
@@ -166,7 +173,21 @@ async fn owner<'a>(
         session,
         now: Instant::now(),
     });
-    match owner::located(snapshot, scoped.headers, held, federation.index(), &ehr_id)? {
+    let located = match scoped.conveyance.confinement() {
+        // NOTE: §12.5, §12.5.2: a confined grant reaches its patient's own {node, ehr_id}
+        // pairs alone, so an ehr_id outside them is refused and never probed for.
+        Some(confinement) => {
+            let holders = confined::holders(snapshot, confinement, &ehr_id);
+            let located = owner::located_within(snapshot, scoped.headers, &holders)?;
+            if !confined::admits_located(scoped.conveyance, &located, &ehr_id) {
+                confined::stopped("ehr_id", &logged);
+                return Err(Unrouted::Confined);
+            }
+            located
+        }
+        None => owner::located(snapshot, scoped.headers, held, federation.index(), &ehr_id)?,
+    };
+    match located {
         owner::Located::At { endpoint, step } => Ok(Owner { endpoint, step }),
         owner::Located::Unreachable { .. } => Err(Unrouted::NoEndpoint),
         owner::Located::Collision(claimed) => {

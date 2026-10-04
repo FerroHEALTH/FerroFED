@@ -61,12 +61,12 @@ use openehr_its::rest::runtime::ApiError;
 use secrecy::SecretString;
 
 use crate::error::{self, Code};
-use crate::facade::consent;
 use crate::facade::localize::{Localized, localize};
 use crate::facade::owner::{self, Listed};
 use crate::facade::provenance::Provenance;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
 use crate::facade::security;
+use crate::facade::{confined, consent};
 use crate::federation::Federation;
 use crate::health::dependencies::Observed;
 
@@ -144,7 +144,17 @@ pub(crate) async fn serve(
         .collect();
     let session = arrived.session.map(|session| (session, &consented.denied));
     learn(federation, &resolved.holders, session, started);
-    let (endpoint, ehr_id) = match resolved.settled() {
+    let settled = resolved.settled();
+    // NOTE: §5.2, §12.5: a confined grant reads its own patient's EHR alone, and learns
+    // nothing of another subject, not even whether one has an EHR anywhere.
+    if confined::is_confined(&arrived.conveyance)
+        && !settled.as_ref().is_ok_and(|(endpoint, ehr_id)| {
+            confined::admits(&arrived.conveyance, endpoint.id(), ehr_id)
+        })
+    {
+        return confined::refused("subject", request_id, &logged);
+    }
+    let (endpoint, ehr_id) = match settled {
         Ok(owner) => owner,
         Err(unserved) => return unserved.respond(request_id, &logged),
     };

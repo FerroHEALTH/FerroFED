@@ -20,6 +20,8 @@ use ferrofed_engine::fanout::{
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_registry::id::EhrId;
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::Analysis;
 use openehr_federation::aql::refusal::Refusal;
@@ -33,7 +35,8 @@ use crate::error::{self, Code};
 use crate::facade::provenance::{Dispatch, Provenance};
 use crate::facade::request::{Arrived, Submitted, read};
 use crate::facade::{
-    cells, completeness, dedup, follow_up, intake, owner, plan, prefer, scoped, security, target,
+    cells, completeness, confined, dedup, follow_up, intake, owner, plan, prefer, scoped, security,
+    target,
 };
 use crate::federation::Federation;
 
@@ -139,6 +142,13 @@ pub(super) enum Failure {
     /// no one member that owns it.
     #[error(transparent)]
     Routed(#[from] scoped::Unrouted),
+    /// The caller's grant is confined to one patient, and the query names no
+    /// patient, or reaches a `{node, ehr_id}` pair outside that patient's
+    /// (§5.2, §12.5).
+    #[error(
+        "the query reaches beyond the patient the access token's patient/ grant is confined to, or names no patient (§5.2, §12.5)"
+    )]
+    Confined,
     /// Node selection left no registry member in scope, so the request
     /// resolves to no destination (§11.2, §11.3).
     #[error(
@@ -173,6 +183,7 @@ impl Failure {
             Self::Target(error) => error.code(),
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
             Self::Routed(unrouted) => unrouted.code(),
+            Self::Confined => Code::PatientConfinement,
             Self::NoDestination => Code::NoDestination,
             // NOTE: §11.1, a node row the gateway cannot use is a node-error
             // at dispatch, so one reaching the cells is the gateway's fault.
@@ -300,6 +311,7 @@ async fn federate(
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
+    population(conveyance, &analysis, request_id)?;
     let scope = scoped::Scoped {
         headers,
         session,
@@ -322,6 +334,12 @@ async fn federate(
             None,
         ),
     };
+    if confined::is_confined(conveyance)
+        && !within(federation.snapshot(), conveyance, &analysis, &targets)
+    {
+        confined::stopped("patient", request_id);
+        return Err(Failure::Confined);
+    }
     if targets.plan.has_no_destination() {
         return Err(Failure::NoDestination);
     }
@@ -372,6 +390,65 @@ async fn federate(
         Vec::new()
     };
     Ok((status, result_set, acting))
+}
+
+/// Refuses a query that names neither a patient nor an `ehr_id` when the
+/// caller in `conveyance` is confined to one patient.
+///
+/// # Errors
+///
+/// Returns [`Failure::Confined`] for such a query, with nothing sent.
+fn population(
+    conveyance: &Conveyance,
+    analysis: &Analysis,
+    request_id: &str,
+) -> Result<(), Failure> {
+    // NOTE: master08 §Resource Scopes: a patient grant reaches "data within that patient's
+    // EHR", so a query that names neither a patient nor an ehr_id is beyond it.
+    if confined::is_confined(conveyance)
+        && matches!(analysis, Analysis::Unscoped(query) if query.ehr_scope().is_none())
+    {
+        confined::stopped("population", request_id);
+        return Err(Failure::Confined);
+    }
+    Ok(())
+}
+
+/// Whether every `{node, ehr_id}` pair `targets` would dispatch to is one of
+/// the confined patient's in `conveyance`, and there is at least one (§5.2,
+/// §12.5).
+///
+/// A patient query goes to each member under the `ehr_id` its patient
+/// resolved to there, and a query scoped to one `ehr_id` goes under that
+/// `ehr_id`. A plan that dispatches nothing is refused too, so a confined
+/// caller never learns whether another patient is known anywhere.
+fn within(
+    snapshot: &RegistrySnapshot,
+    conveyance: &Conveyance,
+    analysis: &Analysis,
+    targets: &plan::Targets,
+) -> bool {
+    let scope = match analysis {
+        // NOTE: §12.5, an ehr_id that is no HIER_OBJECT_ID names no EHR, so it is no pair
+        // of the confined patient.
+        Analysis::Unscoped(query) => query.ehr_scope().and_then(|value| EhrId::new(value).ok()),
+        Analysis::Patient(_) => None,
+    };
+    let mut dispatched = targets.plan.dispatched().peekable();
+    dispatched.peek().is_some()
+        && dispatched.all(|endpoint| {
+            let ehr_id = match analysis {
+                Analysis::Patient(_) => snapshot.endpoint(endpoint).and_then(|declared| {
+                    targets
+                        .resolved
+                        .iter()
+                        .find(|(node, _)| node == declared.node())
+                        .map(|(_, ehr_id)| ehr_id)
+                }),
+                Analysis::Unscoped(_) => scope.as_ref(),
+            };
+            ehr_id.is_some_and(|ehr_id| confined::admits(conveyance, endpoint, ehr_id))
+        })
 }
 
 /// Runs the fan-out of `plan` inside the `fan_out` span, which names how many

@@ -591,6 +591,9 @@ fn federation_class(error: &FederationError) -> &'static str {
         FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
         FederationError::DemographicWithoutRegistry
         | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",
+        FederationError::PatientWithoutRegistry { .. }
+        | FederationError::PatientEndpointUnknown { .. }
+        | FederationError::PatientWithoutResolver { .. } => "patient-binding",
         FederationError::Describe(_) => "self-description",
         FederationError::Clients(SetupError::UnknownEndpoint { .. })
         | FederationError::Grant { .. } => "credentials",

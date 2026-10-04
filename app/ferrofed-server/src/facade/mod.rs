@@ -54,6 +54,7 @@
 mod answer;
 pub mod cells;
 pub mod completeness;
+mod confined;
 mod consent;
 pub mod dedup;
 pub mod follow_up;
@@ -80,6 +81,7 @@ use axum::Extension;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::Response;
+use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
 use http::{HeaderMap, Method, Uri};
@@ -89,6 +91,7 @@ use crate::auth::caller::Caller;
 use crate::conveyed;
 use crate::error::{self, Code};
 use crate::facade::request::{Arrived, Submitted};
+use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
 
@@ -187,6 +190,10 @@ async fn federated(
         Ok(conveyance) => conveyance,
         Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
     };
+    let conveyance = match confined_by(&federation, caller, started, conveyance).await {
+        Ok(conveyance) => conveyance,
+        Err(unconfined) => return unconfined.respond(request_id, &outbound.to_string()),
+    };
     if let Submitted::Body(body) = submitted {
         let logged = outbound.to_string();
         let Lookup::Matched(matched) = routes::lookup(&Method::POST, ADHOC_QUERY) else {
@@ -210,4 +217,30 @@ async fn federated(
         session,
     };
     answer::answer(&federation, arrived, submitted).await
+}
+
+/// `conveyance`, its caller's `patient/` grant confined to the patient it
+/// resolves to at every member, within the overall budget of a request that
+/// arrived at `started` (§5.2, §11.5); unchanged for a caller whose grant is
+/// not confined.
+///
+/// # Errors
+///
+/// Returns the [`confined::Unconfined`] of a patient that cannot be
+/// resolved, which sends nothing.
+pub(crate) async fn confined_by(
+    federation: &Federation,
+    caller: Option<&Caller>,
+    started: Instant,
+    conveyance: Conveyance,
+) -> Result<Conveyance, confined::Unconfined> {
+    let deadline = started
+        .checked_add(federation.budget().overall())
+        .ok_or(confined::Unconfined::Clock)?;
+    Ok(
+        match confined::confinement(federation, caller, deadline).await? {
+            Some(confinement) => conveyance.with_confinement(confinement),
+            None => conveyance,
+        },
+    )
 }

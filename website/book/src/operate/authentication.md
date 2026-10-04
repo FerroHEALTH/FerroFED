@@ -79,6 +79,8 @@ demographic_clients = []
 | `auth.issuer[].introspection_endpoint` | none | Its RFC 7662 introspection endpoint, with `client_id` and `client_secret` or `client_secret_file`: `https`, or `http` to a loopback host, under every profile. |
 | `auth.issuer[].backend_clients` | `[]` | The `client_id`s whose `system/aql-*` grant is honoured. |
 | `auth.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
+| `auth.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[auth.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](#patient-grants)). |
+| `auth.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
 | `auth.edge.header` | none | The header the edge's assertion travels in, with `mode = "edge"`. |
 
 An issuer names exactly one of `jwks_uri`, `jwks_file`, `jwks` and
@@ -136,13 +138,11 @@ FerroFED's design:
   and the gateway admits only the clients you list.
 - A `patient/` grant is confined to the patient of the token's launch context
   (master07 §Context Selection), which SMART on openEHR gives as an `ehrId`
-  at one platform. The gateway resolves patients by identifier and namespace,
-  and cannot show that a request stays inside that context, so a `patient/`
-  grant admits nothing at the gateway. That is the decision, not a gap to
-  wait out: an `ehrId` names no namespace and means nothing outside the CDR
-  that issued it, so a bare match could admit another patient's EHR at
-  another node. An opt-in that binds each patient-token issuer to one member
-  is planned ([#443](https://github.com/FerroHEALTH/FerroFED/issues/443)).
+  at one platform. An `ehrId` names no namespace and means nothing outside
+  the CDR that issued it, so a bare match could admit another patient's EHR
+  at another node (§12.5, §12.5.2). A `patient/` grant therefore admits
+  nothing at the gateway, unless you bind its issuer to one member
+  ([Patient grants](#patient-grants)).
 - `system/aql-*` "would grant access to all registered and ad-hoc AQL queries
   system-wide" (master08), so it counts only for a client listed in
   `backend_clients`.
@@ -151,6 +151,69 @@ FerroFED's design:
 
 The node behind the gateway still makes its own access decision (§13.2,
 N26).
+
+## Patient grants
+
+A patient-facing app holds a token whose `patient/` scopes are confined to
+one patient, named by the token's `ehrId` claim (SMART on openEHR master04
+§Capabilities, master07 §Context Selection). That `ehrId` is an `ehr_id` at
+the platform that issued the token, and at no other member. You opt in per
+issuer by naming that platform's member and the identifier system under
+which your cross-reference service knows its `ehr_id`s:
+
+```toml
+[[auth.issuer]]
+issuer = "https://patient-portal.example.org"
+jwks_uri = "https://patient-portal.example.org/jwks"
+
+[auth.issuer.patient]
+endpoint = "node-a-pub"
+ehr_id_system = "urn:oid:2.999.9.1"
+```
+
+`config check` and the start refuse a binding whose endpoint the registry
+lacks, a binding without a registry, and a binding without a cross-reference
+service (`[dev]` or `[pixm]`), each naming its key. Without the section, a
+`patient/` grant of that issuer admits nothing, as above.
+
+With the opt-in, a `patient/` scope of that issuer counts on an EHR's data
+alone: the `composition-` family, and an `aql-` search. When only
+`patient/` scopes cover an operation, the gateway confines the request to
+the token's patient:
+
+1. It reads the `ehrId` claim from the access token, or from the
+   introspection answer. A token without one, or with one that is no
+   `HIER_OBJECT_ID`, is `403` (`patient-context-missing`).
+2. It resolves the pair (`ehr_id_system`, `ehrId`) through the
+   cross-reference service at every member (§5.2), giving the patient's own
+   `{node, ehr_id}` pairs. The bound member keeps the token's `ehrId`. A
+   cross-reference that cannot answer, or that places the patient under
+   another `ehr_id` at the bound member, is `424`
+   (`patient-context-unavailable`).
+3. It admits the request only when every `{node, ehr_id}` pair it would
+   send to is one of those. Everything else is `403`
+   (`patient-confinement`) with nothing sent: a query for another patient,
+   a query that names no patient, an `ehr_id` that is not the patient's at
+   the member it would go to, a read by subject of another patient, the
+   creation of an EHR, a definition request and a DEMOGRAPHIC request. An
+   `ehr_id` the patient's own pairs do not place is never looked up in the
+   gateway's index or probed for at the members.
+
+The gateway never compares the bare `ehrId` with an `ehr_id` at another
+member, because one `ehr_id` can name another patient's EHR there (§12.5.2).
+Each node is told the patient's own `ehr_id` at that node in the `ehrId`
+claim of the caller's token, with only the `patient/` scopes that cover the
+operation in `scope`, so the node can enforce the grant as well (N26;
+[below](#what-a-node-is-told-about-the-caller)). No specification defines a
+patient grant across nodes, so this opt-in is FerroFED's own design.
+
+The residual risk is the cross-reference service. The confinement is only
+as correct as its link between the `ehrId` at the bound member and the
+patient's `ehr_id` at every other member: a wrong link admits the wrong
+EHR at that member. Bind an issuer only to the member whose platform issued
+its tokens, and only when your cross-reference service holds that member's
+`ehr_id`s as identifiers under `ehr_id_system`. Record the choice in your
+[§13.4 decisions](deployment-decisions.md#5-what-the-technique-does-not-cover).
 
 ## Purpose of use
 
@@ -207,6 +270,9 @@ travelled.
 | `403` | `scope-insufficient` | no granted scope covers the operation, or the client is not admitted to the DEMOGRAPHIC API |
 | `403` | `purpose-of-use-required` | the token declares no purpose of use |
 | `403` | `operation-refused` | the ADMIN API, refused to every caller |
+| `403` | `patient-context-missing` | only a bound issuer's `patient/` scope covers the operation, and the token carries no `ehrId` |
+| `403` | `patient-confinement` | the request reaches beyond the patient a `patient/` grant is confined to |
+| `424` | `patient-context-unavailable` | the patient of a `patient/` grant cannot be resolved at every member |
 | `503` | `authentication-unavailable` | the issuer's key set or introspection endpoint cannot be had |
 
 Every refusal is logged under the `ferrofed::security` target as
@@ -261,7 +327,8 @@ names `alg` `ES384`, the key's `kid` and `typ`
 | `verified_by` | `signature`, `introspection`, or `edge` for an identity the edge asserted |
 | `subject_organization_id` | the caller's organisation, when its token names one (IHE IUA) |
 | `purpose_of_use` | each purpose of use the token declares, as `{"system", "code"}` (IHE IUA, HL7 v3 `PurposeOfUse`) |
-| `scope` | the caller's scopes as granted |
+| `scope` | the caller's scopes as granted; under a [patient grant](#patient-grants), only the `patient/` scopes that cover the operation |
+| `ehrId` | under a [patient grant](#patient-grants) only: the patient's own `ehr_id` at this node (SMART on openEHR master04 §Capabilities) |
 
 The token never carries the caller's own token, its `client_id`, or a
 patient identifier: an IUA `person_id` is never read (N33). The outbound
@@ -306,6 +373,7 @@ release, and audits who asked:
    `exp`, allowing a few seconds of clock skew (RFC 7519 §4.1.4).
 6. Where the gateway authenticates with an OAuth 2.0 grant, check that `iss`
    equals the `client_id` of the access token on the same request.
-7. Apply `scope` and `purpose_of_use` to what you release, and record `sub`,
+7. Apply `scope` and `purpose_of_use` to what you release, confine a
+   `patient/` scope to the EHR the `ehrId` claim names, and record `sub`,
    `iss_upstream`, `verified_by` and `subject_organization_id` in your audit
    trail. Consent stays your own check (§13.2, N27).

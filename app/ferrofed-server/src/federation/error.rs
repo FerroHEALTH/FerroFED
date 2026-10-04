@@ -73,6 +73,33 @@ pub enum FederationError {
         /// The endpoint id that was given.
         endpoint: EndpointId,
     },
+    /// An `[auth.issuer.patient]` binding is set but no registry is, neither
+    /// `registry.document` nor `[registry.mcsd]`, so it names an endpoint
+    /// that does not exist.
+    #[error(
+        "{key} needs a registry, registry.document or [registry.mcsd], whose endpoint it names"
+    )]
+    PatientWithoutRegistry {
+        /// The binding's key.
+        key: String,
+    },
+    /// An `[auth.issuer.patient]` binding names no endpoint of the registry.
+    #[error("{key} names {endpoint}, which is no endpoint of the registry")]
+    PatientEndpointUnknown {
+        /// The binding's key.
+        key: String,
+        /// The endpoint id that was given.
+        endpoint: EndpointId,
+    },
+    /// An `[auth.issuer.patient]` binding is set but no resolver is, so the
+    /// token's `ehrId` cannot be resolved to the members' `ehr_id`s (§5.2).
+    #[error(
+        "{key} needs a cross-reference resolver, [dev] or [pixm], to resolve the token's ehrId at every member (§5.2)"
+    )]
+    PatientWithoutResolver {
+        /// The binding's key.
+        key: String,
+    },
     /// `[pixm]` is set but no registry is, neither `registry.document` nor
     /// `[registry.mcsd]`, so it names members that do not exist.
     #[error(

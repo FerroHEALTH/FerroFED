@@ -61,6 +61,24 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   an NL-GF `Organization`. The source of the IG (`fhir.nl.gf` 0.3.0,
   EUPL-1.2) is vendored under `docs/specs/nl-gf/` by a new fetch script,
   pinned by tag and commit because the IG has no registry package (#87).
+- `[auth.issuer.patient]` honours one issuer's `patient/` grants, off by
+  default. It binds the issuer to the one member whose platform issues its
+  patient tokens and names the identifier system under which the
+  cross-reference knows that member's `ehr_id`s; `config check` refuses a
+  binding whose endpoint the registry lacks, or that has no registry or no
+  cross-reference. A bound issuer's `patient/` scope counts on an EHR's data
+  alone. The gateway reads the token's `ehrId` claim (SMART on openEHR),
+  resolves it at every member (§5.2), and sends a request only to the
+  patient's own `{node, ehr_id}` pairs. Another patient, a query that names
+  no patient, an `ehr_id` the pairs do not place, EHR creation, definitions
+  and the DEMOGRAPHIC area are `403` (`patient-confinement`) with nothing
+  sent and nothing probed; a token without the claim is `403`
+  (`patient-context-missing`), and a cross-reference that cannot resolve the
+  patient is `424` (`patient-context-unavailable`). The bare `ehrId` is never
+  compared across members (§12.5). Each node's `openEHR-federation-client`
+  token carries the patient's `ehr_id` at that node as `ehrId`, and only the
+  covering `patient/` scopes in `scope` (N26). Without the section a
+  `patient/` grant still admits nothing (#443).
 - The texts client authentication is held to are vendored under
   `docs/specs/`. The ITS-REST Release-1.1.0 fetch now takes the SMART on
   openEHR source (`docs/smart_app_launch/`), recording that the release

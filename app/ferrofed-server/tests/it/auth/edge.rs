@@ -40,6 +40,7 @@ fn at_the_edge(edge: &Issuer) -> AuthSettings {
             verification: Verification::KeySet(KeySource::Set(edge.jwks())),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            patient: None,
         }],
         ..AuthSettings::default()
     }
