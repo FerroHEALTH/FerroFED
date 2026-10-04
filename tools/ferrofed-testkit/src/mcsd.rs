@@ -124,6 +124,24 @@ impl Member {
         Ok(organisation)
     }
 
+    /// The member's `Organization` of [`Member::organisation`], whose
+    /// `endpoint` list also names each literal of `references`, after the
+    /// member's endpoint: an organisation of a shared directory that lists
+    /// endpoints of other services too.
+    ///
+    /// # Errors
+    /// [`McsdHarnessError::Example`] when the vendored example cannot be read.
+    pub fn organisation_also_listing(
+        &self,
+        references: &[&str],
+    ) -> Result<Organization, McsdHarnessError> {
+        let mut organisation = self.organisation()?;
+        organisation
+            .endpoint
+            .extend(references.iter().map(|literal| reference(literal)));
+        Ok(organisation)
+    }
+
     /// The member's `Endpoint`, built from the IG's example
     /// `Endpoint-ex-endpointXCAquery`: the registry's identifiers, the
     /// openEHR Query API connection type, the member's organisation as its

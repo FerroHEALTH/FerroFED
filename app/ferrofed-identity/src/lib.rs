@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The identity roles of the Federation Tier as traits (resolver, localizer,
-//! directory, consent pre-filter, onward authentication) and the patient
+//! consent pre-filter), the registry's directory sources, and the patient
 //! reference carrier, with no FHIR and no transport.
 //!
 //! The gateway core depends on these traits only; each binding implements
@@ -29,7 +29,8 @@
 //!   and the registry read from an mCSD directory and kept in step with it
 //!   ([`directory::mcsd`], §15.1, N21).
 //!
-//! The onward-authentication seam lands with its issue.
+//! How the gateway authenticates to each node as itself (§13.1, N25) is the
+//! engine's, in `ferrofed_engine::onward`.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod binding;
