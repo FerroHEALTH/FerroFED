@@ -47,12 +47,21 @@ use crate::state::AppState;
 ///
 /// `registry` is the registry document, its path and its form, `credentials`
 /// the outbound credentials of each endpoint, `dev` and `pixm` the
-/// resolver, `xcpd` and `nl_gf` the localizer, and `dev` and `nl_gf` the
-/// consent pre-filter, all of which name the members. A
+/// resolver, `pdqm` the demographics step ahead of it, `xcpd` and `nl_gf` the
+/// localizer, and `dev` and `nl_gf` the consent pre-filter, all of which
+/// serve the resolution of the members. A
 /// registry read from a care services directory changes with the directory,
 /// never with a reload: a reload rebuilds the federation over the registry in
 /// place, and a change to `[registry.mcsd]` takes a restart.
-pub const RELOADABLE: [&str; 6] = ["registry", "credentials", "dev", "pixm", "xcpd", "nl_gf"];
+pub const RELOADABLE: [&str; 7] = [
+    "registry",
+    "credentials",
+    "dev",
+    "pixm",
+    "pdqm",
+    "xcpd",
+    "nl_gf",
+];
 
 /// Reloads the registry the server started with.
 ///
@@ -421,9 +430,7 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         // NOTE: no specification governs this: our own design; the identity feed
         // outlives every federation a reload builds, so a change to it takes a restart.
         pmir: None,
-        // NOTE: no specification governs this: our own design; a reload carries the
-        // running demographics step over, so a change to it takes a restart.
-        pdqm: None,
+        pdqm: fresh.pdqm,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
@@ -436,15 +443,6 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
 /// Whether `fresh` sets, unsets or changes `[pmir]`.
 fn pmir_changed(boot: &Settings, fresh: &Settings) -> bool {
     match (&boot.pmir, &fresh.pmir) {
-        (Some(was), Some(now)) => !was.same_as(now),
-        (None, None) => false,
-        (Some(_), None) | (None, Some(_)) => true,
-    }
-}
-
-/// Whether `fresh` sets, unsets or changes `[pdqm]`.
-fn pdqm_changed(boot: &Settings, fresh: &Settings) -> bool {
-    match (&boot.pdqm, &fresh.pdqm) {
         (Some(was), Some(now)) => !was.same_as(now),
         (None, None) => false,
         (Some(_), None) | (None, Some(_)) => true,
@@ -575,7 +573,6 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
         ("xcpd.audit", audit_changed(boot, fresh)),
         ("audit", boot.audit != fresh.audit),
         ("pmir", pmir_changed(boot, fresh)),
-        ("pdqm", pdqm_changed(boot, fresh)),
         (
             "metrics.listen",
             boot.metrics.listen != fresh.metrics.listen,
@@ -699,19 +696,16 @@ mod tests {
     }
 
     #[test]
-    fn a_change_to_the_demographics_step_takes_a_restart() {
+    fn a_change_to_the_demographics_step_reloads_with_the_resolver() {
         let boot = with_pdqm("https://pdq.example.org/fhir/", "iti-78");
-        for fresh in [
-            with_pdqm("https://pdq.example.org/fhir/", "iti-119"),
-            with_pdqm("https://other.example.org/fhir/", "iti-78"),
-        ] {
-            assert_eq!(vec!["pdqm"], needs_restart(&boot, &fresh));
-            assert!(
-                effective(&boot, fresh).pdqm.is_none(),
-                "the running step is carried over, never rebuilt"
-            );
-        }
-        let same = with_pdqm("https://pdq.example.org/fhir/", "iti-78");
-        assert!(needs_restart(&boot, &same).is_empty());
+        let fresh = with_pdqm("https://other.example.org/fhir/", "iti-119");
+        assert!(
+            needs_restart(&boot, &fresh).is_empty(),
+            "[pdqm] is reloadable, as [pixm] is"
+        );
+        let applied = effective(&boot, fresh)
+            .pdqm
+            .expect("the pdqm section reloads");
+        assert_eq!("https://other.example.org/fhir/", applied.url.expose());
     }
 }

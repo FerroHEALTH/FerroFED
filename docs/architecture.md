@@ -564,10 +564,10 @@ dispatched (N8).
   `424` under `ask-all` and on a directed query; an exchange whose audit
   record cannot be stored fails closed under every policy, as XCPD's does.
   The step needs a cross-reference (`[pixm]` or `[dev]`), is refused for a
-  namespace `[pixm.namespaces]` maps, and outlives a registry reload, so a
-  change to it takes a restart. It shows as `demographics` on `GET
+  namespace `[pixm.namespaces]` maps, and a registry reload rebuilds it from
+  `[pdqm]`, as it rebuilds the resolver. It shows as `demographics` on `GET
   /health/dependencies` and is counted by outcome. No specification
-  governs the outage mapping or the reload rule: our own design.
+  governs the outage mapping: our own design.
 - **The resolver** (decision A17). A resolver that cannot answer is not a
   patient who is unknown. An ITI-83 `404`, or a `200` with no identifier in a
   domain, is `not-resolved` and, per N6, does not fail the query. An outage, a

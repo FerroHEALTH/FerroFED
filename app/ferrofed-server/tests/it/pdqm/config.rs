@@ -200,7 +200,7 @@ fn unreached_pixm() -> String {
 }
 
 #[test]
-fn a_reload_carries_the_running_step_over() -> TestResult {
+fn a_reload_that_unsets_the_table_drops_the_step() -> TestResult {
     let dir = tempfile::tempdir()?;
     let boot = settings(
         dir.path(),
@@ -208,14 +208,14 @@ fn a_reload_carries_the_running_step_over() -> TestResult {
     )?;
     let running = Federation::load(&boot)?.ok_or("a registry is configured")?;
     assert!(running.demographics().is_some());
-    // A reload builds over settings without `[pdqm]`, which takes a restart.
+    // The reload applies `[pdqm]` as it applies `[pixm]`, so unsetting it stops the step.
     let fresh = settings(dir.path(), &unreached_pixm())?;
     let next = running
         .reloaded(&fresh, read_registry(&fresh))?
         .ok_or("a registry is configured")?;
     assert!(
-        next.demographics().is_some(),
-        "the reloaded federation keeps the running step"
+        next.demographics().is_none(),
+        "the reloaded federation has no step"
     );
     Ok(())
 }

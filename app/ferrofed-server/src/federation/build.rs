@@ -83,8 +83,7 @@ impl Federation {
     /// index and the learned `creating_system_id` map, which
     /// [`Federation::reconcile`] then holds to the new snapshot, and records
     /// its node requests through this one's instruments. This federation is
-    /// unchanged, so a request that took it finishes on it. The demographics
-    /// step is this one's, so a change to `[pdqm]` takes a restart.
+    /// unchanged, so a request that took it finishes on it.
     ///
     /// # Errors
     /// Returns the [`FederationError`] [`Federation::load_read`] returns for
@@ -94,8 +93,7 @@ impl Federation {
         settings: &Settings,
         document: Option<Result<RegistrySnapshot, FederationError>>,
     ) -> Result<Option<Self>, FederationError> {
-        let carried = (Arc::clone(&self.observed), self.demographics.clone());
-        let mut next = Self::assemble(settings, document, Some(carried))?;
+        let mut next = Self::assemble(settings, document, Some(Arc::clone(&self.observed)))?;
         if let (Some(next), Some(instruments)) = (next.as_mut(), self.requests.instruments()) {
             next.requests.metered(instruments.clone());
         }
@@ -119,12 +117,12 @@ impl Federation {
         }
     }
 
-    /// Builds the federation over `document`, and over what a reload carries
-    /// over: what the process observed, and the demographics step.
+    /// Builds the federation over `document`, and over `observed` when a
+    /// reload carries it over.
     fn assemble(
         settings: &Settings,
         document: Option<Result<RegistrySnapshot, FederationError>>,
-        carried: Option<(Arc<Observed>, Option<DemographicsStep>)>,
+        observed: Option<Arc<Observed>>,
     ) -> Result<Option<Self>, FederationError> {
         let Some(document) = document else {
             if settings.dev.is_some() {
@@ -172,7 +170,7 @@ impl Federation {
             }
         };
         patient_bound(settings, &snapshot, resolver.is_some())?;
-        let (observed, demographics) = carry(settings, carried, resolver.is_some())?;
+        let (observed, demographics) = carry(settings, observed, resolver.is_some())?;
         let resolving = localization::Resolving { development, pixm };
         let localization = localization::policy(settings, selection, resolving, &snapshot)
             .map_err(FederationError::Localization)?;
@@ -304,8 +302,8 @@ fn default_index_capacity() -> NonZeroU32 {
         .expect("the default ehr_id index capacity should be positive")
 }
 
-/// What the process observed and the demographics step: those a reload
-/// `carried` over, or new ones from `settings` at boot.
+/// What the process observed, `observed` when a reload carries it over or
+/// nothing yet at boot, and the demographics step `settings` describe.
 ///
 /// # Errors
 ///
@@ -314,25 +312,22 @@ fn default_index_capacity() -> NonZeroU32 {
 /// error of a `[pdqm]` step that cannot be built.
 fn carry(
     settings: &Settings,
-    carried: Option<(Arc<Observed>, Option<DemographicsStep>)>,
+    observed: Option<Arc<Observed>>,
     resolving: bool,
 ) -> Result<(Arc<Observed>, Option<DemographicsStep>), FederationError> {
-    let (observed, demographics) = if let Some(carried) = carried {
-        carried
-    } else {
+    let observed = observed.unwrap_or_else(|| {
         let federation = &settings.federation;
-        let observed = Arc::new(Observed::new(
+        Arc::new(Observed::new(
             ResolutionBindings::new(federation.binding_ttl)
                 .with_capacity(widened(federation.binding_capacity)),
             federation.ehr_index_capacity,
-        ));
-        let step = settings
-            .pdqm
-            .as_ref()
-            .map(|pdqm| pdqm_step(pdqm, &settings.audit))
-            .transpose()?;
-        (observed, step)
-    };
+        ))
+    });
+    let demographics = settings
+        .pdqm
+        .as_ref()
+        .map(|pdqm| pdqm_step(pdqm, &settings.audit))
+        .transpose()?;
     if demographics.is_some() && !resolving {
         return Err(FederationError::PdqmWithoutResolver);
     }

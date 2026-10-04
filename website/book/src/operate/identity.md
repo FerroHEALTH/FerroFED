@@ -155,8 +155,8 @@ bearer_token_file = "/run/secrets/pdq-token"
   Supplier is sent the patient identifier, so plain `http` is refused,
   naming `pdqm.url`, unless the profile is `development`. No redirect is
   followed, and an answer is read up to 8 MiB.
-- A change to `[pdqm]` takes a restart. A reload keeps the step the gateway
-  started with and names `pdqm` among the settings that wait for one.
+- A `SIGHUP` reload applies a change to `[pdqm]`, as it does to `[pixm]`:
+  the reloaded federation asks the Supplier the new table names.
 
 | The Supplier answers | The members are | The query |
 |---|---|---|

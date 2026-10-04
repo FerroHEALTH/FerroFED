@@ -234,9 +234,9 @@ body names the class only; the log line `registry reload refused` carries
 the precise `class`. The directory's state never gates readiness.
 
 A `SIGHUP` reload with a directory rebuilds the federation over the registry
-the directory gave, applying `[credentials]`, `[dev]`, `[pixm]`, `[xcpd]`
-and `[nl_gf]`; it never asks the directory. A change to `[registry.mcsd]` takes a
-restart, and a change between a document and a directory is refused as
+the directory gave, applying `[credentials]`, `[dev]`, `[pixm]`, `[pdqm]`,
+`[xcpd]` and `[nl_gf]`; it never asks the directory. A change to
+`[registry.mcsd]` takes a restart, and a change between a document and a directory is refused as
 `registry-presence`.
 
 A directory change goes through the same checks, so it is refused when the

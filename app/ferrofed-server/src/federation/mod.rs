@@ -77,9 +77,7 @@ pub struct Federation {
 /// map is taken to before localization and resolution, with its budget
 /// (Annex A §A.2).
 ///
-/// The step outlives a registry reload, which carries it over to the
-/// federation it builds, so a change to `[pdqm]` takes a restart (no
-/// specification governs this: our own design).
+/// A registry reload builds it again from `[pdqm]`, as it builds the resolver.
 #[derive(Clone)]
 pub struct DemographicsStep {
     step: Arc<dyn Demographics>,

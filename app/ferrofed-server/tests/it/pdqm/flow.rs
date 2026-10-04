@@ -12,7 +12,11 @@
 )]
 
 use std::error::Error;
+use std::sync::Arc;
 
+use ferrofed_server::federation::Federation;
+use ferrofed_server::federation::registry::read_registry;
+use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdq::PdqSupplier;
 use ferrofed_testkit::unreachable;
@@ -20,11 +24,11 @@ use http::StatusCode;
 
 use super::{
     ASK_ALL, CLIENT_ID, LOCAL, MASTER, MASTER_ID, demographics_state, gateway, local_query,
-    manager, pdqm, pixm, supplier, tables,
+    manager, pdqm, pixm, settings, supplier, tables,
 };
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, body, node_answering, patient_query, post, received, registry,
-    schema, statuses, wire,
+    schema, settings_with_room, statuses, wire,
 };
 use crate::metrics::{count, parse};
 use crate::support::call;
@@ -369,6 +373,46 @@ async fn neither_identifier_reaches_a_log_line_a_metric_or_a_node() -> TestResul
             }
         }
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_reload_that_changes_the_supplier_url_asks_the_new_supplier() -> TestResult {
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let pix = manager().await;
+    let first = supplier().await?;
+    let second = supplier().await?;
+    let dir = tempfile::tempdir()?;
+    let registry = registry(&a.uri(), &b.uri(), "");
+    let boot = settings(
+        dir.path(),
+        &registry,
+        ASK_ALL,
+        &tables(&pix.uri(), &first.base_url(), "iti-78"),
+    )?;
+    let running = Federation::load(&boot)?.ok_or("a registry is configured")?;
+    let fresh = settings(
+        dir.path(),
+        &registry,
+        ASK_ALL,
+        &tables(&pix.uri(), &second.base_url(), "iti-78"),
+    )?;
+    let next = running
+        .reloaded(&fresh, read_registry(&fresh))?
+        .ok_or("a registry is configured")?;
+    let app = ferrofed_server::router(
+        Arc::new(AppState::with_federation(next)),
+        &settings_with_room(),
+    );
+    let (status, text) = call(app, post(body(&local_query())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        1,
+        second.searches(),
+        "the reloaded step asks the new Supplier"
+    );
+    assert_eq!(0, first.searches(), "the old Supplier is no longer asked");
     Ok(())
 }
 

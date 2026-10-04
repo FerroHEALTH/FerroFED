@@ -23,6 +23,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
+use ferrofed_server::config::settings::Settings;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdq::PdqSupplier;
@@ -126,17 +127,26 @@ pub(crate) fn gateway(
     federation: &str,
     tables: &str,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
+    let settings = settings(dir, registry, federation, tables)?;
+    let state = Arc::new(AppState::build(&settings)?);
+    let app = ferrofed_server::router(Arc::clone(&state), &settings_with_room());
+    Ok((app, state))
+}
+
+/// The settings of the development gateway [`gateway`] builds.
+pub(crate) fn settings(
+    dir: &Path,
+    registry: &str,
+    federation: &str,
+    tables: &str,
+) -> Result<Settings, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nid = \"example-federation\"\n{federation}\n\n{tables}"
     );
-    let settings =
-        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
-    let state = Arc::new(AppState::build(&settings)?);
-    let app = ferrofed_server::router(Arc::clone(&state), &settings_with_room());
-    Ok((app, state))
+    Ok(Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?)
 }
 
 /// The `[federation]` key of an ask-all deployment, which has no localizer.

@@ -27,9 +27,9 @@
 //! identifier the cross-reference resolves; each `namespaces` key is a client
 //! namespace taken to the Supplier, mapped to the identifier system the
 //! identifier is sent in. The Supplier is sent the patient identifier, so its
-//! URL is held to the protected-payload policy of [`transport`]. A change
-//! takes a restart, as `[pixm]` does. No specification governs the shape of
-//! the table: our own design.
+//! URL is held to the protected-payload policy of [`transport`]. A reload
+//! applies a change, as it does to `[pixm]`. No specification governs the
+//! shape of the table: our own design.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -95,32 +95,6 @@ pub struct PdqmSettings {
     pub namespaces: BTreeMap<String, String>,
     /// How long one exchange may take.
     pub timeout: Duration,
-}
-
-impl PdqmSettings {
-    /// Whether `other` names the same Supplier, credentials, transaction,
-    /// domains and timeout.
-    #[must_use]
-    pub fn same_as(&self, other: &Self) -> bool {
-        let credentials = match (&self.credentials, &other.credentials) {
-            (None, None) => true,
-            (Some(Scheme::Bearer(was)), Some(Scheme::Bearer(now))) => was == now,
-            (
-                Some(Scheme::Basic { user, password }),
-                Some(Scheme::Basic {
-                    user: now_user,
-                    password: now_password,
-                }),
-            ) => user == now_user && password == now_password,
-            _ => false,
-        };
-        credentials
-            && self.url.expose() == other.url.expose()
-            && self.transaction == other.transaction
-            && self.master == other.master
-            && self.namespaces == other.namespaces
-            && self.timeout == other.timeout
-    }
 }
 
 /// Resolves `[pdqm]`: a URL that parses, carries no userinfo and is `https`

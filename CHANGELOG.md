@@ -72,8 +72,8 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   the PDQm Query or Match Consumer record, required outside development;
   the step shows as `demographics` on `GET /health/dependencies` and is
   counted in `ferrofed_demographics_requests_total`. The read of an EHR by
-  subject takes the same step. A change to `[pdqm]` takes a restart
-  (#487).
+  subject takes the same step, and a reload applies a change to `[pdqm]`
+  as it does to `[pixm]` (#487).
 - The ITI-119 Patient Demographics Match in `ihe-iti` 0.0.19:
   `PdqmClient::match_patient` posts a `MatchInput` to `[base]/Patient/$match`
   and reads the Match Output Bundle, every matched Patient with its score
