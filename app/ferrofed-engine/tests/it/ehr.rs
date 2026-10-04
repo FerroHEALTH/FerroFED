@@ -25,6 +25,8 @@ use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
+use crate::timing;
+
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The `ehr_id` the mock node assigns, a synthetic version-4 UUID.
@@ -136,17 +138,14 @@ async fn a_read_the_node_leaves_unanswered_is_a_time_out_of_a_silent_node() -> T
     let server = Server::start().await;
     Mock::given(method("GET"))
         .and(path(format!("/openehr/v1/ehr/{EHR_ID}")))
-        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(3)))
+        .respond_with(ResponseTemplate::new(200).set_delay(timing::SILENT))
         .mount(&server)
         .await;
     let client = client_at(&format!("{}/openehr", server.uri()))?;
-    let deadline = Instant::now()
-        .checked_add(Duration::from_millis(200))
-        .ok_or("the deadline is past the platform clock")?;
     let read = client
         .read_ehr(
             EHR_ID,
-            &DispatchOptions::new(deadline, crate::conveyed::conveyance()),
+            &DispatchOptions::new(timing::deadline()?, crate::conveyed::conveyance()),
         )
         .await;
     let Err(error) = read else {
@@ -157,5 +156,7 @@ async fn a_read_the_node_leaves_unanswered_is_a_time_out_of_a_silent_node() -> T
         "§11.1: sent, and no answer in time: {error:?}"
     );
     assert_eq!(Contact::Silent, Contact::of_ehr_call_error(&error));
+    let received = server.received_requests().await.ok_or("recording is on")?;
+    assert_eq!(1, received.len(), "the request left");
     Ok(())
 }

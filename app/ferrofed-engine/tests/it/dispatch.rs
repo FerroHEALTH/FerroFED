@@ -19,8 +19,8 @@ use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::reported::{MESSAGE_LIMIT, UNAUTHENTICATED};
 use ferrofed_engine::dispatch::{
-    DispatchOptions, NodeClient, NodeClients, NodeQuery, NodeReply, REQUEST_ID_HEADER, SetupError,
-    SharedCredentials,
+    Contact, DispatchOptions, NodeClient, NodeClients, NodeQuery, NodeReply, REQUEST_ID_HEADER,
+    SetupError, SharedCredentials,
 };
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::hygiene::mask::MASK;
@@ -37,6 +37,8 @@ use openehr_its::rest::client::{
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, Request, ResponseTemplate};
+
+use crate::timing;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -370,19 +372,18 @@ async fn rows_as_wide_as_the_query_selects_are_active() -> TestResult {
 async fn no_answer_before_the_deadline_is_a_time_out() -> TestResult {
     let server = node_answering(
         "/openehr",
-        json(200, EMPTY_RESULT_SET).set_delay(Duration::from_secs(3)),
+        json(200, EMPTY_RESULT_SET).set_delay(timing::SILENT),
     )
     .await;
     let client = client_at(&format!("{}/openehr", server.uri()))?;
     let reply = client
-        .query(
-            &NodeQuery::new(NODE_AQL),
-            &within(Duration::from_millis(200))?,
-        )
+        .query(&NodeQuery::new(NODE_AQL), &within(timing::SLACK)?)
         .await?;
     assert_eq!(reply.status(), EndpointStatus::TimeOut);
+    assert_eq!(Contact::Silent, reply.contact(), "§11.1: sent, and silent");
     assert!(error_text(&reply)?.starts_with("no answer before the deadline"));
     assert!(reply.outcome().latency_ms().is_some());
+    assert_eq!(1, received(&server).await?.len(), "the request left");
     Ok(())
 }
 
