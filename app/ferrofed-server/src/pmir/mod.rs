@@ -28,7 +28,8 @@ use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_identity::lifecycle::{self, LifecycleConfigError, RegistryAuth};
+use ferrofed_identity::fhir::Authentication;
+use ferrofed_identity::lifecycle::{self, LifecycleConfigError};
 use ferrofed_registry::secret::Secret;
 use http::HeaderMap;
 use http::header::AUTHORIZATION;
@@ -105,14 +106,14 @@ impl IdentityFeed {
         audit: Option<Arc<dyn AuditRecorder>>,
     ) -> Result<Self, IdentityFeedError> {
         let auth = match &settings.credentials {
-            Some(Scheme::Bearer(token)) => RegistryAuth::Bearer(token.to_secret_string()),
-            Some(Scheme::Basic { user, password }) => RegistryAuth::Basic {
+            Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
+            Some(Scheme::Basic { user, password }) => Authentication::Basic {
                 user: user.clone(),
                 password: password.to_secret_string(),
             },
             // NOTE: no specification governs this: our own design; configuration
             // refuses an OAuth 2.0 or Nuts grant here, so only the transport remains.
-            Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) | None => RegistryAuth::None,
+            Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) | None => Authentication::None,
         };
         let subscriber = lifecycle::subscriber(&settings.url, &auth)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose

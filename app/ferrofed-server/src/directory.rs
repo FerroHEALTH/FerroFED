@@ -31,9 +31,9 @@ use ferrofed_identity::directory::mcsd::{
     Content, DirectoryConfig, DirectoryConfigError, DirectoryReadError, DirectorySource,
     ExchangeError, Materialised, Refreshed,
 };
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
-use openehr_its::rest::client::Credentials;
 use serde::Serialize;
 
 use crate::config::settings::{DirectorySettings, Scheme, Settings};
@@ -316,12 +316,12 @@ pub fn read(settings: &DirectorySettings) -> Result<RegistrySnapshot, Federation
 /// The source `settings` name.
 fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationError> {
     let credentials = match &settings.credentials {
-        None => None,
-        Some(Scheme::Bearer(token)) => Some(Credentials::bearer(token.to_secret_string())),
-        Some(Scheme::Basic { user, password }) => Some(Credentials::basic(
-            user.as_str(),
-            password.to_secret_string(),
-        )),
+        None => Authentication::None,
+        Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
+        Some(Scheme::Basic { user, password }) => Authentication::Basic {
+            user: user.clone(),
+            password: password.to_secret_string(),
+        },
         // NOTE: no specification governs this: our own design; configuration
         // refuses a grant here, and a refusal is safer than sending nothing.
         Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) => {

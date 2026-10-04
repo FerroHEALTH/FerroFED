@@ -28,40 +28,20 @@ use async_trait::async_trait;
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use http::header::{AUTHORIZATION, HeaderMap};
 use ihe_iti::balp::AuditRecorder;
 use ihe_iti::pixm::PixmClient;
 use ihe_iti::pixm::error::{InvalidInput, PixmError};
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
-use openehr_its::rest::client::{Credentials, InvalidCredentials};
+use openehr_its::rest::client::InvalidCredentials;
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
+use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
 use crate::resolver::{Resolution, Resolver, ResolverError};
-
-/// How the gateway authenticates to one PIX Manager (ITI TF-2 Appendix Z.8).
-///
-/// `Debug` redacts every secret, because [`SecretString`] does.
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum PixAuth {
-    /// No `Authorization` header: the transport (mutual TLS, a private
-    /// network) authenticates the gateway.
-    None,
-    /// An RFC 6750 bearer token.
-    Bearer(SecretString),
-    /// RFC 7617 basic authentication.
-    Basic {
-        /// The user name, which is not a secret.
-        user: String,
-        /// The password.
-        password: SecretString,
-    },
-}
 
 /// One PIX Manager as the configuration names it.
 #[derive(Debug)]
@@ -69,7 +49,7 @@ pub struct ManagerConfig {
     /// The Manager's FHIR base URL, which `Debug` shows without its userinfo.
     pub base: SecretUrl,
     /// How the gateway authenticates to it.
-    pub auth: PixAuth,
+    pub auth: Authentication,
     /// The members this Manager resolves, each with its `ehr_id` domain: the
     /// assigning authority whose identifiers are that member's `ehr_id`s.
     pub members: BTreeMap<NodeId, String>,
@@ -119,6 +99,15 @@ pub enum PixmConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for a PIX Manager could not be built")]
     Client(#[source] reqwest::Error),
+}
+
+impl From<ClientError> for PixmConfigError {
+    fn from(error: ClientError) -> Self {
+        match error {
+            ClientError::Credentials(source) => Self::Credentials(source),
+            ClientError::Build(source) => Self::Client(source),
+        }
+    }
 }
 
 /// Why the PIXm resolver could not answer for a member.
@@ -212,7 +201,7 @@ impl PixmResolver {
                 seen.push(member.clone());
                 members.push((member, target));
             }
-            let http = http_client(&manager.auth)?;
+            let http = fhir::http_client(&manager.auth, &Tls::default())?;
             let base = Url::parse(manager.base.expose()).map_err(PixmConfigError::BaseUrl)?;
             let client = PixmClient::new(base, http).map_err(PixmConfigError::Base)?;
             built.push(Arc::new(Manager { client, members }));
@@ -284,31 +273,6 @@ impl fmt::Debug for PixmResolver {
             )
             .finish()
     }
-}
-
-/// The HTTP client one Manager is asked through: no redirects, because the
-/// request URL holds the source identifier, and the credentials sent as a
-/// sensitive default header, composed as the node client composes them.
-fn http_client(auth: &PixAuth) -> Result<reqwest::Client, PixmConfigError> {
-    let mut headers = HeaderMap::new();
-    let credentials = match auth {
-        PixAuth::None => None,
-        PixAuth::Bearer(token) => Some(Credentials::bearer(token.clone())),
-        PixAuth::Basic { user, password } => {
-            Some(Credentials::basic(user.as_str(), password.clone()))
-        }
-    };
-    if let Some(credentials) = credentials {
-        let header = credentials
-            .header_value()
-            .map_err(PixmConfigError::Credentials)?;
-        headers.insert(AUTHORIZATION, header);
-    }
-    reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .default_headers(headers)
-        .build()
-        .map_err(PixmConfigError::Client)
 }
 
 /// What one ITI-83 exchange said of one member.

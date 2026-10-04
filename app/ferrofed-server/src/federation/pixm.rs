@@ -6,8 +6,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::patient::IdentifierNamespace;
-use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmResolver};
+use ferrofed_identity::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
@@ -35,9 +36,9 @@ pub(super) fn pixm_resolver(
             members.insert(member, domain.clone());
         }
         let auth = match &manager.credentials {
-            None => PixAuth::None,
-            Some(Scheme::Bearer(token)) => PixAuth::Bearer(token.to_secret_string()),
-            Some(Scheme::Basic { user, password }) => PixAuth::Basic {
+            None => Authentication::None,
+            Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
+            Some(Scheme::Basic { user, password }) => Authentication::Basic {
                 user: user.clone(),
                 password: password.to_secret_string(),
             },
