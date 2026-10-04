@@ -23,7 +23,8 @@ use crate::config::error::Error;
 use crate::config::secrets::{resolve_credentials, resolve_signing};
 use crate::config::settings::{
     DirectorySettings, FederationSettings, LocalizationSettings, MetricsSettings,
-    PixManagerSettings, PixmSettings, Scheme, ServerSettings, Settings, TelemetrySettings,
+    PixManagerSettings, PixmSettings, Scheme, ServerSettings, Settings, SigningSettings,
+    TelemetrySettings,
 };
 use crate::config::transport::{self, directory_site};
 use crate::config::{
@@ -107,18 +108,7 @@ impl Config {
             credentials.insert(id, scheme);
         }
         let signing = self.signing.as_ref().map(resolve_signing).transpose()?;
-        // NOTE: §13.1, N25: the client assertion of every grant is signed with the
-        // gateway's key, so a grant without one is refused at load.
-        if signing.is_none()
-            && let Some(endpoint) = credentials
-                .iter()
-                .find(|(_, scheme)| matches!(scheme, Scheme::OAuth2(_)))
-                .map(|(endpoint, _)| endpoint)
-        {
-            return Err(Error::GrantWithoutSigning {
-                section: format!("credentials.{endpoint}.oauth2"),
-            });
-        }
+        signed_grants(signing.as_ref(), &credentials)?;
         let federation = self.resolve_federation(request_timeout)?;
         let pixm = self
             .pixm
@@ -272,6 +262,26 @@ impl Config {
             fan_out_stored_queries: self.federation.fan_out_stored_queries,
         })
     }
+}
+
+/// Refuses an OAuth 2.0 grant in `credentials` when `signing` is unset.
+fn signed_grants(
+    signing: Option<&SigningSettings>,
+    credentials: &BTreeMap<EndpointId, Scheme>,
+) -> Result<(), Error> {
+    // NOTE: §13.1, N25: the client assertion of every grant is signed with the
+    // gateway's key, so a grant without one is refused at load.
+    if signing.is_none()
+        && let Some(endpoint) = credentials
+            .iter()
+            .find(|(_, scheme)| matches!(scheme, Scheme::OAuth2(_)))
+            .map(|(endpoint, _)| endpoint)
+    {
+        return Err(Error::GrantWithoutSigning {
+            section: format!("credentials.{endpoint}.oauth2"),
+        });
+    }
+    Ok(())
 }
 
 /// Resolves `[pixm]`: every Manager URL parses, carries no userinfo and is

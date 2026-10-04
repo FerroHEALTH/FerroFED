@@ -152,11 +152,15 @@ fn a_registry_or_callback_in_the_clear_is_refused_outside_development() -> TestR
         ),
     ] {
         let dir = tempfile::tempdir()?;
-        let text = text(dir.path(), url, callback, "")?.replacen(
-            "profile = \"development\"",
-            "profile = \"production\"",
-            1,
-        );
+        // The PIX Manager is held to https outside development too, so only the
+        // [pmir] site is in the clear.
+        let text = text(dir.path(), url, callback, "")?
+            .replacen("profile = \"development\"", "profile = \"production\"", 1)
+            .replacen(
+                "url = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]",
+                "url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]",
+                1,
+            );
         let error = resolve(&text)?.err().ok_or("refused")?;
         assert!(
             matches!(&error, ConfigError::Cleartext(refused) if refused.site.url_key == key),
