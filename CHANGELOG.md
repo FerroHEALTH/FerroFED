@@ -68,11 +68,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and every outcome shows on `GET /health/dependencies` as `directory`.
   `config check` reads the directory too. Credentials for the directory
   travel over `https` only, outside the development profile (#402).
-  A member organisation of a shared directory may list endpoints of other
-  services: a listing of an `Endpoint` that is no member is ignored and
-  logged by its reference, once per read of the content, where the document
-  refuses it; a listing that named a member endpoint when the running
-  registry was read, and names none now, is refused (#423).
+  A member organisation of a shared directory may list endpoints that are no
+  member: another service's, one that lost the federation's identifier, or
+  one the directory deleted. Such a listing is ignored and logged by its
+  reference, once per read of the content, at a start and on a refresh
+  alike, where the document refuses it, and a deleted endpoint leaves the
+  registry (#423, #433).
 - `ihe-iti` 0.0.13: the `mcsd` feature carries the ITI-90 Query Client and
   the ITI-91 Update Client (`McsdClient`), every walk bounded by one
   `Budget` (a deadline and caps on pages, bytes and entries), and a replica
@@ -284,6 +285,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   the admission check without a registry, and a registry in FHIR form that
   lists an endpoint it does not hold says the reference names no resource,
   where it said it named no `Organization` (#434).
+- The book draws the v0.0.8 work on `main` as built (#406). The How it works
+  pages show the gate, the onward OAuth 2.0 token with its ES384 assertion
+  and cache, the signed caller on every node request, the XCPD and PIXm
+  localizers, the mCSD directory and the resolution bindings per verified
+  caller; only the ATNA audit repository (#418), PMIR (#147) and the Dutch
+  Generic Functions (#87, #88) stay dashed as planned. The claims page lists
+  the merged v0.0.8 items as on `main`, in the next release, and v0.0.7 as
+  released. The README, `llms.txt` and the introduction say client
+  authentication and onward authentication are built.
 
 ### Fixed
 
