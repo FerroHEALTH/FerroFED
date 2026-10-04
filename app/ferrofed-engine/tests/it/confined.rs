@@ -59,10 +59,10 @@ fn confined_to(told: &str) -> Result<DispatchOptions, Box<dyn Error>> {
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(5))
         .ok_or("the deadline is past the platform clock")?;
-    let confinement = Confinement::new(BTreeMap::from([(
+    let confinement = Confinement::new(
         EndpointId::new(ENDPOINT)?,
-        EhrId::new(told)?,
-    )]));
+        BTreeMap::from([(EndpointId::new(ENDPOINT)?, EhrId::new(told)?)]),
+    );
     Ok(DispatchOptions::new(
         deadline,
         conveyed::conveyance().with_confinement(confinement),

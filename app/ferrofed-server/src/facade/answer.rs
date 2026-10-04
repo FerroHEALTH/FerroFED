@@ -149,6 +149,11 @@ pub(super) enum Failure {
         "the query reaches beyond the patient the access token's patient/ grant is confined to, or names no patient (§5.2, §12.5)"
     )]
     Confined,
+    /// The caller's grant is confined to one patient, and the patient the
+    /// query names could not be checked against it at the bound member
+    /// (§5.2, §11.2).
+    #[error(transparent)]
+    Unconfirmed(confined::Unconfined),
     /// Node selection left no registry member in scope, so the request
     /// resolves to no destination (§11.2, §11.3).
     #[error(
@@ -184,6 +189,7 @@ impl Failure {
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
             Self::Routed(unrouted) => unrouted.code(),
             Self::Confined => Code::PatientConfinement,
+            Self::Unconfirmed(_) => Code::PatientContextUnavailable,
             Self::NoDestination => Code::NoDestination,
             // NOTE: §11.1, a node row the gateway cannot use is a node-error
             // at dispatch, so one reaching the cells is the gateway's fault.
@@ -311,7 +317,7 @@ async fn federate(
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
-    population(conveyance, &analysis, request_id)?;
+    confine(federation, conveyance, &analysis, (deadline, request_id)).await?;
     let scope = scoped::Scoped {
         headers,
         session,
@@ -392,24 +398,45 @@ async fn federate(
     Ok((status, result_set, acting))
 }
 
-/// Refuses a query that names neither a patient nor an `ehr_id` when the
-/// caller in `conveyance` is confined to one patient.
+/// Refuses, when the caller in `conveyance` is confined to one patient, a
+/// query whose node queries read beyond the one `EHR` each is scoped to, and
+/// a query that names another patient than the confined one.
+///
+/// A query beyond the one `EHR` names neither a patient nor an `ehr_id`, or
+/// has a class beside that `EHR`, a second `EHR`, or an `EHR` under
+/// `NOT CONTAINS`. A named patient is resolved at the bound member alone
+/// before `deadline` ([`confined::names_own`]), so no localizer, consent
+/// pre-filter or other member learns of another patient.
 ///
 /// # Errors
 ///
-/// Returns [`Failure::Confined`] for such a query, with nothing sent.
-fn population(
+/// Returns [`Failure::Confined`] for such a query, before any lookup and
+/// with nothing sent, and [`Failure::Unconfirmed`] when the named patient
+/// cannot be checked at the bound member.
+async fn confine(
+    federation: &Federation,
     conveyance: &Conveyance,
     analysis: &Analysis,
-    request_id: &str,
+    (deadline, request_id): (Instant, &str),
 ) -> Result<(), Failure> {
-    // NOTE: master08 §Resource Scopes: a patient grant reaches "data within that patient's
-    // EHR", so a query that names neither a patient nor an ehr_id is beyond it.
-    if confined::is_confined(conveyance)
-        && matches!(analysis, Analysis::Unscoped(query) if query.ehr_scope().is_none())
-    {
+    let Some(confinement) = conveyance.confinement() else {
+        return Ok(());
+    };
+    // NOTE: master08 §Resource Scopes, §7.1: a patient grant reaches "data within that patient's
+    // EHR", so every class the query reads must be contained under the one scoped EHR.
+    if !analysis.within_one_ehr() {
         confined::stopped("population", request_id);
         return Err(Failure::Confined);
+    }
+    if let Analysis::Patient(query) = analysis {
+        let patient = plan::patient_ref(query.subject()).map_err(Failure::Plan)?;
+        let own = confined::names_own(federation, confinement, &patient, deadline)
+            .await
+            .map_err(Failure::Unconfirmed)?;
+        if !own {
+            confined::stopped("patient", request_id);
+            return Err(Failure::Confined);
+        }
     }
     Ok(())
 }

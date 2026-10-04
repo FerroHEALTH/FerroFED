@@ -159,7 +159,48 @@ pub(crate) async fn confinement(
             Some((endpoint.id().clone(), ehr_id.clone()))
         })
         .collect();
-    Ok(Some(Confinement::new(at)))
+    Ok(Some(Confinement::new(context.endpoint().clone(), at)))
+}
+
+/// Whether `patient`, the subject a confined request names, is the patient
+/// `confinement` names: resolved at the bound member alone before
+/// `deadline`, it must be the token's own `ehr_id` there (§5.2).
+///
+/// Nothing else is asked first, no localizer, no consent pre-filter and no
+/// other member, so a confined caller who names another patient makes the
+/// gateway learn nothing of that patient anywhere else.
+///
+/// # Errors
+///
+/// Returns an [`Unconfined`] when the bound member left the registry, no
+/// resolver is configured, or the cross-reference could not answer for it.
+pub(crate) async fn names_own(
+    federation: &Federation,
+    confinement: &Confinement,
+    patient: &PatientRef,
+    deadline: Instant,
+) -> Result<bool, Unconfined> {
+    let bound = federation
+        .snapshot()
+        .endpoint(confinement.bound())
+        .ok_or_else(|| Unconfined::Departed(confinement.bound().clone()))?
+        .node()
+        .clone();
+    let cross_reference = federation.resolver().ok_or(Unconfined::NoResolver)?;
+    let mut answers = cross_reference
+        .resolve(patient, std::slice::from_ref(&bound), deadline)
+        .await;
+    match answers.remove(&bound) {
+        Some(Resolution::Resolved(ehr_id)) => {
+            Ok(confinement.ehr_id_at(confinement.bound()) == Some(&ehr_id))
+        }
+        Some(Resolution::Unknown) => Ok(false),
+        Some(Resolution::Unavailable(source)) => Err(Unconfined::Unavailable {
+            member: bound,
+            source,
+        }),
+        None => Err(Unconfined::Unanswered(bound)),
+    }
 }
 
 /// Whether `conveyance` admits a request to `ehr_id` at the node `endpoint`

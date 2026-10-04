@@ -211,15 +211,23 @@ pub enum ConveyanceError {
 /// confinement is FerroFED's own design.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Confinement {
+    bound: EndpointId,
     at: BTreeMap<EndpointId, EhrId>,
 }
 
 impl Confinement {
-    /// The confinement to `at`: the patient's `ehr_id` at each endpoint the
-    /// grant reaches.
+    /// The confinement to `at`, the patient's `ehr_id` at each endpoint the
+    /// grant reaches, of a token issued at the member `bound` reaches.
     #[must_use]
-    pub fn new(at: BTreeMap<EndpointId, EhrId>) -> Self {
-        Self { at }
+    pub fn new(bound: EndpointId, at: BTreeMap<EndpointId, EhrId>) -> Self {
+        Self { bound, at }
+    }
+
+    /// The endpoint of the member whose platform issued the token, where
+    /// the token's own `ehrId` names the patient's EHR.
+    #[must_use]
+    pub fn bound(&self) -> &EndpointId {
+        &self.bound
     }
 
     /// The patient's `ehr_id` at the node `endpoint` reaches, or `None` when
@@ -561,10 +569,10 @@ pub(crate) mod tests {
         let c = EndpointId::new("node-c-pub").expect("an id");
         let ehr_a = EhrId::new("2222aaaa-2222-4222-8222-222222222222").expect("an ehr_id");
         let ehr_b = EhrId::new("1111bbbb-1111-4111-8111-111111111111").expect("an ehr_id");
-        let confinement = Confinement::new(BTreeMap::from([
-            (a.clone(), ehr_a.clone()),
-            (b.clone(), ehr_b.clone()),
-        ]));
+        let confinement = Confinement::new(
+            a.clone(),
+            BTreeMap::from([(a.clone(), ehr_a.clone()), (b.clone(), ehr_b.clone())]),
+        );
         assert!(confinement.admits(&a, &ehr_a));
         assert!(
             !confinement.admits(&a, &ehr_b),

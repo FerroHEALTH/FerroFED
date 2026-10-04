@@ -248,6 +248,84 @@ async fn a_population_query_is_refused() -> TestResult {
     assert_confined(&gateway, as_the_patient(population)?).await
 }
 
+/// The query `from`, scoped by `e/ehr_id/value` to the token's own `ehr_id`
+/// at node A, which is all the confinement routes by.
+fn own_scope_from(from: &str) -> Result<Request<Body>, Box<dyn Error>> {
+    let aql = format!("SELECT c/uid/value FROM {from} WHERE e/ehr_id/value = '{EHR_A}'");
+    Ok(post(body(&aql)?)?)
+}
+
+// NOTE: master08 §Resource Scopes, §7.1: a class beside the scoped EHR in an OR containment
+// is not contained in it, so the node would answer other patients' rows.
+// conformance: CP-17
+#[tokio::test]
+async fn a_class_beside_the_scoped_ehr_under_or_is_refused() -> TestResult {
+    let gateway = gateway().await?;
+    let request = own_scope_from("EHR e OR COMPOSITION c")?;
+    assert_confined(&gateway, as_the_patient(request)?).await
+}
+
+// NOTE: master08 §Resource Scopes, §7.1: a class beside the scoped EHR in an AND containment
+// is not contained in it either.
+// conformance: CP-17
+#[tokio::test]
+async fn a_class_beside_the_scoped_ehr_under_and_is_refused() -> TestResult {
+    let gateway = gateway().await?;
+    let request = own_scope_from("EHR e AND COMPOSITION c")?;
+    assert_confined(&gateway, as_the_patient(request)?).await
+}
+
+// NOTE: master08 §Resource Scopes, §7.1: an EHR under NOT CONTAINS selects by another EHR.
+// conformance: CP-17
+#[tokio::test]
+async fn an_ehr_under_not_contains_is_refused() -> TestResult {
+    let gateway = gateway().await?;
+    let request = own_scope_from("EHR e CONTAINS COMPOSITION c NOT CONTAINS EHR x")?;
+    assert_confined(&gateway, as_the_patient(request)?).await
+}
+
+// NOTE: master08 §Resource Scopes, §7.1: a second EHR variable reads an EHR the scope does
+// not name.
+// conformance: CP-17
+#[tokio::test]
+async fn a_second_ehr_variable_is_refused() -> TestResult {
+    let gateway = gateway().await?;
+    let request = own_scope_from("EHR e CONTAINS COMPOSITION c AND EHR x CONTAINS COMPOSITION d")?;
+    assert_confined(&gateway, as_the_patient(request)?).await?;
+    let request = own_scope_from("EHR e CONTAINS COMPOSITION c CONTAINS EHR x")?;
+    assert_confined(&gateway, as_the_patient(request)?).await
+}
+
+// NOTE: master08 §Resource Scopes, §7.1: a patient query with a class beside its EHR reads
+// beyond the patient too.
+// conformance: CP-17
+#[tokio::test]
+async fn a_patient_query_with_a_class_beside_its_ehr_is_refused() -> TestResult {
+    let gateway = gateway().await?;
+    let aql = format!(
+        "SELECT c/uid/value FROM EHR e OR COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    assert_confined(&gateway, as_the_patient(post(body(&aql)?)?)?).await
+}
+
+// NOTE: §7.1: every class contained, conjunctively, under the scoped EHR reads that EHR alone.
+// conformance: CP-17
+#[tokio::test]
+async fn a_containment_nested_under_the_scoped_ehr_is_admitted() -> TestResult {
+    let gateway = gateway().await?;
+    let aql = format!(
+        "SELECT o/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o \
+         WHERE e/ehr_id/value = '{EHR_A}'"
+    );
+    let (status, _, text) = sent(&gateway.app, as_the_patient(post(body(&aql)?)?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(1, asked(&gateway.a).await?.len(), "node A, which holds it");
+    assert!(asked(&gateway.b).await?.is_empty(), "node B is not asked");
+    Ok(())
+}
+
 // NOTE: SMART on openEHR master04 §Capabilities conveys the context in the ehrId claim, so a
 // token without one names no patient to confine its grant to.
 // conformance: CP-17

@@ -73,7 +73,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   no patient, an `ehr_id` the pairs do not place, EHR creation and
   definitions are `403` (`patient-confinement`) with nothing sent, nothing
   probed and, for another patient's read by subject, no resolution binding
-  or index entry recorded. A token whose resource scopes are all `patient/`
+  or index entry recorded. A query whose `FROM` reads a class beside its
+  one scoped `EHR` (under `AND` or `OR`, a second `EHR`, an `EHR` under
+  `NOT CONTAINS`) is refused the same way, and a named patient is checked at
+  the bound member alone before any localizer, consent pre-filter or other
+  member hears of it. `openehr-federation` 0.0.38 adds
+  `Analysis::within_one_ehr`, which says whether every class a query reads is
+  contained under that one `EHR`. A token whose resource scopes are all `patient/`
   is refused the DEMOGRAPHIC API the same way, bound or not and even for a
   listed demographic client. A token without the claim is `403`
   (`patient-context-missing`), and a cross-reference that cannot resolve the

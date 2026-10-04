@@ -199,6 +199,19 @@ the token's patient:
    own pairs do not place is never looked up in the gateway's index or
    probed for at the members, and a refused read by subject leaves no
    resolution binding for the caller and no entry in the index.
+4. A query must read the patient's EHR alone: every class in its `FROM`
+   is contained, conjunctively, under the one `EHR` it is scoped to
+   (`FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o`). A class
+   beside that `EHR` under `AND` or `OR`, a second `EHR`, or an `EHR`
+   under `NOT CONTAINS` would let a node answer other patients' rows, so
+   such a query is `403` (`patient-confinement`) before anything is looked
+   up (§7.1).
+5. A query or a read by subject that names a patient is first resolved
+   at the bound member alone. When the patient there is not the token's
+   own `ehrId`, the request is `403` (`patient-confinement`) before any
+   localizer (XCPD or the NVI), consent pre-filter or other member is
+   asked about it, so no ITI-55 exchange or audit event is made for that
+   patient.
 
 A token whose resource scopes are all `patient/` never reaches the
 DEMOGRAPHIC API, whether or not its issuer is bound and even when its client

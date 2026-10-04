@@ -772,7 +772,16 @@ rules are FerroFED's own design, decided with #80 after a security review:
   the patient under another `ehr_id` at the bound member, is `424`
   `patient-context-unavailable`. Every request is then held to T, `403`
   `patient-confinement` with nothing sent otherwise: a query with no patient
-  and no `ehr_id`, a plan whose every dispatched pair is not in T (or that
+  and no `ehr_id`, or one whose `FROM` holds a class not contained,
+  conjunctively, under its one scoped `EHR` (a class beside it under `AND`
+  or `OR`, a second `EHR`, an `EHR` under `NOT CONTAINS`; the typed
+  `openehr_federation::aql::Analysis::within_one_ehr`, read off the
+  `openehr-query` syntax tree, §7.1), so a node never answers rows of
+  another EHR; a named patient that, resolved at the bound member alone,
+  is not the token's own `ehrId` there (checked before any localizer,
+  consent pre-filter or other member is asked, so nothing beyond the bound
+  member learns of another patient and no ITI-55 exchange or audit is made
+  for it); a plan whose every dispatched pair is not in T (or that
   dispatches nothing, so a confined caller never learns whether another
   patient is known anywhere), an `ehr_id` route or `ehr_id`-scoped query that
   T does not place at its member (located by the targeting headers and T

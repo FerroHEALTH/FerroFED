@@ -437,7 +437,7 @@ fn detail(message: &str) -> Result<ErrorDetail, TargetsError> {
 }
 
 /// The patient reference the resolver is asked about.
-fn patient_ref(subject: &Subject) -> Result<PatientRef, TargetsError> {
+pub(crate) fn patient_ref(subject: &Subject) -> Result<PatientRef, TargetsError> {
     let namespace = IdentifierNamespace::new(subject.namespace()).map_err(TargetsError::Patient)?;
     PatientRef::new(namespace, SecretString::from(subject.value())).map_err(TargetsError::Patient)
 }

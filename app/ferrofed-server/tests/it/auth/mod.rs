@@ -18,6 +18,7 @@ mod edge;
 mod introspection;
 mod kept_token;
 mod keys;
+mod other_patient;
 mod patient;
 mod purpose;
 mod scope;
