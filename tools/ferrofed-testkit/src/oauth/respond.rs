@@ -1,0 +1,241 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! How the harness token endpoint answers one request: the RFC 6749 §4.4.2
+//! client-credentials grant and RFC 8693 token exchange, each authenticated
+//! by an RFC 7523 §2.2 client assertion, and a `DPoP` proof where one is
+//! required (RFC 9449 §5).
+
+use std::sync::Arc;
+
+use serde::Serialize;
+use wiremock::{Request, Respond, ResponseTemplate};
+
+use crate::dpop;
+use crate::oauth::{
+    ACCESS_TOKEN_TYPE, Exchanged, JWT_BEARER, JWT_TOKEN_TYPE, Shared, State, TOKEN_EXCHANGE,
+    Verdict, verify, verify_subject,
+};
+
+/// The responder the token endpoint's mock answers every request with.
+pub(super) struct Responder(pub(super) Arc<Shared>);
+
+#[derive(Serialize)]
+struct TokenBody<'a> {
+    access_token: &'a str,
+    token_type: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_in: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    issued_token_type: Option<&'static str>,
+}
+
+#[derive(Serialize)]
+struct Refused<'a> {
+    error: &'a str,
+    error_description: &'a str,
+}
+
+impl Respond for Responder {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let form: Vec<(String, String)> = url::form_urlencoded::parse(&request.body)
+            .map(|(name, value)| (name.into_owned(), value.into_owned()))
+            .collect();
+        let proof = request
+            .headers
+            .get(dpop::HEADER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let mut state = self.0.lock();
+        state.forms.push(form.clone());
+        let delay = state.delay;
+        let answer = self.answer(&mut state, &form, proof.as_deref());
+        match delay {
+            Some(delay) => answer.set_delay(delay),
+            None => answer,
+        }
+    }
+}
+
+/// How one request failed: the RFC 6749 §5.2 code and the reason.
+type Failure = (&'static str, String);
+
+impl Responder {
+    /// The answer to a request carrying `form` and `proof`, recorded in
+    /// `state`.
+    fn answer(
+        &self,
+        state: &mut State,
+        form: &[(String, String)],
+        proof: Option<&str>,
+    ) -> ResponseTemplate {
+        if let Some(refusal) = state.refusal.clone() {
+            state.verdicts.push(Verdict::Refused(refusal.error.clone()));
+            return refused(refusal.status, &refusal.error, &refusal.description);
+        }
+        let jkt = match self.proven(state, proof) {
+            Ok(jkt) => jkt,
+            Err(answer) => return *answer,
+        };
+        let outcome = self.granted(state, form);
+        match outcome {
+            Ok(subject) => {
+                let token = uuid::Uuid::new_v4().simple().to_string();
+                state.accepted.insert(token.clone());
+                if let Some(subject) = &subject {
+                    state.subjects.insert(token.clone(), subject.clone());
+                }
+                if let Some(jkt) = jkt {
+                    state.bound.insert(token.clone(), jkt);
+                }
+                state.verdicts.push(Verdict::Issued);
+                let body = TokenBody {
+                    access_token: &token,
+                    token_type: if state.dpop { "DPoP" } else { "Bearer" },
+                    expires_in: state.expires_in,
+                    issued_token_type: (subject.is_some() && !state.untyped)
+                        .then_some(ACCESS_TOKEN_TYPE),
+                };
+                ResponseTemplate::new(200).set_body_json(body)
+            }
+            Err((error, reason)) => {
+                state.verdicts.push(Verdict::Refused(reason.clone()));
+                refused(400, error, &reason)
+            }
+        }
+    }
+
+    /// The thumbprint of a required proof's key, `None` when no proof is
+    /// required, or the answer to a request whose proof is refused.
+    fn proven(
+        &self,
+        state: &mut State,
+        proof: Option<&str>,
+    ) -> Result<Option<String>, Box<ResponseTemplate>> {
+        if !state.dpop {
+            return Ok(None);
+        }
+        let Some(proof) = proof else {
+            state
+                .verdicts
+                .push(Verdict::Refused("no DPoP proof".to_owned()));
+            return Err(Box::new(refused(
+                400,
+                "invalid_dpop_proof",
+                "no DPoP proof",
+            )));
+        };
+        let verified = match dpop::verify(proof, "POST", &self.0.token_url, None) {
+            Ok(verified) => verified,
+            Err(reason) => {
+                state.verdicts.push(Verdict::Refused(reason.clone()));
+                return Err(Box::new(refused(400, "invalid_dpop_proof", &reason)));
+            }
+        };
+        if let Some(nonce) = state.nonce.clone()
+            && verified.proof.nonce.as_ref() != Some(&nonce)
+        {
+            state
+                .verdicts
+                .push(Verdict::Refused("use_dpop_nonce".to_owned()));
+            return Err(Box::new(
+                refused(400, "use_dpop_nonce", "a nonce is required")
+                    .insert_header(dpop::NONCE_HEADER, nonce.as_str()),
+            ));
+        }
+        if !state.jti.insert(verified.proof.jti.clone()) {
+            state.verdicts.push(Verdict::Refused(
+                "the proof's jti was used before".to_owned(),
+            ));
+            return Err(Box::new(refused(400, "invalid_dpop_proof", "jti")));
+        }
+        Ok(Some(verified.jkt))
+    }
+
+    /// The caller a request is granted a token for: `None` under the
+    /// client-credentials grant, the subject's `sub` under token exchange.
+    fn granted(
+        &self,
+        state: &mut State,
+        form: &[(String, String)],
+    ) -> Result<Option<String>, Failure> {
+        let field = |name: &str| {
+            form.iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+        };
+        let exchange = match field("grant_type").as_deref() {
+            Some("client_credentials") => false,
+            Some(TOKEN_EXCHANGE) if state.callers.is_some() => true,
+            _ => return Err(("unsupported_grant_type", "grant_type".to_owned())),
+        };
+        if field("client_assertion_type").as_deref() != Some(JWT_BEARER) {
+            return Err(("invalid_client", "client_assertion_type".to_owned()));
+        }
+        if field("client_secret").is_some() {
+            return Err(("invalid_request", "a client secret was sent".to_owned()));
+        }
+        if let Some(expected) = &state.scope
+            && field("scope").as_deref() != Some(expected.as_str())
+        {
+            return Err(("invalid_scope", "scope".to_owned()));
+        }
+        let assertion = field("client_assertion")
+            .ok_or(("invalid_client", "no client_assertion".to_owned()))?;
+        state.assertions.push(assertion.clone());
+        self.assertion(state, &assertion, "invalid_client")?;
+        if !exchange {
+            return Ok(None);
+        }
+        if field("subject_token_type").as_deref() != Some(ACCESS_TOKEN_TYPE) {
+            return Err(("invalid_request", "subject_token_type".to_owned()));
+        }
+        if field("actor_token_type").as_deref() != Some(JWT_TOKEN_TYPE) {
+            return Err(("invalid_request", "actor_token_type".to_owned()));
+        }
+        if let Some(expected) = &state.resource
+            && field("resource").as_deref() != Some(expected.as_str())
+        {
+            return Err(("invalid_target", "resource".to_owned()));
+        }
+        let actor = field("actor_token").ok_or(("invalid_request", "no actor_token".to_owned()))?;
+        self.assertion(state, &actor, "invalid_request")?;
+        let subject_token =
+            field("subject_token").ok_or(("invalid_request", "no subject_token".to_owned()))?;
+        let callers = state
+            .callers
+            .clone()
+            .ok_or(("unsupported_grant_type", "grant_type".to_owned()))?;
+        let subject = verify_subject(&subject_token, &callers.jwks, &callers.issuer)
+            .map_err(|reason| ("invalid_grant", reason))?;
+        state.exchanges.push(Exchanged {
+            subject: subject.clone(),
+            scope: field("scope"),
+            resource: field("resource"),
+        });
+        Ok(Some(subject))
+    }
+
+    /// Verifies `assertion` as the gateway's, refusing with `error`, and
+    /// spends its `jti`.
+    fn assertion(
+        &self,
+        state: &mut State,
+        assertion: &str,
+        error: &'static str,
+    ) -> Result<(), Failure> {
+        let claims = verify(assertion, &state.jwks, &self.0.client_id, &self.0.token_url)
+            .map_err(|reason| (error, reason))?;
+        if !state.jti.insert(claims.jti) {
+            return Err((error, "the jti was used before".to_owned()));
+        }
+        Ok(())
+    }
+}
+
+fn refused(status: u16, error: &str, description: &str) -> ResponseTemplate {
+    ResponseTemplate::new(status).set_body_json(Refused {
+        error,
+        error_description: description,
+    })
+}
