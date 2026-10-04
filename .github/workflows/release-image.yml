@@ -144,7 +144,8 @@ jobs:
             org.opencontainers.image.url=https://ferrofed.eu
             org.opencontainers.image.documentation=https://ferrofed.eu/docs/operate/container.html
             org.opencontainers.image.source=https://github.com/FerroHEALTH/FerroFED
-            org.opencontainers.image.vendor=FerroFED
+            org.opencontainers.image.vendor=FerroHEALTH
+            org.opencontainers.image.authors=FerroHEALTH <https://github.com/FerroHEALTH>
             org.opencontainers.image.licenses=BUSL-1.1
           # The action derives its annotations from its own default labels, so
           # the custom lines above never reach the index, and GHCR reads the
@@ -155,7 +156,8 @@ jobs:
             org.opencontainers.image.url=https://ferrofed.eu
             org.opencontainers.image.documentation=https://ferrofed.eu/docs/operate/container.html
             org.opencontainers.image.source=https://github.com/FerroHEALTH/FerroFED
-            org.opencontainers.image.vendor=FerroFED
+            org.opencontainers.image.vendor=FerroHEALTH
+            org.opencontainers.image.authors=FerroHEALTH <https://github.com/FerroHEALTH>
             org.opencontainers.image.licenses=BUSL-1.1
 
       # Cold by construction, like the binary lane: no cache may influence a
