@@ -77,7 +77,7 @@ use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::route::chosen::{Chooser, named};
 use crate::facade::write;
-use crate::facade::{follow_up, owner, security, subject};
+use crate::facade::{confined, follow_up, owner, security, subject};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
@@ -175,6 +175,12 @@ pub(crate) async fn unrouted(
         Ok(conveyance) => conveyance,
         Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
     };
+    let started = Instant::now();
+    let conveyance =
+        match crate::facade::confined_by(serving, caller.as_deref(), started, conveyance).await {
+            Ok(conveyance) => conveyance,
+            Err(unconfined) => return unconfined.respond(request_id, &outbound.to_string()),
+        };
     let mut arrived = Arrived {
         method: &method,
         path,
@@ -211,7 +217,16 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
     let Some(federation) = federation else {
         return error::fixed(Code::NotImplemented, arrived.request_id);
     };
-    match routes::lookup(arrived.method, arrived.path) {
+    let looked_up = routes::lookup(arrived.method, arrived.path);
+    // NOTE: master08 §Resource Scopes, §12.4: a patient grant reaches data in its patient's
+    // existing EHRs, so a new EHR, a definition and a party are beyond it.
+    if confined::is_confined(&arrived.conveyance)
+        && !matches!(&looked_up, Lookup::Matched(matched) if in_ehr_area(matched) || subject::serves(matched))
+    {
+        let logged = arrived.outbound.to_string();
+        return confined::refused("area", arrived.request_id, &logged);
+    }
+    match looked_up {
         Lookup::Matched(matched) if in_ehr_area(&matched) => {
             ehr::route(federation, arrived, &matched).await
         }

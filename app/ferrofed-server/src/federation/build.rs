@@ -19,6 +19,7 @@ use openehr_federation::id::FederationId;
 use openehr_its::rest::client::ReqwestTransport;
 
 use crate::config::NodeSelection;
+use crate::config::auth::PatientBinding;
 use crate::config::settings::Settings;
 use crate::facade::options;
 use crate::health::dependencies::Dependencies;
@@ -130,6 +131,9 @@ impl Federation {
             if settings.federation.demographic_endpoint.is_some() {
                 return Err(FederationError::DemographicWithoutRegistry);
             }
+            if let Some((key, _)) = patient_bindings(settings).next() {
+                return Err(FederationError::PatientWithoutRegistry { key });
+            }
             return Ok(None);
         };
         let Some(selection) = settings.federation.node_selection else {
@@ -159,6 +163,7 @@ impl Federation {
                 pixm.clone().map(|it| -> Arc<dyn Resolver> { it })
             }
         };
+        patient_bound(settings, &snapshot, resolver.is_some())?;
         let resolving = localization::Resolving { development, pixm };
         let localization = localization::policy(settings, selection, resolving, &snapshot)
             .map_err(FederationError::Localization)?;
@@ -267,6 +272,47 @@ impl Federation {
 fn default_index_capacity() -> NonZeroU32 {
     NonZeroU32::new(crate::config::Federation::default().ehr_index_capacity)
         .expect("the default ehr_id index capacity should be positive")
+}
+
+/// Holds every `[auth.issuer.patient]` binding of `settings` to the
+/// registry `snapshot`, and to a configured resolver when `resolving`.
+///
+/// # Errors
+///
+/// Returns [`FederationError::PatientEndpointUnknown`] for a binding whose
+/// endpoint the registry lacks, and
+/// [`FederationError::PatientWithoutResolver`] for one without a resolver.
+fn patient_bound(
+    settings: &Settings,
+    snapshot: &RegistrySnapshot,
+    resolving: bool,
+) -> Result<(), FederationError> {
+    for (key, binding) in patient_bindings(settings) {
+        // NOTE: no specification governs this: our own design; a patient token's
+        // member is held to the registry as every configured endpoint is.
+        if snapshot.endpoint(&binding.endpoint).is_none() {
+            let endpoint = binding.endpoint.clone();
+            return Err(FederationError::PatientEndpointUnknown { key, endpoint });
+        }
+        if !resolving {
+            return Err(FederationError::PatientWithoutResolver { key });
+        }
+    }
+    Ok(())
+}
+
+/// Every `[auth.issuer.patient]` binding of `settings`, with its key.
+fn patient_bindings(settings: &Settings) -> impl Iterator<Item = (String, &PatientBinding)> {
+    settings
+        .server
+        .auth
+        .issuers
+        .iter()
+        .enumerate()
+        .filter_map(|(index, issuer)| {
+            let binding = issuer.patient.as_ref()?;
+            Some((format!("auth.issuer[{index}].patient"), binding))
+        })
 }
 
 /// The rewrite's targeting for an undirected query under the declared node

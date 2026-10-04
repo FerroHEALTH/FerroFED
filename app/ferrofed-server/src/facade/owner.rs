@@ -154,6 +154,30 @@ pub fn located<'a>(
     Ok(among(snapshot, &indexed, Step::Index, Detection::Index).unwrap_or(Located::Unknown))
 }
 
+/// Locates the owner of a path `ehr_id` for a caller confined to one patient.
+///
+/// The targeting headers come first, then `holders`, the members at which
+/// that patient's own `ehr_id` is the path `ehr_id`. The confinement is a resolution of the caller's patient, so it stands as
+/// step 2 of §12.5.1, and no later step is taken: neither the index nor the
+/// ask-all probe can name a member outside the patient's own pairs.
+///
+/// # Errors
+///
+/// Returns [`Untargeted`] as [`located`] does.
+pub fn located_within<'a>(
+    snapshot: &'a RegistrySnapshot,
+    headers: &HeaderMap,
+    holders: &[NodeId],
+) -> Result<Located<'a>, Untargeted> {
+    if let Some(endpoint) = targeted(snapshot, headers)? {
+        return Ok(Located::At {
+            endpoint,
+            step: Step::Target,
+        });
+    }
+    Ok(among(snapshot, holders, Step::Binding, Detection::Binding).unwrap_or(Located::Unknown))
+}
+
 /// The members a binding of the `held` session names for `ehr_id` (§12.5.1
 /// step 2), or none when the binding names a member the snapshot does not
 /// hold, which is dropped whole.

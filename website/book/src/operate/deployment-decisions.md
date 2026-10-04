@@ -138,8 +138,12 @@ authenticates that connection the same way.
   against the published key set;
 - consent is never inferred from localization: each node makes its own
   consent decision, whatever a pre-filter answered (§13.2, N27);
-- a `patient/` grant admits nothing, so a patient-facing app cannot use the
-  gateway with a patient-confined token. A deployment that instead issues
+- a `patient/` grant admits nothing unless you bind its issuer to one
+  member ([Patient grants](authentication.md#patient-grants)). Bound, the
+  grant reaches only the patient's own `{node, ehr_id}` pairs, as your
+  cross-reference service links them to the token's `ehrId`: a wrong link
+  there admits the wrong EHR at that member, so record which issuers you
+  bind and why you trust that link. A deployment that instead issues
   `user/` or `system/` scopes to patient users widens what those users can
   reach to everything those scopes cover; record that choice here.
 

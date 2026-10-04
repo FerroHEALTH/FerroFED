@@ -331,6 +331,15 @@ impl<T: Transport + Clone> NodeClient<T> {
         aql: &str,
         options: &DispatchOptions,
     ) -> Result<(), DispatchError> {
+        // NOTE: SMART on openEHR master08 §Resource Scopes: a definition is no EHR's data, so
+        // it is composed for no ehr_id and a confined conveyance is never sent with it.
+        options
+            .conveyance()
+            .holds_own(&self.endpoint, None)
+            .map_err(|source| DispatchError::Conveyance {
+                endpoint: self.endpoint.clone(),
+                source,
+            })?;
         if options.withheld.is_empty() {
             return Ok(());
         }

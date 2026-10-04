@@ -23,7 +23,10 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::Config;
+use ferrofed_server::config::auth::PatientBinding;
 use ferrofed_server::config::error;
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::localization::{LocalizationError, XCPD};
@@ -520,4 +523,106 @@ async fn each_discovery_writes_an_audit_event_without_the_identifier() -> TestRe
     }
     assert!(!text.contains(PATIENT), "no identifier in the log: {text}");
     Ok(())
+}
+
+/// The identifier system of node A's `ehr_id`s at the cross-reference.
+const EHR_SYSTEM: &str = "urn:oid:2.999.9.1";
+
+/// Another synthetic patient, known at node A.
+const OTHER: &str = "SENTINEL-OTHER-71xw";
+
+/// The router over the federation `text` loads, its issuer's patient tokens
+/// bound to node A, and a token of the patient whose `ehrId` there is the
+/// first of [`EHR_IDS`].
+fn confined_gateway(text: &str) -> Result<(Router, String), Box<dyn Error>> {
+    let settings =
+        Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
+    let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
+    let mut server = settings_with_room();
+    server.auth = crate::support::auth();
+    for issuer in &mut server.auth.issuers {
+        issuer.patient = Some(PatientBinding {
+            endpoint: EndpointId::new("node-a-pub")?,
+            ehr_id_system: IdentifierNamespace::new(EHR_SYSTEM)?,
+        });
+    }
+    let mut claims = crate::support::claims();
+    claims.scope = Some("patient/aql-*.s".to_owned());
+    claims.ehr_id = Some(EHR_IDS[0].to_owned());
+    let token = crate::support::issuer().mint(&claims)?;
+    let app = ferrofed_server::router(Arc::new(AppState::with_federation(federation)), &server);
+    Ok((app, token))
+}
+
+// NOTE: ITI TF-2 §3.55.5.1, §5.2: a confined caller naming another patient is refused at the
+// bound member, so no ITI-55 exchange is made for that patient and no audit event written.
+#[tokio::test]
+async fn a_confined_caller_naming_another_patient_makes_no_exchange_and_no_audit() -> TestResult {
+    let servers = members().await;
+    let [a, b, c] = urls(&servers);
+    let holding = RespondingGateway::answering(Answer::Holds(vec![Community::new(
+        COMMUNITIES[0],
+        "2.999.50.2",
+        "PID-SYNTH-A",
+    )]))
+    .await;
+    let dir = tempfile::tempdir()?;
+    let mut text = config(
+        dir.path(),
+        [&a, &b, &c],
+        &[holding.endpoint()],
+        "development",
+        "",
+    )?;
+    for (member, ehr_id) in MEMBERS.into_iter().zip(EHR_IDS) {
+        write!(
+            text,
+            "\n[[dev.crossref]]\nnamespace = \"{EHR_SYSTEM}\"\nvalue = \"{}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n",
+            EHR_IDS[0]
+        )?;
+    }
+    write!(
+        text,
+        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{OTHER}\"\nmember = \"node-a\"\nehr_id = \"4444dddd-4444-4444-8444-444444444444\"\n"
+    )?;
+    let (app, token) = confined_gateway(&text)?;
+    let logs = crate::support::Logs::default();
+    let capture = ferrofed_server::telemetry::subscriber(
+        ferrofed_server::telemetry::Rendering::Json,
+        "info",
+        false,
+        logs.clone(),
+    )?;
+    let guard = tracing::subscriber::set_default(capture);
+    let other = patient_query().replace(PATIENT, OTHER);
+    let request = crate::auth::bearing(post(body(&other)?)?, &token)?;
+    let (status, _, refused) = crate::auth::sent(&app, request).await?;
+    let audited_for_other = audit_events(&logs.text());
+    let requests_for_other = holding.requests().await.len();
+    let members_for_other = asked_counts(&servers).await?;
+    let request = crate::auth::bearing(post(body(&patient_query())?)?, &token)?;
+    let (own, _, answered) = crate::auth::sent(&app, request).await?;
+    drop(guard);
+    assert_eq!(StatusCode::FORBIDDEN, status, "{refused}");
+    assert_eq!(
+        0, requests_for_other,
+        "no ITI-55 exchange for the other patient"
+    );
+    assert_eq!(0, audited_for_other, "no audit event for the other patient");
+    assert_eq!([0, 0, 0], members_for_other, "no member is asked");
+    assert_eq!(StatusCode::OK, own, "{answered}");
+    assert_eq!(
+        1,
+        holding.requests().await.len(),
+        "the own patient is localized"
+    );
+    assert_eq!(1, audit_events(&logs.text()), "and audited once");
+    Ok(())
+}
+
+/// How many ITI-55 audit events `text` holds.
+fn audit_events(text: &str) -> usize {
+    text.lines()
+        .filter(|line| line.contains(ferrofed_identity::xcpd::AUDIT_TARGET))
+        .count()
 }

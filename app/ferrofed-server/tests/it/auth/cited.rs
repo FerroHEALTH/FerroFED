@@ -100,3 +100,30 @@ fn the_cited_iua_sections_and_claims_are_in_the_pinned_supplement() -> TestResul
     }
     Ok(())
 }
+
+/// The citations behind the issuer-bound `patient/` opt-in: the `ehrId`
+/// claim of master04 §Capabilities, the launch context master07 lists, and
+/// the reach of a patient grant in master08 §Resource Scopes.
+#[test]
+fn the_cited_patient_context_texts_are_in_the_pinned_text() -> TestResult {
+    let discovery = vendored(&format!("{SMART}/master04-service_discovery.adoc"))?;
+    assert!(
+        discovery.lines().any(|line| line == "== Capabilities"),
+        "master04 §Capabilities"
+    );
+    assert!(
+        discovery.contains("conveyed via the `ehrId` token claim"),
+        "the quotation naming the `ehrId` claim"
+    );
+    let authorization = vendored(&format!("{SMART}/master07-authorization.adoc"))?;
+    assert!(
+        authorization.contains("| `ehrId` |"),
+        "master07 lists the `ehrId` launch context"
+    );
+    let scopes = vendored(&format!("{SMART}/master08-scopes.adoc"))?;
+    assert!(
+        scopes.contains("restricted to data within that patient's EHR"),
+        "the quotation behind holding a patient grant to an EHR's data"
+    );
+    Ok(())
+}

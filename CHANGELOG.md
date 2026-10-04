@@ -83,6 +83,35 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   subscriber and the ITI-93 feed reader and response, held to the PMIR 1.6.0
   package, now vendored under `docs/specs/ihe-pmir/`; the testkit gains a
   harness Patient Identity Registry. Track 8 stays deferred (#147).
+- `[auth.issuer.patient]` honours one issuer's `patient/` grants, off by
+  default. It binds the issuer to the one member whose platform issues its
+  patient tokens and names the identifier system under which the
+  cross-reference knows that member's `ehr_id`s; `config check` refuses a
+  binding whose endpoint the registry lacks, or that has no registry or no
+  cross-reference. A bound issuer's `patient/` scope counts on an EHR's data
+  alone. The gateway reads the token's `ehrId` claim (SMART on openEHR),
+  resolves it at every member (§5.2), and sends a request only to the
+  patient's own `{node, ehr_id}` pairs. Another patient, a query that names
+  no patient, an `ehr_id` the pairs do not place, EHR creation and
+  definitions are `403` (`patient-confinement`) with nothing sent, nothing
+  probed and, for another patient's read by subject, no resolution binding
+  or index entry recorded. A query whose `FROM` reads a class beside its
+  one scoped `EHR` (under `AND` or `OR`, a second `EHR`, an `EHR` under
+  `NOT CONTAINS`) is refused the same way, and a named patient is checked at
+  the bound member alone before any localizer, consent pre-filter or other
+  member hears of it. `openehr-federation` 0.0.38 adds
+  `Analysis::within_one_ehr`, which says whether every class a query reads is
+  contained under that one `EHR`. A token whose resource scopes are all `patient/`
+  is refused the DEMOGRAPHIC API the same way, bound or not and even for a
+  listed demographic client. A token without the claim is `403`
+  (`patient-context-missing`), and a cross-reference that cannot resolve the
+  patient is `424` (`patient-context-unavailable`). The bare `ehrId` is never
+  compared across members (§12.5). Each node's `openEHR-federation-client`
+  token carries the patient's `ehr_id` at that node as `ehrId`, and only the
+  covering `patient/` scopes in `scope` (N26); the outbound gate refuses,
+  with nothing sent, a request whose token would tell its node another
+  `ehr_id` than the one the request is composed for. Without the section a
+  `patient/` grant still admits nothing (#443).
 - The texts client authentication is held to are vendored under
   `docs/specs/`. The ITS-REST Release-1.1.0 fetch now takes the SMART on
   openEHR source (`docs/smart_app_launch/`), recording that the release

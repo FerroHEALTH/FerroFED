@@ -119,7 +119,13 @@ fn conveyed(caller: &Caller) -> conveyance::Caller {
                 code: purpose.code.clone(),
             })
             .collect(),
-        scope: caller.granted().to_owned(),
+        // NOTE: SMART on openEHR master08 §Resource Scopes; a confined caller's node is told
+        // only the patient/ scopes that cover the operation, which its ehrId then confines.
+        scope: if caller.patient().is_some() {
+            caller.covering().to_owned()
+        } else {
+            caller.granted().to_owned()
+        },
         verified_by: match caller.verified_by() {
             VerifiedBy::Signature => Verification::Signature,
             VerifiedBy::Introspection => Verification::Introspection,

@@ -291,6 +291,17 @@ impl Analysis {
         }
     }
 
+    /// Whether the node queries read the one `EHR` each is scoped to and
+    /// nothing beside it ([`PatientQuery::within_one_ehr`],
+    /// [`UnscopedQuery::within_one_ehr`]).
+    #[must_use]
+    pub fn within_one_ehr(&self) -> bool {
+        match self {
+            Self::Patient(query) => query.within_one_ehr,
+            Self::Unscoped(query) => query.within_one_ehr,
+        }
+    }
+
     /// How the merge orders and cuts the node answers (§11.6.1, N13, N39):
     /// the node columns of the `ORDER BY` keys and the tie-break, and the
     /// façade's `LIMIT`.
@@ -385,9 +396,21 @@ pub struct PatientQuery {
     stripped: Vec<Option<Range<usize>>>,
     order: ResultOrder,
     recombination: Option<Recombination>,
+    within_one_ehr: bool,
 }
 
 impl PatientQuery {
+    /// Whether every class the node query reads is contained, conjunctively,
+    /// under the one `EHR` it is scoped to, so a node answers rows of the
+    /// patient's EHR alone (§7.1).
+    ///
+    /// A class beside that `EHR` in an `AND` or `OR` containment, a second
+    /// `EHR`, or an `EHR` under `NOT CONTAINS` reads beyond it.
+    #[must_use]
+    pub fn within_one_ehr(&self) -> bool {
+        self.within_one_ehr
+    }
+
     /// The patient, resolution input for §5.2.
     #[must_use]
     pub fn subject(&self) -> &Subject {
@@ -430,6 +453,7 @@ pub struct UnscopedQuery {
     ehr_scope: Option<String>,
     order: ResultOrder,
     recombination: Option<Recombination>,
+    within_one_ehr: bool,
 }
 
 impl UnscopedQuery {
@@ -458,6 +482,17 @@ impl UnscopedQuery {
     #[must_use]
     pub fn ehr_scope(&self) -> Option<&str> {
         self.ehr_scope.as_deref()
+    }
+
+    /// Whether the query is scoped to one `ehr_id` and every class it reads
+    /// is contained, conjunctively, under that one `EHR`, so a node answers
+    /// rows of that EHR alone (§7.1, N29).
+    ///
+    /// A class beside that `EHR` in an `AND` or `OR` containment, a second
+    /// `EHR`, or an `EHR` under `NOT CONTAINS` reads beyond it.
+    #[must_use]
+    pub fn within_one_ehr(&self) -> bool {
+        self.within_one_ehr
     }
 }
 
@@ -634,6 +669,7 @@ fn patient(
     }
     let mut template = query;
     let ehr = rewrite::ehr_variable(&mut template, &findings.ehr);
+    let within_one_ehr = scope::within_one_ehr(&template.from, &ehr);
     rewrite::strip_where(&mut template, consumed, Some(&ehr));
     rewrite::strip_columns(&mut template, &inputs);
     rewrite::keep_a_column(&mut template, &ehr);
@@ -664,6 +700,7 @@ fn patient(
         stripped,
         order,
         recombination: None,
+        within_one_ehr,
     }))
 }
 
@@ -679,6 +716,8 @@ fn unscoped(
     if context.targeting == Targeting::Localized && ehr_scope.is_none() {
         return Err(Refusal::NodeSetUndefined);
     }
+    let within_one_ehr = ehr_scope.is_some()
+        && matches!(findings.ehr.as_slice(), [only] if scope::within_one_ehr(&query.from, only));
     if query.select.columns.is_empty() {
         // NOTE: no specification governs a query that selects only ENDPOINT attributes (§9.3):
         // our own design, each node answers one EHR column per row it holds.
@@ -697,5 +736,6 @@ fn unscoped(
         ehr_scope,
         order,
         recombination: None,
+        within_one_ehr,
     }))
 }

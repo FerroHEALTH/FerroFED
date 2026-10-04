@@ -766,18 +766,72 @@ the deployment lists, because it "would grant access to all registered and
 ad-hoc AQL queries system-wide" (`master08-scopes.adoc` §Resource Scopes). Three further
 rules are FerroFED's own design, decided with #80 after a security review:
 
-- **`patient/` grants nothing at the gateway.** SMART on openEHR confines a
-  patient grant to the token's launch context, an `ehrId` at one platform
-  (`master07-authorization.adoc` §Context Selection); no claim the specifications define names the
-  patient as the identifier and namespace the gateway resolves, so the
-  gateway cannot prove a request stays inside the context, on a query, on
-  `GET {base}/v1/ehr?subject_id=` or on a route addressed by `ehr_id`. The
-  grant admits nothing (decided on #413, 2026-10-04): an `ehrId` names no
-  namespace, and §12.5 says an `ehr_id` "is meaningless outside the CDR that
-  issued it", so matching a bare `ehrId` against the resolved set could admit
-  another patient's EHR at another node (§12.5.2). An opt-in that binds each
-  patient-token issuer to one member and resolves its `ehrId` through §5.2 is
-  planned (#443); the silence is reported upstream (#212, T176 and T177).
+- **`patient/` grants nothing at the gateway, unless its issuer is bound.**
+  SMART on openEHR confines a patient grant to the token's launch context,
+  an `ehrId` at one platform (`master07-authorization.adoc` §Context
+  Selection), conveyed "via the `ehrId` token claim"
+  (`master04-service_discovery.adoc` §Capabilities); no claim the specifications
+  define names the patient as the identifier and namespace the gateway
+  resolves. By default the grant admits nothing (decided on #413,
+  2026-10-04): an `ehrId` names no namespace, and §12.5 says an `ehr_id` "is
+  meaningless outside the CDR that issued it", so matching a bare `ehrId`
+  against the resolved set could admit another patient's EHR at another node
+  (§12.5.2). The silence is reported upstream (#212, T176 and T177).
+- **The issuer-bound opt-in** (built with #443). `[auth.issuer.patient]`
+  binds one issuer's patient tokens to one member endpoint and names the
+  identifier system under which the cross-reference knows that member's
+  `ehr_id`s. The start refuses a binding without a registry, one whose
+  endpoint the registry lacks, and one without a resolver. For a bound
+  issuer, a `patient/` scope counts on an EHR's data alone (the
+  `composition-` family and an `aql-` search, `auth::permission`), and when
+  only `patient/` scopes cover the operation the gate reads the `ehrId`
+  claim, from the token or the introspection answer, into a
+  `PatientContext`; a missing or malformed claim is `403`
+  `patient-context-missing`. The façade (`facade::confined`) resolves
+  (`ehr_id_system`, `ehrId`) through §5.2 at every member, the bound member
+  keeping the token's own `ehrId`, into the set T of the patient's
+  `{endpoint, ehr_id}` pairs; a resolver that cannot answer, or that places
+  the patient under another `ehr_id` at the bound member, is `424`
+  `patient-context-unavailable`. Every request is then held to T, `403`
+  `patient-confinement` with nothing sent otherwise: a query with no patient
+  and no `ehr_id`, or one whose `FROM` holds a class not contained,
+  conjunctively, under its one scoped `EHR` (a class beside it under `AND`
+  or `OR`, a second `EHR`, an `EHR` under `NOT CONTAINS`; the typed
+  `openehr_federation::aql::Analysis::within_one_ehr`, read off the
+  `openehr-query` syntax tree, §7.1), so a node never answers rows of
+  another EHR; a named patient that, resolved at the bound member alone,
+  is not the token's own `ehrId` there (checked before any localizer,
+  consent pre-filter or other member is asked, so nothing beyond the bound
+  member learns of another patient and no ITI-55 exchange or audit is made
+  for it); a plan whose every dispatched pair is not in T (or that
+  dispatches nothing, so a confined caller never learns whether another
+  patient is known anywhere), an `ehr_id` route or `ehr_id`-scoped query that
+  T does not place at its member (located by the targeting headers and T
+  alone, `owner::located_within`, with no index lookup and no probe), a read
+  by subject outside T (refused before the session's resolution bindings or
+  the index learn anything of that subject), and EHR creation and
+  definitions. A token whose resource scopes are all `patient/` is refused
+  the DEMOGRAPHIC area at the gate, `403` `patient-confinement`, bound or
+  not and listed in `demographic_clients` or not: a patient scope reaches
+  its patient's own compartment only (`master08-scopes.adoc` §Resource
+  Scopes). The pair is compared, never the bare `ehr_id`
+  (`onward::conveyance::Confinement::admits`). Each node's conveyance
+  carries an `ehrId` claim with that node's own `ehr_id` in T and narrows
+  `scope` to the covering `patient/` scopes, so the node can enforce the
+  grant (N26); an endpoint outside T is signed no conveyance
+  (`ConveyanceError::Unconfined`), so no request reaches it. The outbound
+  gate holds the `ehrId` to the node-local `ehr_id` the request is composed
+  for, as it reads every other carrier (§5.4.1, N33): the query's scope (an
+  `ehr_id`-scoped query carries its `ehr_id` as its scope, as a patient
+  query does), the `ehr_id`
+  of a routed path, or none for a definition; a mismatch or no `ehr_id` is
+  `ConveyanceError::NotOwn` with nothing sent. The residual
+  risk is the cross-reference: the confinement is only as correct as its
+  link from the `ehrId` at the bound member to the patient's `ehr_id` at
+  every other member, and a wrong link admits the wrong EHR there; the
+  deployment records which issuers it binds in its §13.4 page. No
+  specification governs this: our own design, until T176 is settled
+  upstream.
 - **The DEMOGRAPHIC API admits only listed clients.** The grammar defines no
   demographic family, so each issuer entry lists its `demographic_clients`,
   empty by default, and no scope grants the area.
@@ -882,7 +936,10 @@ claims: `iss` (the gateway), `aud` (the
 node's `endpoint_id`), `exp` of 60 s or less, `jti`, `sub` and `iss_upstream`
 (the verified caller), the caller organisation, `purpose_of_use` (the IHE IUA
 claim name, HL7 v3 PurposeOfUse coding) and `scope` (the caller's scopes as
-granted). It never carries `person_id` or any patient identifier (N33). §13.1
+granted, or under the issuer-bound opt-in the covering `patient/` scopes,
+with `ehrId` the patient's own `ehr_id` at that node). It never carries
+`person_id` or any patient identifier (N33): a node-local `ehr_id` is the
+value N33 lets locate a node. §13.1
 leaves end-user conveyance unspecified, naming RFC 8693 and an OIDC `id_token`
 as candidates without mandating either, so the header and its claim set are
 FerroFED's own. Production federations do the same: the US XCPD networks

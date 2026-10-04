@@ -48,6 +48,7 @@ use ferrofed_engine::declared::{self, query};
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::forward::{ClientRequest, HeldRequest};
 use ferrofed_engine::hygiene::Withheld;
+use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::Resolution;
@@ -61,12 +62,12 @@ use openehr_its::rest::runtime::ApiError;
 use secrecy::SecretString;
 
 use crate::error::{self, Code};
-use crate::facade::consent;
 use crate::facade::localize::{Localized, localize};
 use crate::facade::owner::{self, Listed};
 use crate::facade::provenance::Provenance;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
 use crate::facade::security;
+use crate::facade::{confined, consent};
 use crate::federation::Federation;
 use crate::health::dependencies::Observed;
 
@@ -110,28 +111,21 @@ pub(crate) async fn serve(
         Ok(candidates) => candidates,
         Err(unserved) => return unserved.respond(request_id, &logged),
     };
-    let members: Vec<NodeId> = candidates
-        .iter()
-        .map(|endpoint| endpoint.node().clone())
-        .collect();
-    // NOTE: N4, §5.2, §14.1: a read that names the patient and no node is undirected,
-    // so the localizer narrows which members learn of the patient; a targeted one is not (§8).
-    let located = if directed {
-        Localized::everyone()
-    } else {
-        localize(federation, &subject.patient, &members, budget.overall()).await
-    };
-    if located.failed_closed() {
-        return Unserved::Unlocalized.respond(request_id, &logged);
+    let named = (&subject.patient, budget.overall());
+    if let Some(refused) = other_patient(
+        federation,
+        &arrived.conveyance,
+        named,
+        (request_id, &logged),
+    )
+    .await
+    {
+        return refused;
     }
-    let candidates: Vec<&Endpoint> = candidates
-        .into_iter()
-        .filter(|endpoint| located.admits(endpoint.node()))
-        .collect();
-    let members: Vec<NodeId> = candidates
-        .iter()
-        .map(|endpoint| endpoint.node().clone())
-        .collect();
+    let Some((candidates, members)) = localized(federation, named, candidates, directed).await
+    else {
+        return Unserved::Unlocalized.respond(request_id, &logged);
+    };
     let consented =
         consent::prefilter(federation, &subject.patient, &members, budget.overall()).await;
     let (denied, candidates): (Vec<&Endpoint>, Vec<&Endpoint>) = candidates
@@ -142,9 +136,20 @@ pub(crate) async fn serve(
         .iter()
         .map(|endpoint| endpoint.id().clone())
         .collect();
+    let holders = resolved.holders.clone();
+    let settled = resolved.settled();
+    // NOTE: §5.2, §12.5: a confined grant reads its own patient's EHR alone, and the gateway
+    // records nothing of another subject, no session binding and no index entry.
+    if confined::is_confined(&arrived.conveyance)
+        && !settled.as_ref().is_ok_and(|(endpoint, ehr_id)| {
+            confined::admits(&arrived.conveyance, endpoint.id(), ehr_id)
+        })
+    {
+        return confined::refused("subject", request_id, &logged);
+    }
     let session = arrived.session.map(|session| (session, &consented.denied));
-    learn(federation, &resolved.holders, session, started);
-    let (endpoint, ehr_id) = match resolved.settled() {
+    learn(federation, &holders, session, started);
+    let (endpoint, ehr_id) = match settled {
         Ok(owner) => owner,
         Err(unserved) => return unserved.respond(request_id, &logged),
     };
@@ -181,6 +186,58 @@ pub(crate) async fn serve(
         Err(Failure::Forward(failure)) => {
             route::failed(&failure, provenance, (request_id, &logged))
         }
+    }
+}
+
+/// The `candidates` the localizer names for `patient` before `deadline`, with
+/// their members, or every candidate for a `directed` read; `None` when the
+/// localizer failed closed.
+async fn localized<'a>(
+    federation: &Federation,
+    (patient, deadline): (&PatientRef, Instant),
+    candidates: Vec<&'a Endpoint>,
+    directed: bool,
+) -> Option<(Vec<&'a Endpoint>, Vec<NodeId>)> {
+    // NOTE: N4, §5.2, §14.1: a read that names the patient and no node is undirected,
+    // so the localizer narrows which members learn of the patient; a targeted one is not (§8).
+    let located = if directed {
+        Localized::everyone()
+    } else {
+        let members: Vec<NodeId> = candidates
+            .iter()
+            .map(|endpoint| endpoint.node().clone())
+            .collect();
+        localize(federation, patient, &members, deadline).await
+    };
+    if located.failed_closed() {
+        return None;
+    }
+    let candidates: Vec<&Endpoint> = candidates
+        .into_iter()
+        .filter(|endpoint| located.admits(endpoint.node()))
+        .collect();
+    let members = candidates
+        .iter()
+        .map(|endpoint| endpoint.node().clone())
+        .collect();
+    Some((candidates, members))
+}
+
+/// The refusal of a read by subject whose caller is confined to one patient
+/// and names another, or `None` to go on: the subject is resolved at the
+/// bound member alone before `deadline`, ahead of any localizer, consent
+/// pre-filter or other member (§5.2).
+async fn other_patient(
+    federation: &Federation,
+    conveyance: &Conveyance,
+    (patient, deadline): (&PatientRef, Instant),
+    (request_id, logged): (&str, &str),
+) -> Option<Response> {
+    let confinement = conveyance.confinement()?;
+    match confined::names_own(federation, confinement, patient, deadline).await {
+        Ok(true) => None,
+        Ok(false) => Some(confined::refused("subject", request_id, logged)),
+        Err(unconfined) => Some(unconfined.respond(request_id, logged)),
     }
 }
 

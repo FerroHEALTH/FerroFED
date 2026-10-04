@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 48] = [
+    pub const GATEWAY: [Self; 51] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -60,6 +60,9 @@ impl Code {
         Self::AuthenticationUnavailable,
         Self::OperationRefused,
         Self::LocalizationUnavailable,
+        Self::PatientContextMissing,
+        Self::PatientConfinement,
+        Self::PatientContextUnavailable,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -124,6 +127,9 @@ impl Code {
             Self::AuthenticationUnavailable => "authentication-unavailable",
             Self::OperationRefused => "operation-refused",
             Self::LocalizationUnavailable => "localization-unavailable",
+            Self::PatientContextMissing => "patient-context-missing",
+            Self::PatientConfinement => "patient-confinement",
+            Self::PatientContextUnavailable => "patient-context-unavailable",
         }
     }
 
@@ -169,15 +175,18 @@ impl Code {
             Self::NodeRefused
             | Self::NodeError
             | Self::ResolutionUnavailable
-            | Self::LocalizationUnavailable => StatusCode::FAILED_DEPENDENCY,
+            | Self::LocalizationUnavailable
+            | Self::PatientContextUnavailable => StatusCode::FAILED_DEPENDENCY,
             Self::MediaTypeNotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::MediaTypeUnsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StoredQueryReadOnly => StatusCode::METHOD_NOT_ALLOWED,
-            Self::ConsentDenied => StatusCode::FORBIDDEN,
             Self::Unauthenticated => StatusCode::UNAUTHORIZED,
-            Self::ScopeInsufficient | Self::PurposeOfUseRequired | Self::OperationRefused => {
-                StatusCode::FORBIDDEN
-            }
+            Self::ConsentDenied
+            | Self::ScopeInsufficient
+            | Self::PurposeOfUseRequired
+            | Self::OperationRefused
+            | Self::PatientContextMissing
+            | Self::PatientConfinement => StatusCode::FORBIDDEN,
             Self::AuthenticationUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
@@ -296,6 +305,15 @@ impl Code {
             Self::LocalizationUnavailable => {
                 "the localizer could not answer, or its exchange could not be audited, so no member was asked and where the subject has an EHR is unknown (§14.1, N4)"
             }
+            Self::PatientContextMissing => {
+                "only a patient/ grant covers this operation, and the access token carries no ehrId to confine it to"
+            }
+            Self::PatientConfinement => {
+                "the request reaches beyond the patient the access token's patient/ grant is confined to, or names no patient, so nothing was sent (§5.2, §12.5)"
+            }
+            Self::PatientContextUnavailable => {
+                "the cross-reference could not resolve the patient of the access token's patient/ grant, so the grant cannot be confined and nothing was sent (§5.2, §11.2)"
+            }
         }
     }
 }
@@ -362,6 +380,9 @@ mod tests {
             Code::AuthenticationUnavailable => Some(45),
             Code::OperationRefused => Some(46),
             Code::LocalizationUnavailable => Some(47),
+            Code::PatientContextMissing => Some(48),
+            Code::PatientConfinement => Some(49),
+            Code::PatientContextUnavailable => Some(50),
         }
     }
 
@@ -460,6 +481,12 @@ mod tests {
             ),
             (Code::OperationRefused, StatusCode::FORBIDDEN),
             (Code::LocalizationUnavailable, StatusCode::FAILED_DEPENDENCY),
+            (Code::PatientContextMissing, StatusCode::FORBIDDEN),
+            (Code::PatientConfinement, StatusCode::FORBIDDEN),
+            (
+                Code::PatientContextUnavailable,
+                StatusCode::FAILED_DEPENDENCY,
+            ),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

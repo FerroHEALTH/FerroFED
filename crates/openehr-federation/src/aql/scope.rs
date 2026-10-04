@@ -34,6 +34,45 @@ pub(super) fn of(findings: &Findings) -> Option<String> {
         .then(|| first.clone())
 }
 
+/// Whether every class `from` reads is contained, conjunctively, under the
+/// one `EHR` bound to `variable`, so a node scoped to that `EHR`'s `ehr_id`
+/// answers rows of that `EHR` alone (§7.1).
+///
+/// The `EHR` must be the root of the containment, with no `AND` or `OR`
+/// sibling, and no other `EHR`, negated or not, may occur beneath it.
+pub(super) fn within_one_ehr(from: &ContainsExpr, variable: &str) -> bool {
+    match from {
+        ContainsExpr::Contained {
+            operand:
+                ClassExprOperand::Class {
+                    rm_type,
+                    variable: Some(bound),
+                    ..
+                },
+            contains,
+        } if rm_type == "EHR" && bound == variable => contains
+            .as_ref()
+            .is_none_or(|constraint| !names_ehr(&constraint.expr)),
+        ContainsExpr::Contained { .. } | ContainsExpr::And(..) | ContainsExpr::Or(..) => false,
+    }
+}
+
+/// Whether an `EHR` class occurs anywhere in `expr`, under `NOT CONTAINS`
+/// included.
+fn names_ehr(expr: &ContainsExpr) -> bool {
+    match expr {
+        ContainsExpr::Contained { operand, contains } => {
+            matches!(operand, ClassExprOperand::Class { rm_type, .. } if rm_type == "EHR")
+                || contains
+                    .as_ref()
+                    .is_some_and(|constraint| names_ehr(&constraint.expr))
+        }
+        ContainsExpr::And(left, right) | ContainsExpr::Or(left, right) => {
+            names_ehr(left) || names_ehr(right)
+        }
+    }
+}
+
 /// Moves every `[ehr_id/value = '<literal>']` class predicate of an `EHR`
 /// in the conjunctive containment into `WHERE` as
 /// `<var>/ehr_id/value = '<literal>'` (§7.1, N29).
@@ -162,7 +201,7 @@ mod tests {
     use openehr_query::parser::parse_str;
     use openehr_query::printer::to_aql;
 
-    use super::canonical;
+    use super::{canonical, within_one_ehr};
 
     const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
 
@@ -261,6 +300,34 @@ mod tests {
             let mut moved = query.clone();
             canonical(&mut moved);
             assert_eq!(query, moved, "{aql}");
+        }
+    }
+
+    fn within(aql: &str) -> bool {
+        within_one_ehr(&parse_str(aql).unwrap().from, "e")
+    }
+
+    // NOTE: §7.1: a node scoped to e answers e's rows only when every class is contained in e.
+    #[test]
+    fn only_a_containment_rooted_at_the_one_ehr_is_within_it() {
+        assert!(within(
+            "SELECT o/uid/value FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o"
+        ));
+        assert!(within(
+            "SELECT c/uid/value FROM EHR e CONTAINS (COMPOSITION c AND COMPOSITION d)"
+        ));
+        assert!(within(
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c NOT CONTAINS OBSERVATION o"
+        ));
+        for beyond in [
+            "SELECT c/uid/value FROM EHR e OR COMPOSITION c",
+            "SELECT c/uid/value FROM EHR e AND COMPOSITION c",
+            "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c NOT CONTAINS EHR x",
+            "SELECT c/uid/value FROM EHR e CONTAINS (COMPOSITION c AND EHR x)",
+            "SELECT c/uid/value FROM EHR x CONTAINS COMPOSITION c",
+            "SELECT c/uid/value FROM COMPOSITION c CONTAINS EHR e",
+        ] {
+            assert!(!within(beyond), "{beyond}");
         }
     }
 }
