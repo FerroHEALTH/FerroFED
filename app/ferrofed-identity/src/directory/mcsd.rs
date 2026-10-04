@@ -304,8 +304,8 @@ impl fmt::Debug for DirectorySource {
 /// history), and a version applied twice changes nothing, so the overlap
 /// costs a re-read of recent versions and covers one committed while the
 /// previous answer was written.
-// NOTE: no specification governs this: our own design; ITI-91 leaves the
-// instant to the Update Client (§3.91.4.1.1, "business rules").
+// NOTE: no specification governs this: our own design; the ITI-91 capability
+// statements fix only `history-type` with `_since`, never the instant asked from.
 pub const OVERLAP: SignedDuration = SignedDuration::from_secs(60);
 
 /// The FHIR `instant` [`OVERLAP`] before the HTTP `Date` `answered_at`

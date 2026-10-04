@@ -187,19 +187,26 @@ A refresh that changed something goes through the same checks as a reload:
 - When the changed registry passes, it replaces the running one, with the
   effects of a reload (learned routes held to it, entries for a member that
   left dropped). It logs `registry reloaded` and counts as an applied reload.
-- When it breaks a rule (an endpoint relying on `hl7-fhir-rest`, a `system_id`
-  given to two nodes, a registry left with no node, a member the resolver
-  does not cover), it is refused. A deleted endpoint is no such break: its
-  organisation's listing is ignored and the endpoint leaves the registry.
-  The running
-  registry stays, the gateway logs `registry reload refused` with
-  `class = "registry-invalid"`, and the refusal counts as a refused reload.
-  The next refresh asks again from the same instant, so the registry follows
-  the directory once the directory is put right.
+- When it breaks a rule, it is refused. The running registry stays, the
+  gateway logs `registry reload refused` with the `class` of the
+  [reload classes](#reloading-the-registry), and the refusal counts as a
+  refused reload. A content that breaks a registry rule (an endpoint relying
+  on `hl7-fhir-rest`, a `system_id` given to two nodes, a registry left with
+  no node) is `registry-invalid`. A sound registry that the rest of the
+  configuration no longer fits is refused under the class of that part:
+  `dev-cross-reference` or `pixm` for a resolver row naming a member the
+  refresh removed, `localization`, `demographic-endpoint`, `credentials`
+  for a `[credentials]` section naming a removed endpoint, `node-clients`,
+  `http-client`, `self-description`, `signing` or `federation`. A deleted
+  endpoint is no break of its own: its organisation's listing is ignored
+  and the endpoint leaves the registry. The next refresh asks again from
+  the same instant, so the registry follows the directory once the
+  directory, or the configuration, is put right.
 - When the directory's answer runs past `deadline_ms`, `max_pages`,
-  `max_bytes` or `max_entries`, or does not hold to ITI-91, the refresh is
-  refused the same way, with `class = "registry-budget"` for a limit, and
-  counts as a refused reload. Each limit bounds one whole read or refresh,
+  `max_bytes` or `max_entries`, the refresh is refused the same way with
+  `class = "registry-budget"`; an answer that does not hold to ITI-91 is
+  refused with `class = "registry-unreadable"`. Both count as a refused
+  reload. Each limit bounds one whole read or refresh,
   over every page of both resource types, so a directory that links its
   pages in a cycle or answers without end cannot hold the gateway or fill
   its memory. A partial answer never becomes the registry. No
@@ -441,6 +448,8 @@ the same file to see the fault. The classes are:
 | `dev-cross-reference`, `pixm`, `resolvers` | the resolver refuses the new members, or both resolvers are set |
 | `localization` | the localizer refuses the new members, or the node selection has none |
 | `node-clients`, `http-client`, `self-description` | the node clients or the `OPTIONS {base}/` body cannot be built |
+| `federation` | a registry is configured without `federation.node_selection` or `federation.id` |
+| `signing` | a registry is configured without `[signing]` |
 | `registry-presence` | `registry.document` or `[registry.mcsd]` was set, unset or swapped for the other, which takes a restart |
 | `profile` | `profile` was changed, which takes a restart |
 | `cleartext` | a credential or a patient identifier would travel over a URL that is not `https`, outside the development profile the process started with |
