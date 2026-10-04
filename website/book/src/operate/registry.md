@@ -206,19 +206,29 @@ selection with no localizer refuses to boot, and so do
 
 The specification lets a query's resolution leave a binding behind for the
 client session: which member holds which `ehr_id`, so a follow-up on a path
-`ehr_id` reaches the right node (§12.5.1 step 2). A session needs a client
-identity. The gateway verifies every caller
-([Client authentication](authentication.md)), and keeping bindings per
-verified caller is planned
-([#412](https://github.com/FerroHEALTH/FerroFED/issues/412)), so no binding
-is held yet, and the `ehr_id` index below carries what a resolution teaches.
+`ehr_id` reaches the right node (§12.5.1 step 2). The session is the caller
+the gateway verified ([Client authentication](authentication.md)): the
+token's issuer, subject and client together. A federated query and a read of
+an EHR by subject record the `{node, ehr_id}` pairs their resolution found
+under that caller, and a routed request by the same caller is routed by them
+before the `ehr_id` index. Another caller never sees them. A consent denial
+of a member drops every binding of that caller naming it (N27a); a binding
+records where an `ehr_id` was resolved, never a consent decision. Bindings
+live in memory only, keyed by `ehr_id` and never by a patient identifier,
+and a restart forgets them.
 
-The lifetime a binding will have is already a setting, checked at boot:
+Both bounds are settings, checked at boot:
 
 ```toml
 [federation]
-binding_ttl_ms = 900000   # 15 minutes, the default; 0 is refused
+binding_ttl_ms = 900000    # 15 minutes after a caller's last resolution, the default; 0 is refused
+binding_capacity = 100000  # ehr_id bindings over every caller, the default; 0 is refused
 ```
+
+When the bindings are full, a new one first drops the bindings of the other
+callers whose lifetime ends soonest, whole; a binding that still does not fit
+is not kept, which costs that caller's follow-up the next step of §12.5.1,
+never a wrong node.
 
 The lifetime is a correctness bound. An identity merge or split at the
 identity source can make a binding stale, and a binding never outlives its

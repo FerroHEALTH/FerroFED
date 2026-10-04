@@ -58,6 +58,7 @@ use ferrofed_engine::declared::Refusal;
 use ferrofed_engine::dispatch::{Contact, DispatchOptions, REQUEST_ID_HEADER};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, Method, Uri};
@@ -111,6 +112,9 @@ pub struct Arrived<'a> {
     /// The gateway's id for the request, the `X-Request-Id` the node receives
     /// (§5.4.1, N33).
     pub outbound: OutboundId,
+    /// The verified caller's session, whose resolution bindings route a
+    /// path `ehr_id` (§12.5.1 step 2); `None` when no caller was verified.
+    pub session: Option<&'a SessionKey>,
 }
 
 /// Answers a request under the ITS-REST prefix that no other route serves.

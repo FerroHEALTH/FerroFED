@@ -632,9 +632,13 @@ never pseudonymises in the core; a regional adapter may (decision A19).
 
 **Caching resolution** (decision A20). The resolution bindings of §12.5.1 step
 2 belong to the client session: they are held in memory, keyed by the
-authenticated session, and expire with it under a TTL declared as a correctness
-bound. A consent denial drops any cached `ehr_id`, and "no signal" is never
-cached as consent. FerroFED keeps no cross-session resolution cache and writes
+authenticated session (the verified caller's issuer, subject and client, so
+two apps of one subject do not share bindings), and expire with it under a TTL
+declared as a correctness bound. A consent denial drops the caller's resolution
+bindings that name the denied member; the shared `ehr_id` index is a routing
+hint and is kept, because it records only which node holds an EHR, the node
+checks consent on every request (N27), and a denial can be specific to one
+caller or purpose. "No signal" is never cached as consent. FerroFED keeps no cross-session resolution cache and writes
 nothing derived from a patient identifier to disk (section 8). An unkeyed hash
 of a national identifier space reverses by enumeration (the BSN space is about
 10^9 values with an eleven-check), and a keyed hash is pseudonymised personal
@@ -674,8 +678,9 @@ domain with two identifiers, a value that is not an `ehr_id`, a namespace with
 no mapping, a timeout and any other failure are `Unavailable`, which fails the
 query `424` (decision A17). No specification governs the namespace mapping or
 the coverage rule: our own design. Each resolution's `{node, ehr_id}` set is
-recorded as the session's resolution bindings (decision A20) once a client
-session exists (#80); follow-up routing reads them (#62).
+recorded as the session's resolution bindings (decision A20), the session
+being the verified caller's issuer, subject and client (#412); follow-up
+routing reads them (#62).
 
 ## 7. The security handoff
 
@@ -850,7 +855,7 @@ silent on storage, so this section is FerroFED's own).
 | Organisations, nodes, endpoints, node identifiers, configured `system_id` | the operator, at admission (§12b.1) | a reviewed bootstrap document, loaded into an immutable snapshot |
 | Observed `creating_system_id` to node (N21) | learned from result rows and routed answers | an in-memory map behind one lock every request shares, as the `ehr_id` index is, written once each answer is settled (#64) |
 | The `ehr_id` to node index (§12.5.1 step 3) | learned from resolution and probes | a bounded in-memory LRU |
-| Resolution bindings (§12.5.1 step 2) | per client session | in memory, keyed by the session (decision A20) |
+| Resolution bindings (§12.5.1 step 2) | per verified caller | in memory, keyed by the caller's session, bounded by a TTL and a capacity (decision A20) |
 | Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log and a counter |
 | Stored-query definitions (N44) | a client `PUT` | the one durable store, behind `DefinitionStore` |
 | Outbound credentials | the operator | `_file` secrets per endpoint |
@@ -1845,7 +1850,7 @@ R4 is #23, #25 and #27).
 | A17 | A resolver that cannot answer [R2 D4] | `not-resolved` with the error, `complete` cleared, `424` under all-or-nothing; only a `404` keeps N6's do-not-fail rule; best-effort may degrade it only when requested | a PIX outage must never look like an empty record; §11.1 does not separate the cases (held on #17) | decided (owner, 2026-10-01) |
 | A18 | Vendoring the bindings [R2 D9] | PIXm 3.1.0, mCSD 4.0.0, PMIR 1.6.0 (CC-BY-4.0) and Nuts GF 0.3.0 (EUPL-1.2), each with the issue that first reads it; not the ITI TF volumes or IUA until their terms are read | `.claude/rules/vendored-inputs.md`; the licences were read from each `package.json` | decided (owner, 2026-10-01) |
 | A19 | Pseudonyms [R2 D10] | accept a pseudonym or a direct identifier; never pseudonymise in the core; a regional adapter may | §5.3, §B.7; a pseudonym is personal data under the same hygiene | decided (owner, 2026-10-01) |
-| A20 | The resolution cache [reconciles R2 §5 with R3 D2] | session-scoped, in memory, TTL-bounded; no cross-session cache keyed by a hash of the identifier | §12.5.1 step 2 scopes the binding to the session; a keyed hash is pseudonymised personal data | decided (owner, 2026-10-01) |
+| A20 | The resolution cache [reconciles R2 §5 with R3 D2] | session-scoped, in memory, TTL-bounded; no cross-session cache keyed by a hash of the identifier; a consent denial drops the caller's resolution bindings that name the denied member; the shared `ehr_id` index is a routing hint and is kept | §12.5.1 step 2 scopes the binding to the session; a keyed hash is pseudonymised personal data | decided (owner, 2026-10-01) |
 | A21 | Identity conveyance [R2 D5] | RFC 7523 client credentials by default, the gateway-signed `openEHR-federation-client` JWT on every request, RFC 8693 per endpoint where offered | §13.1 leaves end-user conveyance open; production federations convey a signed assertion per request; the caller's token is never forwarded (RFC 9700 §2.3) | decided (owner, 2026-10-01) |
 | A22 | FerroEHR #3511 and #3512 [R2 D6] | confirmed; DPoP as a `Transport` decorator, no new issue | both are built on FerroEHR's side and ship in 0.0.74 | decided (owner, 2026-10-01; built on FerroEHR's side) |
 | A23 | `OPTIONS {base}/` [R2 D7] | authenticated, `401` otherwise; the JWKS public | the stricter of §7a.2's two sentences; T158 holds the ambiguity | decided (owner, 2026-10-01) |

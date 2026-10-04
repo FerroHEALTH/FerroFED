@@ -600,21 +600,18 @@ async fn dependencies(State(state): State<Arc<AppState>>) -> Json<health::depend
 
 /// Every path no route serves.
 ///
-/// A path under [`ITS_REST_PREFIX`] is part of the ITS-REST surface: a
-/// request to an EHR resource under a path `ehr_id`, the creation of an
-/// EHR, a definition request the stored-query registry does not hold, and a
-/// DEMOGRAPHIC request naming the endpoint the deployment declared for it, is
-/// routed to one node ([`facade::route`]; §7a.1, §12.4, §12.6), `OPTIONS`
-/// names the methods the gateway serves for the path
-/// ([`facade::options::allow`]; §7a.2), and every other path answers `501`
-/// (§7a.1, N32), because a `404` would claim the resource does not exist.
-/// Every other path answers `404`. No answer of the gateway's own echoes the path.
-///
-/// A routed request reaches its node under the request's [`OutboundId`],
-/// never the client's `x-request-id` (§5.4.1, N33).
+/// Under [`ITS_REST_PREFIX`], an EHR resource under a path `ehr_id`, a new
+/// EHR, a definition the stored-query registry does not hold, and a
+/// DEMOGRAPHIC request naming its declared endpoint go to one node
+/// ([`facade::route`]; §7a.1, §12.4, §12.6), `OPTIONS` names the methods
+/// served ([`facade::options::allow`]; §7a.2), and every other path answers `501`
+/// (§7a.1, N32). Every other path answers `404`, and no answer of the
+/// gateway's own echoes the path. A routed request reaches its node under the
+/// request's [`OutboundId`], never the client's `x-request-id` (§5.4.1, N33).
 async fn unrouted(
     State(state): State<Arc<AppState>>,
     outbound: Option<Extension<OutboundId>>,
+    caller: Option<Extension<auth::caller::Caller>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
@@ -622,6 +619,7 @@ async fn unrouted(
 ) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();
     let outbound = outbound.map_or_else(OutboundId::mint, |Extension(id)| id);
+    let session = facade::session(caller);
     let Some(path) = uri
         .path()
         .strip_prefix(ITS_REST_PREFIX.trim_end_matches('/'))
@@ -640,6 +638,7 @@ async fn unrouted(
         body,
         request_id,
         outbound,
+        session: session.as_ref(),
     };
     let federation = state.federation();
     if let (Some(federation), Some(definitions)) = (federation.as_deref(), state.definitions())

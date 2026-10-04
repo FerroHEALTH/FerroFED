@@ -52,12 +52,16 @@ exactly one node (§12.5.1, N41):
    (`no-destination`). A query parameter such as `?endpoint=` names no node
    here either; it is one the operation does not declare, so it is a `400`
    (`query-parameter-refused`) and nothing is sent.
-2. A resolution binding of your client session: the node your earlier query
-   resolved that `ehr_id` at. A session needs a client identity. The gateway verifies
-   every caller ([Client authentication](../operate/authentication.md)), and
-   keeping bindings per verified caller is planned
-   ([#412](https://github.com/FerroHEALTH/FerroFED/issues/412)), so this step
-   never answers yet.
+2. A resolution binding of your session: the node one of your earlier
+   queries, or a read of an EHR by subject, resolved that `ehr_id` at. Your
+   session is the caller the gateway verified
+   ([Client authentication](../operate/authentication.md)): the token's
+   issuer, subject and client together. Another caller, or the same subject
+   through another client, never sees your bindings. A binding lives for
+   `federation.binding_ttl_ms` after your last resolution, and a consent
+   denial of a member drops every binding of yours that names it. A binding
+   records only where an `ehr_id` was resolved, never a consent decision: the
+   node still decides what it releases.
 3. The gateway's `ehr_id` index, which it learns from resolutions and from
    the nodes' successful answers.
 4. For a read only, an ask-all probe: the gateway sends

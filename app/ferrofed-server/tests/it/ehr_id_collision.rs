@@ -42,7 +42,7 @@ use crate::facade::{
     post, registry,
 };
 use crate::path_ehr_id::{answer, holder, over, probe_at};
-use crate::support::{Logs, asked, error_body, mount};
+use crate::support::{Logs, asked, bearer_as, error_body, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -256,12 +256,16 @@ async fn the_index_insert_alarm_fires_once_and_the_index_then_routes_neither() -
     let dir = tempfile::tempdir()?;
     let (app, a, b) = resolving_at_both(dir.path()).await?;
     let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
+    // NOTE: §12.5.1 step 2 answers the querying caller first, so another caller,
+    // who holds no binding, reads through the index (step 3).
     let (answers, logs) = captured(
         &app,
         vec![
             post(body(&patient_query())?)?,
             post(body(&patient_query())?)?,
-            Request::get(&resource).body(Body::empty())?,
+            Request::get(&resource)
+                .header(header::AUTHORIZATION, bearer_as("another-caller")?)
+                .body(Body::empty())?,
         ],
     )
     .await?;
@@ -293,6 +297,43 @@ async fn the_index_insert_alarm_fires_once_and_the_index_then_routes_neither() -
                 .iter()
                 .all(|(verb, at)| verb == "POST" && at == "/v1/query/aql"),
             "the index routes neither, and nothing is probed: {paths:?}"
+        );
+    }
+    Ok(())
+}
+
+// conformance: CP-33
+#[tokio::test]
+async fn the_querying_callers_binding_finds_the_collision_first_and_routes_neither() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (app, a, b) = resolving_at_both(dir.path()).await?;
+    let resource = format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}");
+    let (answers, logs) = captured(
+        &app,
+        vec![
+            post(body(&patient_query())?)?,
+            Request::get(&resource).body(Body::empty())?,
+        ],
+    )
+    .await?;
+    let mut answers = answers.into_iter();
+    let (status, _, text) = answers.next().ok_or("the query answered")?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    refused_naming_both(&answers.next().ok_or("the read answered")?)?;
+    let found = incidents(&logs)?;
+    let refused = found.last().ok_or("the refusal's incident")?;
+    assert_eq!(
+        ("EhrIdCollision", Some("binding")),
+        (refused.kind.as_str(), refused.detection.as_deref()),
+        "step 2 holds both claimants for the caller who queried (§12.5.1, N42): {logs}"
+    );
+    for server in [&a, &b] {
+        let paths: Vec<(String, String)> = asked(server).await?;
+        assert!(
+            paths
+                .iter()
+                .all(|(verb, at)| verb == "POST" && at == "/v1/query/aql"),
+            "no claimant is read, and nothing is probed: {paths:?}"
         );
     }
     Ok(())
