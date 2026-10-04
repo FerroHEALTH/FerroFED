@@ -2337,7 +2337,7 @@ R4 is #23, #25 and #27).
 | A48 | The URL authority and `Host` at the outbound gate [owner, #309] | the gate reads the path, the query string, the fragment and the headers the gateway composes, and never the authority of a node's URL or the `Host` header the HTTP client writes from it; a client `Host` is never forwarded | §5.4.1 [[no-identifier-fanout]] and N33 forbid a directly identifying identifier "in the parts of the outbound request the gateway composes (the dispatched AQL, the request path, the query string and the headers)"; the authority, and `Host` with it, is the operator's registry endpoint URL, fixed before any request and composed from none, so it cannot carry a client-supplied identifier, and searching it refused every query for a patient whose identifier occurs in a node's port (#232); the silence on the authority is on #212 | decided by the specification text under the owner's spec-first rule (2026-10-03) |
 | A49 | `AVG` over integers [owner, #309, amending A30] | an integer when every node `SUM` is an integer: the one nearest the exact quotient of the federation's sum and count, a tie to the even one, rounded once at the gateway and never per node; the decimal mean, written as the nearest JSON number, when a node `SUM` is a real | AQL 1.1.0 §3.9.1.5: "Input values type should be either Integer or Real, and it will also determine the return type"; §3.9.1.4 says the same of `SUM`, so the node sums carry the input type; AQL gives no rounding, and the rounding is our own design: the nearest integer is the Integer closest to the arithmetic mean §3.9.1 defines, and ties to even is the rule the gateway already applies writing a real mean as the nearest binary64 (IEEE 754 roundTiesToEven), with no bias toward zero or upward; the silence on the rounding is on #212 | decided by the specification text under the owner's spec-first rule (2026-10-03) for the return type; the ties-to-even rounding is our own design within that |
 | A50 | The metrics surface and the incident webhook [#281] | one OpenTelemetry `MeterProvider` (`opentelemetry` 0.33 with the Prometheus pull reader and an optional OTLP gRPC push), the family FerroEHR runs; `GET /metrics` on an admin listener of its own, off by default and on loopback unless `allow_remote`; the incident counter by `kind`, the node request counter by `endpoint` and §11.1 `outcome` with a duration histogram by `endpoint`, the reload counter by `result`, every label from an enum or the registry; no webhook | an operator alerts on a counter, and a webhook adds an outbound channel with its own credentials, retries and failure handling for no gain over a scrape; one provider keeps the two surfaces equal; a listener the client face never reaches needs no gateway authentication; no specification governs metrics: our own design | decided on #281 (2026-10-03) |
-| A51 | FerroFED under Regulation (EU) 2025/327 [#519] | an EHR system under Art 2(2)(k), its intended purpose including the priority categories of Art 14(1)(a), (e) and (f); the harmonised software components of Art 25(1) delivered before 26 March 2029; cross-border care through the national contact point | FerroFED intermediates priority-category data for healthcare providers providing patient care; Art 25(2) excludes only "general purpose software"; Art 105 applies Art 25 and 26 from 26 March 2029 to a system intended to process patient summaries; Art 11(2) and Art 23 route cross-border access through MyHealth@EU; section 16 | decided on #519 (2026-10-04, by the orchestrator under the owner's standing delegation); legal review can only narrow it |
+| A51 | FerroFED under Regulation (EU) 2025/327 [#519] | an EHR system under Art 2(2)(k), its intended purpose covering every priority category its member CDRs hold, all six of Art 14(1)(a) to (f); the harmonised software components of Art 25(1) delivered before 26 March 2029 for (a) to (c) and 26 March 2031 for (d) to (f); cross-border care through the national contact point | FerroFED intermediates priority-category data for healthcare providers providing patient care and selects none by category; Art 25(2) excludes only "general purpose software"; Art 105 applies Art 25 and 26 from 26 March 2029 to a system intended to process categories (a) to (c) and from 26 March 2031 for (d) to (f); Art 11(2) and Art 23 route cross-border access through MyHealth@EU; section 16 | decided on #519 (2026-10-04, by the orchestrator under the owner's standing delegation); legal review can only narrow it |
 
 ## 16. Regulatory status
 
@@ -2353,11 +2353,11 @@ categories ... to be stored, intermediated, exported, imported, converted,
 edited or viewed, and intended by the manufacturer to be used by healthcare
 providers when providing patient care". FerroFED answers clinicians' queries
 over the openEHR CDRs of many providers and routes their follow-up reads and
-writes, which intermediates patient summaries, test results and discharge
-reports (Art 14(1)(a), (e) and (f)) wherever the nodes hold them; Annex II
-point 2.1 ("designed to store or intermediate") expects such a system. The
-intended purpose includes those categories, because excluding them would cut
-FerroFED off from its own use case. Art 25(2) excludes "general purpose
+writes, which intermediates whatever priority-category data the nodes hold;
+Annex II point 2.1 ("designed to store or intermediate") expects such a
+system. FerroFED selects no data by category, so its intended purpose covers
+every priority category its member CDRs hold, all six of Art 14(1)(a) to (f);
+excluding them would cut FerroFED off from its own use case. Art 25(2) excludes "general purpose
 software used in a healthcare environment", and recital 38 names
 "general-purpose middleware" among its examples; FerroFED is middleware
 built for one clinical purpose, openEHR federation for patient care, so the
@@ -2368,10 +2368,13 @@ logging software components (Art 25(1), Art 2(2)(n) and (o)), meets the
 essential requirements of Annex II, and carries technical documentation
 (Art 37, Annex III), an EU declaration of conformity (Art 39, Annex IV), the
 CE marking (Art 41) and registration (Art 49). Art 105 applies Articles 25,
-26 and 49 from 26 March 2029 to a system intended to process patient
-summaries, prescriptions or dispensations, which FerroFED's purpose
-includes, and Chapter III from 26 March 2031 to a system put into service
-under Art 26(2). The exchange format (Art 15(1)) and the common
+26 and 49 from 26 March 2029 for patient summaries, prescriptions and
+dispensations (Art 14(1)(a) to (c)) and from 26 March 2031 for imaging, test
+results and discharge reports ((d) to (f)), both of which FerroFED's purpose
+covers, and Chapter III from 26 March 2031 to a system put into service under
+Art 26(2). Articles 28, 30, 36 to 41 and 44 are not named in Art 105 and so
+fall under its general date of 26 March 2027, while Art 26(1) ties placing
+on the market to the later dates. The exchange format (Art 15(1)) and the common
 specifications (Art 36(1)) are implementing acts due by 26 March 2027. The
 components, the national contact point and the conformity documentation are
 planned in v0.0.10 (#521 to #526); none is built yet.

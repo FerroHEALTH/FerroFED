@@ -43,12 +43,10 @@ answer to the CDR that holds the record.
   (b) electronic prescriptions; (c) electronic dispensations; (d) medical
   imaging studies and related imaging reports; (e) medical test results,
   including laboratory and other diagnostic results and related reports; and
-  (f) discharge reports", with their main characteristics in Annex I. The
-  intended purpose includes patient summaries, medical test results and
-  discharge reports (Art 14(1)(a), (e) and (f)) wherever the member CDRs hold
-  them. FerroFED does not select data by category: a query reaches whatever
-  the CDRs hold, so prescriptions, dispensations and imaging reports pass
-  through it too where a CDR holds them.
+  (f) discharge reports", with their main characteristics in Annex I.
+  FerroFED does not select data by category: a query reaches whatever the
+  member CDRs hold. Its intended purpose therefore covers every priority
+  category a member CDR holds, all six of Art 14(1)(a) to (f).
 
 ## Classification: an EHR system
 
@@ -70,9 +68,9 @@ FerroFED meets each part of that definition:
   an EHR system that intermediates without storing: Annex II, point 2.1,
   begins "Where an EHR system is designed to store or intermediate personal
   electronic health data".
-- **The data belong to the priority categories.** Patient summaries, test
-  results and discharge reports are among the data openEHR CDRs hold, and the
-  intended purpose includes them.
+- **The data belong to the priority categories.** Data of each of the six
+  categories can be held in an openEHR CDR, and the intended purpose covers
+  every category the member CDRs hold.
 - **The manufacturer intends it for healthcare providers providing patient
   care.** That is the intended purpose above. Defining the purpose to exclude
   the priority categories would cut FerroFED off from its own use case, so
@@ -115,13 +113,16 @@ Articles 25, 26, 27, 47, 48 and 49 apply later: "from 26 March 2029 to ...
 EHR systems intended by the manufacturer to process" patient summaries,
 prescriptions or dispensations, and "from 26 March 2031" to those intended
 to process imaging, test results or discharge reports. FerroFED's intended
-purpose includes patient summaries, so its date is 26 March 2029.
+purpose covers all six categories, so both dates apply to it: 26 March 2029
+for patient summaries, prescriptions and dispensations (Art 14(1)(a) to (c)),
+and 26 March 2031 for imaging, test results and discharge reports (Art
+14(1)(d) to (f)).
 
 | Obligation | Article | Applies to FerroFED from |
 |---|---|---|
-| Include the two harmonised software components | Art 25(1) | 26 March 2029 |
-| Be placed on the market or put into service "only if they comply with the provisions laid down in this Chapter" | Art 26(1) | 26 March 2029 |
-| Registration in the EU database before placing on the market or putting into service, with the results of the testing environment | Art 49(2), Art 30(1)(h) | 26 March 2029 |
+| Include the two harmonised software components | Art 25(1) | 26 March 2029 for (a) to (c); 26 March 2031 for (d) to (f) |
+| Be placed on the market or put into service "only if they comply with the provisions laid down in this Chapter" | Art 26(1) | 26 March 2029 for (a) to (c); 26 March 2031 for (d) to (f) |
+| Registration in the EU database before placing on the market or putting into service, with the results of the testing environment | Art 49(2), Art 30(1)(h) | 26 March 2029 for (a) to (c); 26 March 2031 for (d) to (f) |
 | Conformity of the harmonised components with the essential requirements of Annex II and the common specifications | Art 30(1)(a), Art 36 | 26 March 2027 (see below) |
 | Technical documentation with at least the elements of Annex III and the results of the European digital testing environment | Art 37, Art 40(3), Art 30(1)(c) | 26 March 2027 (see below) |
 | An information sheet naming the intended purpose and the data categories, and instructions for use | Art 38, Art 30(1)(d) | 26 March 2027 (see below) |
@@ -136,7 +137,8 @@ Art 105 names no later date for Articles 28, 30, 36 to 41 and 44, so the
 general date of 26 March 2027 applies to them. Each of them attaches to an
 EHR system placed on the market or put into service, and Art 26(1), which
 makes compliance the condition for either, applies to FerroFED from
-26 March 2029. That reading is one counsel should confirm.
+26 March 2029 for categories (a) to (c) and from 26 March 2031 for (d) to
+(f). That reading is one counsel should confirm.
 
 The technical content comes from implementing acts the Commission has not
 yet adopted. The exchange format (Art 15(1)) and the common specifications
@@ -176,8 +178,9 @@ For FerroFED this means:
   Such a hosted service also needs a commercial licence
   ([licensing](licensing.md)).
 
-FerroFED plans its harmonised components for before 26 March 2029 whichever
-reading holds, so a deployment can use them under either. Who carries the
+FerroFED plans its harmonised components for before the dates that apply to
+each category (26 March 2029 for (a) to (c)) whichever reading holds, so a
+deployment can use them under either. Who carries the
 manufacturer's obligations for a given deployment is a question for that
 deployment's counsel.
 
@@ -254,8 +257,8 @@ deployment's obligations. A deployment's counsel should confirm at least:
 1. The intended-purpose statement and the classification as an EHR system
    under Art 2(2)(k), including the answer to recital 38's
    "general-purpose middleware" example.
-2. Which priority categories the intended purpose names, given that FerroFED
-   passes through whatever the member CDRs hold.
+2. That the intended purpose covers all six priority categories, given that
+   FerroFED passes through whatever the member CDRs hold.
 3. Whether the deployment is an EHR system "manufactured and used within
    health institutions" (Art 26(2)), and who then carries the manufacturer's
    obligations of Art 30.
