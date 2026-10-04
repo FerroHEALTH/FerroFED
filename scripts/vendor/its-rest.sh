@@ -19,6 +19,12 @@
 # are `x-status: DEVELOPMENT` in this release; the provenance records each
 # module's status rather than assuming it.
 #
+# It also takes the AsciiDoc source of the SMART on openEHR document of the
+# same release, docs/smart_app_launch/, whose scope grammar and launch
+# context client authentication is held to (#80, #414). That document
+# declares its own lifecycle status in manifest_vars.adoc, DEVELOPMENT at
+# Release-1.1.0, and the provenance records it rather than assuming it.
+#
 # The "openEHR ITS-REST OpenAPI" row of docs/VERSIONS.md pins a tag. A tag is
 # mutable and every file in it says `info.version: latest`, so the script
 # resolves the tag to a commit and records the commit and the git blob id of
@@ -49,6 +55,8 @@ for module in "${modules[@]}"; do
   paths+=("$oas/$module-codegen.openapi.yaml")
 done
 paths+=("$oas/query-validation.openapi.yaml")
+smart="docs/smart_app_launch"
+paths+=("$smart")
 paths+=("LICENSE")
 
 pin="$(corpus_pin_cell "openEHR ITS-REST OpenAPI")"
@@ -93,6 +101,13 @@ At this tag the Query API's validation and code-generation documents are the
 same bytes: the table below gives both one git blob id."
 fi
 
+smart_status="$(sed -nE 's/^:spec_status:[[:space:]]*([A-Z]+)[[:space:]]*$/\1/p' "$dest/$smart/manifest_vars.adoc")"
+[ -n "$smart_status" ] || die "$smart/manifest_vars.adoc declares no spec_status"
+smart_title="$(sed -nE 's/^:spec_title:[[:space:]]*(.+)$/\1/p' "$dest/$smart/manifest_vars.adoc")"
+[ -n "$smart_title" ] || die "$smart/manifest_vars.adoc declares no spec_title"
+grep -q 'boilerplate/full_front_block.adoc' "$dest/$smart/master.adoc" \
+  || die "$smart/master.adoc no longer includes the openEHR front block that states its licence"
+
 licence="$(sed -nE 's/^[[:space:]]+name:[[:space:]]*(Creative Commons.*)$/\1/p' \
   "$dest/$oas/ehr-codegen.openapi.yaml" | head -n1)"
 [ -n "$licence" ] || die "ehr-codegen.openapi.yaml declares no info.license.name"
@@ -115,15 +130,35 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Pin: tag \`$tag\`, which resolves to commit \`$commit\`
 - Fetched: $fetched
 - Upstream licence: the specification content declares \`$licence\` in each
-  document's \`info.license\`. The repository's own \`LICENSE\` file is the
-  Apache License 2.0 and is vendored beside this file, so both statements are
-  here and neither is assumed.
+  document's \`info.license\`. The SMART on openEHR source carries no licence
+  line of its own: its \`master.adoc\` includes the openEHR front block
+  (\`docs/boilerplate/full_front_block.adoc\` of
+  <https://github.com/openEHR/specifications-AA_GLOBAL>), whose licence block
+  states Creative Commons Attribution-NoDerivs 3.0 Unported
+  (<https://creativecommons.org/licenses/by-nd/3.0/>), which permits verbatim
+  redistribution with attribution. The repository's own \`LICENSE\` file is
+  the Apache License 2.0 and is vendored beside this file, so every statement
+  is here and none is assumed.
 - Layout: the upstream paths, unchanged
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #26 (the façade and the dispatch on the generated ITS-REST contract)
-  and #310 (the result-set schema test against \`query-validation.openapi.yaml\`)
+- Read by: #26 (the façade and the dispatch on the generated ITS-REST contract),
+  #310 (the result-set schema test against \`query-validation.openapi.yaml\`)
+  and #414 (client authentication's citations of SMART on openEHR, held to
+  the vendored headings and status by the server's citation test)
+
+## SMART on openEHR
+
+\`$smart/\` is the AsciiDoc source of *$smart_title* at this release, whole:
+the master document, its chapters (\`master04-service_discovery.adoc\`,
+\`master07-authorization.adoc\` and \`master08-scopes.adoc\` among them), its
+\`manifest_vars.adoc\` and its diagrams. Its \`manifest_vars.adoc\` declares
+\`:spec_status: $smart_status\`: the document is in the $smart_status state
+in this release, so what the gateway is held to by it is a draft the
+release does not stabilise, and every citation of it says so. The rendered
+\`docs/smart_app_launch.html\` is not taken: it is generated from this
+source.
 
 ## Why every module
 

@@ -20,6 +20,7 @@ so the guard can hold every row here to its source.
 | IHE PIXm FHIR package | `ihe.iti.pixm`, version 3.1.0 | the identifier cross-reference binding (ITI-83) |
 | IHE PDQm FHIR package | `ihe.iti.pdqm`, version 3.2.0 | the demographics query capability of `ihe-iti` (ITI-78) |
 | IHE mCSD FHIR package | `ihe.iti.mcsd`, version 4.0.0 | the addressing binding: the registry read from a care services directory (ITI-90, ITI-91) |
+| IHE IUA supplement | tag 2.5 | the access token claims and the bearer presentation client authentication reads (ITI-71, ITI-72), Revision 2.5, Trial Implementation |
 | Rust toolchain | 1.98.1, edition 2024 | the toolchain the workspace builds with |
 
 The other identity bindings (IHE PMIR, XCPD and the Dutch Generic
@@ -29,7 +30,9 @@ binding uses, and each package is vendored by the issue that first reads it.
 ## Vendored specifications
 
 The specification, its reference implementation, the ITS-REST OpenAPI
-documents and the AQL source are vendored verbatim under
+documents with the SMART on openEHR source of the same release (a
+DEVELOPMENT-status document in ITS-REST 1.1.0), the AQL source, the IHE
+FHIR packages and the IHE IUA supplement are vendored verbatim under
 [`docs/specs/`](https://github.com/FerroHEALTH/FerroFED/tree/main/docs/specs),
 each fetched by a committed script and stamped with a `PROVENANCE.md` that
 records the source, the pin, the licence and a tree digest.

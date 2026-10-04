@@ -5,6 +5,12 @@
 //! every ITS-REST operation, and the scope check (§13.1, N25; ITS-REST SMART
 //! on openEHR, master08 §Resource Scopes).
 //!
+//! SMART on openEHR is cited from the ITS-REST Release-1.1.0 source vendored
+//! at `docs/specs/its-rest/docs/smart_app_launch/` (`master07-authorization.adoc`
+//! and `master08-scopes.adoc`), a document whose `manifest_vars.adoc` declares
+//! it DEVELOPMENT status in that release: a draft the release does not
+//! stabilise.
+//!
 //! The SMART on openEHR grammar defines three resource families,
 //! `template-`, `composition-` and `aql-`, each with CRUDS permissions. An
 //! operation on one of them needs a granted resource scope of that family,
@@ -504,9 +510,9 @@ fn every(scope: &ResourceScope) -> bool {
 /// grant, and a `system/aql-*` grant only for a backend client the
 /// deployment lists.
 fn honoured(scope: &ResourceScope, backend: bool) -> bool {
-    // NOTE: master07 §Context Selection and Federation Tier §12.5; an `ehrId` names
-    // no namespace and means nothing outside its CDR, so no patient grant can be
-    // shown confined across nodes and none is honoured (opt-in planned, #443).
+    // NOTE: SMART on openEHR (DEVELOPMENT) master07 §Context Selection, Federation Tier §12.5; an
+    // `ehrId` names no namespace and means nothing outside its CDR, so no patient grant can
+    // be shown confined across nodes and none is honoured (opt-in planned, #443).
     if scope.compartment == Compartment::Patient {
         return false;
     }
