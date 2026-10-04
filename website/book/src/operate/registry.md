@@ -1,3 +1,5 @@
+| `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
+| `[nl_gf]` | |
 <!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
@@ -220,10 +222,19 @@ past a cap, and `down` when it did not answer before the deadline or could
 not be reached. The directory's state never gates readiness.
 
 A `SIGHUP` reload with a directory rebuilds the federation over the registry
-the directory gave, applying `[credentials]`, `[dev]`, `[pixm]` and
-`[xcpd]`; it never asks the directory. A change to `[registry.mcsd]` takes a
+the directory gave, applying `[credentials]`, `[dev]`, `[pixm]`, `[xcpd]`
+and `[nl_gf]`; it never asks the directory. A change to `[registry.mcsd]` takes a
 restart, and a change between a document and a directory is refused as
 `registry-presence`.
+
+A directory change goes through the same checks, so it is refused when the
+localizer cannot place the new members. Under `[nl_gf.nvi]`, or `[xcpd]`, a
+member the directory adds without a custodian URA (or a community) mapped to
+it makes the change refused as `localization`: the gateway keeps the previous
+registry, logs the refusal and counts it in `ferrofed_registry_reloads_total`
+([Metrics](metrics.md)), and asks again from the same instant at the next
+refresh. `GET /health/dependencies` still shows the directory `up`, since it
+answered. Map the member first, then publish it.
 
 ## Federation id
 
@@ -295,14 +306,17 @@ that answers that no member holds the patient's data leaves every member
 `not-localized` with no error.
 
 The localizer is the IHE XCPD binding when `[xcpd]` is set
-([XCPD localization](identity.md#xcpd-localization-xcpd)). Otherwise it is
+([XCPD localization](identity.md#xcpd-localization-xcpd)), and the NVI of
+the Dutch Generic Functions when `[nl_gf.nvi]` is
+([Dutch localization](identity.md#dutch-localization-nl_gfnvi)); setting
+both refuses to boot. Otherwise it is
 the resolver: the PIXm resolver when `[pixm]` is set, which names the members
 whose domain holds the patient at the PIX Manager
 ([`[pixm]` as the localizer](identity.md#pixm-as-the-localizer)), or the
 [development cross-reference](identity.md), under `profile = "development"`,
 which names the members its `[dev]` rows map the patient at. The localized
 selection with no localizer refuses to boot, and so do
-`[federation.localization]` and `[xcpd]` under `ask-all`.
+`[federation.localization]`, `[xcpd]` and `[nl_gf.nvi]` under `ask-all`.
 
 ## Resolution bindings
 
@@ -384,7 +398,7 @@ the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
 gateway reloads on the signal only and never watches the file, so write the
 new document completely, then send the signal.
 
-Five sections take effect on a reload:
+Six sections take effect on a reload:
 
 | Reloaded | Needs a restart |
 |---|---|

@@ -54,6 +54,8 @@ pub struct Settings {
     pub pixm: Option<PixmSettings>,
     /// The XCPD localizer, with every secret and file read.
     pub xcpd: Option<crate::config::xcpd::XcpdSettings>,
+    /// The Dutch Generic Functions, with every secret and file read.
+    pub nl_gf: Option<crate::config::nl_gf::NlGfSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
     /// The metrics surface.

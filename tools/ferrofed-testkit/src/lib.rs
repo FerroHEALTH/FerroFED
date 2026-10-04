@@ -25,6 +25,8 @@
 //!   (#86);
 //! - [`mock`]: the wiremock server every suite stands its nodes up with,
 //!   dropped outside the test's runtime;
+//! - [`nvi`]: a stub NVI Localization Service answering the GF-Localization
+//!   search of the Dutch Generic Functions (#87);
 //! - [`oauth`]: the harness OAuth 2.0 token endpoint, which verifies the
 //!   gateway's client assertion against its published JWK Set and issues
 //!   the token a mock node then requires (#81), exchanges a caller's token
@@ -50,6 +52,7 @@ pub mod issuer;
 pub mod leak;
 pub mod mcsd;
 pub mod mock;
+pub mod nvi;
 pub mod oauth;
 pub mod otlp;
 pub mod pix;

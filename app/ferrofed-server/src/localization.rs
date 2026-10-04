@@ -5,7 +5,8 @@
 //! gateway does when it does not answer (N4, N10, §14.1).
 //!
 //! Under `federation.node_selection = "localized"` exactly one localizer is
-//! active: the XCPD localizer when `[xcpd]` is set (Annex A.3), the PIXm
+//! active: the XCPD localizer when `[xcpd]` is set (Annex A.3), the NVI
+//! localizer when `[nl_gf.nvi]` is (Annex B §B.1), the PIXm
 //! resolver when `[pixm]` is (§14.2), and the static development
 //! cross-reference under `profile = "development"` otherwise. A configured
 //! localizer that does not answer fails closed unless
@@ -13,7 +14,7 @@
 //! `OPTIONS {base}/` declares the policy either way (§7a.2, N30). Under `node_selection = "ask-all"` there is no localizer and
 //! every member is a candidate (§4.3, N4 last sentence).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,6 +22,7 @@ use std::time::Duration;
 use ferrofed_identity::atna::RepositoryAudit;
 use ferrofed_identity::dev::{Profile, StaticResolver};
 use ferrofed_identity::localizer::{Localizer, OnFailure};
+use ferrofed_identity::nvi::{NviConfig, NviConfigError, NviLocalizer};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::pixm::PixmResolver;
 use ferrofed_identity::xcpd::{
@@ -31,9 +33,11 @@ use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::Secret;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use openehr_its::rest::client::Credentials;
 
 use crate::audit::{self, AuditTrailError};
-use crate::config::settings::{LocalizationSettings, Settings};
+use crate::config::nl_gf::NviSettings;
+use crate::config::settings::{LocalizationSettings, Scheme, Settings};
 use crate::config::xcpd::{AuditDestination, XcpdSettings};
 use crate::config::{self, NodeSelection};
 
@@ -149,6 +153,10 @@ pub const XCPD: &str = "xcpd";
 /// The `localization.mode` of the PIXm localizer (§14.2, Annex A.1).
 pub const PIXM: &str = "pixm";
 
+/// The `localization.mode` of the NVI localizer of the Dutch Generic
+/// Functions (Annex B §B.1).
+pub const NL_GF_NVI: &str = "nl-gf-nvi";
+
 /// A localization configuration that cannot be set up.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -157,7 +165,7 @@ pub enum LocalizationError {
     /// configured, so no undirected patient query could find its node set
     /// (N4).
     #[error(
-        "federation.node_selection = \"localized\" needs a localizer: [xcpd], [pixm], or the [dev] cross-reference under profile = \"development\" (N4, §14.1)"
+        "federation.node_selection = \"localized\" needs a localizer: [xcpd], [nl_gf.nvi], [pixm], or the [dev] cross-reference under profile = \"development\" (N4, §14.1)"
     )]
     NoLocalizer,
     /// `[federation.localization]` is set under a node selection that uses
@@ -171,6 +179,34 @@ pub enum LocalizationError {
         "[xcpd] is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
     )]
     XcpdUnused,
+    /// `[nl_gf.nvi]` is set under a node selection that uses no localizer.
+    #[error(
+        "[nl_gf.nvi] is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
+    )]
+    NviUnused,
+    /// `[xcpd]` and `[nl_gf.nvi]` are both set, and exactly one localizer is
+    /// active.
+    #[error("[xcpd] and [nl_gf.nvi] are both localizers; set one")]
+    TwoLocalizers,
+    /// An `[nl_gf.nvi.custodians]` value is not a node id.
+    #[error("nl_gf.nvi.custodians.{ura:?} is not a node id")]
+    NviMember {
+        /// The custodian key, a URA and never a patient value.
+        ura: String,
+        /// What the id rules reported.
+        #[source]
+        source: IdError,
+    },
+    /// An `nl_gf.nvi.namespaces` entry is empty.
+    #[error("nl_gf.nvi.namespaces has an empty namespace")]
+    NviNamespace(#[source] PatientRefError),
+    /// `[nl_gf.nvi.credentials]` names an OAuth 2.0 grant, which only a node
+    /// takes.
+    #[error("nl_gf.nvi.credentials takes a bearer token or basic credentials, not an oauth2 grant")]
+    NviGrant,
+    /// The NVI localizer refuses its configuration.
+    #[error("the [nl_gf.nvi] localizer cannot be enabled")]
+    Nvi(#[source] NviConfigError),
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("{key} is not one SAML 2.0 Assertion element")]
     XcpdAssertion {
@@ -212,7 +248,8 @@ pub struct Resolving {
 /// The localization policy `settings` declare under `selection` over the
 /// members of `snapshot`, with the resolver the federation runs, `resolving`.
 ///
-/// The localizer is the XCPD one when `[xcpd]` is set. Otherwise it is the
+/// The localizer is the XCPD one when `[xcpd]` is set, and the NVI one when
+/// `[nl_gf.nvi]` is (Annex B §B.1); never both. Otherwise it is the
 /// resolver itself: the PIXm resolver, which names the members whose domain
 /// holds the patient over the ITI-83 call its resolution reuses (§14.2), or
 /// the development cross-reference.
@@ -222,7 +259,8 @@ pub struct Resolving {
 /// Returns [`LocalizationError::NoLocalizer`] for the localized selection
 /// with no localizer, [`LocalizationError::NotLocalized`] and
 /// [`LocalizationError::XcpdUnused`] for a localization table under the
-/// ask-all selection, and the XCPD errors for an `[xcpd]` table the
+/// ask-all selection, [`LocalizationError::TwoLocalizers`] for `[xcpd]` and
+/// `[nl_gf.nvi]` together, and the XCPD and NVI errors for a table its
 /// localizer refuses.
 pub fn policy(
     settings: &Settings,
@@ -236,6 +274,10 @@ pub fn policy(
             Err(LocalizationError::NotLocalized)
         }
         NodeSelection::AskAll if settings.xcpd.is_some() => Err(LocalizationError::XcpdUnused),
+        NodeSelection::AskAll if nvi(settings).is_some() => Err(LocalizationError::NviUnused),
+        NodeSelection::Localized if settings.xcpd.is_some() && nvi(settings).is_some() => {
+            Err(LocalizationError::TwoLocalizers)
+        }
         NodeSelection::AskAll => Ok(LocalizationPolicy::none()),
         NodeSelection::Localized => {
             let declared = federation.localization.unwrap_or_else(|| {
@@ -249,6 +291,9 @@ pub fn policy(
             let mut repository = None;
             let (localizer, mode): (Arc<dyn Localizer>, _) =
                 match (&settings.xcpd, pixm, development) {
+                    (None, _, _) if let Some(nvi) = nvi(settings) => {
+                        (Arc::new(nvi_localizer(nvi, snapshot)?), NL_GF_NVI)
+                    }
                     (Some(xcpd), _, _) => {
                         let (localizer, trail) = xcpd_localizer(xcpd, settings.profile, snapshot)?;
                         repository = trail;
@@ -343,4 +388,50 @@ fn xcpd_localizer(
             (localizer, None)
         }
     })
+}
+
+/// The `[nl_gf.nvi]` table of `settings`, when it is set.
+fn nvi(settings: &Settings) -> Option<&NviSettings> {
+    settings.nl_gf.as_ref().and_then(|nl_gf| nl_gf.nvi.as_ref())
+}
+
+/// The NVI localizer `nvi` describes over the members of `snapshot`
+/// (Annex B §B.1).
+fn nvi_localizer(
+    nvi: &NviSettings,
+    snapshot: &RegistrySnapshot,
+) -> Result<NviLocalizer, LocalizationError> {
+    let mut custodians = BTreeMap::new();
+    for (ura, member) in &nvi.custodians {
+        let member =
+            NodeId::new(member.as_str()).map_err(|source| LocalizationError::NviMember {
+                ura: ura.clone(),
+                source,
+            })?;
+        custodians.insert(ura.clone(), member);
+    }
+    let namespaces = nvi
+        .namespaces
+        .iter()
+        .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map_err(LocalizationError::NviNamespace)?;
+    let credentials = match &nvi.credentials {
+        None => None,
+        Some(Scheme::Bearer(token)) => Some(Credentials::bearer(token.to_secret_string())),
+        Some(Scheme::Basic { user, password }) => Some(Credentials::basic(
+            user.as_str(),
+            password.to_secret_string(),
+        )),
+        Some(Scheme::OAuth2(_)) => return Err(LocalizationError::NviGrant),
+    };
+    let config = NviConfig {
+        base: nvi.url.clone(),
+        credentials,
+        custodians,
+        namespaces,
+        client_identity: nvi.client_identity.as_ref().map(Secret::to_secret_string),
+        trust_roots: nvi.trust_roots.clone(),
+    };
+    NviLocalizer::from_config(config, snapshot).map_err(LocalizationError::Nvi)
 }
