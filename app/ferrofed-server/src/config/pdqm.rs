@@ -43,6 +43,7 @@ use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
 use crate::config::error::Error;
+use crate::config::resolve::localization_budget_ms;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
@@ -163,11 +164,7 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PdqmSettings>, Error> {
             key: format!("{PDQM_KEY}.timeout_ms"),
         });
     }
-    let localization_ms = config
-        .federation
-        .localization
-        .as_ref()
-        .map_or(0, |section| section.timeout_ms);
+    let localization_ms = localization_budget_ms(config);
     let overall_ms = config.federation.overall_timeout_ms;
     if pdqm.timeout_ms.saturating_add(localization_ms) >= overall_ms {
         return Err(Error::DemographicsBudget {

@@ -31,7 +31,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use ferrofed_registry::id::{EhrId, NodeId};
@@ -386,5 +386,9 @@ impl ConsentPrefilter for StaticConsentPrefilter {
 
     fn mode(&self) -> &'static str {
         STATIC_CONSENT_MODE
+    }
+
+    fn budget(&self) -> Option<Duration> {
+        None
     }
 }

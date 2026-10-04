@@ -155,6 +155,10 @@ impl ConsentPrefilter for Prefiltering {
     fn mode(&self) -> &'static str {
         "test-recording"
     }
+
+    fn budget(&self) -> Option<Duration> {
+        None
+    }
 }
 
 /// The gateway and every record its seams keep.

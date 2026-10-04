@@ -26,7 +26,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use ferrofed_identity::consent::ON_UNAVAILABLE;
+use ferrofed_identity::consent::{ConsentPrefilter, ON_UNAVAILABLE};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use openehr_federation::aql::{OffsetStrategy, Targeting};
@@ -72,6 +72,10 @@ pub const LOCALIZATION_MS: &str = "localization_ms";
 /// The `timeout` member that carries the demographics step's budget, in
 /// milliseconds.
 pub const DEMOGRAPHICS_MS: &str = "demographics_ms";
+
+/// The `timeout` member that carries the consent pre-filter's budget, in
+/// milliseconds.
+pub const CONSENT_MS: &str = "consent_ms";
 
 /// The `federation` member that declares the Step-1 consent pre-filter.
 pub const CONSENT: &str = "consent";
@@ -236,8 +240,9 @@ fn localization(policy: &LocalizationPolicy) -> Result<Localization, DescribeErr
 }
 
 /// The `timeout` member: the configured budget, under which a node past it
-/// is abandoned and marked `time-out` (§11.5, N38), and, with a localizer or
-/// a demographics step configured, its own part of it.
+/// is abandoned and marked `time-out` (§11.5, N38), and, with a localizer, a
+/// demographics step or a consent pre-filter that asks a service
+/// configured, its own part of it.
 fn timeout(federation: &Federation) -> Result<TimeoutPolicy, DescribeError> {
     let budget = federation.budget();
     let millis = |member: &'static str, duration: std::time::Duration| {
@@ -253,6 +258,13 @@ fn timeout(federation: &Federation) -> Result<TimeoutPolicy, DescribeError> {
     if let Some(step) = federation.demographics() {
         let demographics = millis(DEMOGRAPHICS_MS, step.timeout())?;
         extra.insert_serialized(DEMOGRAPHICS_MS, &demographics)?;
+    }
+    if let Some(prefilter) = federation
+        .consent_prefilter()
+        .and_then(ConsentPrefilter::budget)
+    {
+        let consent = millis(CONSENT_MS, prefilter)?;
+        extra.insert_serialized(CONSENT_MS, &consent)?;
     }
     Ok(TimeoutPolicy {
         per_node_ms: millis("per_node_ms", budget.per_node())?,

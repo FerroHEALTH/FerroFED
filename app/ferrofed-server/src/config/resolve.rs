@@ -518,6 +518,21 @@ fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
     Ok(Duration::from_millis(millis))
 }
 
+/// The localizer's budget the configuration declares, in milliseconds: the
+/// `[federation.localization]` budget when the section is written, its
+/// default under `node_selection = "localized"` without it, and zero with no
+/// localizer, as `resolve_federation` resolves it.
+pub(super) fn localization_budget_ms(config: &Config) -> u64 {
+    match (
+        &config.federation.localization,
+        config.federation.node_selection,
+    ) {
+        (Some(section), _) => section.timeout_ms,
+        (None, Some(NodeSelection::Localized)) => Localization::default().timeout_ms,
+        (None, _) => 0,
+    }
+}
+
 /// Resolves `[federation.localization]`: a positive budget that ends before
 /// the overall one, of which it is a part (§11.5, §14.1).
 fn resolve_localization(
