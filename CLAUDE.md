@@ -29,18 +29,24 @@ configuration attached to every release. v0.0.6 carried the v0.0.4 to v0.0.6
 milestones: the merged answer across nodes (§9 to §11), the ITS-REST surface
 with follow-up routing (§7a, §12, §12a), and targeting with the
 self-description (§8, §7a.2). v0.0.8 is security and the bindings (§13 to
-§15, Annex A, Annex B): client authentication (#80), onward OAuth 2.0 with a
-signed assertion and a published JWKS (#81), the caller's identity conveyed
-to each node (#82), consent left to the node (#83), XCPD localization (#85),
-mCSD addressing (#86) and the Dutch Generic Functions (#87). `main` carries
-all of these but the Dutch Generic Functions: every caller is authenticated
-at the gateway, each node is reached with its own credential or an OAuth 2.0
-token for an ES384 client assertion, and is told the caller in a token the
-gateway signs; undirected patient queries are localized by XCPD or the PIXm
-resolver, and the registry can be read from an mCSD directory. The ATNA
-audit repository (#418), the Annex B adapters (#87, #88) and traces (#353)
-are planned. v0.0.9 is the conformance program. Each crate gets the rest of
-its behaviour from its own issue, in milestone order.
+§15, Annex A, Annex B), and `main` carries all of it: every caller is
+authenticated at the gateway (#80); each node is reached with its own
+credential, an OAuth 2.0 token for an ES384 client assertion with token
+exchange and DPoP (#81, #439), the Nuts grant (#88) or the FAPI 2.0 grant
+(#497), and is told the caller in a token the gateway signs (#82); consent
+stays with the node, with the optional Step-1 pre-filter (#83) and Mitz
+(#475); undirected patient queries are localized by XCPD (#85), PIXm or the
+NVI (#87), with PDQm ahead of resolution (#487) and PMIR identity changes
+dropping stale bindings (#147); the registry can be read from an mCSD
+directory (#86) with LRZa addressing; every IHE transaction is audited over
+ATNA ITI-20, the BALP records with a bounded spool (#418, #486, #512);
+traces export over OpenTelemetry (#353); and the identity clients share one
+TLS type with mutual TLS (#507). v0.0.9 is the conformance program, with the
+country research (#488) and the national binding refactor (#489). v0.0.10 is
+EHDS readiness (#519): FerroFED is an EHR system under Regulation (EU)
+2025/327, and its harmonised components are due before the dates the
+Regulation applies. Each crate gets the rest of its behaviour from its own
+issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
@@ -141,17 +147,20 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `openehr-federation` (the Federation Tier: the wire additions always on, the
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
   `merge`), `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`,
-  `xcpd`) and `nl-generic-functions` (the Annex B functions: `nvi`, `mitz`,
-  `lrza`, `nuts-auth`). The binding crates depend on nothing in FerroFED, so
+  `xcpd`, and the ATNA audit as `atna` and `balp`) and `nl-generic-functions`
+  (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, and the shared
+  `oauth-metadata`). The binding crates depend on nothing in FerroFED, so
   FerroPIX can use them as they are.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-identity` (the role traits, `PatientRef`, the development
-  cross-reference, the PIXm resolver and localizer and the XCPD localizer
-  over `ihe-iti`, the mCSD directory, the resolution bindings per verified
-  caller, and the adapters over the binding crates) and `ferrofed-engine`
-  (dispatch, fan-out, budgets, follow-up routing, onward OAuth 2.0 and the
-  signed caller token, and the outbound identifier-hygiene gate every
+  cross-reference, the PIXm resolver and localizer, the PDQm demographics
+  step and the XCPD localizer over `ihe-iti`, the PMIR identity feed, the
+  mCSD directory, the NVI localizer and the Mitz pre-filter over
+  `nl-generic-functions`, the audit recorders, the one IHE FHIR client and
+  TLS type, and the resolution bindings per verified caller) and `ferrofed-engine`
+  (dispatch, fan-out, budgets, follow-up routing, the onward grants (OAuth
+  2.0, token exchange, DPoP, Nuts, FAPI 2.0) and the signed caller token, and the outbound identifier-hygiene gate every
   request to a node passes, #45).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):
@@ -176,7 +185,11 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   by digest behind the `FERROFED_E2E` gate (`containers`, #155), the
   capturing and fault proxy in front of each node (`proxy`), and the synthetic
   seed builder that writes over ITS-REST alone inside the `urn:oid:2.999`
-  example arc (`seed`) (`.claude/memory/e2e-gate.md`).
+  example arc (`seed`) (`.claude/memory/e2e-gate.md`), and the harness
+  services every binding is tested against: the PIX Manager, PDQm Supplier,
+  XCPD responding gateway, mCSD directory, PMIR Registry, Audit Record
+  Repositories, NVI, Mitz, Nuts node and the OAuth 2.0 and FAPI 2.0
+  authorization servers, with a mutual-TLS front.
 - The root `Cargo.toml` carries the lint set, the release profile, the
   `openehr-*` family as one pin group and the `publish` switch; `deny.toml`,
   `clippy.toml`, `rustfmt.toml` and `rust-toolchain.toml` sit beside it.
