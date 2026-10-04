@@ -21,6 +21,7 @@ use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
+use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -66,6 +67,7 @@ fn pixm(server: &Server) -> PixmResolver {
                 (node("node-a"), DOMAIN_A.to_owned()),
                 (node("node-b"), DOMAIN_B.to_owned()),
             ]),
+            invocation: Invocation::Get,
         }],
         BTreeMap::new(),
         &registry(),

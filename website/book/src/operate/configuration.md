@@ -233,6 +233,35 @@ credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]`, `[nl_gf.nvi]` and
 `[nl_gf.mitz]`: a grant in any of them is refused at load, and never read as
 no credential.
 
+### A PIX Manager asked by `GET` or `POST`
+
+ITI-83 is an HTTP `GET` with the parameters in the URL: "the HTTP GET
+operation shall be used" (PIXm 3.1.0 §2:3.83.4.1.2), and FHIR R4 requires a
+server to support that `GET` (FHIR R4 Operations §3.2.0.1). The patient
+identifier is then in the request URL, where a proxy, a load balancer or the
+Manager's access log can record it. `method = "get"` is the default, because
+every PIXm Manager answers it.
+
+FHIR R4 invokes an operation "generally" by a `POST` of a `Parameters`
+resource to the operation's endpoint (FHIR R4 Operations §3.2.0.1), and the
+PIXm IG gives the request in that form (its Query Parameters In profile and
+request example). With `method = "post"` the gateway posts the same
+`sourceIdentifier` and `targetSystem` parameters as `valueString`s, with
+`Content-Type: application/fhir+json`, to `[base]/Patient/$ihe-pix`, and the
+request URL carries no parameter. PIXm does not require a Manager to accept a
+`POST`, so set it only for a Manager that says it does:
+
+```toml
+[[pixm.manager]]
+url = "https://pix.example.org/fhir/"
+method = "post"   # the patient identifier travels in the body, never the URL
+```
+
+Any other value is refused naming the key. The answer is read the same way
+under either method, and the audit record of each exchange holds the request
+as sent: the URL of a `GET`, or the request line, media type and body of a
+`POST` ([The audit trail](audit.md)).
+
 ### Mutual TLS to the identity services
 
 A national identity service often authenticates the gateway by its client

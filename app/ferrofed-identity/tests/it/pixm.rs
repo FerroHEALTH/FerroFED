@@ -22,9 +22,10 @@ use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
+use ihe_iti::pixm::Invocation;
 use openehr_its::rest::client::InvalidCredentials;
 use secrecy::SecretString;
-use wiremock::matchers::{header, method, path, query_param};
+use wiremock::matchers::{body_string_contains, header, method, path, query_param};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::support::registry;
@@ -79,6 +80,7 @@ fn manager(server: &Server, auth: Authentication, pairs: &[(&str, &str)]) -> Man
         base: SecretUrl::new(format!("{}/fhir/", server.uri())),
         auth,
         members: members(pairs),
+        invocation: Invocation::Get,
     }
 }
 
@@ -400,6 +402,49 @@ async fn the_bearer_credential_travels_to_the_manager() {
     );
 }
 
+#[tokio::test]
+async fn a_manager_configured_to_post_is_asked_in_the_body_and_never_in_the_url() {
+    let server = Server::start().await;
+    Mock::given(method("POST"))
+        .and(path(OPERATION))
+        .and(header("content-type", FHIR_JSON))
+        .and(body_string_contains(format!("{SOURCE_SYSTEM}|{SENTINEL}")))
+        .and(body_string_contains(DOMAIN_A))
+        .and(body_string_contains(DOMAIN_B))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            parameters(&[(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)]).into_bytes(),
+            FHIR_JSON,
+        ))
+        .mount(&server)
+        .await;
+    let mut config = manager(
+        &server,
+        Authentication::None,
+        &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
+    );
+    config.invocation = Invocation::Post;
+    let resolver = PixmResolver::from_config(vec![config], namespaces(), &registry())
+        .expect("the resolver builds");
+    let resolutions = resolve(&resolver).await;
+    assert_eq!(
+        (Some(EHR_A.to_owned()), Some(EHR_B.to_owned())),
+        (
+            resolved_at(&resolutions, "node-a"),
+            resolved_at(&resolutions, "node-b")
+        ),
+        "the stub answers only a posted query: {resolutions:?}"
+    );
+    let requests = server.received_requests().await.expect("recording is on");
+    assert_eq!(1, requests.len(), "one ITI-83 call for both members");
+    for request in &requests {
+        assert!(
+            !request.url.as_str().contains(SENTINEL),
+            "the identifier is in the request URL: {}",
+            request.url
+        );
+    }
+}
+
 #[test]
 fn every_member_must_have_exactly_one_domain() {
     let server_uri = "http://127.0.0.1:9";
@@ -408,6 +453,7 @@ fn every_member_must_have_exactly_one_domain() {
         base: SecretUrl::new(format!("{server_uri}/fhir/")),
         auth: Authentication::None,
         members: members(pairs),
+        invocation: Invocation::Get,
     };
     let built = |managers| PixmResolver::from_config(managers, namespaces(), &registry());
     assert!(matches!(
@@ -447,6 +493,7 @@ fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
             base: SecretUrl::new("http://127.0.0.1:9/fhir/"),
             auth,
             members: members(&[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)]),
+            invocation: Invocation::Get,
         };
         PixmResolver::from_config(vec![config], namespaces(), &registry())
             .expect_err("the credential is refused")

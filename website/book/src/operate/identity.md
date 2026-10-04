@@ -75,6 +75,9 @@ bearer_token_file = "/run/secrets/pix-token"
 - `[pixm.namespaces]` maps the namespace a client writes to the assigning
   authority the Manager knows it by. A namespace that is itself an absolute
   URI needs no entry.
+- `method` is `"get"`, the default, or `"post"`, which keeps the patient
+  identifier out of the request URL
+  ([`GET` or `POST`](configuration.md#a-pix-manager-asked-by-get-or-post)).
 
 For each query, the gateway asks each Manager once, with one `targetSystem`
 per member that Manager resolves, and reads the identifier the answer holds

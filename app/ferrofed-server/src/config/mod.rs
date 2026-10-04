@@ -175,6 +175,24 @@ pub struct PixManager {
     /// A file of PEM trust roots the Manager's certificate chains to, beside
     /// the platform's.
     pub trust_roots_file: Option<PathBuf>,
+    /// How the gateway asks the Manager: `"get"` or `"post"`.
+    pub method: PixmMethod,
+}
+
+/// How the gateway invokes ITI-83 at a PIX Manager (`method`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PixmMethod {
+    /// `GET [base]/Patient/$ihe-pix?sourceIdentifier=…`: the patient identifier
+    /// is in the request URL.
+    // NOTE: PIXm 3.1.0 §2:3.83.4.1.2 says "the HTTP GET operation shall be used", and
+    // FHIR R4 Operations §3.2.0.1 requires a server to support that GET, with no such rule for POST.
+    #[default]
+    Get,
+    /// `POST [base]/Patient/$ihe-pix` with the parameters in a `Parameters`
+    /// body (FHIR R4 Operations §3.2.0.1), which keeps the patient identifier
+    /// out of the request URL; for a Manager that accepts it.
+    Post,
 }
 
 /// The federation's membership.

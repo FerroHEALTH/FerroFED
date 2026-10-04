@@ -16,7 +16,9 @@
 //! answer holds in a member's domain as that member's `ehr_id`.
 //!
 //! The patient identifier reaches the PIX Manager only, which is the
-//! transaction's purpose. It travels inside `ihe_iti`'s redacting
+//! transaction's purpose: in the request URL of the `GET` ITI-83 prescribes,
+//! or in the body of a `POST` for a Manager configured for one
+//! ([`ManagerConfig::invocation`]). It travels inside `ihe_iti`'s redacting
 //! [`SourceIdentifier`]; nothing here logs it, and no error carries it.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -29,9 +31,9 @@ use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ihe_iti::balp::AuditRecorder;
-use ihe_iti::pixm::PixmClient;
 use ihe_iti::pixm::error::{InvalidInput, PixmError};
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
+use ihe_iti::pixm::{Invocation, PixmClient};
 use openehr_its::rest::client::InvalidCredentials;
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
@@ -56,6 +58,9 @@ pub struct ManagerConfig {
     /// The members this Manager resolves, each with its `ehr_id` domain: the
     /// assigning authority whose identifiers are that member's `ehr_id`s.
     pub members: BTreeMap<NodeId, String>,
+    /// How the gateway asks it: the `GET` ITI-83 prescribes, or a `POST` that
+    /// keeps the patient identifier out of the request URL.
+    pub invocation: Invocation,
 }
 
 /// A PIXm resolver that cannot be built.
@@ -206,7 +211,9 @@ impl PixmResolver {
             }
             let http = fhir::http_client(&manager.auth, &manager.tls)?;
             let base = Url::parse(manager.base.expose()).map_err(PixmConfigError::BaseUrl)?;
-            let client = PixmClient::new(base, http).map_err(PixmConfigError::Base)?;
+            let client = PixmClient::new(base, http)
+                .map_err(PixmConfigError::Base)?
+                .invoked_by(manager.invocation);
             built.push(Arc::new(Manager { client, members }));
         }
         if let Some(uncovered) = registry

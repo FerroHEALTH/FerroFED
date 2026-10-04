@@ -158,6 +158,8 @@ pub struct PixManagerSettings {
     pub credentials: Option<Scheme>,
     /// The TLS material it is reached with.
     pub tls: crate::config::tls::TlsSettings,
+    /// How the gateway asks it.
+    pub method: crate::config::PixmMethod,
 }
 
 /// The federated query, resolved.

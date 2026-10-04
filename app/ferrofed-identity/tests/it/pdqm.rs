@@ -29,6 +29,7 @@ use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdq::PdqSupplier;
 use ihe_iti::balp::{AuditError, AuditRecorder, Exchange};
+use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, ResponseTemplate};
@@ -167,6 +168,7 @@ async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager(
                 (NodeId::new("node-a")?, DOMAIN_A.to_owned()),
                 (NodeId::new("node-b")?, DOMAIN_B.to_owned()),
             ]),
+            invocation: Invocation::Get,
         }],
         BTreeMap::new(),
         &registry(),

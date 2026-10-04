@@ -24,7 +24,9 @@
 //!   replaces it (`200`), several are a `412`. `DELETE [base]/Patient?identifier=
 //!   …` is the Remove Patient Option's conditional delete (`204`).
 //! - **ITI-83, Get Corresponding Identifiers:** `GET [base]/Patient/$ihe-pix?
-//!   sourceIdentifier=<system>|<value>[&targetSystem=<system>]*`, answered as
+//!   sourceIdentifier=<system>|<value>[&targetSystem=<system>]*`, or the same
+//!   inputs as `valueString`s of a `Parameters` body posted to the operation
+//!   (FHIR R4 Operations §3.2.0.1), answered as
 //!   ITI TF-2 §3.83.4.2.2 lays out: a `Parameters` of `targetId` and
 //!   `targetIdentifier` (Case 1), a `404` `not-found` when the source is unknown
 //!   (Case 2), a `400` `code-invalid` when its domain is unknown (Case 3), a
@@ -305,6 +307,12 @@ async fn handle(
         (&Method::GET, "/fhir/Patient/$ihe-pix" | "/fhir/Patient/%24ihe-pix") => {
             cross_reference(&shared, &query)
         }
+        (&Method::POST, "/fhir/Patient/$ihe-pix" | "/fhir/Patient/%24ihe-pix") => {
+            match posted(parts.headers.get(CONTENT_TYPE), &body) {
+                Ok(inputs) => cross_reference(&shared, &inputs),
+                Err(refusal) => refusal.answer(),
+            }
+        }
         (&Method::PUT, "/fhir/Patient") => {
             feed(&shared, &query, parts.headers.get(CONTENT_TYPE), &body)
         }
@@ -363,6 +371,45 @@ fn condition(query: &[(String, String)]) -> Result<DomainId, BadCondition> {
             "a conditional interaction names one identifier, not several",
         )),
     }
+}
+
+/// The input parameters of a posted `$ihe-pix`, read from its `Parameters`
+/// body as the name and value pairs a `GET` carries: each a `valueString`
+/// named by the `OperationDefinition` (FHIR R4 Operations §3.2.0.1; the PIXm
+/// Query Parameters In profile). The request URL is not read.
+fn posted(media: Option<&HeaderValue>, body: &[u8]) -> Result<Vec<(String, String)>, BadCondition> {
+    const NOT_PARAMETERS: BadCondition = BadCondition("structure", "the body is not a Parameters");
+    if !fhir_json(media) {
+        return Err(BadCondition("not-supported", "the body is not FHIR JSON"));
+    }
+    let value: Value = serde_json::from_slice(body).map_err(|_unquoted| NOT_PARAMETERS)?;
+    let object =
+        expect_object(&value, &Path::root("Parameters")).map_err(|_unquoted| NOT_PARAMETERS)?;
+    if object.get("resourceType").and_then(Value::as_str) != Some("Parameters") {
+        return Err(NOT_PARAMETERS);
+    }
+    let parameters = Parameters::from_json(object, &mut Path::root("Parameters"))
+        .map_err(|_unquoted| NOT_PARAMETERS)?;
+    parameters
+        .parameter
+        .iter()
+        .map(
+            |parameter| match (parameter.name.value.as_deref(), &parameter.value) {
+                (
+                    Some(name @ ("sourceIdentifier" | "targetSystem" | "_format")),
+                    Some(ParametersParameterValue::String(text)),
+                ) => text
+                    .value
+                    .clone()
+                    .map(|text| (name.to_owned(), text))
+                    .ok_or(NOT_PARAMETERS),
+                _ => Err(BadCondition(
+                    "invalid",
+                    "a $ihe-pix input is a sourceIdentifier, targetSystem or _format valueString",
+                )),
+            },
+        )
+        .collect()
 }
 
 /// ITI-83: the identifiers cross-referenced with the source in the asked
