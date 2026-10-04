@@ -326,19 +326,14 @@ impl Gate {
                 }
                 // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the
                 // granted scopes that cover the operation, never the whole grant.
-                let covering = caller
-                    .granted()
-                    .split_whitespace()
-                    .filter(|raw| {
-                        permission::granted(
-                            &[SmartScope::parse(raw)],
-                            (family, permission),
-                            named,
-                            backend,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let covering = SmartScope::format_all(caller.scopes().iter().filter(|scope| {
+                    permission::granted(
+                        std::slice::from_ref(*scope),
+                        (family, permission),
+                        named,
+                        backend,
+                    )
+                }));
                 caller = caller.with_covering(covering);
             }
         }

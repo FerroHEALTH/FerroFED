@@ -39,11 +39,7 @@ async fn a_check_the_budget_overtook_names_a_call_never_sent_and_records_nothing
         .await;
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), unreachable::BASE, ""))?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
-    let clients = NodeClients::from_snapshot(
-        &snapshot,
-        &ferrofed_engine::onward::dpop::DpopTransport::new(transport),
-        &BTreeMap::new(),
-    )?;
+    let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     // One nanosecond per node: every call's deadline has passed before the
     // client checks it, so none leaves the gateway.
     let federation = Federation::new(

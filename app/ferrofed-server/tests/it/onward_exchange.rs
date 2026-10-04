@@ -186,6 +186,43 @@ async fn node_a_receives_a_token_exchanged_for_the_verified_caller() -> TestResu
     Ok(())
 }
 
+/// The exchange asks for the caller's covering scopes in the canonical form
+/// `openehr-sdt` prints, whatever order the caller's token wrote their
+/// permissions in (RFC 8693 §2.1, N26; ITS-REST SMART App Launch, master08
+/// §Resource Scopes).
+// conformance: CP-17
+#[tokio::test]
+async fn the_exchange_asks_for_the_covering_scope_in_canonical_form() -> TestResult {
+    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
+    endpoint.accept_exchange(issuer().jwks(), ISSUER);
+    let a = node(endpoint.bearer_for(CALLER)).await;
+    let dir = tempfile::tempdir()?;
+    let tables = exchange_grant(
+        &endpoint.token_url(),
+        &format!("resource = \"{RESOURCE}\"\n"),
+    );
+    let app = gateway(dir.path(), &a.uri(), &tables, crate::support::auth())?;
+    endpoint.trust(published(&app).await?);
+    let mut claims = crate::support::claims();
+    CALLER.clone_into(&mut claims.sub);
+    claims.scope = Some(String::from(
+        "user/composition-*.r  user/aql-*.sdurc user/template-*.r",
+    ));
+    let authorization = format!("Bearer {}", issuer().mint(&claims)?);
+
+    let (status, text) = call(app, patient_post(&authorization)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        vec![Exchanged {
+            subject: CALLER.to_owned(),
+            scope: Some(COVERING.to_owned()),
+            resource: Some(RESOURCE.to_owned()),
+        }],
+        endpoint.exchanges()
+    );
+    Ok(())
+}
+
 /// The caller's token, kept for the exchange, appears in no log line at
 /// any level, no exported span, no metric and no claim the
 /// `openEHR-federation-client` token conveys, and the node never receives

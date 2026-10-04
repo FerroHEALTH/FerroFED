@@ -56,19 +56,25 @@ async fn member(delay: Duration) -> Server {
     server
 }
 
-/// Probes node A at `a` and node B at `b` under one deadline, `budget` from
-/// the moment the clients are built.
+/// Probes node A at `a` and node B at `b`, each member under a per-node
+/// deadline `per_node` from the moment the clients are built, and all under
+/// an overall budget `overall` from that moment.
 async fn probed(
     a: &Server,
     b: &Server,
-    budget: Duration,
+    per_node: Duration,
+    overall: Duration,
 ) -> Result<Vec<(EndpointId, probe::Probed)>, Box<dyn Error>> {
     let snapshot = registry(&a.uri(), &b.uri())?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
-    let until = Instant::now()
-        .checked_add(budget)
+    let built = Instant::now();
+    let per_node = built
+        .checked_add(per_node)
         .ok_or("the deadline is past the platform clock")?;
+    let overall = built
+        .checked_add(overall)
+        .ok_or("the budget is past the platform clock")?;
     let endpoints = [
         EndpointId::new("node-a-pub")?,
         EndpointId::new("node-b-pub")?,
@@ -76,8 +82,8 @@ async fn probed(
     let probe = Probe {
         ehr_id: ProbedEhrId::try_from(&EhrId::new(EHR)?)?,
         headers: HeaderMap::new(),
-        per_node: until,
-        overall: until,
+        per_node,
+        overall,
         request_id: OutboundId::mint(),
         conveyance: crate::conveyed::conveyance(),
     };
@@ -96,7 +102,7 @@ async fn received(server: &Server) -> Result<usize, Box<dyn Error>> {
 async fn a_probe_the_budget_overtook_is_unsent_at_every_member() -> TestResult {
     let a = member(Duration::ZERO).await;
     let b = member(Duration::ZERO).await;
-    let answers = probed(&a, &b, Duration::ZERO).await?;
+    let answers = probed(&a, &b, Duration::ZERO, Duration::ZERO).await?;
     assert_eq!(2, answers.len());
     for (endpoint, probed) in &answers {
         assert!(
@@ -115,7 +121,7 @@ async fn a_probe_the_budget_overtook_is_unsent_at_every_member() -> TestResult {
 async fn a_probe_a_member_leaves_unanswered_past_the_budget_shows_a_silent_member() -> TestResult {
     let a = member(Duration::ZERO).await;
     let b = member(timing::SILENT).await;
-    let answers = probed(&a, &b, timing::SLACK).await?;
+    let answers = probed(&a, &b, timing::SLACK, timing::SLACK).await?;
     let contacts: Vec<(&str, Contact)> = answers
         .iter()
         .map(|(endpoint, probed)| (endpoint.as_str(), probed.contact()))
@@ -128,6 +134,34 @@ async fn a_probe_a_member_leaves_unanswered_past_the_budget_shows_a_silent_membe
         contacts,
         "§11.1: node B was sent the probe and gave no answer in time"
     );
+    assert_eq!(1, received(&b).await?, "the probe left for node B");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_member_whose_own_deadline_passes_inside_the_budget_is_a_time_out_of_a_contacted_member()
+-> TestResult {
+    let a = member(Duration::ZERO).await;
+    let b = member(timing::SILENT).await;
+    // The per-node deadline passes a full SLACK before the overall budget, so
+    // node B's own transport time-out ends its probe, never the budget.
+    let overall = timing::SLACK
+        .checked_mul(2)
+        .ok_or("the budget is past the platform clock")?;
+    let answers = probed(&a, &b, timing::SLACK, overall).await?;
+    let [(_, answered), (silent, unanswered)] = answers.as_slice() else {
+        return Err(format!("one answer per member: {answers:?}").into());
+    };
+    assert_eq!(Contact::Answered(http::StatusCode::OK), answered.contact());
+    assert!(
+        matches!(
+            unanswered.answer,
+            Answer::Failed(ForwardError::TimeOut { .. })
+        ),
+        "§11.1, §12.5.1: {silent} was sent the probe and timed out: {:?}",
+        unanswered.answer
+    );
+    assert_eq!(Contact::Silent, unanswered.contact(), "{silent}");
     assert_eq!(1, received(&b).await?, "the probe left for node B");
     Ok(())
 }

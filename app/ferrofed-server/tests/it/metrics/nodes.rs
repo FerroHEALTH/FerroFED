@@ -292,11 +292,7 @@ async fn a_member_request_that_never_left_the_gateway_is_neither_counted_nor_tim
     let only_a = RegistrySnapshot::from_toml_str(&only_node_a(&a.uri()))?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
     // Node B has no client, so the gateway sends it nothing.
-    let clients = NodeClients::from_snapshot(
-        &only_a,
-        &ferrofed_engine::onward::dpop::DpopTransport::new(transport),
-        &BTreeMap::new(),
-    )?;
+    let clients = NodeClients::from_snapshot(&only_a, &transport, &BTreeMap::new())?;
     let federation = Federation::new(
         FederationId::new("example-federation")?,
         snapshot,

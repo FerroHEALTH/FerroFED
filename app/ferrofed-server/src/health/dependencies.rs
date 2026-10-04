@@ -34,6 +34,7 @@ use ferrofed_registry::id::{EndpointId, NodeId};
 use ihe_iti::atna::forwarder::Status;
 use serde::Serialize;
 
+use crate::directory::DirectoryFault;
 use crate::pmir::subscription::RegistryFault;
 
 /// The last state observed of one dependency.
@@ -49,7 +50,8 @@ pub enum Observed {
     /// The last request could not reach it or got no answer in time.
     Down,
     /// It is reachable, and work it has not taken yet waits for it: the
-    /// audit repository while its spool holds messages.
+    /// audit repository while its spool holds messages, and the care
+    /// services directory while the change it answered with is refused.
     Degraded,
 }
 
@@ -298,6 +300,7 @@ impl Dependencies {
             directory: None,
             identity_registry: None,
             identity_registry_fault: None,
+            directory_fault: None,
             audit_repository: self
                 .audit_repository
                 .as_ref()
@@ -323,9 +326,10 @@ pub struct Report {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub localizer: Option<Observed>,
     /// The state of the care services directory the registry is read from,
-    /// absent when the registry is a document: `up` after its last answer,
-    /// `failing` after a `5xx` or an answer that breaks ITI-90 or ITI-91, and
-    /// `down` when it did not answer.
+    /// absent when the registry is a document: `up` after an answer the
+    /// gateway accepted, `degraded` after an answer whose change it refused,
+    /// `failing` after an HTTP error or an answer that breaks ITI-90 or
+    /// ITI-91, and `down` when it did not answer.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<Observed>,
     /// The state of the PMIR Patient Identity Registry the identity feed
@@ -340,6 +344,12 @@ pub struct Report {
     /// cannot locate; absent while it is up, not yet asked, or not configured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity_registry_fault: Option<RegistryFault>,
+    /// Why the care services directory's last answer was not accepted:
+    /// `registry-invalid` or `configuration-mismatch` while it is `degraded`,
+    /// and `refused-credentials` while it is `failing` after a `401` or a
+    /// `403`; absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory_fault: Option<DirectoryFault>,
     /// The audit repository's state, absent when no audit message goes to
     /// one.
     #[serde(skip_serializing_if = "Option::is_none")]

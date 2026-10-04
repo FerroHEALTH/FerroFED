@@ -248,16 +248,13 @@ impl<T: Transport> Inner<T> {
             return Ok(fresh);
         }
         let started = self.clock.now();
-        let key_pair = self.keys.current();
-        let assertion = token::assertion(&self.grant, key_pair, self.lifetime)?;
-        let actor = token::assertion(&self.grant, key_pair, self.lifetime)?;
         let issued = token::exchange(
             &self.grant,
             Subject {
                 token: subject.token(),
                 scope: subject.scope(),
             },
-            (&assertion, &actor),
+            (self.keys.current(), self.lifetime),
             &self.transport,
             self.timeout,
         )

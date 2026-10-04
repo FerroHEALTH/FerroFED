@@ -69,7 +69,7 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
   Federation Tier  0.9.0
   ITS-REST         1.1.0
   AQL              1.1.0
-  openehr-*        0.0.81
+  openehr-*        0.0.82
 
   Base path        /
   Listen           0.0.0.0:8080
@@ -281,7 +281,10 @@ section is required except those two:
 
 - `scope` is space-separated SMART on openEHR scopes, each a resource scope
   of the `system` compartment (`system/aql-*.s`, `system/composition-*.cru`);
-  anything else is refused at load.
+  anything else is refused at load. The token request carries each scope in
+  the canonical form of the grammar, its permissions in `c`, `r`, `u`, `d`,
+  `s` order and one space between scopes: `system/aql-*.sr` is requested as
+  `system/aql-*.rs`.
 - `token_endpoint` is an `https` URL with no user name, password, query or
   fragment; `http` is accepted only under `profile = "development"`
   ([What must travel encrypted](#what-must-travel-encrypted)).
@@ -319,9 +322,10 @@ For a request on behalf of a caller, the gateway sends the token endpoint
 the caller's verified access token as `subject_token`, an assertion of its
 own as `actor_token`, with its own `jti`, and the client assertion as
 above. It asks for the caller's granted scopes that cover the operation,
-and never the rest (N26), and names the node with `resource`. The answer
-must issue an access token (`issued_token_type`, RFC 8693 §2.2.1). The
-token is cached per caller's token and scope, at most 1024 per endpoint,
+and never the rest (N26), each in the canonical form, and names the node
+with `resource`. The answer must issue an access token
+(`issued_token_type`, RFC 8693 §2.2.1). The token is cached per caller's
+token and scope, at most 1024 per endpoint,
 until 30 seconds before it expires, and dropped when the node answers
 `401`. The cache keys on a SHA-256 of the caller's token, never the token.
 
@@ -366,6 +370,12 @@ endpoint that answers `400 use_dpop_nonce`, or a node that answers `401`
 with a `DPoP` challenge naming `use_dpop_nonce`, is sent the request once
 more with the nonce it gave, within the request's budget, and every later
 proof to that server carries the latest nonce it sent (RFC 9449 §8, §9).
+The token endpoint's nonce and the node's are kept apart even when both
+live on one host. A token request sent once more carries a newly signed
+client assertion, and under token exchange a new actor token, so the
+token endpoint never sees a `jti` twice. A node whose deadline passes
+before that second send is `time-out`, and it counts as a node that was
+asked.
 The key is read at start and on each reload; a key that is no P-256 or
 P-384 key refuses the configuration, naming `dpop_key_file`.
 
@@ -453,7 +463,7 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 | `OPTIONS {base}/` | the federation's self-description (§7a.2) |
 | `GET {base}/health` | `200` while the process is up |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems (the configuration, the registry, the outbound clients, the stored-query store) are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives, with the phase and each subsystem's state; no member node and no identity source gates it |
-| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter and of the mCSD directory: `up`, `failing`, `down` or `unknown`; endpoint ids and states only |
+| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter and of the mCSD directory: `up`, `degraded`, `failing`, `down` or `unknown`, with `directory_fault` while the directory is `degraded`; endpoint ids, states and the fault's class only |
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |
 | `{base}/v1/ehr/{ehr_id}` and below | routed to the one node that owns the `ehr_id`, found in the order of §12.5.1: the `openEHR-federation-endpoint` header, the session's resolution binding, the `ehr_id` index, then for a read the ask-all probe; answered as that node answered; `501` when no registry is configured |
 | `GET {base}/v1/ehr?subject_id=…&subject_namespace=…` | the subject resolved at the gateway, and `GET /v1/ehr/{ehr_id}` sent to the one member that holds it, at that member's own base, answered as that node answered; `501` when no registry is configured |

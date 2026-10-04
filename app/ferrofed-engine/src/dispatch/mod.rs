@@ -45,6 +45,7 @@ use crate::ehr::EhrCallError;
 use crate::forward::{ForwardError, Forwarded};
 use crate::hygiene::{Part, Withheld};
 use crate::onward::conveyance::{self, Conveyance, ConveyanceError};
+use crate::onward::dpop::NodeProver;
 use crate::onward::exchange::SharedOnBehalf;
 use crate::outbound_id::OutboundId;
 use crate::trace_context;
@@ -62,6 +63,7 @@ use url::Url;
 
 mod classify;
 pub mod definition;
+pub(crate) mod dpop;
 mod gate;
 mod on_behalf;
 mod query;
@@ -284,8 +286,10 @@ pub enum Contact {
     Unsent,
     /// The node answered with this HTTP status.
     Answered(StatusCode),
-    /// The request left and the node gave no answer: it timed out, could not
-    /// be reached, or was abandoned when the overall budget ran out.
+    /// The request left and the node gave no answer to it: it timed out,
+    /// could not be reached, was abandoned when the overall budget ran out,
+    /// or was answered with a `DPoP` nonce challenge and could not be sent
+    /// again (RFC 9449 §9).
     Silent,
 }
 
@@ -309,7 +313,9 @@ impl Contact {
     pub fn of_forward_error(error: &ForwardError) -> Self {
         match error {
             ForwardError::Refused { status, .. } => Self::Answered(*status),
-            ForwardError::TimeOut { .. } | ForwardError::Unreachable { .. } => Self::Silent,
+            ForwardError::TimeOut { .. }
+            | ForwardError::Unreachable { .. }
+            | ForwardError::Credentials { sent: true, .. } => Self::Silent,
             ForwardError::QueryParameter(_)
             | ForwardError::Expired { .. }
             | ForwardError::Value(_)
@@ -334,13 +340,18 @@ impl Contact {
             EhrCallError::Withheld { .. }
             | EhrCallError::Expired { .. }
             | EhrCallError::Conveyance { .. } => Self::Unsent,
-            EhrCallError::Failed { source, .. } => Self::of_client_error(source),
+            EhrCallError::Failed { source, sent, .. } => match Self::of_client_error(source) {
+                Self::Unsent if *sent => Self::Silent,
+                contact => contact,
+            },
         }
     }
 
     /// Returns what a call that ended in `error` showed of the node: the
     /// status of an answer, [`Contact::Silent`] for a request that left with
-    /// no answer, and [`Contact::Unsent`] for one that never left.
+    /// no answer, and [`Contact::Unsent`] for one the error alone shows never
+    /// left. A `DPoP` call whose request left before such an error is read
+    /// by its caller, which saw the call's sends.
     #[must_use]
     pub fn of_client_error(error: &ClientError) -> Self {
         match error {
@@ -353,6 +364,7 @@ impl Contact {
             ClientError::BaseUrl { .. }
             | ClientError::DeadlineElapsed { .. }
             | ClientError::Credentials { .. }
+            | ClientError::DpopProof { .. }
             | ClientError::Build { .. }
             | ClientError::HeaderName { .. }
             | ClientError::InvalidCredentials { .. }
@@ -503,6 +515,7 @@ pub struct NodeClient<T> {
     client: Client<T>,
     consent_refusal_codes: BTreeSet<String>,
     on_behalf: Option<SharedOnBehalf>,
+    dpop: Option<NodeProver>,
 }
 
 impl<T: Transport + Clone> NodeClient<T> {
@@ -525,8 +538,9 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint: endpoint.id().clone(),
                 source: Box::new(source),
             })?
-            // NOTE: openehr-its Client::execute (docs.rs) raises DeadlineElapsed before an attempt, so
-            // with one attempt it is a request never sent, which every Contact reading here relies on.
+            // NOTE: openehr-its Client::execute (docs.rs) raises DeadlineElapsed before an attempt or
+            // before a DPoP nonce re-send, so with one attempt the request is unsent unless the
+            // call's prover saw a send, which every Contact reading here relies on (dpop::Sent).
             .with_retry(RetryPolicy {
                 max_attempts: 1,
                 ..RetryPolicy::default()
@@ -536,6 +550,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             client,
             consent_refusal_codes: endpoint.consent_refusal_codes().clone(),
             on_behalf: None,
+            dpop: None,
         })
     }
 

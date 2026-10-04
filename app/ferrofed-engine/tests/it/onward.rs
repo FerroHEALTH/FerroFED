@@ -543,6 +543,50 @@ fn a_scope_outside_the_system_resource_grammar_is_refused() {
     assert!(Scope::parse("system/aql-*.s system/template-*.r").is_ok());
 }
 
+/// A configured scope is requested in the canonical form `openehr-sdt`
+/// prints: the permissions in the grammar's `c`, `r`, `u`, `d`, `s` order,
+/// one space between scopes, whatever order and spacing the text used
+/// (ITS-REST SMART App Launch, master08 §Resource Scopes; RFC 6749 §3.3).
+#[test]
+fn a_scope_is_requested_in_its_canonical_form() -> TestResult {
+    let scope = Scope::parse("  system/aql-*.sr \t system/composition-*.dcr\n")?;
+    assert_eq!("system/aql-*.rs system/composition-*.crd", scope.as_str());
+    assert_eq!(
+        scope,
+        Scope::parse(scope.as_str())?,
+        "canonical is a fixed point"
+    );
+    Ok(())
+}
+
+/// The token request carries the scope in its canonical form, not as the
+/// configuration wrote it (RFC 6749 §3.3, §4.4.2).
+// conformance: CP-17
+#[tokio::test]
+async fn the_token_request_carries_the_canonical_scope() -> TestResult {
+    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
+    let clock: Arc<dyn Clock> = ManualClock::new();
+    let keys = ring(key()?, Arc::clone(&clock))?;
+    endpoint.trust(keys.published());
+    let grant = Grant::new(
+        &SecretUrl::new(endpoint.token_url()),
+        CLIENT_ID,
+        Scope::parse("system/composition-*.rc   system/aql-*.s")?,
+    )?;
+    provider(grant, keys, clock)?.credentials().await?;
+
+    let forms = endpoint.forms();
+    let [form] = forms.as_slice() else {
+        return Err(format!("expected one token request, got {}", forms.len()).into());
+    };
+    let scope = form
+        .iter()
+        .find(|(name, _)| name == "scope")
+        .map(|(_, value)| value.as_str());
+    assert_eq!(Some("system/composition-*.cr system/aql-*.s"), scope);
+    Ok(())
+}
+
 /// The provider names its endpoint and client and never a token.
 #[tokio::test]
 async fn a_provider_shows_no_token() -> TestResult {

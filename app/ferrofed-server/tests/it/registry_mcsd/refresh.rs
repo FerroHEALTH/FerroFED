@@ -5,7 +5,9 @@
 //! applies only what changed since the last read, a refresh that breaks an
 //! integrity rule is refused and counted with the running registry kept, and
 //! a directory that does not answer keeps the registry and shows on
-//! `/health/dependencies` (§15.1, §15.2, N19, N21).
+//! `/health/dependencies` (§15.1, §15.2, N19, N21), as does a change the
+//! gateway refused (no specification governs the health report: our own
+//! design).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -61,6 +63,31 @@ async fn directory_state(gateway: &Gateway) -> Result<Option<String>, Box<dyn Er
     let (status, text) = call(gateway.router(), request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok(serde_json::from_str::<Report>(&text)?.directory)
+}
+
+/// What `/health/dependencies` reports of the directory.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+struct DirectoryHealth {
+    directory: Option<String>,
+    directory_fault: Option<String>,
+}
+
+impl DirectoryHealth {
+    /// The directory in `state`, with `fault` as why it is degraded.
+    fn of(state: &str, fault: Option<&str>) -> Self {
+        Self {
+            directory: Some(state.to_owned()),
+            directory_fault: fault.map(str::to_owned),
+        }
+    }
+}
+
+/// What `/health/dependencies` reports of the directory, and the whole body.
+async fn directory_health(gateway: &Gateway) -> Result<(DirectoryHealth, String), Box<dyn Error>> {
+    let request = Request::get("/health/dependencies").body(Body::empty())?;
+    let (status, text) = call(gateway.router(), request).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    Ok((serde_json::from_str(&text)?, text))
 }
 
 #[tokio::test]
@@ -458,5 +485,218 @@ async fn a_refresh_past_a_cap_is_refused_counted_and_shown() -> TestResult {
     assert_eq!(before, gateway.addresses()?, "the running registry stays");
     assert_eq!(Some("1".to_owned()), reloads(&gateway, "refused")?);
     assert_eq!(Some("failing".to_owned()), directory_state(&gateway).await?);
+    Ok(())
+}
+
+/// A change the gateway refuses shows the directory `degraded`, with the
+/// class of the refusal and no identifier, while the previous registry is
+/// served; a directory that then stops answering shows `down` with no fault,
+/// the same change refused again shows `degraded` again, and an accepted
+/// change shows `up` (no specification governs this: our own design).
+#[tokio::test]
+async fn a_refused_change_shows_the_directory_degraded_until_a_change_is_accepted() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-b::cdr-b.example.org::1").await;
+    let moved = node_answering("uid-b::cdr-b.example.org::1").await;
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&members(&a.uri(), &b.uri()))?;
+    let gateway = Gateway::boot(&harness, 1_000)?;
+    let up = DirectoryHealth::of("up", None);
+
+    harness.put_endpoint(member("b", &moved.uri()).endpoint()?);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(matches!(outcome, RefreshOutcome::Applied(_)), "{outcome:?}");
+    assert_eq!(up, directory_health(&gateway).await?.0);
+    let accepted = gateway.addresses()?;
+
+    harness.put_endpoint(
+        member("b", "https://cdr-b2.example.org/openehr").endpoint_with_connection_type(
+            "http://terminology.hl7.org/CodeSystem/endpoint-connection-type",
+            "hl7-fhir-rest",
+        )?,
+    );
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    let RefreshOutcome::Refused(error) = &outcome else {
+        return Err(format!("the refresh is refused: {outcome:?}").into());
+    };
+    assert_eq!("registry-invalid", error.class());
+    let refused = DirectoryHealth::of("degraded", Some("registry-invalid"));
+    let (health, text) = directory_health(&gateway).await?;
+    assert_eq!(refused, health, "{text}");
+    for content in ["cdr-b2", "hl7-fhir-rest", "org-b", "cdr-b.example.org"] {
+        assert!(!text.contains(content), "no directory content: {text}");
+    }
+    assert_eq!(
+        accepted,
+        gateway.addresses()?,
+        "the previous registry stays"
+    );
+    assert_eq!(
+        vec![
+            ("node-a-pub".to_owned(), "active".to_owned()),
+            ("node-b-pub".to_owned(), "active".to_owned()),
+        ],
+        asked(&gateway).await?
+    );
+    assert_eq!(
+        1,
+        received(&moved).await?.len(),
+        "the kept address is asked"
+    );
+
+    harness.outage(Some(Outage::Silent));
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(matches!(outcome, RefreshOutcome::Refused(_)), "{outcome:?}");
+    assert_eq!(
+        DirectoryHealth {
+            directory: Some("down".to_owned()),
+            directory_fault: None,
+        },
+        directory_health(&gateway).await?.0,
+        "a directory that did not answer is down, never refused"
+    );
+
+    harness.outage(None);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(matches!(outcome, RefreshOutcome::Refused(_)), "{outcome:?}");
+    assert_eq!(
+        refused,
+        directory_health(&gateway).await?.0,
+        "the same change is refused again"
+    );
+
+    harness.put_endpoint(member("b", "https://cdr-b3.example.org/openehr").endpoint()?);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(matches!(outcome, RefreshOutcome::Applied(_)), "{outcome:?}");
+    assert_eq!(up, directory_health(&gateway).await?.0);
+    let addresses = gateway.addresses()?;
+    assert!(
+        addresses
+            .get("node-b-pub")
+            .is_some_and(|url| url.starts_with("https://cdr-b3.example.org/")),
+        "the accepted change is served: {addresses:?}"
+    );
+    Ok(())
+}
+
+/// A sound registry the rest of the configuration does not fit, a member
+/// the development cross-reference names removed, shows the directory
+/// `degraded` as `configuration-mismatch` until the directory holds the
+/// member again (no specification governs this: our own design).
+#[tokio::test]
+async fn a_change_the_configuration_does_not_fit_shows_a_configuration_mismatch() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&members(
+        "https://cdr-a.example.org/openehr",
+        "https://cdr-b.example.org/openehr",
+    ))?;
+    let gateway = Gateway::boot(&harness, 5_000)?;
+    let before = gateway.addresses()?;
+
+    harness.delete_endpoint("node-b-pub");
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    let RefreshOutcome::Refused(error) = &outcome else {
+        return Err(format!("the refresh is refused: {outcome:?}").into());
+    };
+    assert_eq!("dev-cross-reference", error.class());
+    assert_eq!(
+        DirectoryHealth::of("degraded", Some("configuration-mismatch")),
+        directory_health(&gateway).await?.0
+    );
+    assert_eq!(before, gateway.addresses()?);
+
+    harness.put_endpoint(member("b", "https://cdr-b.example.org/openehr").endpoint()?);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(
+        matches!(outcome, RefreshOutcome::Unchanged),
+        "the directory holds the registry in place again: {outcome:?}"
+    );
+    assert_eq!(
+        DirectoryHealth::of("up", None),
+        directory_health(&gateway).await?.0
+    );
+    Ok(())
+}
+
+/// A registry whose integrity the federation refuses, one `system_id` for
+/// two nodes (N21, §12a.1), shows the directory `degraded` as
+/// `registry-invalid` (no specification governs the report: our own design).
+#[tokio::test]
+async fn a_change_that_breaks_the_registry_integrity_shows_registry_invalid() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&members(
+        "https://cdr-a.example.org/openehr",
+        "https://cdr-b.example.org/openehr",
+    ))?;
+    let gateway = Gateway::boot(&harness, 5_000)?;
+    let mut clash = member("b", "https://cdr-b.example.org/openehr");
+    clash.system_id = "cdr-a.example.org".to_owned();
+    harness.put_endpoint(clash.endpoint()?);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(
+        matches!(
+            &outcome,
+            RefreshOutcome::Refused(ReloadError::Federation { .. })
+        ),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        DirectoryHealth::of("degraded", Some("registry-invalid")),
+        directory_health(&gateway).await?.0
+    );
+    Ok(())
+}
+
+/// A directory that answers a refresh `401` refused the gateway's
+/// credentials: it shows `failing` as `refused-credentials`, never `up`,
+/// while the registry in place is served; a `503` shows `failing` with no
+/// fault, and an answer accepted again shows `up` (no specification governs
+/// this: our own design).
+#[tokio::test]
+async fn a_directory_that_refuses_the_credentials_shows_failing_never_up() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-b::cdr-b.example.org::1").await;
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&members(&a.uri(), &b.uri()))?;
+    let gateway = Gateway::boot(&harness, 5_000)?;
+    let before = gateway.addresses()?;
+
+    harness.outage(Some(Outage::Unauthorized));
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(
+        matches!(outcome, RefreshOutcome::Unreachable(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        DirectoryHealth::of("failing", Some("refused-credentials")),
+        directory_health(&gateway).await?.0
+    );
+    assert_eq!(before, gateway.addresses()?, "the running registry stays");
+    assert_eq!(
+        vec![
+            ("node-a-pub".to_owned(), "active".to_owned()),
+            ("node-b-pub".to_owned(), "active".to_owned()),
+        ],
+        asked(&gateway).await?
+    );
+
+    harness.outage(Some(Outage::Refusing));
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(
+        matches!(outcome, RefreshOutcome::Unreachable(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        DirectoryHealth::of("failing", None),
+        directory_health(&gateway).await?.0
+    );
+
+    harness.outage(None);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(matches!(outcome, RefreshOutcome::Unchanged), "{outcome:?}");
+    assert_eq!(
+        DirectoryHealth::of("up", None),
+        directory_health(&gateway).await?.0
+    );
     Ok(())
 }

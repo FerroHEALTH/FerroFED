@@ -4,40 +4,38 @@
 //! `DPoP`: onward tokens bound to a key of the gateway's (RFC 9449), for a
 //! deployment that requires sender-constrained tokens (§13.4).
 //!
-//! [`DpopTransport`] wraps the HTTP engine every node request and every
-//! token request is sent through. A request whose URL lies under a route,
-//! a node's base URL or its token endpoint, gets a proof in the [`HEADER`]
-//! signed by that route's [`Prover`]: a JWS typed [`PROOF_TYPE`] whose
-//! header carries the public key, and whose claims bind the request's
-//! method (`htm`) and URL without query and fragment (`htu`), with a fresh
-//! `jti` and `iat` (RFC 9449 §4.2). The proof is made where the request is
-//! final, because only the engine sees its method and URL. A request that
-//! carries an access token sends it under the `DPoP` scheme, and its proof
-//! carries the token's hash in `ath` (RFC 9449 §7.1).
+//! A grant's [`Prover`] holds the key. Every request of that grant carries a
+//! proof in the [`HEADER`]: a JWS typed [`PROOF_TYPE`] whose header carries
+//! the public key, and whose claims bind the request's method (`htm`) and
+//! URL without query and fragment (`htu`), with a fresh `jti` and `iat`
+//! (RFC 9449 §4.2). A token request proves itself where it is composed
+//! ([`token`](crate::onward::token)). A node request carries its bound
+//! token as `openehr-its`'s `Credentials::Dpop`, under the `DPoP` scheme
+//! (§7.1), and the node's client asks the endpoint's [`NodeProver`] for the
+//! proof over the final method and URL, with the token's hash in `ath`.
 //!
 //! A server that demands a nonce answers with one in [`NONCE_HEADER`]: the
-//! token endpoint with `400` and `use_dpop_nonce` (RFC 9449 §8), a node
-//! with `401` and a `DPoP` challenge naming `use_dpop_nonce` (§9). The
-//! transport then sends the request once more, with the nonce in a new
-//! proof, to the same URL and within the time the request had left. Every
-//! nonce a server sends is kept per origin and put in the next proof to it.
-//! A request under no route passes through unchanged.
+//! token endpoint with `400` and [`USE_NONCE`] (RFC 9449 §8), a node with
+//! `401` and a `DPoP` challenge naming it (§9). The request is then sent
+//! once more, with the nonce in a new proof, to the same URL: a token
+//! request by [`token`](crate::onward::token), a node request by the
+//! `openehr-its` client, which answers the challenge for a client given a
+//! prover. Every nonce a server sends is kept per origin and per role,
+//! the token endpoint's apart from the node's even on one origin (§9), and
+//! put in the next proof to that server.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Instant;
 
 use aws_lc_rs::digest::{SHA256, digest};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use http::header::{AUTHORIZATION, WWW_AUTHENTICATE};
-use http::{HeaderValue, StatusCode};
 use jsonwebtoken::jwk::{Jwk, ThumbprintHash};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
-use openehr_its::rest::client::{RequestTimeout, Transport, TransportError};
+use openehr_its::rest::client::{CredentialsError, DpopProofRequest, DpopProver};
 use secrecy::{ExposeSecret, SecretString};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use url::Url;
 
 /// The header a proof travels in (RFC 9449 §4.1).
@@ -79,7 +77,18 @@ pub struct Prover {
     algorithm: Algorithm,
     public: Jwk,
     thumbprint: String,
-    nonces: Mutex<BTreeMap<String, String>>,
+    nonces: Mutex<BTreeMap<(Role, String), String>>,
+}
+
+/// The part a server plays toward a `DPoP`-bound grant, which keeps the
+/// nonces of each apart (RFC 9449 §9: a nonce of the authorization server
+/// and one of a resource server are never confused).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Role {
+    /// The authorization server: the grant's token endpoint (§8).
+    Authorization,
+    /// The resource server: the node (§9).
+    Resource,
 }
 
 /// The claims of one proof (RFC 9449 §4.2).
@@ -145,22 +154,28 @@ impl Prover {
         &self.thumbprint
     }
 
-    /// A proof of a request with `method` to `htu`, bound to `token` when
-    /// the request carries one and naming `nonce` when the server sent one.
-    fn proof(
+    /// A proof of a request with `method` to `url`, a server in `role`,
+    /// bound to `token` when the request carries one, and naming the nonce
+    /// that server sent last, when it sent one (RFC 9449 §4.2).
+    ///
+    /// The proof's `htu` is `url` without its query and fragment.
+    pub(crate) fn prove(
         &self,
-        method: &http::Method,
-        htu: &str,
+        (method, url): (&http::Method, &Url),
+        role: Role,
         token: Option<&str>,
-        nonce: Option<&str>,
     ) -> Result<String, jsonwebtoken::errors::Error> {
+        let nonce = self.nonce(role, url);
+        let mut htu = url.clone();
+        htu.set_query(None);
+        htu.set_fragment(None);
         let claims = Claims {
             jti: uuid::Uuid::new_v4().to_string(),
             htm: method.as_str(),
-            htu,
+            htu: htu.as_str(),
             iat: jiff::Timestamp::now().as_second(),
             ath: token.map(|token| URL_SAFE_NO_PAD.encode(digest(&SHA256, token.as_bytes()))),
-            nonce,
+            nonce: nonce.as_deref(),
         };
         let mut header = Header::new(self.algorithm);
         header.typ = Some(PROOF_TYPE.to_owned());
@@ -168,17 +183,22 @@ impl Prover {
         jsonwebtoken::encode(&header, &claims, &self.private)
     }
 
-    /// The nonce `origin` sent last, when it sent one.
-    fn nonce(&self, origin: &str) -> Option<String> {
-        self.lock().get(origin).cloned()
+    /// The nonce the server in `role` at `url`'s origin sent last, when it
+    /// sent one.
+    fn nonce(&self, role: Role, url: &Url) -> Option<String> {
+        self.lock()
+            .get(&(role, url.origin().ascii_serialization()))
+            .cloned()
     }
 
-    /// Keeps `nonce` as the one `origin` sent last.
-    fn remember(&self, origin: &str, nonce: String) {
-        self.lock().insert(origin.to_owned(), nonce);
+    /// Keeps `nonce` as the one the server in `role` at `url`'s origin sent
+    /// last.
+    pub(crate) fn remember(&self, role: Role, url: &Url, nonce: &str) {
+        self.lock()
+            .insert((role, url.origin().ascii_serialization()), nonce.to_owned());
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, String>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<(Role, String), String>> {
         // NOTE: no specification governs this: our own design; a panic while the
         // lock was held leaves at worst a stale nonce, which the server replaces.
         self.nonces.lock().unwrap_or_else(PoisonError::into_inner)
@@ -194,212 +214,47 @@ impl fmt::Debug for Prover {
     }
 }
 
-/// A route: the URLs one [`Prover`] proves requests to.
-#[derive(Debug, Clone)]
-struct Route {
-    prefix: Url,
-    prover: Arc<Prover>,
-}
-
-impl Route {
-    /// Whether `url` lies under this route: the same origin, and a path
-    /// that is the route's path or continues it after a `/`.
-    fn covers(&self, url: &Url) -> bool {
-        if url.origin() != self.prefix.origin() {
-            return false;
-        }
-        let root = self.prefix.path().trim_end_matches('/');
-        url.path()
-            .strip_prefix(root)
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
-    }
-}
-
-/// The HTTP engine `inner`, with a `DPoP` proof on every request under one
-/// of its routes.
+/// The proofs of one node's requests: a [`Prover`] for the node at one base
+/// URL, as the `DpopProver` of the node's `openehr-its` client.
 ///
-/// `Debug` names the routes and their keys' thumbprints.
+/// The client asks it for the proof of every request it sends under a bound
+/// token, over the request's final method and URL and the token (RFC 9449
+/// §4.2, §7.1), and hands it every nonce the node sends, which it keeps for
+/// the node's origin (§9).
 #[derive(Debug, Clone)]
-pub struct DpopTransport<T> {
-    inner: T,
-    routes: Arc<[Route]>,
+pub struct NodeProver {
+    prover: Arc<Prover>,
+    base: Url,
 }
 
-impl<T> DpopTransport<T> {
-    /// The engine `inner` with no route: every request passes through
-    /// unchanged.
+impl NodeProver {
+    /// The proofs of `prover` for the node at `base`.
     #[must_use]
-    pub fn new(inner: T) -> Self {
-        Self {
-            inner,
-            routes: Arc::from(Vec::new()),
-        }
-    }
-
-    /// This engine, proving every request under `prefix` with `prover`.
-    ///
-    /// The longest route that covers a request proves it.
-    #[must_use]
-    pub fn with_route(mut self, prefix: Url, prover: Arc<Prover>) -> Self {
-        let mut routes = self.routes.to_vec();
-        routes.push(Route { prefix, prover });
-        routes.sort_by_key(|route| std::cmp::Reverse(route.prefix.as_str().len()));
-        self.routes = Arc::from(routes);
-        self
-    }
-
-    /// The prover of the route that covers `url`, when one does.
-    fn prover_for(&self, url: &Url) -> Option<&Arc<Prover>> {
-        self.routes
-            .iter()
-            .find(|route| route.covers(url))
-            .map(|route| &route.prover)
+    pub fn new(prover: Arc<Prover>, base: Url) -> Self {
+        Self { prover, base }
     }
 }
+
+/// A request URI no proof can name.
+#[derive(Debug, thiserror::Error)]
+#[error("the request URI is not an absolute URL a DPoP proof can name")]
+struct Unnamed(#[source] url::ParseError);
 
 #[async_trait::async_trait]
-impl<T: Transport> Transport for DpopTransport<T> {
-    async fn send(
-        &self,
-        request: http::Request<Vec<u8>>,
-    ) -> Result<http::Response<Vec<u8>>, TransportError> {
-        // NOTE: no specification governs this: our own design; a URI the url crate
-        // cannot read is under no route, and its request passes through unchanged.
-        let url = Url::parse(&request.uri().to_string()).ok();
-        let Some(prover) = url.as_ref().and_then(|url| self.prover_for(url)) else {
-            return self.inner.send(request).await;
-        };
-        let Some(url) = url.as_ref() else {
-            return self.inner.send(request).await;
-        };
-        let started = Instant::now();
-        let (parts, body) = request.into_parts();
-        let token = bearer(&parts.headers);
-        let origin = url.origin().ascii_serialization();
-        let mut htu = url.clone();
-        htu.set_query(None);
-        htu.set_fragment(None);
-        let sent = prover.nonce(&origin);
-        let first = self
-            .attempt(
-                prover,
-                (parts.clone(), &body),
-                (htu.as_str(), token.as_deref()),
-                sent.as_deref(),
+impl DpopProver for NodeProver {
+    async fn proof(&self, request: &DpopProofRequest<'_>) -> Result<String, CredentialsError> {
+        let url = Url::parse(&request.uri().to_string())
+            .map_err(|source| CredentialsError::new(Unnamed(source)))?;
+        self.prover
+            .prove(
+                (request.method(), &url),
+                Role::Resource,
+                Some(request.access_token().expose_secret()),
             )
-            .await?;
-        let learned = nonce_of(&first);
-        if let Some(nonce) = &learned {
-            prover.remember(&origin, nonce.clone());
-        }
-        let fresh = learned.filter(|nonce| sent.as_deref() != Some(nonce.as_str()));
-        let (Some(nonce), true) = (fresh, demands_nonce(&first)) else {
-            return Ok(first);
-        };
-        let mut parts = parts;
-        if let Some(RequestTimeout(budget)) = parts.extensions.get::<RequestTimeout>().copied() {
-            let left = budget.saturating_sub(started.elapsed());
-            if left.is_zero() {
-                return Ok(first);
-            }
-            parts.extensions.insert(RequestTimeout(left));
-        }
-        let retried = self
-            .attempt(
-                prover,
-                (parts, &body),
-                (htu.as_str(), token.as_deref()),
-                Some(&nonce),
-            )
-            .await?;
-        if let Some(nonce) = nonce_of(&retried) {
-            prover.remember(&origin, nonce);
-        }
-        Ok(retried)
+            .map_err(CredentialsError::new)
     }
-}
 
-impl<T: Transport> DpopTransport<T> {
-    /// Sends the request of `parts` and `body` once, with a proof of
-    /// `prover` over `htu`, bound to `token` and naming `nonce`.
-    async fn attempt(
-        &self,
-        prover: &Prover,
-        (parts, body): (http::request::Parts, &[u8]),
-        (htu, token): (&str, Option<&str>),
-        nonce: Option<&str>,
-    ) -> Result<http::Response<Vec<u8>>, TransportError> {
-        let proof = prover
-            .proof(&parts.method, htu, token, nonce)
-            .map_err(unsent)?;
-        let mut request = http::Request::from_parts(parts, body.to_vec());
-        let headers = request.headers_mut();
-        if let Some(token) = token {
-            let value = HeaderValue::from_str(&format!("DPoP {token}")).map_err(unsent)?;
-            let mut value = value;
-            value.set_sensitive(true);
-            headers.insert(AUTHORIZATION, value);
-        }
-        headers.insert(HEADER, HeaderValue::from_str(&proof).map_err(unsent)?);
-        self.inner.send(request).await
-    }
-}
-
-/// The access token an `Authorization: Bearer` header carries.
-///
-/// The node client composes every onward token as a bearer credential;
-/// under a route it is sent under the `DPoP` scheme instead (RFC 9449 §7.1).
-fn bearer(headers: &http::HeaderMap) -> Option<String> {
-    let value = headers.get(AUTHORIZATION)?.to_str().ok()?;
-    let (scheme, token) = value.split_once(' ')?;
-    scheme
-        .eq_ignore_ascii_case("bearer")
-        .then(|| token.trim_start_matches(' ').to_owned())
-}
-
-/// The nonce `response` carries in [`NONCE_HEADER`], when it carries one.
-fn nonce_of(response: &http::Response<Vec<u8>>) -> Option<String> {
-    // NOTE: RFC 9449 §8, a nonce is visible ASCII; one that is not is
-    // legitimately unusable, and the server is answered as if it sent none.
-    response
-        .headers()
-        .get(NONCE_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned)
-}
-
-/// The `error` member of an RFC 6749 §5.2 error body.
-#[derive(Deserialize)]
-struct ErrorBody {
-    error: String,
-}
-
-/// Whether `response` demands a nonce: a token endpoint's `400` with
-/// [`USE_NONCE`] (RFC 9449 §8), or a resource's `401` whose `DPoP`
-/// challenge names it (§9).
-fn demands_nonce(response: &http::Response<Vec<u8>>) -> bool {
-    let status = response.status();
-    if status == StatusCode::BAD_REQUEST {
-        return serde_json::from_slice::<ErrorBody>(response.body())
-            .is_ok_and(|body| body.error == USE_NONCE);
-    }
-    status == StatusCode::UNAUTHORIZED
-        && response
-            .headers()
-            .get_all(WWW_AUTHENTICATE)
-            .iter()
-            .filter_map(|value| value.to_str().ok())
-            .any(|challenge| {
-                challenge
-                    .get(..4)
-                    .is_some_and(|scheme| scheme.eq_ignore_ascii_case("dpop"))
-                    && challenge.contains(USE_NONCE)
-            })
-}
-
-/// The transport error of a request the proof could not be attached to.
-fn unsent(source: impl std::error::Error + Send + Sync + 'static) -> TransportError {
-    TransportError::Send {
-        source: Box::new(source),
+    fn nonce(&self, nonce: &str) {
+        self.prover.remember(Role::Resource, &self.base, nonce);
     }
 }
