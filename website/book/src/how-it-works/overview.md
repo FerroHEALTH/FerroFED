@@ -115,9 +115,8 @@ flowchart TB
   resolver (the PIX Manager over ITI-83, or a static cross-reference for
   trials), the localizer (XCPD over ITI-55, the PIX Manager, or the static
   cross-reference) and the consent pre-filter. The pre-filter has a
-  development binding; its production binding, the Dutch Mitz
-  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), is planned for
-  v0.0.8.
+  development binding and a production binding, the Dutch Mitz
+  ([Dutch consent](../operate/identity.md#dutch-consent-nl_gfmitz)).
 - **Engine:** sends one request per node under one deadline (§11.5, N38),
   routes a follow-up to the node that owns it (§12), and passes every
   outbound request through the outbound gate (§5.4.1, N33). Each request

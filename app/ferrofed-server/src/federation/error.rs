@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use ferrofed_engine::dispatch::SetupError;
 use ferrofed_identity::dev::DevCrossRefError;
 use ferrofed_identity::directory::error::FhirFormError;
+use ferrofed_identity::mitz::MitzConfigError;
 use ferrofed_identity::patient::PatientRefError;
 use ferrofed_identity::pixm::PixmConfigError;
 use ferrofed_registry::error::{IdError, LoadError};
@@ -110,6 +111,28 @@ pub enum FederationError {
     /// (no specification governs this: our own design).
     #[error("set one resolver: [dev] and [pixm] are both configured")]
     TwoResolvers,
+    /// Both `[[dev.consent_denied]]` and `[nl_gf.mitz]` are set, and at most
+    /// one consent pre-filter is active (N27a).
+    #[error(
+        "set one consent pre-filter: [[dev.consent_denied]] and [nl_gf.mitz] are both configured"
+    )]
+    TwoConsentPrefilters,
+    /// A key of `[nl_gf.mitz.holders]` or `[nl_gf.nvi.custodians]` is not a
+    /// node id.
+    #[error("{key} is not a node id")]
+    MitzMember {
+        /// The key, a member or a URA and never a patient value.
+        key: String,
+        /// What the id rules reported.
+        #[source]
+        source: IdError,
+    },
+    /// A `nl_gf.mitz.namespaces` entry is empty.
+    #[error("nl_gf.mitz.namespaces has an empty namespace")]
+    MitzNamespace(#[source] PatientRefError),
+    /// The Mitz consent pre-filter refuses its configuration.
+    #[error("the [nl_gf.mitz] consent pre-filter cannot be enabled")]
+    Mitz(#[source] MitzConfigError),
     /// A registry is configured, but `federation.node_selection` is not: how
     /// an undirected patient query finds its nodes is a deployment decision,
     /// declared and never defaulted (§4.3, N4).

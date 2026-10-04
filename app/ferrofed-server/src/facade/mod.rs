@@ -215,6 +215,7 @@ async fn federated(
         conveyance: &conveyance,
         started,
         session,
+        requester: caller.and_then(Caller::requester),
     };
     answer::answer(&federation, arrived, submitted).await
 }

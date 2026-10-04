@@ -81,6 +81,10 @@ demographic_clients = []
 | `auth.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
 | `auth.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[auth.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](#patient-grants)). |
 | `auth.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
+| `auth.issuer[].requester.professional` | none | The name of the string claim in this issuer's tokens that carries the professional's UZI number, which the [Mitz consent pre-filter](identity.md#dutch-consent-nl_gfmitz) asks about. `[auth.issuer.requester]` names all four claims or none. |
+| `auth.issuer[].requester.role` | none | The claim carrying the professional's UZI role code. |
+| `auth.issuer[].requester.organisation` | none | The claim carrying the URA of the professional's organisation. |
+| `auth.issuer[].requester.organisation_type` | none | The claim carrying that organisation's care provider type. |
 | `auth.edge.header` | none | The header the edge's assertion travels in, with `mode = "edge"`. |
 
 An issuer names exactly one of `jwks_uri`, `jwks_file`, `jwks` and

@@ -14,6 +14,9 @@ mod ig;
 #[cfg(feature = "lrza")]
 mod lrza;
 #[cfg(test)]
+#[cfg(feature = "mitz")]
+mod mitz;
+#[cfg(test)]
 #[cfg(feature = "nuts-auth")]
 mod nuts_auth;
 #[cfg(test)]

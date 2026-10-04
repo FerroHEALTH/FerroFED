@@ -970,7 +970,8 @@ docs/specs/dif-pe|DIF Presentation Exchange 2.0.0
 docs/specs/dif-pe|DIF Claim Format Registry
 docs/specs/openid|OpenID FAPI 2.0 Security Profile
 docs/specs/openid|OpenID for Verifiable Credential Issuance 1.0
-docs/specs/openid|OpenID for Verifiable Presentations draft 18"
+docs/specs/openid|OpenID for Verifiable Presentations draft 18
+docs/specs/mitz|Mitz closed authorization question"
 
 agreed=0
 expected=0

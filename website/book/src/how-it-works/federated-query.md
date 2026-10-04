@@ -71,9 +71,9 @@ sequenceDiagram
   denies is `consent-denied`, never resolved and never sent a request, and
   every other member is asked so its node can decide (§13.2.1, N27, N27a).
   When the pre-filter cannot answer, every candidate is asked. The
-  pre-filter today is the development table `[[dev.consent_denied]]`; the
-  Dutch binding, Mitz, is planned for v0.0.8
-  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
+  pre-filter is the development table `[[dev.consent_denied]]` or the Dutch
+  binding, Mitz
+  ([Dutch consent](../operate/identity.md#dutch-consent-nl_gfmitz)).
 - "No identifier in this domain" is an answer: that member is
   `not-resolved` and does not fail the query (N6). A PIX Manager that cannot
   answer is a failure, reported on the member and failing the query `424`

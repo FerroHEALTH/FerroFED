@@ -343,7 +343,9 @@ impl Localizer for NviLocalizer {
 /// The custodian map the registry gives: each URA its member organisations
 /// carry, by the LRZa rules (Annex B §B.2), mapped to the members those
 /// organisations operate. It is empty for a registry no directory gave.
-fn derived(registry: &RegistrySnapshot) -> Result<BTreeMap<Ura, BTreeSet<NodeId>>, NviConfigError> {
+pub(crate) fn derived(
+    registry: &RegistrySnapshot,
+) -> Result<BTreeMap<Ura, BTreeSet<NodeId>>, NviConfigError> {
     let mut derived: BTreeMap<Ura, BTreeSet<NodeId>> = BTreeMap::new();
     for node in registry.nodes() {
         let Some(organisation) = registry.organisation(node.organisation()) else {

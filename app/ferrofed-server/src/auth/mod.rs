@@ -498,8 +498,11 @@ impl Gate {
             VerifiedBy::Signature
         };
         let launch_ehr_id = token.claims.launch_ehr_id();
-        let caller = Caller::new(token.claims.stated(), verified_by);
-        Ok((caller.with_launch_ehr_id(launch_ehr_id), trusted))
+        let requester = token.claims.requester(trusted.settings.requester.as_ref());
+        let caller = Caller::new(token.claims.stated(), verified_by)
+            .with_launch_ehr_id(launch_ehr_id)
+            .with_requester(requester);
+        Ok((caller, trusted))
     }
 
     /// Asks `trusted`'s introspection endpoint about `token` and reads its
@@ -562,7 +565,14 @@ impl Gate {
             granted: answer.scope.unwrap_or_default(),
             purposes: answer.declared.purposes(),
         };
-        Ok(Caller::new(stated, VerifiedBy::Introspection).with_launch_ehr_id(answer.ehr_id))
+        let requester = trusted
+            .settings
+            .requester
+            .as_ref()
+            .and_then(|named| answer.others.requester(named));
+        Ok(Caller::new(stated, VerifiedBy::Introspection)
+            .with_launch_ehr_id(answer.ehr_id)
+            .with_requester(requester))
     }
 
     /// Whether any caller can be admitted: some issuer is on the trust list.

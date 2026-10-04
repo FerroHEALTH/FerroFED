@@ -41,6 +41,7 @@ fn at_the_edge(edge: &Issuer) -> AuthSettings {
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
             patient: None,
+            requester: None,
         }],
         ..AuthSettings::default()
     }

@@ -11,16 +11,23 @@
 //! `authorization_details`, whose `purpose_of_use` is written `system|code`
 //! (the Federation Tier's Annex B §B.4a.3), and the SMART on openEHR `ehrId`,
 //! the `ehr_id` of the launch context, "conveyed via the `ehrId` token claim"
-//! (master04 §Capabilities). Every other claim is passed over, and the IUA
-//! `person_id`, a patient identifier, is never read (§5.4.1, N33).
+//! (master04 §Capabilities). The string claims an issuer's
+//! `[auth.issuer.requester]` names are read as the requester the consent
+//! pre-filter asks about (§13.4). Every other claim is passed over, and the
+//! IUA `person_id`, a patient identifier, is never read (§5.4.1, N33).
 //!
 //! IUA is cited from the Revision 2.5 Trial Implementation supplement
 //! vendored at `docs/specs/ihe-iua/IHE_ITI_Suppl_IUA.md`: ITI TF-2 3.71.4.2.2.1
 //! (the JSON Web Token Option) and 3.71.4.2.2.1.1 (the JWT IUA extension).
 
+use std::collections::BTreeMap;
+
+use ferrofed_identity::consent::Requester;
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 
 use crate::auth::caller::{PurposeOfUse, Stated};
+use crate::config::auth::RequesterClaims;
 
 /// The claims of an RFC 9068 access token, as read after its signature, its
 /// issuer, its audience and its validity window were verified.
@@ -54,12 +61,21 @@ pub(super) struct AccessToken {
     /// The organisation and the purposes of use.
     #[serde(flatten)]
     declared: Declared,
+    /// Every other claim.
+    #[serde(flatten)]
+    others: Others,
 }
 
 impl AccessToken {
     /// Returns the token's `ehrId` claim, when it carries one.
     pub(super) fn launch_ehr_id(&self) -> Option<String> {
         self.ehr_id.clone()
+    }
+
+    /// Returns the requester the claims `named` name, when the token carries
+    /// every one of them as a string.
+    pub(super) fn requester(&self, named: Option<&RequesterClaims>) -> Option<Requester> {
+        named.and_then(|named| self.others.requester(named))
     }
 
     /// Returns what the token states about its caller.
@@ -107,6 +123,55 @@ pub(super) struct Introspected {
     /// The organisation and the purposes of use.
     #[serde(flatten)]
     pub(super) declared: Declared,
+    /// Every other member.
+    #[serde(flatten)]
+    pub(super) others: Others,
+}
+
+/// The claims a token carries besides the ones read by name: a string claim
+/// kept as its text, any other skipped.
+///
+/// `Debug` shows how many there are and none of them.
+#[derive(Default, Deserialize)]
+pub(super) struct Others(BTreeMap<String, Claim>);
+
+/// One claim of [`Others`].
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Claim {
+    /// A string claim.
+    Text(String),
+    /// Any other claim, skipped.
+    Other(IgnoredAny),
+}
+
+impl Others {
+    /// The string claim `name`, when the token carries one that is not
+    /// empty.
+    fn text(&self, name: &str) -> Option<String> {
+        match self.0.get(name)? {
+            Claim::Text(text) if !text.is_empty() => Some(text.clone()),
+            Claim::Text(_) | Claim::Other(_) => None,
+        }
+    }
+
+    /// The requester the claims `named` name, when every one is a string.
+    pub(super) fn requester(&self, named: &RequesterClaims) -> Option<Requester> {
+        Requester::new(
+            self.text(&named.professional)?,
+            self.text(&named.role)?,
+            self.text(&named.organisation)?,
+            self.text(&named.organisation_type)?,
+        )
+    }
+}
+
+impl std::fmt::Debug for Others {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Others")
+            .field("claims", &self.0.len())
+            .finish()
+    }
 }
 
 /// An `aud` claim: one audience or several (RFC 7519 §4.1.3).

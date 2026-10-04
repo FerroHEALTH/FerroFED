@@ -69,6 +69,7 @@ package registry listed as latest on 2026-10-01.
 | ATNA (ITI-20, syslog with the DICOM message) | the IHE ITI Technical Framework, cited and not vendored, with DICOM PS3.15 Annex A.5 (NEMA, reproduction by permission only) and RFC 5424 and RFC 5425 | Vol 2 Rev 20.1 §3.20; no 2024-25 change proposal touched ITI-20, so Rev 20.2's text is the same |
 | IUA (ITI-71, ITI-72) | the IHE ITI Technical Framework Supplement, no FHIR package | Rev 2.5 (2026-06-18, Trial Implementation), vendored by #414 (the corpus table below) |
 | Netherlands Generic Functions | `fhir.nl.gf` | 0.3.0, as Annex B names it; released as a git tag with no package on the registry, so #87 vendors its source (the corpus table below) |
+| Mitz closed authorization question (Annex B §B.6) | VZVZ architecture documents, no package and no licence stated | Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2 (2024-05-27), pinned and not redistributed by #475 (the corpus table below) |
 
 ## Corpora and machine-readable inputs
 
@@ -116,6 +117,7 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | OpenID FAPI 2.0 Security Profile | `https://openid.net/specs/fapi-security-profile-2_0-final.html` sha256 `26a49ad19b1f2b19ecc1cd9b825b4d5012f5e03a5dc8cb0dbd26462d39da465c`, Final; pinned and fetched to `.vendor-cache/openid/`, never committed (its licence is limited to developing and implementing the specification) | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
 | OpenID for Verifiable Credential Issuance 1.0 | `https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html` sha256 `f123c3178cacd27688b15b762098a045e9eb35eccfe2f5f18a357c3815e06ba7`, Final; pinned and fetched as the row above | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
 | OpenID for Verifiable Presentations draft 18 | `https://openid.net/specs/openid-4-verifiable-presentations-1_0-18.html` sha256 `48d539e12e6b75235d7b673b0ee1b3a6589f6013c665bbf00f3f2933d0ec0dcd`, the draft Nuts RFC021 cites; pinned and fetched as the rows above | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
+| Mitz closed authorization question | the VZVZ Confluence page `828314367` (space `MA11`, "Bijlage Architectuurdocumenten"), attachment version `1` of each document: `VZVZ_Mitz_Implementatiehandleiding_OpenGesloten_v3.8.2.pdf` sha256 `a5ce8f0d7eba8969a395a8560cf69f9e359f9da4c76145adc0748b9907ac0cf3`, `VZVZ_Mitz_PvE_AMC_Aansluiting_Mitz-connector_v3.8.1.ad1.pdf` sha256 `b1f18b48969475ce969472299179b37663cdcf67b067e9275532e0fa35bb59cb`, `VZVZ_Mitz_Implementatiehandleiding_Berichtauthenticatie_v3.8.1.ad1.pdf` sha256 `9659bdcd20a4deebc699357a455aaca7b3643c78a53b078329edcb899ef02f01`; no licence is stated, so the documents are pinned and fetched into the git-ignored `docs/specs/mitz/cache/`, never committed | `scripts/vendor/mitz.sh`, `docs/specs/mitz/PROVENANCE.md` |
 
 ### Country research corpora (#488)
 

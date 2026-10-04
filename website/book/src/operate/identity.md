@@ -190,9 +190,93 @@ value = "ffd-test-0001"
 member = "node-b"        # this patient's consent denies asking node-b
 ```
 
-The pre-filter of the Dutch binding, Mitz, is not built: the Generic
-Functions IG defines no interface for it
-([#475](https://github.com/FerroHEALTH/FerroFED/issues/475)).
+In the Netherlands the pre-filter is Mitz, below. Set `[[dev.consent_denied]]`
+rows or `[nl_gf.mitz]`, never both: both refuse the configuration.
+
+### Dutch consent: `[nl_gf.mitz]`
+
+Mitz keeps the consent Dutch patients record and answers one closed
+question about it, the *gesloten autorisatievraag* (Annex B §B.6): may this
+data holder make this patient's data of these categories available to this
+data user, for this purpose? The gateway asks it once per data holder among
+the candidates, after localization and before resolution. A member whose
+holder Mitz denies for every category asked is `consent-denied` and never
+asked. Every other member is asked, and its node checks consent itself:
+Mitz is a filter in front of the gate, not the gate (§14.3, N27).
+
+The wire is the VZVZ *Implementatiehandleiding Open en gesloten
+autorisatievraag* 3.8.2: a SOAP 1.2 request carrying one XACML 3.0
+`XACMLAuthzDecisionQuery`, over mutual TLS, with an `X-Request-Id` on every
+request. VZVZ states no licence for the document, so the repository pins it
+by sha256 and does not ship it; `scripts/vendor/mitz.sh` fetches it for
+reading.
+
+```toml
+profile = "production"
+
+[nl_gf.mitz]
+url = "https://mitz.example.org/geslotenautorisatievraag"
+client_identity_file = "/run/secrets/mitz-client.pem"   # mutual TLS
+trust_roots_file = "/etc/ferrofed/mitz-roots.pem"       # optional
+credentials = { bearer_token_file = "/run/secrets/mitz-token" }  # optional
+namespaces = ["urn:oid:2.999.1"]  # client namespaces that stand for the BSN
+purpose = "TREAT"                 # TREAT or COC
+data_categories = ["GGC002"]      # the Mitz data categories asked about
+timeout_ms = 1000                 # one round of questions, within the query's budget
+
+[nl_gf.mitz.holders]              # each member's care provider
+"node-a" = { type = "V6" }        # the URA from [nl_gf.nvi.custodians] or the directory
+"node-b" = { type = "V6", ura = "ura-test-0002" }
+
+[[auth.issuer]]                   # the issuer of your callers' tokens
+issuer = "https://issuer.example.org"
+jwks_uri = "https://issuer.example.org/jwks"
+
+[auth.issuer.requester]           # the claims of its tokens that name the requester
+professional = "uzi_number"       # the professional's UZI number
+role = "uzi_role"                 # the professional's UZI role code
+organisation = "ura"              # the organisation's URA
+organisation_type = "organisation_type"
+```
+
+What a deployment must provide:
+
+- **The BSN.** Mitz is asked by BSN. A client names the patient in a BSN
+  system (`http://fhir.nl/fhir/NamingSystem/bsn`, or the BSN's OID as
+  `urn:oid:2.16.840.1.113883.2.4.6.3` or dotted) or in one `namespaces`
+  lists. A patient named by the pseudonymised BSN, as the NVI requires,
+  cannot be asked about: the pre-filter then carries no consent signal and
+  every candidate is asked. The pseudonym's system is never accepted in
+  `namespaces`. The BSN reaches Mitz and nothing else: never a node, a log
+  line or an error.
+- **A holder per member.** Every registry member needs a `type`, and one
+  URA from its `ura`, `[nl_gf.nvi.custodians]` or a directory that
+  publishes URAs; where more than one gives it they must agree. A member
+  with no holder, a holder with no URA, or a holder naming no member
+  refuses the configuration.
+- **The requester, in the caller's token.** The question names the
+  professional who asks, by UZI number and role, and their organisation, by
+  URA and type. That is always the verified caller: Mitz records the
+  professional and decides on their role, so the gateway never asks for
+  anyone else. Map, per trusted issuer, the four token claims that carry
+  them under `[auth.issuer.requester]`
+  ([Client authentication](authentication.md#configuration)); no
+  specification the gateway binds names these claims, so each is configured
+  and none has a default. A caller whose token does not carry all four is
+  not asked about: Mitz is not called, no member is filtered, and each node
+  checks consent itself (N27).
+- **TLS.** The `url` must be `https` outside `profile = "development"`.
+  `credentials` takes a bearer token or basic credentials, never an OAuth
+  2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission
+  to the Mitz afsprakenstelsel.
+
+Mitz answers `Permit` or `Deny` per category. `Indeterminate`, a fault, a
+status other than `200`, silence past `timeout_ms` and an answer that does
+not hold to the question are no decision: the members of that holder are
+asked, and the failure is carried in `meta.federation.consent.error`. When
+Mitz denies one holder and fails for another, the denied members are
+`consent-denied`, the others are asked, and the failure is still carried.
+`OPTIONS {base}/` declares the pre-filter as `"nl-gf-mitz"`.
 
 ## Choosing one
 
@@ -495,9 +579,8 @@ declares `localization.mode` as `"nl-gf-nvi"`.
 
 Set `[nl_gf.nvi]` or `[xcpd]`, never both: both refuse the configuration.
 `[nl_gf.nvi]` takes effect on a reload; under `node_selection = "ask-all"`
-it refuses the configuration. The Mitz consent pre-filter of the Dutch
-binding is not built: the IG defines no interface for it
-([#475](https://github.com/FerroHEALTH/FerroFED/issues/475)).
+it refuses the configuration. The consent pre-filter of the Dutch binding is
+[Mitz](#dutch-consent-nl_gfmitz).
 
 ## The identity feed: `[pmir]`
 

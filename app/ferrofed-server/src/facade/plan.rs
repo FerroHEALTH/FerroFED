@@ -22,6 +22,7 @@ use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
 
+use ferrofed_identity::consent::Requester;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -170,7 +171,7 @@ struct Membership {
 pub async fn patient(
     federation: &Federation,
     selection: Selection<'_>,
-    query: &PatientQuery,
+    (query, requester): (&PatientQuery, Option<&Requester>),
     deadline: Instant,
 ) -> Result<Targets, TargetsError> {
     let resolver = federation.resolver();
@@ -202,7 +203,9 @@ pub async fn patient(
         .filter(|member| located.admits(member))
         .collect();
     let consented = match &patient {
-        Some(patient) => consent::prefilter(federation, patient, &candidates, deadline).await,
+        Some(patient) => {
+            consent::prefilter(federation, (patient, requester), &candidates, deadline).await
+        }
         None => consent::Prefiltered::default(),
     };
     plan = settle_denied(plan, &mut membership.asked, &consented)?;

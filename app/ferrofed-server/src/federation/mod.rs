@@ -16,6 +16,7 @@
 
 mod build;
 pub mod error;
+mod mitz;
 mod pixm;
 pub mod registry;
 

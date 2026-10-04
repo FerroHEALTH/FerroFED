@@ -474,7 +474,7 @@ whether); the core never assumes it does.
 |---|---|---|
 | `Directory` | `Arc<RegistrySnapshot>` | the addressing registry (N21, §15), refreshed off the clinical path; a query never awaits a directory call |
 | `Localizer` | `NotConfigured`, `Candidates(set)`, `NoRecords`, `Unavailable(error)` | where (N4, §14) |
-| `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `Unavailable(error)` | which candidates may not be asked (N27a); absence from `Denied` asserts nothing |
+| `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `Unavailable(error)`, `Partial { denied, failure }` | which candidates may not be asked about the patient on behalf of the verified caller's `Requester`, when its token names one (N27a, §13.4); absence from `Denied` asserts nothing |
 | `Resolver` | per member: `Resolved(EhrId)`, `Unknown`, `Unavailable(error)` | under which local id (N3, §5.2) |
 | `OnwardAuth` | per endpoint: a `CredentialsProvider`, the conveyance header, an optional transport layer | how the gateway authenticates to each node (section 7) |
 
@@ -540,7 +540,33 @@ are dispatched (N8).
   carried in `meta.federation.consent.error` beside §14.1's
   `localization.error`, on `/health/dependencies` as `consent` (a decision or
   an answer below `500` is up, a `5xx` failing, no answer down, the members'
-  rule) and in `ferrofed.consent.prefilter.requests` by outcome (#400).
+  rule) and in `ferrofed.consent.prefilter.requests` by outcome (#400). A
+  pre-filter that denied some candidates and could not answer for others
+  answers `Partial`: the denied are `consent-denied`, the rest are asked
+  under the same policy, and the failure is carried as above (#475).
+
+**Mitz, the Dutch pre-filter** (#475). `[nl_gf.mitz]` binds the seam to
+Mitz's closed authorization question (Annex B §B.6), the wire of the VZVZ
+Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2: a SOAP 1.2
+request carrying one XACML 3.0 `XACMLAuthzDecisionQuery` over mutual TLS,
+asked once per data holder among the candidates, through the `mitz` feature
+of `nl-generic-functions`. The data user is the verified caller: its
+professional by UZI number and role and its organisation by URA and type,
+read from the claims each trusted issuer's `[auth.issuer.requester]` maps
+and carried to the seam as a `Requester` (§3.2.4.2, §13.4). Mitz records
+that professional and decides on that role, so a configured identity is
+never substituted: a caller whose token lacks the claims is not asked
+about, and no member is filtered for it. Each member's data holder is its care provider by URA, from the configuration,
+the NVI custodians or the directory, and its configured category. A member
+is denied only when Mitz denies its holder for every category asked; any
+`Permit` leaves the node to decide (N27, §14.3). Only `Permit` and `Deny`
+are decisions: `Indeterminate`, a fault, a status, a timeout and a
+malformed answer are failures under the policy above. Mitz is asked by BSN,
+so a patient named by the pseudonym of §B.7 gets no signal. VZVZ states no
+licence for its documents, so they are pinned by sha256 and not committed
+(`scripts/vendor/mitz.sh`). Whether a gateway may be admitted as a Mitz
+connector at all is a matter for the afsprakenstelsel, which the gateway
+cannot settle.
 
 **Consent stays with the node** (#83). The pre-filter runs at Step 1 on every
 patient route: every federated query, a directed one included, and the read
@@ -579,7 +605,7 @@ are FerroFED's own design; the missing signal is report T151 on #212.
 | Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, behind the `xcpd` feature of `ihe-iti` | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
 | Localizer | the Annex B NVI adapter | #87 | `fhir.nl.gf` 0.3.0 |
 | Directory | the static registry document, or an mCSD directory: ITI-90 reads at boot, then ITI-91 `_history`/`_since` synchronised into the snapshot (section 8) | #36, #74, #86 | mCSD 4.0.0 |
-| ConsentPrefilter | none; the static development pre-filter (`[[dev.consent_denied]]`, development profile only); then the Annex B Mitz adapter | #83, #87 | none for the development table; `fhir.nl.gf` 0.3.0 for Mitz |
+| ConsentPrefilter | none; the static development pre-filter (`[[dev.consent_denied]]`, development profile only); or the Annex B Mitz adapter (`[nl_gf.mitz]`), the closed authorization question | #83, #475 | none for the development table; for Mitz, the VZVZ Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2, pinned and not redistributed |
 
 **Built here, movable later.** The protocols live in two published crates
 that know nothing of FerroFED: `ihe-iti`, with a feature per profile (`pixm`,

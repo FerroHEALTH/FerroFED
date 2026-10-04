@@ -47,8 +47,8 @@ use crate::state::AppState;
 ///
 /// `registry` is the registry document, its path and its form, `credentials`
 /// the outbound credentials of each endpoint, `dev` and `pixm` the
-/// resolver, and `xcpd` and `nl_gf` the localizer, all of which name the
-/// members. A
+/// resolver, `xcpd` and `nl_gf` the localizer, and `dev` and `nl_gf` the
+/// consent pre-filter, all of which name the members. A
 /// registry read from a care services directory changes with the directory,
 /// never with a reload: a reload rebuilds the federation over the registry in
 /// place, and a change to `[registry.mcsd]` takes a restart.
@@ -600,6 +600,10 @@ fn federation_class(error: &FederationError) -> &'static str {
         | FederationError::PixmNamespace(_)
         | FederationError::Pixm(_) => "pixm",
         FederationError::TwoResolvers => "resolvers",
+        FederationError::TwoConsentPrefilters
+        | FederationError::MitzMember { .. }
+        | FederationError::MitzNamespace(_)
+        | FederationError::Mitz(_) => "consent-prefilter",
         FederationError::Localization(_) => "localization",
         FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
         FederationError::DemographicWithoutRegistry

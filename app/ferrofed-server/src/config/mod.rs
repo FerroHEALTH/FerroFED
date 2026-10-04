@@ -25,6 +25,7 @@ pub mod audit_repository;
 pub mod auth;
 pub mod error;
 mod load;
+pub mod mitz;
 pub mod nl_gf;
 pub mod pmir;
 mod resolve;

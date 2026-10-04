@@ -47,7 +47,7 @@ openehr-sdt = { version = "0.0.82", default-features = false }
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.38" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.17" }
-nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.8" }
+nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.9" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -154,7 +154,9 @@ base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # for the ITI-104 Patient (#47).
 fhir-types = { version = "0.1.107", default-features = false }
 # The XML reader and writer of the XCPD ITI-55 SOAP 1.2 and HL7 v3 messages
-# (#85), behind crates/ihe-iti's `xcpd` feature; the version fhir-types already
+# (#85), behind crates/ihe-iti's `xcpd` feature, and of the Mitz closed
+# authorization question (#475), behind crates/nl-generic-functions' `mitz`
+# feature; the version fhir-types already
 # locks, so the feature adds no crate to the graph. Verified against crates.io
 # on 2026-10-03.
 quick-xml = { version = "0.42.0", default-features = false }

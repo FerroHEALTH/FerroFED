@@ -433,6 +433,15 @@ pub enum Error {
         /// The namespace as written, a naming system and never a value.
         namespace: String,
     },
+    /// A `[nl_gf.mitz]` value the closed authorization question does not
+    /// take: the key and why, never a patient value.
+    #[error("{key} {fault}")]
+    Mitz {
+        /// The key.
+        key: String,
+        /// Why it is refused.
+        fault: &'static str,
+    },
     /// A syslog header value is empty, too long, or holds a character
     /// syslog cannot carry (RFC 5424 §6).
     #[error("{key} cannot be a syslog header field")]

@@ -60,8 +60,9 @@ pub const NODE_REQUESTS: &str = "ferrofed.node.requests";
 /// `ferrofed_node_request_duration_seconds`.
 pub const NODE_REQUEST_DURATION: &str = "ferrofed.node.request.duration";
 
-/// The calls to the consent pre-filter, by `outcome` (`denied`, `no-signal` or
-/// `unavailable`); Prometheus `ferrofed_consent_prefilter_requests_total`.
+/// The calls to the consent pre-filter, by `outcome` (`denied`, `no-signal`,
+/// `unavailable` or `partial`); Prometheus
+/// `ferrofed_consent_prefilter_requests_total`.
 pub const CONSENT_PREFILTER_REQUESTS: &str = "ferrofed.consent.prefilter.requests";
 
 /// The calls to the localizer, by `outcome` (`candidates`, `no-records`,
