@@ -77,6 +77,8 @@ flowchart TB
     subgraph ops["Your operations"]
         store[("redb, PostgreSQL<br/>or files")]
         logs["Log pipeline,<br/>ferrofed::audit"]
+        spool[("Audit spool,<br/>encrypted volume")]
+        arr["ATNA Audit Record<br/>Repository"]
         admin["Admin listener<br/>/metrics, /admin"]
     end
     gw --> identity
@@ -84,9 +86,11 @@ flowchart TB
     gw -->|"node token,<br/>signed caller"| cdr
     gw -->|"definitions"| store
     gw -->|"events"| logs
+    gw -->|"XCPD audit<br/>messages"| spool
+    spool -->|"ITI-20, syslog<br/>over TLS"| arr
     gw -->|"serves"| admin
     prom["Prometheus"] -->|"scrapes"| admin
-    gw -.->|"planned"| planned["ATNA audit repository,<br/>ITI-20 (#418)<br/>Dutch Generic Functions (#87)<br/>PMIR identity feed (#147)"]:::planned
+    gw -.->|"planned"| planned["Dutch Generic Functions (#87)<br/>PMIR identity feed (#147)"]:::planned
 ```
 
 - **The proxy** terminates TLS. The gateway authenticates each caller
@@ -108,15 +112,17 @@ flowchart TB
   signs, and checks that assertion against `{base}/.well-known/jwks.json`.
   A member without one is sent its static credential, if it has one
   ([Trust and keys](trust-and-keys.md)).
-- **The audit of each XCPD exchange** goes to the log target
-  `ferrofed::audit` under `[xcpd] audit = "log"`; route that target to your
-  audit repository.
+- **The audit of each XCPD exchange** goes to your ATNA Audit Record
+  Repository under `[xcpd] audit = "repository"`: written to a spool on disk
+  first, then sent with ITI-20 over TLS, so a repository outage delays the
+  audit and fails no query. The spool holds audit records that name
+  patients, so it belongs on an encrypted volume
+  ([The audit repository](../operate/identity.md#the-audit-repository)).
+  Under `audit = "log"` it goes to the log target `ferrofed::audit` instead.
 - **The admin listener** is a second listener for your operators, off unless
   `[metrics] listen` is set and on loopback unless you allow otherwise
   ([Metrics](../operate/metrics.md)).
-- **The planned services** are the audit sent straight to an ATNA Audit
-  Record Repository with ITI-20
-  ([#418](https://github.com/FerroHEALTH/FerroFED/issues/418)), the Dutch
+- **The planned services** are the Dutch
   Generic Functions, NVI localization, the Mitz consent pre-filter and LRZa
   addressing
   ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), and PMIR

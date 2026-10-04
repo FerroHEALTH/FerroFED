@@ -127,6 +127,13 @@ once the milestone closes.
   [#408](https://github.com/FerroHEALTH/FerroFED/issues/408),
   [#409](https://github.com/FerroHEALTH/FerroFED/issues/409),
   [#410](https://github.com/FerroHEALTH/FerroFED/issues/410)).
+- The XCPD audit sent to an ATNA Audit Record Repository with ITI-20: the
+  DICOM PS3.15 audit message in RFC 5424 syslog over TLS, stored in a
+  bounded spool on disk first and delivered from it, so a repository outage
+  fails no discovery and a full spool fails it closed (ITI TF-2 §3.20,
+  §3.55.5.1.1;
+  [#418](https://github.com/FerroHEALTH/FerroFED/issues/418),
+  [The audit repository](../operate/identity.md#the-audit-repository)).
 - The registry read from an IHE mCSD care services directory with ITI-90 and
   kept in step with ITI-91, a shared directory included (§15.1, §15.2, N21,
   Annex A.5;
@@ -150,8 +157,6 @@ release, and every issue in it names the sections it answers.
 
 The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
 
-- the XCPD audit sent to an ATNA Audit Record Repository with ITI-20
-  ([#418](https://github.com/FerroHEALTH/FerroFED/issues/418));
 - an opt-in that accepts a `patient/` scope through an issuer-bound
   `ehrId` resolved by §5.2; without it a `patient/` grant admits nothing
   ([#443](https://github.com/FerroHEALTH/FerroFED/issues/443)), and the

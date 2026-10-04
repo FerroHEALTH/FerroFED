@@ -422,6 +422,16 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
     }
 }
 
+/// Whether `fresh` names another stored-query store than the process
+/// started with, or sets or unsets one.
+fn stored_queries_changed(boot: &Settings, fresh: &Settings) -> bool {
+    match (&boot.stored_queries, &fresh.stored_queries) {
+        (Some(was), Some(now)) => !was.same_as(now),
+        (None, None) => false,
+        (Some(_), None) | (None, Some(_)) => true,
+    }
+}
+
 /// Whether `fresh` sends the XCPD audit messages elsewhere than the process
 /// started with, while both configure the XCPD localizer.
 fn audit_changed(boot: &Settings, fresh: &Settings) -> bool {
@@ -532,14 +542,7 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             "federation.demographic_endpoint",
             was.demographic_endpoint != now.demographic_endpoint,
         ),
-        (
-            "stored_queries",
-            match (&boot.stored_queries, &fresh.stored_queries) {
-                (Some(was), Some(now)) => !was.same_as(now),
-                (None, None) => false,
-                (Some(_), None) | (None, Some(_)) => true,
-            },
-        ),
+        ("stored_queries", stored_queries_changed(boot, fresh)),
         ("xcpd.audit", audit_changed(boot, fresh)),
         (
             "metrics.listen",
