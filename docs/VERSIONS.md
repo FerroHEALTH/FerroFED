@@ -91,6 +91,53 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
 | Netherlands Generic Functions IG source | `nuts-foundation/nl-generic-functions-ig` tag `v0.3.0`, commit `5367430787042c218996f11570f904bd3cd37a83`, the source of package `fhir.nl.gf` version `0.3.0`: the localization, consent, care services and identification pages with their FSH profiles, capability statements and examples | `scripts/vendor/nl-gf.sh`, `docs/specs/nl-gf/PROVENANCE.md` |
 
+### Country research corpora (#488)
+
+The national sources of the country research on #488 have no git commit to
+pin: statutes, specification pages, PDFs, FHIR packages and Confluence pages.
+Each artefact is pinned in its country script by the URL it is fetched from
+and the sha256 of its bytes (`scripts/vendor/lib/pinned.sh`), and each row
+below carries the pin-set digest, the sha256 over the sorted
+`mode  file  url  sha256` lines of that corpus's pins. The script fails when
+its pins and this digest disagree, and when an upstream hash moves.
+`PINNED_DIGESTS_ONLY=1 scripts/vendor/<country>.sh` prints the digests for a
+re-pin. An artefact whose licence does not allow redistribution, or is
+unclear, is fetched into the git-ignored `.vendor-cache/` and only its
+provenance is committed. Live pages (the NSPOP, Inera and NHN pages, the
+Commission legal notice) move with every edit, so their scripts fail until
+the pins are renewed.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| German ePA für alle (gematik) | ePA specification pages and the ePA-Basic OpenAPI documents, pin-set digest `ec39f57443d348a3e61330a380644c13c5ba5804e11f2a416ba0429ba031114a` | `scripts/vendor/de.sh`, `docs/specs/de-gematik-epa/PROVENANCE.md` |
+| German VZD FHIR-Directory (gematik) | the VZD specification page, package `de.gematik.fhir.directory` 1.3.0 and its source licence, pin-set digest `099fb9c34136d4c7de5b9b95f07e6efda0c9b667cb19e17075d431e7b65fb562` | `scripts/vendor/de.sh`, `docs/specs/de-gematik-vzd/PROVENANCE.md` |
+| German ZETA (gematik) | gemSpec_ZETA 1.3.2, pin-set digest `ff1ccf6ae282fe84c0127141f423dbd7ae434337d4f27bc6fafc64a830c39c6a` | `scripts/vendor/de.sh`, `docs/specs/de-gematik-zeta/PROVENANCE.md` |
+| German base profiles (HL7 Deutschland) | package `de.basisprofil.r4` 1.6.0, pin-set digest `9f7dfc9072bfec1942a16b073691433575c6312cb980d576c6f7ccb41fc2d0d6` | `scripts/vendor/de.sh`, `docs/specs/de-hl7-basisprofil/PROVENANCE.md` |
+| German ISiK (gematik) | package `de.gematik.isik` 6.0.0, pin-set digest `6331afd5ea3c218941d399fcb8b11fd3541c54f678953eecaf59dd6febb509f0` | `scripts/vendor/de.sh`, `docs/specs/de-gematik-isik/PROVENANCE.md` |
+| German MII consent module | package `de.medizininformatikinitiative.kerndatensatz.consent` 2026.0.0, pin-set digest `b3b8f3c69d0f3c2441e7fa5627b074d2281739346e01be5f4f800dd090eacb0b` | `scripts/vendor/de.sh`, `docs/specs/de-mii-consent/PROVENANCE.md` |
+| German SGB V | §§290, 339 and 342 SGB V, pin-set digest `4012d33a8ab6a4555f954e831517e0f0e2108068bf8cfab539bb2b8c39215e4f` | `scripts/vendor/de.sh`, `docs/specs/de-sgb5/PROVENANCE.md` |
+| Austrian GTelG 2012 | the consolidated GTelG 2012 of 2026-10-04, pin-set digest `92c3913a8772e92243c3ee54dd192750b97e8e918a89fe6a4b1c2e8085b0f786` | `scripts/vendor/at.sh`, `docs/specs/at-gtelg/PROVENANCE.md` |
+| Austrian ELGA Berechtigungssystem | six BeS v5.5 developer pages, pin-set digest `5dff95e1dd642758ced2ab24e964c1899fcde35e4e32444a74e4c2e8006d3f63` | `scripts/vendor/at.sh`, `docs/specs/at-elga-bes/PROVENANCE.md` |
+| Austrian ELGA overview | the ELGA technical overview and the Digital Health Standards Catalogue Austria 2026, pin-set digest `08326503145045a59936fd3b2780d9a570de4fc087676603f044e54572db4374` | `scripts/vendor/at.sh`, `docs/specs/at-elga/PROVENANCE.md` |
+| Austrian core profiles (HL7 Austria) | package `hl7.at.fhir.core.r4` 2.0.0, pin-set digest `0668e925bc8fb66f24fce08690f220c023e211cf882d2d0756f0447260cb3929` | `scripts/vendor/at.sh`, `docs/specs/at-hl7-core/PROVENANCE.md` |
+| Swiss EPR legislation (Fedlex) | EPDG, EPDV, EPDV-EDI with its annexes, and the EGDG draft, pin-set digest `384f0bbb5b958da909b54b835faf1535b2d0a141a05bc4a92d324914ff943910` | `scripts/vendor/ch.sh`, `docs/specs/ch-fedlex-epr/PROVENANCE.md` |
+| Swiss CH EPR FHIR package | package `ch.fhir.ig.ch-epr-fhir` 5.0.0, pin-set digest `75f8cce821998e823bd9a9fecac8848ca661d862d2576b1488e6399a9309eed5` | `scripts/vendor/ch.sh`, `docs/specs/ch-epr-fhir/PROVENANCE.md` |
+| Swiss EPR central services interface pack | `Central-Services_20260601_PROD.zip`, pin-set digest `6f6eb0c51aa0843a4332e915b6f9e0020ab36d6d6dfa245eb3ff9de9a1020ed0` | `scripts/vendor/ch.sh`, `docs/specs/ch-ehs-central-services/PROVENANCE.md` |
+| IHE PIXm FHIR package, Swiss pin | package `ihe.iti.pixm` 3.0.4, pin-set digest `68b36cfa85cc04551e30b3628ce16218c1b980495c06bb835f34b0ccc706063a` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pixm-ch/PROVENANCE.md` |
+| IHE PDQm FHIR package, Swiss pin | package `ihe.iti.pdqm` 3.1.0, pin-set digest `ae4fb56c9eba92fcdf5637c86135618e37b60642c99013a8ca06ba747c9c4e73` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pdqm-ch/PROVENANCE.md` |
+| IHE IUA supplement, Swiss pin | `IHE/ITI.IUA` Revision 2.3, pin-set digest `2a5f13a87ccf307fecda8c48e77a61fd09c440089b2172be0edea912dea85439` | `scripts/vendor/ch.sh`, `docs/specs/ihe-iua-ch/PROVENANCE.md` |
+| EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, two eHealth Network guidelines and the Commission legal notice, pin-set digest `35a38a6ca7a1f6026bca1c412af9c8fbabd05a8efadb2111ab75b93aba0a0fd8` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
+| MyHealth@EU NCPeH API and OpenNCP | package `myhealth.eu.fhir.ncp-api` 9.1.0, two guide pages and OpenNCP v10.1.0, pin-set digest `491dc60ee8b1bf8510758e0d4a62a8578c728f27c8b519a56ba40548f72c0c56` | `scripts/vendor/eu.sh`, `docs/specs/ehdsi/PROVENANCE.md` |
+| IHE ITI Technical Framework Volume 1 pages | ITI TF Revision 20.2 chapters 13, 18 and 27, pin-set digest `838b2f672e0bc34841d7fe297fd561c6f49c42fdd12b5a15119eb10a7234aeb7` | `scripts/vendor/ihe-iti-tf.sh`, `docs/specs/ihe-iti-tf/PROVENANCE.md` |
+| Belgian eHealth platform documents | ten cookbooks, two Swagger documents and the re-use conditions, pin-set digest `62377196eaf498ce49beca04948308cc78d02a718b5ecd1471514c1567b2c025` | `scripts/vendor/be.sh`, `docs/specs/be-ehealth/PROVENANCE.md` |
+| Belgian core profiles (HL7 Belgium) | package `hl7.fhir.be.core` 2.2.0, pin-set digest `ad5ae8d7d42c01757df5c7ed3a879fd69151e19a90b17636ad1c6fba8f6b3ca7` | `scripts/vendor/be.sh`, `docs/specs/be-fhir/PROVENANCE.md` |
+| French ANS publications | FR Core, the Annuaire Santé, Pro Santé Connectée transport security, PDSm and PDSm for DMP, pin-set digest `26094f61487a2a7e02d324a0ae7890f38f09bc4be4b7bfb90a266e6489c40eb0` | `scripts/vendor/fr.sh`, `docs/specs/fr-ans/PROVENANCE.md` |
+| Danish NSP documentation (NSPOP) | five NSPOP Confluence pages, pin-set digest `bfcb5dec956a2ce7a255d38a7667efa01ceb884c00fcacf273260e1deceb4fdc` | `scripts/vendor/dk.sh`, `docs/specs/dk-nsp/PROVENANCE.md` |
+| Swedish RIV-TA and Inera documentation | four RIV-TA service contracts, Basic Profile 2.1 and the engagement index FAQ, pin-set digest `32e7de7b0fced3297889794a12b7a5f2026199254935135b95339d4f2e286cf8` | `scripts/vendor/se.sh`, `docs/specs/se-inera/PROVENANCE.md` |
+| Norwegian NHN developer portal | ten Pasientens journaldokumenter, HelseID and document-sharing pages, pin-set digest `3eef682e5633ba560c8cbe2caee315501204cba9935a9432fdb2a4308e64364b` | `scripts/vendor/no.sh`, `docs/specs/no-nhn/PROVENANCE.md` |
+| Finnish Kanta documents and packages | three Kanta documents and two Kanta FHIR packages, pin-set digest `8709b4a22c5b8ce006490664a80c681dded2bd587811bde2afc77ddd1c6cb50e` | `scripts/vendor/fi.sh`, `docs/specs/fi-kanta/PROVENANCE.md` |
+| Finnish base profiles (HL7 Finland) | package `hl7.fhir.fi.base` 2.0.0, pin-set digest `b8a3c0782939e16f1dcfbf2b4be037abcccdb26be448fca4c818efb79f70eef9` | `scripts/vendor/fi.sh`, `docs/specs/fi-hl7/PROVENANCE.md` |
+
 ## openEHR model crates (crates.io)
 
 The openEHR surface comes from the published `openehr-*` crates, consumed by

@@ -33,10 +33,11 @@
 #                          .github/actions/docs-toolchain/action.yml.
 #   7. testkit images      the PinnedImage constants of the testkit container
 #                          harness against the docs/VERSIONS.md image rows.
-#   8. vendored corpora    every docs/specs/*/PROVENANCE.md names the commit or
-#                          tag its docs/VERSIONS.md corpus row pins, and the
-#                          federation specification's provenance declares the
-#                          version the specification row pins.
+#   8. vendored corpora    every docs/specs/*/PROVENANCE.md names the commit,
+#                          tag or pin-set digest its docs/VERSIONS.md corpus
+#                          row pins, and the federation specification's
+#                          provenance declares the version the specification
+#                          row pins.
 #   9. container images    the FROM of docker/Dockerfile against the base-image
 #                          row, every digest-pinned compose.yaml image against
 #                          a row naming the same reference, and the
@@ -900,8 +901,9 @@ done
 
 echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"
 # The reference a pin cell names: its first 40-hex token (a commit), else its
-# first 64-hex token (the sha256 of a FHIR package tarball), else the token
-# after the word `tag`.
+# first 64-hex token (the sha256 of a FHIR package tarball, or the pin-set
+# digest of a corpus pinned file by file), else the token after the word
+# `tag`.
 pinned_ref_of() {
   local cell="$1"
   awk '{
@@ -920,7 +922,35 @@ docs/specs/ihe-pdqm|IHE PDQm FHIR package
 docs/specs/ihe-mcsd|IHE mCSD FHIR package
 docs/specs/ihe-pmir|IHE PMIR FHIR package
 docs/specs/ihe-iua|IHE IUA supplement
-docs/specs/nl-gf|Netherlands Generic Functions IG source"
+docs/specs/nl-gf|Netherlands Generic Functions IG source
+docs/specs/de-gematik-epa|German ePA für alle (gematik)
+docs/specs/de-gematik-vzd|German VZD FHIR-Directory (gematik)
+docs/specs/de-gematik-zeta|German ZETA (gematik)
+docs/specs/de-hl7-basisprofil|German base profiles (HL7 Deutschland)
+docs/specs/de-gematik-isik|German ISiK (gematik)
+docs/specs/de-mii-consent|German MII consent module
+docs/specs/de-sgb5|German SGB V
+docs/specs/at-gtelg|Austrian GTelG 2012
+docs/specs/at-elga-bes|Austrian ELGA Berechtigungssystem
+docs/specs/at-elga|Austrian ELGA overview
+docs/specs/at-hl7-core|Austrian core profiles (HL7 Austria)
+docs/specs/ch-fedlex-epr|Swiss EPR legislation (Fedlex)
+docs/specs/ch-epr-fhir|Swiss CH EPR FHIR package
+docs/specs/ch-ehs-central-services|Swiss EPR central services interface pack
+docs/specs/ihe-pixm-ch|IHE PIXm FHIR package, Swiss pin
+docs/specs/ihe-pdqm-ch|IHE PDQm FHIR package, Swiss pin
+docs/specs/ihe-iua-ch|IHE IUA supplement, Swiss pin
+docs/specs/eu-ehds|EU EHDS Regulation and eHealth Network guidelines
+docs/specs/ehdsi|MyHealth@EU NCPeH API and OpenNCP
+docs/specs/ihe-iti-tf|IHE ITI Technical Framework Volume 1 pages
+docs/specs/be-ehealth|Belgian eHealth platform documents
+docs/specs/be-fhir|Belgian core profiles (HL7 Belgium)
+docs/specs/fr-ans|French ANS publications
+docs/specs/dk-nsp|Danish NSP documentation (NSPOP)
+docs/specs/se-inera|Swedish RIV-TA and Inera documentation
+docs/specs/no-nhn|Norwegian NHN developer portal
+docs/specs/fi-kanta|Finnish Kanta documents and packages
+docs/specs/fi-hl7|Finnish base profiles (HL7 Finland)"
 
 agreed=0
 expected=0
