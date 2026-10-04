@@ -16,7 +16,10 @@ change the pin in docs/VERSIONS.md and re-run the script.
   <https://github.com/openEHR/specifications-AA_GLOBAL>), whose licence block
   states Creative Commons Attribution-NoDerivs 3.0 Unported
   (<https://creativecommons.org/licenses/by-nd/3.0/>), which permits verbatim
-  redistribution with attribution. The repository's own `LICENSE` file is
+  redistribution with attribution. That front block is cited by URL on the
+  default branch of `specifications-AA_GLOBAL`; it is neither vendored nor
+  pinned here, because it is boilerplate the rendering includes and none of
+  the gateway's citations read it. The repository's own `LICENSE` file is
   the Apache License 2.0 and is vendored beside this file, so every statement
   is here and none is assumed.
 - Layout: the upstream paths, unchanged

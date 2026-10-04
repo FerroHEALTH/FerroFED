@@ -33,9 +33,11 @@ profile) and Volume 2 §3.71 Get Access Token [ITI-71], §3.72 Incorporate
 Access Token [ITI-72], §3.102 Introspect Token [ITI-102] and §3.103 Get
 Authorization Server Metadata [ITI-103]. `media/` is the upstream
 directory whole: the figures the text links and the slide deck the actor
-diagrams are drawn in. The repository's build script, stylesheet, code
-system, issue templates and README are not taken. The status is the document's own: a Trial Implementation supplement
-may be amended before it is incorporated into the Technical Framework.
+diagrams are drawn in, which the text does not link but which is kept so
+the directory stays as the publisher ships it. The repository's build
+script, stylesheet, code system, issue templates and README are not taken.
+The status is the document's own: a Trial Implementation supplement may be
+amended before it is incorporated into the Technical Framework.
 
 | File | sha256 | git blob id |
 |---|---|---|
