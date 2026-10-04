@@ -424,6 +424,9 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
+        // NOTE: no specification governs this: our own design; one forwarder drains
+        // each audit spool, so where the audit records go takes a restart.
+        audit: boot.audit.clone(),
     }
 }
 
@@ -558,6 +561,7 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
         ),
         ("stored_queries", stored_queries_changed(boot, fresh)),
         ("xcpd.audit", audit_changed(boot, fresh)),
+        ("audit", boot.audit != fresh.audit),
         ("pmir", pmir_changed(boot, fresh)),
         (
             "metrics.listen",
@@ -605,6 +609,7 @@ fn federation_class(error: &FederationError) -> &'static str {
         | FederationError::MitzNamespace(_)
         | FederationError::Mitz(_) => "consent-prefilter",
         FederationError::Localization(_) => "localization",
+        FederationError::Audit(_) => "audit",
         FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
         FederationError::DemographicWithoutRegistry
         | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",

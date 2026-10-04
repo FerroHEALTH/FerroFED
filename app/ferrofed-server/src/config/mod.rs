@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use crate::config::error::Error;
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
+pub mod audit;
 pub mod audit_repository;
 pub mod auth;
 pub mod error;
@@ -102,6 +103,9 @@ pub struct Config {
     pub signing: Option<Signing>,
     /// How a caller authenticates to the gateway (`[auth]`, §13.1, N25).
     pub auth: auth::Auth,
+    /// Where the audit records of the PIXm, mCSD and PMIR transactions go
+    /// (`[audit]`, #486).
+    pub audit: audit::Audit,
 }
 
 impl Default for Config {
@@ -122,6 +126,7 @@ impl Default for Config {
             metrics: Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),
+            audit: audit::Audit::default(),
         }
     }
 }

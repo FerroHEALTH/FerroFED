@@ -32,9 +32,15 @@ use ferrofed_identity::lifecycle::{self, LifecycleConfigError, RegistryAuth};
 use ferrofed_registry::secret::Secret;
 use http::HeaderMap;
 use http::header::AUTHORIZATION;
+use std::sync::Arc;
+
+use ihe_iti::balp::{AuditError, AuditRecorder};
 use ihe_iti::pmir::PmirSubscriber;
+use ihe_iti::pmir::audit::received;
 use ihe_iti::pmir::error::InvalidInput;
+use ihe_iti::pmir::feed::Feed;
 use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
+use url::Url;
 
 use crate::config::pmir::PmirSettings;
 use crate::config::settings::Scheme;
@@ -51,12 +57,17 @@ pub enum IdentityFeedError {
     /// The subscription cannot be described.
     #[error("the PMIR subscription cannot be described")]
     Request(#[source] InvalidInput),
+    /// The Registry's base URL does not parse.
+    #[error("the PMIR Registry base URL is not a URL")]
+    Registry(#[source] url::ParseError),
 }
 
 /// The identity feed a running gateway keeps: its subscription and the
 /// route's credential.
 pub struct IdentityFeed {
     subscriber: PmirSubscriber,
+    registry: Url,
+    audit: Option<Arc<dyn AuditRecorder>>,
     request: SubscriptionRequest,
     token: Secret,
     domains: BTreeSet<String>,
@@ -82,12 +93,16 @@ impl IdentityFeed {
     /// The feed `settings` describe, whose changes are scoped by the members'
     /// `ehr_id` `domains` (Annex A.1). Nothing is sent yet.
     ///
+    /// Every ITI-94 exchange and every ITI-93 message received is recorded
+    /// through `audit`, when it is given (PMIR §2:3.93.5.1, §2:3.94.5.1).
+    ///
     /// # Errors
     /// [`IdentityFeedError`] when the subscriber or the subscription cannot
     /// be built.
     pub fn new(
         settings: &PmirSettings,
         domains: BTreeSet<String>,
+        audit: Option<Arc<dyn AuditRecorder>>,
     ) -> Result<Self, IdentityFeedError> {
         let auth = match &settings.credentials {
             Some(Scheme::Bearer(token)) => RegistryAuth::Bearer(token.to_secret_string()),
@@ -100,6 +115,13 @@ impl IdentityFeed {
             Some(Scheme::OAuth2(_)) | None => RegistryAuth::None,
         };
         let subscriber = lifecycle::subscriber(&settings.url, &auth)?;
+        // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose
+        // record is refused fails like a Registry that did not answer.
+        let subscriber = match &audit {
+            Some(recorder) => subscriber.audited(Arc::clone(recorder)),
+            None => subscriber,
+        };
+        let registry = Url::parse(settings.url.expose()).map_err(IdentityFeedError::Registry)?;
         let criteria = match &settings.identifier_system {
             Some(system) => {
                 Criteria::identifier_system(system).map_err(IdentityFeedError::Request)?
@@ -110,6 +132,8 @@ impl IdentityFeed {
             .map_err(IdentityFeedError::Request)?;
         Ok(Self {
             subscriber,
+            registry,
+            audit,
             request,
             token: settings.feed_token.clone(),
             domains,
@@ -125,6 +149,24 @@ impl IdentityFeed {
     #[must_use]
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    /// Records the ITI-93 message `feed`, as read, or a message refused
+    /// before it could be read, as the Feed audit profile fixes it (PMIR
+    /// §2:3.93.5.1), when the feed is audited.
+    ///
+    /// The Registry is named by its configured base: the message carried the
+    /// feed token, which only the subscription's Registry holds.
+    ///
+    /// # Errors
+    /// The [`AuditError`] of a record the recorder refused.
+    pub async fn record(&self, feed: Option<&Feed>) -> Result<(), AuditError> {
+        let Some(recorder) = &self.audit else {
+            return Ok(());
+        };
+        recorder
+            .record(received(&self.registry, self.request.endpoint(), feed))
+            .await
     }
 
     /// The members' `ehr_id` domains a change is scoped by.

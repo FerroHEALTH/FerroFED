@@ -160,7 +160,7 @@ impl Federation {
                 development.clone().map(|it| -> Arc<dyn Resolver> { it })
             }
             (None, Some(section)) => {
-                pixm = Some(pixm_resolver(section, &snapshot)?);
+                pixm = Some(pixm_resolver(section, &settings.audit, &snapshot)?);
                 pixm.clone().map(|it| -> Arc<dyn Resolver> { it })
             }
         };
@@ -196,7 +196,8 @@ impl Federation {
             Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some())
                 .with_consent(consent.is_some())
                 .with_localizer(localization.localizer().is_some())
-                .with_audit_repository(localization.repository().cloned());
+                .with_audit_repository(localization.repository().cloned())
+                .with_audit_feed(audit_feed(settings)?);
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
         let federation = Self {
             id,
@@ -308,6 +309,14 @@ fn patient_bound(
         }
     }
     Ok(())
+}
+
+/// The FHIR Feed trail the PIXm, mCSD and PMIR audit records of `settings`
+/// go to, which `GET /health/dependencies` reports as `audit_feed`.
+fn audit_feed(
+    settings: &Settings,
+) -> Result<Option<Arc<ferrofed_identity::balp::FeedAudit>>, FederationError> {
+    crate::audit::feed(&settings.audit).map_err(FederationError::Audit)
 }
 
 /// Every `[auth.issuer.patient]` binding of `settings`, with its key.

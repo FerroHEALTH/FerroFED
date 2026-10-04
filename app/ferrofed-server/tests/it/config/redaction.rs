@@ -110,7 +110,7 @@ fn configuration(
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n\n\
          [metrics]\notlp_endpoint = \"{otlp}\"\n\n\
-         [[pixm.manager]]\nurl = \"{pix_url}\"\n\
+         [audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{pix_url}\"\n\
          members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
          [pixm.manager.credentials]\nbearer_token = \"{BEARER}\"\n\n{extra}"
     );
@@ -272,7 +272,10 @@ fn a_pix_manager_url_with_userinfo_is_refused_without_quoting_it() -> TestResult
     }
     let output = binary(
         &["config", "check"],
-        &format!("[[pixm.manager]]\nurl = \"{}\"\n", pix_url_with_userinfo()),
+        &format!(
+            "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}\"\n",
+            pix_url_with_userinfo()
+        ),
     )?;
     assert_eq!(
         Some(i32::from(ferrofed_server::EXIT_CONFIG)),

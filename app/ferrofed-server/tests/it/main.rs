@@ -35,6 +35,7 @@ mod endpoint_attributes;
 mod endpoint_report;
 mod errors;
 mod facade;
+mod feed_audit;
 mod follow_up;
 mod healthcheck;
 mod http;

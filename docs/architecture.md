@@ -517,6 +517,28 @@ are dispatched (N8).
   audit failure (#418); `log` writes a structured event at the
   `ferrofed::audit` target without the query parameters; and `off` is
   refused outside the development profile and declared in `OPTIONS` (#410).
+- **The audit of the FHIR profiles** (#486, #469). PIXm (§2:3.83.5.1.1),
+  mCSD (§2:3.90.5.1, §2:3.91.5.1), PMIR (§2:3.93.5.1, §2:3.94.5.1) and PDQm
+  (§2:3.78.5.1) each define their audit record as a FHIR `AuditEvent`
+  profile built on the IHE Basic Audit Log Patterns, and BALP has the Audit
+  Creator send it over the ATX: FHIR Feed Option of ITI-20 (BALP
+  §1:52.1.1.1; the RESTful ATNA supplement, ITI TF-2 §3.20.4.2), a FHIR
+  `create` at the repository. So these transactions are not audited as
+  DICOM messages over syslog: `ihe-iti`'s `balp` feature writes each
+  profile's `AuditEvent` and posts it through the same spool and forwarder
+  as the ITI-55 trail, and each client (`PixmClient`, `McsdClient`,
+  `PmirSubscriber`, `PdqmClient`) takes an `AuditRecorder` and fails the
+  transaction when its record cannot be stored, the XCPD policy. The FHIR
+  Feed adds what syslog lacks, an answer: a `4xx` other than `408` and
+  `429` is a refusal a retry cannot change (§3.20.4.3.3 leaves it to the
+  client), so the record is quarantined and the drain goes on. The server's
+  `[audit]` table routes them: `repository`, `log`, or `off` under
+  development only, with no default outside development once `[pixm]`,
+  `[registry.mcsd]` or `[pmir]` is set. A record names the patient
+  (the source identifier of ITI-83, the identities of an ITI-93 message)
+  toward the repository only, never in a log, a metric or a node request
+  (§5.4, N33). No record names a user agent, which every BALP pattern leaves
+  optional; PDQm is wired when the gateway first uses it (#487).
 - **The resolver** (decision A17). A resolver that cannot answer is not a
   patient who is unknown. An ITI-83 `404`, or a `200` with no identifier in a
   domain, is `not-resolved` and, per N6, does not fail the query. An outage, a
@@ -1066,9 +1088,10 @@ Research: #20. The gateway holds no clinical data. Its state has five
 origins, and each lives where its origin puts it (decision A25; the
 specification is silent on storage, so this section is FerroFED's own). The
 fifth is the audit records awaiting delivery to an ATNA Audit Record
-Repository (#418): audit records, not clinical data, and the one place the
-gateway writes a patient identifier to disk, since each XCPD audit message
-carries the query parameters as ITI TF-2 §3.55.5.1.1 requires.
+Repository (#418, #486): audit records, not clinical data, and the one place
+the gateway writes a patient identifier to disk, since each XCPD audit
+message carries the query parameters as ITI TF-2 §3.55.5.1.1 requires, and
+each PIXm and PMIR record names the patient as its profile requires.
 
 | State | Origin | Where it lives |
 |---|---|---|
@@ -1080,6 +1103,7 @@ carries the query parameters as ITI TF-2 §3.55.5.1.1 requires.
 | Stored-query definitions (N44) | a client `PUT` | the one durable store, behind `DefinitionStore` |
 | Outbound credentials | the operator | `_file` secrets per endpoint |
 | Audit records awaiting delivery (ITI-55 audit messages) | ITI-20 store-and-forward (ITI TF-2 §3.20.4.1.1), one per XCPD exchange | a bounded spool directory, one fsynced `0600` file per message in a `0700` directory the gateway refuses to start on when it is open to other users, drained in order and removed once delivered, a message that cannot be read moved to its `quarantine` subdirectory and counted under the same bounds; in memory under the development profile without `spool_dir` (#418) |
+| Audit records awaiting delivery (BALP `AuditEvent`s of ITI-83, ITI-90, ITI-91, ITI-93, ITI-94) | ITI-20 store-and-forward over the FHIR Feed, one per transaction | a spool of its own, as above, holding FHIR JSON; a record the repository refuses is quarantined too (#486) |
 
 **A secret is a type** (#364, the design FerroEHR's configuration uses). Every
 credential the configuration holds is a `Secret` (a bearer token, a basic

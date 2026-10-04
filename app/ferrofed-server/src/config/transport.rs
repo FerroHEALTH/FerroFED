@@ -274,6 +274,15 @@ pub fn check(
     {
         hold(directory.url.expose(), directory_site())?;
     }
+    if let Some(repository) = &settings.audit.repository {
+        hold(
+            repository.url.as_str(),
+            site(
+                String::from("audit.repository.url"),
+                String::from("the PIXm, mCSD and PMIR audit records, which name the patient"),
+            ),
+        )?;
+    }
     let collectors = [
         ("metrics.otlp_endpoint", &settings.metrics.otlp_endpoint),
         ("telemetry.otlp_endpoint", &settings.telemetry.otlp_endpoint),

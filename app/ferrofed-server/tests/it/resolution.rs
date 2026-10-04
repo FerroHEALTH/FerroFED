@@ -94,7 +94,7 @@ async fn manager_not_knowing() -> Server {
 /// The `[pixm]` table of one Manager at `pix` serving node A and node B.
 fn pixm(pix: &str) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
+        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
     )
 }
 
@@ -365,7 +365,7 @@ fn a_pix_manager_and_the_dev_cross_reference_together_refuse_to_boot() -> TestRe
 fn a_pix_manager_that_leaves_a_member_unresolved_refuses_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;
     let text = format!(
-        "[[pixm.manager]]\nurl = \"https://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
+        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"https://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
     );
     let error = load_refusal(dir.path(), &text)?;
     assert!(
@@ -448,7 +448,7 @@ fn a_refusal_asking_for_a_registry_names_both_sources() {
 
 #[test]
 fn a_pix_manager_url_that_does_not_parse_refuses_to_boot_naming_its_key() -> TestResult {
-    let text = "[[pixm.manager]]\nurl = \"not a url\"\n";
+    let text = "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"not a url\"\n";
     match Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Url { key, .. }) if key == "pixm.manager[0].url" => Ok(()),
         other => Err(format!("refused naming the key: {other:?}").into()),

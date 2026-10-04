@@ -110,11 +110,17 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
                 settings.profile == Profile::Development,
             )
             .with_cleartext(cleartext.as_deref())
-            .with_audit_spool_in_memory(settings.xcpd.as_ref().is_some_and(|xcpd| {
-                xcpd.audit_repository
+            .with_audit_spool_in_memory(
+                settings.xcpd.as_ref().is_some_and(|xcpd| {
+                    xcpd.audit_repository
+                        .as_ref()
+                        .is_some_and(|repository| repository.spool_dir.is_none())
+                }) || settings
+                    .audit
+                    .repository
                     .as_ref()
-                    .is_some_and(|repository| repository.spool_dir.is_none())
-            })),
+                    .is_some_and(|repository| repository.spool_dir.is_none()),
+            ),
             format.colour(stdout_is_terminal, no_color.as_deref()),
         );
     }
