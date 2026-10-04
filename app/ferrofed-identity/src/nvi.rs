@@ -44,6 +44,23 @@ use url::Url;
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
 
+/// The naming systems of the BSN itself: the IG's `$bsn` system, and the OID
+/// it is registered under, as a URN and dotted.
+///
+/// None of them may stand for the pseudonymised BSN, which is the only
+/// identifier the NVI is keyed on (Annex B §B.1).
+pub const BSN_SYSTEMS: [&str; 3] = [
+    "http://fhir.nl/fhir/NamingSystem/bsn",
+    "urn:oid:2.16.840.1.113883.2.4.6.3",
+    "2.16.840.1.113883.2.4.6.3",
+];
+
+/// Returns whether `namespace` names the BSN itself, one of [`BSN_SYSTEMS`].
+#[must_use]
+pub fn is_bsn_system(namespace: &str) -> bool {
+    BSN_SYSTEMS.contains(&namespace)
+}
+
 /// The NVI localizer as the configuration names it.
 pub struct NviConfig {
     /// The Localization Service's FHIR base URL, which `Debug` shows without
@@ -94,6 +111,10 @@ pub enum NviConfigError {
         "the Localization Service base URL is not an http(s) URL without a query or a fragment"
     )]
     Base(#[source] InvalidInput),
+    /// A namespace listed as standing for the pseudonymised BSN is a BSN
+    /// system, so a BSN would reach the NVI labelled as a pseudonym.
+    #[error("the namespace {0} is a BSN system and cannot stand for the pseudonymised BSN")]
+    BsnAsPseudonym(IdentifierNamespace),
     /// A custodian key is empty.
     #[error("a custodian URA is empty")]
     EmptyUra,
@@ -156,14 +177,23 @@ impl NviLocalizer {
     ///
     /// # Errors
     ///
-    /// An [`NviConfigError`] for a base URL that is not one, a custodian
-    /// with an empty URA or naming a member the registry does not hold, a
-    /// member no custodian maps to, and TLS material or a credential that
-    /// cannot be used.
+    /// An [`NviConfigError`] for a BSN system listed as standing for the
+    /// pseudonym, a base URL that is not one, a custodian with an empty URA or
+    /// naming a member the registry does not hold, a member no custodian maps
+    /// to, and TLS material or a credential that cannot be used.
     pub fn from_config(
         config: NviConfig,
         registry: &RegistrySnapshot,
     ) -> Result<Self, NviConfigError> {
+        // NOTE: Annex B §B.1, N33: the NVI is keyed on the pseudonym, so a BSN system listed
+        // as its alias would send a BSN there; refused here as well as at configuration load.
+        if let Some(bsn) = config
+            .namespaces
+            .iter()
+            .find(|namespace| is_bsn_system(namespace.as_str()))
+        {
+            return Err(NviConfigError::BsnAsPseudonym(bsn.clone()));
+        }
         let base = Url::parse(config.base.expose()).map_err(NviConfigError::BaseUrl)?;
         let http = http_client(&config)?;
         let mut custodians = BTreeMap::new();

@@ -217,3 +217,21 @@ fn a_base_that_is_no_fhir_base_is_refused() -> TestResult {
     ));
     Ok(())
 }
+
+// conformance: CP-26
+#[test]
+fn a_bsn_system_never_stands_for_the_pseudonym() -> TestResult {
+    for bsn in [
+        "http://fhir.nl/fhir/NamingSystem/bsn",
+        "urn:oid:2.16.840.1.113883.2.4.6.3",
+        "2.16.840.1.113883.2.4.6.3",
+    ] {
+        let mut written = config("https://nvi.example.org/fhir")?;
+        written.namespaces.insert(IdentifierNamespace::new(bsn)?);
+        match NviLocalizer::from_config(written, &registry()) {
+            Err(NviConfigError::BsnAsPseudonym(namespace)) => assert_eq!(namespace.as_str(), bsn),
+            other => panic!("{bsn} is refused as an alias of the pseudonym, not {other:?}"),
+        }
+    }
+    Ok(())
+}

@@ -227,6 +227,15 @@ and `[nl_gf]`; it never asks the directory. A change to `[registry.mcsd]` takes 
 restart, and a change between a document and a directory is refused as
 `registry-presence`.
 
+A directory change goes through the same checks, so it is refused when the
+localizer cannot place the new members. Under `[nl_gf.nvi]`, or `[xcpd]`, a
+member the directory adds without a custodian URA (or a community) mapped to
+it makes the change refused as `localization`: the gateway keeps the previous
+registry, logs the refusal and counts it in `ferrofed_registry_reloads_total`
+([Metrics](metrics.md)), and asks again from the same instant at the next
+refresh. `GET /health/dependencies` still shows the directory `up`, since it
+answered. Map the member first, then publish it.
+
 ## Federation id
 
 A gateway that federates names its federation, and refuses to boot without

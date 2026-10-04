@@ -461,3 +461,30 @@ fn a_member_no_custodian_names_refuses_to_boot() -> TestResult {
         other => Err(format!("node-c could never be localized: {other:?}").into()),
     }
 }
+
+// conformance: CP-26
+#[test]
+fn a_bsn_system_listed_as_the_pseudonym_is_refused_at_load() -> TestResult {
+    for bsn in [
+        "http://fhir.nl/fhir/NamingSystem/bsn",
+        "urn:oid:2.16.840.1.113883.2.4.6.3",
+        "2.16.840.1.113883.2.4.6.3",
+    ] {
+        let dir = tempfile::tempdir()?;
+        let text = edited(
+            dir.path(),
+            "production",
+            "https://nvi.example.org/fhir",
+            |text| text.replace("namespaces = [\"", &format!("namespaces = [\"{bsn}\", \"")),
+        )?;
+        match resolved(&text) {
+            Err(error::Error::BsnAsPseudonym { namespace }) => assert_eq!(namespace, bsn),
+            other => {
+                return Err(
+                    format!("{bsn} never stands for the pseudonym (N33): {other:?}").into(),
+                );
+            }
+        }
+    }
+    Ok(())
+}

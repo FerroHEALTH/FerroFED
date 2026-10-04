@@ -456,7 +456,10 @@ patient in any other namespace, a BSN included, cannot be localized, so the
 query fails closed and the NVI is never asked. The pseudonym is personal
 data like the BSN it stands for, so it is handled as every patient
 identifier is: it reaches the NVI and the PIX Manager, never a node, a log
-line or an error.
+line or an error. A BSN system is never accepted in `namespaces`: listing
+`http://fhir.nl/fhir/NamingSystem/bsn`, or the BSN's OID as
+`urn:oid:2.16.840.1.113883.2.4.6.3` or dotted, refuses the configuration, so
+a BSN can never reach the NVI labelled as a pseudonym.
 
 What a deployment must provide:
 

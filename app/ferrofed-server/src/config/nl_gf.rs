@@ -30,6 +30,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 
+use ferrofed_identity::nvi::is_bsn_system;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
@@ -60,7 +61,8 @@ pub struct Nvi {
     /// holds its data; every member needs one.
     pub custodians: BTreeMap<String, String>,
     /// The client namespaces that stand for the pseudonymised BSN, beside
-    /// `http://fhir.nl/fhir/NamingSystem/pseudo-bsn` itself.
+    /// `http://fhir.nl/fhir/NamingSystem/pseudo-bsn` itself; a BSN system is
+    /// refused.
     pub namespaces: Vec<String>,
     /// The gateway's client certificate chain and private key, PEM, for
     /// mutual TLS, inline or through `client_identity_file`.
@@ -116,6 +118,7 @@ pub const NVI_KEY: &str = "nl_gf.nvi";
 /// every secret and file read.
 ///
 /// # Errors
+/// [`Error::BsnAsPseudonym`] for a BSN system listed in `namespaces`,
 /// [`Error::Missing`] for no registry or no `url`, [`Error::Url`] for a URL
 /// that does not parse, [`Error::UrlCredentials`] for one that carries a
 /// user name or a password, [`Error::Cleartext`] for one that is not
@@ -156,6 +159,17 @@ fn resolve_nvi(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> {
         return Err(Error::UrlCredentials {
             key: url_key,
             section: format!("{NVI_KEY}.credentials"),
+        });
+    }
+    // NOTE: Annex B §B.1, N33: the NVI is keyed on the pseudonymised BSN, so a BSN
+    // system listed as its alias would send a BSN there under the pseudonym's label.
+    if let Some(bsn) = nvi
+        .namespaces
+        .iter()
+        .find(|namespace| is_bsn_system(namespace))
+    {
+        return Err(Error::BsnAsPseudonym {
+            namespace: bsn.clone(),
         });
     }
     let section = format!("{NVI_KEY}.credentials");
