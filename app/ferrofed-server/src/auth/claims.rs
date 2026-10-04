@@ -9,9 +9,10 @@
 //! IUA extension (ITI TF-2 3.71.4.2.2.1.1: `extensions.ihe_iua`, its
 //! `purpose_of_use` an array of FHIR `Coding`) and RFC 9396
 //! `authorization_details`, whose `purpose_of_use` is written `system|code`
-//! (the Federation Tier's Annex B §B.4a.3). Every other claim is passed over,
-//! and the IUA `person_id`, a patient identifier, is never read (§5.4.1,
-//! N33).
+//! (the Federation Tier's Annex B §B.4a.3), and the SMART on openEHR `ehrId`,
+//! the `ehr_id` of the launch context, "conveyed via the `ehrId` token claim"
+//! (master04 §Capabilities). Every other claim is passed over, and the IUA
+//! `person_id`, a patient identifier, is never read (§5.4.1, N33).
 //!
 //! IUA is cited from the Revision 2.5 Trial Implementation supplement
 //! vendored at `docs/specs/ihe-iua/IHE_ITI_Suppl_IUA.md`: ITI TF-2 3.71.4.2.2.1
@@ -46,12 +47,21 @@ pub(super) struct AccessToken {
     /// `scope`.
     #[serde(default)]
     scope: Option<String>,
+    /// The SMART on openEHR `ehrId`, the launch context a `patient/` grant
+    /// is confined to.
+    #[serde(default, rename = "ehrId")]
+    ehr_id: Option<String>,
     /// The organisation and the purposes of use.
     #[serde(flatten)]
     declared: Declared,
 }
 
 impl AccessToken {
+    /// Returns the token's `ehrId` claim, when it carries one.
+    pub(super) fn launch_ehr_id(&self) -> Option<String> {
+        self.ehr_id.clone()
+    }
+
     /// Returns what the token states about its caller.
     pub(super) fn stated(self) -> Stated {
         Stated {
@@ -91,6 +101,9 @@ pub(super) struct Introspected {
     /// `nbf`, in seconds since the epoch.
     #[serde(default)]
     pub(super) nbf: Option<i64>,
+    /// The SMART on openEHR `ehrId`.
+    #[serde(default, rename = "ehrId")]
+    pub(super) ehr_id: Option<String>,
     /// The organisation and the purposes of use.
     #[serde(flatten)]
     pub(super) declared: Declared,

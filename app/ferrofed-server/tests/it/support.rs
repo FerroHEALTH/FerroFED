@@ -181,6 +181,7 @@ pub(crate) fn auth() -> AuthSettings {
             verification: Verification::KeySet(KeySource::Set(issuer().jwks())),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::from([claims().client_id]),
+            patient: None,
         }],
         ..AuthSettings::default()
     }
@@ -531,6 +532,10 @@ pub(crate) struct Conveyed {
     #[serde(default)]
     pub(crate) purpose_of_use: Vec<ConveyedPurpose>,
     pub(crate) scope: Option<String>,
+    /// The confined patient's own `ehr_id` at the node, under a confined
+    /// `patient/` grant only.
+    #[serde(default, rename = "ehrId", skip_serializing_if = "Option::is_none")]
+    pub(crate) ehr_id: Option<String>,
 }
 
 /// The claims `token` carries, read without verifying it.

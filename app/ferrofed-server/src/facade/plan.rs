@@ -345,13 +345,15 @@ pub fn unscoped(
         plan = settle(plan, endpoint, Outcome::Excluded { error })?;
     }
     let node = query.node_query();
+    // NOTE: §7.1, N29: an ehr_id that is no HIER_OBJECT_ID is no node's own, so the query
+    // is scoped to none and the outbound gate reads its literal like any other text.
+    let scope = query.ehr_scope().and_then(|value| EhrId::new(value).ok());
     for endpoint in membership.asked.into_values() {
-        plan = plan
-            .dispatch(
-                endpoint,
-                NodeQuery::new(node.aql()).with_width(super::cells::width(node.columns())),
-            )
-            .map_err(TargetsError::Plan)?;
+        let mut sent = NodeQuery::new(node.aql()).with_width(super::cells::width(node.columns()));
+        if let Some(ehr_id) = &scope {
+            sent = sent.with_scope(ehr_id.hier_object_id());
+        }
+        plan = plan.dispatch(endpoint, sent).map_err(TargetsError::Plan)?;
     }
     Ok(Targets {
         plan,
@@ -435,7 +437,7 @@ fn detail(message: &str) -> Result<ErrorDetail, TargetsError> {
 }
 
 /// The patient reference the resolver is asked about.
-fn patient_ref(subject: &Subject) -> Result<PatientRef, TargetsError> {
+pub(crate) fn patient_ref(subject: &Subject) -> Result<PatientRef, TargetsError> {
     let namespace = IdentifierNamespace::new(subject.namespace()).map_err(TargetsError::Patient)?;
     PatientRef::new(namespace, SecretString::from(subject.value())).map_err(TargetsError::Patient)
 }

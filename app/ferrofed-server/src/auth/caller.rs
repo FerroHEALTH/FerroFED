@@ -6,12 +6,16 @@
 //!
 //! A request the gateway admits carries one [`Caller`] in its extensions. It
 //! holds what the verified token or edge assertion says about the caller and
-//! never anything about a patient: an IHE IUA `person_id` claim is never read
-//! (§5.4.1, N33).
+//! no patient identifier: an IHE IUA `person_id` claim is never read
+//! (§5.4.1, N33). The one patient context it may hold is the SMART on openEHR
+//! `ehrId`, an `ehr_id` at the platform that issued the token, which N33
+//! lets locate a node; it confines a `patient/` grant ([`PatientContext`]).
 
 use std::fmt;
 
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use openehr_sdt::smart_scopes::SmartScope;
 use secrecy::{ExposeSecret, SecretString};
 
@@ -42,6 +46,61 @@ pub struct Caller {
     /// in the canonical form of the SMART on openEHR grammar: the scope an
     /// exchanged token is asked for (N26).
     covering: String,
+    /// The token's `ehrId` claim as written, read only to confine a
+    /// `patient/` grant.
+    launch_ehr_id: Option<String>,
+    /// The patient the caller's grant is confined to, when only a
+    /// `patient/` grant covers the operation.
+    patient: Option<PatientContext>,
+}
+
+/// The patient a caller's `patient/` grant is confined to: the token's
+/// `ehrId` at the member its issuer is bound to.
+///
+/// The `ehrId` is the SMART on openEHR launch context (master07 §Context
+/// Selection), an `ehr_id` at that member alone (§12.5). The gateway resolves
+/// it through the cross-reference as an identifier in that member's `ehr_id`
+/// system (§5.2), so it never compares the bare `ehrId` across members.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatientContext {
+    /// The endpoint of the member whose platform issued the token.
+    endpoint: EndpointId,
+    /// The identifier system of that member's `ehr_id`s at the
+    /// cross-reference.
+    ehr_id_system: IdentifierNamespace,
+    /// The token's `ehrId`.
+    ehr_id: EhrId,
+}
+
+impl PatientContext {
+    /// Returns the context of `ehr_id`, an `ehr_id` in `ehr_id_system`, at
+    /// the member `endpoint` reaches.
+    #[must_use]
+    pub fn new(endpoint: EndpointId, ehr_id_system: IdentifierNamespace, ehr_id: EhrId) -> Self {
+        Self {
+            endpoint,
+            ehr_id_system,
+            ehr_id,
+        }
+    }
+
+    /// Returns the endpoint of the member whose platform issued the token.
+    #[must_use]
+    pub fn endpoint(&self) -> &EndpointId {
+        &self.endpoint
+    }
+
+    /// Returns the identifier system of that member's `ehr_id`s.
+    #[must_use]
+    pub fn ehr_id_system(&self) -> &IdentifierNamespace {
+        &self.ehr_id_system
+    }
+
+    /// Returns the token's `ehrId`.
+    #[must_use]
+    pub fn ehr_id(&self) -> &EhrId {
+        &self.ehr_id
+    }
 }
 
 /// A caller's verified access token.
@@ -109,7 +168,37 @@ impl Caller {
             verified_by,
             token: None,
             covering: String::new(),
+            launch_ehr_id: None,
+            patient: None,
         }
+    }
+
+    /// Returns this caller with `claim`, its token's `ehrId` claim as
+    /// written (SMART on openEHR master04 §Capabilities).
+    #[must_use]
+    pub fn with_launch_ehr_id(mut self, claim: Option<String>) -> Self {
+        self.launch_ehr_id = claim;
+        self
+    }
+
+    /// Returns the token's `ehrId` claim as written, when it carries one.
+    #[must_use]
+    pub fn launch_ehr_id(&self) -> Option<&str> {
+        self.launch_ehr_id.as_deref()
+    }
+
+    /// Returns this caller, its grant confined to the patient of `context`.
+    #[must_use]
+    pub fn with_patient(mut self, context: PatientContext) -> Self {
+        self.patient = Some(context);
+        self
+    }
+
+    /// Returns the patient the caller's grant is confined to, when only a
+    /// `patient/` grant covers the operation.
+    #[must_use]
+    pub fn patient(&self) -> Option<&PatientContext> {
+        self.patient.as_ref()
     }
 
     /// Returns the issuer that vouched for the caller.

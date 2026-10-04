@@ -201,6 +201,16 @@ pub enum Error {
         #[source]
         source: IdError,
     },
+    /// An `[auth.issuer.patient]` binding names something that is not an
+    /// endpoint id.
+    #[error("{key} is not an endpoint id")]
+    PatientEndpoint {
+        /// The key that carries it.
+        key: String,
+        /// What the registry's endpoint id rule reported.
+        #[source]
+        source: IdError,
+    },
     /// `federation.demographic_endpoint` is not an endpoint id.
     #[error("federation.demographic_endpoint is not an endpoint id")]
     DemographicEndpoint {

@@ -92,6 +92,14 @@ jwks_uri = "https://idp.example.org/jwks"
 # introspection_endpoint = "https://idp.example.org/introspect"
 # client_id = "ferrofed"
 # client_secret_file = "/run/secrets/ferrofed/introspection-secret"
+#
+# Honour this issuer's patient/ grants, confined to the patient its tokens'
+# ehrId names: the one member whose platform issues them, and the identifier
+# system under which the cross-reference knows that member's ehr_ids.
+# https://ferrofed.eu/docs/operate/authentication.html#patient-grants
+# [auth.issuer.patient]
+# endpoint = "node-a-query"
+# ehr_id_system = "urn:oid:2.999.9.1"
 
 # The identity service: an IHE PIXm PIX Manager.
 # https://ferrofed.eu/docs/operate/identity.html

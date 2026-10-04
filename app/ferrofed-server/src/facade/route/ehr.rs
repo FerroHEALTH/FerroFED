@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use axum::response::Response;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
+use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_registry::id::EhrId;
@@ -32,7 +33,7 @@ use super::{Arrived, Deadlines, Failure, answered, failed, forward, held, learn,
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::write::{self, Write};
-use crate::facade::{follow_up, owner, security};
+use crate::facade::{confined, follow_up, owner, security};
 use crate::federation::Federation;
 
 /// The path parameter that names the EHR (§12.5).
@@ -76,7 +77,7 @@ pub(super) async fn route(
         Err(failure) => return unheld(&failure, request_id, &logged),
     };
     let snapshot = federation.snapshot();
-    let asked = (arrived.headers, arrived.session);
+    let asked = ((arrived.headers, arrived.session), &arrived.conveyance);
     let located = match locate(federation, asked, write, &ehr_id, started) {
         Ok(located) => located,
         Err(Unlocated::Untargeted(untargeted)) => {
@@ -85,6 +86,7 @@ pub(super) async fn route(
         Err(Unlocated::HeldElsewhere(refused)) => {
             return held_elsewhere(&refused, (request_id, &logged));
         }
+        Err(Unlocated::Confined) => return confined::refused("ehr_id", request_id, &logged),
     };
     let Some(budget) = Deadlines::from(federation, started) else {
         tracing::error!(
@@ -175,18 +177,38 @@ pub(super) async fn route(
 /// targeting headers route it (§12.4, §8.4, N23), and only while neither
 /// places its `ehr_id` at another member.
 ///
+/// For a caller whose `conveyance` confines its grant to one patient, only
+/// the targeting headers and that patient's own `{node, ehr_id}` pairs
+/// locate the owner, with no index lookup and no probe.
+///
 /// # Errors
 ///
 /// Returns [`Unlocated`] when the targeting headers name no one endpoint the
-/// registry holds (§8.4.1), or another member holds a new EHR's `ehr_id`.
+/// registry holds (§8.4.1), another member holds a new EHR's `ehr_id`, or a
+/// confined caller creates an EHR or reaches beyond its patient's pairs.
 fn locate<'a>(
     federation: &'a Federation,
-    (headers, session): (&HeaderMap, Option<&SessionKey>),
+    ((headers, session), conveyance): ((&HeaderMap, Option<&SessionKey>), &Conveyance),
     write: Write,
     ehr_id: &EhrId,
     started: Instant,
 ) -> Result<owner::Located<'a>, Unlocated> {
     let (snapshot, index) = (federation.snapshot(), federation.index());
+    if let Some(confinement) = conveyance.confinement() {
+        // NOTE: master08 §Resource Scopes: a patient grant reaches data in its patient's
+        // existing EHRs, so it creates none.
+        if write == Write::NewEhr {
+            return Err(Unlocated::Confined);
+        }
+        let holders = confined::holders(snapshot, confinement, ehr_id);
+        let located = owner::located_within(snapshot, headers, &holders)?;
+        // NOTE: §12.5, §12.5.2: a confined grant reaches its patient's own {node, ehr_id}
+        // pairs alone, so a path ehr_id it does not place is never probed for.
+        if !confined::admits_located(conveyance, &located, ehr_id) {
+            return Err(Unlocated::Confined);
+        }
+        return Ok(located);
+    }
     let held = session.map(|session| owner::Held {
         bindings: federation.bindings(),
         session,
@@ -214,6 +236,11 @@ enum Unlocated {
     /// A new EHR's `ehr_id` is held at another member than the targeted one.
     #[error(transparent)]
     HeldElsewhere(owner::HeldElsewhere),
+    /// The caller's grant is confined to one patient, and the request
+    /// creates an EHR or reaches an `ehr_id` that is none of that patient's
+    /// at the member it would go to (§12.5).
+    #[error("the request reaches beyond the patient the caller's grant is confined to")]
+    Confined,
 }
 
 /// The `409` refusing a new EHR whose `ehr_id` `refused` places at another

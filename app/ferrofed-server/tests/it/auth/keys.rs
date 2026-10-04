@@ -41,6 +41,7 @@ fn trusting(source: KeySource, refetch: Duration) -> AuthSettings {
             verification: Verification::KeySet(source),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            patient: None,
         }],
         ..AuthSettings::default()
     }

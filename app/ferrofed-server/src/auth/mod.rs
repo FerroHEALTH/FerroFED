@@ -45,6 +45,7 @@ use axum::extract::{OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, HeaderValue, Method, header};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{Algorithm, Validation};
@@ -53,7 +54,7 @@ use openehr_sdt::smart_scopes::SmartScope;
 use secrecy::SecretString;
 
 use crate::ITS_REST_PREFIX;
-use crate::auth::caller::{Caller, Stated, VerifiedBy};
+use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
 use crate::auth::claims::{AccessToken, Introspected};
 use crate::auth::fetch::{FetchError, Fetcher};
 use crate::auth::keys::{KeyError, KeySet};
@@ -117,6 +118,12 @@ pub enum Refusal {
     Demographic,
     /// The token carries no purpose of use (§13.4).
     PurposeOfUse,
+    /// Only a `patient/` grant covers the operation, and the token carries
+    /// no `ehrId` that reads as an openEHR `HIER_OBJECT_ID` to confine it to.
+    PatientContext,
+    /// The token's grant is a patient grant, which reaches its patient's
+    /// own EHR alone, and the request addresses the DEMOGRAPHIC API.
+    PatientDemographic,
 }
 
 impl Refusal {
@@ -140,6 +147,8 @@ impl Refusal {
             Self::Scope => "scope",
             Self::Demographic => "demographic-client",
             Self::PurposeOfUse => "purpose-of-use",
+            Self::PatientContext => "patient-context",
+            Self::PatientDemographic => "patient-demographic",
         }
     }
 
@@ -163,6 +172,12 @@ impl Refusal {
             Self::Scope => "no scope of the access token grants this operation",
             Self::Demographic => "the client is not admitted to the DEMOGRAPHIC API",
             Self::PurposeOfUse => "the access token carries no purpose of use",
+            Self::PatientContext => {
+                "only a patient/ scope grants this operation, and the access token carries no ehrId to confine it to"
+            }
+            Self::PatientDemographic => {
+                "a patient/ grant reaches its patient's own EHR alone, never the DEMOGRAPHIC API"
+            }
         }
     }
 
@@ -174,6 +189,8 @@ impl Refusal {
             Self::Operation => Code::OperationRefused,
             Self::Scope | Self::Demographic => Code::ScopeInsufficient,
             Self::PurposeOfUse => Code::PurposeOfUseRequired,
+            Self::PatientContext => Code::PatientContextMissing,
+            Self::PatientDemographic => Code::PatientConfinement,
             Self::Missing
             | Self::Malformed
             | Self::Algorithm
@@ -197,7 +214,11 @@ impl Refusal {
         let challenge = match self {
             Self::Missing => Some(format!("Bearer realm=\"{REALM}\"")),
             Self::Unavailable | Self::Operation => None,
-            Self::Scope | Self::Demographic | Self::PurposeOfUse => Some(format!(
+            Self::Scope
+            | Self::Demographic
+            | Self::PurposeOfUse
+            | Self::PatientContext
+            | Self::PatientDemographic => Some(format!(
                 "Bearer realm=\"{REALM}\", error=\"insufficient_scope\", error_description=\"{}\"",
                 self.description()
             )),
@@ -309,6 +330,11 @@ impl Gate {
                 {
                     return Err(Refusal::Demographic);
                 }
+                // NOTE: SMART on openEHR master08 §Resource Scopes: a patient scope reaches "data
+                // within that patient's EHR", so listing its client never widens it to parties.
+                if permission::patient_grant(caller.scopes()) {
+                    return Err(Refusal::PatientDemographic);
+                }
             }
             Requirement::Scope {
                 family,
@@ -319,22 +345,42 @@ impl Gate {
                     Resource::Unnamed => None,
                     Resource::Path(_) => named,
                 };
-                let backend =
-                    permission::backend(&trusted.settings.backend_clients, caller.client_id());
-                if !permission::granted(caller.scopes(), (family, permission), named, backend) {
+                let honoured = permission::Honoured {
+                    backend: permission::backend(
+                        &trusted.settings.backend_clients,
+                        caller.client_id(),
+                    ),
+                    patient: trusted.settings.patient.is_some(),
+                };
+                if !permission::granted(caller.scopes(), (family, permission), named, honoured) {
                     return Err(Refusal::Scope);
                 }
                 // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the
                 // granted scopes that cover the operation, never the whole grant.
-                let covering = SmartScope::format_all(caller.scopes().iter().filter(|scope| {
-                    permission::granted(
-                        std::slice::from_ref(*scope),
-                        (family, permission),
-                        named,
-                        backend,
-                    )
-                }));
+                let covering: Vec<&SmartScope> = caller
+                    .scopes()
+                    .iter()
+                    .filter(|scope| {
+                        permission::granted(
+                            std::slice::from_ref(*scope),
+                            (family, permission),
+                            named,
+                            honoured,
+                        )
+                    })
+                    .collect();
+                let confined = permission::confined(
+                    &covering
+                        .iter()
+                        .map(|scope| (*scope).clone())
+                        .collect::<Vec<_>>(),
+                );
+                let covering = SmartScope::format_all(covering);
                 caller = caller.with_covering(covering);
+                if confined {
+                    let context = patient_context(&caller, trusted)?;
+                    caller = caller.with_patient(context);
+                }
             }
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer
@@ -451,7 +497,9 @@ impl Gate {
         } else {
             VerifiedBy::Signature
         };
-        Ok((Caller::new(token.claims.stated(), verified_by), trusted))
+        let launch_ehr_id = token.claims.launch_ehr_id();
+        let caller = Caller::new(token.claims.stated(), verified_by);
+        Ok((caller.with_launch_ehr_id(launch_ehr_id), trusted))
     }
 
     /// Asks `trusted`'s introspection endpoint about `token` and reads its
@@ -514,7 +562,7 @@ impl Gate {
             granted: answer.scope.unwrap_or_default(),
             purposes: answer.declared.purposes(),
         };
-        Ok(Caller::new(stated, VerifiedBy::Introspection))
+        Ok(Caller::new(stated, VerifiedBy::Introspection).with_launch_ehr_id(answer.ehr_id))
     }
 
     /// Whether any caller can be admitted: some issuer is on the trust list.
@@ -522,6 +570,30 @@ impl Gate {
     pub fn admits_any(&self) -> bool {
         !self.issuers.is_empty()
     }
+}
+
+/// The patient `caller`'s `patient/` grant is confined to: its token's
+/// `ehrId` at the member `trusted` is bound to.
+///
+/// # Errors
+///
+/// Returns [`Refusal::PatientContext`] when the token carries no `ehrId`, or
+/// one that is no openEHR `HIER_OBJECT_ID`, and [`Refusal::Scope`] when the
+/// issuer is bound to no member, whose `patient/` grants then count for
+/// nothing.
+fn patient_context(caller: &Caller, trusted: &Trusted) -> Result<PatientContext, Refusal> {
+    let binding = trusted.settings.patient.as_ref().ok_or(Refusal::Scope)?;
+    // NOTE: SMART on openEHR master04 §Capabilities conveys the context "via the `ehrId`
+    // token claim"; one absent, or no HIER_OBJECT_ID, names no patient to confine to.
+    let ehr_id = caller
+        .launch_ehr_id()
+        .and_then(|claim| EhrId::new(claim).ok())
+        .ok_or(Refusal::PatientContext)?;
+    Ok(PatientContext::new(
+        binding.endpoint.clone(),
+        binding.ehr_id_system.clone(),
+        ehr_id,
+    ))
 }
 
 /// The `iss` of a token not yet verified.

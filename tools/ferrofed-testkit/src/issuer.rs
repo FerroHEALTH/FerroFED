@@ -260,6 +260,9 @@ pub struct Claims {
     /// RFC 9396 `authorization_details`, when set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authorization_details: Option<Vec<AuthorizationDetail>>,
+    /// The SMART on openEHR `ehrId` of the launch context, when set.
+    #[serde(rename = "ehrId", skip_serializing_if = "Option::is_none")]
+    pub ehr_id: Option<String>,
 }
 
 impl Claims {
@@ -280,6 +283,7 @@ impl Claims {
             scope: Some(EVERY_SCOPE.to_owned()),
             extensions: Some(Extensions::treatment()),
             authorization_details: None,
+            ehr_id: None,
         }
     }
 }

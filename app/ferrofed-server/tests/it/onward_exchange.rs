@@ -320,6 +320,7 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
             verification: Verification::KeySet(KeySource::Set(edge.jwks())),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            patient: None,
         }],
         ..AuthSettings::default()
     };

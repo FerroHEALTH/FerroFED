@@ -323,6 +323,7 @@ async fn an_edge_asserted_caller_is_conveyed_as_edge_asserted() -> TestResult {
             verification: Verification::KeySet(KeySource::Set(edge.jwks())),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            patient: None,
         }],
         ..AuthSettings::default()
     })
