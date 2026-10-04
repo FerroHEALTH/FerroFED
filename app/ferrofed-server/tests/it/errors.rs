@@ -467,10 +467,25 @@ async fn a_path_outside_every_surface_is_a_404_not_found() -> TestResult {
 }
 
 /// The `(code, status)` of every row of a code table on the book page.
+///
+/// A row counts only below a table's delimiter row, so a stray row outside
+/// any table leaves its code undocumented and fails the test.
 fn documented() -> Result<BTreeMap<String, String>, Box<dyn Error>> {
     let page = std::fs::read_to_string(BOOK_PAGE)?;
     let mut rows = BTreeMap::new();
+    let mut in_table = false;
     for line in page.lines() {
+        if !line.starts_with('|') {
+            in_table = false;
+            continue;
+        }
+        if line.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ')) {
+            in_table = true;
+            continue;
+        }
+        if !in_table {
+            continue;
+        }
         let mut cells = line.split('|').map(str::trim).skip(1);
         let (Some(first), Some(second)) = (cells.next(), cells.next()) else {
             continue;
