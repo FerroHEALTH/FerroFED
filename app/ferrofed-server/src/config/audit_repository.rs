@@ -31,6 +31,7 @@ use std::time::Duration;
 use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::Secret;
 use ihe_iti::atna::message::AuditSource;
+use ihe_iti::atna::repository::Timeouts;
 use ihe_iti::atna::spool::Bounds;
 use ihe_iti::atna::syslog::Sender;
 use serde::Deserialize;
@@ -64,6 +65,11 @@ pub struct AuditRepository {
     pub spool_max_events: usize,
     /// How long the repository may take to accept a connection.
     pub connect_timeout_ms: u64,
+    /// How long the TLS handshake, and each write and flush of a message,
+    /// may take.
+    pub send_timeout_ms: u64,
+    /// The longest wait between two delivery attempts.
+    pub retry_max_ms: u64,
     /// The gateway's client certificate chain and private key, PEM, inline
     /// or through `client_identity_file`.
     pub client_identity: Option<Secret>,
@@ -86,6 +92,8 @@ impl Default for AuditRepository {
             spool_max_bytes: 64 * 1024 * 1024,
             spool_max_events: 100_000,
             connect_timeout_ms: 5_000,
+            send_timeout_ms: 5_000,
+            retry_max_ms: 60_000,
             client_identity: None,
             client_identity_file: None,
             trust_roots_file: None,
@@ -108,8 +116,10 @@ pub struct AuditRepositorySettings {
     pub spool_dir: Option<PathBuf>,
     /// The spool's bounds.
     pub bounds: Bounds,
-    /// How long the repository may take to accept a connection.
-    pub connect_timeout: Duration,
+    /// How long each step of sending a message may take.
+    pub timeouts: Timeouts,
+    /// The longest wait between two delivery attempts.
+    pub retry_max: Duration,
     /// The client certificate chain and key.
     pub client_identity: Option<Secret>,
     /// The PEM trust roots.
@@ -178,6 +188,8 @@ pub(super) fn resolve(
         ("spool_max_bytes", table.spool_max_bytes == 0),
         ("spool_max_events", table.spool_max_events == 0),
         ("connect_timeout_ms", table.connect_timeout_ms == 0),
+        ("send_timeout_ms", table.send_timeout_ms == 0),
+        ("retry_max_ms", table.retry_max_ms == 0),
     ] {
         if zero {
             return Err(Error::Zero {
@@ -217,7 +229,11 @@ pub(super) fn resolve(
             max_messages: table.spool_max_events,
             max_bytes: table.spool_max_bytes,
         },
-        connect_timeout: Duration::from_millis(table.connect_timeout_ms),
+        timeouts: Timeouts {
+            connect: Duration::from_millis(table.connect_timeout_ms),
+            send: Duration::from_millis(table.send_timeout_ms),
+        },
+        retry_max: Duration::from_millis(table.retry_max_ms),
         client_identity,
         trust_roots,
     })

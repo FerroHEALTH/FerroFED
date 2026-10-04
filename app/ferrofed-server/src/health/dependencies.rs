@@ -75,15 +75,13 @@ impl Observed {
     }
 
     /// Returns what the audit forwarder's `status` says of its repository:
-    /// [`Observed::Down`] when the last attempt could not reach it,
-    /// [`Observed::Degraded`] while the spool holds messages,
-    /// [`Observed::Unknown`] before anything was sent, and [`Observed::Up`]
+    /// [`Observed::Degraded`] while it retries a failed delivery, while
+    /// messages wait in the spool, and while any sits in quarantine;
+    /// [`Observed::Unknown`] before anything was sent; and [`Observed::Up`]
     /// otherwise.
     #[must_use]
     pub fn of_audit(status: &Status) -> Self {
-        if !status.reachable {
-            Self::Down
-        } else if status.depth.messages > 0 {
+        if !status.reachable || status.depth.messages > 0 {
             Self::Degraded
         } else if status.delivered == 0 {
             Self::Unknown

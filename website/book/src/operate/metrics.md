@@ -67,8 +67,10 @@ the unit after a histogram.
 | `ferrofed_localizer_requests_total` | `ferrofed.localizer.requests` | counter | `outcome` | the calls to the [localizer](registry.md#node-selection), by `candidates`, `no-records`, `not-configured`, `unavailable`, or `audit-failed` for an XCPD exchange whose audit message could not be recorded |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
 | `ferrofed_audit_spool_events` | `ferrofed.audit.spool.events` | gauge | none | the ITI-20 audit messages waiting in the spool for the [audit repository](identity.md#the-audit-repository); present only with one configured |
-| `ferrofed_audit_spool_bytes` | `ferrofed.audit.spool.bytes` | gauge | none | the bytes of those messages |
+| `ferrofed_audit_spool_bytes` | `ferrofed.audit.spool.bytes` | gauge | none | the bytes the spool holds, its quarantine included |
+| `ferrofed_audit_quarantined` | `ferrofed.audit.quarantined` | gauge | none | the audit messages in the spool's quarantine, which could not be read or were no whole frame |
 | `ferrofed_audit_delivered_total` | `ferrofed.audit.delivered` | counter | none | the ITI-20 audit messages delivered to the audit repository since the process started |
+| `ferrofed_audit_retries_total` | `ferrofed.audit.retries` | counter | none | the failed attempts to deliver, each followed by a backoff |
 | `target_info` | the resource | gauge | `service_name`, `service_version`, `telemetry_sdk_*` | always `1`: the gateway and its version |
 
 Every label value comes from a closed set or from your registry document,

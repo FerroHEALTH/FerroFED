@@ -114,7 +114,8 @@ fn reaching(
 
 /// The router and state of the federation `text` loads.
 fn gateway(text: &str) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
-    let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
+    let settings =
+        Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
     let state = Arc::new(AppState::with_federation(federation));
     Ok((
@@ -125,7 +126,8 @@ fn gateway(text: &str) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
 
 /// The federation `text` loads, or why it does not.
 fn load(text: &str) -> Result<Result<Option<Federation>, FederationError>, Box<dyn Error>> {
-    let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
+    let settings =
+        Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
     Ok(Federation::load(&settings))
 }
 
@@ -278,17 +280,21 @@ async fn a_repository_that_is_down_holds_the_messages_and_shows_it() -> TestResu
         "active", answer.meta.federation.endpoints[0].status,
         "an outage of the repository is stored, not refused (ITI TF-2 §3.20.4.1.1)"
     );
-    assert_eq!(Some("down"), await_state(&app, "down").await?.as_deref());
+    assert_eq!(
+        Some("degraded"),
+        await_state(&app, "degraded").await?.as_deref(),
+        "degraded while the forwarder retries"
+    );
     let samples = parse(&Metrics::default().render()?)?;
     assert_eq!(
         Some("1".to_owned()),
         count(&samples, "ferrofed_audit_spool_events", &[])
     );
-    assert_eq!(
-        1,
-        std::fs::read_dir(&spool)?.count(),
-        "the message is on disk"
-    );
+    let retries: u64 = count(&samples, "ferrofed_audit_retries_total", &[])
+        .ok_or("the retries are counted")?
+        .parse()?;
+    assert!(retries >= 1, "{retries}");
+    assert_eq!(1, spooled(&spool)?, "the message is on disk");
 
     repository.set_up(true);
     let messages = repository.wait_for(1, Duration::from_secs(10)).await;
@@ -298,8 +304,19 @@ async fn a_repository_that_is_down_holds_the_messages_and_shows_it() -> TestResu
         "the spool drains once the repository is back"
     );
     assert_eq!(Some("up"), await_state(&app, "up").await?.as_deref());
-    assert_eq!(0, std::fs::read_dir(&spool)?.count());
+    assert_eq!(0, spooled(&spool)?);
     Ok(())
+}
+
+/// The messages in the spool directory `spool`, its quarantine left out.
+fn spooled(spool: &Path) -> Result<usize, Box<dyn Error>> {
+    let mut files = 0;
+    for entry in std::fs::read_dir(spool)? {
+        if entry?.path().is_file() {
+            files += 1;
+        }
+    }
+    Ok(files)
 }
 
 // conformance: CP-5

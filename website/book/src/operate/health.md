@@ -73,10 +73,10 @@ directory the registry is read from updates `directory`: an answer is `up`, a
 registry is a document
 ([The registry](registry.md#the-registry-read-from-an-mcsd-directory)). The
 [audit repository](identity.md#the-audit-repository) shows as
-`audit_repository`, read from its spool at each request: `up` when it is
-reachable and nothing waits, `degraded` while audit messages wait in the
-spool, `down` when the last attempt could not reach it, and `unknown` before
-the first message. It is absent when the audit messages go elsewhere. The
+`audit_repository`, read from its spool at each request: `up` when the last
+delivery succeeded and nothing waits, `degraded` while the gateway retries a
+failed delivery, while audit messages wait in the spool and while any sits in
+its quarantine, and `unknown` before the first message. It is absent when the audit messages go elsewhere. The
 body names endpoint ids and states only, never a URL, a credential or a
 body.
 

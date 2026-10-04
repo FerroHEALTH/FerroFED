@@ -18,6 +18,15 @@
 //! names a patient. In memory ([`Spool::in_memory`]), the messages live as
 //! long as the process, for a development deployment.
 //!
+//! A stored message that cannot be read, or that is no whole RFC 5425 frame,
+//! is moved to the `quarantine` subdirectory when the drain reaches it,
+//! logged with its sequence number and never its content, and the drain goes
+//! on with the next one, so one bad file never holds back the rest. A
+//! quarantined message stays counted under the bounds until an operator
+//! removes it. A file the spool did not write refuses [`Spool::open`]
+//! instead, naming the file to move: in a directory only the gateway's user
+//! may enter, it was put there by hand.
+//!
 //! The bounds and the file layout are our own design: no specification
 //! governs them.
 
@@ -34,6 +43,9 @@ const STORED: &str = "msg";
 
 /// The extension of a message being written.
 const PARTIAL: &str = "partial";
+
+/// The subdirectory a message that cannot be delivered is moved to.
+pub const QUARANTINE: &str = "quarantine";
 
 /// The bounds of a spool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,9 +71,18 @@ pub enum SpoolError {
     /// The directory gives a group or other users access to it.
     #[error("the audit spool directory {0} is open to its group or to other users")]
     Exposed(PathBuf),
-    /// The directory holds a file that is no spooled message.
-    #[error("the audit spool directory {0} holds a file that is no spooled message")]
-    Foreign(PathBuf),
+    /// The directory holds a file the spool did not write.
+    #[error(
+        "the audit spool directory {} holds {}, which the gateway did not write: move that file out of the spool directory, keeping it if it may be an audit record, and start again",
+        directory.display(),
+        path.display()
+    )]
+    Foreign {
+        /// The spool directory, or its quarantine.
+        directory: PathBuf,
+        /// The file to move.
+        path: PathBuf,
+    },
     /// A file system operation failed.
     #[error("the audit spool at {path} could not be {action}")]
     Io {
@@ -81,10 +102,20 @@ pub enum SpoolError {
 /// What a spool holds right now.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Depth {
-    /// The messages held.
+    /// The messages held, quarantined ones included.
     pub messages: usize,
-    /// The bytes held.
+    /// The bytes held, quarantined ones included.
     pub bytes: u64,
+    /// The messages held in quarantine.
+    pub quarantined: usize,
+}
+
+impl Depth {
+    /// The messages awaiting delivery: those held, less the quarantined.
+    #[must_use]
+    pub fn waiting(&self) -> usize {
+        self.messages.saturating_sub(self.quarantined)
+    }
 }
 
 /// One stored message, with the sequence number it is removed by.
@@ -131,6 +162,7 @@ enum Store {
     Disk {
         directory: PathBuf,
         sizes: BTreeMap<u64, u64>,
+        quarantined: BTreeMap<u64, u64>,
     },
     Memory(VecDeque<(u64, SecretSlice<u8>)>),
 }
@@ -141,47 +173,37 @@ impl Spool {
     ///
     /// # Errors
     ///
-    /// [`SpoolError::Exposed`] when the directory gives a group or other
-    /// users access to it (Unix), [`SpoolError::Foreign`] when it holds a
-    /// file that is no spooled message, and [`SpoolError::Io`] when it cannot
-    /// be created, read or written.
+    /// [`SpoolError::Exposed`] when the directory or its quarantine gives a
+    /// group or other users access to it (Unix), [`SpoolError::Foreign`]
+    /// when either holds a file the spool did not write, and
+    /// [`SpoolError::Io`] when they cannot be created, read or written.
     pub fn open(directory: &Path, bounds: Bounds) -> Result<Self, SpoolError> {
+        let held = directory.join(QUARANTINE);
         create_private(directory)?;
         check_private(directory)?;
+        create_private(&held)?;
+        check_private(&held)?;
         probe(directory)?;
-        let entries = fs::read_dir(directory).map_err(io("read", directory))?;
-        let mut sizes = BTreeMap::new();
-        let mut depth = Depth::default();
-        for entry in entries {
-            let entry = entry.map_err(io("read", directory))?;
-            let path = entry.path();
-            let extension = path.extension().and_then(|it| it.to_str());
-            let sequence = path
-                .file_stem()
-                .and_then(|it| it.to_str())
-                .and_then(|it| it.parse::<u64>().ok());
-            match (extension, sequence) {
-                (Some(STORED), Some(sequence)) => {
-                    let size = entry.metadata().map_err(io("read", &path))?.len();
-                    sizes.insert(sequence, size);
-                    depth.messages = depth.messages.saturating_add(1);
-                    depth.bytes = depth.bytes.saturating_add(size);
-                }
-                // NOTE: a partial file is a write a crash interrupted, which
-                // never counted as stored, so it is removed.
-                (Some(PARTIAL), Some(_)) => {
-                    fs::remove_file(&path).map_err(io("removed", &path))?;
-                }
-                _ => return Err(SpoolError::Foreign(path)),
-            }
-        }
+        let sizes = scan(directory, Some(&held))?;
+        let quarantined = scan(&held, None)?;
+        let depth = Depth {
+            messages: sizes.len().saturating_add(quarantined.len()),
+            bytes: sizes
+                .values()
+                .chain(quarantined.values())
+                .fold(0, |sum, size| sum.saturating_add(*size)),
+            quarantined: quarantined.len(),
+        };
         let next = sizes
-            .last_key_value()
-            .map_or(0, |(last, _)| last.saturating_add(1));
+            .keys()
+            .chain(quarantined.keys())
+            .max()
+            .map_or(0, |last| last.saturating_add(1));
         Ok(Self::with(
             Store::Disk {
                 directory: directory.to_owned(),
                 sizes,
+                quarantined,
             },
             bounds,
             depth,
@@ -242,11 +264,15 @@ impl Spool {
         .map_err(SpoolError::Task)?
     }
 
-    /// The oldest message, still stored.
+    /// The oldest message that can be delivered, still stored.
+    ///
+    /// Every older message that cannot be read, or is no whole RFC 5425
+    /// frame, is moved to the quarantine on the way.
     ///
     /// # Errors
     ///
-    /// [`SpoolError::Io`] when it cannot be read.
+    /// [`SpoolError::Io`] when a message can neither be read nor moved to
+    /// the quarantine.
     pub async fn oldest(&self) -> Result<Option<Stored>, SpoolError> {
         let inner = Arc::clone(&self.inner);
         tokio::task::spawn_blocking(move || {
@@ -289,7 +315,9 @@ impl Inner {
         }
         let sequence = self.next;
         match &mut self.store {
-            Store::Disk { directory, sizes } => {
+            Store::Disk {
+                directory, sizes, ..
+            } => {
                 write_durably(directory, sequence, &message)?;
                 sizes.insert(sequence, size);
             }
@@ -301,29 +329,88 @@ impl Inner {
         Ok(())
     }
 
-    fn oldest(&self) -> Result<Option<Stored>, SpoolError> {
-        match &self.store {
-            Store::Disk { directory, sizes } => {
-                let Some(sequence) = sizes.keys().next().copied() else {
-                    return Ok(None);
-                };
-                let path = file(directory, sequence, STORED);
-                let message = fs::read(&path).map_err(io("read", &path))?;
-                Ok(Some(Stored {
-                    sequence,
-                    message: SecretSlice::from(message),
-                }))
+    fn oldest(&mut self) -> Result<Option<Stored>, SpoolError> {
+        loop {
+            let (directory, sequence) = match &self.store {
+                Store::Memory(queue) => {
+                    return Ok(queue.front().map(|(sequence, message)| Stored {
+                        sequence: *sequence,
+                        message: SecretSlice::from(message.expose_secret().to_vec()),
+                    }));
+                }
+                Store::Disk {
+                    directory, sizes, ..
+                } => match sizes.keys().next() {
+                    None => return Ok(None),
+                    Some(sequence) => (directory.clone(), *sequence),
+                },
+            };
+            match fs::read(file(&directory, sequence, STORED)) {
+                Ok(message) if super::syslog::is_frame(&message) => {
+                    return Ok(Some(Stored {
+                        sequence,
+                        message: SecretSlice::from(message),
+                    }));
+                }
+                Ok(_) => self.quarantine(&directory, sequence, "it is no whole RFC 5425 frame")?,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    tracing::error!(sequence, "a spooled audit message is gone from the spool");
+                    self.forget(sequence);
+                }
+                Err(error) => {
+                    tracing::error!(sequence, error = %error, "a spooled audit message cannot be read");
+                    self.quarantine(&directory, sequence, "it cannot be read")?;
+                }
             }
-            Store::Memory(queue) => Ok(queue.front().map(|(sequence, message)| Stored {
-                sequence: *sequence,
-                message: SecretSlice::from(message.expose_secret().to_vec()),
-            })),
         }
+    }
+
+    /// Drops message `sequence`, whose file is gone, from the count.
+    fn forget(&mut self, sequence: u64) {
+        if let Store::Disk { sizes, .. } = &mut self.store
+            && let Some(size) = sizes.remove(&sequence)
+        {
+            self.depth.messages = self.depth.messages.saturating_sub(1);
+            self.depth.bytes = self.depth.bytes.saturating_sub(size);
+        }
+    }
+
+    /// Moves message `sequence` to the quarantine, where it stays counted.
+    fn quarantine(
+        &mut self,
+        directory: &Path,
+        sequence: u64,
+        why: &'static str,
+    ) -> Result<(), SpoolError> {
+        let held = directory.join(QUARANTINE);
+        let from = file(directory, sequence, STORED);
+        let to = file(&held, sequence, STORED);
+        fs::rename(&from, &to).map_err(io("moved to the quarantine", &from))?;
+        sync_directory(directory)?;
+        sync_directory(&held)?;
+        if let Store::Disk {
+            sizes, quarantined, ..
+        } = &mut self.store
+            && let Some(size) = sizes.remove(&sequence)
+        {
+            quarantined.insert(sequence, size);
+            self.depth.quarantined = self.depth.quarantined.saturating_add(1);
+        }
+        // NOTE: RFC 5425 §4.3 carries no application-level acknowledgement, so
+        // only a file the spool cannot send is quarantined, never a rejection.
+        tracing::error!(
+            sequence,
+            reason = why,
+            "a spooled audit message was moved to the quarantine; the drain goes on"
+        );
+        Ok(())
     }
 
     fn remove(&mut self, sequence: u64) -> Result<(), SpoolError> {
         let size = match &mut self.store {
-            Store::Disk { directory, sizes } => {
+            Store::Disk {
+                directory, sizes, ..
+            } => {
                 let Some(size) = sizes.get(&sequence).copied() else {
                     return Ok(());
                 };
@@ -345,6 +432,45 @@ impl Inner {
         self.depth.bytes = self.depth.bytes.saturating_sub(size);
         Ok(())
     }
+}
+
+/// The messages in `directory`, by sequence number, with their sizes; a
+/// partial write a crash left is removed, and `skip`, the quarantine, is
+/// passed over.
+fn scan(directory: &Path, skip: Option<&Path>) -> Result<BTreeMap<u64, u64>, SpoolError> {
+    let mut sizes = BTreeMap::new();
+    for entry in fs::read_dir(directory).map_err(io("read", directory))? {
+        let entry = entry.map_err(io("read", directory))?;
+        let path = entry.path();
+        if Some(path.as_path()) == skip {
+            continue;
+        }
+        let extension = path.extension().and_then(|it| it.to_str());
+        // NOTE: no specification governs this: our own design; a name that
+        // is no sequence number is a file this spool did not write.
+        let sequence = path
+            .file_stem()
+            .and_then(|it| it.to_str())
+            .and_then(|it| it.parse::<u64>().ok());
+        match (extension, sequence) {
+            (Some(STORED), Some(sequence)) => {
+                let size = entry.metadata().map_err(io("read", &path))?.len();
+                sizes.insert(sequence, size);
+            }
+            // NOTE: a partial file is a write a crash interrupted, which
+            // never counted as stored, so it is removed.
+            (Some(PARTIAL), Some(_)) => {
+                fs::remove_file(&path).map_err(io("removed", &path))?;
+            }
+            _ => {
+                return Err(SpoolError::Foreign {
+                    directory: directory.to_owned(),
+                    path,
+                });
+            }
+        }
+    }
+    Ok(sizes)
 }
 
 /// Writes and removes a partial file, so a directory that cannot take a

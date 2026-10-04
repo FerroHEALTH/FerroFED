@@ -23,7 +23,7 @@ use ferrofed_testkit::atna::AuditRepository;
 use ferrofed_testkit::xcpd::RespondingGateway;
 use ihe_iti::atna::forwarder::Forwarder;
 use ihe_iti::atna::message::AuditSource;
-use ihe_iti::atna::repository::{Repository, TlsSettings};
+use ihe_iti::atna::repository::{Repository, Timeouts, TlsSettings};
 use ihe_iti::atna::spool::{Bounds, Spool};
 use ihe_iti::atna::syslog::Sender;
 use url::Url;
@@ -46,14 +46,18 @@ fn recorder(repository: &AuditRepository, spool: Spool) -> Result<RepositoryAudi
         identity: None,
     };
     let address = Url::parse(&repository.url())?;
-    let connection = Repository::tls(&address, &tls, Duration::from_secs(2))?;
+    let timeouts = Timeouts {
+        connect: Duration::from_secs(2),
+        send: Duration::from_millis(500),
+    };
+    let connection = Repository::tls(&address, &tls, timeouts)?;
     let sender = Sender::new("gateway.example.org", "ferrofed", "4242")?;
     let source = AuditSource {
         id: "gateway.example.org".to_owned(),
         enterprise_site: None,
     };
     Ok(RepositoryAudit::new(
-        Forwarder::new(spool, connection),
+        Forwarder::new(spool, connection, Duration::from_millis(500)),
         sender,
         source,
     ))
@@ -120,6 +124,42 @@ async fn a_repository_that_is_down_delays_delivery_and_fails_nothing() -> TestRe
     );
     assert_eq!(0, audit.status().depth.messages);
     assert!(audit.status().reachable);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_repository_that_hangs_in_the_handshake_is_given_up_and_retried() -> TestResult {
+    let repository = AuditRepository::start().await?;
+    repository.set_stalled(true);
+    let audit = Arc::new(recorder(&repository, Spool::in_memory(ROOMY))?);
+    let stub = RespondingGateway::answering(holds(COMMUNITY_A)).await;
+    let localizer = localizer(&[&stub])?.audited(audit.clone());
+
+    let asked = std::time::Instant::now();
+    assert!(matches!(
+        localize(&localizer).await?,
+        Localization::Candidates(_)
+    ));
+    assert!(
+        asked.elapsed() < Duration::from_millis(500),
+        "the discovery never waits on the repository"
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    while audit.status().retries == 0 && std::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let stalled = audit.status();
+    assert!(
+        stalled.retries >= 1,
+        "the handshake is given up within the send timeout"
+    );
+    assert!(!stalled.reachable);
+    assert_eq!(1, stalled.depth.messages, "the message stays spooled");
+
+    repository.set_stalled(false);
+    let messages = repository.wait_for(1, Duration::from_secs(10)).await;
+    assert_eq!(1, messages.len(), "delivered once the repository answers");
+    assert_eq!(0, audit.status().depth.messages);
     Ok(())
 }
 

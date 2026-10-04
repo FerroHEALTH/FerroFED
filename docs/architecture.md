@@ -920,7 +920,7 @@ carries the query parameters as ITI TF-2 §3.55.5.1.1 requires.
 | Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log and a counter |
 | Stored-query definitions (N44) | a client `PUT` | the one durable store, behind `DefinitionStore` |
 | Outbound credentials | the operator | `_file` secrets per endpoint |
-| Audit records awaiting delivery (ITI-55 audit messages) | ITI-20 store-and-forward (ITI TF-2 §3.20.4.1.1), one per XCPD exchange | a bounded spool directory, one fsynced `0600` file per message in a `0700` directory the gateway refuses to start on when it is open to other users, drained in order and removed once delivered; in memory under the development profile without `spool_dir` (#418) |
+| Audit records awaiting delivery (ITI-55 audit messages) | ITI-20 store-and-forward (ITI TF-2 §3.20.4.1.1), one per XCPD exchange | a bounded spool directory, one fsynced `0600` file per message in a `0700` directory the gateway refuses to start on when it is open to other users, drained in order and removed once delivered, a message that cannot be read moved to its `quarantine` subdirectory and counted under the same bounds; in memory under the development profile without `spool_dir` (#418) |
 
 **A secret is a type** (#364, the design FerroEHR's configuration uses). Every
 credential the configuration holds is a `Secret` (a bearer token, a basic

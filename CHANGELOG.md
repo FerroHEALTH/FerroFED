@@ -101,11 +101,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and a restart keeps the spool. A full or unwritable spool fails the
   discovery closed. The spool directory is created `0700` with `0600`
   files, and a directory open to other users refuses to start;
-  `spool_dir` is required outside development. `GET /health/dependencies`
-  reports `audit_repository` (`degraded` while messages wait), and the
-  metrics `ferrofed_audit_spool_events`, `ferrofed_audit_spool_bytes` and
-  `ferrofed_audit_delivered_total` carry no label. Where the audit messages
-  go takes a restart.
+  `spool_dir` is required outside development. Recording only writes to
+  the spool. Delivery is bounded at every step (`connect_timeout_ms` for the
+  connection, `send_timeout_ms` for the TLS handshake and each write and
+  flush), and a failure drops the connection and retries with a jittered
+  exponential backoff up to `retry_max_ms`. A spooled message that cannot be
+  read or is no whole frame is moved to the spool's `quarantine/`, logged by
+  its sequence number, and the drain goes on; a file the gateway did not
+  write refuses the start, naming the file to move.
+  `GET /health/dependencies` reports `audit_repository` (`degraded` while
+  retrying, while messages wait and while any sits in quarantine), and the
+  metrics `ferrofed_audit_spool_events`, `ferrofed_audit_spool_bytes`,
+  `ferrofed_audit_quarantined`, `ferrofed_audit_delivered_total` and
+  `ferrofed_audit_retries_total` carry no label. Where the audit messages go
+  takes a restart.
 - `ihe-iti` 0.0.14: the `atna` feature, the ITI-20 sender (the DICOM audit
   message, the RFC 5424 syslog frame, the RFC 5425 TLS connection, the
   spool and the forwarder), and `AuditEvent::message` for the ITI-55

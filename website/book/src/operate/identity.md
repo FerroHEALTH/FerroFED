@@ -340,7 +340,9 @@ spool_dir = "/var/lib/ferrofed/audit-spool"
 # enterprise_site = "2.999.40"         # AuditEnterpriseSiteID
 # spool_max_bytes = 67108864
 # spool_max_events = 100000
-# connect_timeout_ms = 5000
+# connect_timeout_ms = 5000           # opening the TCP connection
+# send_timeout_ms = 5000              # the TLS handshake, each write and flush
+# retry_max_ms = 60000                # the longest wait between two attempts
 client_identity_file = "/run/secrets/atna-client.pem"  # when the repository asks
 trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
 ```
@@ -353,7 +355,25 @@ is down, discovery goes on and the messages wait in the spool, and a restart
 keeps them. Only a message the gateway can neither deliver nor store is an
 audit failure: a full spool (`spool_max_events` or `spool_max_bytes`) or one
 that cannot be written fails the discovery closed, as any audit failure does
-above.
+above. Recording an exchange only ever writes to the spool, so a slow or
+hung repository never holds a query.
+
+Delivery is bounded at every step: the TCP connection by
+`connect_timeout_ms`, and the TLS handshake, each write and each flush by
+`send_timeout_ms`, so a repository that accepts a connection and then stops
+answering cannot hold the sender. After any timeout or transport failure the
+gateway drops the connection, keeps the message in the spool, and tries
+again after a wait that doubles from 250 ms up to `retry_max_ms`, with
+jitter. A spooled message that cannot be read, or is no whole syslog frame,
+is moved to the `quarantine` subdirectory, logged at error level with its
+sequence number and never its content, and the drain goes on with the next
+one; a quarantined message stays counted under `spool_max_events` and
+`spool_max_bytes` until you remove it. Syslog over TLS has no
+acknowledgement (RFC 5425), so only a transport failure is retried, and a
+message written to a connection the repository has just closed can be lost;
+the gateway checks the connection before each write to keep that window
+short. A file in the spool directory the gateway did not write refuses the
+start, naming the file to move out.
 
 The spool is the one place FerroFED writes a patient identifier to disk:
 each message carries the query parameters, base64-encoded, as the audit
@@ -362,17 +382,16 @@ alone (`0700`) and every file `0600`, and refuses to start, and
 `config check` refuses the configuration, when the directory gives its group
 or other users any access or cannot be written. Put it on an encrypted
 volume: the gateway holds no key to encrypt it with, so encryption at rest
-is the deployment's. Syslog has no acknowledgement, so a message written to
-a connection the repository has just closed can be lost; the gateway checks
-the connection before each write to keep that window short.
+is the deployment's.
 
 The url is `tls://` outside `profile = "development"`; under that profile
 `tcp://host:port` is accepted and named on the banner, and without
 `spool_dir` the spool is held in memory, which a restart loses and the
 banner says so. `GET /health/dependencies` reports the repository as
-`audit_repository`: `up`, `degraded` while messages wait in the spool,
-`down` when the last attempt could not reach it, and `unknown` before the
-first message. The metrics carry the spool's depth and the deliveries
+`audit_repository`: `up`, `degraded` while the gateway retries a failed
+delivery, while messages wait in the spool and while any sits in
+quarantine, and `unknown` before the first message. The metrics carry the
+spool's depth, its quarantine, the deliveries and the retries
 ([Metrics](metrics.md)). The audit FHIR feed of RESTful ATNA is an option
 of ITI-20 this gateway does not send.
 

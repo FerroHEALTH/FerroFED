@@ -6,14 +6,19 @@
 //! Every message is stored in the [`Spool`] first and delivered from it,
 //! oldest first, so a message counts as recorded once it is stored, and a
 //! repository that cannot be reached delays its delivery without losing it.
+//! [`Forwarder::submit`] only ever writes to the spool: it never waits on
+//! the network, so a slow repository never holds an exchange.
 //!
 //! [`Forwarder::run`] is the delivery loop: it keeps one connection open,
-//! writes each stored message to it, removes the message once it is written,
-//! and backs off between attempts while the repository cannot be reached.
+//! writes each stored message to it within the repository's timeouts,
+//! removes the message once it is written, and after any transport failure
+//! drops the connection and retries with an exponential backoff, with
+//! jitter, capped at the configured longest wait.
 
+use std::hash::BuildHasher as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use secrecy::SecretSlice;
 use tokio::sync::Notify;
@@ -24,17 +29,18 @@ use super::spool::{Depth, Spool, SpoolError};
 /// The first wait after a failed delivery.
 const FIRST_RETRY: Duration = Duration::from_millis(250);
 
-/// The longest wait between delivery attempts.
-const LAST_RETRY: Duration = Duration::from_secs(30);
-
 /// What the forwarder reports of itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Status {
-    /// What the spool holds, awaiting delivery.
+    /// What the spool holds, awaiting delivery or in quarantine.
     pub depth: Depth,
     /// The messages delivered since the forwarder started.
     pub delivered: u64,
-    /// Whether the last attempt to reach the repository succeeded.
+    /// The failed delivery attempts since the forwarder started, each
+    /// followed by a backoff.
+    pub retries: u64,
+    /// Whether the last attempt to deliver succeeded; `false` while the
+    /// forwarder retries.
     pub reachable: bool,
     /// Whether the spool is on disk.
     pub durable: bool,
@@ -45,20 +51,25 @@ pub struct Status {
 pub struct Forwarder {
     spool: Spool,
     repository: Repository,
+    retry_max: Duration,
     wake: Notify,
     delivered: AtomicU64,
+    retries: AtomicU64,
     reachable: AtomicBool,
 }
 
 impl Forwarder {
-    /// The sender of the messages in `spool` to `repository`.
+    /// The sender of the messages in `spool` to `repository`, waiting at
+    /// most `retry_max` between two attempts.
     #[must_use]
-    pub fn new(spool: Spool, repository: Repository) -> Arc<Self> {
+    pub fn new(spool: Spool, repository: Repository, retry_max: Duration) -> Arc<Self> {
         Arc::new(Self {
             spool,
             repository,
+            retry_max: retry_max.max(FIRST_RETRY),
             wake: Notify::new(),
             delivered: AtomicU64::new(0),
+            retries: AtomicU64::new(0),
             reachable: AtomicBool::new(true),
         })
     }
@@ -81,6 +92,7 @@ impl Forwarder {
         Status {
             depth: self.spool.depth(),
             delivered: self.delivered.load(Ordering::Relaxed),
+            retries: self.retries.load(Ordering::Relaxed),
             reachable: self.reachable.load(Ordering::Relaxed),
             durable: self.spool.is_durable(),
         }
@@ -102,7 +114,7 @@ impl Forwarder {
                 }
                 Err(error) => {
                     tracing::warn!(error = %chain(&error), "the audit spool could not be read");
-                    retry = pause(retry).await;
+                    retry = self.back_off(retry).await;
                     continue;
                 }
             };
@@ -110,29 +122,26 @@ impl Forwarder {
                 Some(mut open) => (!open.is_closed().await).then_some(open),
                 None => None,
             };
-            let open = match reusable {
+            let mut open = match reusable {
                 Some(open) => open,
                 None => match self.repository.connect().await {
                     Ok(open) => open,
                     Err(error) => {
-                        self.reachable.store(false, Ordering::Relaxed);
                         tracing::warn!(
                             error = %chain(&error),
                             "the audit repository could not be reached; its messages stay spooled"
                         );
-                        retry = pause(retry).await;
+                        retry = self.back_off(retry).await;
                         continue;
                     }
                 },
             };
-            let mut open = open;
             if let Err(error) = open.send(&stored.message).await {
-                self.reachable.store(false, Ordering::Relaxed);
                 tracing::warn!(
                     error = %chain(&error),
-                    "an audit message could not be delivered; it stays spooled"
+                    "an audit message could not be delivered; the connection is dropped and the message stays spooled"
                 );
-                retry = pause(retry).await;
+                retry = self.back_off(retry).await;
                 continue;
             }
             connection = Some(open);
@@ -147,17 +156,30 @@ impl Forwarder {
                         error = %chain(&error),
                         "a delivered audit message could not be removed from the spool"
                     );
-                    retry = pause(retry).await;
+                    retry = self.back_off(retry).await;
                 }
             }
         }
     }
+
+    /// Records a failed attempt, waits about `retry`, and returns the wait
+    /// after it: twice as long, at most the configured longest wait.
+    async fn back_off(&self, retry: Duration) -> Duration {
+        self.reachable.store(false, Ordering::Relaxed);
+        self.retries.fetch_add(1, Ordering::Relaxed);
+        tokio::time::sleep(jittered(retry)).await;
+        retry.saturating_mul(2).min(self.retry_max)
+    }
 }
 
-/// Waits `retry`, and returns the wait after it.
-async fn pause(retry: Duration) -> Duration {
-    tokio::time::sleep(retry).await;
-    retry.saturating_mul(2).min(LAST_RETRY)
+/// A wait between half of `retry` and `retry`, so senders that failed
+/// together do not retry together (no specification governs this: our own
+/// design).
+fn jittered(retry: Duration) -> Duration {
+    let half = retry / 2;
+    let spread = u64::try_from(half.as_nanos()).unwrap_or(u64::MAX);
+    let random = std::collections::hash_map::RandomState::new().hash_one(Instant::now());
+    half.saturating_add(Duration::from_nanos(random % spread.saturating_add(1)))
 }
 
 /// `error` with its causes, joined.

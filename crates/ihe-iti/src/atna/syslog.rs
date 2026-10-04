@@ -108,6 +108,24 @@ impl Sender {
     }
 }
 
+/// Whether `bytes` is one whole RFC 5425 §4.3 frame: a `MSG-LEN` of
+/// `NONZERO-DIGIT *DIGIT`, a space, and exactly that many octets.
+#[must_use]
+pub fn is_frame(bytes: &[u8]) -> bool {
+    let Some(space) = bytes.iter().position(|byte| *byte == b' ') else {
+        return false;
+    };
+    let (length, rest) = bytes.split_at(space);
+    let digits = !length.is_empty()
+        && length.first() != Some(&b'0')
+        && length.iter().all(u8::is_ascii_digit);
+    digits
+        && std::str::from_utf8(length)
+            .ok()
+            .and_then(|text| text.parse::<usize>().ok())
+            .is_some_and(|declared| declared.saturating_add(1) == rest.len())
+}
+
 #[cfg(test)]
 mod tests {
     use jiff::Timestamp;

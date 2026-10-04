@@ -40,6 +40,7 @@ use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider, Temporality};
 
 use crate::config::settings::MetricsSettings;
 use crate::metrics::nodes::Instruments;
+use ihe_iti::atna::forwarder::Status;
 
 /// The instrumentation scope every instrument is created under.
 pub const SCOPE: &str = "ferrofed";
@@ -82,6 +83,14 @@ pub const AUDIT_SPOOL_BYTES: &str = "ferrofed.audit.spool.bytes";
 /// The ITI-20 audit messages delivered to the audit repository; Prometheus
 /// `ferrofed_audit_delivered_total`.
 pub const AUDIT_DELIVERED: &str = "ferrofed.audit.delivered";
+
+/// The failed attempts to deliver to the audit repository, each followed by
+/// a backoff; Prometheus `ferrofed_audit_retries_total`.
+pub const AUDIT_RETRIES: &str = "ferrofed.audit.retries";
+
+/// The ITI-20 audit messages held in the spool's quarantine; Prometheus
+/// `ferrofed_audit_quarantined`.
+pub const AUDIT_QUARANTINED: &str = "ferrofed.audit.quarantined";
 
 /// The upper bounds of the node request duration buckets, in seconds: 5 ms
 /// to 30 s, past the default per-node timeout of 10 s.
@@ -150,11 +159,16 @@ pub struct Metrics {
     _incidents: ObservableCounter<u64>,
     /// Kept for the life of the provider: their callbacks read the audit
     /// spools at each collection.
-    _audit: (
-        ObservableGauge<u64>,
-        ObservableGauge<u64>,
-        ObservableCounter<u64>,
-    ),
+    _audit: AuditInstruments,
+}
+
+/// The audit spool instruments, kept for the life of the provider.
+struct AuditInstruments {
+    _events: ObservableGauge<u64>,
+    _bytes: ObservableGauge<u64>,
+    _quarantined: ObservableGauge<u64>,
+    _delivered: ObservableCounter<u64>,
+    _retries: ObservableCounter<u64>,
 }
 
 impl Metrics {
@@ -291,45 +305,62 @@ impl std::fmt::Debug for Metrics {
 
 /// The audit spool instruments, which read every running audit trail at
 /// each collection, summed, with no label.
-fn audit_instruments(
-    meter: &opentelemetry::metrics::Meter,
-) -> (
-    ObservableGauge<u64>,
-    ObservableGauge<u64>,
-    ObservableCounter<u64>,
-) {
-    let events = meter
-        .u64_observable_gauge(AUDIT_SPOOL_EVENTS)
-        .with_description("ITI-20 audit messages waiting in the spool for the audit repository")
-        .with_callback(|observer| {
-            let statuses = crate::audit::statuses();
-            if !statuses.is_empty() {
-                let held: usize = statuses.iter().map(|status| status.depth.messages).sum();
-                observer.observe(u64::try_from(held).unwrap_or(u64::MAX), &[]);
-            }
-        })
-        .build();
-    let bytes = meter
-        .u64_observable_gauge(AUDIT_SPOOL_BYTES)
-        .with_description("Bytes of the ITI-20 audit messages waiting in the spool")
-        .with_callback(|observer| {
-            let statuses = crate::audit::statuses();
-            if !statuses.is_empty() {
-                observer.observe(statuses.iter().map(|status| status.depth.bytes).sum(), &[]);
-            }
-        })
-        .build();
-    let delivered = meter
-        .u64_observable_counter(AUDIT_DELIVERED)
-        .with_description("ITI-20 audit messages delivered to the audit repository")
-        .with_callback(|observer| {
-            let statuses = crate::audit::statuses();
-            if !statuses.is_empty() {
-                observer.observe(statuses.iter().map(|status| status.delivered).sum(), &[]);
-            }
-        })
-        .build();
-    (events, bytes, delivered)
+fn audit_instruments(meter: &opentelemetry::metrics::Meter) -> AuditInstruments {
+    let gauge = |name: &'static str, description: &'static str, read: fn(&Status) -> u64| {
+        meter
+            .u64_observable_gauge(name)
+            .with_description(description)
+            .with_callback(move |observer| {
+                if let Some(total) = summed(read) {
+                    observer.observe(total, &[]);
+                }
+            })
+            .build()
+    };
+    let counter = |name: &'static str, description: &'static str, read: fn(&Status) -> u64| {
+        meter
+            .u64_observable_counter(name)
+            .with_description(description)
+            .with_callback(move |observer| {
+                if let Some(total) = summed(read) {
+                    observer.observe(total, &[]);
+                }
+            })
+            .build()
+    };
+    AuditInstruments {
+        _events: gauge(
+            AUDIT_SPOOL_EVENTS,
+            "ITI-20 audit messages waiting in the spool for the audit repository",
+            |status| u64::try_from(status.depth.waiting()).unwrap_or(u64::MAX),
+        ),
+        _bytes: gauge(
+            AUDIT_SPOOL_BYTES,
+            "Bytes of the ITI-20 audit messages the spool holds, quarantine included",
+            |status| status.depth.bytes,
+        ),
+        _quarantined: gauge(
+            AUDIT_QUARANTINED,
+            "ITI-20 audit messages held in the spool's quarantine",
+            |status| u64::try_from(status.depth.quarantined).unwrap_or(u64::MAX),
+        ),
+        _delivered: counter(
+            AUDIT_DELIVERED,
+            "ITI-20 audit messages delivered to the audit repository",
+            |status| status.delivered,
+        ),
+        _retries: counter(
+            AUDIT_RETRIES,
+            "Failed attempts to deliver to the audit repository, each followed by a backoff",
+            |status| status.retries,
+        ),
+    }
+}
+
+/// `read` summed over every running audit trail, or `None` with none.
+fn summed(read: fn(&Status) -> u64) -> Option<u64> {
+    let statuses = crate::audit::statuses();
+    (!statuses.is_empty()).then(|| statuses.iter().map(read).fold(0, u64::saturating_add))
 }
 
 /// Builds the admin listener's application: `GET /metrics` answers the

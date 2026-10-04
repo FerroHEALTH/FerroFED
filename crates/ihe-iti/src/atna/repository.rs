@@ -58,15 +58,52 @@ pub enum RepositoryError {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum SendError {
-    /// The connection could not be opened in time.
+    /// The connection could not be opened.
     #[error("the audit repository could not be reached")]
     Connect(#[source] std::io::Error),
-    /// The connection did not open within the timeout.
-    #[error("the audit repository did not accept a connection within the timeout")]
-    Timeout,
+    /// The TLS handshake failed.
+    #[error("the TLS handshake with the audit repository failed")]
+    Handshake(#[source] std::io::Error),
+    /// A step did not finish within its timeout.
+    #[error("the audit repository did not finish the {0} within its timeout")]
+    Timeout(Step),
     /// The frame could not be written.
     #[error("the audit message could not be written to the audit repository")]
     Write(#[source] std::io::Error),
+}
+
+/// A step of sending a frame, each bounded by a timeout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Step {
+    /// Opening the TCP connection.
+    Connect,
+    /// The TLS handshake.
+    Handshake,
+    /// Writing the frame.
+    Write,
+    /// Flushing it.
+    Flush,
+}
+
+impl fmt::Display for Step {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Connect => "connection",
+            Self::Handshake => "TLS handshake",
+            Self::Write => "write",
+            Self::Flush => "flush",
+        })
+    }
+}
+
+/// How long each step of sending a frame may take.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Timeouts {
+    /// Opening the TCP connection.
+    pub connect: Duration,
+    /// The TLS handshake, and each write and flush of a frame.
+    pub send: Duration,
 }
 
 /// How a connection is secured.
@@ -82,7 +119,7 @@ pub struct Repository {
     host: String,
     port: u16,
     transport: Transport,
-    connect_timeout: Duration,
+    timeouts: Timeouts,
 }
 
 impl fmt::Debug for Repository {
@@ -107,8 +144,7 @@ pub struct TlsSettings {
 
 impl Repository {
     /// The repository at `address`, `tls://host[:port]`, reached over TLS
-    /// 1.2 or later with `tls`, and given `connect_timeout` to accept a
-    /// connection.
+    /// 1.2 or later with `tls`, each step bounded by `timeouts`.
     ///
     /// # Errors
     ///
@@ -117,7 +153,7 @@ impl Repository {
     pub fn tls(
         address: &Url,
         tls: &TlsSettings,
-        connect_timeout: Duration,
+        timeouts: Timeouts,
     ) -> Result<Self, RepositoryError> {
         if address.scheme() != "tls" {
             return Err(RepositoryError::Address);
@@ -129,7 +165,7 @@ impl Repository {
             host,
             port,
             transport: Transport::Tls(connector, name),
-            connect_timeout,
+            timeouts,
         })
     }
 
@@ -142,7 +178,7 @@ impl Repository {
     /// [`RepositoryError::Address`] for an address of another form.
     pub fn unencrypted_for_development(
         address: &Url,
-        connect_timeout: Duration,
+        timeouts: Timeouts,
     ) -> Result<Self, RepositoryError> {
         if address.scheme() != "tcp" {
             return Err(RepositoryError::Address);
@@ -152,35 +188,53 @@ impl Repository {
             host,
             port,
             transport: Transport::Plain,
-            connect_timeout,
+            timeouts,
         })
     }
 
-    /// Opens a connection.
+    /// Opens a connection: the TCP connection within the connect timeout,
+    /// then the TLS handshake within the send timeout.
     ///
     /// # Errors
     ///
-    /// A [`SendError`] when the repository cannot be reached, does not
-    /// accept within the timeout, or fails the TLS handshake.
+    /// A [`SendError`] when the repository cannot be reached, fails the TLS
+    /// handshake, or does not finish a step within its timeout.
     pub async fn connect(&self) -> Result<Connection, SendError> {
-        let opened = tokio::time::timeout(self.connect_timeout, async {
-            let stream = TcpStream::connect((self.host.as_str(), self.port))
-                .await
-                .map_err(SendError::Connect)?;
-            Ok::<Box<dyn Stream>, SendError>(match &self.transport {
-                Transport::Plain => Box::new(stream),
-                Transport::Tls(connector, name) => Box::new(
-                    connector
-                        .connect(name.clone(), stream)
-                        .await
-                        .map_err(SendError::Connect)?,
-                ),
-            })
+        let stream = bounded(
+            self.timeouts.connect,
+            Step::Connect,
+            TcpStream::connect((self.host.as_str(), self.port)),
+        )
+        .await?
+        .map_err(SendError::Connect)?;
+        let stream: Box<dyn Stream> = match &self.transport {
+            Transport::Plain => Box::new(stream),
+            Transport::Tls(connector, name) => Box::new(
+                bounded(
+                    self.timeouts.send,
+                    Step::Handshake,
+                    connector.connect(name.clone(), stream),
+                )
+                .await?
+                .map_err(SendError::Handshake)?,
+            ),
+        };
+        Ok(Connection {
+            stream,
+            send_timeout: self.timeouts.send,
         })
-        .await
-        .map_err(|_elapsed| SendError::Timeout)??;
-        Ok(Connection { stream: opened })
     }
+}
+
+/// `step`, given at most `limit` to finish.
+async fn bounded<T>(
+    limit: Duration,
+    step: Step,
+    future: impl Future<Output = T>,
+) -> Result<T, SendError> {
+    tokio::time::timeout(limit, future)
+        .await
+        .map_err(|_elapsed| SendError::Timeout(step))
 }
 
 /// A connection's byte stream, plain or TLS.
@@ -191,6 +245,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin> Stream for T {}
 /// An open connection to a repository.
 pub struct Connection {
     stream: Box<dyn Stream>,
+    send_timeout: Duration,
 }
 
 impl fmt::Debug for Connection {
@@ -214,18 +269,26 @@ impl Connection {
         }
     }
 
-    /// Writes `frame` and flushes it.
+    /// Writes `frame` and flushes it, each within the send timeout, so a
+    /// repository that stops reading cannot hold the sender.
     ///
     /// # Errors
     ///
-    /// [`SendError::Write`] when the connection fails, after which it is not
-    /// used again.
+    /// [`SendError::Write`] when the connection fails, and
+    /// [`SendError::Timeout`] when the write or the flush does not finish in
+    /// time; the connection is not used again after either.
     pub async fn send(&mut self, frame: &SecretSlice<u8>) -> Result<(), SendError> {
-        self.stream
-            .write_all(frame.expose_secret())
-            .await
-            .map_err(SendError::Write)?;
-        self.stream.flush().await.map_err(SendError::Write)
+        let limit = self.send_timeout;
+        bounded(
+            limit,
+            Step::Write,
+            self.stream.write_all(frame.expose_secret()),
+        )
+        .await?
+        .map_err(SendError::Write)?;
+        bounded(limit, Step::Flush, self.stream.flush())
+            .await?
+            .map_err(SendError::Write)
     }
 }
 

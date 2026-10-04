@@ -9,8 +9,10 @@
 //! and never written anywhere: [`AuditRepository::trust_roots`] is the CA a
 //! client trusts it by. While it is [down](AuditRepository::set_up), it
 //! accepts each connection and closes it before the TLS handshake, so a
-//! sender cannot deliver and keeps its messages. No specification governs
-//! the harness: our own design.
+//! sender cannot deliver and keeps its messages; while it is
+//! [stalled](AuditRepository::set_stalled), it accepts each connection and
+//! never answers, so only a sender's own timeouts free it. No specification
+//! governs the harness: our own design.
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -49,6 +51,7 @@ pub struct AuditRepository {
     trust_roots: String,
     messages: Arc<Mutex<Vec<String>>>,
     up: Arc<AtomicBool>,
+    stalled: Arc<AtomicBool>,
     task: JoinHandle<()>,
 }
 
@@ -66,19 +69,29 @@ impl AuditRepository {
         let address = listener.local_addr()?;
         let messages = Arc::new(Mutex::new(Vec::new()));
         let up = Arc::new(AtomicBool::new(true));
+        let stalled = Arc::new(AtomicBool::new(false));
         let task = tokio::spawn(serve(
             listener,
             acceptor,
             Arc::clone(&messages),
             Arc::clone(&up),
+            Arc::clone(&stalled),
         ));
         Ok(Self {
             address,
             trust_roots,
             messages,
             up,
+            stalled,
             task,
         })
+    }
+
+    /// Stalls the repository, or lets it go on: while stalled, it accepts
+    /// each TCP connection and then never answers the TLS handshake, as a
+    /// repository that hangs does.
+    pub fn set_stalled(&self, stalled: bool) {
+        self.stalled.store(stalled, Ordering::SeqCst);
     }
 
     /// The repository's address, `tls://127.0.0.1:<port>`.
@@ -179,8 +192,14 @@ async fn serve(
     acceptor: TlsAcceptor,
     messages: Arc<Mutex<Vec<String>>>,
     up: Arc<AtomicBool>,
+    stalled: Arc<AtomicBool>,
 ) {
+    let mut held = Vec::new();
     while let Ok((stream, _peer)) = listener.accept().await {
+        if stalled.load(Ordering::SeqCst) {
+            held.push(stream);
+            continue;
+        }
         if !up.load(Ordering::SeqCst) {
             drop(stream);
             continue;

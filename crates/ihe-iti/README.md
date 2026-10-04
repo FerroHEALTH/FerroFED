@@ -159,9 +159,15 @@ message ids and `jiff` for the creation time, and no other feature but
   `unencrypted_for_development` admits `tcp://` for development and tests.
 - `spool::Spool`: the bounded store a sender that cannot reach its
   repository keeps the records in (§3.20.4.1.1), one fsynced file per
-  message in a directory private to its owner, or a queue in memory.
+  message in a directory private to its owner, or a queue in memory. A
+  message that cannot be read or is no whole frame moves to its
+  `quarantine` subdirectory, so the drain never stalls on it.
+- `repository::Timeouts`: the connect timeout, and the send timeout that
+  bounds the TLS handshake and each write and flush.
 - `forwarder::Forwarder`: stores every message first, then delivers it from
-  the spool in order, and reports the spool's depth and its deliveries.
+  the spool in order, retries a transport failure with a jittered backoff
+  capped where the caller says, and reports the spool's depth, its
+  quarantine, its deliveries and its retries.
 
 The RESTful ATNA FHIR feed is an option of ITI-20 this crate does not
 send.

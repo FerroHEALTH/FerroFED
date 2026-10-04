@@ -72,7 +72,7 @@ pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>,
         return Ok(Arc::clone(&running.recorder));
     }
     let repository = if settings.unencrypted {
-        Repository::unencrypted_for_development(&settings.url, settings.connect_timeout)
+        Repository::unencrypted_for_development(&settings.url, settings.timeouts)
     } else {
         let tls = TlsSettings {
             roots: settings
@@ -84,7 +84,7 @@ pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>,
                 .as_ref()
                 .map(ferrofed_registry::secret::Secret::to_secret_string),
         };
-        Repository::tls(&settings.url, &tls, settings.connect_timeout)
+        Repository::tls(&settings.url, &tls, settings.timeouts)
     }
     .map_err(AuditTrailError::Repository)?;
     let spool = match &settings.spool_dir {
@@ -94,7 +94,7 @@ pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>,
         None => Spool::in_memory(settings.bounds),
     };
     let recorder = Arc::new(RepositoryAudit::new(
-        Forwarder::new(spool, repository),
+        Forwarder::new(spool, repository, settings.retry_max),
         settings.sender.clone(),
         settings.source.clone(),
     ));
