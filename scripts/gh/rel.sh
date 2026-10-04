@@ -266,18 +266,20 @@ STUB
   }
 
   # A sub-issue write sends the child's database id to the parent's list.
-  run "parent 3 7" 0 parent 3 7
-  said "parent 3 7" "$out" "ok: #3 is now a sub-issue of #7"
-  said "parent 3 7" "$calls" "api --method POST repos/Example-Org/Example/issues/7/sub_issues --input -"
-  said "parent 3 7" "$calls" 'body: {"sub_issue_id":1003}'
+  local sub_issue_case="parent 3 7"
+  run "$sub_issue_case" 0 parent 3 7
+  said "$sub_issue_case" "$out" "ok: #3 is now a sub-issue of #7"
+  said "$sub_issue_case" "$calls" "api --method POST repos/Example-Org/Example/issues/7/sub_issues --input -"
+  said "$sub_issue_case" "$calls" 'body: {"sub_issue_id":1003}'
   run "parent 3 7 --replace" 0 parent 3 7 --replace
   said "parent 3 7 --replace" "$calls" 'body: {"sub_issue_id":1003,"replace_parent":true}'
 
   # "3 blocks 7" is written as "7 is blocked by 3", the one writable direction.
-  run "blocking 3 7" 0 blocking 3 7
-  said "blocking 3 7" "$out" "ok: #3 now blocks #7"
-  said "blocking 3 7" "$calls" "api --method POST repos/Example-Org/Example/issues/7/dependencies/blocked_by --input -"
-  said "blocking 3 7" "$calls" 'body: {"issue_id":1003}'
+  local blocking_case="blocking 3 7"
+  run "$blocking_case" 0 blocking 3 7
+  said "$blocking_case" "$out" "ok: #3 now blocks #7"
+  said "$blocking_case" "$calls" "api --method POST repos/Example-Org/Example/issues/7/dependencies/blocked_by --input -"
+  said "$blocking_case" "$calls" 'body: {"issue_id":1003}'
 
   run "id 5" 0 id 5
   said "id 5" "$out" "1005"

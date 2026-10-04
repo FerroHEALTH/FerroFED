@@ -41,7 +41,8 @@
 #
 # THE DATABASE. One FerroEHR PostgreSQL container holds four databases,
 # ferroehr_a to ferroehr_d, each owned by a login role of the same name whose
-# password is that name too: development credentials, NOT for anything real.
+# password is that name followed by _example (ferroehr_a_example): development
+# credentials, NOT for anything real.
 # A database per node, never a schema per node, because FerroEHR creates fixed
 # schema names in the database it connects to. Each database admits only its
 # own node's role (CONNECT is revoked from PUBLIC), so one node's role is
@@ -161,7 +162,7 @@ services:
       # PG_INIT_ keys; the script mounted below runs it again for each name in
       # FERROFED_NODE_DATABASES.
       PG_INIT_USER: ferroehr_a
-      PG_INIT_PASSWORD: ferroehr_a
+      PG_INIT_PASSWORD: ferroehr_a_example
       PG_INIT_DB: ferroehr_a
       FERROFED_NODE_DATABASES: ferroehr_b ferroehr_c ferroehr_d
     volumes:
@@ -193,7 +194,7 @@ services:
   ferroehr-a:
     <<: *ferroehr-node
     environment:
-      FERROEHR__DB__URL: postgres://ferroehr_a:ferroehr_a@ferroehr-postgres:5432/ferroehr_a
+      FERROEHR__DB__URL: postgres://ferroehr_a:ferroehr_a_example@ferroehr-postgres:5432/ferroehr_a
       # The system_id the node stamps into every EHR and version it creates,
       # the one docker/quickstart/registry.toml declares for node-a.
       FERROEHR__SERVER__SYSTEM_ID: node-a.quickstart.local
@@ -204,7 +205,7 @@ services:
   ferroehr-b:
     <<: *ferroehr-node
     environment:
-      FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b@ferroehr-postgres:5432/ferroehr_b
+      FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
       FERROEHR__SERVER__SYSTEM_ID: node-b.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
     ports:
@@ -213,7 +214,7 @@ services:
   ferroehr-c:
     <<: *ferroehr-node
     environment:
-      FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c@ferroehr-postgres:5432/ferroehr_c
+      FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
       FERROEHR__SERVER__SYSTEM_ID: node-c.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
     ports:
@@ -222,7 +223,7 @@ services:
   ferroehr-d:
     <<: *ferroehr-node
     environment:
-      FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d@ferroehr-postgres:5432/ferroehr_d
+      FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
       FERROEHR__SERVER__SYSTEM_ID: node-d.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
     ports:

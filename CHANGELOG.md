@@ -342,6 +342,14 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The quickstart's node database roles have new development passwords (#452):
+  each role's password is its name followed by `_example`
+  (`ferroehr_a_example`), set by `docker/postgres/20-ferrofed-node-databases.sh`
+  and `compose.yaml` together. A quickstart volume created before this
+  change keeps the old passwords, so the nodes are refused by their
+  databases: run `docker compose down -v` once before the next
+  `docker compose up --wait`, which removes the quickstart's data and its
+  synthetic patients, then run `scripts/quickstart/seed.sh` again.
 - The Kubernetes example bounds the gateway's ephemeral storage (#452): the
   container requests `128Mi` and is limited to `1Gi`, and the audit-spool
   `emptyDir` has a `sizeLimit` of `512Mi`, which holds the default spool

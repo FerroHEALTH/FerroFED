@@ -164,11 +164,12 @@ STUB
   fields='{"data":{"organization":{"issueFields":{"nodes":[{"id":"IF_priority","name":"Priority","options":[{"id":"OPT_high","name":"High"}]},{"id":"IF_effort","name":"Effort","options":[{"id":"OPT_low","name":"Low"}]}]}}}}'
   create=ok
 
-  run "an organisation that answers" 0 new bug high low --title t --body b
-  said "an organisation that answers" "$work/out" "#4242 is a Bug"
-  said "an organisation that answers" "$work/out" "#4242 has priority High"
-  said "an organisation that answers" "$work/out" "#4242 has effort Low"
-  said "an organisation that answers" "$work/out" "https://github.com/Example-Org/Example/issues/4242"
+  local answering_case="an organisation that answers"
+  run "$answering_case" 0 new bug high low --title t --body b
+  said "$answering_case" "$work/out" "#4242 is a Bug"
+  said "$answering_case" "$work/out" "#4242 has priority High"
+  said "$answering_case" "$work/out" "#4242 has effort Low"
+  said "$answering_case" "$work/out" "https://github.com/Example-Org/Example/issues/4242"
 
   run "a type the organisation does not carry" 1 new dragon high low --title t --body b
   said "a type the organisation does not carry" "$work/err" "no enabled issue type named 'Dragon'"

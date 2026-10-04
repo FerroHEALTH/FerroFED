@@ -256,7 +256,8 @@ async fn every_fault_is_injectable_per_node() {
 /// Returns `psql` run as `role` against `database` over TCP, so the server's
 /// password authentication and its `CONNECT` privileges apply.
 fn psql_as(role: &str, database: &str) -> ExecCommand {
-    let url = format!("postgresql://{role}:{role}@127.0.0.1:5432/{database}");
+    let password = containers::role_password(role);
+    let url = format!("postgresql://{role}:{password}@127.0.0.1:5432/{database}");
     ExecCommand::new([
         "psql".to_owned(),
         url,

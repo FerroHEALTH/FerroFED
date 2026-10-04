@@ -219,29 +219,31 @@ STUB
     "$(node 3 CLOSED "" "" "" "P3" "docs(readme): say it")" \
     "$(node 4 CLOSED Task High "" "chore" "Housekeeping")" \
     "$(node 6 CLOSED "" "" "" "upstream-report" "A report")")"
-  run "a plan over labelled issues" 0 plan
-  said "a plan over labelled issues" "$work/out" "#1  type Bug"
-  said "a plan over labelled issues" "$work/out" "#1  priority Urgent"
-  said "a plan over labelled issues" "$work/out" "#1  effort Low"
-  said "a plan over labelled issues" "$work/out" "#2  type Feature (was Task)"
-  said "a plan over labelled issues" "$work/out" "#3  label +documentation"
-  said "a plan over labelled issues" "$work/out" "#6  label +chore"
-  said "a plan over labelled issues" "$work/out" "types: Bug 1, Feature 1, Task 3"
-  said "a plan over labelled issues" "$work/out" "priorities: Urgent 1, High 1, Medium 1, Low 1, none 1"
-  never "a plan over labelled issues" "$work/out" "#3  effort"
-  never "a plan over labelled issues" "$work/out" "#4  "
-  never "a plan over labelled issues" "$calls" "fields "
-  never "a plan over labelled issues" "$calls" "issue edit"
+  local plan_case="a plan over labelled issues"
+  run "$plan_case" 0 plan
+  said "$plan_case" "$work/out" "#1  type Bug"
+  said "$plan_case" "$work/out" "#1  priority Urgent"
+  said "$plan_case" "$work/out" "#1  effort Low"
+  said "$plan_case" "$work/out" "#2  type Feature (was Task)"
+  said "$plan_case" "$work/out" "#3  label +documentation"
+  said "$plan_case" "$work/out" "#6  label +chore"
+  said "$plan_case" "$work/out" "types: Bug 1, Feature 1, Task 3"
+  said "$plan_case" "$work/out" "priorities: Urgent 1, High 1, Medium 1, Low 1, none 1"
+  never "$plan_case" "$work/out" "#3  effort"
+  never "$plan_case" "$work/out" "#4  "
+  never "$plan_case" "$calls" "fields "
+  never "$plan_case" "$calls" "issue edit"
 
-  run "an apply over labelled issues" 0 apply
-  said "an apply over labelled issues" "$calls" "fields type 1 bug"
-  said "an apply over labelled issues" "$calls" "fields priority 1 urgent"
-  said "an apply over labelled issues" "$calls" "fields effort 1 low"
-  said "an apply over labelled issues" "$calls" "fields type 2 feature"
-  said "an apply over labelled issues" "$calls" "fields priority 3 low"
-  said "an apply over labelled issues" "$calls" "gh issue edit 3 --add-label documentation"
-  never "an apply over labelled issues" "$calls" "fields type 4"
-  never "an apply over labelled issues" "$calls" "fields effort 3"
+  local apply_case="an apply over labelled issues"
+  run "$apply_case" 0 apply
+  said "$apply_case" "$calls" "fields type 1 bug"
+  said "$apply_case" "$calls" "fields priority 1 urgent"
+  said "$apply_case" "$calls" "fields effort 1 low"
+  said "$apply_case" "$calls" "fields type 2 feature"
+  said "$apply_case" "$calls" "fields priority 3 low"
+  said "$apply_case" "$calls" "gh issue edit 3 --add-label documentation"
+  never "$apply_case" "$calls" "fields type 4"
+  never "$apply_case" "$calls" "fields effort 3"
 
   run "a verify before the apply took" 1 verify
   said "a verify before the apply took" "$work/err" "11 changes still to make"
@@ -263,11 +265,12 @@ STUB
     "$(node 7 OPEN "" "" "" "bug,enhancement,P1" "Both")" \
     "$(node 8 OPEN "" "" "" "P1" "No kind")" \
     "$(node 9 OPEN Task "" "" "test,P1,P2" "Two priorities")")"
-  run "issues the mapping cannot place" 1 plan
-  said "issues the mapping cannot place" "$work/err" "#7 carries both bug and enhancement"
-  said "issues the mapping cannot place" "$work/err" "#8 is open with no judged effort"
-  said "issues the mapping cannot place" "$work/err" "#8 is a Task with no work-kind label"
-  said "issues the mapping cannot place" "$work/err" "#9 carries more than one priority label"
+  local unplaced_case="issues the mapping cannot place"
+  run "$unplaced_case" 1 plan
+  said "$unplaced_case" "$work/err" "#7 carries both bug and enhancement"
+  said "$unplaced_case" "$work/err" "#8 is open with no judged effort"
+  said "$unplaced_case" "$work/err" "#8 is a Task with no work-kind label"
+  said "$unplaced_case" "$work/err" "#9 carries more than one priority label"
   run "an apply over issues it cannot place" 1 apply
   never "an apply over issues it cannot place" "$calls" "fields "
 
