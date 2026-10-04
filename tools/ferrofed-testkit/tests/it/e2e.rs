@@ -5,6 +5,9 @@
 //! `FERROFED_E2E` gate: both nodes start under their own `system_id`, take a
 //! seed over ITS-REST alone, answer through their proxies, journal what
 //! reached them, and misbehave on demand one node at a time.
+//!
+//! As the federation operator of track 11, the harness applies the admission
+//! check to a candidate node before it admits it, in [`admission`].
 
 use ferrofed_testkit::containers::{
     self, API_PATH, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode,
@@ -21,6 +24,8 @@ use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use std::time::{Duration, Instant};
 use testcontainers::core::{CmdWaitFor, ExecCommand};
 use uuid::Uuid;
+
+mod admission;
 
 /// The fixed `ehr_id` the first patient has on node A.
 const FIRST_ON_A: Uuid = Uuid::from_u128(0x2222_2222_2222_4222_8222_2222_2222_2222);

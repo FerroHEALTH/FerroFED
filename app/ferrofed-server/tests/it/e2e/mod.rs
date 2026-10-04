@@ -25,6 +25,11 @@
 //! two nodes in [`track10`], and a plain client given only a prefixed base
 //! URL reads and writes through the gateway in [`track9`] (N28, N29).
 //!
+//! Track 11, the integrity suite, seeds one `ehr_id` at both nodes and finds
+//! every read, query and write of it refused, with no row served and no
+//! write applied, and a write no earlier step routes refused unprobed
+//! (§12.5, N41, N42), in [`track11`].
+//!
 //! The admission check creates its test EHRs on node A and reads each back,
 //! with only synthetic subjects on the wire (§12b.1, §12b.2, N42a), in
 //! [`admission`].
@@ -63,6 +68,7 @@ mod pixm;
 #[cfg(feature = "postgres")]
 mod stored_postgres;
 mod track10;
+mod track11;
 mod track9;
 
 type TestResult = Result<(), Box<dyn Error>>;
