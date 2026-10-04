@@ -25,3 +25,4 @@ mod masking;
 mod onward;
 mod pins;
 mod probe;
+mod timing;

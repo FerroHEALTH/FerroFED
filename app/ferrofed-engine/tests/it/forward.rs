@@ -30,6 +30,8 @@ use secrecy::SecretString;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
+use crate::timing;
+
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The synthetic patient identifier.
@@ -548,16 +550,14 @@ async fn a_forward_the_node_leaves_unanswered_is_a_time_out_of_a_silent_node() -
     let server = node(
         "GET",
         &format!("/v1{at}"),
-        ResponseTemplate::new(200).set_delay(Duration::from_secs(3)),
+        ResponseTemplate::new(200).set_delay(timing::SILENT),
     )
     .await;
-    let deadline = Instant::now()
-        .checked_add(Duration::from_millis(200))
-        .ok_or("the deadline is past the platform clock")?;
-    let forwarded = client(&server.uri())?
+    let client = client(&server.uri())?;
+    let forwarded = client
         .forward(
             request(Method::GET, &at, HeaderMap::new(), b""),
-            &DispatchOptions::new(deadline, crate::conveyed::conveyance()),
+            &DispatchOptions::new(timing::deadline()?, crate::conveyed::conveyance()),
         )
         .await;
     assert!(

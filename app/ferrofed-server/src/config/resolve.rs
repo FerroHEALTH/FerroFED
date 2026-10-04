@@ -120,7 +120,11 @@ impl Config {
             });
         }
         let federation = self.resolve_federation(request_timeout)?;
-        let pixm = self.pixm.as_ref().map(resolve_pixm).transpose()?;
+        let pixm = self
+            .pixm
+            .as_ref()
+            .map(|pixm| resolve_pixm(pixm, self.profile))
+            .transpose()?;
         let xcpd = crate::config::xcpd::resolve(self)?;
         let nl_gf = crate::config::nl_gf::resolve(self)?;
         if self.registry.document.is_some() && self.registry.mcsd.is_some() {
@@ -268,9 +272,9 @@ impl Config {
     }
 }
 
-/// Resolves `[pixm]`: every Manager URL parses and carries no userinfo, and
-/// every secret is read.
-fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
+/// Resolves `[pixm]`: every Manager URL parses, carries no userinfo and is
+/// `https` outside the development `profile`, and every secret is read.
+fn resolve_pixm(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Error> {
     let mut managers = Vec::with_capacity(pixm.manager.len());
     for (index, manager) in pixm.manager.iter().enumerate() {
         let key = format!("pixm.manager[{index}]");
@@ -295,6 +299,14 @@ fn resolve_pixm(pixm: &Pixm) -> Result<PixmSettings, Error> {
         if matches!(credentials, Some(Scheme::OAuth2(_))) {
             return Err(Error::GrantNotHere { section });
         }
+        // NOTE: no specification governs this: our own design; the Manager is sent
+        // patient identifiers, held to https at load as the XCPD and NVI tables are.
+        let carried = credentials.is_some().then_some(section.as_str());
+        transport::protected_payload(
+            profile,
+            manager.url.expose(),
+            transport::identity_site(&key, carried),
+        )?;
         managers.push(PixManagerSettings {
             url: manager.url.clone(),
             members: manager.members.clone(),

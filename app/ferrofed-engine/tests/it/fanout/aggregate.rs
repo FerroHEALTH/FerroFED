@@ -121,14 +121,21 @@ async fn a_value_the_recombination_cannot_use_fails_the_query_424() -> TestResul
 #[tokio::test]
 async fn a_node_that_does_not_answer_fails_the_aggregate_504() -> TestResult {
     let a = aggregate_node("[3, 12, 2]", Duration::ZERO).await;
-    let slow = aggregate_node("[2, 0.5, 1]", Duration::from_millis(200 + SLACK_MS)).await;
+    let slow = aggregate_node("[2, 0.5, 1]", Duration::from_millis(2 * SLACK_MS)).await;
     let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,
         plan(&["node-a-pub", "node-b-pub"])?,
-        budget(200, 2_000)?,
+        budget(SLACK_MS, 2 * SLACK_MS)?,
     )
     .await?;
+    let statuses = statuses(&answer);
+    assert_eq!(statuses.get("node-a-pub"), Some(&EndpointStatus::Active));
+    assert_eq!(
+        statuses.get("node-b-pub"),
+        Some(&EndpointStatus::TimeOut),
+        "§11.1"
+    );
     assert_eq!(answer.status(), StatusCode::GATEWAY_TIMEOUT, "§11.4");
     assert!(answer.rows().is_empty());
     assert!(!answer.federation().complete());
