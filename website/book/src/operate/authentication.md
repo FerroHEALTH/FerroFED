@@ -11,7 +11,9 @@ cross-reference service and no store is asked anything. There is no
 unauthenticated mode. This page covers how you configure the issuers your
 clients get their tokens from, what each operation requires, the purpose of
 use, the edge mode for a deployment that authenticates at a proxy, and what
-each node is told about the caller.
+each node is told about the caller. FerroFED's answers to the five questions §13.4 asks
+every deployment, and the template for yours, are on
+[The §13.4 deployment decisions](deployment-decisions.md).
 
 The health family (`GET {base}/health`, `/health/readiness`,
 `/health/dependencies`) and `GET {base}/` stay open: they describe the
@@ -157,7 +159,8 @@ IHE IUA extension, `extensions.ihe_iua.purpose_of_use`, an array of FHIR
 §B.4a.3). A token that declares none is a `403`
 (`purpose-of-use-required`) on every route that reaches a node. A deployment
 relaxes the rule with `auth.purpose_of_use.required = false`, and records why
-in its §13.4 decisions. The organisation the caller acts for is read from
+in its [§13.4 decisions](deployment-decisions.md#3-purpose-of-use). The
+organisation the caller acts for is read from
 `extensions.ihe_iua.subject_organization_id`. The IUA `person_id` claim, a
 patient identifier, is never read.
 

@@ -23,6 +23,7 @@ mod dedup;
 mod dedup_write;
 mod definition;
 mod demographic;
+mod deployment_decisions;
 mod directive;
 mod distinct;
 mod e2e;
