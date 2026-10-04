@@ -19,7 +19,7 @@ use ferrofed_identity::dev::Profile;
 use ferrofed_server::banner::{DEVELOPMENT_NOTICE, Deployment, Registry, WORDMARK, prints, render};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::stored_queries::{Backend, Store};
-use ferrofed_server::federation::{FederationError, read_registry};
+use ferrofed_server::federation::{error::FederationError, registry::read_registry};
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::telemetry::Format;
 

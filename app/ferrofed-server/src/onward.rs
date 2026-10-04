@@ -21,7 +21,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::settings::{Scheme, Settings};
-use crate::federation::FederationError;
+use crate::federation::error::FederationError;
 
 /// The HTTP engine every request to a node and to its token endpoint is
 /// sent through: the `reqwest` engine, with a `DPoP` proof on the requests

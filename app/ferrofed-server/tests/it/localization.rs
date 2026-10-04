@@ -31,7 +31,7 @@ use ferrofed_identity::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use ferrofed_server::config::Config;
 use ferrofed_server::facade::options::{LOCALIZATION_MODE, LOCALIZATION_MS};
-use ferrofed_server::federation::{Federation, FederationError};
+use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::localization::{DEVELOPMENT_STATIC, LocalizationError, LocalizationPolicy};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;

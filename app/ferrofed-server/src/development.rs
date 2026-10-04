@@ -14,7 +14,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::DevSection;
 use crate::config::settings::Settings;
-use crate::federation::FederationError;
+use crate::federation::error::FederationError;
 
 /// The resolver and the consent pre-filter of the `[dev]` table.
 pub(crate) type Seams = (

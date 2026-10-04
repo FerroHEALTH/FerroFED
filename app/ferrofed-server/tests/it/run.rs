@@ -11,7 +11,7 @@ use std::process::{Command, ExitCode, Output};
 
 /// Runs the library entry point with `argv`.
 fn run(argv: &[&str]) -> ExitCode {
-    ferrofed_server::run(argv.iter().map(|word| (*word).to_owned()))
+    ferrofed_server::command::run(argv.iter().map(|word| (*word).to_owned()))
 }
 
 /// Renders `code` the way `ExitCode` renders itself, so two are comparable.

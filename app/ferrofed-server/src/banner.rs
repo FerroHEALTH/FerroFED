@@ -23,7 +23,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use crate::base_path::BasePath;
 use crate::config::stored_queries::Backend;
 use crate::config::transport::{CleartextError, ProtectedSite};
-use crate::federation::FederationError;
+use crate::federation::error::FederationError;
 use crate::telemetry::{Format, Rendering};
 
 /// The `FerroFED` wordmark in the `FIGlet` "standard" font.
@@ -97,7 +97,7 @@ pub struct Deployment {
 impl Deployment {
     /// Returns the deployment the gateway serves under `base_path` on
     /// `listen`, with the registry `document`
-    /// [`read_registry`](crate::federation::read_registry) read, the backend
+    /// [`read_registry`](crate::federation::registry::read_registry) read, the backend
     /// of the `stored_queries` registry when it is offered, and whether the
     /// profile is `development`.
     ///

@@ -39,7 +39,7 @@ use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::directory::DirectoryFailure;
-use crate::federation::{Federation, FederationError, Reconciled, read_registry};
+use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::metrics::ReloadResult;
 use crate::state::AppState;
 
