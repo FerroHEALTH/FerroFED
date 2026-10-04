@@ -15,8 +15,9 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::pixm::{ManagerConfig, PixAuth, PixmConfigError, PixmResolver};
+use ferrofed_identity::pixm::{ManagerConfig, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
@@ -72,7 +73,7 @@ fn namespaces() -> BTreeMap<IdentifierNamespace, String> {
     )])
 }
 
-fn manager(server: &Server, auth: PixAuth, pairs: &[(&str, &str)]) -> ManagerConfig {
+fn manager(server: &Server, auth: Authentication, pairs: &[(&str, &str)]) -> ManagerConfig {
     ManagerConfig {
         base: SecretUrl::new(format!("{}/fhir/", server.uri())),
         auth,
@@ -85,7 +86,7 @@ fn resolver(server: &Server) -> PixmResolver {
     PixmResolver::from_config(
         vec![manager(
             server,
-            PixAuth::None,
+            Authentication::None,
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -302,7 +303,7 @@ async fn a_namespace_with_no_pix_domain_asks_nobody() {
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            PixAuth::None,
+            Authentication::None,
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         BTreeMap::new(),
@@ -340,7 +341,7 @@ async fn the_bearer_credential_travels_to_the_manager() {
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            PixAuth::Bearer(SecretString::from("synthetic-pix-token")),
+            Authentication::Bearer(SecretString::from("synthetic-pix-token")),
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -364,7 +365,7 @@ fn every_member_must_have_exactly_one_domain() {
     let server_uri = "http://127.0.0.1:9";
     let config = |pairs: &[(&str, &str)]| ManagerConfig {
         base: SecretUrl::new(format!("{server_uri}/fhir/")),
-        auth: PixAuth::None,
+        auth: Authentication::None,
         members: members(pairs),
     };
     let built = |managers| PixmResolver::from_config(managers, namespaces(), &registry());
@@ -408,7 +409,9 @@ fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
         PixmResolver::from_config(vec![config], namespaces(), &registry())
             .expect_err("the credential is refused")
     };
-    let bearer = refused(PixAuth::Bearer(SecretString::from("Qz7left Qz7right")));
+    let bearer = refused(Authentication::Bearer(SecretString::from(
+        "Qz7left Qz7right",
+    )));
     assert!(
         matches!(
             &bearer,
@@ -416,7 +419,7 @@ fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
         ),
         "a bearer token is the b64token of RFC 6750 §2.1: {bearer:?}"
     );
-    let basic = refused(PixAuth::Basic {
+    let basic = refused(Authentication::Basic {
         user: "gate:way".to_owned(),
         password: SecretString::from("Qz7left"),
     });

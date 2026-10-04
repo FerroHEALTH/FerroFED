@@ -375,6 +375,11 @@ async fn each_dispatched_endpoint_keeps_the_nodes_own_status_beside_its_record()
         Some(&EndpointStatus::NodeError),
         "§11.1: the record says node-error"
     );
+    assert_eq!(
+        statuses(&answer).get("node-o-pub"),
+        Some(&EndpointStatus::Offline),
+        "§11.1: the silent node could not be reached, so its record says offline"
+    );
     let contacts: BTreeMap<String, Contact> = answer
         .contacts()
         .map(|(endpoint, contact)| (endpoint.as_str().to_owned(), contact))
