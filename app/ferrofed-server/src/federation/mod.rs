@@ -17,18 +17,21 @@
 mod build;
 pub mod error;
 mod mitz;
+mod pdqm;
 mod pixm;
 pub mod registry;
 
 use std::collections::BTreeSet;
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_engine::onward::conveyance::Signer;
 use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
 use ferrofed_identity::consent::ConsentPrefilter;
+use ferrofed_identity::demographics::Demographics;
 use ferrofed_identity::resolver::Resolver;
 use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::ehr_index::EhrIndex;
@@ -53,6 +56,7 @@ pub struct Federation {
     snapshot: Arc<RegistrySnapshot>,
     clients: NodeClients<NodeTransport>,
     resolver: Option<Arc<dyn Resolver>>,
+    demographics: Option<DemographicsStep>,
     localization: LocalizationPolicy,
     consent: Option<Arc<dyn ConsentPrefilter>>,
     observed: Arc<Observed>,
@@ -67,6 +71,47 @@ pub struct Federation {
     signing: Option<SigningSettings>,
     signer: Option<Arc<Signer>>,
     client_keys: Vec<Jwk>,
+}
+
+/// The demographics step a patient identifier the cross-reference does not
+/// map is taken to before localization and resolution, with its budget
+/// (Annex A §A.2).
+///
+/// The step outlives a registry reload, which carries it over to the
+/// federation it builds, so a change to `[pdqm]` takes a restart (no
+/// specification governs this: our own design).
+#[derive(Clone)]
+pub struct DemographicsStep {
+    step: Arc<dyn Demographics>,
+    timeout: Duration,
+}
+
+impl DemographicsStep {
+    /// The step `step`, each exchange of which may take `timeout`.
+    #[must_use]
+    pub fn new(step: Arc<dyn Demographics>, timeout: Duration) -> Self {
+        Self { step, timeout }
+    }
+
+    /// The demographics service.
+    #[must_use]
+    pub fn step(&self) -> &dyn Demographics {
+        self.step.as_ref()
+    }
+
+    /// How long one exchange may take.
+    #[must_use]
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl std::fmt::Debug for DemographicsStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DemographicsStep")
+            .field("timeout", &self.timeout)
+            .finish_non_exhaustive()
+    }
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -275,6 +320,13 @@ impl Federation {
         self.consent.as_deref()
     }
 
+    /// The demographics step ahead of localization and resolution, when one
+    /// is configured (Annex A §A.2).
+    #[must_use]
+    pub fn demographics(&self) -> Option<&DemographicsStep> {
+        self.demographics.as_ref()
+    }
+
     /// What the deployment adds to the query text: the targeting, the
     /// default issuing namespace, the `OFFSET` strategy and the decomposable
     /// aggregates.
@@ -352,6 +404,7 @@ impl std::fmt::Debug for Federation {
             .field("id", &self.id)
             .field("endpoints", &self.clients.len())
             .field("resolver", &self.resolver.is_some())
+            .field("demographics", &self.demographics)
             .field("localization", &self.localization)
             .field(
                 "consent",

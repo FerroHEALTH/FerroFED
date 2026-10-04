@@ -14,7 +14,7 @@ No specification governs health probes: our own design.
 |---|---|---|
 | `GET {base}/health` | `200` while the process serves; it checks nothing else | liveness |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives | readiness, startup, the image `HEALTHCHECK` |
-| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter, of the localizer, of the mCSD directory, of the audit repository and of the PMIR Patient Identity Registry | monitoring, never a probe |
+| `GET {base}/health/dependencies` | always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter, of the localizer, of the demographics step, of the mCSD directory, of the audit repository and of the PMIR Patient Identity Registry | monitoring, never a probe |
 
 Readiness reports the gateway's own subsystems by name: the configuration,
 the registry and the outbound clients when a registry is configured, and the
@@ -66,7 +66,12 @@ patient, is `up`, a failure answered below `500` is `up`, a `5xx` is
 `failing`, an XCPD exchange whose audit message could not be recorded is
 `failing`, and no answer, a silent localizer past its budget included, is
 `down`. It is absent when no localizer is configured
-([Node selection](registry.md#node-selection)). A refresh of the mCSD
+([Node selection](registry.md#node-selection)). A call to the PDQm
+Supplier updates `demographics` by the same rule: an answer, no match or an
+ambiguous one included, is `up`, a `5xx` is `failing`, an exchange whose
+audit record could not be stored is `failing`, and no answer is `down`. It
+is absent when `[pdqm]` is not configured
+([Demographics first](identity.md#demographics-first-pdqm)). A refresh of the mCSD
 directory the registry is read from updates `directory`: an answer the
 gateway accepts is `up`, an answer whose change the gateway refuses is
 `degraded`, an HTTP error (a `4xx` included), an answer that breaks ITI-90

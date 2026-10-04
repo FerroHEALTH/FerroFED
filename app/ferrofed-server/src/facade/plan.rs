@@ -23,6 +23,7 @@ use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
 
 use ferrofed_identity::consent::Requester;
+use ferrofed_identity::localizer::OnFailure;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -36,6 +37,7 @@ use tracing::Instrument as _;
 use tracing::field::Empty;
 
 use crate::facade::consent;
+use crate::facade::demographics::{self, Identified};
 use crate::facade::localize::{Localized, localize};
 use crate::federation::Federation;
 use crate::health::dependencies::Observed;
@@ -142,6 +144,14 @@ struct Membership {
 
 /// The plan of a query that names a patient (§5.2, §14.1, N3, N4, N6).
 ///
+/// A patient named in a namespace the demographics step handles is taken to
+/// it first, and the master identity it finds is localized and resolved in
+/// its place, both identifiers withheld from every request (Annex A §A.2,
+/// §5.4.1, N33). No match leaves every member `not-resolved`, which fails
+/// nothing (N6); an answer naming no one master identity leaves every
+/// member `not-resolved` with the error, which fails the query; a service
+/// that could not answer is handled as `identified` describes.
+///
 /// An undirected query in a deployment with a localizer asks it first which
 /// members might hold the patient's data, within the localizer's budget: a
 /// member it does not name is `not-localized` and never asked (§11.1). A
@@ -175,26 +185,23 @@ pub async fn patient(
     deadline: Instant,
 ) -> Result<Targets, TargetsError> {
     let resolver = federation.resolver();
-    let consent = federation.consent_prefilter();
     let mut membership = membership(federation.snapshot(), selection);
-    // NOTE: §5.4.1, the identifier resolution consumes is withheld from every
-    // request the plan sends, the outbound gate's second layer.
-    let withheld = Withheld::new([SecretString::from(query.subject().value())]);
-    let mut plan = exclude(Plan::new().withholding(withheld), &membership.excluded)?;
     let members: Vec<NodeId> = membership.asked.keys().cloned().collect();
     // NOTE: §8, a directive selects the node set by itself, so only an undirected query is localized.
-    let localizer = match selection {
-        Selection::Undirected => federation.localization().localizer(),
-        Selection::Directed(_) | Selection::Owner(_) => None,
-    };
-    let consulted = localizer.is_some() || consent.is_some() || resolver.is_some();
-    let patient = if !members.is_empty() && consulted {
-        Some(patient_ref(query.subject())?)
-    } else {
-        None
-    };
-    let located = match (localizer, &patient) {
-        (Some(_), Some(patient)) => localize(federation, patient, &members, deadline).await,
+    let undirected = matches!(selection, Selection::Undirected);
+    let (patient, unidentified, withheld) = named(
+        federation,
+        query,
+        (members.is_empty(), undirected),
+        deadline,
+    )
+    .await?;
+    let mut plan = exclude(Plan::new().withholding(withheld), &membership.excluded)?;
+    let located = match (&unidentified, &patient) {
+        (Some(Unidentified::ClosedOut(failure)), _) => Localized::closed(failure.clone()),
+        (None, Some(patient)) if undirected => {
+            localize(federation, patient, &members, deadline).await
+        }
         _ => Localized::everyone(),
     };
     plan = settle_alternates(&located, plan, membership.alternates)?;
@@ -202,16 +209,16 @@ pub async fn patient(
         .into_iter()
         .filter(|member| located.admits(member))
         .collect();
-    let consented = match &patient {
-        Some(patient) => {
+    let consented = match (&patient, &unidentified) {
+        (Some(patient), None) => {
             consent::prefilter(federation, (patient, requester), &candidates, deadline).await
         }
-        None => consent::Prefiltered::default(),
+        _ => consent::Prefiltered::default(),
     };
     plan = settle_denied(plan, &mut membership.asked, &consented)?;
     candidates.retain(|member| !consented.denied.contains(member));
-    let resolutions = match (resolver, &patient) {
-        (Some(resolver), Some(patient)) if !candidates.is_empty() => {
+    let resolutions = match (resolver, &patient, &unidentified) {
+        (Some(resolver), Some(patient), None) if !candidates.is_empty() => {
             resolve(resolver, patient, &candidates, deadline).await
         }
         _ => BTreeMap::new(),
@@ -225,6 +232,11 @@ pub async fn patient(
     for (member, endpoint) in membership.asked {
         if !located.admits(&member) {
             plan = settle(plan, endpoint, located.not_localized())?;
+            continue;
+        }
+        if let Some((error, failed)) = unidentified.as_ref().and_then(Unidentified::unresolved) {
+            resolution_failed |= failed;
+            plan = settle(plan, endpoint, Outcome::NotResolved { error })?;
             continue;
         }
         match resolutions.get(&member) {
@@ -294,6 +306,109 @@ async fn resolve(
         .count();
     span.record("resolved", count);
     resolutions
+}
+
+/// Why the demographics step left a patient query without one master
+/// identity to localize and resolve (Annex A §A.2).
+#[derive(Debug)]
+enum Unidentified {
+    /// The service knows no patient: every member is `not-resolved`, which
+    /// fails nothing (N6).
+    NoMatch(ErrorDetail),
+    /// The answer names no one master identity, or the service failed where
+    /// no localization policy applies: every member is `not-resolved` with
+    /// the error, which fails the query under all-or-nothing.
+    Failed(ErrorDetail),
+    /// The service failed on an undirected query that fails closed: every
+    /// member is `not-localized` with the error, as a localizer outage
+    /// leaves it (§14.1, N4).
+    ClosedOut(ErrorDetail),
+}
+
+impl Unidentified {
+    /// The `not-resolved` error every member localization admitted reports,
+    /// with whether it fails the query, or `None` when the members are
+    /// `not-localized` instead.
+    fn unresolved(&self) -> Option<(ErrorDetail, bool)> {
+        match self {
+            Self::NoMatch(error) => Some((error.clone(), false)),
+            Self::Failed(error) => Some((error.clone(), true)),
+            Self::ClosedOut(_) => None,
+        }
+    }
+}
+
+/// The patient the query names, as it is localized and resolved, with why
+/// the demographics step found no master identity for it and the values the
+/// outbound gate withholds; no patient when there is no member to ask or no
+/// service to consult.
+///
+/// # Errors
+/// Returns [`TargetsError::Patient`] when the subject is not a patient
+/// reference.
+async fn named(
+    federation: &Federation,
+    query: &PatientQuery,
+    (no_member, undirected): (bool, bool),
+    deadline: Instant,
+) -> Result<(Option<PatientRef>, Option<Unidentified>, Withheld), TargetsError> {
+    let consulted = undirected && federation.localization().localizer().is_some()
+        || federation.consent_prefilter().is_some()
+        || federation.resolver().is_some();
+    // NOTE: §5.4.1, the identifier resolution consumes is withheld from every
+    // request the plan sends, and so is a master identity found for it.
+    let mut withheld = vec![SecretString::from(query.subject().value())];
+    if no_member || !consulted {
+        return Ok((None, None, Withheld::new(withheld)));
+    }
+    let named = patient_ref(query.subject())?;
+    let (master, unidentified) = identified(federation, &named, undirected, deadline).await;
+    withheld.extend(master.as_ref().map(PatientRef::withheld));
+    Ok((
+        Some(master.unwrap_or(named)),
+        unidentified,
+        Withheld::new(withheld),
+    ))
+}
+
+/// The patient `named` is localized and resolved as, after the demographics
+/// step: the master identity it found, or `None` for the patient as named;
+/// with why it found none, when it did not.
+///
+/// A service that could not answer on an `undirected` query is the outage
+/// of a step that feeds localization, so the deployment's localization
+/// failure policy decides; an exchange that could not be audited fails
+/// closed under every policy, as a localizer's does. On a directed query it
+/// is a resolution that could not answer (§14.1; Annex A §A.2 places the
+/// step ahead of localization; no specification governs the directed case:
+/// our own design).
+async fn identified(
+    federation: &Federation,
+    named: &PatientRef,
+    undirected: bool,
+    deadline: Instant,
+) -> (Option<PatientRef>, Option<Unidentified>) {
+    match demographics::identify(federation, named, deadline).await {
+        Identified::AsNamed => (None, None),
+        Identified::Master(master) => (Some(master), None),
+        Identified::NoMatch(error) => (None, Some(Unidentified::NoMatch(ErrorDetail::Text(error)))),
+        Identified::Ambiguous(error) => {
+            (None, Some(Unidentified::Failed(ErrorDetail::Text(error))))
+        }
+        Identified::Unavailable {
+            failure,
+            audit_failed,
+        } => {
+            let closed = undirected
+                && (audit_failed || federation.localization().on_failure() == OnFailure::Closed);
+            let failure = ErrorDetail::Text(failure);
+            if closed {
+                (None, Some(Unidentified::ClosedOut(failure)))
+            } else {
+                (None, Some(Unidentified::Failed(failure)))
+            }
+        }
+    }
 }
 
 /// `plan` with every member `consented` denies settled `consent-denied`, each

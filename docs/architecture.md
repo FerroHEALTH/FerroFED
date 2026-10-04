@@ -473,6 +473,7 @@ whether); the core never assumes it does.
 | Trait | Returns | Role |
 |---|---|---|
 | `Directory` | `Arc<RegistrySnapshot>` | the addressing registry (N21, §15), refreshed off the clinical path; a query never awaits a directory call |
+| `Demographics` (optional) | `Identified(PatientRef)`, `NoMatch`, `Ambiguous(Ambiguity)`, `Unavailable(error)` | which master identity a patient identifier in a namespace the cross-reference does not map names, asked of a demographics service ahead of localization (Annex A §A.2 and §A.7, #487) |
 | `Localizer` | `NotConfigured`, `Candidates(set)`, `NoRecords`, `Unavailable(error)` | where (N4, §14) |
 | `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `Unavailable(error)`, `Partial { denied, failure }` | which candidates may not be asked about the patient on behalf of the verified caller's `Requester`, when its token names one (N27a, §13.4); absence from `Denied` asserts nothing |
 | `Resolver` | per member: `Resolved(EhrId)`, `Unknown`, `Unavailable(error)` | under which local id (N3, §5.2) |
@@ -483,8 +484,9 @@ No seam returns an error to the core. A backend that did not answer is an
 budget, declared in `OPTIONS` beside the N38 timeouts, and every seam budget is
 a strict part of the overall budget. A configuration whose seam budgets sum
 above the overall budget is refused at startup. The order is `Directory`, then
-`Localizer`, then `ConsentPrefilter`, then `Resolver`; only `Resolved` members
-are dispatched (N8).
+`Demographics` for an identifier in a namespace it handles, then `Localizer`,
+then `ConsentPrefilter`, then `Resolver`; only `Resolved` members are
+dispatched (N8).
 
 **When a seam fails.**
 
@@ -519,7 +521,7 @@ are dispatched (N8).
   refused outside the development profile and declared in `OPTIONS` (#410).
 - **The audit of the FHIR profiles** (#486, #469). PIXm (§2:3.83.5.1.1),
   mCSD (§2:3.90.5.1, §2:3.91.5.1), PMIR (§2:3.93.5.1, §2:3.94.5.1) and PDQm
-  (§2:3.78.5.1) each define their audit record as a FHIR `AuditEvent`
+  (§2:3.78.5.1, §2:3.119.5.1.1) each define their audit record as a FHIR `AuditEvent`
   profile built on the IHE Basic Audit Log Patterns, and BALP has the Audit
   Creator send it over the ATX: FHIR Feed Option of ITI-20 (BALP
   §1:52.1.1.1; the RESTful ATNA supplement, ITI TF-2 §3.20.4.2), a FHIR
@@ -534,11 +536,38 @@ are dispatched (N8).
   client), so the record is quarantined and the drain goes on. The server's
   `[audit]` table routes them: `repository`, `log`, or `off` under
   development only, with no default outside development once `[pixm]`,
-  `[registry.mcsd]` or `[pmir]` is set. A record names the patient
-  (the source identifier of ITI-83, the identities of an ITI-93 message)
-  toward the repository only, never in a log, a metric or a node request
-  (§5.4, N33). No record names a user agent, which every BALP pattern leaves
-  optional; PDQm is wired when the gateway first uses it (#487).
+  `[pdqm]`, `[registry.mcsd]` or `[pmir]` is set. A record names the patient
+  (the source identifier of ITI-83, the input identifier of ITI-119, the
+  identities of an ITI-93 message) toward the repository only, never in a
+  log, a metric or a node request (§5.4, N33). No record names a user agent,
+  which every BALP pattern leaves optional.
+- **The demographics step** (#487). Annex A places a PDQm query ahead of
+  XCPD and PIXm (§A.2, §A.7: `ITI-104` → `[PDQm ITI-78/119]` → `XCPD ITI-55`
+  → `PIXm ITI-83`), for a patient the cross-reference cannot resolve by the
+  identifier it is named by. `[pdqm]` takes an identifier issued in one of
+  its namespaces to the Supplier, with ITI-78 by default (an `identifier`
+  search that asks for the master domain only, §2:3.78.4.1.2.3) or ITI-119
+  where the deployment declares it (`onlyCertainMatches`, §2:3.119.4.1.2),
+  and the identifier the one matched Patient carries in the master domain
+  replaces the client's for localization, the consent pre-filter and
+  resolution. The outbound gate withholds both identifiers (§5.4.1, N33).
+  No match, or a match with no master identifier, is `not-resolved`
+  everywhere and fails nothing (N6). Several matched Patients (ITI-78
+  counts them in `Bundle.total`, §2:3.78.4.1.3 Case 1; ITI-119 returns an
+  entry each, §2:3.119.4.1.3 Case 2), two master identifiers on one, or an
+  ITI-119 match not graded `certain` refuse the resolution: every member is
+  `not-resolved` with the reason and the query fails `424`; the gateway
+  never picks one. A deprecated Patient (`active` false) is no match
+  (§2:3.78.4.1.3 Case 6). The step feeds localization (§4.2, §A.2), so its
+  outage on an undirected query follows the localization failure policy
+  (§14.1): `not-localized` everywhere under `closed`, `not-resolved` and
+  `424` under `ask-all` and on a directed query; an exchange whose audit
+  record cannot be stored fails closed under every policy, as XCPD's does.
+  The step needs a cross-reference (`[pixm]` or `[dev]`), is refused for a
+  namespace `[pixm.namespaces]` maps, and outlives a registry reload, so a
+  change to it takes a restart. It shows as `demographics` on `GET
+  /health/dependencies` and is counted by outcome. No specification
+  governs the outage mapping or the reload rule: our own design.
 - **The resolver** (decision A17). A resolver that cannot answer is not a
   patient who is unknown. An ITI-83 `404`, or a `200` with no identifier in a
   domain, is `not-resolved` and, per N6, does not fail the query. An outage, a
@@ -662,9 +691,11 @@ the gateway uses only the shared identifier, because its input is an
 identifier and never demographics.
 
 ITI-83 is GET only, and its query string carries the source identifier, so the
-outbound span never records the request URL (#45). PDQm is a demographic
-search a client application makes; FerroFED's input is AQL, which carries an
-identifier and never demographics (§5.4.3), so the gateway does not use it.
+outbound span never records the request URL (#45). FerroFED's input is AQL,
+which carries an identifier and never demographics (§5.4.3), so the gateway
+asks PDQm by identifier alone: the demographics step above sends the
+client's identifier in the body of an ITI-78 `POST` search or an ITI-119
+`$match`, never in a URL (#487).
 
 **The openEHR connection type.** mCSD 4.0.0 defines endpoint types for the IHE
 transactions and none for openEHR. FerroFED defines `openehr-rest-query` in a
@@ -679,8 +710,8 @@ registered code is a draft on #17.
 only in `crates/ihe-iti` (section 11), so the core never compiles it. Its
 `terminology` root set carries every type ITI-83 reads (`Parameters`,
 `OperationOutcome`, `Identifier`, `Reference`, `Bundle`); `resources` joins
-with the PDQm client (#119), whose ITI-78 search answers with `Patient`
-resources, and the mCSD directory reader (#74) and the ITI-90 and ITI-91
+with the PDQm client (#119), whose ITI-78 search and ITI-119 match answer
+with `Patient` resources (#487), and the mCSD directory reader (#74) and the ITI-90 and ITI-91
 client of #86 read `Organization` and `Endpoint` from the same set.
 `ferrofed-identity` maps that directory content onto the registry document
 through `ihe-iti`'s accessors, so it names no FHIR type itself. A
@@ -1886,7 +1917,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | Crate | Responsibility | Depends on | Must not depend on |
 |---|---|---|---|
 | `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
-| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
+| `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth`, and `oauth-metadata`, the RFC 8414 checks the §B.4 and §B.4a tracks share | the clients each function needs | anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |

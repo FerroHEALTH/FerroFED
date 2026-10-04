@@ -22,11 +22,11 @@
 //! 2.0 grant, the authorization server of its Nuts grant (sent the gateway's
 //! credentials in a Verifiable Presentation), the issuer of its FAPI 2.0
 //! grant (sent the client assertion and the callers' tokens), every PIX
-//! Manager, every XCPD
-//! responding gateway, the NVI Localization Service of `[nl_gf.nvi]` and Mitz
-//! of `[nl_gf.mitz]` (each is sent the patient identifier, and a credential
-//! when one is configured), the Patient Identity Registry of `[pmir]` and its
-//! callback URL, which carry patient identities and the feed token, the
+//! Manager, the PDQm Supplier of `[pdqm]`, every XCPD responding gateway, the
+//! NVI Localization Service of `[nl_gf.nvi]` and Mitz of `[nl_gf.mitz]` (each
+//! is sent the patient identifier, and a credential when one is configured),
+//! the Patient Identity Registry of `[pmir]` and its callback URL, which carry
+//! patient identities and the feed token, the
 //! care services directory of `[registry.mcsd]` when it has credentials,
 //! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
 //! a user name or a password, and the ATNA Audit Record Repository the XCPD
@@ -322,7 +322,7 @@ pub fn check(
             repository.url.as_str(),
             site(
                 String::from("audit.repository.url"),
-                String::from("the PIXm, mCSD and PMIR audit records, which name the patient"),
+                String::from("the PIXm, PDQm, mCSD and PMIR audit records, which name the patient"),
             ),
         )?;
     }
@@ -360,7 +360,7 @@ pub fn check(
 
 /// The URL and the site of every identity service `settings` ask about a
 /// patient over HTTP with a credential of their own: each PIX Manager, the
-/// NVI Localization Service and Mitz.
+/// PDQm Supplier, the NVI Localization Service and Mitz.
 fn identity_services(settings: &Settings) -> Vec<(&str, ProtectedSite)> {
     let mut services = Vec::new();
     for (index, manager) in settings
@@ -375,6 +375,17 @@ fn identity_services(settings: &Settings) -> Vec<(&str, ProtectedSite)> {
             .then(|| format!("{key}.credentials"));
         let site = identity_site(&key, credentials.as_deref());
         services.push((manager.url.expose(), site));
+    }
+    if let Some(pdqm) = &settings.pdqm {
+        let key = crate::config::pdqm::PDQM_KEY;
+        let credentials = pdqm
+            .credentials
+            .is_some()
+            .then(|| format!("{key}.credentials"));
+        services.push((
+            pdqm.url.expose(),
+            identity_site(key, credentials.as_deref()),
+        ));
     }
     if let Some(nvi) = settings.nl_gf.as_ref().and_then(|nl_gf| nl_gf.nvi.as_ref()) {
         let key = crate::config::nl_gf::NVI_KEY;

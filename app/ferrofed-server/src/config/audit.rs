@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Where the audit records of the FHIR profiles' transactions go, `[audit]`:
-//! PIXm ITI-83 (`[pixm]`), mCSD ITI-90 and ITI-91 (`[registry.mcsd]`), and
-//! PMIR ITI-93 and ITI-94 (`[pmir]`).
+//! Where the audit records of the FHIR profiles' transactions go, `[audit]`.
+//!
+//! The transactions are PIXm ITI-83 (`[pixm]`), PDQm ITI-78 and ITI-119
+//! (`[pdqm]`), mCSD ITI-90 and ITI-91 (`[registry.mcsd]`), and PMIR ITI-93 and
+//! ITI-94 (`[pmir]`).
 //!
 //! ```toml
 //! [audit]
@@ -18,8 +20,8 @@
 //! ```
 //!
 //! Each profile defines its records as a BALP `AuditEvent` (PIXm
-//! §2:3.83.5.1, mCSD §2:3.90.5.1 and §2:3.91.5.1, PMIR §2:3.93.5.1 and
-//! §2:3.94.5.1), which BALP sends over the ATX: FHIR Feed Option of ITI-20
+//! §2:3.83.5.1, PDQm §2:3.78.5.1 and §2:3.119.5.1, mCSD §2:3.90.5.1 and
+//! §2:3.91.5.1, PMIR §2:3.93.5.1 and §2:3.94.5.1), which BALP sends over the ATX: FHIR Feed Option of ITI-20
 //! (BALP §1:52.1.1.1): `destination = "repository"` posts each record to
 //! the Audit Record Repository's FHIR base, `log` writes it to the
 //! `ferrofed::audit` log target without a patient identifier, and `off`,
@@ -52,7 +54,7 @@ use crate::config::xcpd::AuditDestination;
 pub struct Audit {
     /// Where the records go: `repository`, `log`, or `off`, which only
     /// `profile = "development"` admits. Outside development it has no
-    /// default once a PIXm, mCSD or PMIR binding is configured.
+    /// default once a PIXm, PDQm, mCSD or PMIR binding is configured.
     pub destination: Option<AuditDestination>,
     /// The Audit Record Repository, under `destination = "repository"`.
     pub repository: Option<FeedRepository>,
@@ -160,7 +162,7 @@ const KEY: &str = "audit";
 /// # Errors
 ///
 /// [`Error::Missing`] for no `destination` outside development while a
-/// PIXm, mCSD or PMIR binding is configured, for no `[audit.repository]`
+/// PIXm, PDQm, mCSD or PMIR binding is configured, for no `[audit.repository]`
 /// under `repository`, and for no `url`, `hostname` or, outside
 /// development, `spool_dir`; [`Error::FeedAuditOff`] for `off` outside
 /// development; [`Error::FeedAuditRepositoryUnused`] for a repository under
@@ -170,9 +172,12 @@ const KEY: &str = "audit";
 pub(super) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
     let profile = config.profile;
     let table = &config.audit;
-    let audited = config.pixm.is_some() || config.registry.mcsd.is_some() || config.pmir.is_some();
-    // NOTE: PIXm §2:3.83.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 have each actor
-    // record its transactions, so no audit at all is a development-only choice.
+    let audited = config.pixm.is_some()
+        || config.pdqm.is_some()
+        || config.registry.mcsd.is_some()
+        || config.pmir.is_some();
+    // NOTE: PIXm §2:3.83.5.1, PDQm §2:3.78.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 have each
+    // actor record its transactions, so no audit at all is a development-only choice.
     let destination = match table.destination {
         Some(AuditDestination::Off) if profile != Profile::Development => {
             return Err(Error::FeedAuditOff {

@@ -421,6 +421,9 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         // NOTE: no specification governs this: our own design; the identity feed
         // outlives every federation a reload builds, so a change to it takes a restart.
         pmir: None,
+        // NOTE: no specification governs this: our own design; a reload carries the
+        // running demographics step over, so a change to it takes a restart.
+        pdqm: None,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
@@ -433,6 +436,15 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
 /// Whether `fresh` sets, unsets or changes `[pmir]`.
 fn pmir_changed(boot: &Settings, fresh: &Settings) -> bool {
     match (&boot.pmir, &fresh.pmir) {
+        (Some(was), Some(now)) => !was.same_as(now),
+        (None, None) => false,
+        (Some(_), None) | (None, Some(_)) => true,
+    }
+}
+
+/// Whether `fresh` sets, unsets or changes `[pdqm]`.
+fn pdqm_changed(boot: &Settings, fresh: &Settings) -> bool {
+    match (&boot.pdqm, &fresh.pdqm) {
         (Some(was), Some(now)) => !was.same_as(now),
         (None, None) => false,
         (Some(_), None) | (None, Some(_)) => true,
@@ -563,6 +575,7 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
         ("xcpd.audit", audit_changed(boot, fresh)),
         ("audit", boot.audit != fresh.audit),
         ("pmir", pmir_changed(boot, fresh)),
+        ("pdqm", pdqm_changed(boot, fresh)),
         (
             "metrics.listen",
             boot.metrics.listen != fresh.metrics.listen,
@@ -603,6 +616,9 @@ fn federation_class(error: &FederationError) -> &'static str {
         | FederationError::PixmMember { .. }
         | FederationError::PixmNamespace(_)
         | FederationError::Pixm(_) => "pixm",
+        FederationError::PdqmWithoutResolver
+        | FederationError::PdqmNamespace(_)
+        | FederationError::Pdqm(_) => "pdqm",
         FederationError::TwoResolvers => "resolvers",
         FederationError::TwoConsentPrefilters
         | FederationError::MitzMember { .. }
@@ -668,6 +684,34 @@ mod tests {
         assert_eq!(None, xcpd.audit_repository);
 
         let same = settings("log", "");
+        assert!(needs_restart(&boot, &same).is_empty());
+    }
+
+    /// The settings of a development gateway asking the PDQm Supplier at
+    /// `url` with `transaction`.
+    fn with_pdqm(url: &str, transaction: &str) -> Settings {
+        let text = format!(
+            "profile = \"development\"\n\n[audit]\ndestination = \"log\"\n\n[pdqm]\nurl = \"{url}\"\ntransaction = \"{transaction}\"\nmaster = \"urn:oid:2.999.1\"\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n"
+        );
+        Config::from_sources(Some(&text), &BTreeMap::new())
+            .and_then(|config| config.resolve())
+            .expect("the settings resolve")
+    }
+
+    #[test]
+    fn a_change_to_the_demographics_step_takes_a_restart() {
+        let boot = with_pdqm("https://pdq.example.org/fhir/", "iti-78");
+        for fresh in [
+            with_pdqm("https://pdq.example.org/fhir/", "iti-119"),
+            with_pdqm("https://other.example.org/fhir/", "iti-78"),
+        ] {
+            assert_eq!(vec!["pdqm"], needs_restart(&boot, &fresh));
+            assert!(
+                effective(&boot, fresh).pdqm.is_none(),
+                "the running step is carried over, never rebuilt"
+            );
+        }
+        let same = with_pdqm("https://pdq.example.org/fhir/", "iti-78");
         assert!(needs_restart(&boot, &same).is_empty());
     }
 }

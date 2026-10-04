@@ -3,9 +3,10 @@
 
 //! The audit recorders of the FHIR profiles' transactions.
 //!
-//! PIXm ITI-83, mCSD ITI-90 and ITI-91, and PMIR ITI-93 and ITI-94 are each
-//! recorded as the BALP `AuditEvent` its profile fixes (PIXm §2:3.83.5.1.1,
-//! mCSD §2:3.90.5.1 and §2:3.91.5.1, PMIR §2:3.93.5.1 and §2:3.94.5.1).
+//! PIXm ITI-83, PDQm ITI-78 and ITI-119, mCSD ITI-90 and ITI-91, and PMIR
+//! ITI-93 and ITI-94 are each recorded as the BALP `AuditEvent` its profile
+//! fixes (PIXm §2:3.83.5.1.1, PDQm §2:3.78.5.1 and §2:3.119.5.1.1, mCSD
+//! §2:3.90.5.1 and §2:3.91.5.1, PMIR §2:3.93.5.1 and §2:3.94.5.1).
 //!
 //! [`FeedAudit`] sends each record to an ATNA Audit Record Repository over
 //! the ATX: FHIR Feed Option of ITI-20 (BALP §1:52.1.1.1; the `RESTful` ATNA

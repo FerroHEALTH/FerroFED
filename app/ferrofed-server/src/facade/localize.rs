@@ -47,6 +47,13 @@ impl Localized {
         }
     }
 
+    /// No member a candidate, each `not-localized` with `failure`, the
+    /// failure carried in `meta.federation` too: the fail-closed answer to a
+    /// step feeding localization that did not answer (§14.1, N4).
+    pub(crate) fn closed(failure: ErrorDetail) -> Self {
+        Self::nobody(Some(failure))
+    }
+
     /// No member a candidate, each carrying `error` when there is one.
     fn nobody(error: Option<ErrorDetail>) -> Self {
         Self {

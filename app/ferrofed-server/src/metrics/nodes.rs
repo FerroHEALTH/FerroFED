@@ -22,6 +22,7 @@ use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::probe::{Answer, Probed};
 use ferrofed_identity::consent::ConsentDecision;
+use ferrofed_identity::demographics::{DemographicsError, Identification};
 use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
@@ -31,8 +32,8 @@ use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
 use crate::metrics::{
-    CONSENT_PREFILTER_REQUESTS, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
-    NODE_REQUESTS,
+    CONSENT_PREFILTER_REQUESTS, DEMOGRAPHICS_REQUESTS, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS,
+    NODE_REQUEST_DURATION, NODE_REQUESTS,
 };
 
 /// The node request instruments of one meter provider, shared by every
@@ -43,6 +44,7 @@ pub struct Instruments {
     duration: Histogram<f64>,
     prefilter: Counter<u64>,
     localizer: Counter<u64>,
+    demographics: Counter<u64>,
 }
 
 impl Instruments {
@@ -67,6 +69,10 @@ impl Instruments {
             localizer: meter
                 .u64_counter(LOCALIZER_REQUESTS)
                 .with_description("Calls to the localizer, by outcome")
+                .build(),
+            demographics: meter
+                .u64_counter(DEMOGRAPHICS_REQUESTS)
+                .with_description("Calls to the demographics service, by outcome")
                 .build(),
         }
     }
@@ -197,6 +203,25 @@ impl NodeRequests {
         };
         instruments
             .localizer
+            .add(1, &[KeyValue::new("outcome", outcome)]);
+    }
+
+    /// Counts one call to the demographics service that ended in
+    /// `identification`, in a series of its own: the service is no member,
+    /// so it has no `endpoint` and no §11.1 outcome.
+    pub fn identified(&self, identification: &Identification) {
+        let Some(instruments) = &self.instruments else {
+            return;
+        };
+        let outcome = match identification {
+            Identification::Identified(_) => "identified",
+            Identification::NoMatch => "no-match",
+            Identification::Ambiguous(_) => "ambiguous",
+            Identification::Unavailable(DemographicsError::AuditFailed(_)) => "audit-failed",
+            _ => "unavailable",
+        };
+        instruments
+            .demographics
             .add(1, &[KeyValue::new("outcome", outcome)]);
     }
 

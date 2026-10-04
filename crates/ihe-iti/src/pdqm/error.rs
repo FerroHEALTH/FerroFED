@@ -71,9 +71,9 @@ pub enum PdqmError {
     #[error("the request to the Supplier could not be written")]
     Unwritable(#[source] serde_json::Error),
     /// The audit recorder could not accept the request's audit record, so
-    /// its answer is not used (feature `balp`, §2:3.78.5.1).
+    /// its answer is not used (feature `balp`, §2:3.78.5.1, §2:3.119.5.1.1).
     #[cfg(feature = "balp")]
-    #[error("the ITI-78 audit record could not be recorded")]
+    #[error("the PDQm audit record could not be recorded")]
     Audit(#[source] crate::balp::AuditError),
 }
 

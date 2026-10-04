@@ -10,6 +10,7 @@ use ferrofed_identity::dev::DevCrossRefError;
 use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::mitz::MitzConfigError;
 use ferrofed_identity::patient::PatientRefError;
+use ferrofed_identity::pdqm::PdqmConfigError;
 use ferrofed_identity::pixm::PixmConfigError;
 use ferrofed_registry::error::{IdError, LoadError};
 use ferrofed_registry::id::EndpointId;
@@ -168,6 +169,18 @@ pub enum FederationError {
     /// The PIXm resolver refuses its Managers or members.
     #[error("the [pixm] resolver cannot be enabled")]
     Pixm(#[source] PixmConfigError),
+    /// `[pdqm]` is set but no cross-reference resolver is, so the master
+    /// identity it finds could never be resolved (Annex A §A.2, §5.2).
+    #[error(
+        "the [pdqm] demographics step needs a cross-reference resolver, [dev] or [pixm], to resolve the master identity it finds (Annex A §A.2, §5.2)"
+    )]
+    PdqmWithoutResolver,
+    /// A `[pdqm.namespaces]` key is not a namespace.
+    #[error("pdqm.namespaces has an empty namespace")]
+    PdqmNamespace(#[source] PatientRefError),
+    /// The PDQm demographics step refuses its Supplier or its domains.
+    #[error("the [pdqm] demographics step cannot be enabled")]
+    Pdqm(#[source] PdqmConfigError),
     /// The audit trail of the PIXm, mCSD and PMIR transactions cannot start
     /// (`[audit]`).
     #[error("the [audit] trail cannot start")]

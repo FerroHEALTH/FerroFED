@@ -204,7 +204,7 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
     Ok(recorder)
 }
 
-/// The recorder of the PIXm, mCSD and PMIR audit records `settings`
+/// The recorder of the PIXm, PDQm, mCSD and PMIR audit records `settings`
 /// describe: the FHIR Feed trail, the audit log target, or `None` when the
 /// records are off.
 ///

@@ -43,9 +43,10 @@
 //!   `Endpoint` resources read through `ihe_iti`'s mCSD reader (N19, N20),
 //!   and the registry read from an mCSD directory and kept in step with it
 //!   ([`directory::mcsd`], §15.1, N21);
-//! - [`balp`]: the audit recorders of the PIXm, mCSD and PMIR transactions,
-//!   the BALP `AuditEvent` sent to an ATNA Audit Record Repository over the
-//!   FHIR Feed of ITI-20, or written to the audit log target.
+//! - [`balp`]: the audit recorders of the PIXm, PDQm, mCSD and PMIR
+//!   transactions, the BALP `AuditEvent` sent to an ATNA Audit Record
+//!   Repository over the FHIR Feed of ITI-20, or written to the audit log
+//!   target.
 //!
 //! How the gateway authenticates to each node as itself (§13.1, N25) is the
 //! engine's, in `ferrofed_engine::onward`.

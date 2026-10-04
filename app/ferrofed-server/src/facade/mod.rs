@@ -57,6 +57,7 @@ pub mod completeness;
 mod confined;
 mod consent;
 pub mod dedup;
+mod demographics;
 pub mod follow_up;
 pub mod intake;
 mod localize;
