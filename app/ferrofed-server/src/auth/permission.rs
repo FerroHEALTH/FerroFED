@@ -510,6 +510,21 @@ pub fn confined(covering: &[SmartScope]) -> bool {
         })
 }
 
+/// Whether `granted`, a token's whole grant, is a patient grant: it holds a
+/// resource scope, and every resource scope it holds is a `patient/` one.
+///
+/// A scope that is no resource scope (`openid`, `launch/patient`) grants
+/// no data, so it neither makes nor breaks a patient grant.
+#[must_use]
+pub fn patient_grant(granted: &[SmartScope]) -> bool {
+    let resources: Vec<SmartScope> = granted
+        .iter()
+        .filter(|scope| matches!(scope, SmartScope::Resource(_)))
+        .cloned()
+        .collect();
+    confined(&resources)
+}
+
 /// Whether `scope` is of `family`, holds `permission` and covers the
 /// resource `named`, or every resource when the request names none.
 fn covers(
@@ -580,7 +595,7 @@ pub fn backend(backend_clients: &BTreeSet<String>, client_id: &str) -> bool {
 mod tests {
     use std::collections::BTreeSet;
 
-    use super::{Honoured, Permission, ResourceFamily, TABLE, confined, granted};
+    use super::{Honoured, Permission, ResourceFamily, TABLE, confined, granted, patient_grant};
     use openehr_its::rest::generated::{admin, definition, demographic, ehr, query, system};
     use openehr_sdt::smart_scopes::SmartScope;
 
@@ -687,6 +702,19 @@ mod tests {
         let template = SmartScope::parse_all("patient/template-*.cruds");
         let template_read = (ResourceFamily::Template, Permission::Read);
         assert!(!granted(&template, template_read, None, patient));
+    }
+
+    #[test]
+    fn a_grant_of_patient_resource_scopes_alone_is_a_patient_grant() {
+        assert!(patient_grant(&SmartScope::parse_all(
+            "openid launch/patient patient/composition-*.r"
+        )));
+        assert!(!patient_grant(&SmartScope::parse_all(
+            "patient/composition-*.r user/aql-*.s"
+        )));
+        assert!(!patient_grant(&SmartScope::parse_all(
+            "openid launch/patient"
+        )));
     }
 
     #[test]

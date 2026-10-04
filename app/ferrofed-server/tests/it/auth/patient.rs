@@ -345,6 +345,68 @@ async fn a_read_by_subject_reaches_the_patient_s_own_ehr_alone() -> TestResult {
     Ok(())
 }
 
+// NOTE: §12.5.1 step 2, N41: a refused read records no session binding and no index entry
+// for the other patient, so the same caller's later read of that ehr_id is probed.
+// conformance: CP-17
+#[tokio::test]
+async fn a_refused_read_by_subject_records_nothing_of_the_other_patient() -> TestResult {
+    let gateway = gateway().await?;
+    let other = format!("/v1/ehr?subject_id={OTHER}&subject_namespace={NAMESPACE}");
+    assert_confined(&gateway, as_the_patient(get(&other, Some("node-a-pub"))?)?).await?;
+    answering_ehr(&gateway.a, OTHER_A).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/ehr/{OTHER_A}")))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&gateway.b)
+        .await;
+    let read = get(&format!("/v1/ehr/{OTHER_A}"), None)?;
+    let (status, _, text) = sent(&gateway.app, bearing(read, &minted(&claims())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        vec![("GET".to_owned(), format!("/v1/ehr/{OTHER_A}"))],
+        asked(&gateway.b).await?,
+        "neither a binding nor the index places it, so the same caller's read probes every member"
+    );
+    Ok(())
+}
+
+// NOTE: SMART on openEHR master08 §Resource Scopes: a patient scope reaches its patient's
+// own EHR, so a listed demographic client's patient grant never reaches a party.
+// conformance: CP-17
+#[tokio::test]
+async fn a_patient_grant_never_reaches_the_demographic_api() -> TestResult {
+    let bound = gateway().await?;
+    let unbound = Gateway::with_rows(support::auth(), &rows(EHR_A)).await?;
+    for gateway in [bound, unbound] {
+        let read =
+            Request::get("/v1/demographic/person/8849182c-82ad-4088-a07f-48ead4180515::node-a::1")
+                .body(Body::empty())?;
+        assert_refused(&gateway, as_the_patient(read)?, Refusal::PatientDemographic).await?;
+    }
+    Ok(())
+}
+
+// NOTE: §12.5, N33: node B is told the patient's ehr_id at node B, never the token's ehrId,
+// which is node A's.
+// conformance: CP-16
+#[tokio::test]
+async fn a_member_other_than_the_token_s_own_is_told_its_own_ehr_id() -> TestResult {
+    let gateway = gateway().await?;
+    let (status, _, text) = sent(&gateway.app, as_the_patient(query()?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let told: Vec<Option<String>> = conveyed_at(&gateway.b)
+        .await?
+        .into_iter()
+        .map(|conveyed| conveyed.ehr_id)
+        .collect();
+    assert_eq!(
+        vec![Some(EHR_B.to_owned())],
+        told,
+        "node B's own ehr_id, not the token's"
+    );
+    Ok(())
+}
+
 // NOTE: SMART on openEHR master08 §Resource Scopes: a patient grant reaches data in its
 // patient's existing EHRs, so it creates none.
 // conformance: CP-17

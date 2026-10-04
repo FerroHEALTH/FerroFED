@@ -193,6 +193,13 @@ pub enum ConveyanceError {
         "the caller's patient/ grant is confined to one patient, who has no ehr_id at endpoint {0}"
     )]
     Unconfined(EndpointId),
+    /// The caller's grant is confined to one patient, and the request to
+    /// this endpoint is composed for no node-local `ehr_id`, or for another
+    /// one than the patient's `ehr_id` the conveyance tells that node.
+    #[error(
+        "the request to endpoint {0} is not composed for the confined patient's own ehr_id at its node"
+    )]
+    NotOwn(EndpointId),
 }
 
 /// A caller's `patient/` grant confined to one patient: that patient's own
@@ -340,6 +347,52 @@ impl Conveyance {
         self.0.subject.as_ref()
     }
 
+    /// The patient's `ehr_id` this conveyance tells the node `endpoint`
+    /// reaches, in its `ehrId` claim: the one the confinement holds for that
+    /// node, or `None` for a caller whose grant is not confined.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConveyanceError::Unconfined`] when the caller's grant is
+    /// confined to a patient who has no `ehr_id` at that node.
+    pub fn confined_ehr_id(
+        &self,
+        endpoint: &EndpointId,
+    ) -> Result<Option<&EhrId>, ConveyanceError> {
+        match &self.0.confinement {
+            Some(confinement) => confinement
+                .ehr_id_at(endpoint)
+                .map(Some)
+                .ok_or_else(|| ConveyanceError::Unconfined(endpoint.clone())),
+            None => Ok(None),
+        }
+    }
+
+    /// Holds the `ehrId` this conveyance tells `endpoint` to `composed`, the
+    /// node-local `ehr_id` the request to it is composed for; nothing to
+    /// hold for a caller whose grant is not confined.
+    ///
+    /// The `ehrId` is the one carrier a node is told about the patient, so
+    /// it must be that node's own `ehr_id`, the same the request is located
+    /// by, and never another node's (§5.4.1, N33, §12.5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConveyanceError::Unconfined`] as [`Conveyance::confined_ehr_id`]
+    /// does, and [`ConveyanceError::NotOwn`] when the request is composed for
+    /// no node-local `ehr_id`, or another one.
+    pub fn holds_own(
+        &self,
+        endpoint: &EndpointId,
+        composed: Option<&EhrId>,
+    ) -> Result<(), ConveyanceError> {
+        match self.confined_ehr_id(endpoint)? {
+            None => Ok(()),
+            Some(told) if composed == Some(told) => Ok(()),
+            Some(_) => Err(ConveyanceError::NotOwn(endpoint.clone())),
+        }
+    }
+
     /// The [`HEADER`] value for `endpoint`: a compact JWS, its `aud` the
     /// endpoint's id, valid for [`LIFETIME`] from now, carrying the
     /// patient's `ehr_id` there when the caller's grant is confined.
@@ -350,14 +403,7 @@ impl Conveyance {
     /// [`ConveyanceError::Unconfined`] when the caller's grant is confined
     /// to a patient who has no `ehr_id` at the node `endpoint` reaches.
     pub fn signed_for(&self, endpoint: &EndpointId) -> Result<String, ConveyanceError> {
-        let ehr_id = match &self.0.confinement {
-            Some(confinement) => Some(
-                confinement
-                    .ehr_id_at(endpoint)
-                    .ok_or_else(|| ConveyanceError::Unconfined(endpoint.clone()))?,
-            ),
-            None => None,
-        };
+        let ehr_id = self.confined_ehr_id(endpoint)?;
         let iss = self.0.signer.issuer_at(endpoint);
         let iat = jiff::Timestamp::now().as_second();
         let lifetime = i64::try_from(LIFETIME.as_secs()).unwrap_or(i64::MAX);

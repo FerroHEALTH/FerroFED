@@ -777,13 +777,24 @@ rules are FerroFED's own design, decided with #80 after a security review:
   patient is known anywhere), an `ehr_id` route or `ehr_id`-scoped query that
   T does not place at its member (located by the targeting headers and T
   alone, `owner::located_within`, with no index lookup and no probe), a read
-  by subject outside T, and EHR creation, definitions and the DEMOGRAPHIC
-  area. The pair is compared, never the bare `ehr_id`
+  by subject outside T (refused before the session's resolution bindings or
+  the index learn anything of that subject), and EHR creation and
+  definitions. A token whose resource scopes are all `patient/` is refused
+  the DEMOGRAPHIC area at the gate, `403` `patient-confinement`, bound or
+  not and listed in `demographic_clients` or not: a patient scope reaches
+  its patient's own compartment only (`master08-scopes.adoc` §Resource
+  Scopes). The pair is compared, never the bare `ehr_id`
   (`onward::conveyance::Confinement::admits`). Each node's conveyance
   carries an `ehrId` claim with that node's own `ehr_id` in T and narrows
   `scope` to the covering `patient/` scopes, so the node can enforce the
   grant (N26); an endpoint outside T is signed no conveyance
-  (`ConveyanceError::Unconfined`), so no request reaches it. The residual
+  (`ConveyanceError::Unconfined`), so no request reaches it. The outbound
+  gate holds the `ehrId` to the node-local `ehr_id` the request is composed
+  for, as it reads every other carrier (§5.4.1, N33): the query's scope (an
+  `ehr_id`-scoped query carries its `ehr_id` as its scope, as a patient
+  query does), the `ehr_id`
+  of a routed path, or none for a definition; a mismatch or no `ehr_id` is
+  `ConveyanceError::NotOwn` with nothing sent. The residual
   risk is the cross-reference: the confinement is only as correct as its
   link from the `ehrId` at the bound member to the patient's `ehr_id` at
   every other member, and a wrong link admits the wrong EHR there; the

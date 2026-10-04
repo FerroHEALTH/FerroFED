@@ -70,14 +70,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   alone. The gateway reads the token's `ehrId` claim (SMART on openEHR),
   resolves it at every member (§5.2), and sends a request only to the
   patient's own `{node, ehr_id}` pairs. Another patient, a query that names
-  no patient, an `ehr_id` the pairs do not place, EHR creation, definitions
-  and the DEMOGRAPHIC area are `403` (`patient-confinement`) with nothing
-  sent and nothing probed; a token without the claim is `403`
+  no patient, an `ehr_id` the pairs do not place, EHR creation and
+  definitions are `403` (`patient-confinement`) with nothing sent, nothing
+  probed and, for another patient's read by subject, no resolution binding
+  or index entry recorded. A token whose resource scopes are all `patient/`
+  is refused the DEMOGRAPHIC API the same way, bound or not and even for a
+  listed demographic client. A token without the claim is `403`
   (`patient-context-missing`), and a cross-reference that cannot resolve the
   patient is `424` (`patient-context-unavailable`). The bare `ehrId` is never
   compared across members (§12.5). Each node's `openEHR-federation-client`
   token carries the patient's `ehr_id` at that node as `ehrId`, and only the
-  covering `patient/` scopes in `scope` (N26). Without the section a
+  covering `patient/` scopes in `scope` (N26); the outbound gate refuses,
+  with nothing sent, a request whose token would tell its node another
+  `ehr_id` than the one the request is composed for. Without the section a
   `patient/` grant still admits nothing (#443).
 - The texts client authentication is held to are vendored under
   `docs/specs/`. The ITS-REST Release-1.1.0 fetch now takes the SMART on

@@ -142,11 +142,10 @@ pub(crate) async fn serve(
         .iter()
         .map(|endpoint| endpoint.id().clone())
         .collect();
-    let session = arrived.session.map(|session| (session, &consented.denied));
-    learn(federation, &resolved.holders, session, started);
+    let holders = resolved.holders.clone();
     let settled = resolved.settled();
-    // NOTE: §5.2, §12.5: a confined grant reads its own patient's EHR alone, and learns
-    // nothing of another subject, not even whether one has an EHR anywhere.
+    // NOTE: §5.2, §12.5: a confined grant reads its own patient's EHR alone, and the gateway
+    // records nothing of another subject, no session binding and no index entry.
     if confined::is_confined(&arrived.conveyance)
         && !settled.as_ref().is_ok_and(|(endpoint, ehr_id)| {
             confined::admits(&arrived.conveyance, endpoint.id(), ehr_id)
@@ -154,6 +153,8 @@ pub(crate) async fn serve(
     {
         return confined::refused("subject", request_id, &logged);
     }
+    let session = arrived.session.map(|session| (session, &consented.denied));
+    learn(federation, &holders, session, started);
     let (endpoint, ehr_id) = match settled {
         Ok(owner) => owner,
         Err(unserved) => return unserved.respond(request_id, &logged),

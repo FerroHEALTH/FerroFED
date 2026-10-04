@@ -11,6 +11,7 @@
 //! bound with `DPoP` (§13.1, N25, CP-17).
 
 mod architecture;
+mod confined;
 mod conveyance;
 mod conveyed;
 mod definition;

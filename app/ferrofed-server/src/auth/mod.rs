@@ -121,6 +121,9 @@ pub enum Refusal {
     /// Only a `patient/` grant covers the operation, and the token carries
     /// no `ehrId` that reads as an openEHR `HIER_OBJECT_ID` to confine it to.
     PatientContext,
+    /// The token's grant is a patient grant, which reaches its patient's
+    /// own EHR alone, and the request addresses the DEMOGRAPHIC API.
+    PatientDemographic,
 }
 
 impl Refusal {
@@ -145,6 +148,7 @@ impl Refusal {
             Self::Demographic => "demographic-client",
             Self::PurposeOfUse => "purpose-of-use",
             Self::PatientContext => "patient-context",
+            Self::PatientDemographic => "patient-demographic",
         }
     }
 
@@ -171,6 +175,9 @@ impl Refusal {
             Self::PatientContext => {
                 "only a patient/ scope grants this operation, and the access token carries no ehrId to confine it to"
             }
+            Self::PatientDemographic => {
+                "a patient/ grant reaches its patient's own EHR alone, never the DEMOGRAPHIC API"
+            }
         }
     }
 
@@ -183,6 +190,7 @@ impl Refusal {
             Self::Scope | Self::Demographic => Code::ScopeInsufficient,
             Self::PurposeOfUse => Code::PurposeOfUseRequired,
             Self::PatientContext => Code::PatientContextMissing,
+            Self::PatientDemographic => Code::PatientConfinement,
             Self::Missing
             | Self::Malformed
             | Self::Algorithm
@@ -206,12 +214,14 @@ impl Refusal {
         let challenge = match self {
             Self::Missing => Some(format!("Bearer realm=\"{REALM}\"")),
             Self::Unavailable | Self::Operation => None,
-            Self::Scope | Self::Demographic | Self::PurposeOfUse | Self::PatientContext => {
-                Some(format!(
-                    "Bearer realm=\"{REALM}\", error=\"insufficient_scope\", error_description=\"{}\"",
-                    self.description()
-                ))
-            }
+            Self::Scope
+            | Self::Demographic
+            | Self::PurposeOfUse
+            | Self::PatientContext
+            | Self::PatientDemographic => Some(format!(
+                "Bearer realm=\"{REALM}\", error=\"insufficient_scope\", error_description=\"{}\"",
+                self.description()
+            )),
             _ => Some(format!(
                 "Bearer realm=\"{REALM}\", error=\"invalid_token\", error_description=\"{}\"",
                 self.description()
@@ -319,6 +329,11 @@ impl Gate {
                     .contains(caller.client_id())
                 {
                     return Err(Refusal::Demographic);
+                }
+                // NOTE: SMART on openEHR master08 §Resource Scopes: a patient scope reaches "data
+                // within that patient's EHR", so listing its client never widens it to parties.
+                if permission::patient_grant(caller.scopes()) {
+                    return Err(Refusal::PatientDemographic);
                 }
             }
             Requirement::Scope {

@@ -122,7 +122,7 @@ addresses, only `*` or `**` covers it.
 | `POST {base}/v1/definition/template/…` (an upload) | `template-*` with `c` |
 | A COMPOSITION under `{base}/v1/ehr/{ehr_id}/…`, its versions and tags | `composition-*` with the operation's permission |
 | The EHR, its `EHR_STATUS`, `DIRECTORY` and `CONTRIBUTION`s, and `GET {base}/v1/ehr?subject_id=…` | `composition-*` with the operation's permission |
-| The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients` |
+| The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
@@ -195,17 +195,28 @@ the token's patient:
    (`patient-confinement`) with nothing sent: a query for another patient,
    a query that names no patient, an `ehr_id` that is not the patient's at
    the member it would go to, a read by subject of another patient, the
-   creation of an EHR, a definition request and a DEMOGRAPHIC request. An
-   `ehr_id` the patient's own pairs do not place is never looked up in the
-   gateway's index or probed for at the members.
+   creation of an EHR and a definition request. An `ehr_id` the patient's
+   own pairs do not place is never looked up in the gateway's index or
+   probed for at the members, and a refused read by subject leaves no
+   resolution binding for the caller and no entry in the index.
+
+A token whose resource scopes are all `patient/` never reaches the
+DEMOGRAPHIC API, whether or not its issuer is bound and even when its client
+is listed in `demographic_clients`: a patient scope reaches its patient's
+own EHR alone (master08 §Resource Scopes). The gate refuses it `403`
+(`patient-confinement`) before anything is resolved.
 
 The gateway never compares the bare `ehrId` with an `ehr_id` at another
 member, because one `ehr_id` can name another patient's EHR there (§12.5.2).
 Each node is told the patient's own `ehr_id` at that node in the `ehrId`
 claim of the caller's token, with only the `patient/` scopes that cover the
 operation in `scope`, so the node can enforce the grant as well (N26;
-[below](#what-a-node-is-told-about-the-caller)). No specification defines a
-patient grant across nodes, so this opt-in is FerroFED's own design.
+[below](#what-a-node-is-told-about-the-caller)). The outbound gate holds
+that claim to the `ehr_id` the request to that node is composed for: the
+one its query is scoped to, or the one its path names. A request whose
+token would tell the node another `ehr_id`, or that names none, is never
+sent (§5.4.1, N33). No specification defines a patient grant across nodes,
+so this opt-in is FerroFED's own design.
 
 The residual risk is the cross-reference service. The confinement is only
 as correct as its link between the `ehrId` at the bound member and the
@@ -271,7 +282,7 @@ travelled.
 | `403` | `purpose-of-use-required` | the token declares no purpose of use |
 | `403` | `operation-refused` | the ADMIN API, refused to every caller |
 | `403` | `patient-context-missing` | only a bound issuer's `patient/` scope covers the operation, and the token carries no `ehrId` |
-| `403` | `patient-confinement` | the request reaches beyond the patient a `patient/` grant is confined to |
+| `403` | `patient-confinement` | the request reaches beyond the patient a `patient/` grant is confined to, or a patient grant addresses the DEMOGRAPHIC API |
 | `424` | `patient-context-unavailable` | the patient of a `patient/` grant cannot be resolved at every member |
 | `503` | `authentication-unavailable` | the issuer's key set or introspection endpoint cannot be had |
 

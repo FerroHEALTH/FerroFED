@@ -27,7 +27,7 @@ use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError};
 use crate::hygiene::{Composed, Outbound, Part};
 use crate::onward::conveyance::ConveyanceError;
 use crate::trace_context;
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 
@@ -173,7 +173,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             openehr_version: None,
             openehr_audit_details: None,
         };
-        self.gate_ehr("/ehr", &[("Prefer", PREFER_MINIMAL)], options)?;
+        self.gate_ehr(("/ehr", None), &[("Prefer", PREFER_MINIMAL)], options)?;
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
@@ -247,7 +247,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             "/ehr/{}",
             openehr_its::rest::client::path_segment(&params.ehr_id)
         );
-        self.gate_ehr(&path, &[], options)?;
+        self.gate_ehr((&path, Some(ehr_id)), &[], options)?;
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
@@ -263,14 +263,21 @@ impl<T: Transport + Clone> NodeClient<T> {
         }
     }
 
-    /// The outbound gate over an EHR call to `path` carrying `headers`
-    /// (§5.4.1, N33).
+    /// The outbound gate over an EHR call to `path` for `ehr_id`, when it
+    /// names one, carrying `headers` (§5.4.1, N33).
     fn gate_ehr(
         &self,
-        path: &str,
+        (path, ehr_id): (&str, Option<&str>),
         headers: &[(&'static str, &str)],
         options: &DispatchOptions,
     ) -> Result<(), EhrCallError> {
+        // NOTE: §12.5, an ehr_id that is no HIER_OBJECT_ID names no EHR, so the call is
+        // composed for no node-local ehr_id, which a confined conveyance refuses.
+        let composed = ehr_id.and_then(|ehr_id| EhrId::new(ehr_id).ok());
+        options
+            .conveyance()
+            .holds_own(self.endpoint(), composed.as_ref())
+            .map_err(|source| self.options_failure(OptionsError::Conveyance(source)))?;
         let withheld = options.withheld();
         if withheld.is_empty() {
             return Ok(());

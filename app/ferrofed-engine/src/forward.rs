@@ -40,7 +40,7 @@ use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
 use crate::onward::conveyance::ConveyanceError;
 use crate::trace_context;
-use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::id::{EhrId, EndpointId};
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
 use http::{HeaderMap, HeaderName, Method, StatusCode};
 use openehr_federation::outcome::ErrorDetail;
@@ -455,6 +455,13 @@ impl<T: Transport + Clone> NodeClient<T> {
         request: &Request,
         options: &DispatchOptions,
     ) -> Result<(), ForwardError> {
+        options
+            .conveyance()
+            .holds_own(self.endpoint(), path_ehr_id(request, options).as_ref())
+            .map_err(|source| ForwardError::Conveyance {
+                endpoint: self.endpoint().clone(),
+                source,
+            })?;
         let withheld = options.withheld();
         if withheld.is_empty() {
             return Ok(());
@@ -562,6 +569,19 @@ impl<T: Transport + Clone> NodeClient<T> {
             },
         }
     }
+}
+
+/// The node-local `ehr_id` `request` is composed for: the one the gateway
+/// composed into its path, or else the `{ehr_id}` segment of a path under
+/// `/ehr/`; `None` for a request under no EHR.
+fn path_ehr_id(request: &Request, options: &DispatchOptions) -> Option<EhrId> {
+    if let Some(composed) = options.composed_ehr_id() {
+        return Some(composed.clone());
+    }
+    let segment = request.path().strip_prefix("/ehr/")?.split('/').next()?;
+    // NOTE: §12.5, a segment that is no HIER_OBJECT_ID names no EHR, so the request is composed
+    // for no node-local ehr_id, which a confined conveyance then refuses.
+    EhrId::new(hygiene::decode::percent_decoded(segment)).ok()
 }
 
 /// Removes the hop-by-hop fields of `headers`: `Connection`, every field it
