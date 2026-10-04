@@ -35,6 +35,11 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   profiles, the endpoint type code system and value sets and the IG's
   Organization and Endpoint examples, pinned by package version and tarball
   sha256.
+- `docs/specs/nl-gf/`: the source of the Netherlands Generic Functions IG
+  `fhir.nl.gf` 0.3.0 (EUPL-1.2): the localization, consent, care services
+  and identification pages, their FSH profiles, capability statements and
+  examples, pinned by tag and commit, since the IG has no package on the
+  FHIR package registry.
 - `website/book/vendor/mermaid/`: the mermaid browser bundle and the
   mdbook-mermaid init script the book loads, fetched by
   `scripts/vendor/mdbook-mermaid-assets.sh` (MIT and MPL 2.0).

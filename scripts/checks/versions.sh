@@ -918,7 +918,8 @@ docs/specs/aql|openEHR AQL specification source
 docs/specs/ihe-pixm|IHE PIXm FHIR package
 docs/specs/ihe-pdqm|IHE PDQm FHIR package
 docs/specs/ihe-mcsd|IHE mCSD FHIR package
-docs/specs/ihe-iua|IHE IUA supplement"
+docs/specs/ihe-iua|IHE IUA supplement
+docs/specs/nl-gf|Netherlands Generic Functions IG source"
 
 agreed=0
 expected=0
