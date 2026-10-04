@@ -285,6 +285,7 @@ pub fn directory_site() -> ProtectedSite {
     ProtectedSite {
         url_key: String::from("registry.mcsd.url"),
         payload: String::from("registry.mcsd.credentials"),
+        requires: Encryption::Https,
     }
 }
 
