@@ -27,7 +27,7 @@ async fn the_round_trip_passes_when_the_cross_reference_knows_each_new_ehr() -> 
     let federation = federation(
         dir.path(),
         &registry(&a.uri(), unreachable::BASE, ""),
-        "",
+        "profile = \"development\"",
         &pixm(&pix.uri()),
     )?;
     let report = check_a(&federation).await?;
@@ -48,7 +48,7 @@ async fn the_round_trip_fails_when_the_cross_reference_names_another_ehr() -> Te
     let federation = federation(
         dir.path(),
         &registry(&a.uri(), unreachable::BASE, ""),
-        "",
+        "profile = \"development\"",
         &pixm(&pix.uri()),
     )?;
     let report = check_a(&federation).await?;

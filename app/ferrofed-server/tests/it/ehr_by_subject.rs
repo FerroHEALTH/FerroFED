@@ -106,12 +106,14 @@ fn knowing_another(dir: &Path, a: &str, b: &str) -> Result<Router, Box<dyn Error
     gateway(dir, &registry(a, b, ""), "profile = \"development\"", &rows)
 }
 
-/// A production gateway resolving through the PIX Manager at `pix`.
+/// A gateway resolving through the PIX Manager at `pix`, under the
+/// development profile, the only one that admits the mock Manager's plain
+/// `http`.
 fn pix_gateway(dir: &Path, a: &str, b: &str, pix: &str) -> Result<Router, Box<dyn Error>> {
     let pixm = format!(
         "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
     );
-    gateway(dir, &registry(a, b, ""), "", &pixm)
+    gateway(dir, &registry(a, b, ""), "profile = \"development\"", &pixm)
 }
 
 /// A PIX Manager that fails every ITI-83 call with `500`.
