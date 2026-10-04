@@ -16,6 +16,8 @@
 //!   journal the tests read;
 //! - [`leak`]: the track 10 oracle over that journal, which searches every
 //!   carrier for an identifier and its fragments, raw and percent-decoded;
+//! - [`dpop`]: the check a test device makes of a `DPoP` proof, and the
+//!   nonce challenge a node answers with (#439);
 //! - [`issuer`]: a test issuer that mints RFC 9068 access tokens and serves
 //!   its key set (#80);
 //! - [`mcsd`]: the harness care services directory, a test device that
@@ -25,7 +27,8 @@
 //!   dropped outside the test's runtime;
 //! - [`oauth`]: the harness OAuth 2.0 token endpoint, which verifies the
 //!   gateway's client assertion against its published JWK Set and issues
-//!   the token a mock node then requires (#81);
+//!   the token a mock node then requires (#81), exchanges a caller's token
+//!   (RFC 8693) and binds a token to a `DPoP` key (RFC 9449) (#439);
 //! - [`otlp`]: an in-process OTLP/gRPC trace collector, which keeps every
 //!   span the gateway exports (#437);
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
@@ -42,6 +45,7 @@
 
 pub mod atna;
 pub mod containers;
+pub mod dpop;
 pub mod issuer;
 pub mod leak;
 pub mod mcsd;

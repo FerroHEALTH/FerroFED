@@ -151,7 +151,11 @@ fn scripted(
 ) -> Result<Built, Box<dyn Error>> {
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
-    let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
+    let clients = NodeClients::from_snapshot(
+        &snapshot,
+        &ferrofed_engine::onward::dpop::DpopTransport::new(transport),
+        &BTreeMap::new(),
+    )?;
     let asked = Arc::new(AtomicUsize::new(0));
     let localizer = Scripted {
         script,
@@ -358,7 +362,11 @@ async fn a_gateway_with_no_localizer_reports_none() -> TestResult {
     let b = node_answering("uid-at-b").await;
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
-    let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
+    let clients = NodeClients::from_snapshot(
+        &snapshot,
+        &ferrofed_engine::onward::dpop::DpopTransport::new(transport),
+        &BTreeMap::new(),
+    )?;
     let federation = Federation::new(
         FederationId::new("example-federation")?,
         snapshot,

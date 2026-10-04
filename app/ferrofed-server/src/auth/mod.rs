@@ -49,6 +49,8 @@ use http::{HeaderMap, HeaderValue, Method, header};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{Algorithm, Validation};
 use openehr_its::rest::routes::{self, Lookup};
+use openehr_sdt::smart_scopes::SmartScope;
+use secrecy::SecretString;
 
 use crate::ITS_REST_PREFIX;
 use crate::auth::caller::{Caller, Stated, VerifiedBy};
@@ -285,6 +287,7 @@ impl Gate {
         }
         let credential = self.credential(headers)?;
         let (caller, trusted) = self.verify(credential).await?;
+        let mut caller = caller.with_token(SecretString::from(credential.to_owned()));
         match requirement {
             Requirement::Caller => return Ok(caller),
             Requirement::Refused => return Err(Refusal::Operation),
@@ -311,6 +314,22 @@ impl Gate {
                 if !permission::granted(caller.scopes(), (family, permission), named, backend) {
                     return Err(Refusal::Scope);
                 }
+                // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the
+                // granted scopes that cover the operation, never the whole grant.
+                let covering = caller
+                    .granted()
+                    .split_whitespace()
+                    .filter(|raw| {
+                        permission::granted(
+                            &[SmartScope::parse(raw)],
+                            (family, permission),
+                            named,
+                            backend,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                caller = caller.with_covering(covering);
             }
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer

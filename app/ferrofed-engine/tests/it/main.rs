@@ -7,14 +7,17 @@
 //! Tier order and `LIMIT` over the node answers (§11.6.1, N39),
 //! single-node forwarding (§7a.3, N22, N31, N33), and the EHR create of the
 //! admission check (§12b.1), and the caller's identity on every request to a
-//! node (§13.1, N24, CP-16).
+//! node (§13.1, N24, CP-16), and the onward token exchanged per caller and
+//! bound with `DPoP` (§13.1, N25, CP-17).
 
 mod architecture;
 mod conveyance;
 mod conveyed;
 mod definition;
 mod dispatch;
+mod dpop;
 mod ehr;
+mod exchange;
 mod fanout;
 mod forward;
 mod gate;

@@ -19,6 +19,12 @@ publish = false
 # The onward credentials provider the node client asks before each attempt
 # (#81).
 async-trait.workspace = true
+# The SHA-256 of a caller's token, the key of the token-exchange cache, and of
+# the access token a DPoP proof binds (#439).
+aws-lc-rs.workspace = true
+# The base64url of a DPoP proof's `ath`, and of the payload of a caller's token
+# the outbound gate reads before an exchange (#439).
+base64.workspace = true
 ferrofed-registry.workspace = true
 # The typed `ehr_id` a node query is scoped to (#45).
 openehr-base.workspace = true

@@ -121,6 +121,10 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
+# The base64url of a DPoP proof's `ath` and of a JWS payload the outbound
+# gate reads (#439, RFC 9449 §4.2); the version openehr-its already locks.
+# Verified against crates.io on 2026-10-04.
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # The one time library (clippy.toml): the `saved` instant of a stored query
 # (#77).
 jiff = { version = "0.2.37", default-features = false, features = ["std"] }
@@ -173,11 +177,11 @@ proptest = "1.11.0"
 # YAML the result-set schema's ITS-REST subset is held to; a pure-Rust,
 # maintained serde YAML reader. Verified against crates.io on 2026-10-03.
 serde-saphyr = { version = "1.3.0", default-features = false, features = ["deserialize"] }
-# Test-only for the onward grant (#81): the testkit generates each synthetic
-# ES384 signing key at run time with the crypto library rustls and
-# jsonwebtoken already build on, so no private key is ever committed, and
-# writes it as PEM with the major version jsonwebtoken reads. Verified against
-# crates.io on 2026-10-03.
+# The crypto library rustls and jsonwebtoken already build on. The testkit
+# generates each synthetic ES384 signing key at run time with it, so no
+# private key is ever committed (#81), and the engine hashes a caller's token
+# for the token-exchange cache and a DPoP proof's `ath` with its SHA-256
+# (#439). Verified against crates.io on 2026-10-04.
 aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-sys"] }
 pem = { version = "3.0.6", default-features = false, features = ["std"] }
 # Test-only for the ATNA audit repository (#418): the testkit's harness

@@ -17,6 +17,8 @@ publish = false
 # The harness token endpoint (#81) and the test issuer (#80) generate each
 # synthetic signing key at run time.
 aws-lc-rs.workspace = true
+# The `ath` a harness DPoP check compares (#439).
+base64.workspace = true
 bytes.workspace = true
 # The FHIR R4 model of the harness PIX Manager and its ITI-104 source (#47):
 # `resources` for `Patient`, which a test device may compile and the shipped

@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::provider::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
@@ -174,10 +175,11 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
     let missing = |name: &str| Error::Missing {
         key: format!("{section}.{name}"),
     };
-    match oauth2.grant {
-        Some(GrantKind::ClientCredentials) => {}
+    let exchange = match oauth2.grant {
+        Some(GrantKind::ClientCredentials) => false,
+        Some(GrantKind::TokenExchange) => true,
         None => return Err(missing("grant")),
-    }
+    };
     match oauth2.client_auth {
         Some(ClientAuth::PrivateKeyJwt) => {}
         None => return Err(missing("client_auth")),
@@ -206,6 +208,26 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
     }
     if let Some(audience) = &oauth2.audience {
         grant = grant.with_audience(audience.clone()).map_err(refused)?;
+    }
+    if exchange {
+        // NOTE: RFC 8707 §2, RFC 8693 §2.1: an exchanged token names the node it
+        // is for, so a token-exchange grant without a resource is refused.
+        if oauth2.resource.is_none() {
+            return Err(missing("resource"));
+        }
+        grant = grant.with_token_exchange();
+    }
+    if let Some(path) = &oauth2.dpop_key_file {
+        let key = format!("{section}.dpop_key");
+        let pem = secret::<Secret>(&key, None, Some(path))?.ok_or_else(|| Error::Missing {
+            key: format!("{key}_file"),
+        })?;
+        let prover =
+            Prover::from_pem(&pem.to_secret_string()).map_err(|source| Error::DpopKey {
+                key: format!("{key}_file"),
+                source,
+            })?;
+        grant = grant.with_dpop(Arc::new(prover));
     }
     Ok(grant)
 }

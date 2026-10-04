@@ -41,6 +41,7 @@ use ferrofed_registry::id::EndpointId;
 use jsonwebtoken::Header;
 use serde::Serialize;
 
+use crate::onward::exchange::SubjectToken;
 use crate::onward::keys::{ALGORITHM, KeyRing};
 
 /// The header every request to a node carries the caller's identity in.
@@ -197,6 +198,7 @@ pub struct Conveyance(Arc<Conveyed>);
 struct Conveyed {
     signer: Arc<Signer>,
     principal: Principal,
+    subject: Option<SubjectToken>,
 }
 
 /// The claims of one token.
@@ -224,13 +226,37 @@ impl Conveyance {
     /// The conveyance of `principal`, signed by `signer`.
     #[must_use]
     pub fn new(signer: Arc<Signer>, principal: Principal) -> Self {
-        Self(Arc::new(Conveyed { signer, principal }))
+        Self(Arc::new(Conveyed {
+            signer,
+            principal,
+            subject: None,
+        }))
+    }
+
+    /// This conveyance, carrying the caller's verified token for a node
+    /// whose grant exchanges it (RFC 8693 §2.1).
+    ///
+    /// The token reaches that node's authorization server alone, never the
+    /// node, and is no claim of the [`HEADER`].
+    #[must_use]
+    pub fn with_subject(self, subject: SubjectToken) -> Self {
+        Self(Arc::new(Conveyed {
+            signer: Arc::clone(&self.0.signer),
+            principal: self.0.principal.clone(),
+            subject: Some(subject),
+        }))
     }
 
     /// On whose behalf the request reaches a node.
     #[must_use]
     pub fn principal(&self) -> &Principal {
         &self.0.principal
+    }
+
+    /// The caller's verified token, when the conveyance carries it.
+    #[must_use]
+    pub fn subject(&self) -> Option<&SubjectToken> {
+        self.0.subject.as_ref()
     }
 
     /// The [`HEADER`] value for `endpoint`: a compact JWS, its `aud` the

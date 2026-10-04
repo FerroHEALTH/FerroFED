@@ -20,6 +20,7 @@ use axum::response::Response;
 use ferrofed_engine::onward::conveyance::{
     self, Conveyance, Principal, Purpose, Signer, Verification,
 };
+use ferrofed_engine::onward::exchange::SubjectToken;
 use openehr_federation::id::FederationId;
 
 use crate::auth::caller::{Caller, VerifiedBy};
@@ -81,10 +82,15 @@ pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Result<Signer, F
 pub fn of(federation: &Federation, caller: Option<&Caller>) -> Result<Conveyance, Unconveyed> {
     let signer = federation.signer().ok_or(Unconveyed::Unsigned)?;
     let caller = caller.ok_or(Unconveyed::NoCaller)?;
-    Ok(Conveyance::new(
-        Arc::clone(signer),
-        Principal::Caller(conveyed(caller)),
-    ))
+    let conveyance = Conveyance::new(Arc::clone(signer), Principal::Caller(conveyed(caller)));
+    // NOTE: RFC 8693 §2.1, the caller's verified token is the subject a node's
+    // token exchange needs; it reaches that authorization server alone.
+    Ok(match caller.token() {
+        Some(token) => {
+            conveyance.with_subject(SubjectToken::new(token.secret().clone(), caller.covering()))
+        }
+        None => conveyance,
+    })
 }
 
 /// The conveyance of the gateway itself, for its operator, to the nodes of
