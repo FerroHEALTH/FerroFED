@@ -46,6 +46,7 @@ use crate::forward::{ForwardError, Forwarded};
 use crate::hygiene::{Part, Withheld};
 use crate::onward::conveyance::{self, Conveyance, ConveyanceError};
 use crate::outbound_id::OutboundId;
+use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use http::StatusCode;
@@ -55,15 +56,13 @@ use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{
     CallOptions, Client, ClientError, CredentialsProvider, RetryPolicy, Transport,
 };
-use openehr_its::rest::generated::query::client::QueryClient;
-use openehr_its::rest::generated::query::{
-    AdhocQueryExecute, QueryExecuteAdhocQueryBodyParams, ResultSet,
-};
+use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
 use url::Url;
 
 mod classify;
 pub mod definition;
 mod gate;
+mod query;
 pub mod reported;
 
 /// The API version segment ITS-REST 1.1.0 puts every path under
@@ -240,16 +239,21 @@ impl DispatchOptions {
 
     /// The `openehr-its` call options for these options toward `endpoint`:
     /// the deadline, the [`conveyance::HEADER`] signed for that endpoint,
-    /// and the request id.
+    /// the request id, and the `traceparent` of the current span when it
+    /// belongs to an exported trace, written from the gateway's own trace
+    /// and never from the client's ([`crate::trace_context`]).
     pub(crate) fn call_options(&self, endpoint: &EndpointId) -> Result<CallOptions, OptionsError> {
         let conveyed = self.conveyance.signed_for(endpoint)?;
-        let options = CallOptions::default()
+        let mut options = CallOptions::default()
             .with_deadline(self.deadline)
             .with_header(conveyance::HEADER, &conveyed)?;
-        Ok(match self.request_id {
-            Some(id) => options.with_header(REQUEST_ID_HEADER, &id.to_string())?,
-            None => options,
-        })
+        if let Some(id) = self.request_id {
+            options = options.with_header(REQUEST_ID_HEADER, &id.to_string())?;
+        }
+        if let Some(traceparent) = trace_context::outbound() {
+            options = options.with_header(trace_context::TRACEPARENT, &traceparent)?;
+        }
+        Ok(options)
     }
 }
 
@@ -554,47 +558,6 @@ impl<T: Transport> NodeClient<T> {
     /// The ITS-REST client every request to the node is sent through.
     pub(crate) fn client(&self) -> &Client<T> {
         &self.client
-    }
-
-    /// Sends `query` to the node and classifies the answer.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`DispatchError`] when the request could not leave the gateway:
-    /// a withheld identifier in the request ([`DispatchError::Withheld`], with
-    /// nothing sent), no credential, or a body the client runtime refuses. Every answer, and every failure to reach the node, is a
-    /// [`NodeReply`].
-    pub async fn query(
-        &self,
-        query: &NodeQuery,
-        options: &DispatchOptions,
-    ) -> Result<NodeReply, DispatchError> {
-        self.gate(query, options)?;
-        let call = options
-            .call_options(&self.endpoint)
-            .map_err(|error| DispatchError::of_options(&self.endpoint, error))?;
-        let params = QueryExecuteAdhocQueryBodyParams {
-            accept: None,
-            content_type: None,
-        };
-        let started = Instant::now();
-        let answer = QueryClient::new(&self.client)
-            .with_options(call)
-            .query_execute_adhoc_query_body(&params, &query.body())
-            .await;
-        let latency_ms = classify::elapsed_ms(started);
-        match answer {
-            Ok(outcome) => Ok(classify::narrow(
-                classify::answered(outcome, latency_ms, options.withheld()),
-                query.width,
-            )),
-            Err(error) => classify::failed(
-                (&self.endpoint, &self.consent_refusal_codes),
-                error,
-                latency_ms,
-                options,
-            ),
-        }
     }
 }
 

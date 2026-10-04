@@ -37,6 +37,7 @@
 - [Admitting a node](operate/admission.md)
 - [Health probes](operate/health.md)
 - [Metrics](operate/metrics.md)
+- [Tracing](operate/tracing.md)
 
 # Integrate
 

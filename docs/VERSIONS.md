@@ -162,8 +162,12 @@ one group: they move together, and `scripts/checks/versions.sh` fails when
 one member moves alone, here or in the root `Cargo.toml`
 `[workspace.dependencies]`. `prometheus` is the registry and text encoder
 the pull reader renders through, on its own release line, checked against
-the root `Cargo.toml` alone. Every version was the latest on crates.io on
-2026-10-03.
+the root `Cargo.toml` alone. The trace export (#353) bridges the gateway's
+`tracing` spans to the same OpenTelemetry stack through
+`tracing-opentelemetry`, whose release line is paired with the
+`opentelemetry` one (0.34 with 0.33) and is checked against the root
+`Cargo.toml` alone too. Every version was the latest on crates.io on
+2026-10-03, and `tracing-opentelemetry` on 2026-10-04.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -172,6 +176,7 @@ the root `Cargo.toml` alone. Every version was the latest on crates.io on
 | `opentelemetry-prometheus` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `opentelemetry-otlp` | 0.33.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `prometheus` | 0.14.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `tracing-opentelemetry` | 0.34.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Language and runtime
 

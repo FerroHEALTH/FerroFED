@@ -172,15 +172,17 @@ where
     }
 }
 
-/// Runs `serve`: the banner on a terminal, the subscriber, the state, and
+/// Runs `serve`: the banner on a terminal, the runtime, the subscriber with
+/// the trace export when `telemetry.otlp_endpoint` is set, the state, and
 /// the server, until the process is asked to stop.
 ///
 /// The registry document is read once, before the banner, and the state is
 /// built over that read after the subscriber starts, so the banner describes
-/// the registry the gateway serves and the build still logs.
+/// the registry the gateway serves and the build still logs. The spans still
+/// held are flushed once the server has stopped.
 #[expect(
     clippy::print_stderr,
-    reason = "a refused log filter is reported before any log subscriber exists"
+    reason = "a refused log filter, runtime or trace exporter is reported before any log subscriber exists"
 )]
 fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     let stdout_is_terminal = std::io::stdout().is_terminal();
@@ -207,26 +209,40 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
             format.colour(stdout_is_terminal, no_color.as_deref()),
         );
     }
-    if let Err(error) = telemetry::init(
-        format,
-        &settings.telemetry.filter,
-        stdout_is_terminal,
-        no_color.as_deref(),
-    ) {
-        eprintln!("ferrofed: cannot start: {}", chain(&error));
-        return ExitCode::from(EXIT_CONFIG);
-    }
-    panic::install_hook();
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
     {
         Ok(runtime) => runtime,
         Err(error) => {
-            tracing::error!(%error, "cannot start the runtime");
+            eprintln!("ferrofed: cannot start the runtime: {error}");
             return ExitCode::FAILURE;
         }
     };
+    // NOTE: no specification governs this: our own design; the OTLP trace export
+    // is a tonic client, which is built inside the runtime it will run on.
+    let traces = match settings.telemetry.otlp_endpoint.as_ref().map(|endpoint| {
+        let _entered = runtime.enter();
+        telemetry::Traces::new(endpoint)
+    }) {
+        None => None,
+        Some(Ok(traces)) => Some(traces),
+        Some(Err(error)) => {
+            eprintln!("ferrofed: cannot start: {}", chain(&error));
+            return ExitCode::from(EXIT_CONFIG);
+        }
+    };
+    if let Err(error) = telemetry::init(
+        format,
+        &settings.telemetry.filter,
+        stdout_is_terminal,
+        no_color.as_deref(),
+        traces.as_ref().map(telemetry::Traces::tracer),
+    ) {
+        eprintln!("ferrofed: cannot start: {}", chain(&error));
+        return ExitCode::from(EXIT_CONFIG);
+    }
+    panic::install_hook();
     // NOTE: no specification governs this: our own design; the OTLP push is a
     // tonic client, which is built inside the runtime it will run on.
     if let Err(error) = state::admits_callers(&settings, settings.federates()) {
@@ -245,13 +261,19 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
         }
     };
     drop(entered);
-    match serve_command(&runtime, settings, &state, config, directory) {
+    let code = match serve_command(&runtime, settings, &state, config, directory) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(error = format!("{error:#}"), "cannot serve");
             ExitCode::FAILURE
         }
+    };
+    // NOTE: no specification governs this: our own design; the spans still held
+    // are flushed while the runtime the export runs on is still up.
+    if let Some(Err(error)) = traces.as_ref().map(telemetry::Traces::shutdown) {
+        tracing::warn!(error = chain(&error), "the traces could not be flushed");
     }
+    code
 }
 
 /// Reports a resolved configuration and its `cleartext` credentials, and exits.

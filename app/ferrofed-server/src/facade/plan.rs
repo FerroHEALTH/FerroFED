@@ -23,7 +23,7 @@ use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
 
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
-use ferrofed_identity::resolver::Resolution;
+use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::{EndpointStatus, RegistrySnapshot};
 use openehr_federation::aql::subject::Subject;
@@ -31,6 +31,8 @@ use openehr_federation::aql::{ColumnSource, PatientQuery, UnscopedQuery};
 use openehr_federation::error::WireError;
 use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use secrecy::SecretString;
+use tracing::Instrument as _;
+use tracing::field::Empty;
 
 use crate::facade::consent;
 use crate::facade::localize::{Localized, localize};
@@ -207,7 +209,7 @@ pub async fn patient(
     candidates.retain(|member| !consented.denied.contains(member));
     let resolutions = match (resolver, &patient) {
         (Some(resolver), Some(patient)) if !candidates.is_empty() => {
-            resolver.resolve(patient, &candidates, deadline).await
+            resolve(resolver, patient, &candidates, deadline).await
         }
         _ => BTreeMap::new(),
     };
@@ -267,6 +269,28 @@ pub async fn patient(
         denied: consented.denied,
         resolver: Observed::of_resolutions(&resolutions),
     })
+}
+
+/// Asks `resolver` for `patient`'s `ehr_id` at each of `members` before
+/// `deadline`, inside the `resolve` span, which names how many members were
+/// asked and how many resolved, never the patient.
+async fn resolve(
+    resolver: &dyn Resolver,
+    patient: &PatientRef,
+    members: &[NodeId],
+    deadline: Instant,
+) -> BTreeMap<NodeId, Resolution> {
+    let span = tracing::info_span!("resolve", members = members.len(), resolved = Empty);
+    let resolutions = resolver
+        .resolve(patient, members, deadline)
+        .instrument(span.clone())
+        .await;
+    let count = resolutions
+        .values()
+        .filter(|resolution| matches!(resolution, Resolution::Resolved(_)))
+        .count();
+    span.record("resolved", count);
+    resolutions
 }
 
 /// `plan` with every member `consented` denies settled `consent-denied`, each

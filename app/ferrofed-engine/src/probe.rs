@@ -29,6 +29,8 @@ use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::Transport;
 use tokio::task::{JoinError, JoinSet};
+use tracing::Instrument as _;
+use tracing::field::Empty;
 
 use crate::dispatch::{Contact, DispatchOptions, NodeClients};
 use crate::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
@@ -190,6 +192,7 @@ where
             .clone();
         asked.push(client);
     }
+    let span = tracing::info_span!("probe", endpoints = endpoints.len(), holding = Empty);
     let deadline = probe.per_node.min(probe.overall);
     let options =
         DispatchOptions::new(deadline, probe.conveyance.clone()).with_request_id(probe.request_id);
@@ -208,28 +211,31 @@ where
             body: Vec::new(),
         });
         let options = options.clone();
-        tasks.spawn(async move {
-            let started = Instant::now();
-            let forwarded = async {
-                match request {
-                    Ok(request) => client.forward_held(request, &options).await,
-                    Err(refused) => Err(refused),
-                }
-            };
-            // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a probe
-            // the budget overtook before it left ends `Expired`, never abandoned.
-            let answer = match tokio::time::timeout_at(until, forwarded).await {
-                Ok(forwarded) => classified(forwarded),
-                Err(_elapsed) => Answer::Abandoned,
-            };
-            (
-                index,
-                Probed {
-                    answer,
-                    latency: started.elapsed(),
-                },
-            )
-        });
+        tasks.spawn(
+            async move {
+                let started = Instant::now();
+                let forwarded = async {
+                    match request {
+                        Ok(request) => client.forward_held(request, &options).await,
+                        Err(refused) => Err(refused),
+                    }
+                };
+                // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a
+                // probe the budget overtook before it left ends `Expired`, never abandoned.
+                let answer = match tokio::time::timeout_at(until, forwarded).await {
+                    Ok(forwarded) => classified(forwarded),
+                    Err(_elapsed) => Answer::Abandoned,
+                };
+                (
+                    index,
+                    Probed {
+                        answer,
+                        latency: started.elapsed(),
+                    },
+                )
+            }
+            .instrument(span.clone()),
+        );
     }
     let mut answers: Vec<Option<Probed>> = endpoints.iter().map(|_| None).collect();
     while let Some(joined) = tasks.join_next().await {
@@ -239,6 +245,12 @@ where
         }
     }
     let abandoned_after = asked_at.elapsed();
+    let holding = answers
+        .iter()
+        .flatten()
+        .filter(|probed| matches!(probed.answer, Answer::Holds(_)))
+        .count();
+    span.record("holding", holding);
     Ok(endpoints
         .iter()
         .cloned()

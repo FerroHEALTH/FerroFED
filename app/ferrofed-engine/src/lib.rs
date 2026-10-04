@@ -23,7 +23,8 @@
 //! every header a node request carries (§5.4.1, N33). [`onward`] is how the
 //! gateway authenticates to a node as itself: an OAuth 2.0 client-credentials
 //! grant with a signed JWT client assertion, and the keys it publishes
-//! (§13.1, N25).
+//! (§13.1, N25). [`trace_context`] is the span of each node request and the
+//! W3C `traceparent` it carries when the gateway exports traces.
 #![doc(test(attr(deny(warnings))))]
 
 pub mod declared;
@@ -35,6 +36,7 @@ pub mod hygiene;
 pub mod onward;
 pub mod outbound_id;
 pub mod probe;
+pub mod trace_context;
 
 /// The openEHR ITS-REST release the engine dispatches to each node.
 ///

@@ -28,7 +28,7 @@ use crate::config::settings::{
 use crate::config::transport::{self, directory_site};
 use crate::config::{
     COMBINING_MARGIN_MS, Config, Federation, Localization, McsdDirectory, Metrics, NodeSelection,
-    OffsetPaging, Pixm, stored_queries,
+    OffsetPaging, Pixm, Telemetry, stored_queries,
 };
 
 impl Config {
@@ -54,7 +54,8 @@ impl Config {
     /// distributed with no registry, or no `PUT`, to distribute from. The
     /// metrics surface refuses a remote listener without `metrics.allow_remote`
     /// ([`Error::MetricsRemote`]), a listener on `server.listen`
-    /// ([`Error::MetricsShared`]) and a collector that is no `http://` URL
+    /// ([`Error::MetricsShared`]), and the metrics push and the trace export
+    /// each refuse a collector that is no `http://` URL
     /// ([`Error::OtlpScheme`]). An OAuth 2.0 grant refuses a missing key, a
     /// scope outside the SMART on openEHR `system` grammar ([`Error::Scope`]),
     /// an unusable endpoint or resource ([`Error::Grant`]), a PIX Manager
@@ -94,8 +95,7 @@ impl Config {
                 key: String::from("server.body_limit_bytes"),
             });
         }
-        tracing_subscriber::EnvFilter::try_new(&self.telemetry.filter)
-            .map_err(|source| Error::Filter { source })?;
+        let telemetry = resolve_telemetry(&self.telemetry)?;
         let mut credentials = BTreeMap::new();
         for (endpoint, section) in &self.credentials {
             let id = EndpointId::new(endpoint.as_str()).map_err(|source| Error::EndpointId {
@@ -153,10 +153,7 @@ impl Config {
                 body_limit: self.server.body_limit_bytes,
                 auth: self.auth.resolve()?,
             },
-            telemetry: TelemetrySettings {
-                format: self.telemetry.format,
-                filter: self.telemetry.filter.clone(),
-            },
+            telemetry,
             registry_document: self.registry.document.clone(),
             registry_format: self.registry.format,
             registry_directory,
@@ -391,26 +388,41 @@ fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSetti
             return Err(Error::MetricsShared { address });
         }
     }
-    let otlp_endpoint = metrics
-        .otlp_endpoint
-        .as_ref()
-        .map(|endpoint| {
-            url::Url::parse(endpoint.expose()).map_err(|source| Error::Url {
-                key: String::from("metrics.otlp_endpoint"),
-                source,
-            })
-        })
-        .transpose()?;
-    if otlp_endpoint
-        .as_ref()
-        .is_some_and(|endpoint| endpoint.scheme() != "http")
-    {
-        return Err(Error::OtlpScheme);
-    }
     Ok(MetricsSettings {
         listen,
-        otlp_endpoint: otlp_endpoint.map(|endpoint| SecretUrl::new(String::from(endpoint))),
+        otlp_endpoint: otlp_collector("metrics.otlp_endpoint", metrics.otlp_endpoint.as_ref())?,
     })
+}
+
+/// Resolves `[telemetry]`: a filter that parses and a trace collector that is
+/// an `http://` URL.
+fn resolve_telemetry(telemetry: &Telemetry) -> Result<TelemetrySettings, Error> {
+    tracing_subscriber::EnvFilter::try_new(&telemetry.filter)
+        .map_err(|source| Error::Filter { source })?;
+    Ok(TelemetrySettings {
+        format: telemetry.format,
+        filter: telemetry.filter.clone(),
+        otlp_endpoint: otlp_collector("telemetry.otlp_endpoint", telemetry.otlp_endpoint.as_ref())?,
+    })
+}
+
+/// Resolves the OTLP collector `endpoint` under `key`: an `http://` URL,
+/// because the exporters speak gRPC without TLS, to a collector beside the
+/// gateway.
+fn otlp_collector(key: &str, endpoint: Option<&SecretUrl>) -> Result<Option<SecretUrl>, Error> {
+    let Some(endpoint) = endpoint else {
+        return Ok(None);
+    };
+    let parsed = url::Url::parse(endpoint.expose()).map_err(|source| Error::Url {
+        key: key.to_owned(),
+        source,
+    })?;
+    if parsed.scheme() != "http" {
+        return Err(Error::OtlpScheme {
+            key: key.to_owned(),
+        });
+    }
+    Ok(Some(SecretUrl::new(String::from(parsed))))
 }
 
 /// Returns `count`, refusing zero under `key`.

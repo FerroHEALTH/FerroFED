@@ -482,14 +482,21 @@ impl Default for Server {
     }
 }
 
-/// The console.
+/// The console and the trace export.
+///
+/// The export is off by default. No specification governs telemetry: our own
+/// design.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Telemetry {
     /// The rendering: `auto`, `json` or `pretty`.
     pub format: Format,
-    /// The `tracing` filter directive.
+    /// The `tracing` filter directive of the console.
     pub filter: String,
+    /// The `http://` URL of an OTLP collector the gateway's spans are
+    /// exported to over gRPC. Unset, no span is exported and no node
+    /// request carries a `traceparent`.
+    pub otlp_endpoint: Option<SecretUrl>,
 }
 
 impl Default for Telemetry {
@@ -497,6 +504,7 @@ impl Default for Telemetry {
         Self {
             format: Format::Auto,
             filter: String::from(DEFAULT_FILTER),
+            otlp_endpoint: None,
         }
     }
 }

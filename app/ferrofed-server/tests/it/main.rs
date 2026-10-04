@@ -75,6 +75,7 @@ mod targeting;
 mod telemetry;
 mod template_fan_out;
 mod timeouts;
+mod traces;
 mod track10;
 mod transport;
 mod versioned_write;

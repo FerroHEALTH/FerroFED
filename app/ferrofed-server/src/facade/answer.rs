@@ -14,7 +14,9 @@ use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::response::{IntoResponse, Response};
-use ferrofed_engine::fanout::{Budget, Completion, FanOutError, FederatedAnswer, fan_out_within};
+use ferrofed_engine::fanout::{
+    Budget, Completion, FanOutError, FederatedAnswer, Plan, fan_out_within,
+};
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
@@ -24,6 +26,8 @@ use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::generated::query::ResultSet;
 use openehr_its::rest::runtime::ApiError;
+use tracing::Instrument as _;
+use tracing::field::Empty;
 
 use crate::error::{self, Code};
 use crate::facade::provenance::{Dispatch, Provenance};
@@ -333,19 +337,12 @@ async fn federate(
         plan = plan.recombining(recombination.clone());
     }
     let dispatch = Dispatch::of(routed, &plan);
-    let answer = fan_out_within(
-        federation.clients(),
-        federation.snapshot(),
-        plan,
-        budget,
-        started,
-        (conveyance, Some(outbound)),
-    )
-    .await
-    .map_err(|error| {
-        security::fan_out(&error, request_id);
-        Failure::FanOut(error)
-    })?;
+    let answer = fanned_out(federation, plan, budget, (started, conveyance, outbound))
+        .await
+        .map_err(|error| {
+            security::fan_out(&error, request_id);
+            Failure::FanOut(error)
+        })?;
     observed(federation, &answer);
     follow_up::observe(federation, answer.seen(), request_id);
     let mut status = answer.status();
@@ -375,6 +372,33 @@ async fn federate(
         Vec::new()
     };
     Ok((status, result_set, acting))
+}
+
+/// Runs the fan-out of `plan` inside the `fan_out` span, which names how many
+/// endpoints were asked and the status of the answer.
+async fn fanned_out(
+    federation: &Federation,
+    plan: Plan,
+    budget: Budget,
+    (started, conveyance, outbound): (Instant, &Conveyance, OutboundId),
+) -> Result<FederatedAnswer, FanOutError> {
+    let span = tracing::info_span!(
+        "fan_out",
+        endpoints = plan.dispatched().count(),
+        http.response.status_code = Empty,
+    );
+    let answer = fan_out_within(
+        federation.clients(),
+        federation.snapshot(),
+        plan,
+        budget,
+        started,
+        (conveyance, Some(outbound)),
+    )
+    .instrument(span.clone())
+    .await?;
+    span.record("http.response.status_code", answer.status().as_u16());
+    Ok(answer)
 }
 
 #[cfg(test)]
