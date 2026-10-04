@@ -54,7 +54,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 const FEDERATION: &str = "example-federation";
 
 /// The default caller of the suite's tokens.
-const CALLER: &str = "synthetic-caller";
+pub(crate) const CALLER: &str = "synthetic-caller";
 
 /// The organisation of the suite's default token.
 const ORGANISATION: &str = "urn:oid:2.999.7";
@@ -63,7 +63,7 @@ const ORGANISATION: &str = "urn:oid:2.999.7";
 const UNKNOWN_EHR: &str = "3333cccc-3333-4333-8333-333333333333";
 
 /// The JWK Set `app` publishes.
-async fn published(app: &Router) -> Result<JwkSet, Box<dyn Error>> {
+pub(crate) async fn published(app: &Router) -> Result<JwkSet, Box<dyn Error>> {
     let request = Request::get("/.well-known/jwks.json").body(Body::empty())?;
     let (status, text) = call(app.clone(), request).await?;
     if status != StatusCode::OK {
@@ -90,7 +90,11 @@ async fn tokens(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
 /// `token` verified as a node verifies it: its type and algorithm, its
 /// signature against `keys` by `kid`, `iss` the federation, `aud`
 /// `audience`, and `exp`.
-fn verified(token: &str, keys: &JwkSet, audience: &str) -> Result<Conveyed, Box<dyn Error>> {
+pub(crate) fn verified(
+    token: &str,
+    keys: &JwkSet,
+    audience: &str,
+) -> Result<Conveyed, Box<dyn Error>> {
     let header = jsonwebtoken::decode_header(token)?;
     if header.typ.as_deref() != Some(TYPE) || header.alg != ALGORITHM {
         return Err(format!("typ {:?}, alg {:?}", header.typ, header.alg).into());

@@ -20,12 +20,12 @@ use crate::e2e::{
 use crate::support::call;
 
 /// The `ehr_id` domains of node A and node B at the harness PIX Manager.
-const DOMAIN_A: EhrDomain = EhrDomain::new(1);
-const DOMAIN_B: EhrDomain = EhrDomain::new(2);
+pub(crate) const DOMAIN_A: EhrDomain = EhrDomain::new(1);
+pub(crate) const DOMAIN_B: EhrDomain = EhrDomain::new(2);
 
 /// The two nodes, seeded, and the harness PIX Manager fed over ITI-104 with
 /// the patient at `ehrs`, plus an unrelated patient so both domains are known.
-async fn nodes_and_pix(
+pub(crate) async fn nodes_and_pix(
     ehrs: Vec<(EhrDomain, Uuid)>,
 ) -> Result<(containers::TwoNodes, PixManager), Box<dyn Error>> {
     let nodes = containers::two_nodes().await?;
@@ -70,16 +70,21 @@ async fn nodes_and_pix(
 
 /// The resolver configuration over the harness PIX Manager, under the
 /// development profile, the only one that admits its plain `http`.
-fn pixm_resolver(pix: &PixManager) -> String {
+pub(crate) fn pixm_resolver(pix: &PixManager) -> String {
+    pixm_resolver_at(&pix.base_url())
+}
+
+/// The resolver configuration of [`pixm_resolver`], the Manager reached at
+/// `url`, for a scenario that puts a capturing proxy in front of it.
+pub(crate) fn pixm_resolver_at(url: &str) -> String {
     format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
-        pix.base_url(),
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
         DOMAIN_A.system(),
         DOMAIN_B.system()
     )
 }
 
-// conformance: CP-3 CP-36
+// conformance: CP-3 CP-36 track-2
 #[tokio::test]
 async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> TestResult {
     if !containers::e2e_enabled() {
@@ -131,7 +136,7 @@ async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> T
     Ok(())
 }
 
-// conformance: CP-3
+// conformance: CP-3 track-2
 #[tokio::test]
 async fn a_patient_fed_at_both_members_resolves_through_pix_at_both() -> TestResult {
     if !containers::e2e_enabled() {

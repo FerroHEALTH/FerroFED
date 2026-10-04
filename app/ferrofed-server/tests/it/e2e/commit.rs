@@ -97,7 +97,7 @@ fn assert_landed_as_sent(nodes: &containers::TwoNodes, sent: &str) -> TestResult
     Ok(())
 }
 
-// conformance: CP-24
+// conformance: CP-24 track-9
 #[tokio::test]
 async fn a_composition_committed_through_the_gateway_lands_byte_identical_at_one_node() -> TestResult
 {
@@ -196,7 +196,7 @@ fn versioned_at(
         .body(body)
 }
 
-// conformance: CP-15 CP-24
+// conformance: CP-15 CP-24 track-6 track-9
 #[tokio::test]
 async fn a_versioned_write_reaches_its_controlling_node_and_never_another() -> TestResult {
     if !containers::e2e_enabled() {

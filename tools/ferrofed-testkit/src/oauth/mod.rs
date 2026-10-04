@@ -447,6 +447,14 @@ impl TokenEndpoint {
         self.shared.lock().exchanges.clone()
     }
 
+    /// Returns whether `token` is one this endpoint issued and still accepts,
+    /// for a test that reads the `Authorization` a real node received from a
+    /// proxy journal rather than through a `wiremock` matcher.
+    #[must_use]
+    pub fn accepts(&self, token: &str) -> bool {
+        self.shared.lock().accepted.contains(token)
+    }
+
     /// A matcher for a request carrying `Authorization: Bearer` with a token
     /// this endpoint issued and still accepts.
     #[must_use]

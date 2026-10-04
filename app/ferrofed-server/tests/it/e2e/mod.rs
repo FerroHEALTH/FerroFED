@@ -65,11 +65,20 @@ mod attributes;
 mod commit;
 mod crossref;
 mod pixm;
+mod scenario;
 #[cfg(feature = "postgres")]
 mod stored_postgres;
+mod track1;
 mod track10;
 mod track11;
+mod track2;
+mod track3;
+mod track4;
+mod track5;
+mod track6;
+mod track7;
 mod track9;
+mod track9_surface;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -166,7 +175,22 @@ pub(crate) fn federation_resolving(
     b: &ProxiedNode,
     resolver: &str,
 ) -> Result<Federation, Box<dyn Error>> {
-    let registry = format!(
+    let registry = registry_document(a, b, "");
+    let document = dir.join("registry.toml");
+    std::fs::write(&document, registry)?;
+    let document = toml::Value::String(document.display().to_string());
+    let config = format!(
+        "{resolver}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
+    );
+    let settings_ = Config::from_sources(Some(&crate::support::signed(&config)), &BTreeMap::new())?
+        .resolve()?;
+    Ok(Federation::load(&settings_)?.ok_or("a registry is configured")?)
+}
+
+/// The registry document of node A and node B, with `b_extra` appended to
+/// node B's endpoint entry.
+pub(crate) fn registry_document(a: &ProxiedNode, b: &ProxiedNode, b_extra: &str) -> String {
+    format!(
         r#"
 [[organisation]]
 id = "org-a"
@@ -197,21 +221,13 @@ node = "node-b"
 url = "{}"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-b"
-"#,
+{}"#,
         a.node.system_id(),
         b.node.system_id(),
         a.api_root(),
-        b.api_root()
-    );
-    let document = dir.join("registry.toml");
-    std::fs::write(&document, registry)?;
-    let document = toml::Value::String(document.display().to_string());
-    let config = format!(
-        "{resolver}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
-    );
-    let settings_ = Config::from_sources(Some(&crate::support::signed(&config)), &BTreeMap::new())?
-        .resolve()?;
-    Ok(Federation::load(&settings_)?.ok_or("a registry is configured")?)
+        b.api_root(),
+        b_extra
+    )
 }
 
 /// Whether the raw body of `capture` holds `needle`'s bytes.
