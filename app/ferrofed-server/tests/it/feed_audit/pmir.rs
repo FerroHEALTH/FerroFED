@@ -12,7 +12,6 @@
 )]
 
 use std::error::Error;
-use std::time::Duration;
 
 use axum::body::Body;
 use ferrofed_server::metrics::Metrics;
@@ -20,7 +19,7 @@ use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::pmir::{PatientIdentityRegistry, merge_message};
 use http::{Request, StatusCode, header};
 
-use super::{audit_tables, transactions};
+use super::{SETTLE, audit_tables, transactions};
 use crate::pmir::{DOMAIN_A, EHR_A, EHR_A2, PATH, TOKEN, gateway, text};
 use crate::support::send_as_is;
 
@@ -29,6 +28,22 @@ type TestResult = Result<(), Box<dyn Error>>;
 /// The Registry's id of the merged Patient, which only the repository may
 /// learn.
 const SUBSUMED: &str = "qz7-subsumed-4713";
+
+/// The `[pmir] timeout_ms` of each exchange with the Registry.
+///
+/// The Registry answers at once, so the budget only has to outlast a stall
+/// of a loaded host.
+const BUDGET_MS: u64 = 8_000;
+
+/// The `[pmir] timeout_ms` key within [`BUDGET_MS`], followed by the
+/// `[audit]` tables that post every record to `repository` with the
+/// `[audit.repository]` keys `extra`.
+fn audited(repository: &FeedRepository, extra: &str) -> String {
+    format!(
+        "timeout_ms = {BUDGET_MS}\n{}",
+        audit_tables(repository, extra)
+    )
+}
 
 /// The ITI-93 request carrying `body` with the feed token.
 fn message(body: String) -> Result<Request<Body>, http::Error> {
@@ -47,13 +62,13 @@ async fn each_subscription_exchange_is_recorded() -> TestResult {
         dir.path(),
         &registry.base_url(),
         "http://127.0.0.1:9/pmir/feed",
-        &audit_tables(&repository, ""),
+        &audited(&repository, ""),
     )?)?;
     let feed = gateway.state.identity_feed().ok_or("[pmir] is set")?;
     let _created = feed.check().await;
     let _read = feed.check().await;
     feed.unsubscribe().await;
-    let records = repository.wait_for(4, Duration::from_secs(5)).await;
+    let records = repository.wait_for(4, SETTLE).await;
     let mut seen = Vec::new();
     for record in &records {
         seen.extend(transactions(record)?);
@@ -79,7 +94,7 @@ async fn a_received_message_is_recorded_naming_its_patient_toward_the_repository
         dir.path(),
         "http://127.0.0.1:9/fhir/",
         "http://127.0.0.1:9/pmir/feed",
-        &audit_tables(&repository, ""),
+        &audited(&repository, ""),
     )?)?;
     gateway.bind("caller-1", &[EHR_A, EHR_A2])?;
     let logs = crate::support::Logs::default();
@@ -92,7 +107,7 @@ async fn a_received_message_is_recorded_naming_its_patient_toward_the_repository
     let guard = tracing::subscriber::set_default(capture);
     let body = merge_message(SUBSUMED, &[(DOMAIN_A, EHR_A)], "patient-new")?;
     let response = send_as_is(gateway.app.clone(), message(body)?).await?;
-    let records = repository.wait_for(1, Duration::from_secs(5)).await;
+    let records = repository.wait_for(1, SETTLE).await;
     drop(guard);
     assert_eq!(StatusCode::OK, response.status());
     assert_eq!(1, gateway.bound()?, "the merge was applied");
@@ -118,7 +133,7 @@ async fn a_message_whose_record_the_spool_cannot_take_is_not_applied() -> TestRe
         dir.path(),
         "http://127.0.0.1:9/fhir/",
         "http://127.0.0.1:9/pmir/feed",
-        &audit_tables(&repository, "spool_max_events = 1"),
+        &audited(&repository, "spool_max_events = 1"),
     )?)?;
     gateway.bind("caller-1", &[EHR_A, EHR_A2])?;
     let first = merge_message("qz7-first", &[("urn:oid:2.999.1.999", "SYNTHETIC-1")], "x")?;
@@ -152,7 +167,7 @@ async fn a_create_whose_record_is_refused_is_adopted_by_the_next_check_and_never
         dir.path(),
         &registry.base_url(),
         "http://127.0.0.1:9/pmir/feed",
-        &audit_tables(&repository, "spool_max_events = 1"),
+        &audited(&repository, "spool_max_events = 1"),
     )?)?;
     let feed = gateway.state.identity_feed().ok_or("[pmir] is set")?;
     assert_eq!(
@@ -165,7 +180,7 @@ async fn a_create_whose_record_is_refused_is_adopted_by_the_next_check_and_never
     );
     assert_eq!(1, registry.creates(), "the Registry made the subscription");
     repository.set_up(true);
-    let drained = repository.wait_for(1, Duration::from_secs(5)).await;
+    let drained = repository.wait_for(1, SETTLE).await;
     assert_eq!(
         1,
         drained.len(),

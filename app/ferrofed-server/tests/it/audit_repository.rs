@@ -43,6 +43,7 @@ use crate::facade::{
     Answer as Federated, NAMESPACE, PATIENT, body, node_answering, patient_query, post, received,
     settings_with_room,
 };
+use crate::feed_audit::SETTLE;
 use crate::metrics::{count, parse};
 use crate::support::call;
 
@@ -57,6 +58,18 @@ const EHR_IDS: [&str; 3] = [
 ];
 
 const COMMUNITIES: [&str; 3] = ["2.999.50", "2.999.60", "2.999.70"];
+
+/// The per-node and overall budget of [`config`], in milliseconds.
+///
+/// The members and the responding gateway answer at once, so the budget only
+/// has to outlast a stall of a loaded host, as far as the ten-second request
+/// timeout of `settings_with_room` less the one-second combining margin
+/// allows.
+const BUDGET_MS: u64 = 8_000;
+
+/// The localizer's part of [`BUDGET_MS`], in milliseconds: half of it,
+/// leaving the other half to ask the members.
+const LOCALIZATION_MS: u64 = 4_000;
 
 /// The configuration text of a gateway under `profile` over the members at
 /// `urls`, localized by `[xcpd]` at `gateway`, with the
@@ -91,7 +104,7 @@ fn config(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"repository\"\n\n[[xcpd.gateway]]\nurl = \"{gateway}\"\ndevice = \"2.999.50.1\"\n\n[xcpd.communities]\n{communities}\n[xcpd.audit_repository]\nhostname = \"gateway.example.org\"\n{repository}\n{rows}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {BUDGET_MS}\noverall_timeout_ms = {BUDGET_MS}\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = {LOCALIZATION_MS}\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"repository\"\n\n[[xcpd.gateway]]\nurl = \"{gateway}\"\ndevice = \"2.999.50.1\"\n\n[xcpd.communities]\n{communities}\n[xcpd.audit_repository]\nhostname = \"gateway.example.org\"\n{repository}\n{rows}",
         document = toml::Value::String(document.display().to_string()),
     ))
 }
@@ -106,7 +119,7 @@ fn reaching(
     let roots = dir.join("atna-roots.pem");
     std::fs::write(&roots, repository.trust_roots())?;
     Ok(format!(
-        "url = \"{}\"\ntrust_roots_file = {}\nconnect_timeout_ms = 500\n{extra}",
+        "url = \"{}\"\ntrust_roots_file = {}\nconnect_timeout_ms = 500\nretry_max_ms = 400\n{extra}",
         repository.url(),
         toml::Value::String(roots.display().to_string())
     ))
@@ -164,10 +177,10 @@ async fn repository_state(app: &Router) -> Result<Option<String>, Box<dyn Error>
     Ok(serde_json::from_str::<Report>(&text)?.audit_repository)
 }
 
-/// Waits up to five seconds until `GET /health/dependencies` reports the
+/// Waits up to [`SETTLE`] until `GET /health/dependencies` reports the
 /// audit repository `expected`, and returns the last state it reported.
 async fn await_state(app: &Router, expected: &str) -> Result<Option<String>, Box<dyn Error>> {
-    let until = Instant::now() + Duration::from_secs(5);
+    let until = Instant::now() + SETTLE;
     loop {
         let state = repository_state(app).await?;
         if state.as_deref() == Some(expected) || Instant::now() >= until {
@@ -202,7 +215,7 @@ async fn each_discovery_reaches_the_audit_repository_without_the_identifier_in_a
     )?;
     let guard = tracing::subscriber::set_default(capture);
     let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
-    let messages = repository.wait_for(1, Duration::from_secs(5)).await;
+    let messages = repository.wait_for(1, SETTLE).await;
     drop(guard);
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(1, messages.len(), "one ITI-20 message per exchange");
@@ -299,7 +312,7 @@ async fn a_repository_that_is_down_holds_the_messages_and_shows_it() -> TestResu
         Some("1".to_owned()),
         count(&samples, "ferrofed_audit_spool_events", &[])
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + SETTLE;
     let retries = loop {
         let samples = parse(&Metrics::default().render()?)?;
         let retries: u64 = count(&samples, "ferrofed_audit_retries_total", &[])
@@ -314,7 +327,7 @@ async fn a_repository_that_is_down_holds_the_messages_and_shows_it() -> TestResu
     assert_eq!(1, spooled(&spool)?, "the message is on disk");
 
     repository.set_up(true);
-    let messages = repository.wait_for(1, Duration::from_secs(10)).await;
+    let messages = repository.wait_for(1, SETTLE).await;
     assert_eq!(
         1,
         messages.len(),
