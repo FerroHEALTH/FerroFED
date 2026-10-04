@@ -12,7 +12,8 @@
 //! three decisions, `result` from the reload outcomes, and `endpoint`
 //! from the registry's endpoint ids. Nothing a request carries becomes a
 //! label, so no patient identifier and no client text can reach the
-//! surface (§5.4.1, N33). The instruments fill from what the gateway already
+//! surface (§5.4.1, N33). The audit spool instruments carry no label at all.
+//! The instruments fill from what the gateway already
 //! observes: an incident's event, the per-endpoint report of each node
 //! request, and a registry reload's outcome. No specification governs
 //! metrics: our own design.
@@ -33,12 +34,13 @@ use axum::routing::get;
 use ferrofed_registry::incident::Kind;
 use http::{HeaderValue, StatusCode, header};
 use opentelemetry::KeyValue;
-use opentelemetry::metrics::{Counter, MeterProvider as _, ObservableCounter};
+use opentelemetry::metrics::{Counter, MeterProvider as _, ObservableCounter, ObservableGauge};
 use opentelemetry_otlp::WithExportConfig as _;
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider, Temporality};
 
 use crate::config::settings::MetricsSettings;
 use crate::metrics::nodes::Instruments;
+use ihe_iti::atna::forwarder::Status;
 
 /// The instrumentation scope every instrument is created under.
 pub const SCOPE: &str = "ferrofed";
@@ -70,6 +72,25 @@ pub const LOCALIZER_REQUESTS: &str = "ferrofed.localizer.requests";
 /// The registry reloads, by `result`; Prometheus
 /// `ferrofed_registry_reloads_total`.
 pub const REGISTRY_RELOADS: &str = "ferrofed.registry.reloads";
+
+/// The ITI-20 audit messages waiting in the spool for the audit repository;
+/// Prometheus `ferrofed_audit_spool_events`.
+pub const AUDIT_SPOOL_EVENTS: &str = "ferrofed.audit.spool.events";
+
+/// The bytes of those messages; Prometheus `ferrofed_audit_spool_bytes`.
+pub const AUDIT_SPOOL_BYTES: &str = "ferrofed.audit.spool.bytes";
+
+/// The ITI-20 audit messages delivered to the audit repository; Prometheus
+/// `ferrofed_audit_delivered_total`.
+pub const AUDIT_DELIVERED: &str = "ferrofed.audit.delivered";
+
+/// The failed attempts to deliver to the audit repository, each followed by
+/// a backoff; Prometheus `ferrofed_audit_retries_total`.
+pub const AUDIT_RETRIES: &str = "ferrofed.audit.retries";
+
+/// The ITI-20 audit messages held in the spool's quarantine; Prometheus
+/// `ferrofed_audit_quarantined`.
+pub const AUDIT_QUARANTINED: &str = "ferrofed.audit.quarantined";
 
 /// The upper bounds of the node request duration buckets, in seconds: 5 ms
 /// to 30 s, past the default per-node timeout of 10 s.
@@ -136,6 +157,18 @@ pub struct Metrics {
     /// Kept for the life of the provider: its callback reads the incident
     /// counts at each collection.
     _incidents: ObservableCounter<u64>,
+    /// Kept for the life of the provider: their callbacks read the audit
+    /// spools at each collection.
+    _audit: AuditInstruments,
+}
+
+/// The audit spool instruments, kept for the life of the provider.
+struct AuditInstruments {
+    _events: ObservableGauge<u64>,
+    _bytes: ObservableGauge<u64>,
+    _quarantined: ObservableGauge<u64>,
+    _delivered: ObservableCounter<u64>,
+    _retries: ObservableCounter<u64>,
 }
 
 impl Metrics {
@@ -205,12 +238,14 @@ impl Metrics {
             reloads.add(0, &[KeyValue::new("result", result.as_str())]);
         }
         let nodes = Instruments::new(&meter);
+        let audit = audit_instruments(&meter);
         Ok(Self {
             provider,
             registry,
             nodes,
             reloads,
             _incidents: incidents,
+            _audit: audit,
         })
     }
 
@@ -266,6 +301,66 @@ impl std::fmt::Debug for Metrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Metrics").finish_non_exhaustive()
     }
+}
+
+/// The audit spool instruments, which read every running audit trail at
+/// each collection, summed, with no label.
+fn audit_instruments(meter: &opentelemetry::metrics::Meter) -> AuditInstruments {
+    let gauge = |name: &'static str, description: &'static str, read: fn(&Status) -> u64| {
+        meter
+            .u64_observable_gauge(name)
+            .with_description(description)
+            .with_callback(move |observer| {
+                if let Some(total) = summed(read) {
+                    observer.observe(total, &[]);
+                }
+            })
+            .build()
+    };
+    let counter = |name: &'static str, description: &'static str, read: fn(&Status) -> u64| {
+        meter
+            .u64_observable_counter(name)
+            .with_description(description)
+            .with_callback(move |observer| {
+                if let Some(total) = summed(read) {
+                    observer.observe(total, &[]);
+                }
+            })
+            .build()
+    };
+    AuditInstruments {
+        _events: gauge(
+            AUDIT_SPOOL_EVENTS,
+            "ITI-20 audit messages waiting in the spool for the audit repository",
+            |status| u64::try_from(status.depth.waiting()).unwrap_or(u64::MAX),
+        ),
+        _bytes: gauge(
+            AUDIT_SPOOL_BYTES,
+            "Bytes of the ITI-20 audit messages the spool holds, quarantine included",
+            |status| status.depth.bytes,
+        ),
+        _quarantined: gauge(
+            AUDIT_QUARANTINED,
+            "ITI-20 audit messages held in the spool's quarantine",
+            |status| u64::try_from(status.depth.quarantined).unwrap_or(u64::MAX),
+        ),
+        _delivered: counter(
+            AUDIT_DELIVERED,
+            "ITI-20 audit messages delivered to the audit repository",
+            |status| status.delivered,
+        ),
+        _retries: counter(
+            AUDIT_RETRIES,
+            "Failed attempts to deliver to the audit repository, each followed by a backoff",
+            |status| status.retries,
+        ),
+    }
+}
+
+/// `read` summed over every running audit trail, or `None` with none.
+fn summed(read: fn(&Status) -> u64) -> Option<u64> {
+    let statuses = crate::audit::statuses();
+    (!statuses.is_empty()).then(|| statuses.iter().map(read).fold(0, u64::saturating_add))
 }
 
 /// Builds the admin listener's application: `GET /metrics` answers the

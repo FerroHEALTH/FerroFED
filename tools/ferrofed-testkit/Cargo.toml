@@ -39,6 +39,11 @@ pem.workspace = true
 async-trait.workspace = true
 opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
 tonic = { workspace = true, features = ["server", "router"] }
+# The harness audit repository (#418) generates its CA and server
+# certificate at run time, so no private key is ever committed, and serves
+# syslog over TLS with them.
+rcgen.workspace = true
+tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true
 # The canonical JSON writer the seed's EHR_STATUS is written with.
@@ -51,7 +56,7 @@ serde.workspace = true
 serde_json.workspace = true
 testcontainers.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 # The harness PIX Manager's query-string decoding.
 url.workspace = true
 uuid.workspace = true

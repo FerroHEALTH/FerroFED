@@ -11,6 +11,7 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+mod atna;
 mod binding;
 #[cfg(test)]
 mod directory;

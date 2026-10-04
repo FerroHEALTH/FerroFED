@@ -407,10 +407,39 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         credentials: fresh.credentials,
         dev: fresh.dev,
         pixm: fresh.pixm,
-        xcpd: fresh.xcpd,
+        // NOTE: no specification governs this: our own design; one forwarder
+        // drains each audit spool, so where the audit messages go takes a restart.
+        xcpd: fresh.xcpd.map(|mut xcpd| {
+            if let Some(started) = &boot.xcpd {
+                xcpd.audit = started.audit;
+                xcpd.audit_repository.clone_from(&started.audit_repository);
+            }
+            xcpd
+        }),
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
+    }
+}
+
+/// Whether `fresh` names another stored-query store than the process
+/// started with, or sets or unsets one.
+fn stored_queries_changed(boot: &Settings, fresh: &Settings) -> bool {
+    match (&boot.stored_queries, &fresh.stored_queries) {
+        (Some(was), Some(now)) => !was.same_as(now),
+        (None, None) => false,
+        (Some(_), None) | (None, Some(_)) => true,
+    }
+}
+
+/// Whether `fresh` sends the XCPD audit messages elsewhere than the process
+/// started with, while both configure the XCPD localizer.
+fn audit_changed(boot: &Settings, fresh: &Settings) -> bool {
+    match (&boot.xcpd, &fresh.xcpd) {
+        (Some(was), Some(now)) => {
+            was.audit != now.audit || was.audit_repository != now.audit_repository
+        }
+        _ => false,
     }
 }
 
@@ -513,14 +542,8 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             "federation.demographic_endpoint",
             was.demographic_endpoint != now.demographic_endpoint,
         ),
-        (
-            "stored_queries",
-            match (&boot.stored_queries, &fresh.stored_queries) {
-                (Some(was), Some(now)) => !was.same_as(now),
-                (None, None) => false,
-                (Some(_), None) | (None, Some(_)) => true,
-            },
-        ),
+        ("stored_queries", stored_queries_changed(boot, fresh)),
+        ("xcpd.audit", audit_changed(boot, fresh)),
         (
             "metrics.listen",
             boot.metrics.listen != fresh.metrics.listen,
@@ -578,4 +601,46 @@ fn federation_class(error: &FederationError) -> &'static str {
 /// The ids in `ids`, comma-separated.
 fn joined<T>(ids: &[T], name: impl Fn(&T) -> &str) -> String {
     ids.iter().map(name).collect::<Vec<_>>().join(",")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::{effective, needs_restart};
+    use crate::config::Config;
+    use crate::config::settings::Settings;
+    use crate::config::xcpd::AuditDestination;
+
+    /// The settings of a development gateway whose XCPD audit messages go
+    /// to `audit`, with the `[xcpd.audit_repository]` keys `repository`.
+    fn settings(audit: &str, repository: &str) -> Settings {
+        let text = format!(
+            "profile = \"development\"\n\n[registry]\ndocument = \"registry.toml\"\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"{audit}\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n{repository}"
+        );
+        Config::from_sources(Some(&text), &BTreeMap::new())
+            .and_then(|config| config.resolve())
+            .expect("the settings resolve")
+    }
+
+    #[test]
+    fn where_the_audit_messages_go_takes_a_restart() {
+        let boot = settings("log", "");
+        let fresh = settings(
+            "repository",
+            "\n[xcpd.audit_repository]\nurl = \"tls://arr.example.org\"\nhostname = \"gateway.example.org\"\n",
+        );
+        assert_eq!(vec!["xcpd.audit"], needs_restart(&boot, &fresh));
+        let applied = effective(&boot, fresh);
+        let xcpd = applied.xcpd.expect("the xcpd section reloads");
+        assert_eq!(
+            AuditDestination::Log,
+            xcpd.audit,
+            "the boot's destination holds"
+        );
+        assert_eq!(None, xcpd.audit_repository);
+
+        let same = settings("log", "");
+        assert!(needs_restart(&boot, &same).is_empty());
+    }
 }

@@ -35,6 +35,7 @@ use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
+use crate::config::audit_repository::{AuditRepository, AuditRepositorySettings};
 use crate::config::error::Error;
 use crate::config::secrets::secret;
 use crate::config::{Config, transport};
@@ -45,7 +46,8 @@ use crate::config::{Config, transport};
 pub struct Xcpd {
     /// The gateway's own device OID, the sender of every request.
     pub sender_device: String,
-    /// The gateway's own `homeCommunityId`, when it has one.
+    /// The gateway's own `homeCommunityId`; required under
+    /// `audit = "repository"`, whose audit message names it.
     pub home_community: Option<String>,
     /// The responding gateways, one `[[xcpd.gateway]]` each, every one asked
     /// on each discovery.
@@ -70,15 +72,21 @@ pub struct Xcpd {
     /// A file of PEM trust roots the responding gateways' certificates chain
     /// to, beside the platform's.
     pub trust_roots_file: Option<PathBuf>,
-    /// Where the ITI-55 audit message of every exchange goes: `log`, or
-    /// `off`, which only `profile = "development"` admits. It has no default.
+    /// Where the ITI-55 audit message of every exchange goes: `repository`,
+    /// `log`, or `off`, which only `profile = "development"` admits. It has
+    /// no default.
     pub audit: Option<AuditDestination>,
+    /// The ATNA Audit Record Repository, under `audit = "repository"`.
+    pub audit_repository: Option<AuditRepository>,
 }
 
 /// Where the ITI-55 audit messages go (ITI TF-2 §3.55.5.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AuditDestination {
+    /// The DICOM audit message, sent over ITI-20 to the ATNA Audit Record
+    /// Repository `[xcpd.audit_repository]` names.
+    Repository,
     /// A structured event at the `ferrofed::audit` log target, without the
     /// query parameters, for a deployment that routes its log to its audit
     /// repository.
@@ -92,6 +100,7 @@ impl AuditDestination {
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Repository => "repository",
             Self::Log => "log",
             Self::Off => "off",
         }
@@ -132,6 +141,8 @@ pub struct XcpdSettings {
     pub trust_roots: Option<String>,
     /// Where the audit messages go.
     pub audit: AuditDestination,
+    /// The repository, under [`AuditDestination::Repository`].
+    pub audit_repository: Option<AuditRepositorySettings>,
 }
 
 impl fmt::Debug for XcpdSettings {
@@ -144,6 +155,7 @@ impl fmt::Debug for XcpdSettings {
             .field("client_identity", &self.client_identity.is_some())
             .field("trust_roots", &self.trust_roots.is_some())
             .field("audit", &self.audit)
+            .field("audit_repository", &self.audit_repository)
             .finish_non_exhaustive()
     }
 }
@@ -153,8 +165,8 @@ impl fmt::Debug for XcpdSettings {
 ///
 /// # Errors
 /// [`Error::Missing`] for no registry document, no `sender_device`, no
-/// `audit` or no
-/// gateway, [`Error::Url`]
+/// `audit`, no gateway, or no `home_community` under `audit = "repository"`,
+/// [`Error::Url`]
 /// for a gateway URL that does not parse, [`Error::Cleartext`] for a gateway
 /// URL that is not `https` outside the development profile,
 /// [`Error::AuditOff`] for `audit = "off"` outside it, and the errors of a
@@ -180,22 +192,7 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
             key: String::from("xcpd.gateway"),
         });
     }
-    let development = config.profile == Profile::Development;
-    // NOTE: ITI TF-2 §3.55.5.1, ITI TF-1 Table 27.1.3-1: the actor records every
-    // exchange, so no audit at all is a declared, development-only choice.
-    let audit = match xcpd.audit {
-        None => {
-            return Err(Error::Missing {
-                key: String::from("xcpd.audit"),
-            });
-        }
-        Some(AuditDestination::Off) if !development => {
-            return Err(Error::AuditOff {
-                key: String::from("xcpd.audit"),
-            });
-        }
-        Some(destination) => destination,
-    };
+    let (audit, audit_repository) = audit(config.profile, xcpd)?;
     let assertion_key = if xcpd.assertion_file.is_some() {
         "xcpd.assertion_file"
     } else {
@@ -249,5 +246,53 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         client_identity,
         trust_roots,
         audit,
+        audit_repository,
     }))
+}
+
+/// Where `xcpd`'s audit messages go under `profile`, with the repository
+/// they go to when it is one.
+fn audit(
+    profile: Profile,
+    xcpd: &Xcpd,
+) -> Result<(AuditDestination, Option<AuditRepositorySettings>), Error> {
+    // NOTE: ITI TF-2 §3.55.5.1, ITI TF-1 Table 27.1.3-1: the actor records every
+    // exchange, so no audit at all is a declared, development-only choice.
+    let audit = match xcpd.audit {
+        None => {
+            return Err(Error::Missing {
+                key: String::from("xcpd.audit"),
+            });
+        }
+        Some(AuditDestination::Off) if profile != Profile::Development => {
+            return Err(Error::AuditOff {
+                key: String::from("xcpd.audit"),
+            });
+        }
+        Some(destination) => destination,
+    };
+    // NOTE: ITI TF-2 §3.55.5.1.1: the Initiating Gateway's audit message carries the
+    // ihe:homeCommunityID ParticipantObjectDetail, so a repository-bound audit needs it.
+    let named = xcpd
+        .home_community
+        .as_deref()
+        .is_some_and(|community| !community.is_empty());
+    if audit == AuditDestination::Repository && !named {
+        return Err(Error::Missing {
+            key: String::from("xcpd.home_community"),
+        });
+    }
+    let repository = match (audit, &xcpd.audit_repository) {
+        (AuditDestination::Repository, Some(table)) => {
+            Some(super::audit_repository::resolve(profile, table)?)
+        }
+        (AuditDestination::Repository, None) => {
+            return Err(Error::Missing {
+                key: String::from("xcpd.audit_repository"),
+            });
+        }
+        (_, Some(_)) => return Err(Error::AuditRepositoryUnused),
+        (_, None) => None,
+    };
+    Ok((audit, repository))
 }

@@ -47,7 +47,7 @@ openehr-sdt = { version = "0.0.81", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.35" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.13" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.14" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -135,6 +135,14 @@ tokio-postgres = { version = "0.7.18", default-features = false, features = ["ru
 tokio-postgres-rustls = "0.14.0"
 rustls = { version = "0.23.45", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
 rustls-platform-verifier = "0.7.1"
+# The ATNA audit repository connection (#418): ITI-20 syslog over TLS (RFC
+# 5425) behind crates/ihe-iti's `atna` feature, at the version reqwest and
+# tokio-postgres-rustls already lock, so it adds no crate to the graph.
+# Verified against crates.io on 2026-10-04.
+tokio-rustls = { version = "0.26.6", default-features = false }
+# The base64 of the DICOM audit message's query and detail values (#418), at
+# the version reqwest already locks. Verified against crates.io on 2026-10-04.
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
 # ImplementationGuide), compiled only in crates/ihe-iti and, for its PIX Manager
 # test device, in tools/ferrofed-testkit; checked against docs/VERSIONS.md by
@@ -172,6 +180,11 @@ serde-saphyr = { version = "1.3.0", default-features = false, features = ["deser
 # crates.io on 2026-10-03.
 aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-sys"] }
 pem = { version = "3.0.6", default-features = false, features = ["std"] }
+# Test-only for the ATNA audit repository (#418): the testkit's harness
+# repository generates its CA and server certificate at run time over the
+# crypto library rustls already builds on, so no private key is ever
+# committed. Verified against crates.io on 2026-10-04.
+rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
 
 # The reliability bar (no specification governs it: our own design). Groups sit
 # at priority -1 so every named lint below overrides its group.

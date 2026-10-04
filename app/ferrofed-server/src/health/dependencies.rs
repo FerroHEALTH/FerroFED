@@ -16,17 +16,22 @@
 //! outage. A member's state is its reachability and health, never whether
 //! a request to it was valid: every call that sends a member a request reads
 //! the node's own answer the same way ([`Observed::of_contact`]), whatever
-//! the §11.1 record of that call says. No specification governs health
-//! probes: our own design.
+//! the §11.1 record of that call says. The ATNA Audit Record Repository,
+//! when the XCPD localizer sends its audit messages to one, is read live
+//! from its forwarder: [`Observed::Degraded`] while messages wait in the
+//! spool. No specification governs health probes: our own design.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use ferrofed_engine::dispatch::Contact;
+use ferrofed_identity::atna::RepositoryAudit;
 use ferrofed_identity::consent::ConsentDecision;
 use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
+use ihe_iti::atna::forwarder::Status;
 use serde::Serialize;
 
 /// The last state observed of one dependency.
@@ -41,6 +46,9 @@ pub enum Observed {
     Failing,
     /// The last request could not reach it or got no answer in time.
     Down,
+    /// It is reachable, and work it has not taken yet waits for it: the
+    /// audit repository while its spool holds messages.
+    Degraded,
 }
 
 impl Observed {
@@ -51,6 +59,7 @@ impl Observed {
             Self::Up => 1,
             Self::Failing => 2,
             Self::Down => 3,
+            Self::Degraded => 4,
         }
     }
 
@@ -60,7 +69,24 @@ impl Observed {
             0 => Self::Unknown,
             1 => Self::Up,
             2 => Self::Failing,
+            4 => Self::Degraded,
             _ => Self::Down,
+        }
+    }
+
+    /// Returns what the audit forwarder's `status` says of its repository:
+    /// [`Observed::Degraded`] while it retries a failed delivery, while
+    /// messages wait in the spool, and while any sits in quarantine;
+    /// [`Observed::Unknown`] before anything was sent; and [`Observed::Up`]
+    /// otherwise.
+    #[must_use]
+    pub fn of_audit(status: &Status) -> Self {
+        if !status.reachable || status.depth.messages > 0 {
+            Self::Degraded
+        } else if status.delivered == 0 {
+            Self::Unknown
+        } else {
+            Self::Up
         }
     }
 
@@ -155,6 +181,8 @@ pub struct Dependencies {
     consent: Option<AtomicU8>,
     /// The localizer's slot, when one is configured.
     localizer: Option<AtomicU8>,
+    /// The recorder of the audit repository, when one is configured.
+    audit_repository: Option<Arc<RepositoryAudit>>,
 }
 
 impl Dependencies {
@@ -170,7 +198,16 @@ impl Dependencies {
             resolver: resolver.then(|| AtomicU8::new(Observed::Unknown.code())),
             consent: None,
             localizer: None,
+            audit_repository: None,
         }
+    }
+
+    /// Returns this record with the audit repository `recorder` sends to,
+    /// when one is configured.
+    #[must_use]
+    pub fn with_audit_repository(mut self, recorder: Option<Arc<RepositoryAudit>>) -> Self {
+        self.audit_repository = recorder;
+        self
     }
 
     /// Returns this record with a slot for the consent pre-filter when
@@ -257,6 +294,10 @@ impl Dependencies {
                 .as_ref()
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
             directory: None,
+            audit_repository: self
+                .audit_repository
+                .as_ref()
+                .map(|recorder| Observed::of_audit(&recorder.status())),
         }
     }
 }
@@ -283,6 +324,10 @@ pub struct Report {
     /// `down` when it did not answer.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<Observed>,
+    /// The audit repository's state, absent when no audit message goes to
+    /// one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit_repository: Option<Observed>,
 }
 
 #[cfg(test)]

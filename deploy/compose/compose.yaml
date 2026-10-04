@@ -80,12 +80,22 @@ services:
         read_only: true
         bind:
           create_host_path: true
+      # The ITI-20 audit spool, with [xcpd] audit = "repository": the one
+      # directory the gateway writes. Create it for the image's user first
+      # (install -d -m 0700 -o 65532 -g 65532 audit-spool) and set
+      # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool".
+      # It holds audit messages that name a patient until the repository
+      # takes them, so keep it on an encrypted disk.
+      # - type: bind
+      #   source: ./audit-spool
+      #   target: /var/lib/ferrofed/audit-spool
     # Lets a registry URL name a CDR on the Docker host itself as
     # host.docker.internal.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # The gateway writes nothing: no cache, no scratch file, and every secret is
-    # read at boot. So the root filesystem is read-only with no tmpfs beside it.
+    # The gateway writes nothing but the optional audit spool above: no cache,
+    # no scratch file, and every secret is read at boot. So the root
+    # filesystem is read-only with no tmpfs beside it.
     # The image runs as the numeric user 65532 and has no shell.
     read_only: true
     cap_drop: [ALL]

@@ -115,6 +115,31 @@ bearer_token_file = "/run/secrets/ferrofed/pix-token"
 # [pixm.namespaces]
 # "2.999.1" = "urn:oid:2.999.1"
 
+# Or localize through IHE XCPD responding gateways, with
+# federation.node_selection = "localized", and send each exchange's audit
+# message to your ATNA Audit Record Repository over ITI-20. That message
+# names this gateway's homeCommunityID, so home_community is required with
+# audit = "repository". Mount a spool volume (compose.yaml shows one).
+# https://ferrofed.eu/docs/operate/identity.html#the-audit-repository
+# [xcpd]
+# sender_device = "2.999.40.1"                  # EDIT
+# home_community = "2.999.40"                   # EDIT
+# audit = "repository"
+#
+# [[xcpd.gateway]]
+# url = "https://xcpd.example.org/RespondingGateway"   # EDIT
+# device = "2.999.50.1"                                # EDIT
+#
+# [xcpd.communities]
+# "2.999.50" = "node-a"                         # EDIT
+# "2.999.60" = "node-b"                         # EDIT
+#
+# [xcpd.audit_repository]
+# url = "tls://arr.example.org:6514"            # EDIT
+# hostname = "gateway.example.org"              # EDIT
+# spool_dir = "/var/lib/ferrofed/audit-spool"
+# trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
+
 # EDIT: the credentials the gateway sends each endpoint of registry.toml, one
 # section per endpoint id: a bearer token, or a user and a password. Leave an
 # endpoint out when it needs none.

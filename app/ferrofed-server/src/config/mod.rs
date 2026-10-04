@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use crate::config::error::Error;
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
+pub mod audit_repository;
 pub mod auth;
 pub mod error;
 mod load;

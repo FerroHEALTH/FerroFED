@@ -652,6 +652,7 @@ dependencies = [
  "ferrofed-identity",
  "ferrofed-registry",
  "http",
+ "ihe-iti",
  "jiff",
  "jsonwebtoken",
  "openehr-base",
@@ -1118,16 +1119,23 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
+ "async-trait",
+ "base64 0.23.1",
  "fhir-types",
  "http",
  "jiff",
  "quick-xml",
  "reqwest",
+ "rustls",
+ "rustls-platform-verifier",
  "secrecy",
  "serde_json",
  "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
  "url",
  "uuid",
 ]

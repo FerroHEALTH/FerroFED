@@ -34,6 +34,7 @@
 //! engine's, in `ferrofed_engine::onward`.
 #![doc(test(attr(deny(warnings))))]
 
+pub mod atna;
 pub mod binding;
 pub mod consent;
 pub mod dev;

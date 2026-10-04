@@ -288,6 +288,8 @@ What a deployment must provide:
   before its `NotOnOrAfter` and [reload](registry.md#reloading-the-registry).
 - **An audit destination.** The Initiating Gateway records an audit message
   for every exchange (ITI TF-2 §3.55.5.1.1), so `audit` has no default.
+  `audit = "repository"` sends each message to an ATNA Audit Record
+  Repository over ITI-20 ([The audit repository](#the-audit-repository)).
   `audit = "log"` writes each message as a structured event at the log
   target `ferrofed::audit`: the event, its outcome (`0` success, `4` the
   gateway answered with a failure, `8` no answer), this process's id, the
@@ -313,8 +315,91 @@ every member instead ([Node selection](registry.md#node-selection)).
 FerroFED sends the synchronous exchange only, with an immediate response: it
 claims neither the Asynchronous Web Services Exchange nor the Deferred
 Response option (ITI TF-1 §27.2), and it caches no correlation between
-queries. `[xcpd]` takes effect on a reload, and under
-`node_selection = "ask-all"` it refuses the configuration.
+queries. `[xcpd]` takes effect on a reload, except where its audit messages
+go, which takes a restart; under `node_selection = "ask-all"` it refuses the
+configuration.
+
+### The audit repository
+
+With `audit = "repository"`, the gateway sends each exchange's audit
+message to an ATNA Audit Record Repository as ITI-20 Record Audit Event
+(ITI TF-2 §3.20): the DICOM PS3.15 audit message in an RFC 5424 syslog
+message with the PRI `<85>` and the MSGID `IHE+RFC-3881`, over TLS (RFC
+5425). That message must name the gateway's own `homeCommunityID` (ITI TF-2
+§3.55.5.1.1), so `[xcpd] home_community` is required with
+`audit = "repository"`: `config check`, `serve` and a reload refuse the
+configuration without it, naming `xcpd.home_community`. Under
+`audit = "log"` it stays optional, and the log event carries it when it is
+set.
+
+```toml
+[xcpd]
+audit = "repository"
+home_community = "2.999.40"            # required with audit = "repository"
+
+[xcpd.audit_repository]
+url = "tls://arr.example.org:6514"     # the port defaults to 6514
+hostname = "gateway.example.org"       # syslog HOSTNAME and the message's host
+spool_dir = "/var/lib/ferrofed/audit-spool"
+# app_name = "ferrofed"                # syslog APP-NAME
+# source_id = "gateway.example.org"    # AuditSourceID, the hostname by default
+# enterprise_site = "2.999.40"         # AuditEnterpriseSiteID
+# spool_max_bytes = 67108864
+# spool_max_events = 100000
+# connect_timeout_ms = 5000           # opening the TCP connection
+# send_timeout_ms = 5000              # the TLS handshake, each write and flush
+# retry_max_ms = 60000                # the longest wait between two attempts
+client_identity_file = "/run/secrets/atna-client.pem"  # when the repository asks
+trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
+```
+
+Every message is written to the spool first, flushed to disk, and
+delivered from there in order, so a message counts as recorded once it is
+on disk. ITI-20 has a sender that cannot reach its repository store the
+record and send it when it can (ITI TF-2 §3.20.4.1.1): while the repository
+is down, discovery goes on and the messages wait in the spool, and a restart
+keeps them. Only a message the gateway can neither deliver nor store is an
+audit failure: a full spool (`spool_max_events` or `spool_max_bytes`) or one
+that cannot be written fails the discovery closed, as any audit failure does
+above. Recording an exchange only ever writes to the spool, so a slow or
+hung repository never holds a query.
+
+Delivery is bounded at every step: the TCP connection by
+`connect_timeout_ms`, and the TLS handshake, each write and each flush by
+`send_timeout_ms`, so a repository that accepts a connection and then stops
+answering cannot hold the sender. After any timeout or transport failure the
+gateway drops the connection, keeps the message in the spool, and tries
+again after a wait that doubles from 250 ms up to `retry_max_ms`, with
+jitter. A spooled message that cannot be read, or is no whole syslog frame,
+is moved to the `quarantine` subdirectory, logged at error level with its
+sequence number and never its content, and the drain goes on with the next
+one; a quarantined message stays counted under `spool_max_events` and
+`spool_max_bytes` until you remove it. Syslog over TLS has no
+acknowledgement (RFC 5425), so only a transport failure is retried, and a
+message written to a connection the repository has just closed can be lost;
+the gateway checks the connection before each write to keep that window
+short. A file in the spool directory the gateway did not write refuses the
+start, naming the file to move out.
+
+The spool is the one place FerroFED writes a patient identifier to disk:
+each message carries the query parameters, base64-encoded, as the audit
+table requires. The gateway creates the directory readable by its own user
+alone (`0700`) and every file `0600`, and refuses to start, and
+`config check` refuses the configuration, when the directory gives its group
+or other users any access or cannot be written. Put it on an encrypted
+volume: the gateway holds no key to encrypt it with, so encryption at rest
+is the deployment's.
+
+The url is `tls://` outside `profile = "development"`; under that profile
+`tcp://host:port` is accepted and named on the banner, and without
+`spool_dir` the spool is held in memory, which a restart loses and the
+banner says so. `GET /health/dependencies` reports the repository as
+`audit_repository`: `up`, `degraded` while the gateway retries a failed
+delivery, while messages wait in the spool and while any sits in
+quarantine, and `unknown` before the first message. The metrics carry the
+spool's depth, its quarantine, the deliveries and the retries
+([Metrics](metrics.md)). The audit FHIR feed of RESTful ATNA is an option
+of ITI-20 this gateway does not send.
 
 PMIR notifications of a merge or split are planned for v0.0.8
 ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147)).

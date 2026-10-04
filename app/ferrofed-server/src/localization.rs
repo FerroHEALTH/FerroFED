@@ -18,6 +18,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_identity::atna::RepositoryAudit;
 use ferrofed_identity::dev::{Profile, StaticResolver};
 use ferrofed_identity::localizer::{Localizer, OnFailure};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
@@ -31,6 +32,7 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::Secret;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::audit::{self, AuditTrailError};
 use crate::config::settings::{LocalizationSettings, Settings};
 use crate::config::xcpd::{AuditDestination, XcpdSettings};
 use crate::config::{self, NodeSelection};
@@ -41,11 +43,19 @@ pub struct LocalizationPolicy {
     localizer: Option<Arc<dyn Localizer>>,
     mode: Option<&'static str>,
     audit: Option<&'static str>,
+    repository: Option<Arc<RepositoryAudit>>,
     on_failure: OnFailure,
     timeout: Duration,
 }
 
 impl LocalizationPolicy {
+    /// The recorder that sends the localizer's audit messages to an ATNA
+    /// Audit Record Repository, when one is configured.
+    #[must_use]
+    pub fn repository(&self) -> Option<&Arc<RepositoryAudit>> {
+        self.repository.as_ref()
+    }
+
     /// The policy of a deployment with no localizer: every member is a
     /// candidate, and `OPTIONS {base}/` declares the default `closed`.
     #[must_use]
@@ -54,6 +64,7 @@ impl LocalizationPolicy {
             localizer: None,
             mode: None,
             audit: None,
+            repository: None,
             on_failure: OnFailure::Closed,
             timeout: Duration::ZERO,
         }
@@ -72,6 +83,7 @@ impl LocalizationPolicy {
             localizer: Some(localizer),
             mode: Some(mode),
             audit: None,
+            repository: None,
             on_failure,
             timeout,
         }
@@ -180,6 +192,12 @@ pub enum LocalizationError {
     /// The XCPD localizer refuses its configuration.
     #[error("the [xcpd] localizer cannot be enabled")]
     Xcpd(#[source] XcpdConfigError),
+    /// The audit trail to the ATNA Audit Record Repository cannot start.
+    #[error("the ITI-20 audit trail of the [xcpd] localizer cannot start")]
+    AuditTrail(#[source] AuditTrailError),
+    /// `audit = "repository"` names no `[xcpd.audit_repository]`.
+    #[error("xcpd.audit = \"repository\" needs [xcpd.audit_repository]")]
+    NoAuditRepository,
 }
 
 /// The resolver the federation runs, as a localizer it can also be.
@@ -228,18 +246,21 @@ pub fn policy(
                 }
             });
             let Resolving { development, pixm } = resolving;
+            let mut repository = None;
             let (localizer, mode): (Arc<dyn Localizer>, _) =
                 match (&settings.xcpd, pixm, development) {
-                    (Some(xcpd), _, _) => (
-                        Arc::new(xcpd_localizer(xcpd, settings.profile, snapshot)?),
-                        XCPD,
-                    ),
+                    (Some(xcpd), _, _) => {
+                        let (localizer, trail) = xcpd_localizer(xcpd, settings.profile, snapshot)?;
+                        repository = trail;
+                        (Arc::new(localizer), XCPD)
+                    }
                     (None, Some(pixm), _) => (pixm, PIXM),
                     (None, None, Some(development)) => (development, DEVELOPMENT_STATIC),
                     (None, None, None) => return Err(LocalizationError::NoLocalizer),
                 };
-            let policy =
+            let mut policy =
                 LocalizationPolicy::new(localizer, mode, declared.on_failure, declared.timeout);
+            policy.repository = repository;
             Ok(match &settings.xcpd {
                 Some(xcpd) => policy.audited(xcpd.audit.as_str()),
                 None => policy,
@@ -254,7 +275,7 @@ fn xcpd_localizer(
     xcpd: &XcpdSettings,
     profile: Profile,
     snapshot: &RegistrySnapshot,
-) -> Result<XcpdLocalizer, LocalizationError> {
+) -> Result<(XcpdLocalizer, Option<Arc<RepositoryAudit>>), LocalizationError> {
     let assertion = xcpd
         .assertion
         .as_ref()
@@ -308,13 +329,18 @@ fn xcpd_localizer(
     };
     let localizer =
         XcpdLocalizer::from_config(config, assertion, snapshot).map_err(LocalizationError::Xcpd)?;
-    Ok(match xcpd.audit {
-        AuditDestination::Log => localizer.audited(Arc::new(LogAudit)),
-        AuditDestination::Off => {
+    Ok(match (xcpd.audit, &xcpd.audit_repository) {
+        (AuditDestination::Repository, Some(repository)) => {
+            let trail = audit::trail(repository).map_err(LocalizationError::AuditTrail)?;
+            (localizer.audited(trail.clone()), Some(trail))
+        }
+        (AuditDestination::Repository, None) => return Err(LocalizationError::NoAuditRepository),
+        (AuditDestination::Log, _) => (localizer.audited(Arc::new(LogAudit)), None),
+        (AuditDestination::Off, _) => {
             tracing::warn!(
                 "[xcpd] audit = \"off\": no ITI-55 audit message is recorded (development only)"
             );
-            localizer
+            (localizer, None)
         }
     })
 }

@@ -42,6 +42,9 @@ clap.workspace = true
 ferrofed-engine.workspace = true
 ferrofed-identity.workspace = true
 ferrofed-registry.workspace = true
+# The ITI-20 audit repository of the XCPD localizer (#418): its syslog
+# header, spool, connection and forwarder.
+ihe-iti = { workspace = true, features = ["atna", "xcpd"] }
 # The version uid a follow-up read names, read for its creating_system_id
 # (§12.3, #64).
 openehr-base.workspace = true

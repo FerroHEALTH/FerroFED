@@ -61,6 +61,7 @@ package registry listed as latest on 2026-10-01.
 | PMIR (ITI-93, ITI-94) | `ihe.iti.pmir` | 1.6.0 |
 | mCSD (ITI-90, ITI-91) | `ihe.iti.mcsd` | 4.0.0, vendored by #86 (the corpus table below) |
 | XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | Vol 2 Rev 20.1 (2024-12-12, Final Text) |
+| ATNA (ITI-20, syslog with the DICOM message) | the IHE ITI Technical Framework, cited and not vendored, with DICOM PS3.15 Annex A.5 (NEMA, reproduction by permission only) and RFC 5424 and RFC 5425 | Vol 2 Rev 20.1 §3.20; no 2024-25 change proposal touched ITI-20, so Rev 20.2's text is the same |
 | Netherlands Generic Functions | `fhir.nl.gf` | 0.3.0, as Annex B names it |
 
 ## Corpora and machine-readable inputs

@@ -88,6 +88,10 @@ pub struct Deployment {
     /// Each credential or patient identifier that travels unencrypted,
     /// which only the development profile allows, by key.
     pub cleartext: Vec<ProtectedSite>,
+    /// Whether the ITI-20 audit messages wait for their repository in
+    /// memory, which only the development profile allows, and which a
+    /// restart loses.
+    pub audit_spool_in_memory: bool,
 }
 
 impl Deployment {
@@ -126,7 +130,16 @@ impl Deployment {
             stored_queries,
             development,
             cleartext: Vec::new(),
+            audit_spool_in_memory: false,
         }
+    }
+
+    /// Returns this deployment, saying whether the audit messages wait for
+    /// their repository in memory.
+    #[must_use]
+    pub fn with_audit_spool_in_memory(mut self, in_memory: bool) -> Self {
+        self.audit_spool_in_memory = in_memory;
+        self
     }
 
     /// Returns this deployment with the credentials and patient identifiers
@@ -202,6 +215,13 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
     for (index, site) in deployment.cleartext.iter().enumerate() {
         let label = if index == 0 { "Unencrypted" } else { "" };
         line(&mut out, label, &site.payload);
+    }
+    if deployment.audit_spool_in_memory {
+        line(
+            &mut out,
+            "Audit spool",
+            "in memory: a restart loses the audit messages not yet delivered",
+        );
     }
     if deployment.development {
         // The same words with and without colour, because colour is the first

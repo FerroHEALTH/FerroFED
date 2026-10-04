@@ -25,11 +25,11 @@ use crate::support::{PATIENT_VALUE, registry};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The community serving `node-a`.
-const COMMUNITY_A: &str = "2.999.50";
+pub(crate) const COMMUNITY_A: &str = "2.999.50";
 /// The community serving `node-b`.
 const COMMUNITY_B: &str = "2.999.60";
 
-fn node(id: &str) -> Result<NodeId, Box<dyn Error>> {
+pub(crate) fn node(id: &str) -> Result<NodeId, Box<dyn Error>> {
     Ok(id.parse()?)
 }
 
@@ -69,7 +69,7 @@ fn config(gateways: &[String], transport: Transport) -> Result<XcpdConfig, Box<d
     })
 }
 
-fn localizer(stubs: &[&RespondingGateway]) -> Result<XcpdLocalizer, Box<dyn Error>> {
+pub(crate) fn localizer(stubs: &[&RespondingGateway]) -> Result<XcpdLocalizer, Box<dyn Error>> {
     let endpoints: Vec<String> = stubs.iter().map(|stub| stub.endpoint()).collect();
     Ok(XcpdLocalizer::from_config(
         config(&endpoints, Transport::UnencryptedForDevelopment)?,
@@ -78,7 +78,7 @@ fn localizer(stubs: &[&RespondingGateway]) -> Result<XcpdLocalizer, Box<dyn Erro
     )?)
 }
 
-async fn localize(localizer: &XcpdLocalizer) -> Result<Localization, Box<dyn Error>> {
+pub(crate) async fn localize(localizer: &XcpdLocalizer) -> Result<Localization, Box<dyn Error>> {
     Ok(localizer
         .localize(
             &patient()?,
@@ -88,7 +88,7 @@ async fn localize(localizer: &XcpdLocalizer) -> Result<Localization, Box<dyn Err
         .await)
 }
 
-fn holds(home: &str) -> Answer {
+pub(crate) fn holds(home: &str) -> Answer {
     Answer::Holds(vec![Community::new(
         home,
         &format!("{home}.2"),
@@ -338,8 +338,9 @@ struct Refusing;
 #[error("synthetic audit repository outage")]
 struct AuditOutage;
 
+#[async_trait::async_trait]
 impl ihe_iti::xcpd::audit::AuditRecorder for Refusing {
-    fn record(
+    async fn record(
         &self,
         _event: ihe_iti::xcpd::audit::AuditEvent,
     ) -> Result<(), ihe_iti::xcpd::audit::AuditError> {
@@ -369,8 +370,9 @@ async fn a_discovery_whose_audit_is_refused_fails_closed() -> TestResult {
 /// and accepts the others.
 struct RefusingAnswers;
 
+#[async_trait::async_trait]
 impl ihe_iti::xcpd::audit::AuditRecorder for RefusingAnswers {
-    fn record(
+    async fn record(
         &self,
         event: ihe_iti::xcpd::audit::AuditEvent,
     ) -> Result<(), ihe_iti::xcpd::audit::AuditError> {

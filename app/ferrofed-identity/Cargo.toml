@@ -21,10 +21,11 @@ ferrofed-registry.workspace = true
 http.workspace = true
 # The PIXm resolver (#43) over the ITI-83 client of the binding crate, the
 # registry document in FHIR form (#74) over its mCSD directory reader, and the
-# XCPD localizer (#85) over its ITI-55 client.
-ihe-iti = { workspace = true, features = ["mcsd", "pixm", "xcpd"] }
+# XCPD localizer (#85) over its ITI-55 client, with its audit messages sent
+# over ITI-20 (#418).
+ihe-iti = { workspace = true, features = ["atna", "mcsd", "pixm", "xcpd"] }
 # The instant an ITI-91 refresh asks from, read off the directory's `Date`
-# (#86).
+# (#86), and the time an ITI-20 syslog message is written at (#418).
 jiff.workspace = true
 # The Authorization value of the PIX Manager credentials, composed as the
 # node client composes it (RFC 7617 §2, RFC 6750 §2.1).
@@ -41,6 +42,7 @@ url.workspace = true
 # The mock server that drops off the runtime.
 ferrofed-testkit.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "time"] }
 toml.workspace = true
 wiremock.workspace = true
