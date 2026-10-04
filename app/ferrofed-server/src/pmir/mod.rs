@@ -28,7 +28,6 @@ use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::lifecycle::{self, LifecycleConfigError};
 use ferrofed_registry::secret::Secret;
 use http::HeaderMap;
@@ -44,8 +43,8 @@ use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
 use url::Url;
 
 use crate::config::pmir::PmirSettings;
-use crate::config::settings::Scheme;
 use crate::health::dependencies::Observed;
+use crate::service::{self, GrantRefused, TlsRefused};
 use subscription::{RegistryFault, Watch};
 
 /// The identity feed cannot be built from its settings.
@@ -61,6 +60,12 @@ pub enum IdentityFeedError {
     /// The Registry's base URL does not parse.
     #[error("the PMIR Registry base URL is not a URL")]
     Registry(#[source] url::ParseError),
+    /// `[pmir.credentials]` names a grant, which only a node takes.
+    #[error("the PMIR credentials cannot be used")]
+    Grant(#[source] GrantRefused),
+    /// The TLS material of `[pmir]` does not read.
+    #[error("the PMIR TLS material cannot be used")]
+    Tls(#[source] TlsRefused),
 }
 
 /// The identity feed a running gateway keeps: its subscription and the
@@ -105,19 +110,10 @@ impl IdentityFeed {
         domains: BTreeSet<String>,
         audit: Option<Arc<dyn AuditRecorder>>,
     ) -> Result<Self, IdentityFeedError> {
-        let auth = match &settings.credentials {
-            Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
-            Some(Scheme::Basic { user, password }) => Authentication::Basic {
-                user: user.clone(),
-                password: password.to_secret_string(),
-            },
-            // NOTE: no specification governs this: our own design; configuration
-            // refuses an OAuth 2.0, Nuts or FAPI 2.0 grant here, so only the transport remains.
-            Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) | None => {
-                Authentication::None
-            }
-        };
-        let subscriber = lifecycle::subscriber(&settings.url, &auth)?;
+        let auth = service::authentication("pmir.credentials", settings.credentials.as_ref())
+            .map_err(IdentityFeedError::Grant)?;
+        let tls = service::tls_of("pmir", &settings.tls).map_err(IdentityFeedError::Tls)?;
+        let subscriber = lifecycle::subscriber(&settings.url, &auth, &tls)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose
         // record is refused fails like a Registry that did not answer.
         let subscriber = match &audit {

@@ -21,6 +21,9 @@
 //! bearer_token_file = "/run/secrets/pdq-token"
 //! ```
 //!
+//! `client_identity_file` and `trust_roots_file` give the mutual TLS the
+//! Supplier asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
+//!
 //! `transaction` is `iti-78`, the Mobile Patient Demographics Query, or
 //! `iti-119`, the Patient Demographics Match, where the deployment declares
 //! it. `master` is the identifier system of the master domain, whose
@@ -32,15 +35,17 @@
 //! shape of the table: our own design.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use ferrofed_identity::pdqm::Transaction;
-use ferrofed_registry::secret::SecretUrl;
+use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
 use crate::config::error::Error;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::Scheme;
+use crate::config::tls::TlsSettings;
 use crate::config::{Config, Credentials, transport};
 
 /// The key of the table.
@@ -55,6 +60,15 @@ pub struct Pdqm {
     /// How the gateway authenticates to the Supplier, when the transport
     /// does not.
     pub credentials: Option<Credentials>,
+    /// The gateway's client certificate chain and private key, PEM, for
+    /// mutual TLS with the Supplier, inline or through
+    /// `client_identity_file`.
+    pub client_identity: Option<Secret>,
+    /// A file holding the client identity, read at boot.
+    pub client_identity_file: Option<PathBuf>,
+    /// A file of PEM trust roots the Supplier's certificate chains to,
+    /// beside the platform's.
+    pub trust_roots_file: Option<PathBuf>,
     /// The transaction the Supplier is asked with: `iti-78` or `iti-119`.
     pub transaction: Transaction,
     /// The identifier system of the master domain.
@@ -71,6 +85,9 @@ impl Default for Pdqm {
         Self {
             url: SecretUrl::default(),
             credentials: None,
+            client_identity: None,
+            client_identity_file: None,
+            trust_roots_file: None,
             transaction: Transaction::Search,
             master: String::new(),
             namespaces: BTreeMap::new(),
@@ -87,6 +104,8 @@ pub struct PdqmSettings {
     /// How the gateway authenticates to it: a bearer token or basic
     /// credentials.
     pub credentials: Option<Scheme>,
+    /// The TLS material it is reached with.
+    pub tls: TlsSettings,
     /// The transaction the Supplier is asked with.
     pub transaction: Transaction,
     /// The identifier system of the master domain, as written.
@@ -188,9 +207,16 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PdqmSettings>, Error> {
         pdqm.url.expose(),
         transport::identity_site(PDQM_KEY, credentials.is_some().then_some(section.as_str())),
     )?;
+    let tls = crate::config::tls::resolve(
+        PDQM_KEY,
+        pdqm.client_identity.as_ref(),
+        pdqm.client_identity_file.as_deref(),
+        pdqm.trust_roots_file.as_ref(),
+    )?;
     Ok(Some(PdqmSettings {
         url: pdqm.url.clone(),
         credentials,
+        tls,
         transaction: pdqm.transaction,
         master: pdqm.master.clone(),
         namespaces: pdqm.namespaces.clone(),

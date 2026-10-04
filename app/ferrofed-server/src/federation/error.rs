@@ -18,6 +18,7 @@ use ferrofed_registry::id::EndpointId;
 use crate::directory::DirectoryFailure;
 use crate::facade::options::DescribeError;
 use crate::localization;
+use crate::service::{GrantRefused, TlsRefused};
 
 /// A federation that cannot be built from the settings.
 #[derive(Debug, thiserror::Error)]
@@ -197,6 +198,10 @@ pub enum FederationError {
         /// The credentials section.
         section: String,
     },
+    /// The TLS material of an identity, localization, consent or audit
+    /// service does not read.
+    #[error("the TLS material of a service cannot be used")]
+    Tls(#[source] TlsRefused),
     /// The HTTP client of an endpoint's Nuts grant could not be built.
     #[error("the HTTP client of the Nuts grant of {section} could not be built")]
     NutsClient {
@@ -219,4 +224,12 @@ pub enum FederationError {
     /// The HTTP client every node client shares could not be built.
     #[error("the HTTP client for the nodes could not be built")]
     Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<GrantRefused> for FederationError {
+    fn from(refused: GrantRefused) -> Self {
+        Self::Grant {
+            section: refused.section,
+        }
+    }
 }

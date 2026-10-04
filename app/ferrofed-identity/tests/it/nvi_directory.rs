@@ -15,6 +15,7 @@ use std::error::Error;
 use std::time::{Duration, Instant};
 
 use ferrofed_identity::directory;
+use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::localizer::{Localization, Localizer};
 use ferrofed_identity::nvi::{NviConfig, NviConfigError, NviLocalizer};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
@@ -66,11 +67,10 @@ fn config(base: &str, custodians: &[(&str, &str)]) -> Result<NviConfig, Box<dyn 
     }
     Ok(NviConfig {
         base: SecretUrl::new(base),
-        credentials: None,
+        auth: Authentication::None,
         custodians: written,
         namespaces: BTreeSet::new(),
-        client_identity: None,
-        trust_roots: None,
+        tls: Tls::default(),
     })
 }
 

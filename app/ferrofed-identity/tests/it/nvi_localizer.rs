@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_identity::nvi::{NviConfig, NviConfigError, NviLocalizer};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
@@ -44,15 +45,14 @@ fn patient(namespace: &str, value: &str) -> Result<PatientRef, Box<dyn Error>> {
 fn config(base: &str) -> Result<NviConfig, Box<dyn Error>> {
     Ok(NviConfig {
         base: SecretUrl::new(base),
-        credentials: None,
+        auth: Authentication::None,
         custodians: BTreeMap::from([
             ("ura-test-0001".to_owned(), node("node-a")?),
             ("ura-test-0002".to_owned(), node("node-b")?),
             ("ura-test-0003".to_owned(), node("node-b")?),
         ]),
         namespaces: BTreeSet::from([IdentifierNamespace::new("pseudo-bsn")?]),
-        client_identity: None,
-        trust_roots: None,
+        tls: Tls::default(),
     })
 }
 

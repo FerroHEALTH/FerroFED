@@ -20,8 +20,9 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::localizer::OnFailure;
-use ferrofed_identity::xcpd::{GatewayConfig, Tls, Transport, XcpdConfig, XcpdLocalizer};
+use ferrofed_identity::xcpd::{GatewayConfig, Transport, XcpdConfig, XcpdLocalizer};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;

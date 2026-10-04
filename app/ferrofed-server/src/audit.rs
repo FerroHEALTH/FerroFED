@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use ferrofed_identity::atna::RepositoryAudit;
-use ferrofed_identity::balp::{FeedAudit, FeedConfigError, FeedTls, LogFeedAudit, feed_repository};
+use ferrofed_identity::balp::{FeedAudit, FeedConfigError, LogFeedAudit, feed_repository};
 use ihe_iti::atna::forwarder::{Forwarder, Status};
 use ihe_iti::atna::repository::{Repository, RepositoryError, TlsSettings};
 use ihe_iti::atna::spool::{Content, Spool, SpoolError};
@@ -28,6 +28,7 @@ use ihe_iti::balp::AuditRecorder;
 use crate::config::audit::{AuditSettings, FeedRepositorySettings};
 use crate::config::audit_repository::AuditRepositorySettings;
 use crate::config::xcpd::AuditDestination;
+use crate::service::{self, TlsRefused};
 
 /// Every trail the process started, by its spool.
 static TRAILS: LazyLock<Mutex<BTreeMap<String, Trail>>> =
@@ -63,9 +64,12 @@ pub enum AuditTrailError {
     /// The repository address or its TLS settings were refused.
     #[error("the audit repository cannot be reached as configured")]
     Repository(#[source] RepositoryError),
-    /// The FHIR Feed repository or its TLS material was refused.
+    /// The FHIR Feed repository was refused.
     #[error("the audit repository cannot be reached as configured")]
     Feed(#[source] FeedConfigError),
+    /// The FHIR Feed repository's TLS material does not read.
+    #[error("the audit repository TLS material cannot be used")]
+    Tls(#[source] TlsRefused),
     /// The spool could not be opened.
     #[error("the audit spool cannot be used")]
     Spool(#[source] SpoolError),
@@ -170,13 +174,12 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
             _ => Err(AuditTrailError::InUse { spool: key }),
         };
     }
-    let tls = FeedTls {
-        identity: settings
-            .client_identity
-            .as_ref()
-            .map(ferrofed_registry::secret::Secret::to_secret_string),
-        roots: settings.trust_roots.clone(),
-    };
+    let tls = service::tls(
+        "audit.repository",
+        settings.client_identity.as_ref(),
+        settings.trust_roots.as_deref(),
+    )
+    .map_err(AuditTrailError::Tls)?;
     let repository = feed_repository(
         settings.url.clone(),
         settings.cleartext,

@@ -47,6 +47,7 @@ mod localizer_audit;
 mod localizer_surface;
 mod metrics;
 mod mitz;
+mod mutual_tls;
 mod nl_gf;
 mod no_destination;
 mod onward;

@@ -21,6 +21,7 @@ use openehr_federation::id::FederationId;
 use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::grant::GrantFault;
+use crate::config::mcsd::McsdDirectory;
 use crate::config::secrets::{resolve_credentials, resolve_signing};
 use crate::config::settings::{
     DirectorySettings, FederationSettings, LocalizationSettings, MetricsSettings,
@@ -29,8 +30,8 @@ use crate::config::settings::{
 };
 use crate::config::transport::{self, directory_site};
 use crate::config::{
-    COMBINING_MARGIN_MS, Config, Federation, Localization, McsdDirectory, Metrics, NodeSelection,
-    OffsetPaging, Pixm, Telemetry, stored_queries,
+    COMBINING_MARGIN_MS, Config, Federation, Localization, Metrics, NodeSelection, OffsetPaging,
+    Pixm, Telemetry, stored_queries,
 };
 use crate::telemetry::SampleRatio;
 
@@ -341,10 +342,17 @@ fn resolve_pixm(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Error> {
             manager.url.expose(),
             transport::identity_site(&key, carried),
         )?;
+        let tls = crate::config::tls::resolve(
+            &key,
+            manager.client_identity.as_ref(),
+            manager.client_identity_file.as_deref(),
+            manager.trust_roots_file.as_ref(),
+        )?;
         managers.push(PixManagerSettings {
             url: manager.url.clone(),
             members: manager.members.clone(),
             credentials,
+            tls,
         });
     }
     Ok(PixmSettings {
@@ -403,9 +411,16 @@ fn resolve_directory(
             key: String::from("registry.mcsd.refresh_interval_s"),
         });
     }
+    let tls = crate::config::tls::resolve(
+        "registry.mcsd",
+        directory.client_identity.as_ref(),
+        directory.client_identity_file.as_deref(),
+        directory.trust_roots_file.as_ref(),
+    )?;
     Ok(DirectorySettings {
         url: directory.url.clone(),
         credentials,
+        tls,
         refresh_interval,
         deadline: positive_ms("registry.mcsd.deadline_ms", directory.deadline_ms)?,
         max_pages: positive("registry.mcsd.max_pages", directory.max_pages)?,

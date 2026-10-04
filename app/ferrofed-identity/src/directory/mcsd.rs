@@ -53,6 +53,9 @@ pub struct DirectoryConfig {
     /// The credentials the gateway sends, when the transport does not
     /// authenticate it (ITI TF-2 Appendix Z.8).
     pub credentials: Authentication,
+    /// The TLS material the directory is reached with: a client identity for
+    /// mutual TLS and trust roots beside the platform's.
+    pub tls: Tls,
     /// How long one whole read or refresh may take, over every page of both
     /// resource types.
     pub deadline: Duration,
@@ -213,12 +216,13 @@ impl DirectorySource {
         let DirectoryConfig {
             base,
             credentials,
+            tls,
             deadline,
             pages,
             bytes,
             entries,
         } = config;
-        let http = fhir::http_client(&credentials, &Tls::default())?;
+        let http = fhir::http_client(&credentials, &tls)?;
         let base = Url::parse(base.expose()).map_err(DirectoryConfigError::BaseUrl)?;
         let client = McsdClient::new(base, http).map_err(DirectoryConfigError::Base)?;
         Ok(Self {
