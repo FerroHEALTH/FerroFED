@@ -53,6 +53,8 @@ pub struct Status {
     pub reachable: bool,
     /// Whether the spool is on disk.
     pub durable: bool,
+    /// The messages the spool refused for want of room since it opened.
+    pub refused: u64,
 }
 
 /// Where a forwarder delivers to.
@@ -125,6 +127,7 @@ impl Forwarder {
             retries: self.retries.load(Ordering::Relaxed),
             reachable: self.reachable.load(Ordering::Relaxed),
             durable: self.spool.is_durable(),
+            refused: self.spool.refused(),
         }
     }
 

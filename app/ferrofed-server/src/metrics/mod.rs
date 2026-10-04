@@ -103,6 +103,11 @@ pub const AUDIT_RETRIES: &str = "ferrofed.audit.retries";
 /// `ferrofed_audit_quarantined`.
 pub const AUDIT_QUARANTINED: &str = "ferrofed.audit.quarantined";
 
+/// The ITI-20 audit messages the spool refused for want of room, the
+/// messages queued for a write counted with those stored; Prometheus
+/// `ferrofed_audit_refused_total`.
+pub const AUDIT_REFUSED: &str = "ferrofed.audit.refused";
+
 /// The upper bounds of the node request duration buckets, in seconds: 5 ms
 /// to 30 s, past the default per-node timeout of 10 s.
 pub const NODE_DURATION_BUCKETS: [f64; 12] = [
@@ -218,6 +223,7 @@ struct AuditInstruments {
     _quarantined: ObservableGauge<u64>,
     _delivered: ObservableCounter<u64>,
     _retries: ObservableCounter<u64>,
+    _refused: ObservableCounter<u64>,
 }
 
 impl Metrics {
@@ -416,6 +422,11 @@ fn audit_instruments(meter: &opentelemetry::metrics::Meter) -> AuditInstruments 
             AUDIT_RETRIES,
             "Failed attempts to deliver to the audit repository, each followed by a backoff",
             |status| status.retries,
+        ),
+        _refused: counter(
+            AUDIT_REFUSED,
+            "ITI-20 audit messages the spool refused for want of room, queued writes counted",
+            |status| status.refused,
         ),
     }
 }

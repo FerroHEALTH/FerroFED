@@ -638,7 +638,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   delivered once, in the order it was queued (#532). Before, the record of
   a failed exchange was dropped before its write started, and nothing
   logged it. A failed exchange is still audited, and ITI-20 has a stored
-  record sent when the sender is able (ITI TF-2 §3.20.4.1.1).
+  record sent when the sender is able (ITI TF-2 §3.20.4.1.1). A queued
+  record holds its place under `spool_max_events` and `spool_max_bytes`
+  as a stored one does, so a stalled disk holds no more records in memory
+  than the spool could hold on disk: a record past either bound is
+  refused at once as a full spool, its exchange fails as an audit
+  failure, and the refusal is logged with its count, never the record,
+  and counted in the new `ferrofed_audit_refused_total`.
 - A slow or stalled disk under the audit spool no longer holds a patient
   query past its budget (#512). Storing one record is bounded by the new
   `spool_write_timeout_ms` (2000 by default) in `[audit.repository]` and

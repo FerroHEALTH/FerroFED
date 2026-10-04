@@ -144,7 +144,13 @@ waits for its turn and its transaction is answered at its own bound, so a
 stalled disk holds one thread of the gateway, never one per transaction.
 A record still waiting when its transaction stopped waiting stays queued:
 it is written once the writes ahead of it end, and delivered like any
-other, in the order the records were queued. The mCSD directory
+other, in the order the records were queued. A queued record holds its
+place under `spool_max_events` and `spool_max_bytes` as a stored one does,
+so a stalled disk holds no more records in memory than the spool could
+hold on disk. A record past either bound is refused at once, without
+waiting: its transaction fails as with any full spool, the refusal is
+logged with its count and never the record, and
+`ferrofed_audit_refused_total` counts it ([Metrics](metrics.md)). The mCSD directory
 reads and the PMIR subscription exchanges run outside any patient query,
 so `spool_write_timeout_ms` alone bounds their records.
 
