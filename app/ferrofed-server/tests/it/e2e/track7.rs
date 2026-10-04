@@ -22,7 +22,7 @@ use ferrofed_testkit::proxy::Fault;
 use ferrofed_testkit::seed::PatientId;
 use http::{Request, StatusCode, header};
 
-use crate::conveyance::{CALLER, published, verified};
+use crate::conveyance::{CALLER, published, verified_from};
 use crate::e2e::scenario::{
     Options, Reply, asked, captured_field, clear, dev_rows, development, exchange, gateway_with,
     nobody_asked, patient_compositions, patient_predicate, post_aql, queries, seed_both,
@@ -86,7 +86,7 @@ fn reached_as_the_gateway_for_the_caller(
             );
             let conveyed = captured_field(capture, conveyance::HEADER)
                 .ok_or("CP-16: the caller's identity is conveyed")?;
-            let claims = verified(conveyed, keys, endpoint)?;
+            let claims = verified_from(conveyed, keys, endpoint, CLIENT_ID)?;
             assert_eq!(
                 CALLER, claims.sub,
                 "CP-16: the node is told the verified caller"
@@ -140,7 +140,10 @@ async fn each_node_is_reached_with_its_onward_token_and_told_the_caller() -> Tes
     let capture = routed.first().ok_or("the follow-up reached node A")?;
     let conveyed = captured_field(capture, conveyance::HEADER)
         .ok_or("CP-16: the follow-up conveys the caller")?;
-    assert_eq!(CALLER, verified(conveyed, &keys, "node-a-pub")?.sub);
+    assert_eq!(
+        CALLER,
+        verified_from(conveyed, &keys, "node-a-pub", CLIENT_ID)?.sub
+    );
     Ok(())
 }
 

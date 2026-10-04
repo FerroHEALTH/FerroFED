@@ -40,6 +40,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   as a duplicate, and recorded under one of its own, the check fails the
   `system_id` condition naming member A. The conformance matrix records
   track 11 as covered.
+- The Connectathon tracks 1 to 7 and 9 of §16.3 run as scenarios in the
+  end-to-end harness over two FerroEHR nodes: transparency, resolution
+  through the PIX Manager, the directed query and the endpoint pin, partial
+  results under node faults, de-duplication and cross-node shaping,
+  follow-up routing, onward authentication with consent left to the node,
+  and the REST surface with its self-description. Track 8 stays deferred,
+  as the specification marks it provisional (#92).
+- `scripts/conformance/report.sh` writes the report of §16.4 from a test
+  run: every track and every conformance point as pass, fail, not run,
+  deferred, not applicable or open, with the issue and reason of each
+  deferral. CI writes it from the offline and the container runs and uploads
+  it as the `conformance-report` artifact (#92).
 
 ## [0.0.8] - 2026-10-04
 

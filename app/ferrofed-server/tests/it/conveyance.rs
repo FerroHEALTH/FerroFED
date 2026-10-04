@@ -95,6 +95,17 @@ pub(crate) fn verified(
     keys: &JwkSet,
     audience: &str,
 ) -> Result<Conveyed, Box<dyn Error>> {
+    verified_from(token, keys, audience, FEDERATION)
+}
+
+/// `token` verified as [`verified`] does, its `iss` `issuer`: the `client_id`
+/// of the gateway's grant at a node it holds one at.
+pub(crate) fn verified_from(
+    token: &str,
+    keys: &JwkSet,
+    audience: &str,
+    issuer: &str,
+) -> Result<Conveyed, Box<dyn Error>> {
     let header = jsonwebtoken::decode_header(token)?;
     if header.typ.as_deref() != Some(TYPE) || header.alg != ALGORITHM {
         return Err(format!("typ {:?}, alg {:?}", header.typ, header.alg).into());
@@ -102,7 +113,7 @@ pub(crate) fn verified(
     let kid = header.kid.ok_or("the token names its key")?;
     let jwk = keys.find(&kid).ok_or("the key is published")?;
     let mut validation = Validation::new(ALGORITHM);
-    validation.set_issuer(&[FEDERATION]);
+    validation.set_issuer(&[issuer]);
     validation.set_audience(&[audience]);
     validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
     Ok(jsonwebtoken::decode::<Conveyed>(token, &DecodingKey::from_jwk(jwk)?, &validation)?.claims)
