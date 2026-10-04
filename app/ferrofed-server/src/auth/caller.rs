@@ -38,8 +38,9 @@ pub struct Caller {
     /// The caller's verified access token, kept for a node whose grant
     /// exchanges it (RFC 8693); a caller the edge asserted has none.
     token: Option<VerifiedToken>,
-    /// The granted scopes that cover the operation, space-separated, as
-    /// written: the scope an exchanged token is asked for (N26).
+    /// The granted scopes that cover the operation, space-separated, each
+    /// in the canonical form of the SMART on openEHR grammar: the scope an
+    /// exchanged token is asked for (N26).
     covering: String,
 }
 
@@ -184,7 +185,8 @@ impl Caller {
     }
 
     /// Returns this caller, its granted scopes that cover the operation
-    /// being `covering`, space-separated as written.
+    /// being `covering`, space-separated, each printed by `openehr-sdt` in
+    /// the canonical form of the SMART on openEHR grammar.
     #[must_use]
     pub fn with_covering(mut self, covering: String) -> Self {
         self.covering = covering;

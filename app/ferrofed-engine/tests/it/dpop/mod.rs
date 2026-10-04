@@ -3,9 +3,10 @@
 
 //! `DPoP`-bound onward tokens against the harness token endpoint and a mock
 //! node: every request to the token endpoint and to the node carries a proof
-//! of the grant's key binding its method and URL, the node's request binds
-//! the token's hash, and a nonce either server demands is answered once
-//! (§13.1, N25, CP-17; RFC 9449 §4, §5, §7.1, §8, §9).
+//! of the grant's key binding its method and URL, the node's request carries
+//! the bound token under the `DPoP` scheme and its proof binds the token's
+//! hash, and a nonce either server demands is answered once (§13.1, N25,
+//! CP-17; RFC 9449 §4, §5, §7.1, §8, §9).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -17,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::onward::conveyance::{Conveyance, Principal, Verification};
-use ferrofed_engine::onward::dpop::{DpopKeyError, DpopTransport, Prover};
+use ferrofed_engine::onward::dpop::{DpopKeyError, Prover};
 use ferrofed_engine::onward::exchange::{Exchange, SubjectToken};
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::provider::ClientCredentials;
@@ -31,13 +32,14 @@ use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
 use jsonwebtoken::Algorithm;
 use openehr_federation::status::EndpointStatus;
-use openehr_its::rest::client::ReqwestTransport;
+use openehr_its::rest::client::{Credentials, CredentialsProvider as _, ReqwestTransport};
 use secrecy::SecretString;
-use url::Url;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::conveyed::{UPSTREAM, caller, conveyance, shared};
+
+mod nonce;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -97,21 +99,9 @@ fn grant(endpoint: &TokenEndpoint, prover: &Arc<Prover>) -> Result<Grant, Box<dy
     .with_dpop(Arc::clone(prover)))
 }
 
-/// The engine proving every request to the node at `node` and to
-/// `endpoint`'s token URL with `prover`.
-fn transport(
-    node: &Server,
-    endpoint: &TokenEndpoint,
-    prover: &Arc<Prover>,
-) -> Result<DpopTransport<ReqwestTransport>, Box<dyn Error>> {
-    Ok(
-        DpopTransport::new(ReqwestTransport::with_timeout(Duration::from_secs(10))?)
-            .with_route(Url::parse(&endpoint.token_url())?, Arc::clone(prover))
-            .with_route(
-                Url::parse(&format!("{}/openehr", node.uri()))?,
-                Arc::clone(prover),
-            ),
-    )
+/// The engine every node request and token request is sent through.
+fn transport() -> Result<ReqwestTransport, Box<dyn Error>> {
+    Ok(ReqwestTransport::with_timeout(Duration::from_secs(10))?)
 }
 
 /// The client of the endpoint whose base is `{server}/{base}`, over
@@ -119,8 +109,8 @@ fn transport(
 fn client(
     server: &Server,
     base: &str,
-    transport: DpopTransport<ReqwestTransport>,
-) -> Result<NodeClient<DpopTransport<ReqwestTransport>>, Box<dyn Error>> {
+    transport: ReqwestTransport,
+) -> Result<NodeClient<ReqwestTransport>, Box<dyn Error>> {
     let document = format!(
         "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr-a.example.org\"\n\n[[endpoint]]\nid = \"node-a-pub\"\nnode = \"node-a\"\nurl = \"{}/{base}\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n",
         server.uri()
@@ -134,8 +124,8 @@ fn client(
 fn provider(
     grant: Grant,
     keys: Arc<KeyRing>,
-    transport: DpopTransport<ReqwestTransport>,
-) -> Result<Arc<ClientCredentials<DpopTransport<ReqwestTransport>>>, Box<dyn Error>> {
+    transport: ReqwestTransport,
+) -> Result<Arc<ClientCredentials<ReqwestTransport>>, Box<dyn Error>> {
     Ok(Arc::new(ClientCredentials::new(
         EndpointId::new("node-a-pub")?,
         grant,
@@ -183,9 +173,25 @@ async fn query<T: openehr_its::rest::client::Transport + Clone>(
     Ok(client.query(&NodeQuery::new(NODE_AQL), &options).await?)
 }
 
-/// The node receives the bound token under the `DPoP` scheme with a proof of
-/// the grant's key over its method, URL and the token's hash, and the token
-/// endpoint received a proof of the same key (RFC 9449 §4.2, §5, §7.1).
+/// The `Authorization` value and the `DPoP` proof of `request`.
+fn credential_and_proof(request: &wiremock::Request) -> Result<(&str, &str), Box<dyn Error>> {
+    let sent = request
+        .headers
+        .get(http::header::AUTHORIZATION)
+        .ok_or("the node receives a credential")?
+        .to_str()?;
+    let proof = request
+        .headers
+        .get(HEADER)
+        .ok_or("the node receives a proof")?
+        .to_str()?;
+    Ok((sent, proof))
+}
+
+/// The node receives the bound token under the `DPoP` scheme, never under
+/// `Bearer`, with a proof of the grant's key over its method, URL and the
+/// token's hash, and the token endpoint received a proof of the same key
+/// (RFC 9449 §4.2, §5, §7.1).
 // conformance: CP-17
 #[tokio::test]
 async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestResult {
@@ -194,9 +200,10 @@ async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestRe
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let transport = transport(&node, &endpoint, &prover)?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport.clone())?;
-    let client = client(&node, "openehr", transport)?.with_credentials_provider(provider);
+    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let client = client(&node, "openehr", transport()?)?
+        .with_credentials_provider(provider)
+        .with_dpop(&prover);
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(
@@ -210,17 +217,12 @@ async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestRe
     let [request] = requests.as_slice() else {
         return Err(format!("expected one node request, got {}", requests.len()).into());
     };
-    let sent = request
-        .headers
-        .get(http::header::AUTHORIZATION)
-        .ok_or("the node receives a credential")?
-        .to_str()?;
+    let (sent, proof) = credential_and_proof(request)?;
+    assert!(
+        !sent.to_ascii_lowercase().starts_with("bearer"),
+        "a DPoP-bound token never goes out under Bearer: {sent}"
+    );
     let token = sent.strip_prefix("DPoP ").ok_or("the DPoP scheme")?;
-    let proof = request
-        .headers
-        .get(HEADER)
-        .ok_or("the node receives a proof")?
-        .to_str()?;
     let verified = dpop::verify(
         proof,
         "POST",
@@ -228,6 +230,28 @@ async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestRe
         Some(token),
     )?;
     assert_eq!(prover.thumbprint(), verified.jkt);
+    assert_eq!(None, verified.proof.nonce, "no nonce was demanded");
+    Ok(())
+}
+
+/// A provider of a `DPoP`-bound grant hands its node client a `DPoP`
+/// credential, which is written under the `DPoP` scheme and never under
+/// `Bearer` (RFC 9449 §7.1).
+#[tokio::test]
+async fn a_dpop_bound_token_is_never_a_bearer_credential() -> TestResult {
+    let keys = keys()?;
+    let endpoint = endpoint(&keys).await;
+    let prover = prover()?;
+    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+
+    let credentials = provider.credentials().await?;
+    assert!(
+        matches!(credentials, Credentials::Dpop(_)),
+        "{credentials:?}"
+    );
+    let value = credentials.header_value()?;
+    let written = value.to_str()?;
+    assert!(written.starts_with("DPoP "), "the DPoP scheme");
     Ok(())
 }
 
@@ -242,9 +266,10 @@ async fn the_token_endpoints_nonce_is_answered_once() -> TestResult {
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let transport = transport(&node, &endpoint, &prover)?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport.clone())?;
-    let client = client(&node, "openehr", transport)?.with_credentials_provider(provider);
+    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let client = client(&node, "openehr", transport()?)?
+        .with_credentials_provider(provider)
+        .with_dpop(&prover);
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(
@@ -263,8 +288,70 @@ async fn the_token_endpoints_nonce_is_answered_once() -> TestResult {
     Ok(())
 }
 
-/// A node that demands a nonce is answered once more with it, within the
-/// request's own budget (RFC 9449 §9).
+/// A token endpoint that keeps demanding a nonce is answered once more,
+/// with a proof naming the nonce, and no further: its refusal fails the
+/// node, with nothing sent to the node (RFC 9449 §8).
+// conformance: CP-17
+#[tokio::test]
+async fn the_token_endpoints_nonce_is_answered_no_more_than_once() -> TestResult {
+    let keys = keys()?;
+    let authority = Server::start().await;
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .set_body_raw(
+                    br#"{"error":"use_dpop_nonce"}"#.to_vec(),
+                    "application/json",
+                )
+                .insert_header(dpop::NONCE_HEADER, "synthetic-as-nonce-2"),
+        )
+        .mount(&authority)
+        .await;
+    let token_url = format!("{}/token", authority.uri());
+    let node = Server::start().await;
+    let prover = prover()?;
+    let grant = Grant::new(
+        &SecretUrl::new(token_url.clone()),
+        CLIENT_ID,
+        Scope::parse(SCOPE)?,
+    )?
+    .with_dpop(Arc::clone(&prover));
+    let provider = provider(grant, keys, transport()?)?;
+    let client = client(&node, "openehr", transport()?)?
+        .with_credentials_provider(provider)
+        .with_dpop(&prover);
+
+    let reply = query(&client, conveyance()).await?;
+    assert_eq!(EndpointStatus::NodeError, reply.status());
+    let sent = authority
+        .received_requests()
+        .await
+        .ok_or("recording is on")?;
+    let [first, second] = sent.as_slice() else {
+        return Err(format!("expected one request and one more, got {}", sent.len()).into());
+    };
+    let mut nonces = Vec::new();
+    for request in [first, second] {
+        let proof = request
+            .headers
+            .get(HEADER)
+            .ok_or("every token request carries a proof")?
+            .to_str()?;
+        nonces.push(dpop::verify(proof, "POST", &token_url, None)?.proof.nonce);
+    }
+    assert_eq!(
+        vec![None, Some(String::from("synthetic-as-nonce-2"))],
+        nonces
+    );
+    let requests = node.received_requests().await.ok_or("recording is on")?;
+    assert!(requests.is_empty(), "the node was sent nothing");
+    Ok(())
+}
+
+/// A node that demands a nonce is answered once more with it: the second
+/// request carries a new proof, with its own `jti`, naming the nonce (RFC
+/// 9449 §4.2, §9).
 // conformance: CP-17
 #[tokio::test]
 async fn the_nodes_nonce_is_answered_once() -> TestResult {
@@ -278,9 +365,10 @@ async fn the_nodes_nonce_is_answered_once() -> TestResult {
     )
     .await;
     let prover = prover()?;
-    let transport = transport(&node, &endpoint, &prover)?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport.clone())?;
-    let client = client(&node, "openehr", transport)?.with_credentials_provider(provider);
+    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let client = client(&node, "openehr", transport()?)?
+        .with_credentials_provider(provider)
+        .with_dpop(&prover);
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(
@@ -290,11 +378,26 @@ async fn the_nodes_nonce_is_answered_once() -> TestResult {
         reply.outcome()
     );
     let requests = node.received_requests().await.ok_or("recording is on")?;
-    assert_eq!(
-        2,
-        requests.len(),
-        "one request, and one more with the nonce"
-    );
+    let [first, second] = requests.as_slice() else {
+        return Err(format!(
+            "expected one request and one more with the nonce, got {}",
+            requests.len()
+        )
+        .into());
+    };
+    let url = format!("{}/openehr/v1/query/aql", node.uri());
+    let mut proofs = Vec::new();
+    for request in [first, second] {
+        let (sent, proof) = credential_and_proof(request)?;
+        let token = sent.strip_prefix("DPoP ").ok_or("the DPoP scheme")?;
+        proofs.push(dpop::verify(proof, "POST", &url, Some(token))?.proof);
+    }
+    let [unprompted, prompted] = proofs.as_slice() else {
+        return Err("two proofs".into());
+    };
+    assert_eq!(None, unprompted.nonce);
+    assert_eq!(Some("synthetic-rs-nonce-1"), prompted.nonce.as_deref());
+    assert_ne!(unprompted.jti, prompted.jti, "each proof has its own jti");
     assert_eq!(1, endpoint.issued(), "the challenge drops no token");
     Ok(())
 }
@@ -310,7 +413,6 @@ async fn an_exchanged_token_is_dpop_bound() -> TestResult {
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let transport = transport(&node, &endpoint, &prover)?;
     let grant = grant(&endpoint, &prover)?
         .with_resource("https://cdr-a.example.org/openehr")?
         .with_token_exchange();
@@ -319,10 +421,12 @@ async fn an_exchanged_token_is_dpop_bound() -> TestResult {
         grant,
         keys,
         (Duration::from_secs(300), Duration::from_secs(5)),
-        transport.clone(),
+        transport()?,
         Arc::new(SystemClock),
     ));
-    let client = client(&node, "openehr", transport)?.with_on_behalf(exchange);
+    let client = client(&node, "openehr", transport()?)?
+        .with_on_behalf(exchange)
+        .with_dpop(&prover);
     let mut claims = Claims::new(UPSTREAM, "urn:example:ferrofed-under-test");
     crate::conveyed::SUBJECT.clone_into(&mut claims.sub);
     let token = CALLERS.mint(&claims)?;
@@ -353,9 +457,10 @@ async fn a_bearer_token_where_dpop_was_asked_fails_the_node() -> TestResult {
     let node = Server::start().await;
     answer_when(&node, endpoint.bearer(), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let transport = transport(&node, &endpoint, &prover)?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport.clone())?;
-    let client = client(&node, "openehr", transport)?.with_credentials_provider(provider);
+    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let client = client(&node, "openehr", transport()?)?
+        .with_credentials_provider(provider)
+        .with_dpop(&prover);
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
@@ -364,17 +469,17 @@ async fn a_bearer_token_where_dpop_was_asked_fails_the_node() -> TestResult {
     Ok(())
 }
 
-/// A request under no route passes through unchanged: no proof, and its
-/// bearer token under the `Bearer` scheme, even where another route shares
-/// its origin and the first characters of its path.
+/// A request without a `DPoP`-bound token carries no proof, even from a
+/// client given a key: a grant that binds nothing sends its token under the
+/// `Bearer` scheme.
 #[tokio::test]
-async fn a_request_under_no_route_carries_no_proof() -> TestResult {
+async fn a_request_without_a_bound_token_carries_no_proof() -> TestResult {
     let keys = keys()?;
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     endpoint.trust(keys.published());
     let node = Server::start().await;
     Mock::given(method("POST"))
-        .and(path("/openehr2/v1/query/aql"))
+        .and(path("/openehr/v1/query/aql"))
         .and(endpoint.bearer())
         .respond_with(
             ResponseTemplate::new(200)
@@ -382,16 +487,15 @@ async fn a_request_under_no_route_carries_no_proof() -> TestResult {
         )
         .mount(&node)
         .await;
-    let prover = prover()?;
-    let routed = DpopTransport::new(ReqwestTransport::with_timeout(Duration::from_secs(10))?)
-        .with_route(Url::parse(&format!("{}/openehr", node.uri()))?, prover);
     let plain = Grant::new(
         &SecretUrl::new(endpoint.token_url()),
         CLIENT_ID,
         Scope::parse(SCOPE)?,
     )?;
-    let provider = provider(plain, keys, routed.clone())?;
-    let client = client(&node, "openehr2", routed)?.with_credentials_provider(provider);
+    let provider = provider(plain, keys, transport()?)?;
+    let client = client(&node, "openehr", transport()?)?
+        .with_credentials_provider(provider)
+        .with_dpop(&prover()?);
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(

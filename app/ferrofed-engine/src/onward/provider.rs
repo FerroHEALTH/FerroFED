@@ -106,8 +106,13 @@ impl<T: Transport> ClientCredentials<T> {
     /// margin.
     async fn obtain(&self) -> Result<Credentials, TokenError> {
         let started = self.clock.now();
-        let assertion = token::assertion(&self.grant, self.keys.current(), self.lifetime)?;
-        let issued = token::request(&self.grant, &assertion, &self.transport, self.timeout).await?;
+        let issued = token::request(
+            &self.grant,
+            (self.keys.current(), self.lifetime),
+            &self.transport,
+            self.timeout,
+        )
+        .await?;
         let refresh_at = issued
             .expires_in
             .and_then(|lifetime| lifetime.checked_sub(REFRESH_MARGIN))

@@ -506,7 +506,7 @@ async fn a_prefilter_that_cannot_answer_leaves_every_candidate_to_its_node() -> 
         openehr_its::rest::client::ReqwestTransport::with_timeout(Duration::from_secs(5))?;
     let clients = ferrofed_engine::dispatch::NodeClients::from_snapshot(
         &snapshot,
-        &ferrofed_engine::onward::dpop::DpopTransport::new(transport),
+        &transport,
         &std::collections::BTreeMap::new(),
     )?;
     let federation = ferrofed_server::federation::Federation::new(
