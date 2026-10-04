@@ -9,12 +9,12 @@ specification requires both: the client authenticates to the gateway, the
 gateway authenticates onward to each node, and the client's identity
 travels with every request (§13.1, N24, N25, CP-16, CP-17).
 
-Client authentication
+All three are built on `main` for v0.0.8: client authentication
 ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), OAuth 2.0 to
 each node with the gateway's own key
 ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)) and the caller's
 identity conveyed to each node
-([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)) run today.
+([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)).
 
 ## The gate
 
@@ -29,7 +29,7 @@ flowchart TB
     proxy -->|"HTTP"| gate["The gate: token,<br/>scope, purpose of use"]
     gate -->|"401, 403, 503"| client
     gate --> gw["FerroFED gateway"]
-    gw -->|"its own credential<br/>per endpoint"| node["Node A"]
+    gw -->|"its own credential,<br/>the signed caller"| node["Node A"]
 ```
 
 A caller's `Authorization` header never reaches a node. A proxy that
@@ -109,7 +109,9 @@ that covers the operation is a `403`. A token without a purpose of use is a
 deployment whose proxy already authenticates callers, the edge mode is
 configured explicitly: the proxy signs an assertion of the caller, the
 gateway verifies it like a token and records which identity the proxy
-asserted.
+asserted. A `patient/` scope grants nothing at the gateway until
+[#413](https://github.com/FerroHEALTH/FerroFED/issues/413) decides how a
+patient context is confined across a federation.
 
 **Authenticating to the node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
 §13.1, N25). The gateway sends the node's token endpoint an OAuth 2.0 client
@@ -119,9 +121,10 @@ token endpoint as its audience. The token endpoint verifies it against the
 gateway's JWKS and issues an access token. The gateway caches that token
 per node until 30 seconds before it expires, and drops it on a `401`. A
 token it cannot obtain fails that node `node-error`; the gateway never
-sends a request without one. Where a node's authorization server supports
-token exchange (RFC 8693), the issued token can carry the caller as the
-delegating subject.
+sends a request without one. The client-credentials grant is the one
+onward mechanism built: token exchange (RFC 8693) and sender-constrained
+tokens are not offered, so a node learns who asks from the signed statement
+below.
 
 **Telling the node who asks** ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
 N24, §12.4). Every request to a node carries `openEHR-federation-client`: a
@@ -160,3 +163,7 @@ verified across each boundary and who authenticates the end user, are
 answered for the gateway, with a template for the rest, in
 [The §13.4 deployment decisions](../operate/deployment-decisions.md)
 ([#84](https://github.com/FerroHEALTH/FerroFED/issues/84), CP-39).
+
+The authentication tracks of the Dutch binding, the Nuts profile and the
+harmonised BgZ and eOverdracht track (Annex B.4, B.4a), are planned for
+v0.0.8 ([#88](https://github.com/FerroHEALTH/FerroFED/issues/88)).

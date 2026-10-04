@@ -269,6 +269,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   the admission check without a registry, and a registry in FHIR form that
   lists an endpoint it does not hold says the reference names no resource,
   where it said it named no `Organization` (#434).
+- The book draws the v0.0.8 work on `main` as built (#406). The How it works
+  pages show the gate, the onward OAuth 2.0 token with its ES384 assertion
+  and cache, the signed caller on every node request, the XCPD and PIXm
+  localizers, the mCSD directory and the resolution bindings per verified
+  caller; only the ATNA audit repository (#418), PMIR (#147) and the Dutch
+  Generic Functions (#87, #88) stay dashed as planned. The claims page lists
+  the merged v0.0.8 items as on `main`, in the next release, and v0.0.7 as
+  released. The README, `llms.txt` and the introduction say client
+  authentication and onward authentication are built.
 
 ### Fixed
 

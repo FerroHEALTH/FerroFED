@@ -55,9 +55,11 @@ flowchart TB
 Step 2 is optional. Under `federation.node_selection = "ask-all"` every
 registry member is a candidate, and the gateway asks the PIX Manager about
 all of them (§4.3, N4). Under `"localized"` a localizer names the candidates
-first (§14.1). The localizer today is the development cross-reference; the
-IHE XCPD binding is planned for v0.0.8
-([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)).
+first (§14.1). Three localizers are built: IHE XCPD ITI-55 (Annex A.3), the
+PIX Manager itself, whose one ITI-83 answer both localizes and resolves
+(§14.2), and the development cross-reference. The NVI localizer of the Dutch
+binding is planned for v0.0.8
+([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
 
 ## The parts of the gateway
 
@@ -68,6 +70,7 @@ every other page of this part uses.
 flowchart TB
     client["Client application"]
     subgraph gw["FerroFED gateway"]
+        gate["Gate<br/>token, scope,<br/>purpose of use"]
         facade["Façade<br/>ITS-REST"]
         store[("Stored-query<br/>store")]
         rewrite["Rewrite<br/>AQL per node"]
@@ -76,22 +79,31 @@ flowchart TB
         engine["Engine<br/>fan-out, routing,<br/>outbound gate"]
         merge["Merge<br/>rows and<br/>meta.federation"]
         admin["Admin<br/>listener"]
+        keys["Signing key<br/>and JWK Set"]
     end
     pix["PIX Manager"]
+    xcpd["XCPD responding<br/>gateways"]
     nodes["Member CDRs"]
-    client -->|"requests"| facade
+    client -->|"requests"| gate
+    gate -->|"verified caller"| facade
     store -->|"definitions"| facade
     facade -->|"parsed query"| rewrite
     facade -->|"patient"| seams
     seams -->|"ITI-83"| pix
+    seams -->|"ITI-55"| xcpd
     rewrite -->|"node queries"| engine
     registry -->|"members"| engine
+    keys -->|"assertion,<br/>signed caller"| engine
     engine -->|"ITS-REST"| nodes
     engine -->|"outcomes"| merge
     engine -->|"counts"| admin
     merge -->|"RESULT_SET"| facade
 ```
 
+- **Gate:** verifies the caller's access token against the issuers you
+  trust, and checks the operation's scope and the purpose of use before
+  anything else reads the request (§13.1, N25). A refused request reaches no
+  node ([Trust and keys](trust-and-keys.md)).
 - **Façade:** serves the ITS-REST surface the client sees, from the
   generated route tables of `openehr-its` (§7a, N1). It takes the query
   apart, picks the path a request takes, and writes the answer.
@@ -101,14 +113,20 @@ flowchart TB
   safely (§5.4.3).
 - **Identity seams:** one trait per role of §5.2, §13.2.1 and §14: the
   resolver (the PIX Manager over ITI-83, or a static cross-reference for
-  trials), the localizer and the consent pre-filter. The localizer and the
-  pre-filter have development bindings today. Their production bindings,
-  XCPD ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)) and the
-  Dutch Mitz ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)),
-  are planned for v0.0.8.
+  trials), the localizer (XCPD over ITI-55, the PIX Manager, or the static
+  cross-reference) and the consent pre-filter. The pre-filter has a
+  development binding; its production binding, the Dutch Mitz
+  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), is planned for
+  v0.0.8.
 - **Engine:** sends one request per node under one deadline (§11.5, N38),
   routes a follow-up to the node that owns it (§12), and passes every
-  outbound request through the outbound gate (§5.4.1, N33).
+  outbound request through the outbound gate (§5.4.1, N33). Each request
+  carries the node's own credential and the caller's identity, signed by the
+  gateway for that node (§13.1, N24, N25).
+- **Signing key and JWK Set:** the gateway's ES384 key signs its client
+  assertions to each node's token endpoint and the caller's identity on every
+  node request. Its public half is served at `{base}/.well-known/jwks.json`
+  (§13.1, N30).
 - **Merge:** orders, de-duplicates and cuts the rows across nodes, and
   reports every member with its status (§9 to §11, N13, N16, N37, N39).
 - **Registry snapshot:** the members you admitted, read from a reviewed
@@ -131,8 +149,9 @@ so where each piece of state lives is FerroFED's own design.
 | `ehr_id` to node index | memory, bounded, least recently used out first | no |
 | `creating_system_id` routes learned from answers | memory | no |
 | Resolution bindings per verified caller | memory, under a lifetime and a capacity | no |
+| Access tokens from the nodes' token endpoints | memory, per endpoint, until 30 seconds before each expires | no |
 | Stored-query definitions | `redb`, PostgreSQL or read-only files | yes |
-| Outbound credentials | one secret file each | yes, they are your files |
+| Outbound credentials and the signing keys | one secret file each | yes, they are your files |
 
 It never writes a patient identifier, a value derived from one, or a result
 row to disk. A stored query names its patient through a `$parameter`, and a

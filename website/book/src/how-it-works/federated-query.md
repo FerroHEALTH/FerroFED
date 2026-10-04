@@ -29,7 +29,8 @@ sequenceDiagram
     participant L as Localizer
     participant P as Consent
     participant X as PIX Manager
-    C->>F: POST /v1/query/aql
+    C->>F: POST /v1/query/aql,<br/>Bearer token
+    Note over F: the gate: token,<br/>scope, purpose of use,<br/>or 401, 403
     Note over F: parse, bind,<br/>find the patient,<br/>or answer 400
     Note over F: take the registry<br/>snapshot
     opt node_selection = localized
@@ -42,7 +43,7 @@ sequenceDiagram
     end
     F->>X: ITI-83 $ihe-pix
     X-->>F: ehr_id per domain, or none
-    Note over F: {node, ehr_id}<br/>pairs
+    Note over F: {node, ehr_id}<br/>pairs, kept for<br/>this caller
 ```
 
 - **Node selection** is a declaration you make (§4.3, N4, N10). Under
@@ -55,9 +56,17 @@ sequenceDiagram
   `meta.federation.localization.error` carries the same error, so an outage
   never reads as a patient with no data. Only
   `federation.localization.on_failure = "ask-all"` widens instead (§14.1,
-  N4, CP-5). The localizer today is the development cross-reference, under
-  `profile = "development"`; the IHE XCPD binding is planned for v0.0.8
-  ([#85](https://github.com/FerroHEALTH/FerroFED/issues/85)).
+  N4, CP-5).
+- **The localizer** is one of three
+  ([Identity resolution](../operate/identity.md)). IHE XCPD asks every
+  responding gateway by the patient identifier alone which communities hold
+  the patient (ITI-55, Annex A.3). Without `[xcpd]`, the PIX Manager
+  localizes: its candidates are the members whose domain holds an identifier
+  for the patient, and the resolution reuses that one ITI-83 answer (§14.2).
+  The development cross-reference localizes under `profile =
+  "development"`. The read of an EHR by subject is localized the same way.
+  The NVI localizer of the Dutch binding is planned for v0.0.8
+  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
 - **The consent pre-filter** is optional and never the gate: a member it
   denies is `consent-denied`, never resolved and never sent a request, and
   every other member is asked so its node can decide (§13.2.1, N27, N27a).
@@ -80,7 +89,9 @@ subject predicate becomes `e/ehr_id/value = '<that node's ehr_id>'`, the
 canonical form of N29, and `printer::to_aql` prints it (§7.1, N7, CP-4). The
 engine sends every node query at once, under one deadline fixed when the
 request arrived (§11.5, N38), and each request passes the outbound gate
-first ([Where the patient identifier stops](identifier-hygiene.md)).
+first ([Where the patient identifier stops](identifier-hygiene.md)). Each
+request carries that node's own credential and the caller's identity in a
+token the gateway signs for that node ([Trust and keys](trust-and-keys.md)).
 
 ```mermaid
 %%{init: {"sequence": {"actorMargin": 24}}}%%
@@ -94,10 +105,10 @@ sequenceDiagram
     F->>E: fan out, one deadline
     Note over E: outbound<br/>gate
     par every resolved node at once
-        E->>A: AQL, ehr_id A
+        E->>A: AQL, ehr_id A,<br/>node token, signed caller
         A-->>E: rows
     and
-        E->>B: AQL, ehr_id B
+        E->>B: AQL, ehr_id B,<br/>node token, signed caller
         B-->>E: rows, error,<br/>or time-out
     end
     E-->>F: outcome per member
