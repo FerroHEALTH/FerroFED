@@ -632,6 +632,7 @@ fn federation_class(error: &FederationError) -> &'static str {
         FederationError::Describe(_) => "self-description",
         FederationError::Clients(SetupError::UnknownEndpoint { .. })
         | FederationError::Grant { .. } => "credentials",
+        FederationError::Tls(_) => "tls",
         FederationError::Clients(_) => "node-clients",
         FederationError::Transport(_) | FederationError::NutsClient { .. } => "http-client",
         FederationError::Unsigned => "signing",

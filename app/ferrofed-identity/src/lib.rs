@@ -20,9 +20,9 @@
 //! - [`demographics`]: the optional
 //!   [`Demographics`](demographics::Demographics) seam, the master identity of
 //!   an identifier the cross-reference does not map (Annex A §A.2);
-//! - [`fhir`]: the HTTP client every IHE FHIR server is asked through, with
-//!   its [`Authentication`](fhir::Authentication) and [`Tls`](fhir::Tls)
-//!   material;
+//! - [`fhir`]: the one HTTP client build every outbound client of this crate
+//!   uses, with its [`Authentication`](fhir::Authentication) and its one
+//!   [`Tls`](fhir::Tls) type;
 //! - [`pixm`]: the [`Resolver`](resolver::Resolver) over PIXm ITI-83 (#43);
 //! - [`pdqm`]: the [`Demographics`](demographics::Demographics) step over
 //!   PDQm ITI-78 or ITI-119 (Annex A §A.2);

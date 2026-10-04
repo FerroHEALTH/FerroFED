@@ -26,20 +26,19 @@ use ferrofed_identity::nvi::{NviConfig, NviConfigError, NviLocalizer};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRefError};
 use ferrofed_identity::pixm::PixmResolver;
 use ferrofed_identity::xcpd::{
-    AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Tls, Transport, XcpdConfig,
+    AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Transport, XcpdConfig,
     XcpdConfigError, XcpdLocalizer,
 };
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::Secret;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use openehr_its::rest::client::Credentials;
 
 use crate::audit::{self, AuditTrailError};
 use crate::config::nl_gf::NviSettings;
-use crate::config::settings::{LocalizationSettings, Scheme, Settings};
+use crate::config::settings::{LocalizationSettings, Settings};
 use crate::config::xcpd::{AuditDestination, XcpdSettings};
 use crate::config::{self, NodeSelection};
+use crate::service::{self, GrantRefused, TlsRefused};
 
 /// The localizer of a federation, with its failure policy and budget.
 #[derive(Clone)]
@@ -200,12 +199,12 @@ pub enum LocalizationError {
     /// An `nl_gf.nvi.namespaces` entry is empty.
     #[error("nl_gf.nvi.namespaces has an empty namespace")]
     NviNamespace(#[source] PatientRefError),
-    /// `[nl_gf.nvi.credentials]` names an OAuth 2.0 grant, which only a node
-    /// takes.
-    #[error(
-        "nl_gf.nvi.credentials takes a bearer token or basic credentials, not an oauth2, nuts or fapi2 grant"
-    )]
-    NviGrant,
+    /// A credentials section names a grant, which only a node takes.
+    #[error("the localizer's credentials cannot be used")]
+    Grant(#[source] GrantRefused),
+    /// The localizer's TLS material does not read.
+    #[error("the localizer's TLS material cannot be used")]
+    Tls(#[source] TlsRefused),
     /// The NVI localizer refuses its configuration.
     #[error("the [nl_gf.nvi] localizer cannot be enabled")]
     Nvi(#[source] NviConfigError),
@@ -369,10 +368,12 @@ fn xcpd_localizer(
         } else {
             Transport::Encrypted
         },
-        tls: Tls {
-            identity: xcpd.client_identity.as_ref().map(Secret::to_secret_string),
-            roots: xcpd.trust_roots.clone(),
-        },
+        tls: service::tls(
+            "xcpd",
+            xcpd.client_identity.as_ref(),
+            xcpd.trust_roots.as_deref(),
+        )
+        .map_err(LocalizationError::Tls)?,
     };
     let localizer =
         XcpdLocalizer::from_config(config, assertion, snapshot).map_err(LocalizationError::Xcpd)?;
@@ -418,24 +419,20 @@ fn nvi_localizer(
         .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
         .collect::<Result<BTreeSet<_>, _>>()
         .map_err(LocalizationError::NviNamespace)?;
-    let credentials = match &nvi.credentials {
-        None => None,
-        Some(Scheme::Bearer(token)) => Some(Credentials::bearer(token.to_secret_string())),
-        Some(Scheme::Basic { user, password }) => Some(Credentials::basic(
-            user.as_str(),
-            password.to_secret_string(),
-        )),
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => {
-            return Err(LocalizationError::NviGrant);
-        }
-    };
+    let auth = service::authentication("nl_gf.nvi.credentials", nvi.credentials.as_ref())
+        .map_err(LocalizationError::Grant)?;
+    let tls = service::tls(
+        "nl_gf.nvi",
+        nvi.client_identity.as_ref(),
+        nvi.trust_roots.as_deref(),
+    )
+    .map_err(LocalizationError::Tls)?;
     let config = NviConfig {
         base: nvi.url.clone(),
-        credentials,
+        auth,
         custodians,
         namespaces,
-        client_identity: nvi.client_identity.as_ref().map(Secret::to_secret_string),
-        trust_roots: nvi.trust_roots.clone(),
+        tls,
     };
     NviLocalizer::from_config(config, snapshot).map_err(LocalizationError::Nvi)
 }

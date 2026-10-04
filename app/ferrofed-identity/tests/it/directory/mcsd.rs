@@ -13,7 +13,7 @@ use ferrofed_identity::directory::mcsd::{
     DirectoryConfig, DirectoryReadError, DirectorySource, Refreshed,
 };
 use ferrofed_identity::directory::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM};
-use ferrofed_identity::fhir::Authentication;
+use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;
@@ -34,6 +34,7 @@ fn member(name: &str) -> Member {
 
 fn source(harness: &HarnessDirectory) -> Result<DirectorySource, Box<dyn Error>> {
     Ok(DirectorySource::new(DirectoryConfig {
+        tls: Tls::default(),
         base: SecretUrl::new(harness.base()),
         credentials: Authentication::None,
         deadline: Duration::from_secs(5),
@@ -116,6 +117,7 @@ async fn a_refresh_into_a_broken_registry_is_refused_and_the_content_kept() -> T
 #[tokio::test]
 async fn a_directory_that_does_not_answer_is_an_exchange_error() -> TestResult {
     let source = DirectorySource::new(DirectoryConfig {
+        tls: Tls::default(),
         base: SecretUrl::new(format!("{}/fhir", ferrofed_testkit::unreachable::BASE)),
         credentials: Authentication::None,
         deadline: Duration::from_secs(2),
@@ -161,6 +163,7 @@ async fn a_directory_past_a_cap_gives_no_registry() -> TestResult {
     let harness = HarnessDirectory::start().await;
     harness.publish(&[member("a"), member("b")])?;
     let source = DirectorySource::new(DirectoryConfig {
+        tls: Tls::default(),
         base: SecretUrl::new(harness.base()),
         credentials: Authentication::None,
         deadline: Duration::from_secs(5),

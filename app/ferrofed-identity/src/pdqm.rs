@@ -91,6 +91,9 @@ pub struct PdqmConfig {
     pub base: SecretUrl,
     /// How the gateway authenticates to it.
     pub auth: Authentication,
+    /// The TLS material it is reached with: a client identity for mutual TLS
+    /// and trust roots beside the platform's.
+    pub tls: Tls,
     /// The transaction the Supplier is asked with.
     pub transaction: Transaction,
     /// The identifier system of the master domain: the identifier the matched
@@ -191,7 +194,7 @@ impl PdqmDemographics {
                 return Err(PdqmConfigError::MasterNamespace(namespace.clone()));
             }
         }
-        let http = http_client(&config.auth, &Tls::default()).map_err(PdqmConfigError::Client)?;
+        let http = http_client(&config.auth, &config.tls).map_err(PdqmConfigError::Client)?;
         let base = Url::parse(config.base.expose()).map_err(PdqmConfigError::BaseUrl)?;
         let client = PdqmClient::new(base, http).map_err(PdqmConfigError::Base)?;
         Ok(Self {

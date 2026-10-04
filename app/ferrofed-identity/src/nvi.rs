@@ -34,16 +34,15 @@ use async_trait::async_trait;
 use ferrofed_registry::id::{NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use http::header::{AUTHORIZATION, HeaderMap};
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, PseudoBsn, Ura};
 use nl_generic_functions::lrza::{self, LrzaError};
 use nl_generic_functions::nvi::NviClient;
 use nl_generic_functions::nvi::error::{InvalidInput, NviError};
-use openehr_its::rest::client::{Credentials, InvalidCredentials};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use thiserror::Error;
 use url::Url;
 
+use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
 
@@ -69,32 +68,27 @@ pub struct NviConfig {
     /// The Localization Service's FHIR base URL, which `Debug` shows without
     /// its userinfo.
     pub base: SecretUrl,
-    /// How the gateway authenticates to the service, when the transport does
-    /// not.
-    pub credentials: Option<Credentials>,
+    /// How the gateway authenticates to the service.
+    pub auth: Authentication,
     /// Each care provider, by its URA, mapped to the registry member that
     /// holds its data; empty when the registry's directory gives the map.
     pub custodians: BTreeMap<String, NodeId>,
     /// The client namespaces that stand for the pseudonymised BSN, beside
     /// [`PSEUDO_BSN_SYSTEM`] itself.
     pub namespaces: BTreeSet<IdentifierNamespace>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS.
-    pub client_identity: Option<SecretString>,
-    /// Trust roots the service's certificate chains to, beside the
-    /// platform's, PEM.
-    pub trust_roots: Option<String>,
+    /// The TLS material: a client identity for mutual TLS and trust roots
+    /// beside the platform's.
+    pub tls: Tls,
 }
 
 impl fmt::Debug for NviConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NviConfig")
             .field("base", &self.base)
-            .field("credentials", &self.credentials)
+            .field("auth", &self.auth)
             .field("custodians", &self.custodians)
             .field("namespaces", &self.namespaces)
-            .field("client_identity", &self.client_identity.is_some())
-            .field("trust_roots", &self.trust_roots.is_some())
+            .field("tls", &self.tls)
             .finish()
     }
 }
@@ -150,21 +144,11 @@ pub enum NviConfigError {
     /// `not-localized`.
     #[error("registry member {0} is mapped from no custodian URA")]
     UnlocatedMember(NodeId),
-    /// A credential does not form an `Authorization` value (RFC 7617 §2,
-    /// RFC 6750 §2.1).
-    #[error(
-        "the credentials of the Localization Service cannot be sent in the Authorization header"
-    )]
-    Credentials(#[source] InvalidCredentials),
-    /// The client certificate and key do not read as PEM.
-    #[error("the Localization Service client certificate and key are not PEM")]
-    Identity(#[source] reqwest::Error),
-    /// The trust roots do not read as PEM certificates.
-    #[error("the Localization Service trust roots are not PEM certificates")]
-    Roots(#[source] reqwest::Error),
-    /// The HTTP client could not be built.
+    /// The HTTP client could not be built: a credential that forms no
+    /// `Authorization` value (RFC 7617 §2, RFC 6750 §2.1), or a client the
+    /// platform refuses.
     #[error("the HTTP client for the Localization Service could not be built")]
-    Client(#[source] reqwest::Error),
+    Client(#[source] ClientError),
 }
 
 /// Why the NVI localizer could not answer.
@@ -385,25 +369,5 @@ fn disagreement(
 /// request URL holds the pseudonym, the credential as a default header, and
 /// the TLS material `config` names.
 fn http_client(config: &NviConfig) -> Result<reqwest::Client, NviConfigError> {
-    let mut headers = HeaderMap::new();
-    if let Some(credentials) = &config.credentials {
-        let header = credentials
-            .header_value()
-            .map_err(NviConfigError::Credentials)?;
-        headers.insert(AUTHORIZATION, header);
-    }
-    let mut builder = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .default_headers(headers);
-    if let Some(identity) = &config.client_identity {
-        let identity = reqwest::Identity::from_pem(identity.expose_secret().as_bytes())
-            .map_err(NviConfigError::Identity)?;
-        builder = builder.identity(identity);
-    }
-    if let Some(roots) = &config.trust_roots {
-        let roots = reqwest::Certificate::from_pem_bundle(roots.as_bytes())
-            .map_err(NviConfigError::Roots)?;
-        builder = builder.tls_certs_merge(roots);
-    }
-    builder.build().map_err(NviConfigError::Client)
+    fhir::http_client(&config.auth, &config.tls).map_err(NviConfigError::Client)
 }

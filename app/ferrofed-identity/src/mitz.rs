@@ -33,7 +33,6 @@ use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use http::header::{AUTHORIZATION, HeaderMap};
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, Ura};
 use nl_generic_functions::mitz::error::{ClientError, InvalidInput, MitzError};
 use nl_generic_functions::mitz::question::{
@@ -41,13 +40,13 @@ use nl_generic_functions::mitz::question::{
     ProfessionalId, Purpose, RoleCode,
 };
 use nl_generic_functions::mitz::{MitzClient, UZI_ROOT};
-use openehr_its::rest::client::{Credentials, InvalidCredentials};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
 use crate::consent::{ConsentDecision, ConsentError, ConsentPrefilter, Requester};
+use crate::fhir::{self, Authentication, Tls};
 use crate::nvi::{NviConfigError, derived, is_bsn_system};
 use crate::patient::{IdentifierNamespace, PatientRef};
 
@@ -87,12 +86,11 @@ pub struct MitzConfig {
     /// Whether the deployment is marked for development, which alone admits
     /// a plain `http` endpoint.
     pub development: bool,
-    /// How the gateway authenticates to Mitz beside mutual TLS, if at all.
-    pub credentials: Option<Credentials>,
-    /// The gateway's client certificate chain and private key, PEM.
-    pub client_identity: Option<SecretString>,
-    /// Trust roots Mitz's certificate chains to, beside the platform's, PEM.
-    pub trust_roots: Option<String>,
+    /// How the gateway authenticates to Mitz beside mutual TLS.
+    pub auth: Authentication,
+    /// The TLS material: a client identity for mutual TLS and trust roots
+    /// beside the platform's.
+    pub tls: Tls,
     /// The client namespaces that stand for the BSN, beside the BSN systems.
     pub namespaces: BTreeSet<IdentifierNamespace>,
     /// The Mitz data categories asked about.
@@ -114,9 +112,8 @@ impl fmt::Debug for MitzConfig {
         f.debug_struct("MitzConfig")
             .field("endpoint", &self.endpoint)
             .field("development", &self.development)
-            .field("credentials", &self.credentials)
-            .field("client_identity", &self.client_identity.is_some())
-            .field("trust_roots", &self.trust_roots.is_some())
+            .field("auth", &self.auth)
+            .field("tls", &self.tls)
             .field("namespaces", &self.namespaces)
             .field("categories", &self.categories)
             .field("purpose", &self.purpose)
@@ -178,15 +175,10 @@ pub enum MitzConfigError {
     /// identifiers the LRZa rules refuse.
     #[error("the directory's URAs are refused")]
     Directory(#[source] NviConfigError),
-    /// A credential does not form an `Authorization` value.
-    #[error("the credentials of Mitz cannot be sent in the Authorization header")]
-    Credentials(#[source] InvalidCredentials),
-    /// The client certificate and key do not read as PEM.
-    #[error("the Mitz client certificate and key are not PEM")]
-    Identity(#[source] reqwest::Error),
-    /// The trust roots do not read as PEM certificates.
-    #[error("the Mitz trust roots are not PEM certificates")]
-    Roots(#[source] reqwest::Error),
+    /// A credential does not form an `Authorization` value (RFC 7617 §2,
+    /// RFC 6750 §2.1).
+    #[error("the HTTP client for Mitz could not be set up")]
+    Http(#[source] fhir::ClientError),
 }
 
 /// Why the Mitz pre-filter could not answer for a candidate.
@@ -498,24 +490,8 @@ fn holders(
 /// configured, the credential as a default header, and no redirects.
 fn client(config: &MitzConfig) -> Result<MitzClient, MitzConfigError> {
     let endpoint = Url::parse(config.endpoint.expose()).map_err(MitzConfigError::EndpointUrl)?;
-    let mut headers = HeaderMap::new();
-    if let Some(credentials) = &config.credentials {
-        let header = credentials
-            .header_value()
-            .map_err(MitzConfigError::Credentials)?;
-        headers.insert(AUTHORIZATION, header);
-    }
-    let mut builder = reqwest::Client::builder().default_headers(headers);
-    if let Some(identity) = &config.client_identity {
-        let identity = reqwest::Identity::from_pem(identity.expose_secret().as_bytes())
-            .map_err(MitzConfigError::Identity)?;
-        builder = builder.identity(identity);
-    }
-    if let Some(roots) = &config.trust_roots {
-        let roots = reqwest::Certificate::from_pem_bundle(roots.as_bytes())
-            .map_err(MitzConfigError::Roots)?;
-        builder = builder.tls_certs_merge(roots);
-    }
+    let builder =
+        fhir::http_client_builder(&config.auth, &config.tls).map_err(MitzConfigError::Http)?;
     let client = if config.development {
         MitzClient::unencrypted_for_development(endpoint, builder)
     } else {

@@ -12,12 +12,11 @@ use ferrofed_identity::dev::Profile;
 use ferrofed_identity::mitz::{HolderConfig, MitzConfig, MitzPrefilter};
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::Secret;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use openehr_its::rest::client::Credentials;
 
 use crate::config::mitz::{MITZ_KEY, MitzSettings};
-use crate::config::settings::{Scheme, Settings};
+use crate::config::settings::Settings;
+use crate::service;
 
 use super::error::FederationError;
 
@@ -47,9 +46,16 @@ pub(super) fn mitz_prefilter(
     let config = MitzConfig {
         endpoint: mitz.url.clone(),
         development: settings.profile == Profile::Development,
-        credentials: credentials(mitz),
-        client_identity: mitz.client_identity.as_ref().map(Secret::to_secret_string),
-        trust_roots: mitz.trust_roots.clone(),
+        auth: service::authentication(
+            &format!("{MITZ_KEY}.credentials"),
+            mitz.credentials.as_ref(),
+        )?,
+        tls: service::tls(
+            MITZ_KEY,
+            mitz.client_identity.as_ref(),
+            mitz.trust_roots.as_deref(),
+        )
+        .map_err(FederationError::Tls)?,
         namespaces: namespaces(mitz)?,
         categories: mitz.data_categories.clone(),
         purpose: mitz.purpose.clone(),
@@ -67,19 +73,6 @@ fn node(key: &str, value: &str) -> Result<NodeId, FederationError> {
         key: key.to_owned(),
         source,
     })
-}
-
-/// The credential the configuration resolved; an OAuth 2.0 or Nuts grant is refused
-/// at load, so none reaches here.
-fn credentials(mitz: &MitzSettings) -> Option<Credentials> {
-    match &mitz.credentials {
-        Some(Scheme::Bearer(token)) => Some(Credentials::bearer(token.to_secret_string())),
-        Some(Scheme::Basic { user, password }) => Some(Credentials::basic(
-            user.as_str(),
-            password.to_secret_string(),
-        )),
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) | None => None,
-    }
 }
 
 /// The namespaces that stand for the BSN.

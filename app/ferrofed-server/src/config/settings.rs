@@ -93,6 +93,8 @@ pub struct DirectorySettings {
     /// How the gateway authenticates to it: a bearer token or basic
     /// credentials.
     pub credentials: Option<Scheme>,
+    /// The TLS material the directory is reached with.
+    pub tls: crate::config::tls::TlsSettings,
     /// How often the changes are asked for.
     pub refresh_interval: Duration,
     /// How long one whole read or refresh may take.
@@ -109,8 +111,8 @@ pub struct DirectorySettings {
 }
 
 impl DirectorySettings {
-    /// Whether `other` names the same directory, credentials, interval,
-    /// deadline and caps.
+    /// Whether `other` names the same directory, credentials, TLS material,
+    /// interval, deadline and caps.
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
@@ -127,6 +129,7 @@ impl DirectorySettings {
         };
         credentials
             && self.url.expose() == other.url.expose()
+            && self.tls == other.tls
             && self.refresh_interval == other.refresh_interval
             && self.deadline == other.deadline
             && self.max_pages == other.max_pages
@@ -153,6 +156,8 @@ pub struct PixManagerSettings {
     pub members: BTreeMap<String, String>,
     /// How the gateway authenticates to it.
     pub credentials: Option<Scheme>,
+    /// The TLS material it is reached with.
+    pub tls: crate::config::tls::TlsSettings,
 }
 
 /// The federated query, resolved.

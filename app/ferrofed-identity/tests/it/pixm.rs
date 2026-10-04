@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Authentication;
+use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::pixm::{ManagerConfig, PixmConfigError, PixmResolver};
 use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
@@ -75,6 +75,7 @@ fn namespaces() -> BTreeMap<IdentifierNamespace, String> {
 
 fn manager(server: &Server, auth: Authentication, pairs: &[(&str, &str)]) -> ManagerConfig {
     ManagerConfig {
+        tls: Tls::default(),
         base: SecretUrl::new(format!("{}/fhir/", server.uri())),
         auth,
         members: members(pairs),
@@ -403,6 +404,7 @@ async fn the_bearer_credential_travels_to_the_manager() {
 fn every_member_must_have_exactly_one_domain() {
     let server_uri = "http://127.0.0.1:9";
     let config = |pairs: &[(&str, &str)]| ManagerConfig {
+        tls: Tls::default(),
         base: SecretUrl::new(format!("{server_uri}/fhir/")),
         auth: Authentication::None,
         members: members(pairs),
@@ -441,6 +443,7 @@ fn every_member_must_have_exactly_one_domain() {
 fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
     let refused = |auth| {
         let config = ManagerConfig {
+            tls: Tls::default(),
             base: SecretUrl::new("http://127.0.0.1:9/fhir/"),
             auth,
             members: members(&[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)]),

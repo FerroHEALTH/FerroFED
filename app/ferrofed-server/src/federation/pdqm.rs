@@ -6,13 +6,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_identity::pdqm::{PdqmConfig, PdqmDemographics};
 
 use crate::config::audit::AuditSettings;
 use crate::config::pdqm::PdqmSettings;
-use crate::config::settings::Scheme;
+use crate::service;
 
 use super::DemographicsStep;
 use super::error::FederationError;
@@ -22,19 +21,8 @@ pub(super) fn pdqm_step(
     pdqm: &PdqmSettings,
     audit: &AuditSettings,
 ) -> Result<DemographicsStep, FederationError> {
-    let auth = match &pdqm.credentials {
-        None => Authentication::None,
-        Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
-        Some(Scheme::Basic { user, password }) => Authentication::Basic {
-            user: user.clone(),
-            password: password.to_secret_string(),
-        },
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => {
-            return Err(FederationError::Grant {
-                section: String::from("pdqm.credentials"),
-            });
-        }
-    };
+    let auth = service::authentication("pdqm.credentials", pdqm.credentials.as_ref())?;
+    let tls = service::tls_of("pdqm", &pdqm.tls).map_err(FederationError::Tls)?;
     let mut namespaces = BTreeMap::new();
     for (namespace, system) in &pdqm.namespaces {
         let namespace =
@@ -44,6 +32,7 @@ pub(super) fn pdqm_step(
     let step = PdqmDemographics::from_config(PdqmConfig {
         base: pdqm.url.clone(),
         auth,
+        tls,
         transaction: pdqm.transaction,
         master: pdqm.master.clone(),
         namespaces,

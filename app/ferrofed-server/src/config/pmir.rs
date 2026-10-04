@@ -19,6 +19,9 @@
 //! bearer_token_file = "/run/secrets/pmir-registry-token"
 //! ```
 //!
+//! `client_identity_file` and `trust_roots_file` give the mutual TLS the
+//! Registry asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
+//!
 //! The Registry sends the feed with the bearer token `feed_token`, agreed
 //! with its operator out of band: the subscription carries no credential for
 //! the feed (§2:3.94.5), and ITI-93 leaves the client authentication to "an
@@ -39,6 +42,7 @@ use crate::ITS_REST_PREFIX;
 use crate::config::error::Error;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::Scheme;
+use crate::config::tls::TlsSettings;
 use crate::config::transport::{self, Encryption, ProtectedSite};
 use crate::config::{Config, Credentials};
 
@@ -53,6 +57,14 @@ pub struct Pmir {
     /// authorizes the subscription (§2:3.94.5): a bearer token or basic
     /// credentials.
     pub credentials: Option<Credentials>,
+    /// The gateway's client certificate chain and private key, PEM, for
+    /// mutual TLS with the Registry, inline or through `client_identity_file`.
+    pub client_identity: Option<Secret>,
+    /// A file holding the client identity, read at boot.
+    pub client_identity_file: Option<PathBuf>,
+    /// A file of PEM trust roots the Registry's certificate chains to, beside
+    /// the platform's.
+    pub trust_roots_file: Option<PathBuf>,
     /// The absolute URL the Registry sends the feed to: the gateway's public
     /// address followed by `{base}` and `path`, the `channel.endpoint` of the
     /// subscription.
@@ -81,6 +93,9 @@ impl Default for Pmir {
         Self {
             url: SecretUrl::default(),
             credentials: None,
+            client_identity: None,
+            client_identity_file: None,
+            trust_roots_file: None,
             callback_url: String::new(),
             path: String::from("/pmir/feed"),
             feed_token: None,
@@ -100,6 +115,8 @@ pub struct PmirSettings {
     pub url: SecretUrl,
     /// How the gateway authenticates to the Registry.
     pub credentials: Option<Scheme>,
+    /// The TLS material the Registry is reached with.
+    pub tls: TlsSettings,
     /// Where the Registry sends the feed.
     pub callback_url: Url,
     /// The path under `{base}` the feed is served at.
@@ -115,8 +132,8 @@ pub struct PmirSettings {
 }
 
 impl PmirSettings {
-    /// Whether `other` names the same Registry, credentials, callback, path,
-    /// feed token, criteria and timings.
+    /// Whether `other` names the same Registry, credentials, TLS material,
+    /// callback, path, feed token, criteria and timings.
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
@@ -133,6 +150,7 @@ impl PmirSettings {
         };
         credentials
             && self.url.expose() == other.url.expose()
+            && self.tls == other.tls
             && self.callback_url == other.callback_url
             && self.path == other.path
             && self.feed_token == other.feed_token
@@ -269,9 +287,16 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
             source,
         })?;
     }
+    let tls = crate::config::tls::resolve(
+        "pmir",
+        pmir.client_identity.as_ref(),
+        pmir.client_identity_file.as_deref(),
+        pmir.trust_roots_file.as_ref(),
+    )?;
     let settings = PmirSettings {
         url: pmir.url.clone(),
         credentials,
+        tls,
         callback_url,
         path,
         feed_token,

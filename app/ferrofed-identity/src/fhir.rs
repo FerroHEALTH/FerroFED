@@ -1,17 +1,21 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The HTTP client the gateway asks an IHE FHIR server through.
+//! The HTTP client the gateway asks an identity, localization, consent or
+//! audit service through.
 //!
-//! One build serves every IHE FHIR server the gateway calls: a PIX Manager
-//! (PIXm ITI-83), a Patient Demographics Supplier (PDQm ITI-78 and ITI-119),
-//! a Patient Identity Registry (PMIR ITI-94) and a care services directory
-//! (mCSD ITI-90 and ITI-91). [`http_client`] sends the
+//! One build and one TLS type serve every outbound client of this crate: a
+//! PIX Manager (PIXm ITI-83), a Patient Demographics Supplier (PDQm ITI-78
+//! and ITI-119), a Patient Identity Registry (PMIR ITI-94), a care services
+//! directory (mCSD ITI-90 and ITI-91), an XCPD responding gateway (ITI-55),
+//! the NVI Localization Service and Mitz of the Dutch Generic Functions, and
+//! the FHIR Feed audit repository (ITI-20). [`http_client`] sends the
 //! [`Authentication`] as a sensitive default header, composed as the node
 //! client composes it, presents and trusts the [`Tls`] material, and follows
 //! no redirect: a request can carry a patient identifier and always carries
 //! the credential, and neither goes anywhere the configured base does not
-//! name.
+//! name. [`http_client_builder`] is the same build left open, for a client
+//! that finishes it itself.
 
 use std::fmt;
 
@@ -125,14 +129,28 @@ pub enum ClientError {
     Build(#[source] reqwest::Error),
 }
 
-/// Builds the HTTP client an IHE FHIR server is asked through: `auth` as a
-/// sensitive default `Authorization` header, the `tls` material, and no
-/// redirects.
+/// Builds the HTTP client a service is asked through: `auth` as a sensitive
+/// default `Authorization` header, the `tls` material, and no redirects.
 ///
 /// # Errors
 /// A [`ClientError`] for a credential that forms no `Authorization` value,
 /// or a client that cannot be built.
 pub fn http_client(auth: &Authentication, tls: &Tls) -> Result<reqwest::Client, ClientError> {
+    http_client_builder(auth, tls)?
+        .build()
+        .map_err(ClientError::Build)
+}
+
+/// Returns the builder [`http_client`] finishes: `auth` as a sensitive
+/// default `Authorization` header, the `tls` material, and no redirects.
+///
+/// # Errors
+/// [`ClientError::Credentials`] for a credential that forms no
+/// `Authorization` value.
+pub fn http_client_builder(
+    auth: &Authentication,
+    tls: &Tls,
+) -> Result<reqwest::ClientBuilder, ClientError> {
     let mut headers = HeaderMap::new();
     if let Some(credentials) = auth.credentials() {
         let header = credentials
@@ -147,7 +165,7 @@ pub fn http_client(auth: &Authentication, tls: &Tls) -> Result<reqwest::Client, 
     if let Some(identity) = &tls.identity {
         builder = builder.identity(identity.clone());
     }
-    builder.build().map_err(ClientError::Build)
+    Ok(builder)
 }
 
 #[cfg(test)]

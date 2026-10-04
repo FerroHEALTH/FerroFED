@@ -45,6 +45,7 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
+use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
 
@@ -157,27 +158,6 @@ pub enum Transport {
     UnencryptedForDevelopment,
 }
 
-/// The TLS material of the ATNA secure channel (ITI TF-1 Table 27.1.3-1).
-///
-/// `Debug` shows neither.
-#[derive(Default)]
-pub struct Tls {
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS.
-    pub identity: Option<SecretString>,
-    /// Trust roots the network uses beside the platform's, PEM.
-    pub roots: Option<String>,
-}
-
-impl fmt::Debug for Tls {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Tls")
-            .field("identity", &self.identity.is_some())
-            .field("roots", &self.roots.is_some())
-            .finish()
-    }
-}
-
 /// One responding gateway as the configuration names it.
 #[derive(Debug)]
 pub struct GatewayConfig {
@@ -208,7 +188,8 @@ pub struct XcpdConfig {
     pub namespaces: BTreeMap<IdentifierNamespace, String>,
     /// How the responding gateways are reached.
     pub transport: Transport,
-    /// The TLS material.
+    /// The TLS material of the ATNA secure channel (ITI TF-1 Table
+    /// 27.1.3-1).
     pub tls: Tls,
 }
 
@@ -281,15 +262,9 @@ pub enum XcpdConfigError {
     /// A namespace mapping is not an OID.
     #[error("the assigning authority mapped from namespace {0} is not an ISO OID")]
     Namespace(IdentifierNamespace),
-    /// The client certificate and key do not read as PEM.
-    #[error("the XCPD client certificate and key are not PEM")]
-    Identity(#[source] reqwest::Error),
-    /// The trust roots do not read as PEM certificates.
-    #[error("the XCPD trust roots are not PEM certificates")]
-    Roots(#[source] reqwest::Error),
     /// The HTTP client could not be built.
     #[error("the HTTP client for the responding gateways could not be built")]
-    Client(#[source] reqwest::Error),
+    Client(#[source] ClientError),
 }
 
 /// Why the XCPD localizer could not answer.
@@ -622,19 +597,8 @@ fn communities(
 }
 
 /// The HTTP client the gateways are asked through: no redirects, because the
-/// request body holds the patient identifier, and the network's TLS
-/// material.
+/// request body holds the patient identifier, no `Authorization` header, and
+/// the network's TLS material.
 fn http_client(tls: &Tls) -> Result<reqwest::Client, XcpdConfigError> {
-    let mut builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
-    if let Some(identity) = &tls.identity {
-        let identity = reqwest::Identity::from_pem(identity.expose_secret().as_bytes())
-            .map_err(XcpdConfigError::Identity)?;
-        builder = builder.identity(identity);
-    }
-    if let Some(roots) = &tls.roots {
-        let roots = reqwest::Certificate::from_pem_bundle(roots.as_bytes())
-            .map_err(XcpdConfigError::Roots)?;
-        builder = builder.tls_certs_merge(roots);
-    }
-    builder.build().map_err(XcpdConfigError::Client)
+    fhir::http_client(&Authentication::None, tls).map_err(XcpdConfigError::Client)
 }
