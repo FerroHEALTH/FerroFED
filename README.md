@@ -44,9 +44,10 @@ shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and
 holds stored queries itself.
 
-Every client authenticates with an RFC 9068 access token from an issuer you
-trust, carrying a SMART on openEHR scope for the operation and a purpose of
-use, or through a proxy in the explicit edge mode
+Built on `main` for v0.0.8, and not in a release yet: every client
+authenticates with an RFC 9068 access token from an issuer you trust,
+carrying a SMART on openEHR scope for the operation and a purpose of use, or
+through a proxy in the explicit edge mode
 ([client authentication](https://ferrofed.eu/docs/operate/authentication.html)).
 Toward the nodes, the gateway authenticates as itself, with OAuth 2.0 client
 credentials and a signed assertion or with a bearer token or a user and
@@ -55,6 +56,8 @@ Every request to a node carries the verified client in an
 `openEHR-federation-client` token the gateway signs with its own key, which
 each node can verify against the key set the gateway publishes
 ([what a node is told about the caller](https://ferrofed.eu/docs/operate/authentication.html#what-a-node-is-told-about-the-caller)).
+Localization through XCPD or the PIX Manager, and the registry read from an
+mCSD directory, are built on `main` for v0.0.8 too.
 The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
 lists what each release shipped and what is planned.
@@ -70,7 +73,8 @@ lists what each release shipped and what is planned.
   say which points and statements a test holds.
 - openEHR ITS-REST 1.1.0 on both faces, and openEHR AQL 1.1.0, through the
   published `openehr-*` crates.
-- IHE PIXm ITI-83 for identity resolution, and IHE mCSD ITI-90 and ITI-91
+- IHE PIXm ITI-83 for identity resolution and, without XCPD, for
+  localization, and IHE mCSD ITI-90 and ITI-91
   for addressing: the registry can be read from a care services directory
   and kept in step with it. The `ihe-iti` crate also carries the PDQm ITI-78
   client.

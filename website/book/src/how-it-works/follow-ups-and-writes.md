@@ -25,10 +25,9 @@ N41, CP-33). It never chooses between two claimants (§12.5.2, N42).
 
 ```mermaid
 flowchart TD
-    classDef planned stroke-dasharray: 6 4
     req["Request under<br/>{base}/v1/ehr/{ehr_id}"] -->|"step 1"| s1{"Header names<br/>one endpoint?"}
     s1 -->|"yes"| route["The owning node"]
-    s1 -->|"no, step 2"| s2{"Session<br/>binding?"}:::planned
+    s1 -->|"no, step 2"| s2{"Binding of<br/>this caller?"}
     s2 -->|"one node"| route
     s2 -->|"none, step 3"| s3{"ehr_id index?"}
     s3 -->|"one node"| route
@@ -46,8 +45,9 @@ flowchart TD
   `endpoint_id`, so name it in `openEHR-federation-endpoint` (§12.5.1).
 - **Step 2**, the resolution binding your earlier query left behind, is kept
   per verified caller (issuer, subject and client), in memory, for
-  `federation.binding_ttl_ms`; another caller never sees it, and a consent
-  denial of a member drops the bindings naming it.
+  `federation.binding_ttl_ms` and up to `federation.binding_capacity`
+  bindings over every caller; another caller never sees it, and a consent
+  denial of a member drops the bindings naming it (§12.5.1, N41).
 - **Step 3**, the `ehr_id` index, is in memory and learns from resolutions
   and from the nodes' successful answers. A miss costs one fallback step,
   never a wrong route.

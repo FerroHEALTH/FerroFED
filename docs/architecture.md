@@ -72,7 +72,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `openehr-query` | 0.0.81 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |
 | `openehr-its` | 0.0.81 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543) |
 | `openehr-base`, `openehr-rm` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison and, from 0.0.79, the attribute model with the BASE primitives, the `Ordered` marker and the `OBJECT_REF` targets (FerroEHR #3537) |
-| `openehr-sdt` | 0.0.81, the same lockstep line, joined with client authentication (#80) | the SMART on openEHR scope grammar |
+| `openehr-sdt` | 0.0.81, the same lockstep line, joined with onward OAuth 2.0 (#81) | the SMART on openEHR scope grammar |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
 | `fhir-types` | 0.1.107 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
@@ -106,7 +106,7 @@ gateway.
 | `openehr-its` (`rest`, `json`) | the `AdhocQueryExecute`, `ResultSet`, `ResultSetMetadata` and `ResultSetColumn` DTOs, with `ResultSetMetadata.additional_properties` as the extension point `meta.federation` occupies (N17), and canonical JSON of the RM |
 | `openehr-base` | `ObjectVersionId` (`object_id()`, `creating_system_id()`, `version_tree_id()`), `HierObjectId` for `ehr_id`, the lexical rule for `system_id`, and `PartialOrd` on the ISO 8601 types |
 | `openehr-rm` | `DV_ORDERED`'s `less_than` and `is_strictly_comparable_to`, for cross-node ordering of data values |
-| `openehr-sdt` (`smart_scopes`) | `SmartScope::parse` and `parse_all` for the SMART on openEHR scope grammar (section 7), read by client authentication (#80) |
+| `openehr-sdt` (`smart_scopes`) | `SmartScope::parse` and `parse_all` for the SMART on openEHR scope grammar (section 7): onward OAuth 2.0 (#81) checks that each `oauth2` scope is a `system/` resource scope, and client authentication (#80) reads each caller's scopes |
 
 The research found eight gaps between these crates and what an intermediary
 needs, filed as FerroEHR #3505 to #3512, and the work found a ninth (#3513, a
@@ -570,8 +570,10 @@ are FerroFED's own design; the missing signal is report T151 on #212.
 | Resolver | PIXm ITI-83 `$ihe-pix` against any conformant PIX Manager (a FerroPIX instance once it exists), one call per PIX Manager with `targetSystem` repeated per member domain (`targetSystem` is `0..*` in the OperationDefinition) | #42, #43 | PIXm 3.1.0 |
 | Harness | a PIX Manager answering ITI-83 and seeded by ITI-104 | #47 | PIXm 3.1.0 |
 | Lifecycle | the PMIR hook: a merge or split (an ITI-93 notification to an ITI-94 subscription) drops every resolution binding it could have made stale, and the TTL bounds the rest; track 8 is provisional and not claimed | #48 (the hook); the subscription is unscheduled | PMIR 1.6.0, vendored with the subscription that first reads it |
-| Localizer | none (ask-all); the PIXm resolver as a registry-scoped localizer, the members whose domain returned an identifier (§14.2's "demographic-registration" kind), over the same ITI-83 call its resolution reuses | #46, #408 | PIXm 3.1.0 |
-| Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, in its own crate | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
+| Localizer | none (ask-all); the static development cross-reference, whose `StaticResolver` names the members that hold a row for the patient | #46, #36 | none: FerroFED's own, development profile only |
+| Localizer | the PIXm resolver as a registry-scoped localizer, the members whose domain returned an identifier (§14.2's "demographic-registration" kind), over the same ITI-83 call its resolution reuses | #408 | PIXm 3.1.0 |
+| Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, behind the `xcpd` feature of `ihe-iti` | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
+| Localizer | the Annex B NVI adapter | #87 | `fhir.nl.gf` 0.3.0 |
 | Directory | the static registry document, or an mCSD directory: ITI-90 reads at boot, then ITI-91 `_history`/`_since` synchronised into the snapshot (section 8) | #36, #74, #86 | mCSD 4.0.0 |
 | ConsentPrefilter | none; the static development pre-filter (`[[dev.consent_denied]]`, development profile only); then the Annex B Mitz adapter | #83, #87 | none for the development table; `fhir.nl.gf` 0.3.0 for Mitz |
 
@@ -586,8 +588,17 @@ The gateway core depends only on the traits. When FerroPIX exists, it can use
 PIXm resolver at a FerroPIX instance, with no change to the core. FerroFED
 never blocks on FerroPIX.
 
-**XCPD** (decision A15). ITI-55 lands with the localization seam in v0.0.8
-(#85) as the `xcpd` feature of `ihe-iti`, so the SOAP 1.2, HL7 v3 and SAML XUA
+**Choosing the localizer.** Under `federation.node_selection = "localized"`
+exactly one localizer is active, chosen by the configuration: the XCPD
+localizer when `[xcpd]` is set, otherwise the PIXm resolver when `[pixm]` is,
+otherwise the development cross-reference under `profile = "development"`.
+`OPTIONS {base}/` declares it as `localization.mode`: `"xcpd"`, `"pixm"` or
+`"development-static"`. With `[xcpd]` set, `[pixm]` only resolves. Under
+`node_selection = "ask-all"` no localizer runs, and `[xcpd]` there refuses the
+configuration.
+
+**XCPD** (decision A15). ITI-55 is built with the localization seam (#85) as
+the `xcpd` feature of `ihe-iti`, so the SOAP 1.2, HL7 v3 and SAML XUA
 dependencies stay confined to that feature and reach no deployment that does
 not enable it. Its discovery is a broadcast to every responding community, so it
 runs under the same fail-closed rules as every localizer (N4, §14.1), and its
@@ -659,8 +670,10 @@ built, so track 8 stays deferred in `conformance/tracks.tsv`, and FerroFED
 claims no propagation.
 
 **The development cross-reference** (#36). A TOML table
-(`[[dev.crossref]]` with `namespace`, `value`, `member` and `ehr_id`) read by a
-`StaticResolver` and an optional `StaticLocalizer`. It is accepted only under
+(`[[dev.crossref]]` with `namespace`, `value`, `member` and `ehr_id`) read by
+one `StaticResolver`, which implements both `Resolver` and `Localizer`: under
+`node_selection = "localized"` it is the development localizer and names the
+members that hold a row for the patient. It is accepted only under
 `profile = "development"`; a server in any other profile refuses to start with
 the table present, warns at startup that it is no identity binding, and reports
 `localization.mode = "development-static"` in `OPTIONS`. Its values are
@@ -702,7 +715,9 @@ introspection. Validation fails closed:
 - a token with no scope covering the operation is `403`.
 
 Scopes are read with `openehr_sdt::smart_scopes::SmartScope::parse_all`, never
-a FerroFED parser; `openehr-sdt` joined the workspace with this work (#80). A
+a FerroFED parser. `openehr-sdt` joined the workspace with onward OAuth 2.0
+(#81), which checks each scope an endpoint's `oauth2` grant requests, and
+this work reads the caller's scopes with it. A
 query needs an `aql-…` search scope in the `user/` or `system/` compartment,
 and a routed follow-up needs the matching `composition-` or `template-`
 permission; one table in `ferrofed-server` (`auth::permission::TABLE`) maps
@@ -1580,7 +1595,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth` | the clients each function needs | anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
-| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`; reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`) | any storage implementation (#40), the server |
+| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`, onward OAuth 2.0 and the signed caller token (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken` | any storage implementation (#40), the server |
 | `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), telemetry, health, the storage implementations, wiring | everything | is never depended on |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
 
