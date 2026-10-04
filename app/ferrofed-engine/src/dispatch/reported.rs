@@ -113,6 +113,44 @@ pub fn unauthenticated(
 /// obtained for.
 pub const UNAUTHENTICATED: &str = "no onward credential could be obtained, so nothing was sent";
 
+/// The fixed text of the `error` of a node whose request no `DPoP` proof
+/// could be made for, so it was never sent (RFC 9449 §4).
+pub const UNPROVEN: &str = "no DPoP proof could be made for the request, so nothing was sent";
+
+/// The fixed text of the `error` of a node that demanded a `DPoP` nonce and
+/// whose request no proof could then be made for, so it was not sent again
+/// (RFC 9449 §9).
+pub const UNPROVEN_AGAIN: &str =
+    "the node demanded a DPoP nonce, and no proof could be made to send the request again";
+
+/// The `error` of a node a request was not proven for with `DPoP`: before
+/// it was ever sent, or, when `sent`, after the node answered it with a
+/// nonce challenge (RFC 9449 §4, §9).
+///
+/// The `error` is [`UNPROVEN`] or [`UNPROVEN_AGAIN`] and nothing else. The
+/// prover's account is logged whole at `warn` with `endpoint` and
+/// `request_id`.
+#[must_use]
+pub fn unproven(
+    source: &CredentialsError,
+    endpoint: &EndpointId,
+    request_id: Option<&OutboundId>,
+    sent: bool,
+) -> ErrorDetail {
+    let account = match std::error::Error::source(source) {
+        Some(cause) => chain(cause),
+        None => source.to_string(),
+    };
+    let text = if sent { UNPROVEN_AGAIN } else { UNPROVEN };
+    tracing::warn!(
+        endpoint = %endpoint,
+        request_id = request_id.map(ToString::to_string),
+        error = %account,
+        "{text}"
+    );
+    ErrorDetail::Text(text.to_owned())
+}
+
 /// `error` and its causes, joined, so the reason a request failed is kept
 /// whole, never only its outermost text.
 pub(crate) fn chain(error: &(dyn std::error::Error + 'static)) -> String {

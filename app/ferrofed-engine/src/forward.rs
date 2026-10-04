@@ -34,6 +34,7 @@
 use std::fmt;
 
 use crate::declared::{self, Refusal};
+use crate::dispatch::dpop::Sent;
 use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
@@ -150,16 +151,21 @@ pub enum ForwardError {
         /// The part of the request that carried it; never the value.
         part: Part,
     },
-    /// No onward credential could be obtained for the endpoint, so nothing
-    /// was sent (§13.1, N25).
-    #[error("no onward credential could be obtained for endpoint {endpoint}")]
+    /// No onward credential, or no `DPoP` proof, could be made for the
+    /// endpoint, so nothing was sent, or, when `sent`, the node's nonce
+    /// challenge was not answered (§13.1, N25; RFC 9449 §9).
+    #[error("no onward credential or DPoP proof could be made for endpoint {endpoint}")]
     Credentials {
         /// The endpoint.
         endpoint: EndpointId,
         /// The `error` the endpoint is reported with: a fixed sentence and,
         /// when the token endpoint refused with one, its registered RFC 6749
-        /// §5.2 code ([`reported::unauthenticated`]).
+        /// §5.2 code ([`reported::unauthenticated`], [`reported::unproven`]).
         error: ErrorDetail,
+        /// Whether a request evidently left before the failure: the node
+        /// answered it with a `DPoP` nonce challenge, and no proof could be
+        /// made to send it again.
+        sent: bool,
         /// What the client runtime reported.
         #[source]
         source: Box<ClientError>,
@@ -411,7 +417,8 @@ impl<T: Transport + Clone> NodeClient<T> {
             outgoing.raw_body(body, None);
         }
         self.gate_forward(&operation, &outgoing, options)?;
-        match self.client_for(options).forward(outgoing).await {
+        let (client, sent) = self.client_for(options);
+        match client.forward(outgoing).await {
             Ok(answer) if answer.status() == StatusCode::UNAUTHORIZED => {
                 Err(ForwardError::Refused {
                     endpoint: self.endpoint().clone(),
@@ -429,7 +436,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                     body: answer.into_body(),
                 })
             }
-            Err(error) => Err(self.unanswered(error, options)),
+            Err(error) => Err(self.unanswered(error, &sent, options)),
         }
     }
 
@@ -505,10 +512,23 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// The error for a forwarded request that reached no answer.
     ///
     /// `Client::forward` sends once and raises `DeadlineElapsed` only before
-    /// the request is handed to the transport, so it is a request never sent.
-    fn unanswered(&self, error: ClientError, options: &DispatchOptions) -> ForwardError {
+    /// the request is handed to the transport, or before the one more send
+    /// that answers a node's `DPoP` nonce challenge. It is a request never
+    /// sent unless `sent` shows the call's request left, and then the
+    /// node's time-out (RFC 9449 §9).
+    fn unanswered(
+        &self,
+        error: ClientError,
+        sent: &Sent,
+        options: &DispatchOptions,
+    ) -> ForwardError {
         let endpoint = self.endpoint().clone();
+        let contacted = sent.contradicts(&error);
         match error {
+            ClientError::DeadlineElapsed { .. } if contacted => ForwardError::TimeOut {
+                endpoint,
+                source: Box::new(error),
+            },
             ClientError::DeadlineElapsed { .. } => ForwardError::Expired {
                 endpoint,
                 source: Box::new(error),
@@ -524,10 +544,16 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint,
                 source: Box::new(error),
             },
-            ClientError::Credentials { ref source, .. }
-            | ClientError::DpopProof { ref source, .. } => ForwardError::Credentials {
+            ClientError::Credentials { ref source, .. } => ForwardError::Credentials {
                 error: reported::unauthenticated(source, &endpoint, options.request_id()),
                 endpoint,
+                sent: false,
+                source: Box::new(error),
+            },
+            ClientError::DpopProof { ref source, .. } => ForwardError::Credentials {
+                error: reported::unproven(source, &endpoint, options.request_id(), contacted),
+                endpoint,
+                sent: contacted,
                 source: Box::new(error),
             },
             other => ForwardError::Compose {

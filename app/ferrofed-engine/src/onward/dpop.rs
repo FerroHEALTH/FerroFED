@@ -20,8 +20,9 @@
 //! once more, with the nonce in a new proof, to the same URL: a token
 //! request by [`token`](crate::onward::token), a node request by the
 //! `openehr-its` client, which answers the challenge for a client given a
-//! prover. Every nonce a server sends is kept per origin and put in the next
-//! proof to it.
+//! prover. Every nonce a server sends is kept per origin and per role,
+//! the token endpoint's apart from the node's even on one origin (§9), and
+//! put in the next proof to that server.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -76,7 +77,18 @@ pub struct Prover {
     algorithm: Algorithm,
     public: Jwk,
     thumbprint: String,
-    nonces: Mutex<BTreeMap<String, String>>,
+    nonces: Mutex<BTreeMap<(Role, String), String>>,
+}
+
+/// The part a server plays toward a `DPoP`-bound grant, which keeps the
+/// nonces of each apart (RFC 9449 §9: a nonce of the authorization server
+/// and one of a resource server are never confused).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Role {
+    /// The authorization server: the grant's token endpoint (§8).
+    Authorization,
+    /// The resource server: the node (§9).
+    Resource,
 }
 
 /// The claims of one proof (RFC 9449 §4.2).
@@ -142,18 +154,18 @@ impl Prover {
         &self.thumbprint
     }
 
-    /// A proof of a request with `method` to `url`, bound to `token` when
-    /// the request carries one, and naming the nonce `url`'s origin sent
-    /// last, when it sent one (RFC 9449 §4.2).
+    /// A proof of a request with `method` to `url`, a server in `role`,
+    /// bound to `token` when the request carries one, and naming the nonce
+    /// that server sent last, when it sent one (RFC 9449 §4.2).
     ///
     /// The proof's `htu` is `url` without its query and fragment.
     pub(crate) fn prove(
         &self,
-        method: &http::Method,
-        url: &Url,
+        (method, url): (&http::Method, &Url),
+        role: Role,
         token: Option<&str>,
     ) -> Result<String, jsonwebtoken::errors::Error> {
-        let nonce = self.nonce(url);
+        let nonce = self.nonce(role, url);
         let mut htu = url.clone();
         htu.set_query(None);
         htu.set_fragment(None);
@@ -171,20 +183,22 @@ impl Prover {
         jsonwebtoken::encode(&header, &claims, &self.private)
     }
 
-    /// The nonce `url`'s origin sent last, when it sent one.
-    fn nonce(&self, url: &Url) -> Option<String> {
+    /// The nonce the server in `role` at `url`'s origin sent last, when it
+    /// sent one.
+    fn nonce(&self, role: Role, url: &Url) -> Option<String> {
         self.lock()
-            .get(&url.origin().ascii_serialization())
+            .get(&(role, url.origin().ascii_serialization()))
             .cloned()
     }
 
-    /// Keeps `nonce` as the one `url`'s origin sent last.
-    pub(crate) fn remember(&self, url: &Url, nonce: &str) {
+    /// Keeps `nonce` as the one the server in `role` at `url`'s origin sent
+    /// last.
+    pub(crate) fn remember(&self, role: Role, url: &Url, nonce: &str) {
         self.lock()
-            .insert(url.origin().ascii_serialization(), nonce.to_owned());
+            .insert((role, url.origin().ascii_serialization()), nonce.to_owned());
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, String>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<(Role, String), String>> {
         // NOTE: no specification governs this: our own design; a panic while the
         // lock was held leaves at worst a stale nonce, which the server replaces.
         self.nonces.lock().unwrap_or_else(PoisonError::into_inner)
@@ -233,14 +247,14 @@ impl DpopProver for NodeProver {
             .map_err(|source| CredentialsError::new(Unnamed(source)))?;
         self.prover
             .prove(
-                request.method(),
-                &url,
+                (request.method(), &url),
+                Role::Resource,
                 Some(request.access_token().expose_secret()),
             )
             .map_err(CredentialsError::new)
     }
 
     fn nonce(&self, nonce: &str) {
-        self.prover.remember(&self.base, nonce);
+        self.prover.remember(Role::Resource, &self.base, nonce);
     }
 }

@@ -816,9 +816,16 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   challenge by sending the request once more, as the crate's `Transport`
   contract documents (§9). The token request is composed by the gateway, so
   it proves itself and answers a `400 use_dpop_nonce` once more within the
-  token request's budget (§8). Every nonce a server sends is kept per
-  origin for the next proof, and a token endpoint that answers a bearer
-  token to such a grant fails the node.
+  token request's budget (§8), with a client assertion, and under token
+  exchange an actor token, signed anew so no `jti` repeats (RFC 7523 §3).
+  Every nonce a server sends is kept per origin and per role for the next
+  proof, so the token endpoint's and the node's never mix even on one
+  origin (§9), and a token endpoint that answers a bearer token to such a
+  grant fails the node. Each node call has a prover of its own that records
+  whether a request of the call left: a deadline that passes before the
+  nonce re-send, or a re-send no proof could be made for, is then the
+  node's `time-out` or `node-error` with the node counted as asked
+  (`Contact::Silent`), never as a request never sent (#470).
 
 **Scope attenuation.** The gateway never requests onward more than the caller
 holds. Under token exchange the requested scope is the caller's granted

@@ -28,7 +28,7 @@ use url::form_urlencoded;
 
 use crate::dispatch::reported::MESSAGE_LIMIT;
 use crate::onward::Grant;
-use crate::onward::dpop::{self, Prover};
+use crate::onward::dpop::{self, Prover, Role};
 use crate::onward::keys::{ALGORITHM, SigningKey};
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
@@ -272,41 +272,47 @@ pub fn assertion(
     jsonwebtoken::encode(&header, &claims, key.private()).map_err(TokenError::Sign)
 }
 
-/// Requests a token for `grant` with the client-credentials grant over
-/// `transport`, authenticating with `assertion`, and waits at most
-/// `timeout` for the answer (RFC 6749 §4.4.2).
+/// Requests a token for `grant` with the client-credentials grant (RFC
+/// 6749 §4.4.2).
+///
+/// The request goes over `transport`, authenticated with an assertion
+/// signed with `key` and valid for `lifetime`, and waits at most `timeout`
+/// for the answer. Every send carries an assertion of its own, so the one more send that
+/// answers a demanded `DPoP` nonce never repeats a `jti` (RFC 7523 §3).
 ///
 /// # Errors
 ///
 /// Returns a [`TokenError`] for every request that produced no usable
-/// token: one that could not be composed or sent, an RFC 6749 §5.2 refusal,
-/// another status, a body that is no token response, and a token of
-/// another type than the grant asks for or that cannot be sent.
+/// token: an assertion that could not be signed, a request that could not
+/// be composed or sent, an RFC 6749 §5.2 refusal, another status, a body
+/// that is no token response, and a token of another type than the grant
+/// asks for or that cannot be sent.
 pub async fn request<T: Transport>(
     grant: &Grant,
-    assertion: &str,
+    (key, lifetime): (&SigningKey, Duration),
     transport: &T,
     timeout: Duration,
 ) -> Result<Issued, TokenError> {
-    let token = send(
-        grant,
-        client_credentials_form(grant, assertion),
-        transport,
-        timeout,
-    )
-    .await?;
+    let compose = || -> Result<String, TokenError> {
+        let client = assertion(grant, key, lifetime)?;
+        Ok(client_credentials_form(grant, &client))
+    };
+    let token = send(grant, compose, transport, timeout).await?;
     issued(grant, token)
 }
 
-/// Exchanges `subject`'s token for a token of `grant`'s node over
-/// `transport`, authenticating with `assertion`, naming the gateway as the
-/// actor with `actor`, and waits at most `timeout` (RFC 8693 §2.1).
+/// Exchanges `subject`'s token for a token of `grant`'s node (RFC 8693
+/// §2.1).
 ///
-/// The request always asks for `subject`'s scope and names the node with
+/// The request goes over `transport`, authenticated with an assertion
+/// signed with `key` and valid for `lifetime`, names the gateway as the
+/// actor with a second one, and waits at most `timeout`. It always asks for `subject`'s scope and names the node with
 /// `resource` (RFC 8707 §2), and with `audience` where the grant has one.
 /// An exchange with no scope or no resource is never sent: without `scope`
 /// the authorization server may issue the caller's whole grant (RFC 8693
-/// §2.1). The answer must issue an access token (RFC 8693 §2.2.1).
+/// §2.1). The answer must issue an access token (RFC 8693 §2.2.1). Every
+/// send carries a client assertion and an actor token of its own, each with
+/// its own `jti` (RFC 7523 §3).
 ///
 /// # Errors
 ///
@@ -318,7 +324,7 @@ pub async fn request<T: Transport>(
 pub async fn exchange<T: Transport>(
     grant: &Grant,
     subject: Subject<'_>,
-    (assertion, actor): (&str, &str),
+    (key, lifetime): (&SigningKey, Duration),
     transport: &T,
     timeout: Duration,
 ) -> Result<Issued, TokenError> {
@@ -328,8 +334,12 @@ pub async fn exchange<T: Transport>(
     if grant.resource().is_none() {
         return Err(TokenError::Untargeted);
     }
-    let form = exchange_form(grant, subject, (assertion, actor));
-    let token = send(grant, form, transport, timeout).await?;
+    let compose = || -> Result<String, TokenError> {
+        let client = assertion(grant, key, lifetime)?;
+        let actor = assertion(grant, key, lifetime)?;
+        Ok(exchange_form(grant, subject, (&client, &actor)))
+    };
+    let token = send(grant, compose, transport, timeout).await?;
     if token.issued_token_type.as_deref() != Some(ACCESS_TOKEN_TYPE) {
         return Err(TokenError::IssuedTokenType {
             issued_token_type: token.issued_token_type.as_deref().map(bounded),
@@ -382,29 +392,30 @@ fn targeted(form: &mut form_urlencoded::Serializer<'_, String>, grant: &Grant) {
     }
 }
 
-/// Posts the `application/x-www-form-urlencoded` `body` to `grant`'s token
-/// endpoint and reads the token response.
+/// Posts the `application/x-www-form-urlencoded` body `compose` writes to
+/// `grant`'s token endpoint and reads the token response.
 ///
 /// Under a `DPoP` grant each send carries a proof, a nonce the endpoint
 /// sends is kept for the next proof, and a `400` [`dpop::USE_NONCE`] that
 /// carries one is answered by sending the request once more, within the
-/// time `timeout` left (RFC 9449 §8).
+/// time `timeout` left (RFC 9449 §8). Each send has a body `compose` writes
+/// anew, so its assertions are signed anew (RFC 7523 §3).
 async fn send<T: Transport>(
     grant: &Grant,
-    body: String,
+    compose: impl Fn() -> Result<String, TokenError>,
     transport: &T,
     timeout: Duration,
 ) -> Result<TokenResponse, TokenError> {
     let started = Instant::now();
-    let body = body.into_bytes();
     let mut resend = grant.dpop().is_some();
     let answer = loop {
+        let body = compose()?.into_bytes();
         let left = timeout.saturating_sub(started.elapsed());
         let answer = post(grant, &body, transport, left).await?;
         let Some((prover, nonce)) = grant.dpop().zip(nonce_of(&answer)) else {
             break answer;
         };
-        prover.remember(grant.token_endpoint(), &nonce);
+        prover.remember(Role::Authorization, grant.token_endpoint(), &nonce);
         if !(resend && demands_nonce(&answer)) {
             break answer;
         }
@@ -444,7 +455,11 @@ async fn post<T: Transport>(
 /// carries no access token, so no `ath` (RFC 9449 §4.2).
 fn proof(prover: &Prover, grant: &Grant) -> Result<String, TokenError> {
     prover
-        .prove(&Method::POST, grant.token_endpoint(), None)
+        .prove(
+            (&Method::POST, grant.token_endpoint()),
+            Role::Authorization,
+            None,
+        )
         .map_err(TokenError::Proof)
 }
 

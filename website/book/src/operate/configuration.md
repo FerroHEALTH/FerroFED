@@ -366,6 +366,12 @@ endpoint that answers `400 use_dpop_nonce`, or a node that answers `401`
 with a `DPoP` challenge naming `use_dpop_nonce`, is sent the request once
 more with the nonce it gave, within the request's budget, and every later
 proof to that server carries the latest nonce it sent (RFC 9449 §8, §9).
+The token endpoint's nonce and the node's are kept apart even when both
+live on one host. A token request sent once more carries a newly signed
+client assertion, and under token exchange a new actor token, so the
+token endpoint never sees a `jti` twice. A node whose deadline passes
+before that second send is `time-out`, and it counts as a node that was
+asked.
 The key is read at start and on each reload; a key that is no P-256 or
 P-384 key refuses the configuration, naming `dpop_key_file`.
 

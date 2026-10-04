@@ -39,6 +39,8 @@ use wiremock::{Mock, ResponseTemplate};
 
 use crate::conveyed::{UPSTREAM, caller, conveyance, shared};
 
+mod nonce;
+
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The client the node's authorization server registered the gateway as.

@@ -14,6 +14,7 @@ use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use openehr_its::rest::client::{ClientError, ErrorBody, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
+use super::dpop::Sent;
 use super::reported::{self, chain, excerpt_of};
 use super::{Contact, DispatchError, DispatchOptions, NodeReply};
 use crate::hygiene::Withheld;
@@ -86,8 +87,11 @@ pub(super) fn answered(
 /// `options` withholds.
 ///
 /// A `403` whose body carries one of `refusal_codes`, the endpoint's
-/// consent refusal codes, is `consent-denied` ([`refused_on_consent`]).
+/// consent refusal codes, is `consent-denied` ([`refused_on_consent`]). A
+/// deadline or a missing proof that `sent` shows came after a request of
+/// the call left is read as that request's, never as one never sent.
 pub(super) fn failed(
+    sent: &Sent,
     (endpoint, refusal_codes): (&EndpointId, &BTreeSet<String>),
     error: ClientError,
     latency_ms: u64,
@@ -95,7 +99,17 @@ pub(super) fn failed(
 ) -> Result<NodeReply, DispatchError> {
     let withheld = options.withheld();
     let failure = |outcome, contact| Ok(NodeReply::Failed { outcome, contact });
+    let contacted = sent.contradicts(&error);
     match error {
+        ClientError::DeadlineElapsed { .. } if contacted => failure(
+            Outcome::TimeOut {
+                latency_ms,
+                error: text(
+                    "no answer before the deadline, which passed before the request could be sent again with the DPoP nonce the node demanded",
+                ),
+            },
+            Contact::Silent,
+        ),
         ClientError::DeadlineElapsed { .. } => failure(
             Outcome::TimeOut {
                 latency_ms,
@@ -157,12 +171,23 @@ pub(super) fn failed(
             },
             Contact::Answered(status),
         ),
-        ClientError::Credentials { source, .. } | ClientError::DpopProof { source, .. } => failure(
+        ClientError::Credentials { source, .. } => failure(
             Outcome::NodeError {
                 latency_ms,
                 error: reported::unauthenticated(&source, endpoint, options.request_id()),
             },
             Contact::Unsent,
+        ),
+        ClientError::DpopProof { source, .. } => failure(
+            Outcome::NodeError {
+                latency_ms,
+                error: reported::unproven(&source, endpoint, options.request_id(), contacted),
+            },
+            if contacted {
+                Contact::Silent
+            } else {
+                Contact::Unsent
+            },
         ),
         other => Err(DispatchError::Compose {
             endpoint: endpoint.clone(),
@@ -230,6 +255,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::failed;
+    use crate::dispatch::dpop::Sent;
     use crate::dispatch::{DispatchError, DispatchOptions};
     use ferrofed_registry::id::EndpointId;
     use http::Method;
@@ -244,6 +270,7 @@ mod tests {
         let endpoint = EndpointId::new("node-a-pub")?;
         Ok(matches!(
             failed(
+                &Sent::default(),
                 (&endpoint, &BTreeSet::new()),
                 error,
                 0,
