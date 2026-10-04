@@ -1074,6 +1074,26 @@ selection, the instant or the refresh policy: our own design. The `Directory`
 seam of section 6 is not a trait yet: the document and the directory are the
 two sources the server reads, and both feed the same snapshot and checks.
 
+**Organisation identifiers and the Dutch custodian map** (#87; decided
+2026-10-04 by the orchestrator under the owner's standing delegation;
+Annex B §B.2, mCSD `Organization.identifier`). The registry's organisation
+record keeps the organisation's identifiers as the directory publishes them:
+`system` and `value`, both strings, ordered and each once, every whole
+identifier beside the `organisation-id` one, which stays the selection key.
+They name organisations, never patients. The FHIR form and the mCSD source
+fill them; the native form writes none. When a registry so read carries URAs,
+the NVI localizer derives its custodian map from it: each member
+organisation's `http://fhir.nl/fhir/NamingSystem/ura` identifiers, read by
+the LRZa rules of `nl-generic-functions` (`lrza::ura_in`: one URA, none, or a
+refusal for two different ones), map that URA to the members the organisation
+operates. The `[nl_gf.nvi] custodians` table is then optional; given beside a
+derived map it must equal it, and a disagreement refuses the configuration,
+never a merge. A member no URA maps to refuses it too (`UnlocatedMember`), as
+an unmapped XCPD community does. A reload or a directory refresh rebuilds the
+localizer, so the derived map follows the new snapshot, and a refresh that
+leaves a member unmapped is refused with the running registry kept. No
+specification governs the record or the derivation: our own design.
+
 **The three namespaces** (N32, §12a.1) are three newtypes, `NodeId`,
 `EndpointId` and `SystemId` (the last through `openehr-base`'s lexical rule),
 in three maps, with no conversion between them.

@@ -75,6 +75,7 @@ pub enum EndpointStatus {
 pub struct Organisation {
     id: OrganisationId,
     name: Option<String>,
+    identifiers: BTreeSet<OrganisationIdentifier>,
 }
 
 impl Organisation {
@@ -88,6 +89,36 @@ impl Organisation {
     #[must_use]
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
+    }
+
+    /// The organisation's identifiers as its directory publishes them,
+    /// ordered and each once; empty for a registry in the native form.
+    #[must_use]
+    pub fn identifiers(&self) -> &BTreeSet<OrganisationIdentifier> {
+        &self.identifiers
+    }
+}
+
+/// An identifier a care services directory publishes for an organisation,
+/// as `system|value` (mCSD `Organization.identifier`). It names an
+/// organisation, never a patient.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct OrganisationIdentifier {
+    system: String,
+    value: String,
+}
+
+impl OrganisationIdentifier {
+    /// The identifier system (a URI or an OID).
+    #[must_use]
+    pub fn system(&self) -> &str {
+        &self.system
+    }
+
+    /// The identifier value within its system.
+    #[must_use]
+    pub fn value(&self) -> &str {
+        &self.value
     }
 }
 
@@ -283,11 +314,20 @@ impl RegistrySnapshot {
         if document.nodes.is_empty() {
             return Err(LoadError::NoNode);
         }
-        let organisations =
-            organisations(document.organisations.into_iter().map(|o| Organisation {
+        let organisations = organisations(document.organisations.into_iter().map(|o| {
+            Organisation {
                 id: o.id,
                 name: o.name,
-            }))?;
+                identifiers: o
+                    .identifiers
+                    .into_iter()
+                    .map(|identifier| OrganisationIdentifier {
+                        system: identifier.system,
+                        value: identifier.value,
+                    })
+                    .collect(),
+            }
+        }))?;
         let (nodes, by_system_id) = nodes(document.nodes, &organisations)?;
         let endpoints = endpoints(document.endpoints, &nodes, &organisations)?;
         if let Some(node) = nodes

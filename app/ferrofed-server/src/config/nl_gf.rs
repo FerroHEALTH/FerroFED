@@ -7,7 +7,9 @@
 //! `[nl_gf.nvi]` is the localizer over GF-Localization, the NVI
 //! Localization Service (Annex B §B.1, N4, §14.1): its FHIR base, how the
 //! gateway authenticates to it, and the registry member that holds each care
-//! provider's data, by URA.
+//! provider's data, by URA. The `custodians` table is optional when the
+//! registry comes from a directory whose organisations publish their URAs
+//! (Annex B §B.2); given beside them, it must agree.
 //!
 //! ```toml
 //! [nl_gf.nvi]
@@ -58,7 +60,8 @@ pub struct Nvi {
     /// not: a bearer token or basic credentials.
     pub credentials: Option<Credentials>,
     /// Each care provider, by its URA, mapped to the registry member that
-    /// holds its data; every member needs one.
+    /// holds its data; optional when the directory publishes each member
+    /// organisation's URA, and then equal to the map it gives.
     pub custodians: BTreeMap<String, String>,
     /// The client namespaces that stand for the pseudonymised BSN, beside
     /// `http://fhir.nl/fhir/NamingSystem/pseudo-bsn` itself; a BSN system is

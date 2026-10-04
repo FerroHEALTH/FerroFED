@@ -192,7 +192,7 @@ member = "node-b"        # this patient's consent denies asking node-b
 
 The pre-filter of the Dutch binding, Mitz, is not built: the Generic
 Functions IG defines no interface for it
-([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
+([#475](https://github.com/FerroHEALTH/FerroFED/issues/475)).
 
 ## Choosing one
 
@@ -432,7 +432,7 @@ client_identity_file = "/run/secrets/nvi-client.pem"            # optional, mutu
 trust_roots_file = "/etc/ferrofed/nvi-roots.pem"                # optional
 namespaces = ["pseudo-bsn"]   # client namespaces that stand for the pseudonym
 
-[nl_gf.nvi.custodians]        # every member needs one
+[nl_gf.nvi.custodians]        # optional with a directory that publishes URAs
 "ura-test-0001" = "node-a"
 "ura-test-0002" = "node-b"
 "ura-test-0003" = "node-b"    # one member may hold several providers' data
@@ -463,7 +463,16 @@ What a deployment must provide:
 - **The custodian map.** Every registry member must be mapped from at least
   one URA, or boot is refused, since no localization could ever name it. A
   care provider the NVI returns that the map does not name is outside the
-  federation and adds no candidate.
+  federation and adds no candidate. When the registry comes from a care
+  services directory (`[registry.mcsd]`, or a registry document in FHIR
+  form) whose member organisations publish their URA, as the Dutch
+  directory does with the LRZa as its source (Annex B §B.2), the gateway
+  reads the map from it: each organisation's URA maps to the members it
+  operates. The `custodians` table is then optional. If you write it anyway
+  it must give exactly the same map, or the configuration is refused; the
+  gateway never merges the two. An organisation that publishes two different
+  URAs is refused as well. The map is rebuilt on every reload and directory
+  refresh ([The registry from an mCSD directory](registry.md)).
 - **TLS and credentials.** The `url` must be `https` outside
   `profile = "development"`; a plain `http` URL is refused at boot, naming
   its key. `credentials` takes a bearer token or basic credentials, never an
@@ -488,7 +497,7 @@ Set `[nl_gf.nvi]` or `[xcpd]`, never both: both refuse the configuration.
 `[nl_gf.nvi]` takes effect on a reload; under `node_selection = "ask-all"`
 it refuses the configuration. The Mitz consent pre-filter of the Dutch
 binding is not built: the IG defines no interface for it
-([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
+([#475](https://github.com/FerroHEALTH/FerroFED/issues/475)).
 
 ## The identity feed: `[pmir]`
 

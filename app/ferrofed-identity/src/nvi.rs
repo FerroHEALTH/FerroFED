@@ -13,9 +13,11 @@
 //! (§14.1).
 //!
 //! The service answers with the care providers, by URA, whose records it
-//! exposes to this requester; each URA maps, through the configuration, to
-//! the registry member that holds that provider's data, and those members
-//! are the candidates. The service has checked the requester's access at
+//! exposes to this requester; each URA maps to the registry members that hold
+//! that provider's data, and those members are the candidates. The map comes
+//! from the registry when a directory gave it, each member organisation's URA
+//! read by the LRZa rules (Annex B §B.2), or else from the configuration; when
+//! both give one they must agree, and every member needs a URA either way. The service has checked the requester's access at
 //! each data holder before it answers (the IG's Localization page), so the
 //! answer is consent-aware, and still only candidacy: each node checks
 //! consent itself (§14.3, N27). A provider outside the federation names no
@@ -29,11 +31,12 @@ use std::fmt;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use ferrofed_registry::id::NodeId;
+use ferrofed_registry::id::{NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::header::{AUTHORIZATION, HeaderMap};
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, PseudoBsn, Ura};
+use nl_generic_functions::lrza::{self, LrzaError};
 use nl_generic_functions::nvi::NviClient;
 use nl_generic_functions::nvi::error::{InvalidInput, NviError};
 use openehr_its::rest::client::{Credentials, InvalidCredentials};
@@ -70,7 +73,7 @@ pub struct NviConfig {
     /// not.
     pub credentials: Option<Credentials>,
     /// Each care provider, by its URA, mapped to the registry member that
-    /// holds its data.
+    /// holds its data; empty when the registry's directory gives the map.
     pub custodians: BTreeMap<String, NodeId>,
     /// The client namespaces that stand for the pseudonymised BSN, beside
     /// [`PSEUDO_BSN_SYSTEM`] itself.
@@ -126,6 +129,22 @@ pub enum NviConfigError {
         /// The member it names.
         member: NodeId,
     },
+    /// An organisation the registry read from a directory carries URA
+    /// identifiers the LRZa rules refuse (Annex B §B.2).
+    #[error("organisation {organisation} carries URA identifiers the LRZa rules refuse")]
+    Directory {
+        /// The organisation's registry id.
+        organisation: OrganisationId,
+        /// What the LRZa rules reported.
+        #[source]
+        source: LrzaError,
+    },
+    /// The configured custodian map and the one the directory gives disagree
+    /// on this URA; the gateway never merges them.
+    #[error(
+        "nl_gf.nvi.custodians and the directory disagree on custodian {0}: remove the table, or make it agree"
+    )]
+    CustodiansDisagree(Ura),
     /// A registry member is mapped from no custodian, so no localization
     /// could ever name it and every undirected query would leave it
     /// `not-localized`.
@@ -167,7 +186,7 @@ pub enum NviLocalizeError {
 /// The [`Localizer`] over the NVI Localization Service (Annex B §B.1).
 pub struct NviLocalizer {
     client: NviClient,
-    custodians: BTreeMap<Ura, NodeId>,
+    custodians: BTreeMap<Ura, BTreeSet<NodeId>>,
     namespaces: BTreeSet<IdentifierNamespace>,
 }
 
@@ -179,8 +198,10 @@ impl NviLocalizer {
     ///
     /// An [`NviConfigError`] for a BSN system listed as standing for the
     /// pseudonym, a base URL that is not one, a custodian with an empty URA or
-    /// naming a member the registry does not hold, a member no custodian maps
-    /// to, and TLS material or a credential that cannot be used.
+    /// naming a member the registry does not hold, a member organisation whose
+    /// URAs the LRZa rules refuse, a configured map that disagrees with the
+    /// directory's, a member no custodian maps to, and TLS material or a
+    /// credential that cannot be used.
     pub fn from_config(
         config: NviConfig,
         registry: &RegistrySnapshot,
@@ -196,15 +217,26 @@ impl NviLocalizer {
         }
         let base = Url::parse(config.base.expose()).map_err(NviConfigError::BaseUrl)?;
         let http = http_client(&config)?;
-        let mut custodians = BTreeMap::new();
+        let mut written: BTreeMap<Ura, BTreeSet<NodeId>> = BTreeMap::new();
         for (ura, member) in config.custodians {
             let ura = Ura::new(ura).map_err(|_empty| NviConfigError::EmptyUra)?;
             if registry.node(&member).is_none() {
                 return Err(NviConfigError::UnknownMember { ura, member });
             }
-            custodians.insert(ura, member);
+            written.entry(ura).or_default().insert(member);
         }
-        let located: BTreeSet<&NodeId> = custodians.values().collect();
+        let derived = derived(registry)?;
+        let custodians = match (written.is_empty(), derived.is_empty()) {
+            (_, true) => written,
+            (true, false) => derived,
+            (false, false) => {
+                if let Some(ura) = disagreement(&written, &derived) {
+                    return Err(NviConfigError::CustodiansDisagree(ura));
+                }
+                derived
+            }
+        };
+        let located: BTreeSet<&NodeId> = custodians.values().flatten().collect();
         if let Some(unlocated) = registry
             .nodes()
             .map(ferrofed_registry::snapshot::Node::id)
@@ -258,10 +290,14 @@ impl NviLocalizer {
                 )));
             }
         };
+        // NOTE: §14.3, N27a, report T179 on #212: the NVI applies consent and never says whom
+        // it dropped, so a member it leaves out is `not-localized`, never `consent-denied`
+        // (server test `nl_gf::a_member_the_nvi_leaves_out_is_not_localized_and_complete_holds`).
         let candidates: BTreeSet<NodeId> = found
             .custodians()
             .iter()
             .filter_map(|ura| self.custodians.get(ura))
+            .flatten()
             .filter(|member| members.contains(member))
             .cloned()
             .collect();
@@ -302,6 +338,45 @@ impl Localizer for NviLocalizer {
             Err(error) => Localization::Unavailable(error),
         }
     }
+}
+
+/// The custodian map the registry gives: each URA its member organisations
+/// carry, by the LRZa rules (Annex B §B.2), mapped to the members those
+/// organisations operate. It is empty for a registry no directory gave.
+fn derived(registry: &RegistrySnapshot) -> Result<BTreeMap<Ura, BTreeSet<NodeId>>, NviConfigError> {
+    let mut derived: BTreeMap<Ura, BTreeSet<NodeId>> = BTreeMap::new();
+    for node in registry.nodes() {
+        let Some(organisation) = registry.organisation(node.organisation()) else {
+            continue;
+        };
+        let identifiers = organisation
+            .identifiers()
+            .iter()
+            .map(|identifier| (Some(identifier.system()), Some(identifier.value())));
+        let ura = lrza::ura_in(identifiers).map_err(|source| NviConfigError::Directory {
+            organisation: organisation.id().clone(),
+            source,
+        })?;
+        // NOTE: Annex B §B.2: an organisation with no URA is not a top-level care
+        // provider, so it names no custodian and its members need one elsewhere.
+        if let Some(ura) = ura {
+            derived.entry(ura).or_default().insert(node.id().clone());
+        }
+    }
+    Ok(derived)
+}
+
+/// The first URA on which the configured map `written` and the derived map
+/// `derived` disagree, if any.
+fn disagreement(
+    written: &BTreeMap<Ura, BTreeSet<NodeId>>,
+    derived: &BTreeMap<Ura, BTreeSet<NodeId>>,
+) -> Option<Ura> {
+    written
+        .keys()
+        .chain(derived.keys())
+        .find(|ura| written.get(*ura) != derived.get(*ura))
+        .cloned()
 }
 
 /// The HTTP client the service is asked through: no redirects, because the

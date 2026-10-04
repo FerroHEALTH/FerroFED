@@ -9,6 +9,7 @@
 //! registry and shows on `/health/dependencies`.
 
 mod config;
+mod lrza;
 mod refresh;
 mod routing;
 

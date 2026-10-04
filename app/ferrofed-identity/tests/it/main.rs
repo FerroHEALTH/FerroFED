@@ -17,6 +17,7 @@ mod binding;
 mod directory;
 mod lifecycle;
 mod localizer;
+mod nvi_directory;
 mod nvi_localizer;
 mod patient;
 mod pixm;
