@@ -65,7 +65,17 @@ async fn probed(
     per_node: Duration,
     overall: Duration,
 ) -> Result<Vec<(EndpointId, probe::Probed)>, Box<dyn Error>> {
-    let snapshot = registry(&a.uri(), &b.uri())?;
+    probed_at(&a.uri(), &b.uri(), per_node, overall).await
+}
+
+/// Probes node A at the base URL `a` and node B at `b`, as [`probed`] does.
+async fn probed_at(
+    a: &str,
+    b: &str,
+    per_node: Duration,
+    overall: Duration,
+) -> Result<Vec<(EndpointId, probe::Probed)>, Box<dyn Error>> {
+    let snapshot = registry(a, b)?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let built = Instant::now();
@@ -134,6 +144,16 @@ async fn a_probe_a_member_leaves_unanswered_past_the_budget_shows_a_silent_membe
         contacts,
         "§11.1: node B was sent the probe and gave no answer in time"
     );
+    // NOTE: no specification governs this: our own design; `ask_all` caps the member's deadline
+    // at the budget, so its own time-out and the budget end together and either may report it.
+    let unanswered = answers.get(1).map(|(_, probed)| &probed.answer);
+    assert!(
+        matches!(
+            unanswered,
+            Some(Answer::Abandoned | Answer::Failed(ForwardError::TimeOut { .. }))
+        ),
+        "§11.5: node B was abandoned or timed out, and was reachable: {unanswered:?}"
+    );
     assert_eq!(1, received(&b).await?, "the probe left for node B");
     Ok(())
 }
@@ -163,5 +183,31 @@ async fn a_member_whose_own_deadline_passes_inside_the_budget_is_a_time_out_of_a
     );
     assert_eq!(Contact::Silent, unanswered.contact(), "{silent}");
     assert_eq!(1, received(&b).await?, "the probe left for node B");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_member_that_cannot_be_reached_is_unreachable_and_silent() -> TestResult {
+    let a = member(Duration::ZERO).await;
+    let answers = probed_at(
+        &a.uri(),
+        ferrofed_testkit::unreachable::BASE,
+        timing::SLACK,
+        timing::SLACK,
+    )
+    .await?;
+    let [(_, answered), (silent, unreachable)] = answers.as_slice() else {
+        return Err(format!("one answer per member: {answers:?}").into());
+    };
+    assert_eq!(Contact::Answered(http::StatusCode::OK), answered.contact());
+    assert!(
+        matches!(
+            unreachable.answer,
+            Answer::Failed(ForwardError::Unreachable { .. })
+        ),
+        "§11.1, §12.5.1: {silent} could not be reached, which is no time-out: {:?}",
+        unreachable.answer
+    );
+    assert_eq!(Contact::Silent, unreachable.contact(), "{silent}");
     Ok(())
 }

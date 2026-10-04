@@ -569,6 +569,22 @@ async fn a_forward_the_node_leaves_unanswered_is_a_time_out_of_a_silent_node() -
     Ok(())
 }
 
+#[tokio::test]
+async fn a_forward_to_a_node_that_cannot_be_reached_is_unreachable_and_silent() -> TestResult {
+    let forwarded = client(ferrofed_testkit::unreachable::BASE)?
+        .forward(
+            request(Method::GET, &format!("/ehr/{EHR}"), HeaderMap::new(), b""),
+            &DispatchOptions::new(timing::deadline()?, crate::conveyed::conveyance()),
+        )
+        .await;
+    assert!(
+        matches!(&forwarded, Err(ForwardError::Unreachable { .. })),
+        "§11.1: the node could not be reached, which is no time-out: {forwarded:?}"
+    );
+    assert_eq!(Contact::Silent, Contact::of_forwarded(&forwarded));
+    Ok(())
+}
+
 /// The status a node that answers every directory read `200` gives a read of
 /// the directory at `query` with `headers`, and what the node received.
 async fn directory_read(
