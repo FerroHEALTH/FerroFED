@@ -101,8 +101,9 @@ pub enum ConnectionTypeFault {
     },
 }
 
-/// Why an endpoint's `managingOrganization` names no organisation of the
-/// document (N20).
+/// Why a reference between resources of the document names none: an
+/// endpoint's `managingOrganization` (N20), or an entry of an organisation's
+/// `endpoint` list.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum ReferenceFault {
@@ -112,8 +113,9 @@ pub enum ReferenceFault {
     /// The reference has no literal `reference`, so no entry answers it.
     #[error("the reference carries no literal reference")]
     NotLiteral,
-    /// The reference names no `Organization` of the Bundle.
-    #[error("the reference {0:?} names no Organization of the Bundle")]
+    /// The reference names no resource of the Bundle of the type it is made
+    /// for.
+    #[error("the reference {0:?} names no resource of the Bundle")]
     Outside(String),
 }
 

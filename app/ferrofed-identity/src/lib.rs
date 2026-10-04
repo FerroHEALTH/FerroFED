@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The identity roles of the Federation Tier as traits (resolver, localizer,
-//! consent pre-filter), the registry's directory sources, and the patient
-//! reference carrier, with no FHIR and no transport.
+//! consent pre-filter), the patient reference carrier, and the adapters that
+//! bind the roles and the registry's sources over the IHE binding crate.
 //!
-//! The gateway core depends on these traits only; each binding implements
-//! one in a crate of its own, so it can move without a change to the core
-//! (§2.4, N27, N27a). This crate holds:
+//! The traits and the carrier hold no FHIR and no transport, and the gateway
+//! core depends on them only; each adapter implements a trait over a binding
+//! crate, so a binding can move without a change to the core (§2.4, N27,
+//! N27a). This crate holds:
 //!
 //! - [`patient`]: [`PatientRef`](patient::PatientRef), the patient
 //!   identifier as the gateway carries it, redacted everywhere (§5.4, N33);

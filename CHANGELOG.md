@@ -265,7 +265,10 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 - The boot refusals that ask for a registry (`[dev]`, `[pixm]` and
   `federation.demographic_endpoint` without one, `federation.node_selection`
   and `federation.id` missing beside one) name both of its sources,
-  `registry.document` and `[registry.mcsd]` (#425).
+  `registry.document` and `[registry.mcsd]` (#425). So does the refusal of
+  the admission check without a registry, and a registry in FHIR form that
+  lists an endpoint it does not hold says the reference names no resource,
+  where it said it named no `Organization` (#434).
 
 ### Fixed
 
