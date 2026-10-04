@@ -64,6 +64,15 @@ pub enum ConsentDecision {
     NoSignal,
     /// The service could not answer.
     Unavailable(ConsentError),
+    /// The service denied asking `denied` and could not answer for some
+    /// other candidate, for the reason `failure` gives. A candidate it could
+    /// not answer for is asked, as under [`ConsentDecision::Unavailable`].
+    Partial {
+        /// The candidates consent does not permit asking.
+        denied: BTreeSet<NodeId>,
+        /// Why the service could not answer for the others.
+        failure: ConsentError,
+    },
 }
 
 /// Answers which candidate members may not be asked about a patient.

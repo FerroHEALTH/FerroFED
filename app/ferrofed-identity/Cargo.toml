@@ -31,7 +31,7 @@ jiff.workspace = true
 # The NVI localizer (#87) over the GF-Localization client of the Dutch binding
 # crate (Annex B §B.1), its custodians read by the LRZa rules from the
 # directory (Annex B §B.2).
-nl-generic-functions = { workspace = true, features = ["lrza", "nvi"] }
+nl-generic-functions = { workspace = true, features = ["lrza", "mitz", "nvi"] }
 # The Authorization value of the PIX Manager credentials, composed as the
 # node client composes it (RFC 7617 §2, RFC 6750 §2.1).
 openehr-its = { workspace = true, features = ["rest-client"] }
