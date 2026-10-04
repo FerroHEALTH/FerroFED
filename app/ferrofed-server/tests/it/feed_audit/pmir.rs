@@ -140,3 +140,43 @@ async fn a_message_whose_record_the_spool_cannot_take_is_not_applied() -> TestRe
     assert_eq!(bound, gateway.bound()?, "nothing was applied");
     Ok(())
 }
+
+#[tokio::test]
+async fn a_create_whose_record_is_refused_is_adopted_by_the_next_check_and_never_made_twice()
+-> TestResult {
+    let registry = PatientIdentityRegistry::start().await?;
+    let repository = FeedRepository::start().await;
+    repository.set_up(false);
+    let dir = tempfile::tempdir()?;
+    let gateway = gateway(&text(
+        dir.path(),
+        &registry.base_url(),
+        "http://127.0.0.1:9/pmir/feed",
+        &audit_tables(&repository, "spool_max_events = 1"),
+    )?)?;
+    let feed = gateway.state.identity_feed().ok_or("[pmir] is set")?;
+    assert_eq!(
+        Some(ferrofed_server::pmir::subscription::RegistryFault::AuditFailed),
+        {
+            let _failed = feed.check().await;
+            feed.fault()
+        },
+        "the search's record filled the spool, so the create's answer is set aside"
+    );
+    assert_eq!(1, registry.creates(), "the Registry made the subscription");
+    repository.set_up(true);
+    let drained = repository.wait_for(1, Duration::from_secs(5)).await;
+    assert_eq!(
+        1,
+        drained.len(),
+        "the spool drains once the repository is back"
+    );
+    assert_eq!(
+        ferrofed_server::health::dependencies::Observed::Up,
+        feed.check().await,
+        "the next check's search adopts the subscription the Registry holds"
+    );
+    assert_eq!(1, registry.creates(), "no second subscription is created");
+    assert_eq!(1, registry.subscriptions().len());
+    Ok(())
+}

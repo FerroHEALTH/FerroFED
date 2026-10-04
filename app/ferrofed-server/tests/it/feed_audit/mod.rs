@@ -13,6 +13,7 @@
 //! transaction closed, as the ITI-55 audit trail does.
 
 mod config;
+mod log;
 mod mcsd;
 mod pixm;
 mod pmir;
