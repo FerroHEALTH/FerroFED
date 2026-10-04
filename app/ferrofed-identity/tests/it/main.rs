@@ -27,4 +27,5 @@ mod pixm_localizer;
 mod static_consent;
 mod static_resolver;
 mod support;
+mod timing;
 mod xcpd;

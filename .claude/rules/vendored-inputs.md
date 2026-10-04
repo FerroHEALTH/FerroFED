@@ -26,7 +26,7 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   Parameters profiles, the capability statements, the Consumer's audit
   profile and the IG's examples, pinned by package version and tarball
   sha256.
-- `docs/specs/ihe-pdqm/`: the ITI-78 artefacts of the IHE PDQm 3.2.0 FHIR
+- `docs/specs/ihe-pdqm/`: the ITI-78 and ITI-119 artefacts of the IHE PDQm 3.2.0 FHIR
   package (CC-BY-4.0): the Consumer and Supplier capability statements, the
   Query Patient Resource Response Message and Patient profiles, the
   Consumer's audit profile and the IG's examples, pinned by package version
@@ -37,6 +37,12 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   profiles, the endpoint type code system and value sets, the Query and
   Updates audit profiles and the IG's Organization, Endpoint and audit
   examples, pinned by package version and tarball sha256.
+- `docs/specs/ihe-pmir/`: the IHE PMIR 1.6.0 FHIR package (CC-BY-4.0): the
+  ITI-93 feed and ITI-94 subscription profiles, capability statements and
+  examples the identity feed reads, pinned by package version and tarball
+  sha256 (`scripts/vendor/ihe-pmir.sh`).
+- `docs/specs/ihe-iua/`: the IHE IUA supplement client authentication cites,
+  pinned by tag `2.5` and commit (CC-BY-4.0, `scripts/vendor/ihe-iua.sh`).
 - `docs/specs/ihe-balp/`: the RESTful Query, Read, Create and Delete
   patterns of the IHE Basic Audit Log Patterns 1.1.4 FHIR package
   (CC-BY-4.0), the profiles' audit records are built on, with the Audit
@@ -94,8 +100,10 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     guide index and OpenNCP (evidence only) are cache only.
   - `docs/specs/ihe-iti-tf/`: ITI TF Volume 1 chapters 13, 18 and 27
     (General Introduction §9).
-  - `docs/specs/be-ehealth/`: the eHealth platform cookbooks, cache only
-    until the owner settles their licence.
+  - `docs/specs/be-ehealth/`: the eHealth platform cookbooks, cache only:
+    the cookbooks allow circulation, but the platform's re-use terms require
+    prior approval for downloadable documents, and the stricter term governs
+    (decided 2026-10-04).
   - `docs/specs/be-fhir/`: `hl7.fhir.be.core` (CC0-1.0).
   - `docs/specs/fr-ans/`: the ANS FHIR packages and guide page (CC0-1.0)
     and two ANS repositories (MIT); the INSi pages need manual retrieval.

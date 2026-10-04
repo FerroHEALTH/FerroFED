@@ -6,14 +6,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_identity::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::audit::AuditSettings;
-use crate::config::settings::{PixmSettings, Scheme};
+use crate::config::settings::PixmSettings;
+use crate::service;
 
 use super::error::FederationError;
 
@@ -35,22 +35,14 @@ pub(super) fn pixm_resolver(
                 })?;
             members.insert(member, domain.clone());
         }
-        let auth = match &manager.credentials {
-            None => Authentication::None,
-            Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
-            Some(Scheme::Basic { user, password }) => Authentication::Basic {
-                user: user.clone(),
-                password: password.to_secret_string(),
-            },
-            Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => {
-                return Err(FederationError::Grant {
-                    section: format!("pixm.manager[{index}].credentials"),
-                });
-            }
-        };
+        let key = format!("pixm.manager[{index}]");
+        let auth =
+            service::authentication(&format!("{key}.credentials"), manager.credentials.as_ref())?;
+        let tls = service::tls_of(&key, &manager.tls).map_err(FederationError::Tls)?;
         managers.push(ManagerConfig {
             base: manager.url.clone(),
             auth,
+            tls,
             members,
         });
     }

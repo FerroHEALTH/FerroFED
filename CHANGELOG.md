@@ -88,6 +88,14 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Mutual TLS to the PIX Manager, the PDQm Supplier, the PMIR Patient
+  Identity Registry and the mCSD directory: `[[pixm.manager]]`, `[pdqm]`,
+  `[pmir]` and `[registry.mcsd]` take `client_identity` (or
+  `client_identity_file`) and `trust_roots_file`, as `[xcpd]` does, the
+  client identity held as a secret. A file that cannot be read is refused
+  naming its key, and material that is no PEM refuses the federation
+  without quoting it. The testkit gains a mutual-TLS front that puts any
+  harness server behind `https` with client authentication (#507).
 - A FAPI 2.0 grant as an onward credential, for a node whose authorization
   server follows the FAPI 2.0 Security Profile, as the BgZ/eOverdracht
   track of the Dutch binding does (Annex B §B.4a): a
@@ -576,6 +584,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- Every outbound client of `ferrofed-identity` (PIXm, PDQm, PMIR, mCSD,
+  XCPD, NVI, Mitz and the FHIR Feed audit repository) is built through one
+  client build and one TLS type, and the server maps a credentials section
+  to a credential once, refusing an OAuth 2.0, Nuts or FAPI 2.0 grant
+  wherever one is not allowed; the PMIR mapping no longer reads such a grant
+  as no credential (#507).
 - The container image names FerroHEALTH, the organisation that distributes
   it, as its OCI `vendor`, and FerroHEALTH as its `authors`, in the image
   labels and in the release index annotations (#490).
@@ -688,6 +702,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   localizer and the `[pdqm]` step are now given a deadline a tenth of their
   time short of the gateway's, so the audit failure reaches the gateway
   first and leaves every member `not-localized`.
+- An audit record still queued behind another spool write when its
+  exchange's time runs out is now written once that write ends, and
+  delivered once, in the order it was queued (#532). Before, the record of
+  a failed exchange was dropped before its write started, and nothing
+  logged it. A failed exchange is still audited, and ITI-20 has a stored
+  record sent when the sender is able (ITI TF-2 §3.20.4.1.1). A queued
+  record holds its place under `spool_max_events` and `spool_max_bytes`
+  as a stored one does, so a stalled disk holds no more records in memory
+  than the spool could hold on disk: a record past either bound is
+  refused at once as a full spool, its exchange fails as an audit
+  failure, and the refusal is logged with its count, never the record,
+  and counted in the new `ferrofed_audit_refused_total`.
 - A slow or stalled disk under the audit spool no longer holds a patient
   query past its budget (#512). Storing one record is bounded by the new
   `spool_write_timeout_ms` (2000 by default) in `[audit.repository]` and

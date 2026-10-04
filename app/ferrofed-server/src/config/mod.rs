@@ -27,6 +27,7 @@ pub mod auth;
 pub mod error;
 pub mod grant;
 mod load;
+pub mod mcsd;
 pub mod mitz;
 pub mod nl_gf;
 pub mod pdqm;
@@ -35,6 +36,7 @@ mod resolve;
 mod secrets;
 pub mod settings;
 pub mod stored_queries;
+pub mod tls;
 pub mod transport;
 pub mod xcpd;
 
@@ -165,6 +167,14 @@ pub struct PixManager {
     /// How the gateway authenticates to the Manager, when the transport does
     /// not.
     pub credentials: Option<Credentials>,
+    /// The gateway's client certificate chain and private key, PEM, for
+    /// mutual TLS, inline or through `client_identity_file`.
+    pub client_identity: Option<Secret>,
+    /// A file holding the client identity, read at boot.
+    pub client_identity_file: Option<PathBuf>,
+    /// A file of PEM trust roots the Manager's certificate chains to, beside
+    /// the platform's.
+    pub trust_roots_file: Option<PathBuf>,
 }
 
 /// The federation's membership.
@@ -180,7 +190,7 @@ pub struct Registry {
     /// The mCSD care services directory the registry is read from and kept
     /// in step with (`[registry.mcsd]`, §15.1, Annex A.5), in place of a
     /// document.
-    pub mcsd: Option<McsdDirectory>,
+    pub mcsd: Option<mcsd::McsdDirectory>,
 }
 
 impl Registry {
@@ -188,51 +198,6 @@ impl Registry {
     #[must_use]
     pub fn configured(&self) -> bool {
         self.document.is_some() || self.mcsd.is_some()
-    }
-}
-
-/// The mCSD care services directory the registry is read from.
-///
-/// Its `Organization`s and `Endpoint`s are read with ITI-90 and checked as
-/// the registry document in FHIR form is; every `refresh_interval_s` the
-/// changes since the last read are asked for with ITI-91 and checked again
-/// before they replace the running registry. Each read or refresh ends at
-/// its deadline and its caps on pages, bytes and entries, so a faulty
-/// directory can neither hold it nor fill the gateway's memory (no
-/// specification governs these limits: our own design).
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct McsdDirectory {
-    /// The directory's FHIR base URL, `http` or `https`, with no user name
-    /// or password.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to the directory, when the transport
-    /// does not: a bearer token or basic credentials.
-    pub credentials: Option<Credentials>,
-    /// How often the changes are asked for, in seconds.
-    pub refresh_interval_s: u64,
-    /// How long one whole read or refresh may take, every page of both
-    /// resource types included, in milliseconds.
-    pub deadline_ms: u64,
-    /// The most pages one read or refresh may read.
-    pub max_pages: usize,
-    /// The most bytes of answer bodies one read or refresh may read.
-    pub max_bytes: usize,
-    /// The most Bundle entries one read or refresh may read.
-    pub max_entries: usize,
-}
-
-impl Default for McsdDirectory {
-    fn default() -> Self {
-        Self {
-            url: SecretUrl::default(),
-            credentials: None,
-            refresh_interval_s: 300,
-            deadline_ms: 30_000,
-            max_pages: 200,
-            max_bytes: 64 << 20,
-            max_entries: 50_000,
-        }
     }
 }
 

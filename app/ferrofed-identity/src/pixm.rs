@@ -50,6 +50,9 @@ pub struct ManagerConfig {
     pub base: SecretUrl,
     /// How the gateway authenticates to it.
     pub auth: Authentication,
+    /// The TLS material it is reached with: a client identity for mutual TLS
+    /// and trust roots beside the platform's.
+    pub tls: Tls,
     /// The members this Manager resolves, each with its `ehr_id` domain: the
     /// assigning authority whose identifiers are that member's `ehr_id`s.
     pub members: BTreeMap<NodeId, String>,
@@ -201,7 +204,7 @@ impl PixmResolver {
                 seen.push(member.clone());
                 members.push((member, target));
             }
-            let http = fhir::http_client(&manager.auth, &Tls::default())?;
+            let http = fhir::http_client(&manager.auth, &manager.tls)?;
             let base = Url::parse(manager.base.expose()).map_err(PixmConfigError::BaseUrl)?;
             let client = PixmClient::new(base, http).map_err(PixmConfigError::Base)?;
             built.push(Arc::new(Manager { client, members }));

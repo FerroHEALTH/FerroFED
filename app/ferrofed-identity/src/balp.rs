@@ -33,38 +33,19 @@ use async_trait::async_trait;
 use ihe_iti::atna::feed::{FeedAddressError, FeedRepository};
 use ihe_iti::atna::forwarder::{Forwarder, Status};
 use ihe_iti::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer};
-use secrecy::{ExposeSecret as _, SecretString};
 use tokio::task::JoinHandle;
 use url::Url;
 
+use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::xcpd::AUDIT_TARGET;
-
-/// The TLS material the gateway reaches a FHIR Feed repository with, beside
-/// the platform's trust roots: the ATNA secure channel authenticates both
-/// sides (ITI TF-2 §3.19).
-///
-/// `Debug` redacts the client identity, because [`SecretString`] does.
-#[derive(Debug, Clone, Default)]
-pub struct FeedTls {
-    /// The gateway's client certificate chain and private key, PEM.
-    pub identity: Option<SecretString>,
-    /// PEM trust roots the repository's certificate chains to.
-    pub roots: Option<String>,
-}
 
 /// Why a FHIR Feed repository could not be built.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum FeedConfigError {
-    /// The client identity does not read as a PEM certificate and key.
-    #[error("the audit repository client identity is no PEM certificate and key")]
-    Identity(#[source] reqwest::Error),
-    /// The trust roots do not read as PEM certificates.
-    #[error("the audit repository trust roots are no PEM certificates")]
-    Roots(#[source] reqwest::Error),
     /// The HTTP client could not be built.
     #[error("the HTTP client for the audit repository could not be built")]
-    Client(#[source] reqwest::Error),
+    Client(#[source] ClientError),
     /// The repository's FHIR base was refused.
     #[error("the audit repository FHIR base was refused")]
     Address(#[source] FeedAddressError),
@@ -73,32 +54,22 @@ pub enum FeedConfigError {
 /// Returns the FHIR Feed repository at `base`.
 ///
 /// It is reached over `https`, or over clear text when `cleartext` is set,
-/// which a development deployment alone asks for; each request is bounded by
-/// `timeout`, and no redirect is followed, because a record names the
-/// patient.
+/// which a development deployment alone asks for, with the `tls` material:
+/// the ATNA secure channel authenticates both sides (ITI TF-2 §3.19). Each
+/// request is bounded by `timeout`, and no redirect is followed, because a
+/// record names the patient.
 ///
 /// # Errors
 ///
-/// A [`FeedConfigError`] for TLS material that does not read, an HTTP
-/// client that cannot be built, or a base the feed refuses.
+/// A [`FeedConfigError`] for an HTTP client that cannot be built or a base
+/// the feed refuses.
 pub fn feed_repository(
     base: Url,
     cleartext: bool,
-    tls: &FeedTls,
+    tls: &Tls,
     timeout: Duration,
 ) -> Result<FeedRepository, FeedConfigError> {
-    let mut builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
-    if let Some(identity) = &tls.identity {
-        let identity = reqwest::Identity::from_pem(identity.expose_secret().as_bytes())
-            .map_err(FeedConfigError::Identity)?;
-        builder = builder.identity(identity);
-    }
-    if let Some(roots) = &tls.roots {
-        let roots = reqwest::Certificate::from_pem_bundle(roots.as_bytes())
-            .map_err(FeedConfigError::Roots)?;
-        builder = builder.tls_certs_merge(roots);
-    }
-    let http = builder.build().map_err(FeedConfigError::Client)?;
+    let http = fhir::http_client(&Authentication::None, tls).map_err(FeedConfigError::Client)?;
     if cleartext {
         FeedRepository::cleartext_for_development(base, http, timeout)
     } else {

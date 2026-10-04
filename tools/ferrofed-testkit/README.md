@@ -10,9 +10,10 @@ the capturing and fault proxy in front of each node,
 the track 10 leakage search over the proxy journal (`leak`), the
 synthetic seed builder that writes over ITS-REST alone, the PIX Manager test
 device the seed builder feeds over ITI-104 (a test device, not a PIXm
-implementation), and the PDQm Supplier test device that answers ITI-78 and
+implementation), the PDQm Supplier test device that answers ITI-78 and
 ITI-119 from synthetic Patients in the `urn:oid:2.999` example arc (a test
-device, not a PDQm implementation).
+device, not a PDQm implementation), and a mutual-TLS front that puts any
+harness server behind `https` with client authentication.
 
 A tool crate under `tools/`: never published.
 

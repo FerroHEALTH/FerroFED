@@ -71,6 +71,7 @@ pub mod pmir;
 pub mod reload;
 pub mod request_id;
 pub mod request_log;
+pub mod service;
 pub mod state;
 pub mod stored;
 pub mod telemetry;
