@@ -1144,7 +1144,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1198,7 +1198,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
