@@ -43,7 +43,7 @@ regional alternative (Annex B), which it names at `fhir.nl.gf#0.3.0`. The
 bindings and their versions are decided (`docs/architecture.md` §6, decision
 A18): PIXm 3.1.0, mCSD 4.0.0 and PMIR 1.6.0 (CC-BY-4.0) and `fhir.nl.gf`
 0.3.0 (EUPL-1.2), each vendored under `docs/specs/` and moved into the corpus
-table below by the issue that first reads it (#42, #74 and #86, #48, #87).
+table below by the issue that first reads it (#42, #74 and #86, #147, #87).
 XCPD has no FHIR package; its adapter (#85) binds the ITI Technical Framework
 revision below, cited and not vendored: IHE International licenses its own
 text for reproduction (General Introduction ch. 9), but the ITI-55 pages
@@ -62,7 +62,7 @@ package registry listed as latest on 2026-10-01.
 |---|---|---|
 | PIXm (ITI-83, ITI-104) | `ihe.iti.pixm` | 3.1.0, vendored by #42 (the corpus table below) |
 | PDQm (ITI-78, ITI-119) | `ihe.iti.pdqm` | 3.2.0, vendored by #119 (the corpus table below) |
-| PMIR (ITI-93, ITI-94) | `ihe.iti.pmir` | 1.6.0 |
+| PMIR (ITI-93, ITI-94) | `ihe.iti.pmir` | 1.6.0, vendored by #147 (the corpus table below) |
 | mCSD (ITI-90, ITI-91) | `ihe.iti.mcsd` | 4.0.0, vendored by #86 (the corpus table below) |
 | XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | Vol 2 Rev 20.1 (2024-12-12, Final Text) |
 | ATNA (ITI-20, syslog with the DICOM message) | the IHE ITI Technical Framework, cited and not vendored, with DICOM PS3.15 Annex A.5 (NEMA, reproduction by permission only) and RFC 5424 and RFC 5425 | Vol 2 Rev 20.1 §3.20; no 2024-25 change proposal touched ITI-20, so Rev 20.2's text is the same |
@@ -87,6 +87,7 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | IHE PIXm FHIR package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`, the ITI-83 artefacts | `scripts/vendor/ihe-pixm.sh`, `docs/specs/ihe-pixm/PROVENANCE.md` |
 | IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 artefacts | `scripts/vendor/ihe-pdqm.sh`, `docs/specs/ihe-pdqm/PROVENANCE.md` |
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
+| IHE PMIR FHIR package | `ihe.iti.pmir` version `1.6.0` from `packages.fhir.org`, tarball sha256 `ec9d25fc64ac2f3087f921c14c0da56afc7e794caa80298db3f130bc0a40fe70`, the ITI-93 and ITI-94 artefacts | `scripts/vendor/ihe-pmir.sh`, `docs/specs/ihe-pmir/PROVENANCE.md` |
 | IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
 | Netherlands Generic Functions IG source | `nuts-foundation/nl-generic-functions-ig` tag `v0.3.0`, commit `5367430787042c218996f11570f904bd3cd37a83`, the source of package `fhir.nl.gf` version `0.3.0`: the localization, consent, care services and identification pages with their FSH profiles, capability statements and examples | `scripts/vendor/nl-gf.sh`, `docs/specs/nl-gf/PROVENANCE.md` |
 
