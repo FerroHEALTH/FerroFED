@@ -14,13 +14,14 @@ use ferrofed_identity::binding::ResolutionBindings;
 use ferrofed_identity::resolver::Resolver;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
+use jsonwebtoken::jwk::Jwk;
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
 use openehr_its::rest::client::ReqwestTransport;
 
 use crate::config::NodeSelection;
 use crate::config::auth::PatientBinding;
-use crate::config::settings::Settings;
+use crate::config::settings::{Scheme, Settings};
 use crate::facade::options;
 use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
@@ -220,6 +221,7 @@ impl Federation {
             stored_query_fan_out: settings.federation.fan_out_stored_queries,
             signing: settings.signing.clone(),
             signer: Some(signer),
+            client_keys: client_keys(settings),
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -266,8 +268,27 @@ impl Federation {
             stored_query_fan_out: crate::config::Federation::default().fan_out_stored_queries,
             signing: None,
             signer: None,
+            client_keys: Vec::new(),
         }
     }
+}
+
+/// The public half of the client key of every FAPI 2.0 grant `settings`
+/// configures, each once, in endpoint order.
+fn client_keys(settings: &Settings) -> Vec<Jwk> {
+    let mut keys: Vec<Jwk> = Vec::new();
+    for scheme in settings.credentials.values() {
+        if let Scheme::Fapi2(grant) = scheme {
+            let key = grant.client_key();
+            if !keys
+                .iter()
+                .any(|known| known.common.key_id.as_deref() == Some(key.kid()))
+            {
+                keys.push(key.public().clone());
+            }
+        }
+    }
+    keys
 }
 
 /// The configuration's default `ehr_id` index capacity.

@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "base64 0.23.1",
  "fhir-types",

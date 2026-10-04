@@ -34,6 +34,7 @@
   - [The audit trail](operate/audit.md)
   - [Client authentication](operate/authentication.md)
     - [The §13.4 deployment decisions](operate/deployment-decisions.md)
+  - [Onward credentials](operate/onward-credentials.md)
   - [Queries and API areas](operate/queries-and-areas.md)
 - [Admitting a node](operate/admission.md)
 - [Health probes](operate/health.md)

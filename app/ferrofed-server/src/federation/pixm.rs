@@ -42,7 +42,7 @@ pub(super) fn pixm_resolver(
                 user: user.clone(),
                 password: password.to_secret_string(),
             },
-            Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) => {
+            Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => {
                 return Err(FederationError::Grant {
                     section: format!("pixm.manager[{index}].credentials"),
                 });

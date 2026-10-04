@@ -26,8 +26,10 @@ aws-lc-rs.workspace = true
 # the outbound gate reads before an exchange (#439).
 base64.workspace = true
 ferrofed-registry.workspace = true
-# The access token request of the Nuts grant, Annex B §B.4 (#88).
-nl-generic-functions = { workspace = true, features = ["nuts-auth"] }
+# The access token request of the Nuts grant, Annex B §B.4 (#88), and the
+# authorization server metadata checks the FAPI 2.0 grant of Annex B §B.4a
+# shares with it (#497).
+nl-generic-functions = { workspace = true, features = ["nuts-auth", "oauth-metadata"] }
 # The typed `ehr_id` a node query is scoped to (#45).
 openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["merge"] }

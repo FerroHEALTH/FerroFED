@@ -28,6 +28,11 @@
 //! must carry a `DPoP` proof ([`crate::dpop::verify`]); the token issued is
 //! bound to the proof's key, typed `DPoP`, and [`TokenEndpoint::dpop_bound`]
 //! is the matcher of a node that requires it with a proof of that key.
+//! [`TokenEndpoint::expect_assertion`] holds every assertion to another
+//! algorithm and `aud`, and
+//! [`TokenEndpoint::require_authorization_details`] requires RFC 9396
+//! `authorization_details` of the types it names and states them back in
+//! the token response; the FAPI 2.0 device ([`crate::fapi`]) uses both.
 //!
 //! [`es384_pem`] and [`p256_pem`] generate a synthetic private key in PKCS#8
 //! PEM at run time, so no key is ever committed. No specification governs the
@@ -135,9 +140,27 @@ pub fn verify(
     client_id: &str,
     audience: &str,
 ) -> Result<AssertionClaims, String> {
+    verify_signed(assertion, jwks, (client_id, audience), None)
+}
+
+/// Verifies `assertion` as [`verify`] does, signed with `algorithm`, ES384
+/// when it is `None`, and with `aud` the one string `audience`.
+///
+/// # Errors
+///
+/// Returns the reason the assertion is refused, as [`verify`] does, and an
+/// `aud` that is an array rather than one string (FAPI 2.0 Security Profile
+/// §5.3.3.1).
+pub fn verify_signed(
+    assertion: &str,
+    jwks: &JwkSet,
+    (client_id, audience): (&str, &str),
+    algorithm: Option<Algorithm>,
+) -> Result<AssertionClaims, String> {
+    let algorithm = algorithm.unwrap_or(Algorithm::ES384);
     let header =
         jsonwebtoken::decode_header(assertion).map_err(|error| format!("header: {error}"))?;
-    if header.alg != Algorithm::ES384 {
+    if header.alg != algorithm {
         return Err(format!("the assertion is signed with {:?}", header.alg));
     }
     let kid = header.kid.ok_or("the header names no kid")?;
@@ -145,7 +168,7 @@ pub fn verify(
         .find(&kid)
         .ok_or_else(|| format!("no published key has kid {kid}"))?;
     let key = DecodingKey::from_jwk(jwk).map_err(|error| format!("jwk: {error}"))?;
-    let mut validation = Validation::new(Algorithm::ES384);
+    let mut validation = Validation::new(algorithm);
     validation.set_audience(&[audience]);
     validation.set_issuer(&[client_id]);
     validation.sub = Some(client_id.to_owned());
@@ -235,6 +258,10 @@ struct State {
     dpop: bool,
     nonce: Option<String>,
     untyped: bool,
+    algorithm: Option<Algorithm>,
+    audience: Option<String>,
+    details: Option<BTreeSet<String>>,
+    details_omitted: bool,
     accepted: BTreeSet<String>,
     subjects: BTreeMap<String, String>,
     bound: BTreeMap<String, String>,
@@ -334,6 +361,36 @@ impl TokenEndpoint {
     /// RFC 8693 §2.2.1 requires, as a defective server would.
     pub fn omit_issued_token_type(&self) {
         self.shared.lock().untyped = true;
+    }
+
+    /// Verifies every later assertion as signed with `algorithm` and naming
+    /// `audience`, one string, as its `aud`, in place of ES384 and the token
+    /// URL (FAPI 2.0 Security Profile §5.3.2.1, §5.4.1).
+    pub fn expect_assertion(&self, algorithm: Algorithm, audience: &str) {
+        let mut state = self.shared.lock();
+        state.algorithm = Some(algorithm);
+        state.audience = Some(audience.to_owned());
+    }
+
+    /// Requires `authorization_details` on every later request, an array of
+    /// objects each of a type in `supported`, refusing any other with
+    /// `invalid_authorization_details`, and states the details back in the
+    /// token response (RFC 9396 §5, §6, §7).
+    pub fn require_authorization_details<'a>(&self, supported: impl IntoIterator<Item = &'a str>) {
+        self.shared.lock().details = Some(supported.into_iter().map(str::to_owned).collect());
+    }
+
+    /// Answers every later request without the `authorization_details` RFC
+    /// 9396 §7 requires in the token response, as a defective server would.
+    pub fn omit_authorization_details(&self) {
+        self.shared.lock().details_omitted = true;
+    }
+
+    /// The mock server the endpoint runs on, for a test device that serves
+    /// more beside it on the same origin.
+    #[must_use]
+    pub fn server(&self) -> &Server {
+        &self.server
     }
 
     /// Answers every later request with the RFC 6749 §5.2 error `error`,

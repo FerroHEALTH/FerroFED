@@ -11,6 +11,7 @@
 //! bound with `DPoP` (§13.1, N25, CP-17).
 
 mod architecture;
+mod audience;
 mod confined;
 mod conveyance;
 mod conveyed;
@@ -20,6 +21,7 @@ mod dpop;
 mod ehr;
 mod exchange;
 mod fanout;
+mod fapi2;
 mod forward;
 mod gate;
 mod masking;

@@ -8,13 +8,14 @@
 
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use wiremock::{Request, Respond, ResponseTemplate};
 
 use crate::dpop;
 use crate::oauth::{
     ACCESS_TOKEN_TYPE, Exchanged, JWT_BEARER, JWT_TOKEN_TYPE, Shared, State, TOKEN_EXCHANGE,
-    Verdict, verify, verify_subject,
+    Verdict, verify_signed, verify_subject,
 };
 
 /// The responder the token endpoint's mock answers every request with.
@@ -28,6 +29,15 @@ struct TokenBody<'a> {
     expires_in: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     issued_token_type: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    authorization_details: Option<Box<RawValue>>,
+}
+
+/// One authorization details object, read for its `type` (RFC 9396 §2).
+#[derive(Deserialize)]
+struct Typed {
+    #[serde(rename = "type")]
+    kind: String,
 }
 
 #[derive(Serialize)]
@@ -77,9 +87,12 @@ impl Responder {
             Ok(jkt) => jkt,
             Err(answer) => return *answer,
         };
-        let outcome = self.granted(state, form);
+        let outcome = self.granted(state, form).and_then(|subject| {
+            let details = Self::detailed(state, form)?;
+            Ok((subject, details))
+        });
         match outcome {
-            Ok(subject) => {
+            Ok((subject, details)) => {
                 let token = uuid::Uuid::new_v4().simple().to_string();
                 state.accepted.insert(token.clone());
                 if let Some(subject) = &subject {
@@ -95,6 +108,7 @@ impl Responder {
                     expires_in: state.expires_in,
                     issued_token_type: (subject.is_some() && !state.untyped)
                         .then_some(ACCESS_TOKEN_TYPE),
+                    authorization_details: details.filter(|_| !state.details_omitted),
                 };
                 ResponseTemplate::new(200).set_body_json(body)
             }
@@ -216,6 +230,38 @@ impl Responder {
         Ok(Some(subject))
     }
 
+    /// The `authorization_details` a request asks for, read and held to the
+    /// types the endpoint supports when a test set them, to be stated back
+    /// in the token response (RFC 9396 §5, §6, §7).
+    fn detailed(
+        state: &State,
+        form: &[(String, String)],
+    ) -> Result<Option<Box<RawValue>>, Failure> {
+        let Some(supported) = &state.details else {
+            return Ok(None);
+        };
+        let refused = |reason: &str| ("invalid_authorization_details", reason.to_owned());
+        let text = form
+            .iter()
+            .find(|(key, _)| key == "authorization_details")
+            .map(|(_, value)| value.as_str())
+            .ok_or_else(|| refused("no authorization_details"))?;
+        let details = serde_json::from_str::<Vec<Typed>>(text)
+            .map_err(|_shape| refused("not an array of typed objects"))?;
+        if details.is_empty() {
+            return Err(refused("no authorization details object"));
+        }
+        if let Some(unknown) = details
+            .iter()
+            .find(|detail| !supported.contains(&detail.kind))
+        {
+            return Err(refused(&format!("unknown type {}", unknown.kind)));
+        }
+        serde_json::from_str::<Box<RawValue>>(text)
+            .map(Some)
+            .map_err(|_shape| refused("not JSON"))
+    }
+
     /// Verifies `assertion` as the gateway's, refusing with `error`, and
     /// spends its `jti`.
     fn assertion(
@@ -224,8 +270,14 @@ impl Responder {
         assertion: &str,
         error: &'static str,
     ) -> Result<(), Failure> {
-        let claims = verify(assertion, &state.jwks, &self.0.client_id, &self.0.token_url)
-            .map_err(|reason| (error, reason))?;
+        let audience = state.audience.as_deref().unwrap_or(&self.0.token_url);
+        let claims = verify_signed(
+            assertion,
+            &state.jwks,
+            (&self.0.client_id, audience),
+            state.algorithm,
+        )
+        .map_err(|reason| (error, reason))?;
         if !state.jti.insert(claims.jti) {
             return Err((error, "the jti was used before".to_owned()));
         }

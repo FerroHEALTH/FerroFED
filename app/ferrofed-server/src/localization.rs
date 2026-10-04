@@ -203,7 +203,7 @@ pub enum LocalizationError {
     /// `[nl_gf.nvi.credentials]` names an OAuth 2.0 grant, which only a node
     /// takes.
     #[error(
-        "nl_gf.nvi.credentials takes a bearer token or basic credentials, not an oauth2 or nuts grant"
+        "nl_gf.nvi.credentials takes a bearer token or basic credentials, not an oauth2, nuts or fapi2 grant"
     )]
     NviGrant,
     /// The NVI localizer refuses its configuration.
@@ -425,7 +425,9 @@ fn nvi_localizer(
             user.as_str(),
             password.to_secret_string(),
         )),
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) => return Err(LocalizationError::NviGrant),
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => {
+            return Err(LocalizationError::NviGrant);
+        }
     };
     let config = NviConfig {
         base: nvi.url.clone(),

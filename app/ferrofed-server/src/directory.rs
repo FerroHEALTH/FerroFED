@@ -324,7 +324,7 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
         },
         // NOTE: no specification governs this: our own design; configuration
         // refuses a grant here, and a refusal is safer than sending nothing.
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) => {
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => {
             return Err(FederationError::Grant {
                 section: String::from("registry.mcsd.credentials"),
             });

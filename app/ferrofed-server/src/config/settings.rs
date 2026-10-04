@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
 use ferrofed_engine::onward::Grant;
+use ferrofed_engine::onward::fapi2::Fapi2Grant;
 use ferrofed_engine::onward::keys::KeyRing;
 use ferrofed_engine::onward::nuts::NutsGrant;
 use ferrofed_identity::dev::Profile;
@@ -269,6 +270,10 @@ pub enum Scheme {
     /// The Nuts grant of Annex B §B.4: a `DPoP`-bound token for a
     /// Verifiable Presentation of the gateway's credentials (Nuts RFC021).
     Nuts(Box<NutsGrant>),
+    /// A grant under the FAPI 2.0 Security Profile, the track of Annex B
+    /// §B.4a: a `DPoP`-bound token for an ES256 `private_key_jwt` assertion,
+    /// with RFC 9396 `authorization_details` where configured.
+    Fapi2(Box<Fapi2Grant>),
 }
 
 impl Settings {

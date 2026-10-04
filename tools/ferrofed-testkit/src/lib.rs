@@ -20,6 +20,9 @@
 //!   carrier for an identifier and its fragments, raw and percent-decoded;
 //! - [`dpop`]: the check a test device makes of a `DPoP` proof, and the
 //!   nonce challenge a node answers with (#439);
+//! - [`fapi`]: the harness FAPI 2.0 authorization server, the token
+//!   endpoint held to the profile with its RFC 8414 metadata beside it
+//!   (#497);
 //! - [`issuer`]: a test issuer that mints RFC 9068 access tokens and serves
 //!   its key set (#80);
 //! - [`mcsd`]: the harness care services directory, a test device that
@@ -57,6 +60,7 @@ pub mod atna;
 pub mod atna_feed;
 pub mod containers;
 pub mod dpop;
+pub mod fapi;
 pub mod issuer;
 pub mod leak;
 pub mod mcsd;

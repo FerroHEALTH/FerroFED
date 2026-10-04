@@ -186,8 +186,12 @@ answered for the gateway, with a template for the rest, in
 The Nuts track of the Dutch binding (Annex B §B.4) is built: an endpoint
 whose `[credentials]` name a `nuts` grant obtains its token with a
 Verifiable Presentation of the gateway's credentials, bound to a key of the
-gateway's with `DPoP` ([The Nuts grant](../operate/configuration.md#the-nuts-grant-annex-b-b4),
-[#88](https://github.com/FerroHEALTH/FerroFED/issues/88)). The harmonised
-BgZ and eOverdracht track (Annex B §B.4a), FAPI 2.0 with Rich Authorization
-Requests, is planned
-([#497](https://github.com/FerroHEALTH/FerroFED/issues/497)).
+gateway's with `DPoP` ([The Nuts grant](../operate/onward-credentials.md#the-nuts-grant-annex-b-b4),
+[#88](https://github.com/FerroHEALTH/FerroFED/issues/88)). So is the
+harmonised BgZ and eOverdracht track (Annex B §B.4a): an endpoint whose
+`[credentials]` name a `fapi2` grant discovers an authorization server
+under the FAPI 2.0 Security Profile, authenticates with an ES256
+`private_key_jwt` assertion naming its issuer, sends the configured Rich
+Authorization Requests `authorization_details`, and binds its token with
+`DPoP` ([The FAPI 2.0 grant](../operate/onward-credentials.md#the-fapi-20-grant-annex-b-b4a),
+[#497](https://github.com/FerroHEALTH/FerroFED/issues/497)).

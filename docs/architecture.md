@@ -632,7 +632,8 @@ are FerroFED's own design; the missing signal is report T151 on #212.
 **Built here, movable later.** The protocols live in two published crates
 that know nothing of FerroFED: `ihe-iti`, with a feature per profile (`pixm`,
 `pdqm`, `mcsd`, `pmir`, `xcpd`), and `nl-generic-functions`, with a feature per
-Annex B function (`nvi`, `mitz`, `lrza`, `nuts-auth`). The adapters that turn
+Annex B function (`nvi`, `mitz`, `lrza`, `nuts-auth`, and `oauth-metadata`,
+the RFC 8414 checks both authentication tracks share). The adapters that turn
 those clients into the seams, and the development cross-reference, which binds
 nothing, sit beside the traits in `app/ferrofed-identity` (section 11, #106).
 The gateway core depends only on the traits. When FerroPIX exists, it can use
@@ -909,7 +910,10 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   overlap window of at least the assertion lifetime plus the nodes' JWKS cache
   time;
 - **assertions:** `exp` of 300 s or less, a unique `jti`, `aud` the node's
-  token endpoint;
+  token endpoint, or, with `assertion_audience = "issuer"` (built with
+  #497), the authorization server's configured issuer identifier as one
+  string, the other value RFC 7523 §3 admits and the only one the FAPI 2.0
+  Security Profile accepts (§5.3.2.1);
 - **tokens:** cached per endpoint until `exp` minus 30 s and handed to the
   node's `rest-client` through its `CredentialsProvider`; a `401` drops the
   token;
@@ -980,8 +984,56 @@ GFI-004 names the RFC 7523 JWT bearer grant with a presentation in both
 `assertion` and `client_assertion`; Nuts RFC021 defines the
 `vp_token-bearer` grant with no client assertion instead, and FerroFED speaks
 RFC021 (recorded on #88). The gateway does not serve its
-DID document. The harmonised BgZ/eOverdracht track of §B.4a (FAPI 2.0,
-`private_key_jwt`, RFC 9396 `authorization_details`) is #497.
+DID document.
+
+**The FAPI 2.0 grant** (built with #497; Annex B §B.4a, §13.3, §13.4). An
+endpoint whose `[credentials]` name a `fapi2` grant authenticates to an
+authorization server under the FAPI 2.0 Security Profile, the harmonised
+BgZ/eOverdracht track's choice (the VWS memo, concept v0.9, §B.4a.2). The
+grant is generic FAPI 2.0 in `ferrofed_engine::onward::fapi2`; the track is
+a configuration of it, with no branch for a region:
+
+- **discovery:** at the first token request the metadata is read once from
+  the issuer's RFC 8414 §3.1 well-known URL over the node transport and kept
+  for the provider's life; a failed read is not kept. It is held to the
+  issuer with the checks the Nuts grant built, moved for both tracks into
+  `nl-generic-functions` feature `oauth-metadata` (`oauth_metadata::Issuer`:
+  the canonical issuer, the identical-`issuer` check of RFC 8414 §3.3, the
+  same-origin endpoint check, and the refusal of a repeated name), and it
+  must list `private_key_jwt` with `ES256`, `client_credentials` and, for
+  an exchanging grant, token exchange, every configured
+  `authorization_details` type (RFC 9396 §10), and `ES256` for `DPoP` when
+  it lists `DPoP` algorithms. RFC 8414 §2 defaults read strictly: an omitted
+  method list is `client_secret_basic`, an omitted grant list
+  `authorization_code` and `implicit`;
+- **client authentication:** `private_key_jwt` (FAPI 2.0 §5.3.2.1), the
+  same RFC 7523 assertion as `oauth2` with `aud` the issuer as one string
+  (§5.3.3.1), signed ES256 with a P-256 key of the grant's own, since
+  §5.4.1 admits PS256, ES256 and EdDSA and the `[signing]` key is ES384.
+  The key's public half is published in the gateway's JWK Set beside the
+  `[signing]` keys (§5.4.2; §B.4a.2), so a `fapi2` grant requires
+  `[signing]`;
+- **sender-constraining:** always `DPoP` with a P-256 key, through the
+  engine's `Prover` as for `oauth2` (§5.3.2.1 requires MTLS or `DPoP`);
+- **authorization details:** an optional RFC 9396 `authorization_details`
+  value per endpoint, configured as JSON text, held to the §2 shape and sent
+  as written in every token request (§6); a grant that asks for some takes
+  only a token response that states the details granted (§7), and a
+  refusal with `invalid_authorization_details` names that code. A grant
+  asks for a scope, details, or both, never neither (FAPI 2.0 §5.3.3.1,
+  least privilege);
+- **token exchange:** per verified caller where the endpoint's `grant` is
+  `token_exchange`, through `onward::exchange` at the discovered token
+  endpoint, with the same caching, scope narrowing and withheld-identifier
+  refusal.
+
+The authorization code grant is refused at load: it needs a user agent to
+redirect, with PAR (RFC 9126) and PKCE (FAPI 2.0 §5.3.2.2, §5.3.3.2). The
+purpose of use and organisation type travel as the endpoint's configured
+`authorization_details`, a declaration of the gateway's organisation the
+same for every request; the caller's purpose still reaches the node in
+`openEHR-federation-client` (§13.4 authn-purpose-of-use). Verifying the
+access token the issuing organisation signs is the node's (§B.4a.2).
 
 **Scope attenuation.** The gateway never requests onward more than the caller
 holds. Under token exchange the requested scope is the caller's granted
@@ -1835,7 +1887,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 |---|---|---|---|
 | `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
 | `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
-| `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth` | the clients each function needs | anything in FerroFED |
+| `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth`, and `oauth-metadata`, the RFC 8414 checks the §B.4 and §B.4a tracks share | the clients each function needs | anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
 | `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`, onward OAuth 2.0 and the signed caller token (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken` | any storage implementation (#40), the server |

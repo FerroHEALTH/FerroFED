@@ -112,8 +112,10 @@ impl IdentityFeed {
                 password: password.to_secret_string(),
             },
             // NOTE: no specification governs this: our own design; configuration
-            // refuses an OAuth 2.0 or Nuts grant here, so only the transport remains.
-            Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) | None => Authentication::None,
+            // refuses an OAuth 2.0, Nuts or FAPI 2.0 grant here, so only the transport remains.
+            Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) | None => {
+                Authentication::None
+            }
         };
         let subscriber = lifecycle::subscriber(&settings.url, &auth)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose

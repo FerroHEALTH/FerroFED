@@ -78,7 +78,7 @@ fn credentials(mitz: &MitzSettings) -> Option<Credentials> {
             user.as_str(),
             password.to_secret_string(),
         )),
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) | None => None,
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) | None => None,
     }
 }
 
