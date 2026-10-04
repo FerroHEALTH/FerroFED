@@ -54,7 +54,7 @@ use openehr_federation::headers;
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_federation::status;
-use openehr_its::rest::client::{ErrorBody, ReqwestTransport};
+use openehr_its::rest::client::ErrorBody;
 use openehr_its::rest::routes::RouteMatch;
 use serde::Serialize;
 use tokio::task::{JoinError, JoinSet};
@@ -67,6 +67,7 @@ use crate::facade::provenance::Provenance;
 use crate::facade::security;
 use crate::facade::target::{self, Mechanism, Selected, TargetError};
 use crate::federation::Federation;
+use crate::onward::NodeTransport;
 
 /// The ITS-REST operations that upload a template, ADL 1.4 and ADL 2
 /// (§12.6).
@@ -228,7 +229,7 @@ pub(crate) async fn each<R, F, Fut>(
     call: F,
 ) -> Result<Vec<(Asked<R>, u64)>, Unfinished>
 where
-    F: Fn(NodeClient<ReqwestTransport>, DispatchOptions) -> Fut,
+    F: Fn(NodeClient<NodeTransport>, DispatchOptions) -> Fut,
     Fut: Future<Output = R> + Send + 'static,
     R: Send + 'static,
 {

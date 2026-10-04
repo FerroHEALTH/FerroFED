@@ -566,7 +566,8 @@ pub struct Credentials {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OAuth2 {
-    /// The grant: `client_credentials` (RFC 6749 §4.4).
+    /// The grant: `client_credentials` (RFC 6749 §4.4), or `token_exchange`
+    /// (RFC 8693), a token per verified caller.
     pub grant: Option<GrantKind>,
     /// How the gateway authenticates at the token endpoint:
     /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2).
@@ -587,6 +588,10 @@ pub struct OAuth2 {
     /// The audience the token is asked for, when the authorization server
     /// takes one.
     pub audience: Option<String>,
+    /// A file holding the private key the tokens are bound to with `DPoP`
+    /// (RFC 9449), a P-256 or P-384 key in PKCS#8 PEM, read at boot. Unset,
+    /// the tokens are bearer tokens.
+    pub dpop_key_file: Option<PathBuf>,
 }
 
 /// The OAuth 2.0 grant the gateway uses at a node's token endpoint.
@@ -596,6 +601,10 @@ pub struct OAuth2 {
 pub enum GrantKind {
     /// The client-credentials grant (RFC 6749 §4.4).
     ClientCredentials,
+    /// Token exchange (RFC 8693): the verified caller's token exchanged for
+    /// a token of the node, the gateway as the actor. The gateway's own
+    /// requests use the client-credentials grant.
+    TokenExchange,
 }
 
 /// How the gateway authenticates at a node's token endpoint.

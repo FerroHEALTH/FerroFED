@@ -49,12 +49,13 @@ use crate::facade::options::{self, DescribeError};
 use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::{Instruments, NodeRequests};
+use crate::onward::NodeTransport;
 
 /// The federation a server serves the federated query over.
 pub struct Federation {
     id: FederationId,
     snapshot: Arc<RegistrySnapshot>,
-    clients: NodeClients<ReqwestTransport>,
+    clients: NodeClients<NodeTransport>,
     resolver: Option<Arc<dyn Resolver>>,
     localization: LocalizationPolicy,
     consent: Option<Arc<dyn ConsentPrefilter>>,
@@ -365,9 +366,10 @@ impl Federation {
         // only backstops a connection the call deadline cannot reach.
         let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
-        let credentials = crate::onward::onward_credentials(settings, &transport)?;
+        let onward = crate::onward::onward(settings, &snapshot, transport)?;
         let signer = Arc::new(crate::conveyed::signer(settings, &id)?);
-        let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)
+        let clients = NodeClients::from_snapshot(&snapshot, &onward.transport, &onward.credentials)
+            .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
             .map_err(FederationError::Clients)?;
         let mut context = Context::new(targeting(selection))
             .with_offset_strategy(settings.federation.offset)
@@ -421,7 +423,7 @@ impl Federation {
     pub fn new(
         id: FederationId,
         snapshot: RegistrySnapshot,
-        clients: NodeClients<ReqwestTransport>,
+        clients: NodeClients<NodeTransport>,
         resolver: Option<Arc<dyn Resolver>>,
         context: Context,
         budget: Budget,
@@ -604,7 +606,7 @@ impl Federation {
 
     /// The node clients, one per endpoint.
     #[must_use]
-    pub fn clients(&self) -> &NodeClients<ReqwestTransport> {
+    pub fn clients(&self) -> &NodeClients<NodeTransport> {
         &self.clients
     }
 

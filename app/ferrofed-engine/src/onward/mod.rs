@@ -1,33 +1,44 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! How the gateway authenticates to a node as itself: OAuth 2.0 client
-//! credentials with a signed JWT client assertion (§13.1, N25, CP-17).
+//! How the gateway authenticates to a node as itself: an OAuth 2.0 grant
+//! authenticated by a signed JWT client assertion (§13.1, N25, CP-17).
 //!
 //! For an endpoint configured with a [`Grant`], the gateway obtains an
-//! access token at the node's token endpoint with the client-credentials
-//! grant (RFC 6749 §4.4), authenticating with an ES384 client assertion
-//! (RFC 7523 §2.2) signed by the current key of its [`keys::KeyRing`],
-//! whose public keys it publishes as a JWK Set (RFC 7517). The
-//! [`provider::ClientCredentials`] provider hands the token to the node's
-//! client before each attempt, caches it, and drops it when the node answers
-//! `401`. An onward token that cannot be obtained fails that node; the
-//! gateway never dispatches unauthenticated. The caller's own token is never
-//! forwarded to a node; what a node is told about the caller is a token of
-//! the gateway's own, signed with the same keys ([`conveyance`]; N24).
+//! access token at the node's token endpoint, authenticating with an ES384
+//! client assertion (RFC 7523 §2.2) signed by the current key of its
+//! [`keys::KeyRing`], whose public keys it publishes as a JWK Set (RFC 7517).
+//! A [`GrantKind::ClientCredentials`] grant (RFC 6749 §4.4) gives the
+//! endpoint one token for every caller, through the
+//! [`provider::ClientCredentials`] provider. A [`GrantKind::TokenExchange`]
+//! grant (RFC 8693) gives each verified caller a token of its own, through
+//! [`exchange::Exchange`]: the caller's verified token is the subject, a
+//! second assertion of the gateway the actor, and the scope the caller's
+//! scope narrowed to the operation. Either provider caches what it obtained
+//! and drops it when the node answers `401`. An onward token that cannot be
+//! obtained fails that node; the gateway never dispatches unauthenticated.
+//! The caller's own token reaches no node: under token exchange it reaches
+//! that node's authorization server alone. What a node is told about the
+//! caller is a token of the gateway's own, signed with the same keys
+//! ([`conveyance`]; N24).
 //!
-//! The grant is the one onward mechanism built. RFC 8693 token exchange and
-//! `DPoP` proofs (RFC 9449) are further [`Grant`] kinds and a transport
-//! decorator respectively, and neither is offered.
+//! A grant may bind its tokens to a key of the gateway's with `DPoP` (RFC
+//! 9449): [`dpop::DpopTransport`] adds a proof to every request to that
+//! endpoint and to its token endpoint.
 
 use std::fmt;
+use std::sync::Arc;
 use std::time::Instant;
 
 use ferrofed_registry::secret::SecretUrl;
 use openehr_sdt::smart_scopes::{Compartment, SmartScope};
 use url::Url;
 
+use crate::onward::dpop::Prover;
+
 pub mod conveyance;
+pub mod dpop;
+pub mod exchange;
 pub mod keys;
 pub mod provider;
 pub mod token;
@@ -135,11 +146,27 @@ impl Scope {
 /// `Debug` shows the token endpoint with its credentials redacted.
 #[derive(Clone)]
 pub struct Grant {
+    kind: GrantKind,
     token_endpoint: Url,
     client_id: String,
     scope: Scope,
     resource: Option<Url>,
     audience: Option<String>,
+    dpop: Option<Arc<Prover>>,
+}
+
+/// How a [`Grant`] obtains its tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum GrantKind {
+    /// The client-credentials grant (RFC 6749 §4.4): one token for every
+    /// request to the endpoint, with the grant's own [`Scope`].
+    ClientCredentials,
+    /// Token exchange (RFC 8693 §2): a token per verified caller, with the
+    /// caller's token as the subject and the gateway as the actor. The
+    /// gateway's own requests, which have no caller, use the
+    /// client-credentials grant at the same token endpoint.
+    TokenExchange,
 }
 
 /// A grant that cannot be built.
@@ -202,12 +229,55 @@ impl Grant {
             return Err(GrantError::ClientId);
         }
         Ok(Self {
+            kind: GrantKind::ClientCredentials,
             token_endpoint: url,
             client_id,
             scope,
             resource: None,
             audience: None,
+            dpop: None,
         })
+    }
+
+    /// This grant, obtaining a token per verified caller by token exchange
+    /// (RFC 8693 §2).
+    #[must_use]
+    pub fn with_token_exchange(mut self) -> Self {
+        self.kind = GrantKind::TokenExchange;
+        self
+    }
+
+    /// This grant, binding its tokens to `prover`'s key with `DPoP` (RFC
+    /// 9449): the token endpoint must answer `token_type` `DPoP` (§5), and
+    /// the requests to the token endpoint and to the node carry proofs of
+    /// that key ([`dpop::DpopTransport`]).
+    #[must_use]
+    pub fn with_dpop(mut self, prover: Arc<Prover>) -> Self {
+        self.dpop = Some(prover);
+        self
+    }
+
+    /// This grant as the client-credentials grant at the same token
+    /// endpoint, for the gateway's own requests.
+    #[must_use]
+    pub fn as_client_credentials(&self) -> Self {
+        Self {
+            kind: GrantKind::ClientCredentials,
+            ..self.clone()
+        }
+    }
+
+    /// How the grant obtains its tokens.
+    #[must_use]
+    pub fn kind(&self) -> GrantKind {
+        self.kind
+    }
+
+    /// The key the grant's tokens are bound to with `DPoP` (RFC 9449), when
+    /// they are.
+    #[must_use]
+    pub fn dpop(&self) -> Option<&Arc<Prover>> {
+        self.dpop.as_ref()
     }
 
     /// This grant, naming `resource` as the target service (RFC 8707 §2).
@@ -275,6 +345,7 @@ impl Grant {
 impl fmt::Debug for Grant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Grant")
+            .field("kind", &self.kind)
             .field(
                 "token_endpoint",
                 &SecretUrl::new(String::from(self.token_endpoint.clone())),
@@ -283,6 +354,7 @@ impl fmt::Debug for Grant {
             .field("scope", &self.scope.text)
             .field("resource", &self.resource.as_ref().map(Url::as_str))
             .field("audience", &self.audience)
+            .field("dpop", &self.dpop)
             .finish()
     }
 }

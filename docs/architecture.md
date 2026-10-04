@@ -778,25 +778,56 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
 - **tokens:** cached per endpoint until `exp` minus 30 s and handed to the
   node's `rest-client` through its `CredentialsProvider`; a `401` drops the
   token;
-- **token exchange:** where a node's authorization server supports RFC 8693,
-  the endpoint is configured for it. The `subject_token` is the caller's
-  verified token, the `actor_token` the gateway's assertion, and `resource` the
-  node (RFC 8707), so the issued token is audience-restricted and carries the
-  caller as the delegating subject in `act`. It is preferred where available
-  and is the FerroSMART target;
-- **DPoP:** for a deployment that requires it, a `Transport` decorator adds the
-  proof per request, because the proof binds `htm` and `htu`, which only the
-  transport sees. It needs no change to `openehr-its`.
+- **token exchange** (built with #439): where a node's authorization server
+  supports RFC 8693, the endpoint's `oauth2` grant is `token_exchange`. The
+  `subject_token` is the caller's verified access token, the `actor_token` an
+  assertion of the gateway with its own `jti`, the request still
+  authenticates with a client assertion, and `resource` names the node (RFC
+  8707), which a token-exchange grant must set. The issued token must be an
+  access token (`issued_token_type`, RFC 8693 §2.2.1), is audience-restricted
+  and carries the caller as the delegating subject in `act`. It is cached per
+  endpoint by the SHA-256 of the caller's token and the scope, at most 1024
+  tokens, until 30 s before it expires, and dropped on a `401`
+  (`ferrofed_engine::onward::exchange`). Only a caller verified by signature
+  or introspection has a token to exchange: a caller the edge asserted is
+  refused for that node, `node-error` with nothing sent. The gateway's own
+  requests, the admission check and the stored-query redistribution, use the
+  client-credentials grant at the same token endpoint. The caller's token
+  reaches that authorization server alone, never a node; one whose text or
+  JWS payload carries a withheld identifier is not sent (N33). It is
+  preferred where available and is the FerroSMART target;
+- **DPoP** (built with #439): an `oauth2` grant with a `dpop_key_file` (a
+  P-256 or P-384 key) binds its tokens to that key (RFC 9449). The
+  `Transport` decorator `ferrofed_engine::onward::dpop::DpopTransport` adds a
+  proof to every request under the node's base URL and to its token
+  endpoint, because the proof binds `htm` and `htu`, which only the
+  transport sees; a request carrying a token is sent under the `DPoP` scheme
+  with the token's hash in `ath`. A token endpoint's `400 use_dpop_nonce` and
+  a node's `401` with a `DPoP` `use_dpop_nonce` challenge are answered once
+  more with the nonce, within the request's own budget (RFC 9449 §8, §9), and
+  a token endpoint that answers a bearer token to such a grant fails the
+  node. `openehr-its` composes every token as `Bearer`; the decorator writes
+  the `DPoP` scheme over it on a bound route (RFC 9449 §7.1).
 
 **Scope attenuation.** The gateway never requests onward more than the caller
-holds. Under token exchange the requested scope is the caller's scope
-intersected with the operation. Under client credentials the node's grant to
-the gateway is `system/`, so the caller's narrower scope is enforced at the
-gateway and also conveyed, so the node can apply it (N26).
+holds. Under token exchange the requested scope is the caller's granted
+scopes that cover the operation, as the gate's permission table reads them,
+and every exchange carries it with `resource`. An operation no granted scope
+covers (one with no SMART family, a demographic client, a route that needs
+only a caller) is never exchanged, `node-error` with nothing sent: without
+`scope` the authorization server would choose one, often the whole grant
+(RFC 8693 §2.1). The gate keeps a caller's verified token only while some
+node's grant exchanges it, and only for a caller verified by signature or
+introspection; it is a `SecretString` no `Debug`, log, span, metric or
+conveyed claim carries. Under client credentials the
+node's grant to the gateway is `system/`, so the caller's narrower scope is
+enforced at the gateway and also conveyed, so the node can apply it (N26).
 
 **The caller's token is never forwarded to a node.** Its audience is the
 gateway, and one token would unlock every member that accepts its issuer (RFC
-9700 §2.3). There is no passthrough profile. An onward token that cannot be
+9700 §2.3). There is no passthrough profile; under token exchange the
+caller's token reaches the node's authorization server as the subject of the
+exchange, and never the node. An onward token that cannot be
 obtained fails that node as `node-error`, with the token endpoint's error; the
 gateway never dispatches unauthenticated.
 

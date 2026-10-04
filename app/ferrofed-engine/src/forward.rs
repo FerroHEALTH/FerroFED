@@ -324,7 +324,7 @@ impl fmt::Debug for HeldRequest {
     }
 }
 
-impl<T: Transport> NodeClient<T> {
+impl<T: Transport + Clone> NodeClient<T> {
     /// Forwards `request` to the node once and returns its answer.
     ///
     /// The ITS-REST operation the method and path address decides which of
@@ -411,7 +411,7 @@ impl<T: Transport> NodeClient<T> {
             outgoing.raw_body(body, None);
         }
         self.gate_forward(&operation, &outgoing, options)?;
-        match self.client().forward(outgoing).await {
+        match self.client_for(options).forward(outgoing).await {
             Ok(answer) if answer.status() == StatusCode::UNAUTHORIZED => {
                 Err(ForwardError::Refused {
                     endpoint: self.endpoint().clone(),

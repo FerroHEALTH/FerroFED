@@ -32,6 +32,26 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   tested end to end against an in-process OTLP collector in the testkit: a
   `serve` process's spans arrive under the gateway's resource, are flushed
   on the drain, and carry no synthetic patient identifier (#437).
+- Onward token exchange per verified caller (RFC 8693, #439): an `oauth2`
+  section with `grant = "token_exchange"` and a required `resource` (RFC
+  8707) exchanges the caller's verified access token at the node's token
+  endpoint, with an assertion of the gateway as the actor and only the
+  caller's granted scopes that cover the operation (N26). Every exchange
+  carries its scope and resource; an operation no scope covers, or a
+  caller the edge mode asserted, fails that node `node-error` with nothing
+  sent. Exchanged tokens are cached per endpoint, caller token and scope
+  (the caller token hashed), at most 1024, and dropped on a `401`. The
+  gateway's own requests use the client-credentials grant at the same
+  token endpoint. The gate keeps the caller's token only while some node
+  exchanges it, and no log, span, metric or `openEHR-federation-client`
+  claim carries it.
+- `DPoP`-bound onward tokens per endpoint (RFC 9449, #439): an `oauth2`
+  section's `dpop_key_file`, a P-256 or P-384 key, binds that node's tokens
+  to the key. Every request to the node and its token endpoint carries a
+  proof binding its method and URL, and the token's hash on the node
+  request; the token is sent under the `DPoP` scheme, a bearer token
+  answered to such a grant fails the node, and a nonce either server
+  demands is answered once.
 - The gateway exports its own spans as OpenTelemetry traces over OTLP when
   `[telemetry] otlp_endpoint` names an `http://` collector; off by default.
   A federated query is one trace: the request, the resolution, the fan-out,

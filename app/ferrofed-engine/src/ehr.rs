@@ -121,7 +121,7 @@ pub enum EhrCallError {
     },
 }
 
-impl<T: Transport> NodeClient<T> {
+impl<T: Transport + Clone> NodeClient<T> {
     /// Creates an EHR on the node with `status` as its `EHR_STATUS`, and
     /// returns the `ehr_id` the node assigned, as the node wrote it.
     ///
@@ -171,7 +171,7 @@ impl<T: Transport> NodeClient<T> {
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
-        let answer = EhrClient::new(self.client())
+        let answer = EhrClient::new(&self.client_for(options))
             .with_options(call)
             .ehr_create(&params, Some(status))
             .await
@@ -244,7 +244,7 @@ impl<T: Transport> NodeClient<T> {
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
-        let answer = EhrClient::new(self.client())
+        let answer = EhrClient::new(&self.client_for(options))
             .with_options(call)
             .ehr_get_by_id(&params)
             .await

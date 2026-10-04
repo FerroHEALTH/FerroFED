@@ -547,6 +547,7 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let guard = Arc::new(auth::Guard::new(
         auth::Gate::new(&server.auth),
         server.base_path.clone(),
+        Arc::clone(&state),
     ));
     let guarded = routes
         .with_state(state)

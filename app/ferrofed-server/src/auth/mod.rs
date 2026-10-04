@@ -49,6 +49,8 @@ use http::{HeaderMap, HeaderValue, Method, header};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{Algorithm, Validation};
 use openehr_its::rest::routes::{self, Lookup};
+use openehr_sdt::smart_scopes::SmartScope;
+use secrecy::SecretString;
 
 use crate::ITS_REST_PREFIX;
 use crate::auth::caller::{Caller, Stated, VerifiedBy};
@@ -61,6 +63,7 @@ use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
 use crate::error::{self, Code};
 use crate::facade::security::TARGET;
 use crate::request_id;
+use crate::state::AppState;
 
 /// The signature algorithms a token may be signed with (RFC 8725 §3.1,
 /// §3.2): ECDSA and RSA, never `none` and never an HMAC.
@@ -270,13 +273,18 @@ impl Gate {
     /// Verifies the caller of a request with `headers` and checks it against
     /// `requirement`, where `named` is the resource the request path names.
     ///
+    /// The caller keeps its verified access token only when `exchanging`, a
+    /// node's grant exchanging it (RFC 8693 §2.1), and only when the gateway
+    /// verified it by signature or introspection; otherwise the token is
+    /// dropped with the request's headers.
+    ///
     /// # Errors
     /// Returns the [`Refusal`] the request is answered with.
     pub async fn admit(
         &self,
         headers: &HeaderMap,
-        requirement: Requirement,
-        named: Option<&str>,
+        (requirement, named): (Requirement, Option<&str>),
+        exchanging: bool,
     ) -> Result<Caller, Refusal> {
         // NOTE: no specification governs this: our own design; an operation no
         // caller may reach is refused before any credential is read.
@@ -285,6 +293,11 @@ impl Gate {
         }
         let credential = self.credential(headers)?;
         let (caller, trusted) = self.verify(credential).await?;
+        let mut caller = if exchanging {
+            caller.with_token(SecretString::from(credential.to_owned()))
+        } else {
+            caller
+        };
         match requirement {
             Requirement::Caller => return Ok(caller),
             Requirement::Refused => return Err(Refusal::Operation),
@@ -311,6 +324,22 @@ impl Gate {
                 if !permission::granted(caller.scopes(), (family, permission), named, backend) {
                     return Err(Refusal::Scope);
                 }
+                // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the
+                // granted scopes that cover the operation, never the whole grant.
+                let covering = caller
+                    .granted()
+                    .split_whitespace()
+                    .filter(|raw| {
+                        permission::granted(
+                            &[SmartScope::parse(raw)],
+                            (family, permission),
+                            named,
+                            backend,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                caller = caller.with_covering(covering);
             }
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer
@@ -530,13 +559,26 @@ pub struct Guard {
     gate: Gate,
     /// The base path every guarded route sits under.
     base: BasePath,
+    /// The state whose running federation says whether any node exchanges
+    /// a caller's token.
+    state: Arc<AppState>,
 }
 
 impl Guard {
-    /// Returns the guard of the surface under `base`, verifying with `gate`.
+    /// Returns the guard of the surface under `base`, verifying with `gate`,
+    /// keeping a caller's token only while `state`'s federation exchanges
+    /// tokens at some node.
     #[must_use]
-    pub fn new(gate: Gate, base: BasePath) -> Self {
-        Self { gate, base }
+    pub fn new(gate: Gate, base: BasePath, state: Arc<AppState>) -> Self {
+        Self { gate, base, state }
+    }
+
+    /// Whether the running federation exchanges a caller's token at any
+    /// node (RFC 8693), so the gate keeps the token it verified.
+    fn exchanging(&self) -> bool {
+        self.state
+            .federation()
+            .is_some_and(|federation| federation.clients().exchanging())
     }
 
     /// What a request of `method` to `path` requires, with the resource its
@@ -591,7 +633,11 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
     let outbound = request_id::outbound(request.extensions()).map(|id: OutboundId| id.to_string());
     match guard
         .gate
-        .admit(request.headers(), requirement, named.as_deref())
+        .admit(
+            request.headers(),
+            (requirement, named.as_deref()),
+            guard.exchanging(),
+        )
         .await
     {
         Ok(caller) => {

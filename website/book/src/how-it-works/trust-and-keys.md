@@ -14,7 +14,9 @@ All three are built on `main` for v0.0.8: client authentication
 each node with the gateway's own key
 ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)) and the caller's
 identity conveyed to each node
-([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)).
+([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)), with token
+exchange per caller and `DPoP`-bound tokens where a node asks for them
+([#439](https://github.com/FerroHEALTH/FerroFED/issues/439)).
 
 ## The gate
 
@@ -89,7 +91,7 @@ sequenceDiagram
     C->>G: request, Bearer<br/>(caller token)
     G->>AS: read JWKS, cached
     Note over G: verify alg, iss,<br/>aud, exp, scope,<br/>purpose of use
-    G->>T: client credentials,<br/>RFC 7523 assertion
+    G->>T: client credentials, or the<br/>caller token exchanged,<br/>RFC 7523 assertion
     T->>G: read the gateway JWKS
     T-->>G: node token, cached
     G->>N: request, Bearer (node token),<br/>openEHR-federation-client
@@ -122,10 +124,21 @@ token endpoint as its audience. The token endpoint verifies it against the
 gateway's JWKS and issues an access token. The gateway caches that token
 per node until 30 seconds before it expires, and drops it on a `401`. A
 token it cannot obtain fails that node `node-error`; the gateway never
-sends a request without one. The client-credentials grant is the one
-onward mechanism built: token exchange (RFC 8693) and sender-constrained
-tokens are not offered, so a node learns who asks from the signed statement
-below.
+sends a request without one.
+
+**A token per caller, and a token bound to a key**
+([#439](https://github.com/FerroHEALTH/FerroFED/issues/439)). Where a node's
+authorization server supports token exchange (RFC 8693), the gateway asks
+it for a token per verified caller instead: the caller's token is the
+subject, a second assertion of the gateway the actor, the node the
+resource (RFC 8707), and the scope only the caller's scopes that cover the
+operation (N26). The node then sees the caller in its own token as well as
+in the signed statement below. A caller the edge asserted has no token of
+its own, so that node fails `node-error` with nothing sent. Where a
+deployment requires sender-constrained tokens, a grant binds its tokens to
+a key of the gateway's with `DPoP` (RFC 9449): every request to that node
+and its token endpoint carries a proof of the key over its method and URL,
+and a node that demands a nonce is answered once more with it.
 
 **Telling the node who asks** ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
 N24, §12.4). Every request to a node carries `openEHR-federation-client`: a
@@ -154,10 +167,12 @@ Forwarding it would hand every node a credential that unlocks every other
 member that accepts the same issuer (RFC 9700 §2.3), and a node could replay
 it at its neighbours. So the gateway authenticates to each node as itself,
 with a token the node's own authorization server issued, and conveys the
-caller as a signed statement the node can verify. It never asks a node for
-more than the caller holds: the caller's scopes are enforced at the gateway
-and conveyed, so the node applies them too (N26). Consent stays the node's
-decision either way (§13.2, N27).
+caller as a signed statement the node can verify. Under token exchange the
+caller's token reaches the node's authorization server, which exchanges it,
+and never the node. It never asks a node for more than the caller holds: the
+caller's scopes are enforced at the gateway and conveyed, so the node applies
+them too, and an exchanged token is asked for only the scopes that cover the
+operation (N26). Consent stays the node's decision either way (§13.2, N27).
 
 The §13.4 decisions a deployment must publish, such as which identity is
 verified across each boundary and who authenticates the end user, are

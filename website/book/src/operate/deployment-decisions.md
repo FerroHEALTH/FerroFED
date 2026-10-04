@@ -94,16 +94,21 @@ its nodes then decide without one.
 
 The specification asks two separate questions here.
 
-**Bearer or sender-constrained.** Bearer at both hops. The caller's token is
-a bearer token whose audience is the gateway, and it is never forwarded, so
-it cannot be replayed at a node. The token the gateway obtains from a node's
-authorization server is a bearer token too, kept until 30 seconds before it
-expires and audience-restricted when the `oauth2` section names a `resource`
-(RFC 8707) or an `audience`. The `openEHR-federation-client` token lives 60
-seconds, names one node as its `aud`, and carries a fresh `jti`, so a node
-that records `jti` values can refuse a replay within that window.
-Sender-constrained tokens, DPoP (RFC 9449) or certificate-bound tokens (RFC
-8705), are not built; the Dutch binding's DPoP profile is planned with
+**Bearer or sender-constrained.** Bearer by default at both hops, and
+sender-constrained toward a node where you configure it. The caller's token
+is a bearer token whose audience is the gateway, and it reaches no node, so
+it cannot be replayed at one; under token exchange it reaches the node's
+authorization server as the subject of the exchange. The token the gateway
+obtains from a node's authorization server is a bearer token, kept until 30
+seconds before it expires and audience-restricted when the `oauth2` section
+names a `resource` (RFC 8707) or an `audience`, unless the section names a
+`dpop_key_file`: the token is then bound to that key with DPoP (RFC 9449),
+and a node can refuse it from anyone who does not hold the key
+([Tokens bound to a key](configuration.md#tokens-bound-to-a-key-dpop)). The
+`openEHR-federation-client` token lives 60 seconds, names one node as its
+`aud`, and carries a fresh `jti`, so a node that records `jti` values can
+refuse a replay within that window. Certificate-bound tokens (RFC 8705) are
+not built; the Dutch binding's DPoP profile is planned with
 [#88](https://github.com/FerroHEALTH/FerroFED/issues/88).
 
 **Transport identity.** The gateway never reads a transport identity as an

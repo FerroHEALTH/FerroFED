@@ -9,8 +9,11 @@
 //! never anything about a patient: an IHE IUA `person_id` claim is never read
 //! (§5.4.1, N33).
 
+use std::fmt;
+
 use ferrofed_identity::binding::SessionKey;
 use openehr_sdt::smart_scopes::SmartScope;
+use secrecy::{ExposeSecret, SecretString};
 
 /// A caller the gateway verified.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +35,42 @@ pub struct Caller {
     purposes: Vec<PurposeOfUse>,
     /// How the gateway verified the caller.
     verified_by: VerifiedBy,
+    /// The caller's verified access token, kept for a node whose grant
+    /// exchanges it (RFC 8693); a caller the edge asserted has none.
+    token: Option<VerifiedToken>,
+    /// The granted scopes that cover the operation, space-separated, as
+    /// written: the scope an exchanged token is asked for (N26).
+    covering: String,
+}
+
+/// A caller's verified access token.
+///
+/// `Debug` shows nothing of it, and it is never logged or conveyed to a
+/// node: it reaches only the authorization server of a node whose grant
+/// exchanges it (RFC 8693 §2.1).
+#[derive(Clone)]
+pub struct VerifiedToken(SecretString);
+
+impl VerifiedToken {
+    /// Returns the token text.
+    #[must_use]
+    pub fn secret(&self) -> &SecretString {
+        &self.0
+    }
+}
+
+impl PartialEq for VerifiedToken {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Eq for VerifiedToken {}
+
+impl fmt::Debug for VerifiedToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("VerifiedToken(<redacted>)")
+    }
 }
 
 /// The facts a verified credential states about its caller.
@@ -67,6 +106,8 @@ impl Caller {
             scopes,
             purposes: stated.purposes,
             verified_by,
+            token: None,
+            covering: String::new(),
         }
     }
 
@@ -116,6 +157,46 @@ impl Caller {
     #[must_use]
     pub const fn verified_by(&self) -> VerifiedBy {
         self.verified_by
+    }
+
+    /// Returns this caller, keeping `token`, the access token the gateway
+    /// verified, for a node whose grant exchanges it (RFC 8693 §2.1).
+    ///
+    /// Only a caller verified by its token's signature or by introspection
+    /// keeps it. A caller the edge asserted keeps none: the gateway verified
+    /// the edge's assertion, which is no token of the caller's.
+    #[must_use]
+    pub fn with_token(mut self, token: SecretString) -> Self {
+        if matches!(
+            self.verified_by,
+            VerifiedBy::Signature | VerifiedBy::Introspection
+        ) {
+            self.token = Some(VerifiedToken(token));
+        }
+        self
+    }
+
+    /// Returns the caller's verified access token, when the gateway keeps
+    /// one.
+    #[must_use]
+    pub fn token(&self) -> Option<&VerifiedToken> {
+        self.token.as_ref()
+    }
+
+    /// Returns this caller, its granted scopes that cover the operation
+    /// being `covering`, space-separated as written.
+    #[must_use]
+    pub fn with_covering(mut self, covering: String) -> Self {
+        self.covering = covering;
+        self
+    }
+
+    /// Returns the granted scopes that cover the operation, the scope an
+    /// exchanged token is asked for (N26), or empty for an operation no
+    /// scope covers.
+    #[must_use]
+    pub fn covering(&self) -> &str {
+        &self.covering
     }
 
     /// Returns the session the caller's resolution bindings belong to

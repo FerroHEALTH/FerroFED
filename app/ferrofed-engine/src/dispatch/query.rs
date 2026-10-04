@@ -15,7 +15,7 @@ use openehr_its::rest::generated::query::client::QueryClient;
 use super::{Contact, DispatchError, DispatchOptions, NodeClient, NodeQuery, NodeReply, classify};
 use crate::trace_context;
 
-impl<T: Transport> NodeClient<T> {
+impl<T: Transport + Clone> NodeClient<T> {
     /// Sends `query` to the node and classifies the answer.
     ///
     /// # Errors
@@ -56,7 +56,8 @@ impl<T: Transport> NodeClient<T> {
             content_type: None,
         };
         let started = Instant::now();
-        let answer = QueryClient::new(&self.client)
+        let client = self.client_for(options);
+        let answer = QueryClient::new(&client)
             .with_options(call)
             .query_execute_adhoc_query_body(&params, &query.body())
             .await;

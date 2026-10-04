@@ -18,11 +18,22 @@
 //! else with an RFC 6749 §5.2 error. [`TokenEndpoint::bearer`] is the wiremock
 //! matcher a mock node requires the issued token with.
 //!
+//! Once a test calls [`TokenEndpoint::accept_exchange`], it also answers RFC
+//! 8693 token exchange: the client assertion as above, the `actor_token`
+//! verified the same way, and the `subject_token` verified as an access
+//! token of the trusted caller issuer, by its signature, `iss` and `exp`. It
+//! records each exchange's subject, scope and resource, and
+//! [`TokenEndpoint::bearer_for`] matches a token issued for one subject.
+//! Once a test calls [`TokenEndpoint::require_dpop`], every token request
+//! must carry a `DPoP` proof ([`crate::dpop::verify`]); the token issued is
+//! bound to the proof's key, typed `DPoP`, and [`TokenEndpoint::dpop_bound`]
+//! is the matcher of a node that requires it with a proof of that key.
+//!
 //! [`es384_pem`] and [`p256_pem`] generate a synthetic private key in PKCS#8
 //! PEM at run time, so no key is ever committed. No specification governs the
 //! device: our own design.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -37,6 +48,7 @@ use serde::{Deserialize, Serialize};
 use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, Request, Respond, ResponseTemplate};
 
+use crate::dpop;
 use crate::mock::Server;
 
 /// The path the token endpoint answers on.
@@ -44,6 +56,15 @@ pub const TOKEN_PATH: &str = "/oauth2/token";
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
 pub const JWT_BEARER: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+
+/// The `grant_type` of token exchange (RFC 8693 §2.1).
+pub const TOKEN_EXCHANGE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
+
+/// The token type identifier of an access token (RFC 8693 §3).
+pub const ACCESS_TOKEN_TYPE: &str = "urn:ietf:params:oauth:token-type:access_token";
+
+/// The token type identifier of a JWT (RFC 8693 §3).
+pub const JWT_TOKEN_TYPE: &str = "urn:ietf:params:oauth:token-type:jwt";
 
 /// The longest an assertion may live, `exp` minus `iat`, in seconds.
 pub const MAX_LIFETIME_S: i64 = 300;
@@ -139,6 +160,30 @@ pub fn verify(
     Ok(claims)
 }
 
+/// The claims of a caller's access token the endpoint reads.
+#[derive(Debug, Deserialize)]
+struct SubjectClaims {
+    sub: String,
+}
+
+/// Verifies `token` as an access token `issuer` signed with a key of
+/// `jwks`, by its signature, `iss` and `exp`, and returns its `sub`.
+fn verify_subject(token: &str, jwks: &JwkSet, issuer: &str) -> Result<String, String> {
+    let header = jsonwebtoken::decode_header(token).map_err(|error| format!("header: {error}"))?;
+    let kid = header.kid.ok_or("the subject token names no kid")?;
+    let jwk = jwks
+        .find(&kid)
+        .ok_or_else(|| format!("no trusted caller key has kid {kid}"))?;
+    let key = DecodingKey::from_jwk(jwk).map_err(|error| format!("jwk: {error}"))?;
+    let mut validation = Validation::new(header.alg);
+    validation.validate_aud = false;
+    validation.set_issuer(&[issuer]);
+    validation.set_required_spec_claims(&["exp", "iss", "sub"]);
+    jsonwebtoken::decode::<SubjectClaims>(token, &key, &validation)
+        .map(|data| data.claims.sub)
+        .map_err(|error| format!("subject token: {error}"))
+}
+
 /// What the endpoint made of one token request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
@@ -146,6 +191,17 @@ pub enum Verdict {
     Issued,
     /// The request was refused, for this reason.
     Refused(String),
+}
+
+/// One token exchange the endpoint answered with a token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Exchanged {
+    /// The `sub` of the subject token, the caller.
+    pub subject: String,
+    /// The `scope` asked for, when one was.
+    pub scope: Option<String>,
+    /// The `resource` named, when one was.
+    pub resource: Option<String>,
 }
 
 /// A refusal the endpoint answers every request with, set by
@@ -157,18 +213,33 @@ struct Refusal {
     description: String,
 }
 
+/// The caller issuer whose tokens the endpoint exchanges.
+#[derive(Debug, Clone)]
+struct Callers {
+    jwks: JwkSet,
+    issuer: String,
+}
+
 #[derive(Debug, Default)]
 struct State {
     jwks: JwkSet,
     expires_in: Option<u64>,
     scope: Option<String>,
+    resource: Option<String>,
     refusal: Option<Refusal>,
     delay: Option<Duration>,
+    callers: Option<Callers>,
+    dpop: bool,
+    nonce: Option<String>,
+    untyped: bool,
     accepted: BTreeSet<String>,
+    subjects: BTreeMap<String, String>,
+    bound: BTreeMap<String, String>,
     jti: BTreeSet<String>,
     assertions: Vec<String>,
     verdicts: Vec<Verdict>,
     forms: Vec<Vec<(String, String)>>,
+    exchanges: Vec<Exchanged>,
 }
 
 #[derive(Debug)]
@@ -229,6 +300,39 @@ impl TokenEndpoint {
         self.shared.lock().scope = Some(scope.to_owned());
     }
 
+    /// Refuses every later token exchange whose `resource` is not
+    /// `resource`.
+    pub fn expect_resource(&self, resource: &str) {
+        self.shared.lock().resource = Some(resource.to_owned());
+    }
+
+    /// Answers token exchange from now on, verifying each subject token as
+    /// an access token `issuer` signed with a key of `jwks`.
+    pub fn accept_exchange(&self, jwks: JwkSet, issuer: &str) {
+        self.shared.lock().callers = Some(Callers {
+            jwks,
+            issuer: issuer.to_owned(),
+        });
+    }
+
+    /// Requires a `DPoP` proof on every later token request, and binds every
+    /// token it issues to the proof's key, typed `DPoP` (RFC 9449 §5).
+    pub fn require_dpop(&self) {
+        self.shared.lock().dpop = true;
+    }
+
+    /// Requires every later proof to name `nonce`, answering one that does
+    /// not with `400` `use_dpop_nonce` and the nonce (RFC 9449 §8).
+    pub fn require_nonce(&self, nonce: &str) {
+        self.shared.lock().nonce = Some(nonce.to_owned());
+    }
+
+    /// Answers every later token exchange without the `issued_token_type`
+    /// RFC 8693 §2.2.1 requires, as a defective server would.
+    pub fn omit_issued_token_type(&self) {
+        self.shared.lock().untyped = true;
+    }
+
     /// Answers every later request with the RFC 6749 §5.2 error `error`,
     /// `description` and `status`.
     pub fn refuse(&self, status: u16, error: &str, description: &str) {
@@ -277,17 +381,52 @@ impl TokenEndpoint {
         self.shared.lock().forms.clone()
     }
 
+    /// Every token exchange answered with a token, in arrival order.
+    #[must_use]
+    pub fn exchanges(&self) -> Vec<Exchanged> {
+        self.shared.lock().exchanges.clone()
+    }
+
     /// A matcher for a request carrying `Authorization: Bearer` with a token
     /// this endpoint issued and still accepts.
     #[must_use]
     pub fn bearer(&self) -> IssuedBearer {
-        IssuedBearer(Arc::clone(&self.shared))
+        IssuedBearer {
+            shared: Arc::clone(&self.shared),
+            subject: None,
+        }
+    }
+
+    /// A matcher for a request carrying `Authorization: Bearer` with a token
+    /// this endpoint exchanged for the caller `subject` and still accepts.
+    #[must_use]
+    pub fn bearer_for(&self, subject: &str) -> IssuedBearer {
+        IssuedBearer {
+            shared: Arc::clone(&self.shared),
+            subject: Some(subject.to_owned()),
+        }
+    }
+
+    /// A matcher for a request carrying `Authorization: DPoP` with a token
+    /// this endpoint bound and still accepts, and a `DPoP` proof of the
+    /// bound key over the request's method, URL and token, naming `nonce`
+    /// when a nonce is given (RFC 9449 §7.1).
+    #[must_use]
+    pub fn dpop_bound(&self, nonce: Option<&str>) -> DpopBound {
+        DpopBound {
+            shared: Arc::clone(&self.shared),
+            nonce: nonce.map(str::to_owned),
+        }
     }
 }
 
-/// The wiremock matcher of [`TokenEndpoint::bearer`].
+/// The wiremock matcher of [`TokenEndpoint::bearer`] and
+/// [`TokenEndpoint::bearer_for`].
 #[derive(Debug)]
-pub struct IssuedBearer(Arc<Shared>);
+pub struct IssuedBearer {
+    shared: Arc<Shared>,
+    subject: Option<String>,
+}
 
 impl Match for IssuedBearer {
     fn matches(&self, request: &Request) -> bool {
@@ -297,18 +436,72 @@ impl Match for IssuedBearer {
         let Some(token) = value.to_str().ok().and_then(|v| v.strip_prefix("Bearer ")) else {
             return false;
         };
-        self.0.lock().accepted.contains(token)
+        let state = self.shared.lock();
+        state.accepted.contains(token)
+            && self
+                .subject
+                .as_ref()
+                .is_none_or(|subject| state.subjects.get(token) == Some(subject))
+    }
+}
+
+/// The wiremock matcher of [`TokenEndpoint::dpop_bound`].
+#[derive(Debug)]
+pub struct DpopBound {
+    shared: Arc<Shared>,
+    nonce: Option<String>,
+}
+
+impl Match for DpopBound {
+    fn matches(&self, request: &Request) -> bool {
+        let Some(token) = request
+            .headers
+            .get(http::header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("DPoP "))
+        else {
+            return false;
+        };
+        let Some(proof) = request
+            .headers
+            .get(dpop::HEADER)
+            .and_then(|value| value.to_str().ok())
+        else {
+            return false;
+        };
+        // The mock server reads every request over plain HTTP and names its
+        // URL by `localhost`, so the URL the client sent is its Host and path.
+        let Some(host) = request
+            .headers
+            .get(http::header::HOST)
+            .and_then(|value| value.to_str().ok())
+        else {
+            return false;
+        };
+        let htu = format!("http://{host}{}", request.url.path());
+        let Ok(verified) = dpop::verify(proof, request.method.as_str(), &htu, Some(token)) else {
+            return false;
+        };
+        let state = self.shared.lock();
+        state.accepted.contains(token)
+            && state.bound.get(token) == Some(&verified.jkt)
+            && self
+                .nonce
+                .as_ref()
+                .is_none_or(|nonce| verified.proof.nonce.as_ref() == Some(nonce))
     }
 }
 
 struct Responder(Arc<Shared>);
 
 #[derive(Serialize)]
-struct Issued<'a> {
+struct TokenBody<'a> {
     access_token: &'a str,
     token_type: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     expires_in: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    issued_token_type: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -322,10 +515,15 @@ impl Respond for Responder {
         let form: Vec<(String, String)> = url::form_urlencoded::parse(&request.body)
             .map(|(name, value)| (name.into_owned(), value.into_owned()))
             .collect();
+        let proof = request
+            .headers
+            .get(dpop::HEADER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
         let mut state = self.0.lock();
         state.forms.push(form.clone());
         let delay = state.delay;
-        let answer = self.answer(&mut state, &form);
+        let answer = self.answer(&mut state, &form, proof.as_deref());
         match delay {
             Some(delay) => answer.set_delay(delay),
             None => answer,
@@ -333,57 +531,44 @@ impl Respond for Responder {
     }
 }
 
+/// How one request failed: the RFC 6749 §5.2 code and the reason.
+type Failure = (&'static str, String);
+
 impl Responder {
-    /// The answer to a request carrying `form`, recorded in `state`.
-    fn answer(&self, state: &mut State, form: &[(String, String)]) -> ResponseTemplate {
-        let field = |name: &str| {
-            form.iter()
-                .find(|(key, _)| key == name)
-                .map(|(_, value)| value.clone())
-        };
+    /// The answer to a request carrying `form` and `proof`, recorded in
+    /// `state`.
+    fn answer(
+        &self,
+        state: &mut State,
+        form: &[(String, String)],
+        proof: Option<&str>,
+    ) -> ResponseTemplate {
         if let Some(refusal) = state.refusal.clone() {
             state.verdicts.push(Verdict::Refused(refusal.error.clone()));
             return refused(refusal.status, &refusal.error, &refusal.description);
         }
-        let outcome = (|| {
-            if field("grant_type").as_deref() != Some("client_credentials") {
-                return Err(("unsupported_grant_type", "grant_type".to_owned()));
-            }
-            if field("client_assertion_type").as_deref() != Some(JWT_BEARER) {
-                return Err(("invalid_client", "client_assertion_type".to_owned()));
-            }
-            if field("client_secret").is_some() {
-                return Err(("invalid_request", "a client secret was sent".to_owned()));
-            }
-            if let Some(expected) = &state.scope
-                && field("scope").as_deref() != Some(expected.as_str())
-            {
-                return Err(("invalid_scope", "scope".to_owned()));
-            }
-            let assertion = field("client_assertion")
-                .ok_or(("invalid_client", "no client_assertion".to_owned()))?;
-            state.assertions.push(assertion.clone());
-            let claims = verify(
-                &assertion,
-                &state.jwks,
-                &self.0.client_id,
-                &self.0.token_url,
-            )
-            .map_err(|reason| ("invalid_client", reason))?;
-            if !state.jti.insert(claims.jti) {
-                return Err(("invalid_client", "the jti was used before".to_owned()));
-            }
-            Ok(())
-        })();
+        let jkt = match self.proven(state, proof) {
+            Ok(jkt) => jkt,
+            Err(answer) => return *answer,
+        };
+        let outcome = self.granted(state, form);
         match outcome {
-            Ok(()) => {
+            Ok(subject) => {
                 let token = uuid::Uuid::new_v4().simple().to_string();
                 state.accepted.insert(token.clone());
+                if let Some(subject) = &subject {
+                    state.subjects.insert(token.clone(), subject.clone());
+                }
+                if let Some(jkt) = jkt {
+                    state.bound.insert(token.clone(), jkt);
+                }
                 state.verdicts.push(Verdict::Issued);
-                let body = Issued {
+                let body = TokenBody {
                     access_token: &token,
-                    token_type: "Bearer",
+                    token_type: if state.dpop { "DPoP" } else { "Bearer" },
                     expires_in: state.expires_in,
+                    issued_token_type: (subject.is_some() && !state.untyped)
+                        .then_some(ACCESS_TOKEN_TYPE),
                 };
                 ResponseTemplate::new(200).set_body_json(body)
             }
@@ -392,6 +577,133 @@ impl Responder {
                 refused(400, error, &reason)
             }
         }
+    }
+
+    /// The thumbprint of a required proof's key, `None` when no proof is
+    /// required, or the answer to a request whose proof is refused.
+    fn proven(
+        &self,
+        state: &mut State,
+        proof: Option<&str>,
+    ) -> Result<Option<String>, Box<ResponseTemplate>> {
+        if !state.dpop {
+            return Ok(None);
+        }
+        let Some(proof) = proof else {
+            state
+                .verdicts
+                .push(Verdict::Refused("no DPoP proof".to_owned()));
+            return Err(Box::new(refused(
+                400,
+                "invalid_dpop_proof",
+                "no DPoP proof",
+            )));
+        };
+        let verified = match dpop::verify(proof, "POST", &self.0.token_url, None) {
+            Ok(verified) => verified,
+            Err(reason) => {
+                state.verdicts.push(Verdict::Refused(reason.clone()));
+                return Err(Box::new(refused(400, "invalid_dpop_proof", &reason)));
+            }
+        };
+        if let Some(nonce) = state.nonce.clone()
+            && verified.proof.nonce.as_ref() != Some(&nonce)
+        {
+            state
+                .verdicts
+                .push(Verdict::Refused("use_dpop_nonce".to_owned()));
+            return Err(Box::new(
+                refused(400, "use_dpop_nonce", "a nonce is required")
+                    .insert_header(dpop::NONCE_HEADER, nonce.as_str()),
+            ));
+        }
+        if !state.jti.insert(verified.proof.jti.clone()) {
+            state.verdicts.push(Verdict::Refused(
+                "the proof's jti was used before".to_owned(),
+            ));
+            return Err(Box::new(refused(400, "invalid_dpop_proof", "jti")));
+        }
+        Ok(Some(verified.jkt))
+    }
+
+    /// The caller a request is granted a token for: `None` under the
+    /// client-credentials grant, the subject's `sub` under token exchange.
+    fn granted(
+        &self,
+        state: &mut State,
+        form: &[(String, String)],
+    ) -> Result<Option<String>, Failure> {
+        let field = |name: &str| {
+            form.iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+        };
+        let exchange = match field("grant_type").as_deref() {
+            Some("client_credentials") => false,
+            Some(TOKEN_EXCHANGE) if state.callers.is_some() => true,
+            _ => return Err(("unsupported_grant_type", "grant_type".to_owned())),
+        };
+        if field("client_assertion_type").as_deref() != Some(JWT_BEARER) {
+            return Err(("invalid_client", "client_assertion_type".to_owned()));
+        }
+        if field("client_secret").is_some() {
+            return Err(("invalid_request", "a client secret was sent".to_owned()));
+        }
+        if let Some(expected) = &state.scope
+            && field("scope").as_deref() != Some(expected.as_str())
+        {
+            return Err(("invalid_scope", "scope".to_owned()));
+        }
+        let assertion = field("client_assertion")
+            .ok_or(("invalid_client", "no client_assertion".to_owned()))?;
+        state.assertions.push(assertion.clone());
+        self.assertion(state, &assertion, "invalid_client")?;
+        if !exchange {
+            return Ok(None);
+        }
+        if field("subject_token_type").as_deref() != Some(ACCESS_TOKEN_TYPE) {
+            return Err(("invalid_request", "subject_token_type".to_owned()));
+        }
+        if field("actor_token_type").as_deref() != Some(JWT_TOKEN_TYPE) {
+            return Err(("invalid_request", "actor_token_type".to_owned()));
+        }
+        if let Some(expected) = &state.resource
+            && field("resource").as_deref() != Some(expected.as_str())
+        {
+            return Err(("invalid_target", "resource".to_owned()));
+        }
+        let actor = field("actor_token").ok_or(("invalid_request", "no actor_token".to_owned()))?;
+        self.assertion(state, &actor, "invalid_request")?;
+        let subject_token =
+            field("subject_token").ok_or(("invalid_request", "no subject_token".to_owned()))?;
+        let callers = state
+            .callers
+            .clone()
+            .ok_or(("unsupported_grant_type", "grant_type".to_owned()))?;
+        let subject = verify_subject(&subject_token, &callers.jwks, &callers.issuer)
+            .map_err(|reason| ("invalid_grant", reason))?;
+        state.exchanges.push(Exchanged {
+            subject: subject.clone(),
+            scope: field("scope"),
+            resource: field("resource"),
+        });
+        Ok(Some(subject))
+    }
+
+    /// Verifies `assertion` as the gateway's, refusing with `error`, and
+    /// spends its `jti`.
+    fn assertion(
+        &self,
+        state: &mut State,
+        assertion: &str,
+        error: &'static str,
+    ) -> Result<(), Failure> {
+        let claims = verify(assertion, &state.jwks, &self.0.client_id, &self.0.token_url)
+            .map_err(|reason| (error, reason))?;
+        if !state.jti.insert(claims.jti) {
+            return Err((error, "the jti was used before".to_owned()));
+        }
+        Ok(())
     }
 }
 

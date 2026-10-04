@@ -45,6 +45,7 @@ use crate::ehr::EhrCallError;
 use crate::forward::{ForwardError, Forwarded};
 use crate::hygiene::{Part, Withheld};
 use crate::onward::conveyance::{self, Conveyance, ConveyanceError};
+use crate::onward::exchange::SharedOnBehalf;
 use crate::outbound_id::OutboundId;
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
@@ -62,6 +63,7 @@ use url::Url;
 mod classify;
 pub mod definition;
 mod gate;
+mod on_behalf;
 mod query;
 pub mod reported;
 
@@ -500,9 +502,10 @@ pub struct NodeClient<T> {
     endpoint: EndpointId,
     client: Client<T>,
     consent_refusal_codes: BTreeSet<String>,
+    on_behalf: Option<SharedOnBehalf>,
 }
 
-impl<T: Transport> NodeClient<T> {
+impl<T: Transport + Clone> NodeClient<T> {
     /// The client of `endpoint` over `transport`, rooted at the endpoint's
     /// base URL with the ITS-REST version segment under it.
     ///
@@ -532,6 +535,7 @@ impl<T: Transport> NodeClient<T> {
             endpoint: endpoint.id().clone(),
             client,
             consent_refusal_codes: endpoint.consent_refusal_codes().clone(),
+            on_behalf: None,
         })
     }
 
@@ -556,6 +560,7 @@ impl<T: Transport> NodeClient<T> {
     }
 
     /// The ITS-REST client every request to the node is sent through.
+    #[cfg(test)]
     pub(crate) fn client(&self) -> &Client<T> {
         &self.client
     }

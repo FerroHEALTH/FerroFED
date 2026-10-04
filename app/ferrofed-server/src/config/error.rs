@@ -257,6 +257,16 @@ pub enum Error {
         #[source]
         source: ferrofed_engine::onward::keys::KeyError,
     },
+    /// A `DPoP` key cannot be used: it is no P-256 or P-384 private key in
+    /// PKCS#8 PEM (RFC 9449).
+    #[error("{key} is not a usable DPoP key")]
+    DpopKey {
+        /// The key the file was named by.
+        key: String,
+        /// Why the key is refused; it quotes no part of the key.
+        #[source]
+        source: ferrofed_engine::onward::dpop::DpopKeyError,
+    },
     /// `signing.assertion_lifetime_s` is zero or longer than the five minutes
     /// a client assertion may live.
     #[error(

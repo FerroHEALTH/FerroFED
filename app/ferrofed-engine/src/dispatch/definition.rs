@@ -91,7 +91,7 @@ pub struct Stored {
     pub contact: Contact,
 }
 
-impl<T: Transport> NodeClient<T> {
+impl<T: Transport + Clone> NodeClient<T> {
     /// Stores `aql` at the node as `definition` and reports what the node
     /// made of it: `active` when it answered `200`, with the node's own
     /// status beside the outcome.
@@ -135,7 +135,7 @@ impl<T: Transport> NodeClient<T> {
             accept: None,
         };
         let started = Instant::now();
-        let answer = DefinitionClient::new(self.client())
+        let answer = DefinitionClient::new(&self.client_for(options))
             .with_options(self.definition_call(options)?)
             .definition_query_version_store_yaml(&params, aql)
             .await;
@@ -195,7 +195,7 @@ impl<T: Transport> NodeClient<T> {
             accept: None,
         };
         let started = Instant::now();
-        let answer = DefinitionClient::new(self.client())
+        let answer = DefinitionClient::new(&self.client_for(options))
             .with_options(self.definition_call(options)?)
             .definition_query_version_get(&params)
             .await;
