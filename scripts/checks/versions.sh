@@ -907,7 +907,7 @@ echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"
 pinned_ref_of() {
   local cell="$1"
   awk '{
-    for (i = 1; i <= NF; i++) if ($i ~ /^[0-9a-f]{40}$/) { print $i; exit }
+    for (i = 1; i <= NF; i++) { t = $i; gsub(/[,.;:]+$/, "", t); if (t ~ /^[0-9a-f]{40}$/) { print t; exit } }
     for (i = 1; i <= NF; i++) { t = $i; gsub(/[,.;:]+$/, "", t); if (t ~ /^[0-9a-f]{64}$/) { print t; exit } }
     for (i = 1; i < NF; i++) if ($i == "tag") { t = $(i + 1); gsub(/[,.;:]+$/, "", t); print t; exit }
   }' <<< "$cell"
@@ -950,7 +950,27 @@ docs/specs/dk-nsp|Danish NSP documentation (NSPOP)
 docs/specs/se-inera|Swedish RIV-TA and Inera documentation
 docs/specs/no-nhn|Norwegian NHN developer portal
 docs/specs/fi-kanta|Finnish Kanta documents and packages
-docs/specs/fi-hl7|Finnish base profiles (HL7 Finland)"
+docs/specs/fi-hl7|Finnish base profiles (HL7 Finland)
+docs/specs/nuts-rfc|Nuts specifications
+docs/specs/ietf-oauth|IETF RFC 6749
+docs/specs/ietf-oauth|IETF RFC 7519
+docs/specs/ietf-oauth|IETF RFC 7521
+docs/specs/ietf-oauth|IETF RFC 7523
+docs/specs/ietf-oauth|IETF RFC 7662
+docs/specs/ietf-oauth|IETF RFC 8414
+docs/specs/ietf-oauth|IETF RFC 9126
+docs/specs/ietf-oauth|IETF RFC 9396
+docs/specs/ietf-oauth|IETF RFC 9449
+docs/specs/w3c-did-vc|W3C Verifiable Credentials Data Model 1.1
+docs/specs/w3c-did-vc|W3C Decentralized Identifiers 1.0
+docs/specs/w3c-did-vc|W3C DID Resolution 1.0
+docs/specs/w3c-did-vc|W3C Bitstring Status List 1.0
+docs/specs/w3c-did-vc|did:web Method Specification
+docs/specs/dif-pe|DIF Presentation Exchange 2.0.0
+docs/specs/dif-pe|DIF Claim Format Registry
+docs/specs/openid|OpenID FAPI 2.0 Security Profile
+docs/specs/openid|OpenID for Verifiable Credential Issuance 1.0
+docs/specs/openid|OpenID for Verifiable Presentations draft 18"
 
 agreed=0
 expected=0

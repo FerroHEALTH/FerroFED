@@ -201,3 +201,32 @@ corpus_drop_manifests() {
     rm -f "$file"
   done < <(find "$tree" -type f \( "${args[@]}" \) | LC_ALL=C sort)
 }
+
+# The URL a pin cell names: its first `https://` token.
+corpus_pin_url() {
+  local url
+  url="$(awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^https:\/\//) { t = $i; gsub(/[,;]+$/, "", t); print t; exit } }' <<< "$1")"
+  [ -n "$url" ] || die "the pin '$1' names no https URL"
+  printf '%s\n' "$url"
+}
+
+# The sha256 a pin cell names: its first 64-hex token.
+corpus_pin_sha256() {
+  local sha
+  sha="$(grep -oE '[0-9a-f]{64}' <<< "$1" | head -n1)"
+  [ -n "$sha" ] || die "the pin '$1' names no sha256"
+  printf '%s\n' "$sha"
+}
+
+# Downloads the document the docs/VERSIONS.md row $1 pins by URL and sha256 to
+# $2, and fails when the bytes are not the pinned ones: a document published
+# at a fixed URL is immutable only as far as its hash says.
+corpus_fetch_pinned() {
+  local pin url want got
+  pin="$(corpus_pin_cell "$1")"
+  url="$(corpus_pin_url "$pin")"
+  want="$(corpus_pin_sha256 "$pin")"
+  corpus_download "$url" "$2" || die "download of $url failed"
+  got="$(corpus_sha256 "$2")"
+  [ "$got" = "$want" ] || die "$url has sha256 $got, the '$1' pin records $want"
+}

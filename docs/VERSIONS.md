@@ -1,3 +1,4 @@
+| DIF Claim Format Registry | `decentralized-identity/claim-format-registry` commit `4a15817a7717efdda29912a1eef6e59135d8d02a`, the claim format designation schemas Presentation Exchange 2.0.0 references | `scripts/vendor/dif-pe.sh`, `docs/specs/dif-pe/PROVENANCE.md` |
 <!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
@@ -72,9 +73,15 @@ package registry listed as latest on 2026-10-01.
 ## Corpora and machine-readable inputs
 
 A corpus is pinned by commit or immutable tag, or, for a FHIR package, by its
-version and the sha256 of the registry tarball; never by a moving tag or a
-`latest` URL, and vendored by a committed `scripts/vendor/*.sh` with a
-`PROVENANCE.md` (`.claude/rules/vendored-inputs.md`). Each script below reads
+version and the sha256 of the registry tarball, or, for a document published
+at a fixed URL (an RFC, a dated W3C or OpenID publication), by that URL and the
+sha256 of its bytes; never by a moving tag or a `latest` URL, and vendored by a
+committed `scripts/vendor/*.sh` with a `PROVENANCE.md`
+(`.claude/rules/vendored-inputs.md`). A document whose licence does not
+reach every reader of a public repository (the OpenID Foundation's, limited
+to developing and implementing the specification) is pinned the same way,
+fetched under the ignored `.vendor-cache/`, and only its `PROVENANCE.md` is
+committed. Each script below reads
 its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 `PROVENANCE.md` back and fails when it names a different commit or tag.
 
@@ -89,7 +96,26 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
 | IHE PMIR FHIR package | `ihe.iti.pmir` version `1.6.0` from `packages.fhir.org`, tarball sha256 `ec9d25fc64ac2f3087f921c14c0da56afc7e794caa80298db3f130bc0a40fe70`, the ITI-93 and ITI-94 artefacts | `scripts/vendor/ihe-pmir.sh`, `docs/specs/ihe-pmir/PROVENANCE.md` |
 | IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
-| Netherlands Generic Functions IG source | `nuts-foundation/nl-generic-functions-ig` tag `v0.3.0`, commit `5367430787042c218996f11570f904bd3cd37a83`, the source of package `fhir.nl.gf` version `0.3.0`: the localization, consent, care services and identification pages with their FSH profiles, capability statements and examples | `scripts/vendor/nl-gf.sh`, `docs/specs/nl-gf/PROVENANCE.md` |
+| Netherlands Generic Functions IG source | `nuts-foundation/nl-generic-functions-ig` tag `v0.3.0`, commit `5367430787042c218996f11570f904bd3cd37a83`, the source of package `fhir.nl.gf` version `0.3.0`: the localization, consent, care services, identification and authentication pages (with the six GFI transactions) and the FSH profiles, capability statements and examples | `scripts/vendor/nl-gf.sh`, `docs/specs/nl-gf/PROVENANCE.md` |
+| Nuts specifications | `nuts-foundation/nuts-specification` commit `7c0de533b8cce537812b6647542e5719c93433a8`, RFC003 (OAuth2 Authorization), RFC021 (VP Token Grant Type) and RFC022 (Discovery Service) | `scripts/vendor/nuts-rfc.sh`, `docs/specs/nuts-rfc/PROVENANCE.md` |
+| IETF RFC 6749 | `https://www.rfc-editor.org/rfc/rfc6749.txt` sha256 `f204fc8661d6c92d2ec6e0b54808f961a9ad26e792f57f312d9528335519bd71`, The OAuth 2.0 Authorization Framework | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 7519 | `https://www.rfc-editor.org/rfc/rfc7519.txt` sha256 `fecd930e9ccf2276b95c0017c6c4ff5d09352e4bc3c7629946447894e0f97248`, JSON Web Token (JWT) | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 7521 | `https://www.rfc-editor.org/rfc/rfc7521.txt` sha256 `d5d97b3e691c9bbc495c277cc2cd79316b82486991468fc346a96ab59ba4b3c8`, Assertion Framework for OAuth 2.0 Client Authentication and Authorization Grants | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 7523 | `https://www.rfc-editor.org/rfc/rfc7523.txt` sha256 `ae24f77a8fc4338903c805c6ace38def1f23d40194aea87b123b13c5b3d2d915`, JWT Profile for OAuth 2.0 Client Authentication and Authorization Grants | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 7662 | `https://www.rfc-editor.org/rfc/rfc7662.txt` sha256 `2b7d688cb849f093e860557ac97e6cddac2556d69a4386561b22cdf97bf13657`, OAuth 2.0 Token Introspection | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 8414 | `https://www.rfc-editor.org/rfc/rfc8414.txt` sha256 `16c816e4e0fdbffb7e910ff3017867bf39debe9cb7f52f5cbc508a052ed660e8`, OAuth 2.0 Authorization Server Metadata | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 9126 | `https://www.rfc-editor.org/rfc/rfc9126.txt` sha256 `a79d0e30fcc24a22b79c8e18aa82362f6e63a7b8a5d58b480e746360e97388db`, OAuth 2.0 Pushed Authorization Requests | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 9396 | `https://www.rfc-editor.org/rfc/rfc9396.txt` sha256 `d6a8f032d8a585daae1c33a8c7b6e539d199f886ec8cc1c7898436f7f2eed29c`, OAuth 2.0 Rich Authorization Requests | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| IETF RFC 9449 | `https://www.rfc-editor.org/rfc/rfc9449.txt` sha256 `3842c58e1f6043389416023b9bb8d765048266024982fbbd90640e05943f4e13`, OAuth 2.0 Demonstrating Proof of Possession (DPoP) | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
+| W3C Verifiable Credentials Data Model 1.1 | `https://www.w3.org/TR/2022/REC-vc-data-model-20220303/` sha256 `d7c796e1f7e9a233d9037eec03e9d9fe7d69220a71639b07f5038684949a3091`, W3C Recommendation 2022-03-03 | `scripts/vendor/w3c-did-vc.sh`, `docs/specs/w3c-did-vc/PROVENANCE.md` |
+| W3C Decentralized Identifiers 1.0 | `https://www.w3.org/TR/2022/REC-did-core-20220719/` sha256 `5e44345740d9bfaa852d3b66c57e98c9beb6c5bf6083b0126dd5daac377b9993`, W3C Recommendation 2022-07-19 | `scripts/vendor/w3c-did-vc.sh`, `docs/specs/w3c-did-vc/PROVENANCE.md` |
+| W3C DID Resolution 1.0 | `https://www.w3.org/TR/2026/CRD-did-resolution-1.0-20261001/` sha256 `2b194843d37f5b7f01a4f5464f64d672dc4be43dafe5f2f49114c6070819586e`, W3C Candidate Recommendation Draft 2026-10-01 | `scripts/vendor/w3c-did-vc.sh`, `docs/specs/w3c-did-vc/PROVENANCE.md` |
+| W3C Bitstring Status List 1.0 | `https://www.w3.org/TR/2025/REC-vc-bitstring-status-list-20250515/` sha256 `3cdf3358a09f3b02f2a97e5dac13cf2b63115c2db1260bf7b7c236d8702924ec`, W3C Recommendation 2025-05-15 | `scripts/vendor/w3c-did-vc.sh`, `docs/specs/w3c-did-vc/PROVENANCE.md` |
+| did:web Method Specification | `w3c-ccg/did-method-web` commit `ea423c114e6f2537498ee6f94e8d794c64f60c18`, the Credentials Community Group report and its licence | `scripts/vendor/w3c-did-vc.sh`, `docs/specs/w3c-did-vc/PROVENANCE.md` |
+| DIF Presentation Exchange 2.0.0 | `decentralized-identity/presentation-exchange` commit `7cbe949c95fe1e19413b24c9b49dc34f76f5d76a`, the v2.0.0 specification text and JSON Schemas | `scripts/vendor/dif-pe.sh`, `docs/specs/dif-pe/PROVENANCE.md` |
+| OpenID FAPI 2.0 Security Profile | `https://openid.net/specs/fapi-security-profile-2_0-final.html` sha256 `26a49ad19b1f2b19ecc1cd9b825b4d5012f5e03a5dc8cb0dbd26462d39da465c`, Final; pinned and fetched to `.vendor-cache/openid/`, never committed (its licence is limited to developing and implementing the specification) | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
+| OpenID for Verifiable Credential Issuance 1.0 | `https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html` sha256 `f123c3178cacd27688b15b762098a045e9eb35eccfe2f5f18a357c3815e06ba7`, Final; pinned and fetched as the row above | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
+| OpenID for Verifiable Presentations draft 18 | `https://openid.net/specs/openid-4-verifiable-presentations-1_0-18.html` sha256 `48d539e12e6b75235d7b673b0ee1b3a6589f6013c665bbf00f3f2933d0ec0dcd`, the draft Nuts RFC021 cites; pinned and fetched as the rows above | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
 
 ### Country research corpora (#488)
 
