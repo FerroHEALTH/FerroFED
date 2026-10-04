@@ -6,8 +6,9 @@
 The gateway can export its own spans to an OpenTelemetry collector over
 OTLP, so a federated query shows up as one trace: the client request at the
 root, the resolution and the fan-out under it, and one span per request to a
-member node. Each node request also carries a W3C `traceparent`, so a node
-that traces joins the same trace. The export is off by default, and with it
+member node. Each node request also carries a W3C `traceparent` of the
+gateway's own trace, so a node that traces joins the same trace. The export
+is off by default, and with it
 off no node request carries a `traceparent`.
 
 ## Turning it on
@@ -35,14 +36,13 @@ on a restart only: a [reload](registry.md#reloading-the-registry) that
 changes it logs `telemetry.otlp_endpoint` as needing a restart.
 
 `telemetry.filter` decides what the console logs and nothing else, so a
-quieter log never thins a trace. A trace a client started is sampled as the
-client sampled it, and every other trace is sampled.
+quieter log never thins a trace. Every trace is sampled.
 
 ## The spans
 
 | Span | Under | Attributes |
 |---|---|---|
-| `{method} {route}`, such as `POST /v1/query/aql` | the client's span, when it sent a `traceparent` | `http.request.method`, `http.route` (the route template), `http.response.status_code`, `request_id` (the id the gateway minted) |
+| `{method} {route}`, such as `POST /v1/query/aql` | nothing: the root of the trace, with a link to the client's span when the client sent a `traceparent` | `http.request.method`, `http.route` (the route template), `http.response.status_code`, `request_id` (the id the gateway minted) |
 | `localize` | the request | `members` |
 | `consent_prefilter` | the request | `members` |
 | `resolve` | the request | `members`, `resolved` |
@@ -61,19 +61,24 @@ ids, and no `tracing` event is exported: a log line stays in the log. A path
 it was handed from a patient identifier, and the route template already says
 which resource was read.
 
-## The trace context a node receives
+## The trace context
+
+Every client request starts a trace of the gateway's own, with a random
+trace id, as W3C Trace Context §3.4 and §6.1 allow a service to do. The
+gateway never continues a client's trace. A client chooses the trace id it
+sends, and 32 hexadecimal characters can encode anything, a patient
+identifier included, so a trace id taken from a client would carry it to
+every node (§5.4.1, N33).
+
+A client that sends a `traceparent` still finds its trace: the request span
+records the client's trace id and span id as a span link. Only your
+collector receives that link. A `traceparent` that does not parse leaves no
+link. The gateway never reads the client's `tracestate`, which is free text.
 
 ITS-REST declares no trace header, and a node that does not trace ignores
 it (RFC 9110 §5.1). With the export on, each node request carries a
-`traceparent` that names the client's trace, when the client sent one, and
-the span of that node request as the parent. The gateway reads only the
-client's `traceparent`. It never reads or forwards the client's
-`tracestate`, which is free text, and on a routed request the client's own
-`traceparent` is stripped like every header the ITS-REST operation does not
-declare.
-
-A client chooses the trace id it sends, and a random one can hold a short
-identifier by chance. So the gateway checks its `traceparent` against the
-patient identifier it resolved, as it checks every other part of a node
-request. When the identifier occurs in it, the gateway leaves the header off,
-logs that it did so at `WARN` without the value, and still sends the request.
+`traceparent` that names the gateway's trace and the span of that node
+request as the parent, so a node that traces joins the gateway's trace. No
+part of it comes from the client. On a routed request, the client's own
+`traceparent` and `tracestate` are stripped like every header the ITS-REST
+operation does not declare.

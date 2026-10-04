@@ -32,8 +32,9 @@
 //! minted `iat`, `exp` and `jti` come from no request, as the minted id does.
 //!
 //! The W3C `traceparent` the gateway writes ([`crate::trace_context`]) is
-//! read as the call is composed ([`Withheld::carried_by`]), and one that
-//! carries a withheld identifier is left off while the request still leaves.
+//! exempt for the reason the minted id is: its trace id and span id are the
+//! gateway's own random values, made from no client input, since a client's
+//! trace is only ever a span link and never the parent.
 //!
 //! A single-node route forwards a client request, so the gate also decides
 //! which parts of it travel at all, from the parameters the matched ITS-REST

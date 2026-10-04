@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The span of each node request, the W3C Trace Context the request carries
-//! to the node, and the one a client request may continue.
+//! to the node, and the link to the trace a client request names.
 //!
 //! A node request runs inside one `node_request` span, a child of whatever
 //! span is current: the client request's, or the fan-out's. Its fields are
@@ -11,15 +11,18 @@
 //! client request, so no patient identifier and no query text can reach
 //! one (§5.4.1, N33).
 //!
-//! When the gateway exports traces, a node request carries the `traceparent`
-//! of its own span (W3C Trace Context, <https://www.w3.org/TR/trace-context/>),
-//! so the node's spans join the same trace. ITS-REST declares no trace
+//! Every client request starts a trace of the gateway's own, with a random
+//! trace id, and a node request carries the `traceparent` of its own span
+//! in that trace (W3C Trace Context, <https://www.w3.org/TR/trace-context/>),
+//! so the node's spans join the gateway's trace. ITS-REST declares no trace
 //! header, and RFC 9110 §5.1 has a recipient ignore a field it does not
 //! recognize, so a node that does not trace loses nothing. The value is
-//! written by the propagator of `opentelemetry_sdk` from the span, never
-//! copied from the client. A client's own `traceparent` is read for its trace
-//! id and parent span id, and its `tracestate`, free text a node could read,
-//! is never read and never sent. Without the export, no span has a trace
+//! written by the propagator of `opentelemetry_sdk` from the span, and no
+//! part of it comes from the client: a trace id a client chooses can encode
+//! anything, a patient identifier included (§5.4.1, N33). A client's own
+//! `traceparent` is recorded as a span link on the request span
+//! ([`link_from`]), which only the operator's collector sees, and its
+//! `tracestate` is never read. Without the export, no span has a trace
 //! context and no node request carries a `traceparent`. No specification
 //! governs tracing: our own design.
 
@@ -29,10 +32,11 @@ use ferrofed_registry::id::EndpointId;
 use http::HeaderMap;
 use openehr_federation::status::EndpointStatus;
 use opentelemetry::propagation::{Extractor, Injector, TextMapPropagator as _};
+use opentelemetry::trace::TraceContextExt as _;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use tracing::field::Empty;
 use tracing::{Instrument as _, Span};
-use tracing_opentelemetry::{OpenTelemetrySpanExt as _, SetParentError};
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::dispatch::Contact;
 
@@ -49,20 +53,19 @@ pub fn outbound() -> Option<String> {
     carrier.0
 }
 
-/// Makes `span` continue the trace the `traceparent` of `headers` names, when
-/// the client sent exactly one that parses.
+/// Links `span`, the root of the gateway's own trace for one client request,
+/// to the span the `traceparent` of `headers` names, when the client sent
+/// exactly one that parses.
 ///
-/// Its `tracestate` is never read. A request with no such field, or a
-/// gateway that exports no traces, leaves `span` the root of a trace of its
-/// own.
-pub fn continue_from(span: &Span, headers: &HeaderMap) {
-    let parent = TraceContextPropagator::new().extract(&OnlyTraceparent(headers));
-    match span.set_parent(parent) {
-        // NOTE: tracing-opentelemetry SetParentError (docs.rs): without the export layer there is
-        // no trace to continue, which is the configured state, never a failure.
-        Ok(()) | Err(SetParentError::LayerNotFound) => {}
-        Err(error) => tracing::debug!(%error, "the client's trace context was not continued"),
-    }
+/// The client's trace is never the parent, so its trace id never reaches a
+/// node; the link reaches the operator's collector alone. Its `tracestate`
+/// is never read. A `traceparent` that does not parse leaves no link, and a
+/// gateway that exports no traces records nothing.
+pub fn link_from(span: &Span, headers: &HeaderMap) {
+    // NOTE: §5.4.1, N33; W3C Trace Context §3.4 and §6.1 let a service restart the trace: a client
+    // chooses its trace id and can encode an identifier in it, so the gateway starts its own.
+    let client = TraceContextPropagator::new().extract(&OnlyTraceparent(headers));
+    span.add_link(client.span().span_context().clone());
 }
 
 /// Runs `call`, one request to the node at `endpoint` through the ITS-REST
@@ -130,7 +133,7 @@ impl OnlyTraceparent<'_> {
     fn value(&self) -> Option<&str> {
         let mut fields = self.0.get_all(TRACEPARENT).iter();
         // NOTE: no specification governs this: our own design; two fields name two parents, so
-        // neither is continued.
+        // neither is linked.
         match (fields.next(), fields.next()) {
             (Some(only), None) => only.to_str().ok(),
             _ => None,
@@ -174,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn two_traceparent_fields_continue_neither() {
+    fn two_traceparent_fields_link_neither() {
         let mut headers = HeaderMap::new();
         headers.append(TRACEPARENT, HeaderValue::from_static(PARENT));
         headers.append(TRACEPARENT, HeaderValue::from_static(PARENT));

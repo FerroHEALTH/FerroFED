@@ -150,8 +150,8 @@ impl Traces {
     /// Returns the export to the OTLP collector at `endpoint`, over gRPC.
     ///
     /// The exporter speaks gRPC through `tonic`, so this runs inside the
-    /// Tokio runtime that will carry the export. A trace a client started is
-    /// sampled as the client sampled it, and every other trace is sampled.
+    /// Tokio runtime that will carry the export. Every trace is sampled: each
+    /// starts at the gateway, so no client decides it.
     ///
     /// # Errors
     /// Returns [`Error::Exporter`] when the exporter cannot be built.
@@ -164,7 +164,7 @@ impl Traces {
         let provider = SdkTracerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(resource())
-            .with_sampler(Sampler::ParentBased(Box::new(Sampler::AlwaysOn)))
+            .with_sampler(Sampler::AlwaysOn)
             .build();
         Ok(Self { provider })
     }

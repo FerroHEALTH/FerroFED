@@ -240,8 +240,8 @@ impl DispatchOptions {
     /// The `openehr-its` call options for these options toward `endpoint`:
     /// the deadline, the [`conveyance::HEADER`] signed for that endpoint,
     /// the request id, and the `traceparent` of the current span when it
-    /// belongs to an exported trace and carries no withheld identifier
-    /// ([`crate::trace_context`]).
+    /// belongs to an exported trace, written from the gateway's own trace
+    /// and never from the client's ([`crate::trace_context`]).
     pub(crate) fn call_options(&self, endpoint: &EndpointId) -> Result<CallOptions, OptionsError> {
         let conveyed = self.conveyance.signed_for(endpoint)?;
         let mut options = CallOptions::default()
@@ -251,15 +251,7 @@ impl DispatchOptions {
             options = options.with_header(REQUEST_ID_HEADER, &id.to_string())?;
         }
         if let Some(traceparent) = trace_context::outbound() {
-            if self.withheld.carried_by(&traceparent) {
-                // NOTE: §5.4.1, §5.4.3: the gateway logs that it stripped a value, never the value.
-                tracing::warn!(
-                    header = trace_context::TRACEPARENT,
-                    "a header the gateway composed carried a withheld identifier, so it was not sent"
-                );
-            } else {
-                options = options.with_header(trace_context::TRACEPARENT, &traceparent)?;
-            }
+            options = options.with_header(trace_context::TRACEPARENT, &traceparent)?;
         }
         Ok(options)
     }
