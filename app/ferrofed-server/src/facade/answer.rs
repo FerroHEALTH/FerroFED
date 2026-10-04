@@ -20,6 +20,7 @@ use ferrofed_engine::fanout::{
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::consent::Requester;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, HeaderValue, StatusCode};
@@ -53,6 +54,7 @@ pub(crate) async fn answer(
         conveyance,
         started,
         session,
+        requester,
     } = arrived;
     let completion = match completeness::of(headers, federation.best_effort()) {
         Ok(completion) => completion,
@@ -79,6 +81,7 @@ pub(crate) async fn answer(
         outbound,
         conveyance,
         session,
+        requester,
     };
     match federate(federation, query).await {
         Ok((status, mut result_set, provenance)) => {
@@ -240,6 +243,8 @@ struct Query<'a> {
     conveyance: &'a Conveyance,
     /// The client session the resolution bindings belong to.
     session: Option<&'a SessionKey>,
+    /// Who asks for the data, as the verified caller's token states it.
+    requester: Option<&'a Requester>,
 }
 
 /// Drops the `session`'s bindings that name a member the consent pre-filter
@@ -309,6 +314,7 @@ async fn federate(
         outbound,
         conveyance,
         session,
+        requester,
     } = query;
     let logged = outbound.to_string();
     let request_id = logged.as_str();
@@ -330,7 +336,7 @@ async fn federate(
     let selection = plan::Selection::of(named.as_ref(), routed.map(|owner| owner.endpoint.id()));
     let (targets, subject) = match &analysis {
         Analysis::Patient(query) => (
-            plan::patient(federation, selection, query, deadline)
+            plan::patient(federation, selection, (query, requester), deadline)
                 .await
                 .map_err(Failure::Plan)?,
             Some(query.subject()),

@@ -7,8 +7,11 @@
 //!
 //! For each candidate the gateway asks Mitz whether the member's care
 //! provider, the data holder, may make the patient's data of the configured
-//! categories available to the deployment's own organisation, the data user,
-//! for the configured purpose. A member whose holder Mitz denies for every
+//! categories available to the data user for the configured purpose. The data
+//! user is the verified caller: the professional by UZI number and role and
+//! the organisation by URA and type, as the caller's token states them
+//! ([`Requester`]); a caller whose token does not is never asked about, and
+//! nothing is filtered for it. A member whose holder Mitz denies for every
 //! category is `consent-denied` and never asked. Every other member is asked,
 //! and its node checks consent itself (N26, N27): the pre-filter is a filter
 //! in front of the gate, not the gate (§14.3), and a `Permit` clears nothing.
@@ -32,19 +35,19 @@ use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::header::{AUTHORIZATION, HeaderMap};
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, Ura};
-use nl_generic_functions::mitz::MitzClient;
 use nl_generic_functions::mitz::error::{ClientError, InvalidInput, MitzError};
 use nl_generic_functions::mitz::question::{
     Bsn, CareProviderType, ClosedQuestion, DataCategory, DataHolder, DataUser, MAX_CATEGORIES,
     ProfessionalId, Purpose, RoleCode,
 };
+use nl_generic_functions::mitz::{MitzClient, UZI_ROOT};
 use openehr_its::rest::client::{Credentials, InvalidCredentials};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::consent::{ConsentDecision, ConsentError, ConsentPrefilter};
+use crate::consent::{ConsentDecision, ConsentError, ConsentPrefilter, Requester};
 use crate::nvi::{NviConfigError, derived, is_bsn_system};
 use crate::patient::{IdentifierNamespace, PatientRef};
 
@@ -64,26 +67,6 @@ pub fn is_pseudonym_system(namespace: &str) -> bool {
 #[must_use]
 pub fn is_purpose(code: &str) -> bool {
     Purpose::from_code(code).is_some()
-}
-
-// NOTE: Implementatiehandleiding §3.2.4.2, §5: the question names a responsible professional
-// and role, which the verified caller does not carry (§13.4), so the deployment configures them.
-/// The data user, the deployment's own organisation, as the configuration
-/// names it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DataUserConfig {
-    /// The organisation's URA.
-    pub ura: String,
-    /// The organisation's care provider category.
-    pub kind: String,
-    /// The OID the responsible professional's identification number is
-    /// issued under: the UZI register, the AGB or BIG register, or the
-    /// organisation's own.
-    pub responsible_root: String,
-    /// The responsible professional's identification number.
-    pub responsible: String,
-    /// The responsible professional's UZI role code.
-    pub role: String,
 }
 
 /// One member's care provider, the data holder, as the configuration names
@@ -112,8 +95,6 @@ pub struct MitzConfig {
     pub trust_roots: Option<String>,
     /// The client namespaces that stand for the BSN, beside the BSN systems.
     pub namespaces: BTreeSet<IdentifierNamespace>,
-    /// The data user.
-    pub user: DataUserConfig,
     /// The Mitz data categories asked about.
     pub categories: Vec<String>,
     /// The purpose of use: `TREAT` or `COC`.
@@ -137,7 +118,6 @@ impl fmt::Debug for MitzConfig {
             .field("client_identity", &self.client_identity.is_some())
             .field("trust_roots", &self.trust_roots.is_some())
             .field("namespaces", &self.namespaces)
-            .field("user", &self.user)
             .field("categories", &self.categories)
             .field("purpose", &self.purpose)
             .field("holders", &self.holders)
@@ -163,9 +143,6 @@ pub enum MitzConfigError {
     /// A namespace listed as standing for the BSN is the pseudonymised BSN.
     #[error("the namespace {0} is the pseudonymised BSN and cannot stand for the BSN")]
     PseudonymAsBsn(IdentifierNamespace),
-    /// The data user's URA, category, professional or role is refused.
-    #[error("the data user is refused")]
-    User(#[source] InvalidInput),
     /// The data categories are refused: none, a duplicate, too many, or a
     /// code that is not one.
     #[error("the data categories are refused")]
@@ -225,6 +202,12 @@ pub enum MitzPrefilterError {
     /// The closed authorization question cannot be asked.
     #[error("the closed authorization question cannot be asked")]
     Refused(#[source] InvalidInput),
+    /// The caller's token states a professional, a role, an organisation or
+    /// an organisation type the question does not take.
+    #[error(
+        "the caller's token states a requester the closed authorization question does not take"
+    )]
+    Requester(#[source] InvalidInput),
     /// A question's task stopped before it answered.
     #[error("a closed authorization question stopped before it answered")]
     Stopped,
@@ -235,7 +218,6 @@ pub enum MitzPrefilterError {
 pub struct MitzPrefilter {
     client: Arc<MitzClient>,
     namespaces: BTreeSet<IdentifierNamespace>,
-    user: DataUser,
     categories: Vec<DataCategory>,
     purpose: Purpose,
     holders: BTreeMap<NodeId, DataHolder>,
@@ -250,7 +232,7 @@ impl MitzPrefilter {
     ///
     /// A [`MitzConfigError`] for an endpoint, a credential or TLS material
     /// that cannot be used, a pseudonym namespace listed as the BSN, a data
-    /// user, data category or purpose the question does not take, a holder
+    /// category or purpose the question does not take, a holder
     /// naming no member, a member with no holder or no single URA, and a
     /// directory whose URAs the LRZa rules refuse.
     pub fn from_config(
@@ -266,7 +248,6 @@ impl MitzPrefilter {
         {
             return Err(MitzConfigError::PseudonymAsBsn(pseudonym.clone()));
         }
-        let user = data_user(&config.user).map_err(MitzConfigError::User)?;
         let categories = categories(&config.categories).map_err(MitzConfigError::Categories)?;
         let purpose = Purpose::from_code(&config.purpose)
             .ok_or_else(|| MitzConfigError::Purpose(config.purpose.clone()))?;
@@ -275,7 +256,6 @@ impl MitzPrefilter {
         Ok(Self {
             client: Arc::new(client),
             namespaces: config.namespaces,
-            user,
             categories,
             purpose,
             holders,
@@ -288,15 +268,14 @@ impl MitzPrefilter {
         is_bsn_system(namespace.as_str()) || self.namespaces.contains(namespace)
     }
 
-    /// The question about `patient`'s data at `holder`.
-    fn question(&self, patient: Bsn, holder: DataHolder) -> Result<ClosedQuestion, InvalidInput> {
-        ClosedQuestion::new(
-            patient,
-            holder,
-            self.user.clone(),
-            self.categories.clone(),
-            self.purpose,
-        )
+    /// The question about `patient`'s data at `holder`, asked for `user`.
+    fn question(
+        &self,
+        patient: Bsn,
+        holder: DataHolder,
+        user: DataUser,
+    ) -> Result<ClosedQuestion, InvalidInput> {
+        ClosedQuestion::new(patient, holder, user, self.categories.clone(), self.purpose)
     }
 }
 
@@ -325,6 +304,7 @@ impl ConsentPrefilter for MitzPrefilter {
     async fn prefilter(
         &self,
         patient: &PatientRef,
+        requester: Option<&Requester>,
         candidates: &[NodeId],
         deadline: Instant,
     ) -> ConsentDecision {
@@ -333,6 +313,19 @@ impl ConsentPrefilter for MitzPrefilter {
         if !self.takes(patient.namespace()) {
             return ConsentDecision::NoSignal;
         }
+        // NOTE: Implementatiehandleiding §3.2.4.2, §13.4: the professional asked about is the
+        // verified caller, so a token that does not name them asks nothing and filters no one.
+        let Some(requester) = requester else {
+            return ConsentDecision::NoSignal;
+        };
+        let user = match data_user(requester) {
+            Ok(user) => user,
+            Err(refused) => {
+                return ConsentDecision::Unavailable(ConsentError::Backend(Box::new(
+                    MitzPrefilterError::Requester(refused),
+                )));
+            }
+        };
         let bsn = match Bsn::new(SecretString::from(patient.value())) {
             Ok(bsn) => bsn,
             Err(refused) => {
@@ -359,7 +352,7 @@ impl ConsentPrefilter for MitzPrefilter {
         let mut tasks = JoinSet::new();
         let mut failure: Option<ConsentError> = None;
         for (holder, members) in asked {
-            match self.question(bsn.clone(), holder) {
+            match self.question(bsn.clone(), holder, user.clone()) {
                 Ok(question) => {
                     let client = Arc::clone(&self.client);
                     tasks.spawn(async move { (members, client.ask(&question, timeout).await) });
@@ -415,17 +408,15 @@ fn consent_error(error: MitzError) -> ConsentError {
     }
 }
 
-/// The data user `config` names.
-fn data_user(config: &DataUserConfig) -> Result<DataUser, InvalidInput> {
-    let organisation = Ura::new(config.ura.as_str()).map_err(|_empty| InvalidInput::Code)?;
+/// The data user the verified caller is: its organisation by URA and type,
+/// and its professional by UZI number and role (§3.2.4.2).
+fn data_user(requester: &Requester) -> Result<DataUser, InvalidInput> {
+    let organisation = Ura::new(requester.organisation()).map_err(|_empty| InvalidInput::Code)?;
     Ok(DataUser::new(
         organisation,
-        CareProviderType::new(config.kind.as_str())?,
-        ProfessionalId::new(
-            config.responsible_root.as_str(),
-            config.responsible.as_str(),
-        )?,
-        RoleCode::new(config.role.as_str())?,
+        CareProviderType::new(requester.organisation_type())?,
+        ProfessionalId::new(UZI_ROOT, requester.professional())?,
+        RoleCode::new(requester.role())?,
     ))
 }
 

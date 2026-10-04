@@ -116,6 +116,7 @@ fn only_the_candidates_a_row_names_for_the_patient_are_denied() -> TestResult {
     assert_eq!(prefilter.mode(), STATIC_CONSENT_MODE);
     let decision = ready(prefilter.prefilter(
         &patient(PATIENT_VALUE)?,
+        None,
         &members(&["node-a", "node-b"])?,
         Instant::now(),
     ));
@@ -132,6 +133,7 @@ fn a_member_that_is_not_a_candidate_is_never_denied() -> TestResult {
     let prefilter = enabled(&[(PATIENT_VALUE, "node-b")])?;
     let decision = ready(prefilter.prefilter(
         &patient(PATIENT_VALUE)?,
+        None,
         &members(&["node-a"])?,
         Instant::now(),
     ));
@@ -144,6 +146,7 @@ fn another_patient_gets_no_signal() -> TestResult {
     let prefilter = enabled(&[(PATIENT_VALUE, "node-b")])?;
     let decision = ready(prefilter.prefilter(
         &patient("67890")?,
+        None,
         &members(&["node-a", "node-b"])?,
         Instant::now(),
     ));

@@ -224,16 +224,19 @@ purpose = "TREAT"                 # TREAT or COC
 data_categories = ["GGC002"]      # the Mitz data categories asked about
 timeout_ms = 1000                 # one round of questions, within the query's budget
 
-[nl_gf.mitz.data_user]            # the deployment's own organisation
-ura = "ura-test-0100"
-type = "V6"                       # its care provider category
-responsible_root = "2.999.10"     # the OID the professional's number is issued under
-responsible = "professional0001"
-role = "01.015"                   # the professional's UZI role code
-
 [nl_gf.mitz.holders]              # each member's care provider
 "node-a" = { type = "V6" }        # the URA from [nl_gf.nvi.custodians] or the directory
 "node-b" = { type = "V6", ura = "ura-test-0002" }
+
+[[auth.issuer]]                   # the issuer of your callers' tokens
+issuer = "https://issuer.example.org"
+jwks_uri = "https://issuer.example.org/jwks"
+
+[auth.issuer.requester]           # the claims of its tokens that name the requester
+professional = "uzi_number"       # the professional's UZI number
+role = "uzi_role"                 # the professional's UZI role code
+organisation = "ura"              # the organisation's URA
+organisation_type = "organisation_type"
 ```
 
 What a deployment must provide:
@@ -251,9 +254,17 @@ What a deployment must provide:
   publishes URAs; where more than one gives it they must agree. A member
   with no holder, a holder with no URA, or a holder naming no member
   refuses the configuration.
-- **The data user.** The question names the professional responsible for
-  the request and their role. The verified caller carries neither, so the
-  deployment names the professional it answers for.
+- **The requester, in the caller's token.** The question names the
+  professional who asks, by UZI number and role, and their organisation, by
+  URA and type. That is always the verified caller: Mitz records the
+  professional and decides on their role, so the gateway never asks for
+  anyone else. Map, per trusted issuer, the four token claims that carry
+  them under `[auth.issuer.requester]`
+  ([Client authentication](authentication.md#configuration)); no
+  specification the gateway binds names these claims, so each is configured
+  and none has a default. A caller whose token does not carry all four is
+  not asked about: Mitz is not called, no member is filtered, and each node
+  checks consent itself (N27).
 - **TLS.** The `url` must be `https` outside `profile = "development"`.
   `credentials` takes a bearer token or basic credentials, never an OAuth
   2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission

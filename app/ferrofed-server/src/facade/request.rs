@@ -20,6 +20,7 @@ use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::consent::Requester;
 use ferrofed_registry::id::EndpointId;
 use http::HeaderMap;
 use openehr_federation::aql::directive::FacadeQuery;
@@ -49,6 +50,9 @@ pub(crate) struct Arrived<'a> {
     /// The verified caller's session, which the resolution bindings belong
     /// to (§12.5.1 step 2); `None` when no caller was verified.
     pub(crate) session: Option<&'a SessionKey>,
+    /// Who asks for the data, as the verified caller's token states it,
+    /// which the consent pre-filter asks about (§13.4).
+    pub(crate) requester: Option<&'a Requester>,
 }
 
 /// What a federated query request submits.

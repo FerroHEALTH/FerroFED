@@ -5,12 +5,13 @@
 //! pre-filter over GF-Consent, the closed authorization question of the
 //! Dutch Generic Functions (Annex B §B.6, N27a, §13.2.1).
 //!
-//! The table names the Mitz endpoint and how the gateway reaches it, the
-//! data user (the deployment's own organisation, with the responsible
-//! professional and their role), the data categories and the purpose the
-//! question asks about, and each member's care provider, the data holder.
-//! A holder's URA may be left out where `[nl_gf.nvi.custodians]` or the
-//! directory gives it, and must agree with them where both give one.
+//! The table names what belongs to the gateway: the Mitz endpoint and how the
+//! gateway reaches it, the data categories and the purpose the question asks
+//! about, and each member's care provider, the data holder. A holder's URA
+//! may be left out where `[nl_gf.nvi.custodians]` or the directory gives it,
+//! and must agree with them where both give one. Who asks, the data user, is
+//! the verified caller, read from the claims `[auth.issuer.requester]` names,
+//! never from this table.
 //!
 //! ```toml
 //! [nl_gf.mitz]
@@ -20,13 +21,6 @@
 //! namespaces = ["urn:oid:2.999.1"]
 //! purpose = "TREAT"
 //! data_categories = ["GGC002"]
-//!
-//! [nl_gf.mitz.data_user]
-//! ura = "ura-test-0100"
-//! type = "V6"
-//! responsible_root = "2.999.10"
-//! responsible = "professional0001"
-//! role = "01.015"
 //!
 //! [nl_gf.mitz.holders]
 //! "node-a" = { type = "V6" }
@@ -77,8 +71,6 @@ pub struct Mitz {
     pub data_categories: Vec<String>,
     /// How long one round of questions may take, in milliseconds.
     pub timeout_ms: u64,
-    /// The data user.
-    pub data_user: DataUser,
     /// Each member's data holder, by member id.
     pub holders: BTreeMap<String, Holder>,
 }
@@ -95,27 +87,9 @@ impl Default for Mitz {
             purpose: String::new(),
             data_categories: Vec::new(),
             timeout_ms: 1_000,
-            data_user: DataUser::default(),
             holders: BTreeMap::new(),
         }
     }
-}
-
-/// The data user, as the configuration writes it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct DataUser {
-    /// The organisation's URA.
-    pub ura: String,
-    /// The organisation's care provider category.
-    #[serde(rename = "type")]
-    pub kind: String,
-    /// The OID the responsible professional's number is issued under.
-    pub responsible_root: String,
-    /// The responsible professional's identification number.
-    pub responsible: String,
-    /// The responsible professional's UZI role code.
-    pub role: String,
 }
 
 /// One member's data holder, as the configuration writes it.
@@ -148,8 +122,6 @@ pub struct MitzSettings {
     pub data_categories: Vec<String>,
     /// How long one round of questions may take.
     pub timeout: Duration,
-    /// The data user, as written.
-    pub data_user: DataUser,
     /// The data holders, as written.
     pub holders: BTreeMap<String, Holder>,
 }
@@ -165,7 +137,6 @@ impl fmt::Debug for MitzSettings {
             .field("purpose", &self.purpose)
             .field("data_categories", &self.data_categories)
             .field("timeout", &self.timeout)
-            .field("data_user", &self.data_user)
             .field("holders", &self.holders)
             .finish()
     }
@@ -250,14 +221,13 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         purpose: mitz.purpose.clone(),
         data_categories: mitz.data_categories.clone(),
         timeout: Duration::from_millis(mitz.timeout_ms),
-        data_user: mitz.data_user.clone(),
         holders: mitz.holders.clone(),
     })
 }
 
 /// Holds the question's own keys to what the closed authorization question
-/// takes: a purpose, data categories, no pseudonym as the BSN, a timeout and
-/// a data user.
+/// takes: a purpose, data categories, no pseudonym as the BSN and a
+/// timeout.
 fn question(mitz: &Mitz) -> Result<(), Error> {
     let missing = |key: &str| Error::Missing {
         key: format!("{MITZ_KEY}.{key}"),
@@ -292,18 +262,6 @@ fn question(mitz: &Mitz) -> Result<(), Error> {
         return Err(Error::Zero {
             key: format!("{MITZ_KEY}.timeout_ms"),
         });
-    }
-    let user = &mitz.data_user;
-    for (key, value) in [
-        ("ura", &user.ura),
-        ("type", &user.kind),
-        ("responsible_root", &user.responsible_root),
-        ("responsible", &user.responsible),
-        ("role", &user.role),
-    ] {
-        if value.is_empty() {
-            return Err(missing(&format!("data_user.{key}")));
-        }
     }
     Ok(())
 }

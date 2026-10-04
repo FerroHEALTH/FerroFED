@@ -144,6 +144,30 @@ pub struct TrustedIssuer {
     /// (`[auth.issuer.patient]`); absent by default, and then a `patient/`
     /// grant of this issuer admits nothing.
     pub patient: Option<PatientIssuer>,
+    /// The claims of this issuer's tokens that name who asks for the data
+    /// (`[auth.issuer.requester]`), which the consent pre-filter asks Mitz
+    /// about; absent by default, and then no caller of this issuer names a
+    /// requester.
+    pub requester: Option<RequesterClaims>,
+}
+
+/// `[auth.issuer.requester]`: the names of the token claims that carry the
+/// professional's UZI number and role and the organisation's URA and type,
+/// each a string claim.
+///
+/// No specification the gateway binds names these claims, so each is
+/// configured, with no default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RequesterClaims {
+    /// The claim carrying the professional's UZI number.
+    pub professional: String,
+    /// The claim carrying the professional's UZI role code.
+    pub role: String,
+    /// The claim carrying the organisation's URA.
+    pub organisation: String,
+    /// The claim carrying the organisation's care provider type.
+    pub organisation_type: String,
 }
 
 /// `[auth.issuer.patient]`: the one member endpoint whose platform issues
@@ -235,6 +259,9 @@ pub struct IssuerSettings {
     /// Where this issuer's `patient/` grants are confined, when they are
     /// honoured at all.
     pub patient: Option<PatientBinding>,
+    /// The claims that name who asks for the data, when this issuer's tokens
+    /// carry them.
+    pub requester: Option<RequesterClaims>,
 }
 
 /// An issuer's patient tokens bound to one member, resolved.
@@ -484,12 +511,27 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
         .as_ref()
         .map(|patient| resolve_patient(&format!("{key}.patient"), patient))
         .transpose()?;
+    if let Some(requester) = &written.requester {
+        for (name, claim) in [
+            ("professional", &requester.professional),
+            ("role", &requester.role),
+            ("organisation", &requester.organisation),
+            ("organisation_type", &requester.organisation_type),
+        ] {
+            if claim.is_empty() {
+                return Err(Error::Missing {
+                    key: format!("{key}.requester.{name}"),
+                });
+            }
+        }
+    }
     Ok(IssuerSettings {
         issuer: written.issuer.clone(),
         verification,
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
         patient,
+        requester: written.requester.clone(),
     })
 }
 

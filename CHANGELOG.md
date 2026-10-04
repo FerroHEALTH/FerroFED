@@ -37,8 +37,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   N27a), configured under `[nl_gf.mitz]`. Before resolution the gateway asks
   Mitz's closed authorization question once for each candidate's care
   provider: may this data holder make the patient's data of the configured
-  categories available to the deployment's organisation, for `TREAT` or
-  `COC`? A member whose holder Mitz denies for every category is
+  categories available to the verified caller, for `TREAT` or `COC`? The
+  caller's professional (UZI number and role) and organisation (URA and
+  type) come from the token claims each trusted issuer maps under
+  `[auth.issuer.requester]`; a caller whose token lacks them is not asked
+  about, and nothing is filtered for it. A member whose holder Mitz denies
+  for every category is
   `consent-denied`, never asked, and clears `complete` while the query
   succeeds; every other member is asked and its node still checks consent
   (N27, §14.3). `Indeterminate`, a fault, a timeout or a malformed answer is

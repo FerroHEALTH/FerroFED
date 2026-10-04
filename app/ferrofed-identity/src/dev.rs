@@ -40,7 +40,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::consent::{ConsentDecision, ConsentPrefilter};
+use crate::consent::{ConsentDecision, ConsentPrefilter, Requester};
 use crate::localizer::{Localization, Localizer};
 use crate::patient::{IdentifierNamespace, PatientRef};
 use crate::resolver::{Resolution, Resolver};
@@ -368,6 +368,7 @@ impl ConsentPrefilter for StaticConsentPrefilter {
     async fn prefilter(
         &self,
         patient: &PatientRef,
+        _requester: Option<&Requester>,
         candidates: &[NodeId],
         _deadline: Instant,
     ) -> ConsentDecision {

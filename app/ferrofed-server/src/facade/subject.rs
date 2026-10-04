@@ -126,8 +126,13 @@ pub(crate) async fn serve(
     else {
         return Unserved::Unlocalized.respond(request_id, &logged);
     };
-    let consented =
-        consent::prefilter(federation, &subject.patient, &members, budget.overall()).await;
+    let consented = consent::prefilter(
+        federation,
+        (&subject.patient, arrived.requester),
+        &members,
+        budget.overall(),
+    )
+    .await;
     let (denied, candidates): (Vec<&Endpoint>, Vec<&Endpoint>) = candidates
         .into_iter()
         .partition(|endpoint| consented.denied.contains(endpoint.node()));

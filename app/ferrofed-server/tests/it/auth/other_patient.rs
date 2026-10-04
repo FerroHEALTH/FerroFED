@@ -144,6 +144,7 @@ impl ConsentPrefilter for Prefiltering {
     async fn prefilter(
         &self,
         _patient: &PatientRef,
+        _requester: Option<&ferrofed_identity::consent::Requester>,
         _candidates: &[NodeId],
         _deadline: Instant,
     ) -> ConsentDecision {

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use ferrofed_identity::consent::ConsentPrefilter;
 use ferrofed_identity::dev::Profile;
-use ferrofed_identity::mitz::{DataUserConfig, HolderConfig, MitzConfig, MitzPrefilter};
+use ferrofed_identity::mitz::{HolderConfig, MitzConfig, MitzPrefilter};
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::Secret;
@@ -51,13 +51,6 @@ pub(super) fn mitz_prefilter(
         client_identity: mitz.client_identity.as_ref().map(Secret::to_secret_string),
         trust_roots: mitz.trust_roots.clone(),
         namespaces: namespaces(mitz)?,
-        user: DataUserConfig {
-            ura: mitz.data_user.ura.clone(),
-            kind: mitz.data_user.kind.clone(),
-            responsible_root: mitz.data_user.responsible_root.clone(),
-            responsible: mitz.data_user.responsible.clone(),
-            role: mitz.data_user.role.clone(),
-        },
         categories: mitz.data_categories.clone(),
         purpose: mitz.purpose.clone(),
         holders: holders(mitz)?,

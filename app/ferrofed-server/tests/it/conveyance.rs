@@ -324,6 +324,7 @@ async fn an_edge_asserted_caller_is_conveyed_as_edge_asserted() -> TestResult {
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
             patient: None,
+            requester: None,
         }],
         ..AuthSettings::default()
     })

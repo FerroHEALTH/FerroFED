@@ -474,7 +474,7 @@ whether); the core never assumes it does.
 |---|---|---|
 | `Directory` | `Arc<RegistrySnapshot>` | the addressing registry (N21, §15), refreshed off the clinical path; a query never awaits a directory call |
 | `Localizer` | `NotConfigured`, `Candidates(set)`, `NoRecords`, `Unavailable(error)` | where (N4, §14) |
-| `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `Unavailable(error)`, `Partial { denied, failure }` | which candidates may not be asked (N27a); absence from `Denied` asserts nothing |
+| `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `Unavailable(error)`, `Partial { denied, failure }` | which candidates may not be asked about the patient on behalf of the verified caller's `Requester`, when its token names one (N27a, §13.4); absence from `Denied` asserts nothing |
 | `Resolver` | per member: `Resolved(EhrId)`, `Unknown`, `Unavailable(error)` | under which local id (N3, §5.2) |
 | `OnwardAuth` | per endpoint: a `CredentialsProvider`, the conveyance header, an optional transport layer | how the gateway authenticates to each node (section 7) |
 
@@ -550,10 +550,13 @@ Mitz's closed authorization question (Annex B §B.6), the wire of the VZVZ
 Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2: a SOAP 1.2
 request carrying one XACML 3.0 `XACMLAuthzDecisionQuery` over mutual TLS,
 asked once per data holder among the candidates, through the `mitz` feature
-of `nl-generic-functions`. The data user is the deployment's own
-organisation, with the responsible professional and role it configures,
-because the verified caller carries no UZI number or role (§13.4); each
-member's data holder is its care provider by URA, from the configuration,
+of `nl-generic-functions`. The data user is the verified caller: its
+professional by UZI number and role and its organisation by URA and type,
+read from the claims each trusted issuer's `[auth.issuer.requester]` maps
+and carried to the seam as a `Requester` (§3.2.4.2, §13.4). Mitz records
+that professional and decides on that role, so a configured identity is
+never substituted: a caller whose token lacks the claims is not asked
+about, and no member is filtered for it. Each member's data holder is its care provider by URA, from the configuration,
 the NVI custodians or the directory, and its configured category. A member
 is denied only when Mitz denies its holder for every category asked; any
 `Permit` leaves the node to decide (N27, §14.3). Only `Permit` and `Deny`

@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::consent::{ConsentDecision, ConsentError, ConsentPrefilter};
+use ferrofed_identity::consent::{ConsentDecision, ConsentError, ConsentPrefilter, Requester};
 use ferrofed_identity::mitz::{
-    DataUserConfig, HolderConfig, MITZ_MODE, MitzConfig, MitzConfigError, MitzPrefilter,
+    HolderConfig, MITZ_MODE, MitzConfig, MitzConfigError, MitzPrefilter,
 };
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
@@ -50,13 +50,6 @@ fn config(endpoint: &str, holders: &[(&str, Option<&str>)]) -> Result<MitzConfig
         client_identity: None,
         trust_roots: None,
         namespaces: BTreeSet::from([IdentifierNamespace::new(BSN_ALIAS)?]),
-        user: DataUserConfig {
-            ura: String::from("ura-test-0100"),
-            kind: String::from("V6"),
-            responsible_root: String::from("2.999.10"),
-            responsible: String::from("professional0001"),
-            role: String::from("01.015"),
-        },
         categories: vec![String::from("GGC002")],
         purpose: String::from("TREAT"),
         holders: held,
@@ -80,6 +73,138 @@ fn soon() -> Instant {
     Instant::now() + Duration::from_secs(5)
 }
 
+/// A verified caller as its token states it, with synthetic values.
+fn requester(professional: &str, role: &str) -> Result<Requester, Box<dyn Error>> {
+    Ok(Requester::new(
+        professional.to_owned(),
+        role.to_owned(),
+        String::from("ura-test-0100"),
+        String::from("V6"),
+    )
+    .ok_or("every value is set")?)
+}
+
+/// The default caller of these tests.
+fn caller() -> Result<Requester, Box<dyn Error>> {
+    requester("professional0001", "01.015")
+}
+
+/// A pre-filter over the stub `mitz`, node A and node B held by two URAs.
+fn over(mitz: &Mitz) -> Result<MitzPrefilter, Box<dyn Error>> {
+    let holders = [
+        ("node-a", Some("ura-test-0001")),
+        ("node-b", Some("ura-test-0002")),
+    ];
+    Ok(MitzPrefilter::from_config(
+        config(&mitz.endpoint(), &holders)?,
+        &registry(),
+    )?)
+}
+
+#[tokio::test]
+async fn the_question_names_the_callers_professional_role_and_organisation() -> TestResult {
+    let mitz = Mitz::start().await;
+    let prefilter = over(&mitz)?;
+    prefilter
+        .prefilter(
+            &patient(BSN_ALIAS)?,
+            Some(&caller()?),
+            &candidates()?,
+            soon(),
+        )
+        .await;
+    let questions = mitz.questions().await;
+    assert_eq!(2, questions.len());
+    for question in &questions {
+        assert!(
+            question.contains(
+                r#"<hl7:InstanceIdentifier root="2.16.528.1.1007.3.1" extension="professional0001"/>"#
+            ),
+            "§3.2.4.2: the professional by UZI number: {question}"
+        );
+        assert!(
+            question.contains(
+                r#"<hl7:CodedValue code="01.015" codeSystem="2.16.840.1.113883.2.4.15.111"/>"#
+            ),
+            "the professional's role: {question}"
+        );
+        assert!(
+            question.contains(
+                r#"<hl7:InstanceIdentifier root="2.16.528.1.1007.3.3" extension="ura-test-0100"/>"#
+            ),
+            "the caller's organisation by URA: {question}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_caller_whose_token_names_no_requester_asks_nothing() -> TestResult {
+    let mitz = Mitz::start().await;
+    mitz.deny(PATIENT_VALUE, "ura-test-0001");
+    let prefilter = over(&mitz)?;
+    let decision = prefilter
+        .prefilter(&patient(BSN_ALIAS)?, None, &candidates()?, soon())
+        .await;
+    assert!(
+        matches!(decision, ConsentDecision::NoSignal),
+        "N27: nothing is filtered, and each node decides: {decision:?}"
+    );
+    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
+    Ok(())
+}
+
+#[tokio::test]
+async fn two_callers_with_different_roles_send_different_subjects() -> TestResult {
+    let mitz = Mitz::start().await;
+    let prefilter = over(&mitz)?;
+    let first = requester("professional0001", "01.015")?;
+    let second = requester("professional0002", "30.000")?;
+    for asking in [&first, &second] {
+        prefilter
+            .prefilter(&patient(BSN_ALIAS)?, Some(asking), &candidates()?, soon())
+            .await;
+    }
+    let questions = mitz.questions().await;
+    assert_eq!(4, questions.len());
+    let by = |professional: &str, role: &str| {
+        questions
+            .iter()
+            .filter(|question| {
+                question.contains(&format!("extension=\"{professional}\""))
+                    && question.contains(&format!("code=\"{role}\""))
+            })
+            .count()
+    };
+    assert_eq!(
+        2,
+        by("professional0001", "01.015"),
+        "the first caller's own subject"
+    );
+    assert_eq!(
+        2,
+        by("professional0002", "30.000"),
+        "the second caller's own subject"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_requester_the_question_does_not_take_is_no_decision() -> TestResult {
+    let mitz = Mitz::start().await;
+    let prefilter = over(&mitz)?;
+    let refused = requester("with-hyphen", "01.015")?;
+    let decision = prefilter
+        .prefilter(&patient(BSN_ALIAS)?, Some(&refused), &candidates()?, soon())
+        .await;
+    assert!(
+        matches!(decision, ConsentDecision::Unavailable(_)),
+        "§5: a UZI number is alphanumeric: {decision:?}"
+    );
+    assert!(mitz.questions().await.is_empty());
+    Ok(())
+}
+
 #[tokio::test]
 async fn members_of_one_holder_are_asked_about_once_and_denied_together() -> TestResult {
     let mitz = Mitz::start().await;
@@ -91,7 +216,12 @@ async fn members_of_one_holder_are_asked_about_once_and_denied_together() -> Tes
     let prefilter = MitzPrefilter::from_config(config(&mitz.endpoint(), &holders)?, &registry())?;
     assert_eq!(MITZ_MODE, prefilter.mode());
     let decision = prefilter
-        .prefilter(&patient(BSN_ALIAS)?, &candidates()?, soon())
+        .prefilter(
+            &patient(BSN_ALIAS)?,
+            Some(&caller()?),
+            &candidates()?,
+            soon(),
+        )
         .await;
     match decision {
         ConsentDecision::Denied(denied) => {
@@ -115,7 +245,12 @@ async fn a_permit_for_every_holder_carries_no_signal() -> TestResult {
     ];
     let prefilter = MitzPrefilter::from_config(config(&mitz.endpoint(), &holders)?, &registry())?;
     let decision = prefilter
-        .prefilter(&patient(BSN_ALIAS)?, &candidates()?, soon())
+        .prefilter(
+            &patient(BSN_ALIAS)?,
+            Some(&caller()?),
+            &candidates()?,
+            soon(),
+        )
         .await;
     assert!(
         matches!(decision, ConsentDecision::NoSignal),
@@ -136,7 +271,7 @@ async fn a_patient_named_by_a_pseudonym_is_never_sent_to_mitz() -> TestResult {
     let prefilter = MitzPrefilter::from_config(config(&mitz.endpoint(), &holders)?, &registry())?;
     let pseudonym = patient("http://fhir.nl/fhir/NamingSystem/pseudo-bsn")?;
     let decision = prefilter
-        .prefilter(&pseudonym, &candidates()?, soon())
+        .prefilter(&pseudonym, Some(&caller()?), &candidates()?, soon())
         .await;
     assert!(
         matches!(decision, ConsentDecision::NoSignal),
@@ -158,7 +293,12 @@ async fn a_passed_deadline_asks_nothing_and_is_unavailable() -> TestResult {
     ];
     let prefilter = MitzPrefilter::from_config(config(&mitz.endpoint(), &holders)?, &registry())?;
     let decision = prefilter
-        .prefilter(&patient(BSN_ALIAS)?, &candidates()?, Instant::now())
+        .prefilter(
+            &patient(BSN_ALIAS)?,
+            Some(&caller()?),
+            &candidates()?,
+            Instant::now(),
+        )
         .await;
     assert!(
         matches!(
@@ -181,7 +321,12 @@ async fn a_refused_answer_carries_mitz_status() -> TestResult {
     ];
     let prefilter = MitzPrefilter::from_config(config(&mitz.endpoint(), &holders)?, &registry())?;
     let decision = prefilter
-        .prefilter(&patient(BSN_ALIAS)?, &candidates()?, soon())
+        .prefilter(
+            &patient(BSN_ALIAS)?,
+            Some(&caller()?),
+            &candidates()?,
+            soon(),
+        )
         .await;
     match decision {
         ConsentDecision::Unavailable(error) => {
@@ -267,10 +412,6 @@ fn every_refused_configuration_is_typed() -> TestResult {
     assert!(matches!(
         refused(|config| config.categories.push(String::from("GGC002")))?,
         MitzConfigError::Categories(_)
-    ));
-    assert!(matches!(
-        refused(|config| config.user.responsible = String::from("with-hyphen"))?,
-        MitzConfigError::User(_)
     ));
     assert!(matches!(
         refused(|config| {
