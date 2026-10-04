@@ -30,6 +30,11 @@ use serde::Deserialize;
 
 use crate::support::call;
 
+/// The longest a test waits for the forwarder to reach a state it reaches
+/// within one retry of `retry_max_ms`: far past any stall of a loaded host,
+/// so only a forwarder that never gets there fails the wait.
+pub(crate) const SETTLE: Duration = Duration::from_secs(15);
+
 /// The `[audit]` tables that post every record to `repository`, with the
 /// `[audit.repository]` keys `extra`.
 pub(crate) fn audit_tables(repository: &FeedRepository, extra: &str) -> String {
@@ -77,13 +82,13 @@ pub(crate) async fn feed_state(app: &Router) -> Result<Option<String>, Box<dyn E
     Ok(serde_json::from_str::<Report>(&text)?.audit_feed)
 }
 
-/// Waits up to five seconds until the health report shows the FHIR Feed
+/// Waits up to [`SETTLE`] until the health report shows the FHIR Feed
 /// repository `expected`, and returns the last state it showed.
 pub(crate) async fn await_feed_state(
     app: &Router,
     expected: &str,
 ) -> Result<Option<String>, Box<dyn Error>> {
-    let until = Instant::now() + Duration::from_secs(5);
+    let until = Instant::now() + SETTLE;
     loop {
         let state = feed_state(app).await?;
         if state.as_deref() == Some(expected) || Instant::now() >= until {

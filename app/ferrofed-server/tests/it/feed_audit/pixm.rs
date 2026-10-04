@@ -4,8 +4,10 @@
 //! The ITI-83 audit record of the PIXm resolver (PIXm §2:3.83.5.1.1): each
 //! resolution reaches the repository naming the patient, and no log line,
 //! metric or node request names it; a repository that is down holds the
-//! records and the queries go on; and a spool that cannot take a record
-//! fails the query closed before any member is asked.
+//! records and the queries go on; a repository that never answers holds no
+//! query, because only the spool write sits on the request's path (ITI TF-2
+//! §3.20.4.1.1); and a spool that cannot take a record fails the query closed
+//! before any member is asked.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -13,7 +15,6 @@
 
 use std::error::Error;
 use std::path::Path;
-use std::time::Duration;
 
 use axum::Router;
 use ferrofed_server::metrics::Metrics;
@@ -23,10 +24,10 @@ use http::StatusCode;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use super::{audit_tables, await_feed_state, spool_key, spooled, transactions};
+use super::{SETTLE, audit_tables, await_feed_state, feed_state, spool_key, spooled, transactions};
 use crate::facade::{
-    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, gateway, node_answering, patient_query, post,
-    received, registry,
+    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, gateway, gateway_within, node_answering,
+    patient_query, post, received, registry, statuses,
 };
 use crate::metrics::{count, parse};
 use crate::support::call;
@@ -35,6 +36,21 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const DOMAIN_A: &str = "urn:oid:2.999.10";
 const DOMAIN_B: &str = "urn:oid:2.999.20";
+
+/// The per-node and overall budget of [`audited_gateway`], in milliseconds.
+///
+/// The nodes answer at once, so the budget only has to outlast a stall of a
+/// loaded host, as far as the ten-second request timeout of
+/// `settings_with_room` less the one-second combining margin allows.
+const BUDGET_MS: u64 = 8_000;
+
+/// The feed's per-request timeout toward a repository that never answers:
+/// an hour, past the life of the test, so a delivery on the request's path
+/// would hold the query past every budget.
+const NEVER_MS: u64 = 3_600_000;
+
+/// Both nodes answered.
+const BOTH_ACTIVE: [(&str, &str); 2] = [("node-a-pub", "active"), ("node-b-pub", "active")];
 
 /// A PIX Manager that resolves the patient at node A and node B.
 async fn manager() -> Server {
@@ -55,14 +71,14 @@ async fn manager() -> Server {
 
 /// A development gateway over node A at `a` and node B at `b`, resolving at
 /// the PIX Manager at `pix` and recording to `repository` with the
-/// `[audit.repository]` keys `extra`.
+/// `[audit.repository]` keys `extra`, within [`BUDGET_MS`].
 fn audited_gateway(
     dir: &Path,
     [a, b, pix]: [&str; 3],
     repository: &FeedRepository,
     extra: &str,
 ) -> Result<Router, Box<dyn Error>> {
-    gateway(
+    gateway_within(
         dir,
         &registry(a, b, ""),
         "profile = \"development\"",
@@ -70,7 +86,18 @@ fn audited_gateway(
             "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n{}",
             audit_tables(repository, extra)
         ),
+        (BUDGET_MS, BUDGET_MS),
     )
+}
+
+/// Posts the patient query to `app`, failing unless the answer is a `200`
+/// in which both nodes answered.
+async fn answered_by_both(app: &Router, why: &str) -> TestResult {
+    let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{why}: {text}");
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert_eq!(BOTH_ACTIVE.to_vec(), statuses(&answer), "{why}: {text}");
+    Ok(())
 }
 
 #[tokio::test]
@@ -96,7 +123,7 @@ async fn each_resolution_reaches_the_repository_and_no_log_metric_or_node_names_
     )?;
     let guard = tracing::subscriber::set_default(capture);
     let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
-    let records = repository.wait_for(1, Duration::from_secs(5)).await;
+    let records = repository.wait_for(1, SETTLE).await;
     drop(guard);
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(1, records.len(), "one record per ITI-83 exchange");
@@ -138,19 +165,18 @@ async fn a_repository_that_is_down_holds_the_records_and_the_queries_go_on() -> 
         &repository,
         &key,
     )?;
-    let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
-    assert_eq!(
-        StatusCode::OK,
-        status,
-        "an outage of the repository is stored, not refused (ITI TF-2 §3.20.4.1.1): {text}"
-    );
+    answered_by_both(
+        &app,
+        "an outage of the repository is stored, not refused (ITI TF-2 §3.20.4.1.1)",
+    )
+    .await?;
     assert_eq!(
         Some("degraded"),
         await_feed_state(&app, "degraded").await?.as_deref()
     );
     assert_eq!(1, spooled(&spool)?, "the record is on disk");
     repository.set_up(true);
-    let records = repository.wait_for(1, Duration::from_secs(10)).await;
+    let records = repository.wait_for(1, SETTLE).await;
     assert_eq!(
         1,
         records.len(),
@@ -158,6 +184,44 @@ async fn a_repository_that_is_down_holds_the_records_and_the_queries_go_on() -> 
     );
     assert_eq!(Some("up"), await_feed_state(&app, "up").await?.as_deref());
     assert_eq!(0, spooled(&spool)?);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_repository_that_never_answers_holds_no_query_and_the_records_are_spooled() -> TestResult
+{
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let pix = manager().await;
+    let repository = FeedRepository::start().await;
+    repository.go_silent();
+    let dir = tempfile::tempdir()?;
+    let (key, spool) = spool_key(dir.path());
+    let app = audited_gateway(
+        dir.path(),
+        [&a.uri(), &b.uri(), &pix.uri()],
+        &repository,
+        &format!("{key}\ntimeout_ms = {NEVER_MS}"),
+    )?;
+    answered_by_both(
+        &app,
+        "the first record is stored, not delivered, on the path",
+    )
+    .await?;
+    assert_eq!(
+        1,
+        repository.wait_asked(1, SETTLE).await,
+        "the forwarder's delivery is in flight, and is never answered"
+    );
+    answered_by_both(&app, "a delivery in flight holds no query").await?;
+    assert_eq!(2, spooled(&spool)?, "both records are on disk");
+    assert_eq!(
+        1,
+        repository.asked(),
+        "the forwarder still waits on the first"
+    );
+    assert!(repository.records().is_empty(), "nothing was delivered");
+    assert_eq!(Some("degraded"), feed_state(&app).await?.as_deref());
     Ok(())
 }
 
