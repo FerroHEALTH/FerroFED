@@ -18,9 +18,21 @@
 #                                             missing page fail, and a sound
 #                                             page passes
 # Needs mdbook, mdbook-toc and mdbook-mermaid (the docs toolchain) and lychee
-# on PATH. Exit 1 when a link or an anchor does not resolve; 0 otherwise.
+# on PATH, and stops with exit 1 naming any of them that is missing. Exit 1
+# when a link or an anchor does not resolve; 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+
+# require TOOL...: stop with exit 1, naming the tool, when one is not on PATH.
+require() {
+  local tool
+  for tool in "$@"; do
+    if ! command -v "$tool" > /dev/null 2>&1; then
+      echo "site-links: $tool is not on PATH; install it or add its directory (often ~/.cargo/bin) to PATH" >&2
+      exit 1
+    fi
+  done
+}
 
 # check_html ROOT: lychee over every HTML page under the absolute path ROOT,
 # resolving a root-relative link (/docs/...) against ROOT.
@@ -62,6 +74,7 @@ self_test() {
 
 case "${1:-}" in
 --self-test)
+  require lychee
   self_test
   exit
   ;;
@@ -71,6 +84,8 @@ case "${1:-}" in
   exit 2
   ;;
 esac
+
+require mdbook mdbook-toc mdbook-mermaid lychee
 
 site="$(mktemp -d)"
 trap 'rm -rf "$site"' EXIT
