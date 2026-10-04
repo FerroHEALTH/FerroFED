@@ -18,7 +18,8 @@
 # role: CONNECT is revoked from PUBLIC and granted to that role, so one node's
 # role is refused on another node's database.
 #
-# Development credentials only: each role's password is its name.
+# Development credentials only: each role's password is its name followed by
+# `_example`, and the first node's PG_INIT_PASSWORD keeps that form too.
 #
 # Usage (as the image's entrypoint runs it):
 #   FERROFED_NODE_DATABASES="ferroehr_b ferroehr_c" 20-ferrofed-node-databases.sh
@@ -55,7 +56,7 @@ for name in "${names[@]}"; do
     exit 1
   fi
   echo "ferrofed init: node database '$name'"
-  PG_INIT_USER="$name" PG_INIT_PASSWORD="$name" PG_INIT_DB="$name" "$IMAGE_INIT"
+  PG_INIT_USER="$name" PG_INIT_PASSWORD="${name}_example" PG_INIT_DB="$name" "$IMAGE_INIT"
 done
 
 # restrict DATABASE ROLE: only ROLE (and the superuser) may connect to DATABASE.

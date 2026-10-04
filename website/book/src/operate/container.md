@@ -283,8 +283,9 @@ Four instances of one product: EHRbase, the second product the topology first
 used, refuses a `.` in `PARTY_REF.namespace`, which openEHR BASE admits, so its
 EHRs could not carry the OID-style issuing namespace the synthetic patients
 use. Every node uses FerroEHR's quickstart Basic-auth user, `ferroehr` /
-`ferroehr`, and every database role's password is its name: development
-credentials that must not reach anything real. Every image is pinned by tag
+`ferroehr`, and every database role's password is its name followed by
+`_example` (`ferroehr_a_example`): development credentials that must not
+reach anything real. Every image is pinned by tag
 and digest, and `docs/VERSIONS.md` carries each pin.
 
 Every published port binds the loopback interface. A published port is
@@ -301,7 +302,10 @@ patients to their EHRs. It is a testing device and no identity binding; a
 deployment resolves patients through an identifier cross-reference service,
 a PIX Manager ([Identity resolution](identity.md)).
 
-`docker compose down -v` stops the stack and removes its volumes.
+`docker compose down -v` stops the stack and removes its volumes. A
+quickstart volume created before v0.0.8 holds the roles with their earlier
+passwords, which the nodes no longer send, so run `docker compose down -v`
+once before you bring that stack up again, then seed it anew.
 
 ### The synthetic patients
 

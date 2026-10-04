@@ -54,12 +54,19 @@ pub const NODE_A_SYSTEM_ID: &str = "cdr-a.example.org";
 /// The `system_id` node B stamps into every EHR and version it creates.
 pub const NODE_B_SYSTEM_ID: &str = "cdr-b.example.org";
 
-/// The database node A connects to, which is also its login role and that
-/// role's development password.
+/// The database node A connects to, which is also its login role.
 const NODE_A_DATABASE: &str = "ferroehr_a";
 
 /// The database node B connects to, named as [`NODE_A_DATABASE`] is.
 const NODE_B_DATABASE: &str = "ferroehr_b";
+
+/// Returns the development password of the login role `name`, the one
+/// [`NODE_DATABASES_SCRIPT`] gives every role it creates: the name followed by
+/// `_example`.
+#[must_use]
+pub fn role_password(name: &str) -> String {
+    format!("{name}_example")
+}
 
 /// The init script that adds a database per node to the FerroEHR PostgreSQL
 /// image, shared with the compose quickstart.
@@ -362,8 +369,10 @@ impl Postgres {
     #[must_use]
     pub fn url(&self, name: &str) -> String {
         format!(
-            "postgres://{name}:{name}@{}:{}/{name}?sslmode=disable",
-            self.host, self.port
+            "postgres://{name}:{}@{}:{}/{name}?sslmode=disable",
+            role_password(name),
+            self.host,
+            self.port
         )
     }
 
@@ -379,7 +388,7 @@ impl Postgres {
 ///
 /// It holds the database `first` and one more for each of `others`, each
 /// owned by a login role of the same name whose development password is
-/// that name too. The server is the FerroEHR database image the nodes run, built on
+/// [`role_password`]. The server is the FerroEHR database image the nodes run, built on
 /// PostgreSQL 18.6, so a test of FerroFED's own PostgreSQL use runs on the
 /// release `docs/VERSIONS.md` pins, one database per use.
 ///
@@ -406,7 +415,7 @@ pub async fn postgres(first: &str, others: &[&str]) -> Result<Postgres, HarnessE
 
 /// Starts the FerroEHR PostgreSQL image with the database `first` and one
 /// more for each of `others`, each owned by a login role of the same name
-/// whose development password is that name too.
+/// whose development password is [`role_password`].
 ///
 /// The image's own init script creates `first`, and
 /// [`NODE_DATABASES_SCRIPT`] runs it once more for each of `others`.
@@ -423,7 +432,7 @@ async fn database_server(first: &str, others: &[&str]) -> Result<DatabaseServer,
         )
         .with_env_var("POSTGRES_PASSWORD", "postgres")
         .with_env_var("PG_INIT_USER", first)
-        .with_env_var("PG_INIT_PASSWORD", first)
+        .with_env_var("PG_INIT_PASSWORD", role_password(first))
         .with_env_var("PG_INIT_DB", first)
         .with_env_var("FERROFED_NODE_DATABASES", others.join(" "))
         .with_network(network.clone())
@@ -455,7 +464,8 @@ async fn ferroehr_on(
         .with_env_var(
             "FERROEHR__DB__URL",
             format!(
-                "postgres://{name}:{name}@{}:{POSTGRES_PORT}/{name}",
+                "postgres://{name}:{}@{}:{POSTGRES_PORT}/{name}",
+                role_password(name),
                 database.host
             ),
         )
