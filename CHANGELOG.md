@@ -90,6 +90,27 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   with ITI-91 (`Replica`). IHE mCSD 4.0.0 is vendored under `docs/specs/ihe-mcsd/` by
   `scripts/vendor/ihe-mcsd.sh`, and the testkit carries a harness directory
   built from the IG's examples.
+- The ITI-55 audit messages sent to an ATNA Audit Record Repository (#418;
+  ITI TF-2 §3.20, §3.55.5.1.1): `[xcpd] audit = "repository"` with
+  `[xcpd.audit_repository]` sends each exchange's DICOM PS3.15 audit
+  message as ITI-20 Record Audit Event, RFC 5424 syslog with the PRI `<85>`
+  and the MSGID `IHE+RFC-3881` over TLS (RFC 5425, `tls://`; `tcp://` under
+  `profile = "development"` only). Every message is fsynced to a bounded
+  spool before it counts as recorded and delivered from there in order, so a
+  repository outage delays delivery and fails no discovery (§3.20.4.1.1),
+  and a restart keeps the spool. A full or unwritable spool fails the
+  discovery closed. The spool directory is created `0700` with `0600`
+  files, and a directory open to other users refuses to start;
+  `spool_dir` is required outside development. `GET /health/dependencies`
+  reports `audit_repository` (`degraded` while messages wait), and the
+  metrics `ferrofed_audit_spool_events`, `ferrofed_audit_spool_bytes` and
+  `ferrofed_audit_delivered_total` carry no label. Where the audit messages
+  go takes a restart.
+- `ihe-iti` 0.0.14: the `atna` feature, the ITI-20 sender (the DICOM audit
+  message, the RFC 5424 syslog frame, the RFC 5425 TLS connection, the
+  spool and the forwarder), and `AuditEvent::message` for the ITI-55
+  Initiating Gateway table. `AuditRecorder::record` is async, awaited before
+  the exchange's answer is returned.
 - The consent pre-filter applies to the read of an EHR by subject as it does
   to a federated query (#399; N27a, §13.2.1). A member it denies is never
   resolved and never sent a request. When it denies every member that might

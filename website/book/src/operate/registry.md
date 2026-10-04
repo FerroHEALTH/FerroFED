@@ -392,7 +392,7 @@ Five sections take effect on a reload:
 | `[credentials]` | `[signing]` |
 | `[dev]` | `[telemetry]` and `[metrics]` |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
-| `[xcpd]` | |
+| `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
 
 `federation.demographic_endpoint` keeps its running value until a restart,
 and the document must still declare it: a reload whose document drops that

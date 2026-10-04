@@ -45,6 +45,7 @@ compile_error!(
 
 pub mod admin;
 pub mod admission;
+pub mod audit;
 pub mod auth;
 pub mod banner;
 pub mod base_path;
@@ -205,7 +206,12 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
                     .map(config::stored_queries::Store::backend),
                 settings.profile == Profile::Development,
             )
-            .with_cleartext(cleartext.as_deref()),
+            .with_cleartext(cleartext.as_deref())
+            .with_audit_spool_in_memory(settings.xcpd.as_ref().is_some_and(|xcpd| {
+                xcpd.audit_repository
+                    .as_ref()
+                    .is_some_and(|repository| repository.spool_dir.is_none())
+            })),
             format.colour(stdout_is_terminal, no_color.as_deref()),
         );
     }

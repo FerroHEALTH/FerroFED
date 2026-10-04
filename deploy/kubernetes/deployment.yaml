@@ -103,6 +103,15 @@ spec:
             - name: secrets
               mountPath: /run/secrets/ferrofed
               readOnly: true
+            # The ITI-20 audit spool, with [xcpd] audit = "repository": the
+            # one directory the gateway writes. Set
+            # xcpd.audit_repository.spool_dir to a directory under this
+            # mount, such as /var/lib/ferrofed/audit-spool; the gateway
+            # creates it 0700. It holds audit messages that name a patient
+            # until the repository takes them, so back it with an encrypted
+            # storage class.
+            # - name: audit-spool
+            #   mountPath: /var/lib/ferrofed
       volumes:
         - name: config
           configMap:
@@ -113,3 +122,9 @@ spec:
           secret:
             secretName: ferrofed-secrets
             defaultMode: 0440
+        # Each replica needs a spool of its own: two gateways must never
+        # drain one directory. A StatefulSet volumeClaimTemplate keeps it
+        # across a reschedule; an emptyDir keeps it across a container
+        # restart only.
+        # - name: audit-spool
+        #   emptyDir: {}

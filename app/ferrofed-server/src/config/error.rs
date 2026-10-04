@@ -375,6 +375,22 @@ pub enum Error {
         /// The key that turned the audit off.
         key: String,
     },
+    /// `[xcpd.audit_repository]` is set while the audit messages go
+    /// elsewhere.
+    #[error(
+        "[xcpd.audit_repository] applies only under xcpd.audit = \"repository\"; remove it, or send the audit messages there"
+    )]
+    AuditRepositoryUnused,
+    /// A syslog header value is empty, too long, or holds a character
+    /// syslog cannot carry (RFC 5424 §6).
+    #[error("{key} cannot be a syslog header field")]
+    SyslogHeader {
+        /// The key that holds it.
+        key: String,
+        /// What the syslog writer reported.
+        #[source]
+        source: ihe_iti::atna::syslog::HeaderError,
+    },
     /// A URL that carries a patient identifier or a credential is not
     /// `https`, outside a configuration marked for development.
     #[error(transparent)]

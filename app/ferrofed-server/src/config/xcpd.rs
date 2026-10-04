@@ -35,6 +35,7 @@ use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
+use crate::config::audit_repository::{AuditRepository, AuditRepositorySettings};
 use crate::config::error::Error;
 use crate::config::secrets::secret;
 use crate::config::{Config, transport};
@@ -70,15 +71,21 @@ pub struct Xcpd {
     /// A file of PEM trust roots the responding gateways' certificates chain
     /// to, beside the platform's.
     pub trust_roots_file: Option<PathBuf>,
-    /// Where the ITI-55 audit message of every exchange goes: `log`, or
-    /// `off`, which only `profile = "development"` admits. It has no default.
+    /// Where the ITI-55 audit message of every exchange goes: `repository`,
+    /// `log`, or `off`, which only `profile = "development"` admits. It has
+    /// no default.
     pub audit: Option<AuditDestination>,
+    /// The ATNA Audit Record Repository, under `audit = "repository"`.
+    pub audit_repository: Option<AuditRepository>,
 }
 
 /// Where the ITI-55 audit messages go (ITI TF-2 §3.55.5.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AuditDestination {
+    /// The DICOM audit message, sent over ITI-20 to the ATNA Audit Record
+    /// Repository `[xcpd.audit_repository]` names.
+    Repository,
     /// A structured event at the `ferrofed::audit` log target, without the
     /// query parameters, for a deployment that routes its log to its audit
     /// repository.
@@ -92,6 +99,7 @@ impl AuditDestination {
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Repository => "repository",
             Self::Log => "log",
             Self::Off => "off",
         }
@@ -132,6 +140,8 @@ pub struct XcpdSettings {
     pub trust_roots: Option<String>,
     /// Where the audit messages go.
     pub audit: AuditDestination,
+    /// The repository, under [`AuditDestination::Repository`].
+    pub audit_repository: Option<AuditRepositorySettings>,
 }
 
 impl fmt::Debug for XcpdSettings {
@@ -144,6 +154,7 @@ impl fmt::Debug for XcpdSettings {
             .field("client_identity", &self.client_identity.is_some())
             .field("trust_roots", &self.trust_roots.is_some())
             .field("audit", &self.audit)
+            .field("audit_repository", &self.audit_repository)
             .finish_non_exhaustive()
     }
 }
@@ -195,6 +206,18 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
             });
         }
         Some(destination) => destination,
+    };
+    let audit_repository = match (audit, &xcpd.audit_repository) {
+        (AuditDestination::Repository, Some(table)) => {
+            Some(super::audit_repository::resolve(config.profile, table)?)
+        }
+        (AuditDestination::Repository, None) => {
+            return Err(Error::Missing {
+                key: String::from("xcpd.audit_repository"),
+            });
+        }
+        (_, Some(_)) => return Err(Error::AuditRepositoryUnused),
+        (_, None) => None,
     };
     let assertion_key = if xcpd.assertion_file.is_some() {
         "xcpd.assertion_file"
@@ -249,5 +272,6 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         client_identity,
         trust_roots,
         audit,
+        audit_repository,
     }))
 }

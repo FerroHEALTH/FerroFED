@@ -61,8 +61,9 @@ pub const AUDIT_TARGET: &str = "ferrofed::audit";
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LogAudit;
 
+#[async_trait]
 impl AuditRecorder for LogAudit {
-    fn record(&self, event: AuditEvent) -> Result<(), AuditError> {
+    async fn record(&self, event: AuditEvent) -> Result<(), AuditError> {
         let (access_point_type, access_point) = event
             .destination_access_point
             .as_ref()

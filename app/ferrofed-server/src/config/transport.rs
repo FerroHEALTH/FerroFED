@@ -21,9 +21,10 @@
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
 //! 2.0 grant, every PIX Manager and every XCPD responding gateway (each is
 //! sent the patient identifier, and a credential when one is configured), the
-//! care services directory of `[registry.mcsd]` when it has credentials, and
+//! care services directory of `[registry.mcsd]` when it has credentials,
 //! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
-//! a user name or a password. Any
+//! a user name or a password, and the ATNA Audit Record Repository the XCPD
+//! audit messages go to, which must be `tls://` ([`encrypted_syslog`]). Any
 //! other URL may stay `http`. The encrypted-connection site is the
 //! stored-query store's PostgreSQL connection string, whose `sslmode` must be
 //! `require` when it carries a password and reaches a host over the network.
@@ -63,6 +64,8 @@ pub enum Encryption {
     Https,
     /// A database connection that requires TLS (`sslmode=require`).
     Tls,
+    /// Syslog over TLS (RFC 5425), a `tls://` address.
+    SyslogTls,
 }
 
 impl fmt::Display for Encryption {
@@ -70,6 +73,7 @@ impl fmt::Display for Encryption {
         f.write_str(match self {
             Self::Https => "an https URL",
             Self::Tls => "a connection that requires TLS (sslmode=require)",
+            Self::SyslogTls => "a tls:// syslog address (RFC 5425)",
         })
     }
 }
@@ -138,6 +142,23 @@ pub fn encrypted_connection(
     admit(profile, requires_tls, site)
 }
 
+/// Holds a syslog address to the protected-payload policy: `tls://` (RFC
+/// 5425), or anything else under development alone.
+///
+/// It answers as [`protected_payload`] does.
+///
+/// # Errors
+///
+/// Returns [`CleartextError`] naming `site` when `url` is not `tls://` and
+/// `profile` is not development.
+pub fn encrypted_syslog(
+    profile: Profile,
+    url: &Url,
+    site: ProtectedSite,
+) -> Result<Option<ProtectedSite>, CleartextError> {
+    admit(profile, url.scheme() == "tls", site)
+}
+
 /// The answer for `site`, `protected` or not, under `profile`.
 fn admit(
     profile: Profile,
@@ -193,6 +214,7 @@ pub fn check(
 ) -> Result<Vec<ProtectedSite>, CleartextError> {
     let profile = settings.profile;
     let mut cleartext = Vec::new();
+    let mut audit = None;
     let mut hold = |url: &str, site: ProtectedSite| {
         protected_payload(profile, url, site).map(|exposed| cleartext.extend(exposed))
     };
@@ -245,6 +267,14 @@ pub fn check(
             let key = format!("xcpd.gateway[{index}]");
             hold(gateway.url.expose(), identity_site(&key, assertion))?;
         }
+        if let Some(repository) = &xcpd.audit_repository {
+            let site = ProtectedSite {
+                url_key: String::from("xcpd.audit_repository.url"),
+                payload: String::from("the ITI-55 audit messages, which name the patient"),
+                requires: Encryption::SyslogTls,
+            };
+            audit = encrypted_syslog(profile, &repository.url, site)?;
+        }
     }
     if let Some(directory) = settings
         .registry_directory
@@ -280,6 +310,7 @@ pub fn check(
         let requires_tls = !crate::stored::postgres::exposes_password(url);
         cleartext.extend(encrypted_connection(profile, requires_tls, site)?);
     }
+    cleartext.extend(audit);
     Ok(cleartext)
 }
 

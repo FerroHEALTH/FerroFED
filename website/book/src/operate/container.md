@@ -118,7 +118,11 @@ digest of its image index. The image:
   `runAsNonRoot` accepts it;
 - has no shell and no package manager;
 - needs no writable path, so it runs with a read-only root filesystem and every
-  capability dropped;
+  capability dropped; the one exception is the
+  [audit spool](identity.md#the-audit-repository) of
+  `[xcpd] audit = "repository"`, a volume you mount, which
+  `deploy/compose/compose.yaml` and `deploy/kubernetes/deployment.yaml` show
+  commented out;
 - binds `0.0.0.0:8080` (the binary's own default is loopback, which no
   container can publish), set through `FERROFED__SERVER__LISTEN`;
 - starts `ferrofed serve` as PID 1, so `SIGTERM` reaches the server and it

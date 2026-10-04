@@ -122,7 +122,7 @@ The sections, and the page that covers each:
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
 | `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
-| `[xcpd]` | the XCPD localizer | [XCPD localization](identity.md#xcpd-localization-xcpd) |
+| `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](identity.md#xcpd-localization-xcpd), [The audit repository](identity.md#the-audit-repository) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
 

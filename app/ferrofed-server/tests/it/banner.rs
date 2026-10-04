@@ -44,6 +44,7 @@ fn deployment() -> Result<Deployment, Box<dyn Error>> {
         stored_queries: Some(Backend::Redb),
         development: false,
         cleartext: Vec::new(),
+        audit_spool_in_memory: false,
     })
 }
 
@@ -69,6 +70,23 @@ fn the_banner_carries_the_wordmark_the_version_and_the_maintainer() -> TestResul
     assert!(
         banner.contains("https://github.com/FerroHEALTH/FerroFED"),
         "{banner}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_audit_spool_in_memory_is_declared() -> TestResult {
+    let quiet = render("9.9.9", &deployment()?, false);
+    assert_eq!(None, value_of(&quiet, "Audit spool"), "{quiet}");
+    let declared = render(
+        "9.9.9",
+        &deployment()?.with_audit_spool_in_memory(true),
+        false,
+    );
+    assert_eq!(
+        Some("in memory: a restart loses the audit messages not yet delivered"),
+        value_of(&declared, "Audit spool"),
+        "{declared}"
     );
     Ok(())
 }
