@@ -23,6 +23,7 @@ mod fanout;
 mod forward;
 mod gate;
 mod masking;
+mod nuts;
 mod onward;
 mod pins;
 mod probe;
