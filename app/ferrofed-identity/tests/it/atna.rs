@@ -29,6 +29,7 @@ use ihe_iti::atna::syslog::Sender;
 use url::Url;
 
 use crate::support::PATIENT_VALUE;
+use crate::timing;
 use crate::xcpd::{COMMUNITY_A, holds, localize, localizer, node};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -39,6 +40,26 @@ const ROOMY: Bounds = Bounds {
     write_timeout: Duration::from_secs(10),
 };
 
+/// The timeouts towards the harness repository. The send timeout, which
+/// also bounds the TLS handshake, is the slack a loaded host gets, so a
+/// handshake under load finishes within it.
+const TIMEOUTS: Timeouts = Timeouts {
+    connect: Duration::from_secs(2),
+    send: timing::SLACK,
+};
+
+const RETRY_MAX: Duration = Duration::from_millis(500);
+
+/// The longest the forwarder may take to deliver `messages` over one new
+/// connection under [`TIMEOUTS`]: the connection, the TLS handshake, and a
+/// write and a flush for each message.
+const fn delivery(messages: u32) -> Duration {
+    TIMEOUTS
+        .connect
+        .saturating_add(TIMEOUTS.send)
+        .saturating_add(TIMEOUTS.send.saturating_mul(2).saturating_mul(messages))
+}
+
 /// The recorder sending to `repository` over TLS, trusting its CA, through
 /// `spool`.
 fn recorder(repository: &AuditRepository, spool: Spool) -> Result<RepositoryAudit, Box<dyn Error>> {
@@ -47,18 +68,14 @@ fn recorder(repository: &AuditRepository, spool: Spool) -> Result<RepositoryAudi
         identity: None,
     };
     let address = Url::parse(&repository.url())?;
-    let timeouts = Timeouts {
-        connect: Duration::from_secs(2),
-        send: Duration::from_millis(500),
-    };
-    let connection = Repository::tls(&address, &tls, timeouts)?;
+    let connection = Repository::tls(&address, &tls, TIMEOUTS)?;
     let sender = Sender::new("gateway.example.org", "ferrofed", "4242")?;
     let source = AuditSource {
         id: "gateway.example.org".to_owned(),
         enterprise_site: None,
     };
     Ok(RepositoryAudit::new(
-        Forwarder::new(spool, connection, Duration::from_millis(500)),
+        Forwarder::new(spool, connection, RETRY_MAX),
         sender,
         source,
     ))
@@ -75,7 +92,7 @@ async fn each_discovery_reaches_the_repository_as_one_iti_20_message() -> TestRe
         Localization::Candidates(named) => assert_eq!(BTreeSet::from([node("node-a")?]), named),
         other => return Err(format!("a candidate set: {other:?}").into()),
     }
-    let messages = repository.wait_for(1, Duration::from_secs(5)).await;
+    let messages = repository.wait_for(1, timing::within(delivery(1))).await;
     assert_eq!(1, messages.len(), "one message per exchange");
     let message = &messages[0];
     assert!(
@@ -117,7 +134,14 @@ async fn a_repository_that_is_down_delays_delivery_and_fails_nothing() -> TestRe
     assert_eq!(3, audit.status().depth.messages, "every message is held");
 
     repository.set_up(true);
-    let messages = repository.wait_for(3, Duration::from_secs(10)).await;
+    // The forwarder may be in a failing attempt: it ends that and its
+    // backoff, then delivers the three messages over a new connection.
+    let recovery = TIMEOUTS
+        .connect
+        .saturating_add(TIMEOUTS.send)
+        .saturating_add(RETRY_MAX)
+        .saturating_add(delivery(3));
+    let messages = repository.wait_for(3, timing::within(recovery)).await;
     assert_eq!(
         3,
         messages.len(),
@@ -142,10 +166,11 @@ async fn a_repository_that_hangs_in_the_handshake_is_given_up_and_retried() -> T
         Localization::Candidates(_)
     ));
     assert!(
-        asked.elapsed() < Duration::from_millis(500),
+        asked.elapsed() < TIMEOUTS.send,
         "the discovery never waits on the repository"
     );
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    let deadline =
+        std::time::Instant::now() + timing::within(TIMEOUTS.connect.saturating_add(TIMEOUTS.send));
     while audit.status().retries == 0 && std::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
@@ -158,7 +183,13 @@ async fn a_repository_that_hangs_in_the_handshake_is_given_up_and_retried() -> T
     assert_eq!(1, stalled.depth.messages, "the message stays spooled");
 
     repository.set_stalled(false);
-    let messages = repository.wait_for(1, Duration::from_secs(10)).await;
+    // The forwarder may be in a stalled handshake: it gives that up, backs
+    // off, then delivers over a new connection.
+    let recovery = TIMEOUTS
+        .send
+        .saturating_add(RETRY_MAX)
+        .saturating_add(delivery(1));
+    let messages = repository.wait_for(1, timing::within(recovery)).await;
     assert_eq!(1, messages.len(), "delivered once the repository answers");
     assert_eq!(0, audit.status().depth.messages);
     Ok(())
@@ -209,17 +240,9 @@ async fn a_forwarder_whose_runtime_ended_is_started_again() -> TestResult {
         roots: Some(repository.trust_roots().as_bytes().to_vec()),
         identity: None,
     };
-    let timeouts = Timeouts {
-        connect: Duration::from_secs(2),
-        send: Duration::from_millis(500),
-    };
-    let connection = Repository::tls(&Url::parse(&repository.url())?, &tls, timeouts)?;
+    let connection = Repository::tls(&Url::parse(&repository.url())?, &tls, TIMEOUTS)?;
     let sender = Sender::new("gateway.example.org", "ferrofed", "4242")?;
-    let forwarder = Forwarder::new(
-        Spool::in_memory(ROOMY),
-        connection,
-        Duration::from_millis(500),
-    );
+    let forwarder = Forwarder::new(Spool::in_memory(ROOMY), connection, RETRY_MAX);
     let audit = Arc::new(RepositoryAudit::new(
         Arc::clone(&forwarder),
         sender.clone(),
@@ -247,7 +270,7 @@ async fn a_forwarder_whose_runtime_ended_is_started_again() -> TestResult {
         &secrecy::SecretSlice::from(b"<AuditMessage/>".to_vec()),
     );
     forwarder.submit(frame).await?;
-    let messages = repository.wait_for(1, Duration::from_secs(5)).await;
+    let messages = repository.wait_for(1, timing::within(delivery(1))).await;
     assert_eq!(1, messages.len(), "the restarted forwarder delivers");
     Ok(())
 }
