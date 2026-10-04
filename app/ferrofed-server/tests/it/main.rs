@@ -43,6 +43,7 @@ mod hygiene;
 mod its_rest_areas;
 mod lifecycle;
 mod localization;
+mod localizer_audit;
 mod localizer_surface;
 mod metrics;
 mod mitz;

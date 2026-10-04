@@ -120,13 +120,15 @@ A record that `spool_write_timeout_ms` cuts off is an audit failure, as a
 full spool is, with the outcomes in the table above, and an ITI-55
 discovery fails closed under every `on_failure` policy
 ([The audit repository](identity.md#the-audit-repository)). A record still
-being stored when an ITI-83 query's time runs out fails a query that
-succeeded the same way. A transaction that failed already, such as a PIX
-Manager that did not answer, reports its own failure instead, which the
-late record would only hide. A localization whose time runs out while a
-record is still being stored ends as a localizer that did not answer in
-time, which `on_failure` decides. Either way the query never waits on the
-disk past its budget.
+being stored when its transaction's time runs out fails a transaction that
+succeeded the same way: an ITI-55 discovery or a `[pdqm]` exchange then
+fails closed under every `on_failure` policy, never widened to ask-all. The
+gateway gives the localizer and the `[pdqm]` step a deadline a tenth of
+their time short of its own, so a record cut off at that deadline reaches it
+as the audit failure it is, before the gateway stops waiting. A transaction
+that failed already, such as a PIX Manager or a responding gateway that did
+not answer, reports its own failure instead, which the late record would
+only hide. Either way the query never waits on the disk past its budget.
 
 The write that missed its bound is not abandoned. It runs on until the disk
 answers. Once it stores the record, the record is delivered like any other,

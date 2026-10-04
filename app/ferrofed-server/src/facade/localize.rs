@@ -84,13 +84,33 @@ impl Localized {
     }
 }
 
+/// The deadline a step that feeds localization is given when the façade
+/// stops waiting for it at `until`: a tenth of the time left earlier.
+///
+/// A step bounds its exchanges, and their audit records, by the deadline it
+/// is given, so it answers before the façade stops waiting. An exchange whose
+/// record is still being stored then reaches the façade as the audit failure
+/// it is, which no failure policy widens, rather than as a step that did not
+/// answer, which ask-all covers (ITI TF-2 §3.55.5.1, PDQm §2:3.78.5.1,
+/// §14.1). Stopping the
+/// step at `until` also stops the exchanges it has in flight, before their
+/// records are made.
+// NOTE: no specification governs this: our own design; the tenth kept back covers
+// the step's own timers reaching the façade, and a silent step still ends at `until`.
+pub(crate) fn inside(until: Instant) -> Instant {
+    let left = until.saturating_duration_since(Instant::now());
+    until.checked_sub(left / 10).unwrap_or(until)
+}
+
 /// Asks the federation's localizer which of `members` might hold
 /// `patient`'s data, within the localizer's budget and before `deadline`
 /// (§14.1, N4), and records what it showed of itself.
 ///
 /// Without a configured localizer, or with no member, every member is a
-/// candidate. A localizer still silent at the end of its budget did not
-/// answer, and the failure policy applies as to any other failure.
+/// candidate. The localizer is given a deadline [`inside`] its budget, so
+/// it reports an exchange it could not audit before the budget ends. A
+/// localizer still silent at the end of its budget did not answer, and the
+/// failure policy applies as to any other failure.
 pub(crate) async fn localize(
     federation: &Federation,
     patient: &PatientRef,
@@ -109,7 +129,7 @@ pub(crate) async fn localize(
         .map_or(deadline, |at| at.min(deadline));
     let answer = tokio::time::timeout_at(
         tokio::time::Instant::from_std(until),
-        localizer.localize(patient, members, until),
+        localizer.localize(patient, members, inside(until)),
     )
     .instrument(tracing::info_span!("localize", members = members.len()))
     .await
