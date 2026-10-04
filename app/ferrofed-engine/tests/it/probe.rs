@@ -26,6 +26,8 @@ use openehr_its::rest::client::ReqwestTransport;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
+use crate::timing;
+
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The `ehr_id` every member is asked about.
@@ -54,15 +56,19 @@ async fn member(delay: Duration) -> Server {
     server
 }
 
-/// Probes node A at `a` and node B at `b` under one deadline, `until`.
+/// Probes node A at `a` and node B at `b` under one deadline, `budget` from
+/// the moment the clients are built.
 async fn probed(
     a: &Server,
     b: &Server,
-    until: Instant,
+    budget: Duration,
 ) -> Result<Vec<(EndpointId, probe::Probed)>, Box<dyn Error>> {
     let snapshot = registry(&a.uri(), &b.uri())?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
+    let until = Instant::now()
+        .checked_add(budget)
+        .ok_or("the deadline is past the platform clock")?;
     let endpoints = [
         EndpointId::new("node-a-pub")?,
         EndpointId::new("node-b-pub")?,
@@ -90,7 +96,7 @@ async fn received(server: &Server) -> Result<usize, Box<dyn Error>> {
 async fn a_probe_the_budget_overtook_is_unsent_at_every_member() -> TestResult {
     let a = member(Duration::ZERO).await;
     let b = member(Duration::ZERO).await;
-    let answers = probed(&a, &b, Instant::now()).await?;
+    let answers = probed(&a, &b, Duration::ZERO).await?;
     assert_eq!(2, answers.len());
     for (endpoint, probed) in &answers {
         assert!(
@@ -108,11 +114,8 @@ async fn a_probe_the_budget_overtook_is_unsent_at_every_member() -> TestResult {
 #[tokio::test]
 async fn a_probe_a_member_leaves_unanswered_past_the_budget_shows_a_silent_member() -> TestResult {
     let a = member(Duration::ZERO).await;
-    let b = member(Duration::from_secs(3)).await;
-    let until = Instant::now()
-        .checked_add(Duration::from_millis(300))
-        .ok_or("the deadline is past the platform clock")?;
-    let answers = probed(&a, &b, until).await?;
+    let b = member(timing::SILENT).await;
+    let answers = probed(&a, &b, timing::SLACK).await?;
     let contacts: Vec<(&str, Contact)> = answers
         .iter()
         .map(|(endpoint, probed)| (endpoint.as_str(), probed.contact()))

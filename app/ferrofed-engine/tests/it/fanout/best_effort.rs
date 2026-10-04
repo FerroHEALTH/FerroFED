@@ -169,14 +169,22 @@ async fn every_failure_together_under_best_effort_is_still_a_200() -> TestResult
 async fn no_node_answering_under_best_effort_is_a_200_with_no_rows() -> TestResult {
     let broken = node(json(500, "")).await;
     let slow =
-        node(json(200, &result_set(&[])).set_delay(Duration::from_millis(300 + SLACK_MS))).await;
+        node(json(200, &result_set(&[])).set_delay(Duration::from_millis(2 * SLACK_MS))).await;
     let snapshot = federation(&[("node-e-pub", &broken.uri()), ("node-s-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,
         best_effort(&["node-e-pub", "node-s-pub"])?,
-        budget(300, 2_000)?,
+        budget(SLACK_MS, 2 * SLACK_MS)?,
     )
     .await?;
+    assert_eq!(
+        statuses(&answer),
+        BTreeMap::from([
+            ("node-e-pub".to_owned(), EndpointStatus::NodeError),
+            ("node-s-pub".to_owned(), EndpointStatus::TimeOut),
+        ]),
+        "§11.1"
+    );
     assert_eq!(answer.verdict(), Verdict::Partial);
     assert_eq!(answer.status(), StatusCode::OK);
     assert!(answer.rows().is_empty());
