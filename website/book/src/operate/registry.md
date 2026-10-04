@@ -236,6 +236,16 @@ registry, logs the refusal and counts it in `ferrofed_registry_reloads_total`
 refresh. `GET /health/dependencies` still shows the directory `up`, since it
 answered. Map the member first, then publish it.
 
+The registry keeps each organisation's identifiers as the directory
+publishes them, beside the `organisation-id` one: every identifier with a
+system and a value, ordered and each once. They name organisations, never
+patients, and a registry document in the native form carries none. Under
+`[nl_gf.nvi]` the URA among them (`http://fhir.nl/fhir/NamingSystem/ura`,
+Annex B §B.2) gives the localizer its custodian map, so a Dutch directory
+needs no `custodians` table: a member organisation that publishes its URA
+before its endpoint is never unmapped, and a refresh that adds it applies
+([Dutch localization](identity.md#dutch-localization-nl_gfnvi)).
+
 ## Federation id
 
 A gateway that federates names its federation, and refuses to boot without

@@ -42,6 +42,21 @@ pub struct OrganisationDoc {
     pub id: OrganisationId,
     /// The organisation's display name.
     pub name: Option<String>,
+    /// The organisation's identifiers as a care services directory publishes
+    /// them (mCSD `Organization.identifier`), such as a care provider's URA
+    /// in the Dutch directory (Annex B §B.2). The native form does not
+    /// write them; only the FHIR form and a directory carry them.
+    #[serde(skip)]
+    pub identifiers: Vec<OrganisationIdentifierDoc>,
+}
+
+/// One organisation identifier as read, `system|value`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OrganisationIdentifierDoc {
+    /// The identifier system.
+    pub system: String,
+    /// The identifier value.
+    pub value: String,
 }
 
 /// One node as declared.
