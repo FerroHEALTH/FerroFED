@@ -76,14 +76,14 @@ system_id = "{system_id}"
 [[endpoint]]
 id = "node-a-pub"
 node = "node-a"
-url = "{unreachable}"
+url = "{unreachable}/node-a"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-a"
 
 [[endpoint]]
 id = "node-b-pub"
 node = "node-b"
-url = "{unreachable}"
+url = "{unreachable}/node-b"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-b"
 
@@ -106,7 +106,7 @@ fn federation(dir: &Path, registry: &str) -> Result<Option<Federation>, Box<dyn 
     std::fs::write(&key, oauth::es384_pem()?)?;
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let text = format!(
-        "[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n",
+        "[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n",
         quoted(&document),
         quoted(&key)
     );
