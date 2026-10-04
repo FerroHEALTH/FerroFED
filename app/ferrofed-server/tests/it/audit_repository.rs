@@ -212,6 +212,15 @@ async fn each_discovery_reaches_the_audit_repository_without_the_identifier_in_a
         "{}",
         messages[0]
     );
+    // NOTE: dXJuOm9pZDoyLjk5OS40MA== is the base64 of urn:oid:2.999.40, the
+    // configured home_community (ITI TF-2 §3.55.5.1.1, PS3.15 A.5.1 ValuePair).
+    assert!(
+        messages[0].contains(
+            "<ParticipantObjectDetail type=\"ihe:homeCommunityID\" value=\"dXJuOm9pZDoyLjk5OS40MA==\"/>"
+        ),
+        "the configured homeCommunityID: {}",
+        messages[0]
+    );
     assert!(
         !messages[0].contains(PATIENT),
         "the identifier is only base64 inside the query parameters"
@@ -290,10 +299,18 @@ async fn a_repository_that_is_down_holds_the_messages_and_shows_it() -> TestResu
         Some("1".to_owned()),
         count(&samples, "ferrofed_audit_spool_events", &[])
     );
-    let retries: u64 = count(&samples, "ferrofed_audit_retries_total", &[])
-        .ok_or("the retries are counted")?
-        .parse()?;
-    assert!(retries >= 1, "{retries}");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let retries = loop {
+        let samples = parse(&Metrics::default().render()?)?;
+        let retries: u64 = count(&samples, "ferrofed_audit_retries_total", &[])
+            .ok_or("the retries are counted")?
+            .parse()?;
+        if retries >= 1 || Instant::now() >= deadline {
+            break retries;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(retries >= 1, "every failed attempt is counted: {retries}");
     assert_eq!(1, spooled(&spool)?, "the message is on disk");
 
     repository.set_up(true);
@@ -389,6 +406,30 @@ fn plain_tcp_outside_development_refuses_to_boot_naming_its_key() -> TestResult 
         }
         other => Err(format!("the audit message names the patient: {other:?}").into()),
     }
+}
+
+#[test]
+fn a_repository_audit_without_a_home_community_refuses_to_boot_naming_the_key() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let spool = toml::Value::String(dir.path().join("spool").display().to_string());
+    let text = unreachable(
+        dir.path(),
+        "production",
+        &format!("url = \"tls://arr.example.org\"\nspool_dir = {spool}"),
+    )?
+    .replace("home_community = \"2.999.40\"\n", "");
+    match Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve() {
+        Err(error::Error::Missing { key }) if key == "xcpd.home_community" => {}
+        other => return Err(format!("§3.55.5.1.1 needs the homeCommunityID: {other:?}").into()),
+    }
+    let logged = text
+        .replace("audit = \"repository\"", "audit = \"log\"")
+        .split("[xcpd.audit_repository]")
+        .next()
+        .ok_or("the table")?
+        .to_owned();
+    Config::from_sources(Some(&crate::support::signed(&logged)), &BTreeMap::new())?.resolve()?;
+    Ok(())
 }
 
 #[test]

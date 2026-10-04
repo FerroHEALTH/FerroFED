@@ -325,11 +325,17 @@ With `audit = "repository"`, the gateway sends each exchange's audit
 message to an ATNA Audit Record Repository as ITI-20 Record Audit Event
 (ITI TF-2 §3.20): the DICOM PS3.15 audit message in an RFC 5424 syslog
 message with the PRI `<85>` and the MSGID `IHE+RFC-3881`, over TLS (RFC
-5425).
+5425). That message must name the gateway's own `homeCommunityID` (ITI TF-2
+§3.55.5.1.1), so `[xcpd] home_community` is required with
+`audit = "repository"`: `config check`, `serve` and a reload refuse the
+configuration without it, naming `xcpd.home_community`. Under
+`audit = "log"` it stays optional, and the log event carries it when it is
+set.
 
 ```toml
 [xcpd]
 audit = "repository"
+home_community = "2.999.40"            # required with audit = "repository"
 
 [xcpd.audit_repository]
 url = "tls://arr.example.org:6514"     # the port defaults to 6514

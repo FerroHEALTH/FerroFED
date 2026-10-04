@@ -101,7 +101,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and a restart keeps the spool. A full or unwritable spool fails the
   discovery closed. The spool directory is created `0700` with `0600`
   files, and a directory open to other users refuses to start;
-  `spool_dir` is required outside development. Recording only writes to
+  `spool_dir` is required outside development, and `[xcpd] home_community`
+  is required with `audit = "repository"`, since the audit message names
+  the gateway's `homeCommunityID` (§3.55.5.1.1). Recording only writes to
   the spool. Delivery is bounded at every step (`connect_timeout_ms` for the
   connection, `send_timeout_ms` for the TLS handshake and each write and
   flush), and a failure drops the connection and retries with a jittered

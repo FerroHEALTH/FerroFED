@@ -613,7 +613,7 @@ mod tests {
     /// to `audit`, with the `[xcpd.audit_repository]` keys `repository`.
     fn settings(audit: &str, repository: &str) -> Settings {
         let text = format!(
-            "profile = \"development\"\n\n[registry]\ndocument = \"registry.toml\"\n\n[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"{audit}\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n{repository}"
+            "profile = \"development\"\n\n[registry]\ndocument = \"registry.toml\"\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"{audit}\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n{repository}"
         );
         Config::from_sources(Some(&text), &BTreeMap::new())
             .and_then(|config| config.resolve())
