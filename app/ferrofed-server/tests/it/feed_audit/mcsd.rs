@@ -13,22 +13,27 @@
 )]
 
 use std::error::Error;
-use std::time::Duration;
 
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mcsd::HarnessDirectory;
 
-use super::{audit_tables, spool_key, spooled, transactions};
+use super::{SETTLE, audit_tables, spool_key, spooled, transactions};
 use crate::registry_mcsd::{Gateway, config, members};
 
 type TestResult = Result<(), Box<dyn Error>>;
+
+/// The `[registry.mcsd] deadline_ms` of each directory read.
+///
+/// The directory answers at once, so the budget only has to outlast a stall
+/// of a loaded host.
+const DEADLINE_MS: u64 = 8_000;
 
 /// The configuration of a gateway reading its registry from `harness`,
 /// recording to `repository` with the `[audit.repository]` keys `extra`.
 fn audited(harness: &HarnessDirectory, repository: &FeedRepository, extra: &str) -> String {
     format!(
         "{}{}",
-        config(&harness.base(), 5_000),
+        config(&harness.base(), DEADLINE_MS),
         audit_tables(repository, extra)
     )
 }
@@ -42,13 +47,13 @@ async fn the_first_read_and_each_refresh_are_recorded() -> TestResult {
     ))?;
     let repository = FeedRepository::start().await;
     let gateway = Gateway::boot_from(&audited(&harness, &repository, ""))?;
-    let read = repository.wait_for(2, Duration::from_secs(5)).await;
+    let read = repository.wait_for(2, SETTLE).await;
     assert_eq!(2, read.len(), "one ITI-90 search per resource type");
     for record in &read {
         assert_eq!(vec!["ITI-90"], transactions(record)?);
     }
     let _outcome = gateway.directory.refresh(&gateway.reloader).await;
-    let all = repository.wait_for(4, Duration::from_secs(5)).await;
+    let all = repository.wait_for(4, SETTLE).await;
     assert_eq!(4, all.len(), "one ITI-91 history per resource type");
     for record in all.iter().skip(2) {
         assert_eq!(vec!["ITI-91"], transactions(record)?);
@@ -71,7 +76,7 @@ async fn a_repository_that_is_down_holds_the_records_and_the_registry_is_read() 
     assert_eq!(2, gateway.addresses()?.len(), "the registry is read");
     assert_eq!(2, spooled(&spool)?, "both records are on disk");
     repository.set_up(true);
-    let records = repository.wait_for(2, Duration::from_secs(10)).await;
+    let records = repository.wait_for(2, SETTLE).await;
     assert_eq!(
         2,
         records.len(),

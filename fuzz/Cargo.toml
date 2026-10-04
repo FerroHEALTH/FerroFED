@@ -16,14 +16,18 @@ cargo-fuzz = true
 # Its own workspace root, so cargo never walks up into an enclosing one.
 [workspace]
 
+# Only what the targets reach, because cargo-fuzz instruments every crate in
+# the build with AddressSanitizer (#482). The gateway's request intake is
+# compiled from its own source file in `adhoc_query`, which needs `thiserror`
+# beside the crates below, so the rest of the server stays out of the build.
 [dependencies]
-ferrofed-server = { path = "../app/ferrofed-server" }
 libfuzzer-sys = "0.4.13"
 openehr-base = "0.0.82"
-openehr-federation = { path = "../crates/openehr-federation", features = ["aql"] }
+openehr-federation = { path = "../crates/openehr-federation", default-features = false, features = ["aql"] }
 openehr-its = { version = "0.0.82", default-features = false, features = ["rest"] }
 openehr-query = "0.0.82"
 serde_json = "1"
+thiserror = "2.0.21"
 
 [[bin]]
 name = "aql_rewrite"

@@ -8,7 +8,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::config::error::{Error, Stage};
+use crate::config::error::Error;
+use crate::config::error::parse::Stage;
 use crate::config::{CONFIG_PATH_ENV, Config, ENV_PREFIX};
 
 impl Config {
