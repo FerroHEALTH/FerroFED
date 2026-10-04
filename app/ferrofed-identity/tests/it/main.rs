@@ -16,6 +16,7 @@ mod binding;
 #[cfg(test)]
 mod directory;
 mod localizer;
+mod nvi_directory;
 mod nvi_localizer;
 mod patient;
 mod pixm;

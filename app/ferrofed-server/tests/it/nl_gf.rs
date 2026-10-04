@@ -257,6 +257,45 @@ async fn the_pseudonymised_walkthrough_runs_end_to_end_and_no_node_sees_the_pseu
     Ok(())
 }
 
+/// The NVI applies consent itself and never says which holders it dropped,
+/// so a member it leaves out is `not-localized`, never `consent-denied`, and
+/// with every named member answering the answer stays complete (§14.3,
+/// N27a, N37, §11.4).
+// conformance: CP-5
+#[tokio::test]
+async fn a_member_the_nvi_leaves_out_is_not_localized_and_complete_holds() -> TestResult {
+    let nvi = LocalizationService::start().await;
+    nvi.index(&patient().value(), URAS[0]);
+    nvi.index(&patient().value(), URAS[1]);
+    let pix = fed_manager().await?;
+    let servers = members().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(
+        dir.path(),
+        [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
+        &nvi.base(),
+        &pix.base_url(),
+    )?;
+
+    let (status, text) = call(app, post(body(&query())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let answer: Answer = serde_json::from_str(&text)?;
+    let left_out = answer
+        .meta
+        .federation
+        .endpoints
+        .iter()
+        .find(|endpoint| endpoint.id == "node-c-pub")
+        .ok_or("node C is reported")?;
+    assert_eq!("not-localized", left_out.status, "never consent-denied");
+    assert!(left_out.error.is_none(), "the NVI answered: no error");
+    assert!(
+        answer.meta.federation.complete,
+        "N37: every member in scope answered"
+    );
+    Ok(())
+}
+
 // conformance: CP-5
 #[tokio::test]
 async fn an_nvi_that_does_not_answer_fails_the_query_closed() -> TestResult {
