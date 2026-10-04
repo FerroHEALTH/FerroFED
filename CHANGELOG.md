@@ -54,6 +54,32 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 - `nl-generic-functions` 0.0.10 adds the `oauth-metadata` feature: the RFC
   8414 issuer identifier and metadata checks the Nuts grant built, now
   shared by both Annex B authentication tracks (#497).
+- The PDQm demographics step of Annex A §A.2, ahead of localization and
+  resolution. With `[pdqm]`, a patient named in a namespace the table lists
+  is taken to a PDQm Patient Demographics Supplier first, by ITI-78 (an
+  `identifier` search that asks for the master domain only) or, where the
+  deployment declares `transaction = "iti-119"`, by the ITI-119 `$match`
+  with `onlyCertainMatches`. The identifier the one matched Patient carries
+  in the master domain is localized and resolved in place of the client's,
+  and the outbound gate withholds both from every node request. No match
+  leaves every member `not-resolved` and fails nothing (N6); several
+  matches, two master identifiers or an uncertain match refuse the
+  resolution and fail the query `424`, and the gateway never picks one. A
+  Supplier outage follows the localization failure policy (§14.1). The
+  Supplier is reached over `https` outside development, with no redirect,
+  a bounded answer and its own timeout, which `OPTIONS {base}/` declares as
+  `timeout.demographics_ms`; each exchange is audited through `[audit]` as
+  the PDQm Query or Match Consumer record, required outside development;
+  the step shows as `demographics` on `GET /health/dependencies` and is
+  counted in `ferrofed_demographics_requests_total`. The read of an EHR by
+  subject takes the same step, and a reload applies a change to `[pdqm]`
+  as it does to `[pixm]` (#487).
+- The ITI-119 Patient Demographics Match in `ihe-iti` 0.0.19:
+  `PdqmClient::match_patient` posts a `MatchInput` to `[base]/Patient/$match`
+  and reads the Match Output Bundle, every matched Patient with its score
+  and `match-grade`, and its PDQm Match Consumer audit record (#487). The
+  testkit gains a harness PDQm Supplier that answers ITI-78 and ITI-119 from
+  synthetic Patients in the `urn:oid:2.999` example arc.
 - The Nuts grant of the Dutch Generic Functions (Annex B §B.4) as an onward
   credential: a `[credentials."<id>".nuts]` section makes the gateway obtain
   that node's token from its authorization server with a Verifiable

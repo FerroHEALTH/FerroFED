@@ -4,8 +4,9 @@
 //! The HTTP client the gateway asks an IHE FHIR server through.
 //!
 //! One build serves every IHE FHIR server the gateway calls: a PIX Manager
-//! (PIXm ITI-83), a Patient Identity Registry (PMIR ITI-94) and a care
-//! services directory (mCSD ITI-90 and ITI-91). [`http_client`] sends the
+//! (PIXm ITI-83), a Patient Demographics Supplier (PDQm ITI-78 and ITI-119),
+//! a Patient Identity Registry (PMIR ITI-94) and a care services directory
+//! (mCSD ITI-90 and ITI-91). [`http_client`] sends the
 //! [`Authentication`] as a sensitive default header, composed as the node
 //! client composes it, presents and trusts the [`Tls`] material, and follows
 //! no redirect: a request can carry a patient identifier and always carries

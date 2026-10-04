@@ -30,9 +30,10 @@ use crate::onward::NodeTransport;
 
 use super::error::FederationError;
 use super::mitz::mitz_prefilter;
+use super::pdqm::pdqm_step;
 use super::pixm::pixm_resolver;
 use super::registry::read_registry;
-use super::{Federation, Observed, Reconciled, widened};
+use super::{DemographicsStep, Federation, Observed, Reconciled, widened};
 
 impl Federation {
     /// Builds the federation `settings` describe, or `None` when no registry
@@ -130,6 +131,9 @@ impl Federation {
             if settings.pixm.is_some() {
                 return Err(FederationError::PixmWithoutRegistry);
             }
+            if settings.pdqm.is_some() {
+                return Err(FederationError::PdqmWithoutResolver);
+            }
             if settings.federation.demographic_endpoint.is_some() {
                 return Err(FederationError::DemographicWithoutRegistry);
             }
@@ -166,6 +170,7 @@ impl Federation {
             }
         };
         patient_bound(settings, &snapshot, resolver.is_some())?;
+        let (observed, demographics) = carry(settings, observed, resolver.is_some())?;
         let resolving = localization::Resolving { development, pixm };
         let localization = localization::policy(settings, selection, resolving, &snapshot)
             .map_err(FederationError::Localization)?;
@@ -194,23 +199,18 @@ impl Federation {
             context = context.with_default_namespace(namespace.clone());
         }
         let seams = (resolver.is_some(), consent.is_some());
-        let dependencies = dependencies(settings, &snapshot, seams, &localization)?;
+        let dependencies = dependencies(settings, &snapshot, seams, &localization)?
+            .with_demographics(demographics.is_some());
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id));
         let federation = Self {
             id,
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
+            demographics,
             localization,
             consent,
-            observed: observed.unwrap_or_else(|| {
-                let federation = &settings.federation;
-                Arc::new(Observed::new(
-                    ResolutionBindings::new(federation.binding_ttl)
-                        .with_capacity(widened(federation.binding_capacity)),
-                    federation.ehr_index_capacity,
-                ))
-            }),
+            observed,
             context,
             budget: settings.federation.budget,
             best_effort: settings.federation.best_effort,
@@ -250,6 +250,7 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
+            demographics: None,
             localization: LocalizationPolicy::none(),
             consent: None,
             observed: Arc::new(Observed::new(
@@ -301,6 +302,38 @@ fn default_index_capacity() -> NonZeroU32 {
         .expect("the default ehr_id index capacity should be positive")
 }
 
+/// What the process observed, `observed` when a reload carries it over or
+/// nothing yet at boot, and the demographics step `settings` describe.
+///
+/// # Errors
+///
+/// Returns [`FederationError::PdqmWithoutResolver`] for a demographics step
+/// with no cross-reference `resolving` the master identity it finds, and the
+/// error of a `[pdqm]` step that cannot be built.
+fn carry(
+    settings: &Settings,
+    observed: Option<Arc<Observed>>,
+    resolving: bool,
+) -> Result<(Arc<Observed>, Option<DemographicsStep>), FederationError> {
+    let observed = observed.unwrap_or_else(|| {
+        let federation = &settings.federation;
+        Arc::new(Observed::new(
+            ResolutionBindings::new(federation.binding_ttl)
+                .with_capacity(widened(federation.binding_capacity)),
+            federation.ehr_index_capacity,
+        ))
+    });
+    let demographics = settings
+        .pdqm
+        .as_ref()
+        .map(|pdqm| pdqm_step(pdqm, &settings.audit))
+        .transpose()?;
+    if demographics.is_some() && !resolving {
+        return Err(FederationError::PdqmWithoutResolver);
+    }
+    Ok((observed, demographics))
+}
+
 /// Holds every `[auth.issuer.patient]` binding of `settings` to the
 /// registry `snapshot`, and to a configured resolver when `resolving`.
 ///
@@ -331,7 +364,7 @@ fn patient_bound(
 /// The health record of the members of `snapshot`, of the resolver and the
 /// consent pre-filter when `(resolver, consent)` say they are configured, of
 /// the localizer and its audit repository, and of the FHIR Feed trail the
-/// PIXm, mCSD and PMIR audit records of `settings` go to.
+/// PIXm, PDQm, mCSD and PMIR audit records of `settings` go to.
 fn dependencies(
     settings: &Settings,
     snapshot: &RegistrySnapshot,

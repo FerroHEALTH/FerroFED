@@ -114,6 +114,76 @@ asked unless `on_failure = "ask-all"`. `OPTIONS {base}/` declares
 `localization.mode` as `"pixm"`. With `[xcpd]` set, XCPD localizes and
 `[pixm]` only resolves.
 
+## Demographics first: `[pdqm]`
+
+A client may name the patient by an identifier the cross-reference does not
+know, such as a hospital-local number. Annex A places a PDQm query ahead of
+localization and resolution for that case (Annex A §A.2 and §A.7): the
+gateway asks a Patient Demographics Supplier which person the identifier
+names, takes the identifier that person carries in the master domain, and
+localizes and resolves that identifier as it would the client's own.
+
+```toml
+[pdqm]
+url = "https://pdq.example.org/fhir/"
+transaction = "iti-78"                 # or "iti-119"
+master = "urn:oid:2.999.1"             # the master domain's identifier system
+timeout_ms = 1000                      # each exchange with the Supplier
+
+[pdqm.namespaces]
+"urn:oid:2.999.7" = "urn:oid:2.999.7"  # a client namespace = the system it is sent in
+
+[pdqm.credentials]
+bearer_token_file = "/run/secrets/pdq-token"
+```
+
+- Only an identifier in a namespace `[pdqm.namespaces]` names goes to the
+  Supplier. Every other one is resolved as it is, and a namespace
+  `[pixm.namespaces]` maps is refused here, naming the key.
+- `transaction = "iti-78"`, the default, sends the Mobile Patient
+  Demographics Query: `identifier=<system>|<value>` and
+  `identifier=<master>|`, which asks the Supplier for identifiers in the
+  master domain alone (PDQm §2:3.78.4.1.2.3). `"iti-119"` sends the Patient
+  Demographics Match instead, with the identifier on the input Patient and
+  `onlyCertainMatches` set (§2:3.119.4.1.2); declare it only where the
+  Supplier offers `$match`.
+- `master` is the identifier system of the master domain. The master
+  identifier is resolved in the namespace of the same name, so `[pixm]` or
+  `[dev]` must resolve it; `[pdqm]` without either refuses the
+  configuration.
+- `url`, the credentials and the `http` rule are those of a PIX Manager: the
+  Supplier is sent the patient identifier, so plain `http` is refused,
+  naming `pdqm.url`, unless the profile is `development`. No redirect is
+  followed, and an answer is read up to 8 MiB.
+- A `SIGHUP` reload applies a change to `[pdqm]`, as it does to `[pixm]`:
+  the reloaded federation asks the Supplier the new table names.
+
+| The Supplier answers | The members are | The query |
+|---|---|---|
+| one active Patient carrying exactly one identifier in the master domain (for ITI-119, graded `certain`) | localized and resolved by the master identifier | goes on |
+| no Patient, or one with no master identifier (PDQm §2:3.78.4.1.3 Case 3, §2:3.119.4.1.3 Cases 4, 5 and 7) | `not-resolved` | goes on; `complete` is false (N6) |
+| more than one Patient, a Patient with two master identifiers, or an ITI-119 match not graded `certain` | `not-resolved`, with the reason in `error` | fails `424` under all-or-nothing |
+| a failure, or no answer within `timeout_ms` | `not-localized` with the error under `on_failure = "closed"`; `not-resolved` under `"ask-all"` and on a directed query | `200` under `"closed"` (§14.1); `424` otherwise |
+
+A Patient with `active` set to `false` is a deprecated record and never a
+match (§2:3.78.4.1.3 Case 6). The gateway never picks one of several
+matches: ITI-78 counts them in `Bundle.total` (§2:3.78.4.1.3 Case 1), and
+ITI-119 returns one entry for each (§2:3.119.4.1.3 Case 2). The step feeds
+localization, so an outage on an undirected query follows the localization
+failure policy, `closed` by default, as a localizer outage does; an exchange
+whose audit record cannot be stored fails closed under every policy. The
+read of an EHR by subject answers `404` for no match and `424` for the
+rest.
+
+The client's identifier reaches the Supplier and nowhere else; the master
+identifier reaches the cross-reference and nowhere else. The outbound gate
+withholds both from every request to a node, and no log line, metric label
+or error carries either (§5.4.1, N33). Each exchange is audited through
+[`[audit]`](audit.md), which is required outside development. The step's
+state shows as `demographics` on
+[`GET {base}/health/dependencies`](health.md), and each call is counted in
+`ferrofed_demographics_requests_total` ([Metrics](metrics.md)).
+
 ## The development cross-reference: `[dev]`
 
 For a laptop or a test, the gateway can resolve from a static table in the

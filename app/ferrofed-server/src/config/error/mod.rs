@@ -460,6 +460,15 @@ pub enum Error {
         /// Why it is refused.
         fault: &'static str,
     },
+    /// A `[pdqm]` value the demographics step does not take: the key and
+    /// why, never a patient value.
+    #[error("{key} {fault}")]
+    Pdqm {
+        /// The key.
+        key: String,
+        /// Why it is refused.
+        fault: &'static str,
+    },
     /// A syslog header value is empty, too long, or holds a character
     /// syslog cannot carry (RFC 5424 §6).
     #[error("{key} cannot be a syslog header field")]
@@ -505,6 +514,21 @@ pub enum Error {
     LocalizationBudget {
         /// The localizer's budget.
         timeout_ms: u64,
+        /// The overall fan-out budget.
+        overall_ms: u64,
+    },
+    /// The demographics step's budget and the localizer's do not end before
+    /// the overall budget, of which each is a part, so the two could leave
+    /// no time to resolve and ask the members (§11.5; no specification
+    /// governs the step's budget: our own design).
+    #[error(
+        "pdqm.timeout_ms ({timeout_ms}) plus federation.localization.timeout_ms ({localization_ms}) must be below federation.overall_timeout_ms ({overall_ms}), of which both are a part (§11.5)"
+    )]
+    DemographicsBudget {
+        /// The demographics step's budget.
+        timeout_ms: u64,
+        /// The localizer's budget, zero with no localizer.
+        localization_ms: u64,
         /// The overall fan-out budget.
         overall_ms: u64,
     },

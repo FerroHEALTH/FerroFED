@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The last state the gateway observed of each member endpoint, of the
-//! resolver, of the consent pre-filter and of the localizer, which
-//! `GET /health/dependencies` reports.
+//! resolver, of the consent pre-filter, of the localizer and of the
+//! demographics service, which `GET /health/dependencies` reports.
 //!
 //! Nothing here sends a request: the states come from the requests the
 //! gateway already makes for its clients, so a dependency nobody has asked
 //! since boot is [`Observed::Unknown`]. The record holds one slot per
 //! endpoint of the registry snapshot, and one each for the resolver, the
-//! consent pre-filter and the localizer, fixed when
-//! the federation is built, so it never grows. A dependency's state never
+//! consent pre-filter, the localizer and the demographics service, fixed
+//! when the federation is built, so it never grows. A dependency's state never
 //! gates readiness: under §11 a node outage is reported per query, and
 //! readiness that followed it would turn one CDR outage into a total
 //! outage. A member's state is its reachability and health, never whether
@@ -29,6 +29,7 @@ use ferrofed_engine::dispatch::Contact;
 use ferrofed_identity::atna::RepositoryAudit;
 use ferrofed_identity::balp::FeedAudit;
 use ferrofed_identity::consent::ConsentDecision;
+use ferrofed_identity::demographics::{DemographicsError, Identification};
 use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
@@ -157,6 +158,22 @@ impl Observed {
         }
     }
 
+    /// Returns what a demographics answer says of its service, by the rule
+    /// the localizer follows: an answer, no match or an ambiguous one
+    /// included, is [`Observed::Up`], a `5xx` is [`Observed::Failing`], no
+    /// answer is [`Observed::Down`], and an exchange that could not be
+    /// audited is [`Observed::Failing`].
+    #[must_use]
+    pub fn of_identification(identification: &Identification) -> Self {
+        match identification {
+            Identification::Unavailable(DemographicsError::AuditFailed(_)) => Self::Failing,
+            Identification::Unavailable(error) => {
+                error.status().map_or(Self::Down, Self::of_answer)
+            }
+            _ => Self::Up,
+        }
+    }
+
     /// Returns what a resolution says of the resolver: down when it could not
     /// answer for some member, up when it answered for each, and `None` when
     /// it was not asked.
@@ -187,6 +204,8 @@ pub struct Dependencies {
     consent: Option<AtomicU8>,
     /// The localizer's slot, when one is configured.
     localizer: Option<AtomicU8>,
+    /// The demographics service's slot, when one is configured.
+    demographics: Option<AtomicU8>,
     /// The recorder of the audit repository, when one is configured.
     audit_repository: Option<Arc<RepositoryAudit>>,
     /// The recorder of the FHIR Feed audit repository, when one is
@@ -207,6 +226,7 @@ impl Dependencies {
             resolver: resolver.then(|| AtomicU8::new(Observed::Unknown.code())),
             consent: None,
             localizer: None,
+            demographics: None,
             audit_repository: None,
             audit_feed: None,
         }
@@ -241,6 +261,14 @@ impl Dependencies {
     #[must_use]
     pub fn with_localizer(mut self, configured: bool) -> Self {
         self.localizer = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
+        self
+    }
+
+    /// Returns this record with a slot for the demographics service when
+    /// `configured` is `true`, its state [`Observed::Unknown`].
+    #[must_use]
+    pub fn with_demographics(mut self, configured: bool) -> Self {
+        self.demographics = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
         self
     }
 
@@ -285,6 +313,14 @@ impl Dependencies {
         }
     }
 
+    /// Records `observed` as the demographics service's last state, when
+    /// one is configured.
+    pub fn demographics(&self, observed: Observed) {
+        if let Some(slot) = &self.demographics {
+            slot.store(observed.code(), Ordering::Relaxed);
+        }
+    }
+
     /// Returns the report `GET /health/dependencies` answers with.
     #[must_use]
     pub fn report(&self) -> Report {
@@ -309,6 +345,10 @@ impl Dependencies {
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
             localizer: self
                 .localizer
+                .as_ref()
+                .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
+            demographics: self
+                .demographics
                 .as_ref()
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
             directory: None,
@@ -343,6 +383,10 @@ pub struct Report {
     /// The localizer's state, absent when no localizer is configured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub localizer: Option<Observed>,
+    /// The state of the demographics service the gateway asks for a master
+    /// identity, absent when none is configured (`[pdqm]`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub demographics: Option<Observed>,
     /// The state of the care services directory the registry is read from,
     /// absent when the registry is a document: `up` after an answer the
     /// gateway accepted, `degraded` after an answer whose change it refused,
@@ -373,7 +417,7 @@ pub struct Report {
     /// one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audit_repository: Option<Observed>,
-    /// The state of the audit repository the PIXm, mCSD and PMIR audit
+    /// The state of the audit repository the PIXm, PDQm, mCSD and PMIR audit
     /// records are posted to over the FHIR Feed, absent when none goes to
     /// one.
     #[serde(skip_serializing_if = "Option::is_none")]

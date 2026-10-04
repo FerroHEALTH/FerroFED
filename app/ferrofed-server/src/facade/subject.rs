@@ -32,6 +32,9 @@
 //!   (N27a; no specification governs the answer: our own design);
 //! - the localizer could not answer and the deployment fails closed: `424`
 //!   with no member asked, because a holder may be among them (§14.1);
+//! - the demographics step knows no patient for the subject: `404`; it names
+//!   no one master identity or could not answer: `424`, as a localizer
+//!   outage when an undirected read fails closed (Annex A §A.2, §14.1);
 //! - no member knows it: `404`, the operation's own answer for a subject with
 //!   no EHR (ITS-REST 1.1.0 `404_EHR_subject`, §11.2).
 //!
@@ -50,6 +53,7 @@ use ferrofed_engine::forward::{ClientRequest, HeldRequest};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::localizer::OnFailure;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -62,6 +66,7 @@ use openehr_its::rest::runtime::ApiError;
 use secrecy::SecretString;
 
 use crate::error::{self, Code};
+use crate::facade::demographics::{self, Identified};
 use crate::facade::localize::{Localized, localize};
 use crate::facade::owner::{self, Listed};
 use crate::facade::provenance::Provenance;
@@ -111,24 +116,26 @@ pub(crate) async fn serve(
         Ok(candidates) => candidates,
         Err(unserved) => return unserved.respond(request_id, &logged),
     };
-    let named = (&subject.patient, budget.overall());
-    if let Some(refused) = other_patient(
+    let named = (&subject.patient, directed, budget.overall());
+    let ids = (request_id, logged.as_str());
+    let master = match admitted(federation, &arrived.conveyance, named, ids).await {
+        Ok(master) => master,
+        Err(refused) => return *refused,
+    };
+    let patient = master.as_ref().unwrap_or(&subject.patient);
+    let located = localized(
         federation,
-        &arrived.conveyance,
-        named,
-        (request_id, &logged),
+        (patient, budget.overall()),
+        candidates,
+        directed,
     )
-    .await
-    {
-        return refused;
-    }
-    let Some((candidates, members)) = localized(federation, named, candidates, directed).await
-    else {
+    .await;
+    let Some((candidates, members)) = located else {
         return Unserved::Unlocalized.respond(request_id, &logged);
     };
     let consented = consent::prefilter(
         federation,
-        (&subject.patient, arrived.requester),
+        (patient, arrived.requester),
         &members,
         budget.overall(),
     )
@@ -136,7 +143,7 @@ pub(crate) async fn serve(
     let (denied, candidates): (Vec<&Endpoint>, Vec<&Endpoint>) = candidates
         .into_iter()
         .partition(|endpoint| consented.denied.contains(endpoint.node()));
-    let mut resolved = resolve(federation, candidates, &subject.patient, budget.overall()).await;
+    let mut resolved = resolve(federation, candidates, patient, budget.overall()).await;
     resolved.denied = denied
         .iter()
         .map(|endpoint| endpoint.id().clone())
@@ -163,7 +170,7 @@ pub(crate) async fn serve(
         request_id = logged,
         "routed the read of an EHR by subject to the member that resolved it"
     );
-    let withheld = Arc::new(Withheld::new([subject.value]));
+    let withheld = Arc::new(subject.withheld(master.as_ref()));
     let options = DispatchOptions::new(budget.per_node(), arrived.conveyance.clone())
         .with_request_id(arrived.outbound)
         .with_withheld(withheld)
@@ -228,6 +235,64 @@ async fn localized<'a>(
     Some((candidates, members))
 }
 
+/// The master identity of the subject `patient` before `deadline`, or `None`
+/// for the subject as named, once a confined caller is held to its own
+/// patient: the refusal otherwise, answered under `request_id` and logged
+/// under `logged`.
+async fn admitted(
+    federation: &Federation,
+    conveyance: &Conveyance,
+    (patient, directed, deadline): (&PatientRef, bool, Instant),
+    (request_id, logged): (&str, &str),
+) -> Result<Option<PatientRef>, Box<Response>> {
+    let named = (patient, deadline);
+    if let Some(refused) = other_patient(federation, conveyance, named, (request_id, logged)).await
+    {
+        return Err(Box::new(refused));
+    }
+    identified(federation, patient, directed, deadline)
+        .await
+        .map_err(|unserved| Box::new(unserved.respond(request_id, logged)))
+}
+
+/// The master identity the demographics step finds for `patient` before
+/// `deadline`, or `None` when no step applies (Annex A §A.2).
+///
+/// # Errors
+///
+/// Returns [`Unserved::Nowhere`] when the service knows no patient for the
+/// identifier, and [`Unserved::Unidentified`] when its answer names no one
+/// master identity or it could not answer. An outage on an undirected read
+/// that fails closed is reported as localization's own outage, as a
+/// localizer's is (§14.1, N4); a `directed` read is never localized.
+async fn identified(
+    federation: &Federation,
+    patient: &PatientRef,
+    directed: bool,
+    deadline: Instant,
+) -> Result<Option<PatientRef>, Unserved> {
+    match demographics::identify(federation, patient, deadline).await {
+        Identified::AsNamed => Ok(None),
+        Identified::Master(master) => Ok(Some(master)),
+        Identified::NoMatch(_) => Err(Unserved::Nowhere),
+        Identified::Ambiguous(error) => Err(Unserved::Unidentified {
+            reason: error,
+            closed: false,
+        }),
+        Identified::Unavailable {
+            failure,
+            audit_failed,
+        } => {
+            let closed = !directed
+                && (audit_failed || federation.localization().on_failure() == OnFailure::Closed);
+            Err(Unserved::Unidentified {
+                reason: failure,
+                closed,
+            })
+        }
+    }
+}
+
 /// The refusal of a read by subject whose caller is confined to one patient
 /// and names another, or `None` to go on: the subject is resolved at the
 /// bound member alone before `deadline`, ahead of any localizer, consent
@@ -280,6 +345,15 @@ impl Subject {
         let value = SecretString::from(params.subject_id);
         let patient = PatientRef::new(namespace, value.clone()).map_err(Unserved::Patient)?;
         Ok(Self { patient, value })
+    }
+
+    /// What the outbound gate withholds from the request to the node: the
+    /// subject's identifier, and the `master` identity the demographics step
+    /// found for it, which is as identifying (§5.4.1, N33).
+    fn withheld(self, master: Option<&PatientRef>) -> Withheld {
+        let mut values = vec![self.value];
+        values.extend(master.map(PatientRef::withheld));
+        Withheld::new(values)
     }
 }
 
@@ -492,6 +566,16 @@ enum Unserved {
         "the localizer could not answer, or its exchange could not be audited, so no member was asked and whether the subject has an EHR is unknown (§14.1, N4)"
     )]
     Unlocalized,
+    /// The demographics step named no one master identity for the subject,
+    /// or could not answer; `closed` when the outage of an undirected read
+    /// fails closed as a localizer's does (Annex A §A.2, §14.1).
+    #[error("{reason}, so whether the subject has an EHR is unknown")]
+    Unidentified {
+        /// Why, as every member would report it; it names no identifier.
+        reason: String,
+        /// Whether the read failed closed under the localization policy.
+        closed: bool,
+    },
     /// The request's deadline cannot be represented.
     #[error("the request's deadline cannot be represented")]
     Clock,
@@ -506,9 +590,13 @@ impl Unserved {
             Self::Target(untargeted) => untargeted.code(),
             Self::Suspended | Self::Nowhere => Code::NoDestination,
             Self::Several(_) => Code::SubjectSeveral,
-            Self::Unresolved(_) => Code::ResolutionUnavailable,
+            Self::Unresolved(_) | Self::Unidentified { closed: false, .. } => {
+                Code::ResolutionUnavailable
+            }
             Self::ConsentDenied(_) => Code::ConsentDenied,
-            Self::Unlocalized => Code::LocalizationUnavailable,
+            Self::Unlocalized | Self::Unidentified { closed: true, .. } => {
+                Code::LocalizationUnavailable
+            }
             Self::Clock => Code::Internal,
         }
     }
@@ -520,12 +608,14 @@ impl Unserved {
         let code = self.code();
         match &self {
             Self::Undeclared { position } => security::query_parameter_refused(*position, logged),
-            Self::Unresolved(_) | Self::Unlocalized | Self::Clock => tracing::error!(
-                code = code.as_str(),
-                error = %self,
-                request_id = logged,
-                "the read of an EHR by subject was not served"
-            ),
+            Self::Unresolved(_) | Self::Unlocalized | Self::Unidentified { .. } | Self::Clock => {
+                tracing::error!(
+                    code = code.as_str(),
+                    error = %self,
+                    request_id = logged,
+                    "the read of an EHR by subject was not served"
+                );
+            }
             _ => {}
         }
         if code == Code::Internal {
@@ -586,6 +676,22 @@ mod tests {
             ),
             (
                 Unserved::Unlocalized,
+                "localization-unavailable",
+                StatusCode::FAILED_DEPENDENCY,
+            ),
+            (
+                Unserved::Unidentified {
+                    reason: String::from("the patient could not be identified"),
+                    closed: false,
+                },
+                "resolution-unavailable",
+                StatusCode::FAILED_DEPENDENCY,
+            ),
+            (
+                Unserved::Unidentified {
+                    reason: String::from("the demographics service could not answer"),
+                    closed: true,
+                },
                 "localization-unavailable",
                 StatusCode::FAILED_DEPENDENCY,
             ),
