@@ -67,7 +67,7 @@ package registry listed as latest on 2026-10-01.
 | XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | Vol 2 Rev 20.1 (2024-12-12, Final Text) |
 | ATNA (ITI-20, syslog with the DICOM message) | the IHE ITI Technical Framework, cited and not vendored, with DICOM PS3.15 Annex A.5 (NEMA, reproduction by permission only) and RFC 5424 and RFC 5425 | Vol 2 Rev 20.1 §3.20; no 2024-25 change proposal touched ITI-20, so Rev 20.2's text is the same |
 | IUA (ITI-71, ITI-72) | the IHE ITI Technical Framework Supplement, no FHIR package | Rev 2.5 (2026-06-18, Trial Implementation), vendored by #414 (the corpus table below) |
-| Netherlands Generic Functions | `fhir.nl.gf` | 0.3.0, as Annex B names it |
+| Netherlands Generic Functions | `fhir.nl.gf` | 0.3.0, as Annex B names it; released as a git tag with no package on the registry, so #87 vendors its source (the corpus table below) |
 
 ## Corpora and machine-readable inputs
 
@@ -88,6 +88,7 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 artefacts | `scripts/vendor/ihe-pdqm.sh`, `docs/specs/ihe-pdqm/PROVENANCE.md` |
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
 | IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
+| Netherlands Generic Functions IG source | `nuts-foundation/nl-generic-functions-ig` tag `v0.3.0`, commit `5367430787042c218996f11570f904bd3cd37a83`, the source of package `fhir.nl.gf` version `0.3.0`: the localization, consent, care services and identification pages with their FSH profiles, capability statements and examples | `scripts/vendor/nl-gf.sh`, `docs/specs/nl-gf/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 

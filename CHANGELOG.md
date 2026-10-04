@@ -33,6 +33,14 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The Dutch Generic Functions binding of Annex B starts in
+  `nl-generic-functions`: feature `nvi` asks the national localization index
+  which care providers, by URA, hold data for a patient named by a
+  pseudonymised BSN, and refuses every answer that is not a `searchset` of
+  localization records about that patient; feature `lrza` reads the URA of
+  an NL-GF `Organization`. The source of the IG (`fhir.nl.gf` 0.3.0,
+  EUPL-1.2) is vendored under `docs/specs/nl-gf/` by a new fetch script,
+  pinned by tag and commit because the IG has no registry package (#87).
 - The texts client authentication is held to are vendored under
   `docs/specs/`. The ITS-REST Release-1.1.0 fetch now takes the SMART on
   openEHR source (`docs/smart_app_launch/`), recording that the release
