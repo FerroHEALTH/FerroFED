@@ -21,7 +21,9 @@ use openehr_federation::order::ResultOrder;
 use openehr_federation::outcome::EndpointOutcome;
 use openehr_federation::status::EndpointStatus;
 
-use super::{SLACK_MS, TestResult, budget, federation, json, node, rows_text, run, validated_body};
+use super::{
+    SLACK_MS, TestResult, budget, federation, json, node, rows_text, run, statuses, validated_body,
+};
 
 /// A synthetic node query in the shape the rewrite writes under the mode:
 /// the uid and a label, no `ORDER BY`, no `LIMIT`.
@@ -158,14 +160,21 @@ async fn a_failing_424_envelope_records_the_mode() -> TestResult {
 async fn a_failing_504_envelope_records_the_mode() -> TestResult {
     let (a, _) = scenario().await?;
     let slow =
-        node(json(200, r#"{"rows":[]}"#).set_delay(Duration::from_millis(400 + SLACK_MS))).await;
+        node(json(200, r#"{"rows":[]}"#).set_delay(Duration::from_millis(2 * SLACK_MS))).await;
     let snapshot = federation(&[("node-a-pub", &a.uri()), ("node-b-pub", &slow.uri())])?;
     let answer = run(
         &snapshot,
         plan(&["node-a-pub", "node-b-pub"], DedupMode::None)?,
-        budget(200, 400)?,
+        budget(SLACK_MS, 2 * SLACK_MS)?,
     )
     .await?;
+    let statuses = statuses(&answer);
+    assert_eq!(statuses.get("node-a-pub"), Some(&EndpointStatus::Active));
+    assert_eq!(
+        statuses.get("node-b-pub"),
+        Some(&EndpointStatus::TimeOut),
+        "§11.1"
+    );
     assert_eq!(answer.status(), StatusCode::GATEWAY_TIMEOUT, "N37, N38");
     assert_eq!(dedup_member(answer)?, r#""dedup":{"mode":"none"}"#);
     Ok(())

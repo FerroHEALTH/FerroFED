@@ -68,10 +68,11 @@ async fn nodes_and_pix(
     Ok((nodes, pix))
 }
 
-/// The resolver configuration over the harness PIX Manager.
+/// The resolver configuration over the harness PIX Manager, under the
+/// development profile, the only one that admits its plain `http`.
 fn pixm_resolver(pix: &PixManager) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
         pix.base_url(),
         DOMAIN_A.system(),
         DOMAIN_B.system()
