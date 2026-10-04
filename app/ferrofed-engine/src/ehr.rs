@@ -22,11 +22,13 @@ use openehr_its::rest::generated::ehr::{EhrCreateParams, EhrGetByIdParams};
 use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
-use crate::dispatch::{DispatchOptions, NodeClient, OptionsError};
+use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError};
 use crate::hygiene::{Composed, Outbound, Part};
 use crate::onward::conveyance::ConveyanceError;
+use crate::trace_context;
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
+use openehr_federation::status::EndpointStatus;
 
 /// The `Prefer` value a create sends: the node answers with the `ehr_id` in
 /// `ETag` and `Location` and no body (ITS-REST 1.1.0 EHR API, `Prefer`).
@@ -140,6 +142,24 @@ impl<T: Transport> NodeClient<T> {
         status: &EhrStatus,
         options: &DispatchOptions,
     ) -> Result<String, EhrCallError> {
+        trace_context::node_request(
+            self.endpoint(),
+            "ehr_create",
+            self.create_ehr_once(status, options),
+            |created| match created {
+                Ok(_) => (None, Some(EndpointStatus::Active)),
+                Err(error) => (Some(Contact::of_ehr_call_error(error)), None),
+            },
+        )
+        .await
+    }
+
+    /// Creates the EHR once, as [`NodeClient::create_ehr`] describes.
+    async fn create_ehr_once(
+        &self,
+        status: &EhrStatus,
+        options: &DispatchOptions,
+    ) -> Result<String, EhrCallError> {
         let params = EhrCreateParams {
             prefer: Some(PREFER_MINIMAL.to_owned()),
             accept: None,
@@ -190,6 +210,24 @@ impl<T: Transport> NodeClient<T> {
     /// [`EhrCallError::Failed`] for every other failure, a body that is not an
     /// `EHR` included.
     pub async fn read_ehr(
+        &self,
+        ehr_id: &str,
+        options: &DispatchOptions,
+    ) -> Result<Ehr, EhrCallError> {
+        trace_context::node_request(
+            self.endpoint(),
+            "ehr_get_by_id",
+            self.read_ehr_once(ehr_id, options),
+            |read| match read {
+                Ok(_) => (Some(Contact::Answered(StatusCode::OK)), None),
+                Err(error) => (Some(Contact::of_ehr_call_error(error)), None),
+            },
+        )
+        .await
+    }
+
+    /// Reads the EHR once, as [`NodeClient::read_ehr`] describes.
+    async fn read_ehr_once(
         &self,
         ehr_id: &str,
         options: &DispatchOptions,

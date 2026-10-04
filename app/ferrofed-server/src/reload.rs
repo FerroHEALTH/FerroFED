@@ -470,6 +470,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             "telemetry.filter",
             boot.telemetry.filter != fresh.telemetry.filter,
         ),
+        (
+            "telemetry.otlp_endpoint",
+            boot.telemetry.otlp_endpoint != fresh.telemetry.otlp_endpoint,
+        ),
         ("federation.id", was.id != now.id),
         ("federation.timeouts", was.budget != now.budget),
         (

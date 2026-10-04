@@ -685,10 +685,10 @@ where
         }
         // NOTE: tokio::time::timeout_at (docs.rs) polls the query before the budget, so a request
         // the budget overtook before it left ends unsent, never abandoned.
-        tasks.spawn(async move {
+        tasks.spawn(tracing::Instrument::in_current_span(async move {
             let reply = tokio::time::timeout_at(until, client.query(&query, &options)).await;
             (index, reply)
-        });
+        }));
     }
     let mut replies: Vec<Option<NodeReply>> = vec![None; order.len()];
     while let Some(joined) = tasks.join_next().await {

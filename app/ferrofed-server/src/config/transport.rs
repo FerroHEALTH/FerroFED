@@ -22,7 +22,8 @@
 //! 2.0 grant, every PIX Manager and every XCPD responding gateway (each is
 //! sent the patient identifier, and a credential when one is configured), the
 //! care services directory of `[registry.mcsd]` when it has credentials, and
-//! `metrics.otlp_endpoint` when it carries a user name or a password. Any
+//! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
+//! a user name or a password. Any
 //! other URL may stay `http`. The encrypted-connection site is the
 //! stored-query store's PostgreSQL connection string, whose `sslmode` must be
 //! `require` when it carries a password and reaches a host over the network.
@@ -252,16 +253,20 @@ pub fn check(
     {
         hold(directory.url.expose(), directory_site())?;
     }
-    if let Some(endpoint) = &settings.metrics.otlp_endpoint {
+    let collectors = [
+        ("metrics.otlp_endpoint", &settings.metrics.otlp_endpoint),
+        ("telemetry.otlp_endpoint", &settings.telemetry.otlp_endpoint),
+    ];
+    for (key, endpoint) in collectors {
+        let Some(endpoint) = endpoint else {
+            continue;
+        };
         let carries = Url::parse(endpoint.expose())
             .is_ok_and(|parsed| !parsed.username().is_empty() || parsed.password().is_some());
         if carries {
             hold(
                 endpoint.expose(),
-                site(
-                    String::from("metrics.otlp_endpoint"),
-                    String::from("the userinfo of metrics.otlp_endpoint"),
-                ),
+                site(key.to_owned(), format!("the userinfo of {key}")),
             )?;
         }
     }

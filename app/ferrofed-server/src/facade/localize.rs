@@ -19,6 +19,7 @@ use ferrofed_identity::localizer::{Localization, LocalizerError, OnFailure};
 use ferrofed_identity::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
+use tracing::Instrument as _;
 
 use crate::federation::Federation;
 use crate::health::dependencies::Observed;
@@ -103,6 +104,7 @@ pub(crate) async fn localize(
         tokio::time::Instant::from_std(until),
         localizer.localize(patient, members, until),
     )
+    .instrument(tracing::info_span!("localize", members = members.len()))
     .await
     .unwrap_or(Localization::Unavailable(LocalizerError::DeadlineExceeded));
     if let Some(observed) = Observed::of_localization(&answer) {

@@ -23,6 +23,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The gateway exports its own spans as OpenTelemetry traces over OTLP when
+  `[telemetry] otlp_endpoint` names an `http://` collector; off by default.
+  A federated query is one trace: the request, the resolution, the fan-out,
+  the merge, and one `node_request` span per member asked, with the probe,
+  the template, stored-query and drift fan-outs, the localizer and the
+  consent pre-filter as spans of their own. Every span attribute is a route
+  template, a registry id, an ITS-REST `operationId`, a status or a count,
+  never a patient identifier, query text, header value or body, and no log
+  event is exported. Each node request carries a W3C `traceparent` from its
+  own span, continuing a client's `traceparent`; a client's `tracestate` is
+  never read or forwarded, and a `traceparent` that would carry the resolved
+  identifier is left off while the request is still sent (#353).
+
 - The resolution bindings of §12.5.1 step 2 are kept per verified caller,
   the token's issuer, subject and client together. A federated query and a
   read of an EHR by subject record where each `ehr_id` resolved, and a

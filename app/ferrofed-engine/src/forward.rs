@@ -20,7 +20,9 @@
 //! endpoint's onward credentials set `Authorization`, and the request's
 //! minted [`OutboundId`](crate::outbound_id::OutboundId) sets `X-Request-Id`,
 //! and the caller's identity, signed for the node, sets
-//! [`openEHR-federation-client`](crate::onward::conveyance::HEADER).
+//! [`openEHR-federation-client`](crate::onward::conveyance::HEADER). A
+//! client's `traceparent` is stripped as every undeclared header is, and the
+//! gateway's own is set when it exports traces ([`crate::trace_context`]).
 //!
 //! The answer keeps its status, its body bytes, `Location` and `ETag`; only
 //! the hop-by-hop fields are removed (RFC 9110 §7.6.1). A node's `404` or
@@ -33,9 +35,10 @@ use std::fmt;
 
 use crate::declared::{self, Refusal};
 use crate::dispatch::reported;
-use crate::dispatch::{DispatchOptions, NodeClient, OptionsError};
+use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
 use crate::onward::conveyance::ConveyanceError;
+use crate::trace_context;
 use ferrofed_registry::id::EndpointId;
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
 use http::{HeaderMap, HeaderName, Method, StatusCode};
@@ -358,6 +361,22 @@ impl<T: Transport> NodeClient<T> {
     /// [`ForwardError::Unreachable`] when the node gave no answer, and
     /// [`ForwardError::Refused`] when it answered `401`.
     pub async fn forward_held(
+        &self,
+        request: HeldRequest,
+        options: &DispatchOptions,
+    ) -> Result<Forwarded, ForwardError> {
+        trace_context::node_request(
+            self.endpoint(),
+            request.operation.operation_id,
+            self.forward_once(request, options),
+            |outcome| (Some(Contact::of_forwarded(outcome)), None),
+        )
+        .await
+    }
+
+    /// Forwards the held `request` once, as [`NodeClient::forward_held`]
+    /// describes.
+    async fn forward_once(
         &self,
         request: HeldRequest,
         options: &DispatchOptions,

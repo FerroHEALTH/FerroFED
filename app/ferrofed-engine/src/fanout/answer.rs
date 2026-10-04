@@ -18,6 +18,7 @@ use openehr_federation::object::Uri;
 use openehr_federation::order::ResultOrder;
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_its::rest::generated::query::ResultSetRow;
+use tracing::field::Empty;
 
 use super::seen::{self, Seen};
 use super::{Budget, Completion, FanOutError, FederatedAnswer, decide};
@@ -47,7 +48,8 @@ pub(super) struct Shaping<'a> {
 ///
 /// The versions every answering endpoint's rows show it holding are kept
 /// beside the answer, a failing one included, since the node sent them
-/// whatever the decision (§12.2, N21).
+/// whatever the decision (§12.2, N21). It runs inside the `merge` span, which
+/// names how many endpoints were recorded and how many rows the answer holds.
 pub(super) fn answer(
     snapshot: &RegistrySnapshot,
     records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)>,
@@ -55,6 +57,8 @@ pub(super) fn answer(
     budget: Budget,
     completion: Completion,
 ) -> Result<FederatedAnswer, FanOutError> {
+    let span = tracing::info_span!("merge", endpoints = records.len(), rows = Empty);
+    let _merging = span.enter();
     let mut answers = Vec::new();
     let mut statuses = Vec::with_capacity(records.len());
     let mut versions = Seen::new();
@@ -120,6 +124,7 @@ pub(super) fn answer(
     } else if let Some(error) = unrepresentable {
         return Err(FanOutError::Unrepresentable(error));
     }
+    span.record("rows", rows.len());
     Ok(FederatedAnswer {
         verdict,
         federation,

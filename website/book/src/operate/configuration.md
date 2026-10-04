@@ -118,6 +118,7 @@ The sections, and the page that covers each:
 |---|---|---|
 | `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
+| `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
 | `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
@@ -135,7 +136,8 @@ body_limit_bytes = 1048576    # a body past this answers 413
 
 [telemetry]
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
-filter = "info,hyper=warn,tower=warn,h2=warn"
+filter = "info,hyper=warn,tower=warn,h2=warn"   # what the console logs; never what is traced
+otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the spans are exported to; see Tracing
 
 # The metrics surface, off by default; see Metrics.
 [metrics]
@@ -215,7 +217,8 @@ never a value. The rule covers:
   with or without `[pixm.manager.credentials]`;
 - the `url` of every XCPD responding gateway, which is sent the patient
   identifier and, when one is configured, the XUA assertion;
-- `metrics.otlp_endpoint` when it carries a user name or a password.
+- `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries a
+  user name or a password.
 
 ```text
 ferrofed: cannot start: the url of endpoint hospital-a in registry.document is not an https URL, and credentials.hospital-a would travel over it in cleartext: outside profile = "development" a credential or a patient identifier is sent only encrypted

@@ -337,11 +337,15 @@ pub enum Error {
         /// The address both keys name.
         address: std::net::SocketAddr,
     },
-    /// `metrics.otlp_endpoint` is not an `http://` URL.
+    /// `metrics.otlp_endpoint` or `telemetry.otlp_endpoint` is not an
+    /// `http://` URL.
     #[error(
-        "metrics.otlp_endpoint must be an http:// URL: the OTLP push speaks gRPC without TLS, to a collector beside the gateway"
+        "{key} must be an http:// URL: the OTLP exporters speak gRPC without TLS, to a collector beside the gateway"
     )]
-    OtlpScheme,
+    OtlpScheme {
+        /// The key of the collector URL.
+        key: String,
+    },
     /// The request timeout does not exceed the overall fan-out budget plus
     /// the combining margin, so it could cut the answer and the `504`
     /// envelope the budget produces when it expires (§11.4, §11.5).

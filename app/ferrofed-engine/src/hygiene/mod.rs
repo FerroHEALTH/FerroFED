@@ -31,6 +31,10 @@
 //! sent with the claim masked. The gateway's `iss`, the node's `aud` and the
 //! minted `iat`, `exp` and `jti` come from no request, as the minted id does.
 //!
+//! The W3C `traceparent` the gateway writes ([`crate::trace_context`]) is
+//! read as the call is composed ([`Withheld::carried_by`]), and one that
+//! carries a withheld identifier is left off while the request still leaves.
+//!
 //! A single-node route forwards a client request, so the gate also decides
 //! which parts of it travel at all, from the parameters the matched ITS-REST
 //! operation declares (`openehr-its`'s `routes::lookup`): the client headers

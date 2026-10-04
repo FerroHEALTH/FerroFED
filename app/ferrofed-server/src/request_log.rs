@@ -21,15 +21,23 @@
 //! Past §5.4.3, no specification governs this: our own design, made
 //! mechanical.
 //!
+//! The same middleware opens the `request` span every other span of the
+//! request sits under, with the same fields as the line: the method, the
+//! route template, the status and the gateway's request id. It continues the
+//! trace of a client's `traceparent` ([`trace_context::continue_from`]).
+//!
 //! [`OutboundId`]: ferrofed_engine::outbound_id::OutboundId
 
 use axum::extract::{MatchedPath, OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
+use ferrofed_engine::trace_context;
 use http::Method;
 use openehr_its::rest::routes::{self, Lookup};
 use std::sync::Arc;
 use std::time::Instant;
+use tracing::Instrument as _;
+use tracing::field::Empty;
 
 use crate::base_path::BasePath;
 use crate::{ITS_REST_PREFIX, request_id};
@@ -62,9 +70,24 @@ pub async fn log(State(base): State<Arc<BasePath>>, request: Request, next: Next
     // NOTE: no specification governs this: our own design, an exchange id
     // other than the outbound id is one the client chose, logged as a flag.
     let client_named = request_id::of(request.headers()).is_some_and(|echoed| echoed != id);
+    let span = tracing::info_span!(
+        "request",
+        otel.name = %format_args!("{method} {route}"),
+        otel.kind = "server",
+        http.request.method = method.as_str(),
+        http.route = route.as_str(),
+        http.response.status_code = Empty,
+        otel.status_code = Empty,
+        request_id = id.as_str(),
+    );
+    trace_context::continue_from(&span, request.headers());
     let started = Instant::now();
-    let response = next.run(request).await;
+    let response = next.run(request).instrument(span.clone()).await;
     let status = response.status();
+    span.record("http.response.status_code", status.as_u16());
+    if status.is_server_error() {
+        span.record("otel.status_code", "ERROR");
+    }
     let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
     let (method, route, query, request_id) =
         (method.as_str(), route.as_str(), query.as_str(), id.as_str());

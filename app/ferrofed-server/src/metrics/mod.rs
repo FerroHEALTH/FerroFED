@@ -35,7 +35,6 @@ use http::{HeaderValue, StatusCode, header};
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, MeterProvider as _, ObservableCounter};
 use opentelemetry_otlp::WithExportConfig as _;
-use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider, Temporality};
 
 use crate::config::settings::MetricsSettings;
@@ -179,14 +178,10 @@ impl Metrics {
             .scope_info_enabled(false)
             .build()
             .map_err(MetricsError::Prometheus)?;
-        let resource = Resource::builder()
-            .with_service_name(SCOPE)
-            .with_attribute(KeyValue::new("service.version", crate::body::VERSION))
-            .build();
         // NOTE: no specification governs this: our own design; one provider
         // feeds both readers, so the pull and the push expose the same metrics.
         let mut builder = SdkMeterProvider::builder()
-            .with_resource(resource)
+            .with_resource(crate::telemetry::resource())
             .with_reader(pull);
         if let Some(reader) = otlp {
             builder = builder.with_reader(reader);

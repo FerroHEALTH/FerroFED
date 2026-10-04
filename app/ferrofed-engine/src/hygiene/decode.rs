@@ -4,6 +4,27 @@
 //! The percent-decoded form of a text, the second form the gate reads every
 //! part of a request in (RFC 3986 §2.1).
 
+use secrecy::ExposeSecret as _;
+
+use super::Withheld;
+
+impl Withheld {
+    /// Whether the header value `text`, raw or percent-decoded, carries a
+    /// withheld identifier, read as [`Withheld::found_in`] reads a header.
+    ///
+    /// A trace id may continue a client's trace, so a client can choose it,
+    /// and a random one can hold a short all-hex identifier by chance; the
+    /// trace context is optional, so a `traceparent` this finds is left off
+    /// the request, never the reason to refuse it (§5.4.1, N33).
+    #[must_use]
+    pub fn carried_by(&self, text: &str) -> bool {
+        self.0.iter().any(|value| {
+            let value = value.expose_secret();
+            text.contains(value) || percent_decoded(text).contains(value)
+        })
+    }
+}
+
 /// `text` with every `%XX` escape decoded, invalid UTF-8 replaced; an escape
 /// that is not two hex digits is kept as written.
 pub(crate) fn percent_decoded(text: &str) -> String {

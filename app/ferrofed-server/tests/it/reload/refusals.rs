@@ -105,6 +105,21 @@ async fn a_changed_demographic_endpoint_takes_a_restart() -> TestResult {
 }
 
 #[tokio::test]
+async fn a_changed_trace_collector_takes_a_restart() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let rows = crossref(&[("node-a", EHR_A)]);
+    let gateway = Gateway::start(&member("a", &a.uri()), "", &rows)?;
+    gateway.write_config(
+        "",
+        &(rows + "\n[telemetry]\notlp_endpoint = \"http://127.0.0.1:4317\"\n"),
+    )?;
+
+    let applied = gateway.reloader.reload()?;
+    assert_eq!(vec!["telemetry.otlp_endpoint"], applied.needs_restart);
+    Ok(())
+}
+
+#[tokio::test]
 async fn an_unreadable_document_is_refused() -> TestResult {
     let a = node_answering("uid-a::cdr-a.example.org::1").await;
     let gateway = Gateway::start(&member("a", &a.uri()), "", &crossref(&[("node-a", EHR_A)]))?;
