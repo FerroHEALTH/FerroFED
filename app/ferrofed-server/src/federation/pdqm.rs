@@ -29,7 +29,7 @@ pub(super) fn pdqm_step(
             user: user.clone(),
             password: password.to_secret_string(),
         },
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) => {
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_)) => {
             return Err(FederationError::Grant {
                 section: String::from("pdqm.credentials"),
             });

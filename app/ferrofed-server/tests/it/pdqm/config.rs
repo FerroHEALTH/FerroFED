@@ -105,6 +105,26 @@ fn a_credential_in_the_url_or_a_grant_in_its_section_is_refused() -> TestResult 
 }
 
 #[test]
+fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let file = |name: &str| -> Result<toml::Value, Box<dyn Error>> {
+        let path = dir.path().join(name);
+        std::fs::write(&path, ferrofed_testkit::oauth::p256_pem()?)?;
+        Ok(toml::Value::String(path.display().to_string()))
+    };
+    let (client, dpop) = (file("client.pem")?, file("dpop.pem")?);
+    let error = refusal(&format!(
+        "profile = \"development\"\n{}\n[pdqm.credentials.fapi2]\nissuer = \"https://as.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"gateway\"\nclient_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\n",
+        pdqm(BASE, "iti-78")
+    ))?;
+    assert!(
+        matches!(&error, error::Error::GrantNotHere { section } if section == "pdqm.credentials"),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_namespace_the_cross_reference_maps_is_refused() -> TestResult {
     let error = refusal(&format!(
         "profile = \"development\"\n[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.namespaces]\n\"{LOCAL}\" = \"{LOCAL}\"\n\n{}",
