@@ -20,6 +20,7 @@ use ferrofed_registry::document::Document;
 use ferrofed_registry::secret::{REDACTED, Secret, SecretUrl};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Scheme;
+use ihe_iti::pixm::Invocation;
 
 use super::secret_file;
 use crate::run::binary;
@@ -161,6 +162,7 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
             password: Secret::new(PASSWORD).to_secret_string(),
         },
         members: BTreeMap::new(),
+        invocation: Invocation::Post,
     };
     shows_placeholder("ManagerConfig", &composed);
     Ok(())
@@ -208,6 +210,7 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
             base: manager.url.clone(),
             auth,
             members: BTreeMap::new(),
+            invocation: Invocation::Get,
         };
         redacted("ManagerConfig", &composed);
     }

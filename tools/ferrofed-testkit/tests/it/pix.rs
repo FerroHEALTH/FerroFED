@@ -19,9 +19,9 @@ use ferrofed_testkit::seed::{self, CrossReferenceSeed, EhrDomain, PatientId};
 use fhir_types::codec::{Json, Path, Value, expect_object};
 use fhir_types::r4::patient::Patient;
 use http::StatusCode;
-use ihe_iti::pixm::PixmClient;
 use ihe_iti::pixm::error::PixmError;
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
+use ihe_iti::pixm::{Invocation, PixmClient};
 use secrecy::{ExposeSecret, SecretString};
 use uuid::Uuid;
 
@@ -208,6 +208,98 @@ async fn the_proxy_in_front_journals_the_request_and_injects_a_fault() -> TestRe
         "{failed:?}"
     );
     assert_eq!(1, pix.queries(), "the failed call never reached the device");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_posted_query_resolves_as_the_get_does_and_names_the_patient_in_no_url() -> TestResult {
+    let pix = PixManager::start().await?;
+    seed::feed(&pix.base_url(), &known()).await?;
+    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let posting = PixmClient::new(
+        url::Url::parse(&format!("{}/fhir/", proxy.origin()))?,
+        reqwest::Client::new(),
+    )?
+    .invoked_by(Invocation::Post);
+    let patient = known().patient;
+    let all = posting
+        .cross_reference(&source(patient)?, &[], BUDGET)
+        .await?;
+    let narrowed = posting
+        .cross_reference(&source(patient)?, &[target(EhrDomain::new(2))?], BUDGET)
+        .await?;
+    assert_eq!(
+        (
+            identifiers(
+                &client(&pix)?
+                    .cross_reference(&source(patient)?, &[], BUDGET)
+                    .await?
+            )?,
+            vec![(EhrDomain::new(2).system(), EHR_B.to_string())],
+        ),
+        (identifiers(&all)?, identifiers(&narrowed)?),
+        "the device answers a POST as it answers the GET"
+    );
+    let unknown = posting
+        .cross_reference(&source(PatientId::new(1, 48))?, &[], BUDGET)
+        .await?;
+    assert!(
+        matches!(unknown, CrossReference::SourceNotFound),
+        "ITI TF-2 §3.83.4.2.2.2, Case 2: {unknown:?}"
+    );
+    let journal = proxy.journal();
+    assert_eq!(3, journal.len(), "every posted call passed the proxy");
+    let asked_about = [patient, patient, PatientId::new(1, 48)];
+    for (asked, about) in journal.iter().zip(asked_about) {
+        assert_eq!(
+            ("POST", "/fhir/Patient/$ihe-pix", None),
+            (
+                asked.method.as_str(),
+                asked.path.as_str(),
+                asked.query.as_deref()
+            ),
+            "the parameters ride in the body"
+        );
+        let value = about.value();
+        assert!(
+            asked
+                .body
+                .windows(value.len())
+                .any(|w| w == value.as_bytes()),
+            "the body carries the source identifier"
+        );
+        assert!(!asked.path.contains(&value), "the path names the patient");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_posted_body_that_is_not_parameters_or_names_another_input_is_refused() -> TestResult {
+    let pix = PixManager::start().await?;
+    let operation = format!("{}Patient/$ihe-pix", pix.base_url());
+    let http = reqwest::Client::new();
+    for (media, body) in [
+        ("application/fhir+json", r#"{"resourceType":"Bundle"}"#),
+        (
+            "application/fhir+json",
+            r#"{"resourceType":"Parameters","parameter":[{"name":"identifier","valueString":"x"}]}"#,
+        ),
+        (
+            "application/fhir+json",
+            r#"{"resourceType":"Parameters","parameter":[{"name":"sourceIdentifier","valueUri":"x"}]}"#,
+        ),
+        ("text/plain", "sourceIdentifier=x"),
+    ] {
+        let status = http
+            .post(&operation)
+            .header("content-type", media)
+            .body(body)
+            .send()
+            .await?
+            .status();
+        assert_eq!(StatusCode::BAD_REQUEST, status, "{media} {body}");
+    }
+    assert_eq!(0, pix.queries(), "no refused body was asked about");
     Ok(())
 }
 

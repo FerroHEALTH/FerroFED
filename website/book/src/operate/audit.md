@@ -21,7 +21,7 @@ Audit Event. Two configurations decide where the records go:
 | Transaction | When | Record | Patient named | Section |
 |---|---|---|---|---|
 | ITI-55 Cross Gateway Patient Discovery | each discovery the XCPD localizer makes | the Initiating Gateway's DICOM audit message, over syslog | inside the base64 query parameters | `[xcpd]` |
-| ITI-83 Mobile Patient Identifier Cross-reference Query | each query the PIXm resolver or localizer asks a PIX Manager | PIXm Query Consumer audit (BALP Patient Query): the request as sent, base64 | the source identifier, system and value | `[audit]` |
+| ITI-83 Mobile Patient Identifier Cross-reference Query | each query the PIXm resolver or localizer asks a PIX Manager | PIXm Query Consumer audit (BALP Patient Query): the request as sent, base64; for `method = "post"`, its request line, media type and `Parameters` body | the source identifier, system and value | `[audit]` |
 | ITI-78 Mobile Patient Demographics Query | each search the `[pdqm]` step sends the PDQm Supplier | PDQm Query Consumer audit (BALP Query): the request as sent, base64 | inside the base64 request; a demographics search identifies no patient on its own | `[audit]` |
 | ITI-119 Patient Demographics Match | each match the `[pdqm]` step sends under `transaction = "iti-119"` | PDQm Match Consumer audit (BALP Query): the request as sent, base64 | the identifier on the input Patient, system and value | `[audit]` |
 | ITI-90 Find Matching Care Services | each search of the mCSD directory the registry is read from, one per resource type | mCSD Care Services Query audit (BALP Query): the first request of the search, base64 | none | `[audit]` |

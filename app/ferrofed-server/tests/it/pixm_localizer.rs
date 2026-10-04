@@ -68,8 +68,19 @@ fn query() -> String {
 }
 
 /// The gateway over the members at `urls`, localized and resolved by the
-/// `[pixm]` Manager at `manager`.
+/// `[pixm]` Manager at `manager`, asked with the default method.
 fn gateway(dir: &Path, urls: [&str; 3], manager: &str) -> Result<Router, Box<dyn Error>> {
+    gateway_asking(dir, urls, manager, "")
+}
+
+/// The gateway of [`gateway`], with `method` (a `method = …` line, or
+/// nothing) in the Manager's table.
+fn gateway_asking(
+    dir: &Path,
+    urls: [&str; 3],
+    manager: &str,
+    method: &str,
+) -> Result<Router, Box<dyn Error>> {
     let mut registry = String::new();
     let mut members = String::new();
     for ((member, url), domain) in MEMBERS.into_iter().zip(urls).zip(DOMAINS) {
@@ -82,7 +93,7 @@ fn gateway(dir: &Path, urls: [&str; 3], manager: &str) -> Result<Router, Box<dyn
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[[pixm.manager]]\nurl = \"{manager}\"\n\n[pixm.manager.members]\n{members}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[[pixm.manager]]\nurl = \"{manager}\"\n{method}\n[pixm.manager.members]\n{members}",
         document = toml::Value::String(document.display().to_string()),
     );
     let settings =
@@ -197,6 +208,80 @@ async fn the_members_whose_domain_holds_the_patient_are_asked_over_one_iti_83_ca
             .get("mode")
             .map(serde_json::value::RawValue::get)
     );
+    Ok(())
+}
+
+/// Under `method = "post"` the gateway resolves through the harness Manager
+/// as under `GET`, and the patient identifier appears in no URL it composes:
+/// not in a request to the Manager, which carries it in the `Parameters`
+/// body, and not in any request to a member (§5.4.1, N33; FHIR R4 Operations
+/// §3.2.0.1).
+#[tokio::test]
+async fn a_manager_asked_by_post_resolves_and_no_composed_url_names_the_patient() -> TestResult {
+    let pix = fed_manager().await?;
+    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let servers = members().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway_asking(
+        dir.path(),
+        [&servers[0].uri(), &servers[1].uri(), &servers[2].uri()],
+        &format!("{}/fhir/", proxy.origin()),
+        "method = \"post\"\n",
+    )?;
+
+    let (status, text) = call(app, post(body(&query())?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert_eq!(
+        vec![
+            ("node-a-pub", "active"),
+            ("node-b-pub", "active"),
+            ("node-c-pub", "not-localized"),
+        ],
+        statuses(&answer),
+        "the posted ITI-83 call localizes and resolves as the GET does"
+    );
+    assert_eq!([1, 1, 0], asked_counts(&servers).await?);
+    assert_eq!(1, pix.queries(), "one ITI-83 call");
+
+    let identifier = patient().value();
+    let journal = proxy.journal();
+    assert_eq!(1, journal.len(), "every request to the Manager is captured");
+    for asked in &journal {
+        assert_eq!(
+            ("POST", "/fhir/Patient/$ihe-pix", None),
+            (
+                asked.method.as_str(),
+                asked.path.as_str(),
+                asked.query.as_deref()
+            ),
+            "the parameters ride in the body"
+        );
+        assert!(
+            !asked.path.contains(&identifier),
+            "the Manager's URL names the patient"
+        );
+        assert!(
+            asked
+                .body
+                .windows(identifier.len())
+                .any(|w| w == identifier.as_bytes()),
+            "the body carries the source identifier, the transaction's input"
+        );
+    }
+    for server in &servers {
+        let requests = server.received_requests().await.ok_or("recording is on")?;
+        for request in requests {
+            assert!(
+                !request.url.as_str().contains(&identifier),
+                "a member's URL names the patient (N33)"
+            );
+        }
+        assert!(
+            !wire(server).await?.contains(&identifier),
+            "the identifier reached a member (N33)"
+        );
+    }
     Ok(())
 }
 

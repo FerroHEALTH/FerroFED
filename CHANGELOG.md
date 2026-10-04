@@ -52,6 +52,17 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   deferred, not applicable or open, with the issue and reason of each
   deferral. CI writes it from the offline and the container runs and uploads
   it as the `conformance-report` artifact (#92).
+- A PIX Manager can be asked by `POST` (#494). `[[pixm.manager]]` takes
+  `method = "post"` beside `"get"`, the default: the gateway then posts the
+  ITI-83 `sourceIdentifier` and `targetSystem` parameters in a `Parameters`
+  body to `[base]/Patient/$ihe-pix` (FHIR R4 Operations §3.2.0.1), so the
+  patient identifier is in no request URL a proxy or an access log records.
+  `get` stays the default because PIXm 3.1.0 §2:3.83.4.1.2 prescribes the
+  `GET` and requires no Manager to accept a `POST`. Any other value refuses
+  the configuration naming the key. The ITI-83 audit record of a `POST` holds
+  its request line, media type and body. `ihe-iti` 0.0.22 adds
+  `pixm::Invocation` and `PixmClient::invoked_by`, and the harness PIX
+  Manager answers a posted query.
 
 ## [0.0.8] - 2026-10-04
 

@@ -3,8 +3,9 @@
 
 //! The refusals that name their key, line and file, and never echo a value.
 
-use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrofed_server::config::{Config, PixmMethod};
+use std::collections::BTreeMap;
 use std::error::Error as StdError;
 
 use super::{BROKEN_DEV_ROWS, env, everything, refusal, secret_file};
@@ -150,5 +151,52 @@ fn a_parse_fault_names_the_file_it_is_in() -> Result<(), Box<dyn StdError>> {
         message.contains(&file.path().display().to_string()),
         "the refusal names the file: {message}"
     );
+    Ok(())
+}
+
+/// A `[[pixm.manager]]` table asking with `method`, or the default when it
+/// is empty.
+fn pix_manager(method: &str) -> String {
+    format!("[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n{method}\n")
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_pixm_method_other_than_get_or_post_refuses_to_boot_naming_its_key()
+-> Result<(), Box<dyn StdError>> {
+    for method in ["\"put\"", "\"GET\"", "\"\"", "1"] {
+        let error = refusal(&pix_manager(&format!("method = {method}")))?;
+        assert!(matches!(error, Error::Parse { .. }), "{method}: {error:?}");
+        let message = error.to_string();
+        assert!(
+            message.contains("pixm.manager") && message.contains("method"),
+            "the refusal names the key: {message}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_pixm_method_is_get_unless_post_is_named() -> Result<(), Box<dyn StdError>> {
+    for (line, expected) in [
+        ("", PixmMethod::Get),
+        ("method = \"get\"", PixmMethod::Get),
+        ("method = \"post\"", PixmMethod::Post),
+    ] {
+        let config = Config::from_sources(Some(&pix_manager(line)), &BTreeMap::new())?;
+        let manager = config
+            .pixm
+            .as_ref()
+            .and_then(|pixm| pixm.manager.first())
+            .ok_or("one Manager")?;
+        assert_eq!(expected, manager.method, "{line:?}");
+    }
     Ok(())
 }

@@ -10,7 +10,9 @@ use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_identity::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ihe_iti::pixm::Invocation;
 
+use crate::config::PixmMethod;
 use crate::config::audit::AuditSettings;
 use crate::config::settings::PixmSettings;
 use crate::service;
@@ -44,6 +46,10 @@ pub(super) fn pixm_resolver(
             auth,
             tls,
             members,
+            invocation: match manager.method {
+                PixmMethod::Get => Invocation::Get,
+                PixmMethod::Post => Invocation::Post,
+            },
         });
     }
     let mut namespaces = BTreeMap::new();

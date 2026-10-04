@@ -353,6 +353,7 @@ fn resolve_pixm(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Error> {
             members: manager.members.clone(),
             credentials,
             tls,
+            method: manager.method,
         });
     }
     Ok(PixmSettings {
