@@ -18,19 +18,19 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.8
+## Status: building v0.0.9
 
-v0.0.7 is released (2026-10-03). It carries definitions and membership
-(§12.6, §12.7, §12b): definition requests routed to one chosen node, the
+v0.0.8 is released (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
+membership (§12.6, §12.7, §12b): definition requests routed to one chosen node, the
 template fan-out, the stored-query registry with its storage backends and
 drift repair, the admission check, the metrics surface, every credential held
 in a type that never renders it, and a gateway-only compose file with example
 configuration attached to every release. v0.0.6 carried the v0.0.4 to v0.0.6
 milestones: the merged answer across nodes (§9 to §11), the ITS-REST surface
 with follow-up routing (§7a, §12, §12a), and targeting with the
-self-description (§8, §7a.2). v0.0.8 is security and the bindings (§13 to
-§15, Annex A, Annex B), and `main` carries all of it: every caller is
-authenticated at the gateway (#80); each node is reached with its own
+self-description (§8, §7a.2). v0.0.8 carries security and the bindings (§13
+to §15, Annex A, Annex B): every caller is authenticated at the gateway
+(#80); each node is reached with its own
 credential, an OAuth 2.0 token for an ES384 client assertion with token
 exchange and DPoP (#81, #439), the Nuts grant (#88) or the FAPI 2.0 grant
 (#497), and is told the caller in a token the gateway signs (#82); consent
@@ -41,9 +41,10 @@ dropping stale bindings (#147); the registry can be read from an mCSD
 directory (#86) with LRZa addressing; every IHE transaction is audited over
 ATNA ITI-20, the BALP records with a bounded spool (#418, #486, #512);
 traces export over OpenTelemetry (#353); and the identity clients share one
-TLS type with mutual TLS (#507). v0.0.9 is the conformance program, with the
-country research (#488) and the national binding refactor (#489). v0.0.10 is
-EHDS readiness (#519): FerroFED is an EHR system under Regulation (EU)
+TLS type with mutual TLS (#507). v0.0.9, being built, is the conformance
+program (#89), with the re-pin to the specification's 1.0 release (#17, #354),
+the country research (#488) and the national binding refactor (#489).
+v0.0.10 is EHDS readiness (#519): FerroFED is an EHR system under Regulation (EU)
 2025/327, and its harmonised components are due before the dates the
 Regulation applies. Each crate gets the rest of its behaviour from its own
 issue, in milestone order.
