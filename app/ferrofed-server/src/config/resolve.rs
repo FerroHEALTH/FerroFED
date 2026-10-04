@@ -314,7 +314,7 @@ fn resolve_pixm(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Error> {
             .as_ref()
             .map(|credentials| resolve_credentials(&section, credentials))
             .transpose()?;
-        if matches!(credentials, Some(Scheme::OAuth2(_))) {
+        if matches!(credentials, Some(Scheme::OAuth2(_) | Scheme::Nuts(_))) {
             return Err(Error::GrantNotHere { section });
         }
         // NOTE: no specification governs this: our own design; the Manager is sent
@@ -370,7 +370,7 @@ fn resolve_directory(
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(credentials, Some(Scheme::OAuth2(_))) {
+    if matches!(credentials, Some(Scheme::OAuth2(_) | Scheme::Nuts(_))) {
         return Err(Error::GrantNotHere { section });
     }
     // NOTE: no specification governs this: our own design; the credential is

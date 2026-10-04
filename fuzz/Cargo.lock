@@ -578,6 +578,7 @@ dependencies = [
  "jiff",
  "jsonwebtoken",
  "mime",
+ "nl-generic-functions",
  "openehr-base",
  "openehr-federation",
  "openehr-its",
@@ -659,6 +660,7 @@ dependencies = [
  "ihe-iti",
  "jiff",
  "jsonwebtoken",
+ "nl-generic-functions",
  "openehr-base",
  "openehr-federation",
  "openehr-its",
@@ -1439,13 +1441,17 @@ dependencies = [
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
+ "base64 0.23.1",
  "fhir-types",
  "http",
+ "jiff",
+ "jsonwebtoken",
  "quick-xml",
  "reqwest",
  "secrecy",
+ "serde",
  "serde_json",
  "thiserror",
  "url",

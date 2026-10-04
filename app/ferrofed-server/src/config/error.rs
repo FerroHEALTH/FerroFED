@@ -277,6 +277,29 @@ pub enum Error {
         #[source]
         source: ferrofed_engine::onward::dpop::DpopKeyError,
     },
+    /// A Nuts grant cannot be built: its authorization server is no issuer
+    /// URL without userinfo, query or fragment, its scope holds a character
+    /// RFC 6749 §3.3 does not admit, or its `client_id` is empty (RFC 8414
+    /// §2).
+    #[error("{key} is not usable in a Nuts grant")]
+    NutsGrant {
+        /// The key of the refused value.
+        key: String,
+        /// Why it is refused.
+        #[source]
+        source: nl_generic_functions::nuts_auth::error::InvalidInput,
+    },
+    /// The holder of a Nuts grant cannot present: its DID is no `did:web`
+    /// DID, its key is not one of the DID's or no P-256 or P-384 key, or a
+    /// credential is no JWT credential issued to it (Nuts RFC021 §4.2).
+    #[error("{section} names a holder that cannot present")]
+    NutsHolder {
+        /// The section of the holder.
+        section: String,
+        /// Why it is refused; it quotes no key and no credential.
+        #[source]
+        source: nl_generic_functions::nuts_auth::holder::HolderError,
+    },
     /// `signing.assertion_lifetime_s` is zero or longer than the five minutes
     /// a client assertion may live.
     #[error(
@@ -334,8 +357,8 @@ pub enum Error {
         section: String,
     },
     /// A credentials section that takes a bearer token or basic credentials
-    /// names an OAuth 2.0 grant.
-    #[error("{section} takes a bearer token or basic credentials, not an oauth2 grant")]
+    /// names an OAuth 2.0 grant or a Nuts grant.
+    #[error("{section} takes a bearer token or basic credentials, not an oauth2 or nuts grant")]
     GrantNotHere {
         /// The section.
         section: String,

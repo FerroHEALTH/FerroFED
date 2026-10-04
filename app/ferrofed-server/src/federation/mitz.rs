@@ -69,7 +69,7 @@ fn node(key: &str, value: &str) -> Result<NodeId, FederationError> {
     })
 }
 
-/// The credential the configuration resolved; an OAuth 2.0 grant is refused
+/// The credential the configuration resolved; an OAuth 2.0 or Nuts grant is refused
 /// at load, so none reaches here.
 fn credentials(mitz: &MitzSettings) -> Option<Credentials> {
     match &mitz.credentials {
@@ -78,7 +78,7 @@ fn credentials(mitz: &MitzSettings) -> Option<Credentials> {
             user.as_str(),
             password.to_secret_string(),
         )),
-        Some(Scheme::OAuth2(_)) | None => None,
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) | None => None,
     }
 }
 

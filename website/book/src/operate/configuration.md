@@ -167,6 +167,21 @@ scope = "system/aql-*.s system/composition-*.cru"
 resource = "https://cdr-c.example.org/openehr"   # optional, RFC 8707
 # audience = "cdr-c"                             # optional
 
+# The Nuts grant of the Dutch Generic Functions (Annex B §B.4): a DPoP-bound
+# token for a Verifiable Presentation of the gateway's credentials.
+[credentials."cdr-d".nuts]
+authorization_server = "https://nuts.cdr-d.example.org/oauth2/cdr-d"
+scope = "openehr-query"
+# client_id = "https://nuts.gateway.example.org/oauth2/gateway"   # optional
+did = "did:web:gateway.example.org"
+kid = "did:web:gateway.example.org#key-1"
+key_file = "/run/secrets/nuts-holder.pem"
+dpop_key_file = "/run/secrets/cdr-d-dpop.pem"
+
+[[credentials."cdr-d".nuts.credential]]
+input_descriptor = "organization_credential"
+file = "/run/secrets/nuts-organization-credential.jwt"
+
 # The gateway's signing keys, which sign the caller's identity on every
 # request to a node and every client assertion, and are published as a JWK
 # Set. Required whenever a registry is configured, by registry.document or
@@ -198,7 +213,7 @@ unchanged.
 A PIX Manager's `url` carries no credential: one with a user name or a
 password in it is refused naming the key, as an endpoint URL in the registry
 document is. Its credentials go in `[pixm.manager.credentials]`, which takes
-a bearer token or a user and a password, never an `oauth2` grant.
+a bearer token or a user and a password, never an `oauth2` or a `nuts` grant.
 
 ### What must travel encrypted
 
@@ -217,6 +232,8 @@ never a value. The rule covers:
   its `oauth2` grant obtains;
 - the `token_endpoint` of an `oauth2` section, which receives the client
   assertion;
+- the `authorization_server` of a `nuts` section, which receives the
+  gateway's credentials in a Verifiable Presentation;
 - the `url` of every PIX Manager, which is asked for patient identifiers
   with or without `[pixm.manager.credentials]`;
 - the `url` of every XCPD responding gateway, which is sent the patient
@@ -379,6 +396,73 @@ before that second send is `time-out`, and it counts as a node that was
 asked.
 The key is read at start and on each reload; a key that is no P-256 or
 P-384 key refuses the configuration, naming `dpop_key_file`.
+
+### The Nuts grant (Annex B §B.4)
+
+A `nuts` section makes the gateway authenticate to that node on the Nuts
+track of the Dutch Generic Functions, the regional realisation of §13.3
+that Annex B §B.4 describes. The gateway is the holder: it presents its own
+Verifiable Credentials, signed as a presentation with its `did:web` key,
+and the node's authorization server answers with a token bound to the
+gateway's `DPoP` key. The wire is Nuts RFC021, the VP Token Grant Type:
+
+1. The gateway reads the authorization server's metadata at the RFC 8414
+   well-known URL of `authorization_server`. The metadata must name that
+   issuer exactly, a `token_endpoint`, a `presentation_definition_endpoint`
+   (RFC021 §5) and `vp_formats` admitting `jwt_vp` with the holder key's
+   algorithm (RFC021 §3.1); when it lists `dpop_signing_alg_values_supported`,
+   the `DPoP` key's algorithm must be among them. The token and definition
+   endpoints must be on the issuer's origin (its scheme, host and port), so
+   the credentials go nowhere else, and an answer whose objects repeat a
+   name is refused. Write `authorization_server` in its canonical form, a
+   lower-case host and no default port, since the metadata must name it as
+   the same text.
+2. It reads the Presentation Definition for `scope` and maps each
+   `[[credential]]` to the input descriptor it names. A credential for a
+   descriptor the definition lacks, a descriptor left unanswered when the
+   definition has no submission requirements, or a submission requirement
+   the credentials do not meet stops the request before any credential is
+   sent. The authorization server evaluates each descriptor's constraints
+   against the credentials it receives (RFC021 §4.1); the gateway does not.
+3. It signs a JWT Verifiable Presentation of every credential (VC Data
+   Model 1.1 §6.3.1): `iss` and `sub` the gateway's `did`, `kid` the DID URL
+   `kid`, `aud` the issuer, `nbf` now and `exp` five seconds later, and a
+   fresh `nonce` and `jti` (RFC021 §4.2). A credential whose `exp` has passed
+   is never sent.
+4. It posts `grant_type=vp_token-bearer` with the presentation as
+   `assertion`, the Presentation Submission, the `scope` and, when set,
+   `client_id`, with a `DPoP` proof of `dpop_key_file`'s key. A demanded
+   nonce is answered once, with a new presentation, since RFC021 §4.4
+   refuses a presentation nonce seen before.
+5. It takes the token only when its `token_type` is `DPoP`. The token is
+   kept until 30 seconds before it expires and dropped when the node answers
+   `401`, as an `oauth2` token is, and every request to the node carries it
+   under the `DPoP` scheme with a proof of the same key
+   ([Tokens bound to a key](#tokens-bound-to-a-key-dpop)).
+
+| Key | What it is |
+|---|---|
+| `authorization_server` | The issuer identifier of the node's authorization server (RFC 8414 §2). `https` outside the development profile. |
+| `scope` | The scope the authorization server maps to its Presentation Definition, space-delimited RFC 6749 §3.3 scope tokens. |
+| `client_id` | Optional; sent when the authorization server identifies its clients by one (RFC 6749 §3.2.1). |
+| `did` | The gateway's `did:web` identifier, the holder of the credentials. |
+| `kid` | The DID URL of the holder's key, `<did>#<fragment>`. |
+| `key_file` | The holder's key, a P-256 (ES256) or P-384 (ES384) private key in PKCS#8 PEM. |
+| `dpop_key_file` | The key the tokens are bound to, as in an `oauth2` section. Required: GF-Authentication sender-constrains every token (GFI-005). |
+| `[[credential]]` | One per credential: `input_descriptor`, the descriptor it answers, and `file`, the JWT-encoded credential, issued to `did`. |
+
+The gateway's DID document must publish the holder key under `kid` where the
+`did:web` method resolves it (`https://<host>/.well-known/did.json` for a
+DID with no path), so the authorization server can verify the presentation
+(GFI-001); the gateway does not serve it. The credentials are issued to the
+gateway by their authoritative sources ahead of time (GFI-002); the gateway
+reads them from their files at start and on each reload, and checks only
+that each is a JWT credential, with a `vc` claim, whose `sub` is `did`.
+
+No log line, error or rendering carries a credential, the presentation, a
+key, a proof or the token: a refusal names the authorization server's
+`error` code and at most 256 characters of its description. An `oauth2`
+section and a `nuts` section for the same endpoint refuse the configuration.
 
 ### Signing keys and the JWK Set
 

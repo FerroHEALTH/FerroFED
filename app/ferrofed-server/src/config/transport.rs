@@ -19,11 +19,12 @@
 //!
 //! The protected-payload sites are a registry endpoint with a
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
-//! 2.0 grant, every PIX Manager, every XCPD responding gateway, the NVI
-//! Localization Service of `[nl_gf.nvi]` and Mitz of `[nl_gf.mitz]` (each
-//! is sent the patient identifier, and a credential when one is
-//! configured), the Patient Identity Registry of `[pmir]` and its callback
-//! URL, which carry patient identities and the feed token, the
+//! 2.0 grant, the authorization server of its Nuts grant (sent the gateway's
+//! credentials in a Verifiable Presentation), every PIX Manager, every XCPD
+//! responding gateway, the NVI Localization Service of `[nl_gf.nvi]` and Mitz
+//! of `[nl_gf.mitz]` (each is sent the patient identifier, and a credential
+//! when one is configured), the Patient Identity Registry of `[pmir]` and its
+//! callback URL, which carry patient identities and the feed token, the
 //! care services directory of `[registry.mcsd]` when it has credentials,
 //! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
 //! a user name or a password, and the ATNA Audit Record Repository the XCPD
@@ -198,6 +199,55 @@ pub fn trust_anchor(key: &str, url: &Url) -> Result<(), TrustAnchorError> {
         }),
     }
 }
+/// The sites each endpoint's onward credentials send to: the endpoint's own
+/// URL in `registry`, an OAuth 2.0 grant's token endpoint and a Nuts grant's
+/// authorization server, in key order.
+fn credential_sites(
+    settings: &Settings,
+    registry: Option<&RegistrySnapshot>,
+) -> Vec<(String, ProtectedSite)> {
+    let site = |url_key: String, payload: String| ProtectedSite {
+        url_key,
+        payload,
+        requires: Encryption::Https,
+    };
+    let mut sites = Vec::new();
+    for (endpoint, scheme) in &settings.credentials {
+        let section = format!("credentials.{endpoint}");
+        // NOTE: no specification governs this: our own design; an endpoint the
+        // registry lacks is legitimately absent here, and the client build refuses it.
+        if let Some(declared) = registry.and_then(|registry| registry.endpoint(endpoint)) {
+            sites.push((
+                declared.url().as_str().to_owned(),
+                site(
+                    format!("the url of endpoint {endpoint} in registry.document"),
+                    section.clone(),
+                ),
+            ));
+        }
+        if let Scheme::OAuth2(grant) = scheme {
+            sites.push((
+                grant.token_endpoint().as_str().to_owned(),
+                site(
+                    format!("{section}.oauth2.token_endpoint"),
+                    format!("{section}.oauth2"),
+                ),
+            ));
+        }
+        // NOTE: Nuts RFC021 §7, every endpoint is TLS-protected; the token and
+        // definition endpoints the metadata names are held to it by the client.
+        if let Scheme::Nuts(grant) = scheme {
+            sites.push((
+                grant.grant().authorization_server().to_owned(),
+                site(
+                    format!("{section}.nuts.authorization_server"),
+                    format!("{section}.nuts credentials and presentation"),
+                ),
+            ));
+        }
+    }
+    sites
+}
 
 /// Holds every protected payload `settings` send to [`protected_payload`].
 ///
@@ -226,28 +276,8 @@ pub fn check(
         payload,
         requires: Encryption::Https,
     };
-    for (endpoint, scheme) in &settings.credentials {
-        let section = format!("credentials.{endpoint}");
-        // NOTE: no specification governs this: our own design; an endpoint the
-        // registry lacks is legitimately absent here, and the client build refuses it.
-        if let Some(declared) = registry.and_then(|registry| registry.endpoint(endpoint)) {
-            hold(
-                declared.url().as_str(),
-                site(
-                    format!("the url of endpoint {endpoint} in registry.document"),
-                    section.clone(),
-                ),
-            )?;
-        }
-        if let Scheme::OAuth2(grant) = scheme {
-            hold(
-                grant.token_endpoint().as_str(),
-                site(
-                    format!("{section}.oauth2.token_endpoint"),
-                    format!("{section}.oauth2"),
-                ),
-            )?;
-        }
+    for (url, site) in credential_sites(settings, registry) {
+        hold(&url, site)?;
     }
     for (url, site) in identity_services(settings) {
         hold(url, site)?;

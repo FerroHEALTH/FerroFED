@@ -10,9 +10,12 @@ use std::time::Duration;
 
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
+use ferrofed_engine::onward::nuts::NutsGrant;
 use ferrofed_engine::onward::provider::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::secret::Secret;
+use nl_generic_functions::nuts_auth::error::InvalidInput;
+use nl_generic_functions::nuts_auth::holder::{Did, Holder, HolderKey};
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use secrecy::SecretString;
@@ -20,7 +23,7 @@ use secrecy::zeroize::Zeroizing;
 
 use crate::config::error::{BasicFault, Error};
 use crate::config::settings::{Scheme, SigningSettings};
-use crate::config::{ClientAuth, Credentials, GrantKind, OAuth2, Signing};
+use crate::config::{ClientAuth, Credentials, GrantKind, Nuts, OAuth2, Signing};
 
 /// Returns the scheme `credentials` describes, once it is known to fit the
 /// `Authorization` header it is sent in.
@@ -38,6 +41,19 @@ pub(super) fn resolve_credentials(
         credentials.password.as_ref(),
         credentials.password_file.as_deref(),
     )?;
+    if let Some(nuts) = &credentials.nuts {
+        if token.is_some()
+            || credentials.user.is_some()
+            || password.is_some()
+            || credentials.oauth2.is_some()
+        {
+            return Err(Error::Scheme {
+                section: section.to_owned(),
+            });
+        }
+        return resolve_nuts(&format!("{section}.nuts"), nuts)
+            .map(|grant| Scheme::Nuts(Box::new(grant)));
+    }
     if let Some(oauth2) = &credentials.oauth2 {
         if token.is_some() || credentials.user.is_some() || password.is_some() {
             return Err(Error::Scheme {
@@ -230,6 +246,83 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
         grant = grant.with_dpop(Arc::new(prover));
     }
     Ok(grant)
+}
+
+/// Returns the Nuts grant the `nuts` table at `section` describes (Annex B
+/// §B.4, Nuts RFC021): the authorization server an issuer URL (RFC 8414
+/// §2), the scope a list of RFC 6749 §3.3 scope tokens, the holder a
+/// `did:web` DID whose key `kid` names and whose every credential is a JWT
+/// credential issued to it, and a `DPoP` key the tokens are bound to.
+fn resolve_nuts(section: &str, nuts: &Nuts) -> Result<NutsGrant, Error> {
+    let missing = |name: &str| Error::Missing {
+        key: format!("{section}.{name}"),
+    };
+    let server = nuts
+        .authorization_server
+        .as_ref()
+        .ok_or_else(|| missing("authorization_server"))?;
+    if nuts.scope.trim().is_empty() {
+        return Err(missing("scope"));
+    }
+    let refused = |name: &str| {
+        let key = format!("{section}.{name}");
+        move |source| Error::NutsGrant { key, source }
+    };
+    let mut grant = nl_generic_functions::nuts_auth::Grant::new(server.expose(), &nuts.scope)
+        .map_err(|source| match source {
+            InvalidInput::Scope => refused("scope")(source),
+            _ => refused("authorization_server")(source),
+        })?;
+    if let Some(client_id) = &nuts.client_id {
+        grant = grant
+            .with_client_id(client_id.clone())
+            .map_err(refused("client_id"))?;
+    }
+    if nuts.did.is_empty() {
+        return Err(missing("did"));
+    }
+    if nuts.kid.is_empty() {
+        return Err(missing("kid"));
+    }
+    if nuts.credential.is_empty() {
+        return Err(missing("credential"));
+    }
+    let holder_refused = |source| Error::NutsHolder {
+        section: section.to_owned(),
+        source,
+    };
+    let did = Did::new(nuts.did.clone()).map_err(holder_refused)?;
+    let key_file = nuts
+        .key_file
+        .as_deref()
+        .ok_or_else(|| missing("key_file"))?;
+    let pem = secret::<Secret>(&format!("{section}.key"), None, Some(key_file))?
+        .ok_or_else(|| missing("key_file"))?;
+    let key =
+        HolderKey::from_pem(&pem.to_secret_string(), &nuts.kid, &did).map_err(holder_refused)?;
+    let mut credentials = Vec::with_capacity(nuts.credential.len());
+    for (index, held) in nuts.credential.iter().enumerate() {
+        let prefix = format!("{section}.credential[{index}]");
+        let file = held.file.as_deref().ok_or_else(|| Error::Missing {
+            key: format!("{prefix}.file"),
+        })?;
+        let jwt = read_secret(&format!("{prefix}.file"), file)?;
+        credentials.push((held.input_descriptor.clone(), jwt));
+    }
+    let holder = Holder::new(did, key, credentials).map_err(holder_refused)?;
+    let dpop_file = nuts
+        .dpop_key_file
+        .as_deref()
+        .ok_or_else(|| missing("dpop_key_file"))?;
+    let dpop_key = format!("{section}.dpop_key");
+    let dpop_pem = secret::<Secret>(&dpop_key, None, Some(dpop_file))?
+        .ok_or_else(|| missing("dpop_key_file"))?;
+    let prover =
+        Prover::from_pem(&dpop_pem.to_secret_string()).map_err(|source| Error::DpopKey {
+            key: format!("{dpop_key}_file"),
+            source,
+        })?;
+    Ok(NutsGrant::new(grant, Arc::new(holder), Arc::new(prover)))
 }
 
 /// Returns the signing keys and their publication `[signing]` describes:

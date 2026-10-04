@@ -183,6 +183,15 @@ pub enum FederationError {
         /// The credentials section.
         section: String,
     },
+    /// The HTTP client of an endpoint's Nuts grant could not be built.
+    #[error("the HTTP client of the Nuts grant of {section} could not be built")]
+    NutsClient {
+        /// The credentials section.
+        section: String,
+        /// Why the client could not be built.
+        #[source]
+        source: reqwest::Error,
+    },
     /// A registry is configured, from `registry.document` or from
     /// `[registry.mcsd]`, but `[signing]` is not: every request to a node
     /// conveys the caller's identity, signed with that key (§13.1, N24, N25).

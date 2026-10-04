@@ -6,16 +6,20 @@
 # Vendors the source of the Netherlands Generic Functions IG (package
 # `fhir.nl.gf`, the IG Annex B of the Federation Tier specification names)
 # into docs/specs/nl-gf/: the narrative pages of GF-Localization, GF-Consent,
-# GF-Addressing (the Care Services Directory) and GF-Identification, the FSH
+# GF-Addressing (the Care Services Directory), GF-Identification and
+# GF-Authentication with its six transactions (GFI-001 to GFI-006), the FSH
 # sources of the profiles, naming systems and capability statements those
 # pages define, the examples of the localization record and of the LRZa and
-# Query Directory content, the localization sequence diagram, the IG's build
-# configuration and the repository's licence.
+# Query Directory content, the localization and access-token sequence
+# diagrams, the IG's build configuration and the repository's licence.
 #
-# The clients of crates/nl-generic-functions (#87) read it: the NVI search
-# of feature `nvi` is held to the Localization Service capability statement
-# and the localization record profile, and the LRZa reading of feature
-# `lrza` to the Organization profiles and the LRZa examples.
+# The clients of crates/nl-generic-functions read it: the NVI search of
+# feature `nvi` (#87) is held to the Localization Service capability
+# statement and the localization record profile, the LRZa reading of feature
+# `lrza` (#87) to the Organization profiles and the LRZa examples, and the
+# access token request of feature `nuts-auth` (#88) to GF-Authentication and
+# its Request Access Token [GFI-004] and Authenticated Interaction [GFI-005]
+# transactions.
 #
 # The IG is released as a git tag with no package on the FHIR package
 # registry, so the "Netherlands Generic Functions IG source" row of
@@ -53,6 +57,13 @@ paths=(
   input/pagecontent/care-services.md
   input/pagecontent/identification.md
   input/pagecontent/authorization.md
+  input/pagecontent/authentication.md
+  input/pagecontent/GFI-001.md
+  input/pagecontent/GFI-002.md
+  input/pagecontent/GFI-003.md
+  input/pagecontent/GFI-004.md
+  input/pagecontent/GFI-005.md
+  input/pagecontent/GFI-006.md
   input/fsh/aliases.fsh
   input/fsh/rulesets.fsh
   input/fsh/namingsystem.fsh
@@ -69,6 +80,8 @@ paths=(
   input/fsh/examples/admin-directory-lrza.fsh
   input/fsh/examples/query-directory.fsh
   input/images-source/localization-cardiologist-search.plantuml
+  input/images-source/gfi-004.plantuml
+  input/images-source/gfi-005.plantuml
 )
 
 pin="$(corpus_pin_cell "Netherlands Generic Functions IG source")"
@@ -139,20 +152,24 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Read by: #87 (the NVI search of \`crates/nl-generic-functions\` feature
   \`nvi\`, held to the Localization Service capability statement and the
   localization record profile, and the LRZa reading of feature \`lrza\`,
-  held to the Organization profiles and the LRZa examples)
+  held to the Organization profiles and the LRZa examples) and #88 (the
+  access token request of feature \`nuts-auth\`, held to GF-Authentication
+  and its GFI-004 and GFI-005 transactions)
 
 ## What is taken
 
 The IG has no package on the FHIR package registry; its release is the git
 tag, so the source is taken. The narrative pages of the functions Annex B of
 the Federation Tier specification binds (localization, consent, the care
-services directory, identification and authorization), the FSH sources of the
-profiles, naming systems, code systems, value sets, search parameters and
-capability statements those pages define, the examples of the localization
-record and of the LRZa Administration Directory and the Query Directory, the
-localization sequence diagram, and \`sushi-config.yaml\`, which names the
-package, its version and its licence. The pages and examples of routing,
-care teams, workflow and authentication, the images and the build scripts
+services directory, identification, authentication with its six GFI
+transactions, and authorization), the FSH sources of the profiles, naming
+systems, code systems, value sets, search parameters and capability
+statements those pages define, the examples of the localization record and of
+the LRZa Administration Directory and the Query Directory, the localization
+sequence diagram and the sequence diagrams of Request Access Token (GFI-004)
+and Authenticated Interaction (GFI-005), and \`sushi-config.yaml\`, which
+names the package, its version and its licence. The pages and examples of
+routing, care teams and workflow, the rendered images and the build scripts
 serve no reader here and are not taken.
 
 | File | sha256 | git blob id |

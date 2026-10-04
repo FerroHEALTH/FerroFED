@@ -26,6 +26,11 @@
 //! 9449): its [`dpop::Prover`] proves every request to its token endpoint,
 //! and every request to its node through the node client's
 //! [`dpop::NodeProver`].
+//!
+//! An endpoint on the Dutch Generic Functions' Nuts track (Annex B §B.4)
+//! obtains its token with a Verifiable Presentation of the gateway's
+//! credentials instead, bound with `DPoP` to its own [`dpop::Prover`]
+//! ([`nuts`]).
 
 use std::fmt;
 use std::sync::Arc;
@@ -41,6 +46,7 @@ pub mod conveyance;
 pub mod dpop;
 pub mod exchange;
 pub mod keys;
+pub mod nuts;
 pub mod provider;
 pub mod token;
 

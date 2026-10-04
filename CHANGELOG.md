@@ -33,6 +33,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The Nuts grant of the Dutch Generic Functions (Annex B §B.4) as an onward
+  credential: a `[credentials."<id>".nuts]` section makes the gateway obtain
+  that node's token from its authorization server with a Verifiable
+  Presentation of the gateway's own credentials, signed with its `did:web`
+  key, by the VP Token Grant Type of Nuts RFC021. The token is always bound
+  to the section's `dpop_key_file` with DPoP, and every request to the node
+  carries a proof of that key. The gateway checks the authorization server's
+  metadata and Presentation Definition before any credential leaves, sends
+  no expired credential, answers a demanded DPoP nonce once with a new
+  presentation, caches the token until 30 seconds before it expires, and
+  never logs or reports a credential, the presentation or the token. The
+  client is `nl-generic-functions` feature `nuts-auth`, and the testkit has a
+  harness Nuts node (#88).
+- The specifications the Annex B authentication tracks cite are vendored:
+  the GF-Authentication pages of the NL-GF IG, Nuts RFC003, RFC021 and
+  RFC022, nine OAuth RFCs, VC Data Model 1.1, DID 1.0, DID Resolution,
+  Bitstring Status List and the did:web method, and DIF Presentation
+  Exchange 2.0.0. The OpenID FAPI 2.0, OpenID4VCI and OpenID4VP documents
+  are pinned and fetched, never committed (#88).
 - Mitz as the consent pre-filter of the Dutch binding (Annex B §B.6,
   N27a), configured under `[nl_gf.mitz]`. Before resolution the gateway asks
   Mitz's closed authorization question once for each candidate's care

@@ -48,10 +48,10 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   RESTful ATNA supplement (Rev. 3.6), IHE International's own text under
   General Introduction §9, each pinned by its sha256.
 - `docs/specs/nl-gf/`: the source of the Netherlands Generic Functions IG
-  `fhir.nl.gf` 0.3.0 (EUPL-1.2): the localization, consent, care services
-  and identification pages, their FSH profiles, capability statements and
-  examples, pinned by tag and commit, since the IG has no package on the
-  FHIR package registry.
+  `fhir.nl.gf` 0.3.0 (EUPL-1.2): the localization, consent, care services,
+  identification and authentication pages (with the six GFI transactions),
+  their FSH profiles, capability statements and examples, pinned by tag and
+  commit, since the IG has no package on the FHIR package registry.
 - The country research corpora of #488, each artefact pinned by URL and
   sha256 through `scripts/vendor/lib/pinned.sh`, one script per country
   (`de.sh`, `at.sh`, `ch.sh`, `eu.sh`, `be.sh`, `fr.sh`, `dk.sh`, `se.sh`,
@@ -105,6 +105,24 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/no-nhn/`: the NHN developer portal pages, cache only.
   - `docs/specs/fi-kanta/`: the Kanta documents and packages, cache only.
   - `docs/specs/fi-hl7/`: `hl7.fhir.fi.base` (CC0-1.0).
+- `docs/specs/nuts-rfc/`: Nuts RFC003, RFC021 and RFC022 (CC BY-SA 4.0,
+  stated in each document), pinned by commit: the authorization server, the
+  VP Token Grant Type and the Discovery Service of the Annex B §B.4 track.
+- `docs/specs/ietf-oauth/`: RFC 6749, 7519, 7521, 7523, 7662, 8414, 9126,
+  9396 and 9449 as the RFC Editor publishes them (IETF Trust Legal Provisions
+  §3.c, in full and unmodified), each pinned by URL and sha256.
+- `docs/specs/w3c-did-vc/`: VC Data Model 1.1, DID 1.0, DID Resolution and
+  Bitstring Status List 1.0 (W3C Software and Document License), each pinned
+  by its dated URL and sha256, and the did:web method report, pinned by
+  commit.
+- `docs/specs/dif-pe/`: DIF Presentation Exchange 2.0.0, its text and JSON
+  Schemas, with the claim format designations of the DIF Claim Format
+  Registry they reference (Apache-2.0), each pinned by commit.
+- `docs/specs/openid/`: the provenance alone of the FAPI 2.0 Security
+  Profile, OpenID4VCI 1.0 and OpenID4VP draft 18, pinned by URL and sha256
+  and fetched under the ignored `.vendor-cache/openid/`, because the OpenID
+  Foundation licenses them only for developing and implementing the
+  specifications.
 - `docs/specs/mitz/`: the Mitz documents that define the closed
   authorization question of Annex B §B.6 (the VZVZ implementation guide
   Open en gesloten autorisatievraag 3.8.2, the PvE AMC and the message

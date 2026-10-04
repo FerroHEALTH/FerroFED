@@ -573,6 +573,56 @@ pub struct Credentials {
     /// (`[credentials."<endpoint id>".oauth2]`), the default onward mechanism
     /// of §13.1 (N25).
     pub oauth2: Option<OAuth2>,
+    /// The Nuts grant of the Dutch Generic Functions
+    /// (`[credentials."<endpoint id>".nuts]`), the regional realisation of
+    /// §13.3 (Annex B §B.4).
+    pub nuts: Option<Nuts>,
+}
+
+/// The Nuts grant at one node's authorization server (Annex B §B.4).
+///
+/// The gateway presents its Verifiable Credentials, signed as a presentation
+/// with its `did:web` key, and binds the token with `DPoP` (Nuts RFC021).
+///
+/// No field has a default but `client_id`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Nuts {
+    /// The authorization server's issuer identifier (RFC 8414 §2); `https`
+    /// outside the development profile.
+    pub authorization_server: Option<SecretUrl>,
+    /// The scope the token is asked for, the one the authorization server
+    /// maps to its Presentation Definition (Nuts RFC021 §5).
+    pub scope: String,
+    /// The `client_id` the token request carries (RFC 6749 §3.2.1), when the
+    /// authorization server identifies its clients by one.
+    pub client_id: Option<String>,
+    /// The gateway's own `did:web` identifier, the holder of the credentials.
+    pub did: String,
+    /// The DID URL of the key the presentation is signed with, `<did>#<id>`,
+    /// published in the holder's DID document.
+    pub kid: String,
+    /// A file holding that key, a P-256 or P-384 private key in PKCS#8 PEM,
+    /// read at boot.
+    pub key_file: Option<PathBuf>,
+    /// The credentials the gateway presents, each with the input descriptor
+    /// it answers (`[[credentials."<endpoint id>".nuts.credential]]`).
+    pub credential: Vec<NutsCredential>,
+    /// A file holding the private key the tokens are bound to with `DPoP`
+    /// (RFC 9449), a P-256 or P-384 key in PKCS#8 PEM, read at boot.
+    pub dpop_key_file: Option<PathBuf>,
+}
+
+/// One Verifiable Credential the gateway presents in the Nuts grant.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct NutsCredential {
+    /// The input descriptor of the authorization server's Presentation
+    /// Definition the credential answers (Presentation Exchange 2.0.0).
+    pub input_descriptor: String,
+    /// A file holding the credential, JWT-encoded (VC Data Model 1.1
+    /// §6.3.1), read at boot.
+    pub file: Option<PathBuf>,
 }
 
 /// An OAuth 2.0 grant at one node's token endpoint.
