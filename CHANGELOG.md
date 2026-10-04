@@ -21,6 +21,8 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-10-04
+
 ### Security
 
 - The trace export records nothing of a client's `traceparent` or
@@ -2694,7 +2696,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.8...HEAD
+[0.0.8]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.3...v0.0.6
 [0.0.3]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.1...v0.0.3
