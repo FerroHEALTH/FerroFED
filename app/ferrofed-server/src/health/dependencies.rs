@@ -325,12 +325,14 @@ pub struct Report {
     /// The state of the care services directory the registry is read from,
     /// absent when the registry is a document: `up` after an answer the
     /// gateway accepted, `degraded` after an answer whose change it refused,
-    /// `failing` after a `5xx` or an answer that breaks ITI-90 or ITI-91, and
-    /// `down` when it did not answer.
+    /// `failing` after an HTTP error or an answer that breaks ITI-90 or
+    /// ITI-91, and `down` when it did not answer.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<Observed>,
-    /// Why the care services directory is `degraded`: `registry-invalid` or
-    /// `configuration-mismatch`; absent in every other state.
+    /// Why the care services directory's last answer was not accepted:
+    /// `registry-invalid` or `configuration-mismatch` while it is `degraded`,
+    /// and `refused-credentials` while it is `failing` after a `401` or a
+    /// `403`; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory_fault: Option<DirectoryFault>,
     /// The audit repository's state, absent when no audit message goes to

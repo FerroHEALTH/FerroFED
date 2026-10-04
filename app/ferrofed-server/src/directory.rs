@@ -32,6 +32,7 @@ use ferrofed_identity::directory::mcsd::{
     ExchangeError, Materialised, Refreshed,
 };
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use http::StatusCode;
 use openehr_its::rest::client::Credentials;
 use serde::Serialize;
 
@@ -56,12 +57,14 @@ struct Seen {
     fault: Option<DirectoryFault>,
 }
 
-/// Why the care services directory is degraded, as `directory_fault` names it.
+/// Why the directory's last answer was not accepted, as `directory_fault`
+/// names it.
 ///
-/// The directory answered, and the gateway refused the registry its change
-/// makes, so the previous one is served. The fault names a class and never
-/// an identifier or the directory's content; the refusal's log line names
-/// the precise class.
+/// The directory answered, and the gateway serves the registry it last
+/// accepted: the directory is `degraded` when the gateway refused the
+/// registry its change makes, and `failing` when it refused the gateway's
+/// credentials. The fault names a class and never an identifier or the
+/// directory's content; the refusal's log line names the precise class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
@@ -74,6 +77,9 @@ pub enum DirectoryFault {
     /// not fit its members: the resolver, the localizer, the credentials or
     /// another part of the federation refuses them.
     ConfigurationMismatch,
+    /// The directory answered `401` or `403`: it refused the credentials of
+    /// `[registry.mcsd]`, or what they grant.
+    RefusedCredentials,
 }
 
 /// What one refresh of the directory did.
@@ -126,9 +132,9 @@ impl DirectoryRegistry {
         self.seen().state
     }
 
-    /// Why the directory is degraded, which `/health/dependencies` reports
-    /// as `directory_fault`; `None` unless the last change it answered with
-    /// was refused.
+    /// Why the directory's last answer was not accepted, which
+    /// `/health/dependencies` reports as `directory_fault`; `None` unless the
+    /// change it answered with was refused, or it refused the credentials.
     #[must_use]
     pub fn fault(&self) -> Option<DirectoryFault> {
         self.seen().fault
@@ -147,7 +153,7 @@ impl DirectoryRegistry {
         let refreshed = match self.source.refresh(&held).await {
             Ok(refreshed) => refreshed,
             Err(error) => {
-                self.observe(observed(&error));
+                self.record(seen(&error));
                 tracing::warn!(
                     answered = error.answered(),
                     status = error.status().map(|status| status.as_u16()),
@@ -216,17 +222,21 @@ impl DirectoryRegistry {
     /// Records `state` as what the directory's last exchange showed, which
     /// clears any fault.
     fn observe(&self, state: Observed) {
-        *self.seen.lock().unwrap_or_else(PoisonError::into_inner) = Seen { state, fault: None };
+        self.record(Seen { state, fault: None });
+    }
+
+    fn record(&self, seen: Seen) {
+        *self.seen.lock().unwrap_or_else(PoisonError::into_inner) = seen;
     }
 
     /// Records that the directory answered with a change the gateway refused.
     // NOTE: no specification governs this: our own design; a refused change is
     // degraded, apart from no answer (`down`) and a broken one (`failing`).
     fn refuse(&self, fault: DirectoryFault) {
-        *self.seen.lock().unwrap_or_else(PoisonError::into_inner) = Seen {
+        self.record(Seen {
             state: Observed::Degraded,
             fault: Some(fault),
-        };
+        });
     }
 }
 
@@ -351,13 +361,20 @@ fn blocking(source: &DirectorySource) -> Result<Materialised, FederationError> {
     })
 }
 
-/// What a failed exchange says of the directory, by the rule the members
-/// follow: an answer below `500` is up, a `5xx` or an answer that breaks the
-/// transaction is failing, and no answer is down.
-fn observed(error: &ExchangeError) -> Observed {
-    match error.status() {
-        Some(status) => Observed::of_answer(status),
-        None if error.answered() => Observed::Failing,
-        None => Observed::Down,
-    }
+/// What a failed exchange says of the directory: no answer is down, and any
+/// answer the refresh could not use is failing, with a `401` or a `403`
+/// named as refused credentials.
+// NOTE: no specification governs this: our own design; a refresh answered with
+// an error leaves the registry behind the directory, so it is never up.
+fn seen(error: &ExchangeError) -> Seen {
+    let status = error.status();
+    let state = if status.is_some() || error.answered() {
+        Observed::Failing
+    } else {
+        Observed::Down
+    };
+    let fault = status
+        .filter(|status| *status == StatusCode::UNAUTHORIZED || *status == StatusCode::FORBIDDEN)
+        .map(|_| DirectoryFault::RefusedCredentials);
+    Seen { state, fault }
 }

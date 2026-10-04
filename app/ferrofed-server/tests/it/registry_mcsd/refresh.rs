@@ -646,3 +646,57 @@ async fn a_change_that_breaks_the_registry_integrity_shows_registry_invalid() ->
     );
     Ok(())
 }
+
+/// A directory that answers a refresh `401` refused the gateway's
+/// credentials: it shows `failing` as `refused-credentials`, never `up`,
+/// while the registry in place is served; a `503` shows `failing` with no
+/// fault, and an answer accepted again shows `up` (no specification governs
+/// this: our own design).
+#[tokio::test]
+async fn a_directory_that_refuses_the_credentials_shows_failing_never_up() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-b::cdr-b.example.org::1").await;
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&members(&a.uri(), &b.uri()))?;
+    let gateway = Gateway::boot(&harness, 5_000)?;
+    let before = gateway.addresses()?;
+
+    harness.outage(Some(Outage::Unauthorized));
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(
+        matches!(outcome, RefreshOutcome::Unreachable(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        DirectoryHealth::of("failing", Some("refused-credentials")),
+        directory_health(&gateway).await?.0
+    );
+    assert_eq!(before, gateway.addresses()?, "the running registry stays");
+    assert_eq!(
+        vec![
+            ("node-a-pub".to_owned(), "active".to_owned()),
+            ("node-b-pub".to_owned(), "active".to_owned()),
+        ],
+        asked(&gateway).await?
+    );
+
+    harness.outage(Some(Outage::Refusing));
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(
+        matches!(outcome, RefreshOutcome::Unreachable(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        DirectoryHealth::of("failing", None),
+        directory_health(&gateway).await?.0
+    );
+
+    harness.outage(None);
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    assert!(matches!(outcome, RefreshOutcome::Unchanged), "{outcome:?}");
+    assert_eq!(
+        DirectoryHealth::of("up", None),
+        directory_health(&gateway).await?.0
+    );
+    Ok(())
+}

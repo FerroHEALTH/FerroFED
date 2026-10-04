@@ -69,15 +69,17 @@ patient, is `up`, a failure answered below `500` is `up`, a `5xx` is
 ([Node selection](registry.md#node-selection)). A refresh of the mCSD
 directory the registry is read from updates `directory`: an answer the
 gateway accepts is `up`, an answer whose change the gateway refuses is
-`degraded`, a `5xx`, an answer that breaks ITI-90 or ITI-91 or one past a cap
-is `failing`, and no answer before the deadline is `down`. While the
-directory is `degraded`, `directory_fault` names the class of the refusal:
-`registry-invalid` when the changed registry breaks a rule of its own, and
-`configuration-mismatch` when it is sound and the rest of the configuration
-does not fit its members. The gateway then serves the registry it last
-accepted, and the directory stays `degraded` until a later refresh is
-accepted. `directory_fault` is absent in every other state, and it names a
-class only, never a member, an endpoint or a URL. Both are absent when the
+`degraded`, an HTTP error (a `4xx` included), an answer that breaks ITI-90
+or ITI-91 or one past a cap is `failing`, and no answer before the deadline
+is `down`. While the directory is `degraded`, `directory_fault` names the
+class of the refusal: `registry-invalid` when the changed registry breaks a
+rule of its own, and `configuration-mismatch` when it is sound and the rest
+of the configuration does not fit its members. The gateway then serves the
+registry it last accepted, and the directory stays `degraded` until a later
+refresh is accepted. A directory that answers `401` or `403` is `failing`
+with `directory_fault = "refused-credentials"`: check the credentials of
+`[registry.mcsd]`. `directory_fault` is absent in every other state, and it
+names a class only, never a member, an endpoint or a URL. Both are absent when the
 registry is a document
 ([The registry](registry.md#the-registry-read-from-an-mcsd-directory)). The
 [audit repository](identity.md#the-audit-repository) shows as

@@ -27,8 +27,9 @@
 //! resources are built from the IG's own examples under
 //! `docs/specs/ihe-mcsd/` ([`Member::organisation`], [`Member::endpoint`]),
 //! with the identifiers of the registry's FHIR form and a synthetic address.
-//! An outage makes every answer a `503` ([`Outage::Refusing`]) or no answer
-//! within any timeout a test sets ([`Outage::Silent`]).
+//! An outage makes every answer a `503` ([`Outage::Refusing`]), a `401`
+//! ([`Outage::Unauthorized`]), or no answer within any timeout a test sets
+//! ([`Outage::Silent`]).
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -86,6 +87,8 @@ const TICK: SignedDuration = SignedDuration::from_hours(1);
 pub enum Outage {
     /// Every request answers `503`.
     Refusing,
+    /// Every request answers `401`, as for credentials the directory refuses.
+    Unauthorized,
     /// Every request waits a minute before answering.
     Silent,
 }
@@ -392,6 +395,7 @@ impl State {
     fn answer(&self, path: &str, query: &BTreeMap<String, String>) -> ResponseTemplate {
         match self.outage {
             Some(Outage::Refusing) => return ResponseTemplate::new(503),
+            Some(Outage::Unauthorized) => return ResponseTemplate::new(401),
             Some(Outage::Silent) => {
                 return ResponseTemplate::new(200).set_delay(Duration::from_secs(60));
             }

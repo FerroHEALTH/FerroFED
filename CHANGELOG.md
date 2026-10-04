@@ -434,7 +434,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `degraded`, with `directory_fault` naming the class of the refusal
   (`registry-invalid` or `configuration-mismatch`) and never a member or a
   URL, until a later refresh is accepted. A directory that did not answer
-  still shows `down`, and one whose answer is broken `failing`.
+  still shows `down`, and one whose answer is broken `failing`. A directory
+  that answers a refresh with a `4xx` shows `failing` where it showed `up`,
+  and a `401` or `403` names `directory_fault = "refused-credentials"`.
 
 ### Security
 
