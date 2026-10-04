@@ -41,7 +41,7 @@ fn from_form() -> String {
 
 /// Seeds node A with [`EHR_A`] and one composition, and node B with
 /// [`EHR_B`], and clears both journals.
-async fn seeded() -> Result<TwoNodes, Box<dyn Error>> {
+pub(crate) async fn seeded() -> Result<TwoNodes, Box<dyn Error>> {
     let nodes = containers::two_nodes().await?;
     seed::seed(
         &nodes.a.api_root(),
@@ -91,7 +91,7 @@ fn is_commit(capture: &Capture) -> bool {
     capture.method == "POST" && capture.path.ends_with("/composition")
 }
 
-// conformance: CP-21 CP-22
+// conformance: CP-21 CP-22 CP-24 track-9
 #[tokio::test]
 async fn an_unmodified_client_given_only_the_base_url_reads_and_writes_at_a_prefix() -> TestResult {
     if !containers::e2e_enabled() {

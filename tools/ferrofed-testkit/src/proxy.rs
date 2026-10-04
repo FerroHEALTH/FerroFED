@@ -12,7 +12,7 @@
 //!
 //! [`Fault`] selects what the proxy does with a request, per proxy and at any
 //! point in a test: forward it unmodified, refuse the connection, delay it, or
-//! answer with a status of the test's choosing. Together with stopping the
+//! answer with a status, and a body, of the test's choosing. Together with stopping the
 //! node's container these produce the endpoint statuses of §11.1 that need a
 //! misbehaving node (§16).
 //!
@@ -46,6 +46,9 @@ pub enum Fault {
     /// Answer with this status and an empty body without forwarding, as a
     /// failing node does.
     Status(StatusCode),
+    /// Answer with this status and this `application/json` body without
+    /// forwarding, as a node that refuses with an ITS-REST `Error` does.
+    Reply(StatusCode, &'static str),
 }
 
 /// One request as the proxy received it.
@@ -307,6 +310,7 @@ async fn handle(
     match shared.fault() {
         Fault::Refuse => return Err(Refused),
         Fault::Status(code) => return Ok(status(code)),
+        Fault::Reply(code, body) => return Ok(reply(code, body)),
         Fault::Delay(delay) => tokio::time::sleep(delay).await,
         Fault::Forward => {}
     }
@@ -344,6 +348,17 @@ async fn handle(
 fn status(code: StatusCode) -> Response<Full<Bytes>> {
     let mut response = Response::new(Full::new(Bytes::new()));
     *response.status_mut() = code;
+    response
+}
+
+/// Returns an answer with `code` and the JSON `body`.
+fn reply(code: StatusCode, body: &'static str) -> Response<Full<Bytes>> {
+    let mut response = Response::new(Full::new(Bytes::from_static(body.as_bytes())));
+    *response.status_mut() = code;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        http::HeaderValue::from_static("application/json"),
+    );
     response
 }
 

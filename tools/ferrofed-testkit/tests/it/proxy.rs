@@ -180,6 +180,35 @@ async fn a_status_fault_answers_without_reaching_the_node() {
 }
 
 #[tokio::test]
+async fn a_reply_fault_answers_its_status_and_json_body_without_reaching_the_node() {
+    let node = node().await;
+    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let error = r#"{"message":"synthetic refusal","code":"synthetic-code"}"#;
+    proxy.set_fault(Fault::Reply(StatusCode::FORBIDDEN, error));
+
+    let answer = reqwest::get(format!(
+        "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
+        proxy.origin()
+    ))
+    .await
+    .unwrap();
+    assert_eq!(answer.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        answer
+            .headers()
+            .get(http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        Some("application/json")
+    );
+    assert_eq!(answer.text().await.unwrap(), error, "the body as given");
+    assert_eq!(proxy.journal().len(), 1, "the request is journalled");
+    assert!(
+        node.received_requests().await.unwrap().is_empty(),
+        "an injected reply never reaches the node"
+    );
+}
+
+#[tokio::test]
 async fn a_delay_fault_holds_the_request_then_forwards_it() {
     let node = node().await;
     let proxy = CapturingProxy::start(node.uri()).await.unwrap();

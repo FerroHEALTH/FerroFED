@@ -18,7 +18,7 @@ use crate::e2e::{
 };
 use crate::support::call;
 
-// conformance: CP-1 CP-2 CP-4 CP-35
+// conformance: CP-1 CP-2 CP-4 CP-35 track-1 track-2
 #[tokio::test]
 async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> TestResult {
     if !containers::e2e_enabled() {
@@ -123,7 +123,7 @@ async fn sorted_rows(router: axum::Router, aql: &str) -> Result<Vec<Vec<String>>
     Ok(rows)
 }
 
-// conformance: CP-38
+// conformance: CP-38 track-2
 #[tokio::test]
 async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_nodes() -> TestResult {
     if !containers::e2e_enabled() {

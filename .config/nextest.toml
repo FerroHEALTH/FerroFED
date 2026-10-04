@@ -18,6 +18,14 @@ filter = 'test(/^e2e::/)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 # The CI lanes select this profile. It repeats the default limit, and the
-# override above still applies to it.
+# override above still applies to it. It runs every test past a failure, so
+# the conformance report reads an outcome for every marked test.
 [profile.ci]
 slow-timeout = { period = "30s", terminate-after = 2 }
+fail-fast = false
+
+# The CI profile writes a JUnit report, target/nextest/ci/junit.xml, which
+# scripts/conformance/report.sh joins with the conformance markers into the
+# per-track and per-point report of section 16.4.
+[profile.ci.junit]
+path = "junit.xml"

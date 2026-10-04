@@ -59,7 +59,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `file-length` | `scripts/checks/file-length.sh --self-test`, then `scripts/checks/file-length.sh`: the 1000-line cap on hand-written Rust and on the book's Markdown pages, with its ratchet allow-list |
 | `versions` | `scripts/checks/versions.sh --self-test`, then `scripts/checks/versions.sh`: the pin matrix against every file that repeats a pin and each specification row against the crate constant it names, the landing page's release string against the newest `CHANGELOG.md` release, the book's pin table against the rows it names, the vendored provenance stamps and the SPDX licence claims |
 | `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
-| `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, the conformance matrix against the vendored specification, the test markers against the matrix, the rendered book page against the matrix, and the README conformance badges under `conformance/badges/` against the matrix and the AQL golden pass list (`docs/architecture.md` section 12) |
+| `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, then `scripts/conformance/report.sh --self-test`: the conformance matrix against the vendored specification, the test markers against the matrix, the rendered book page against the matrix, and the README conformance badges under `conformance/badges/` against the matrix and the AQL golden pass list (`docs/architecture.md` section 12) |
 | `obligations` | `scripts/checks/obligations.sh --self-test`, then `scripts/checks/obligations.sh`: every row of `conformance/obligations.tsv` with a known status, an issue where its status needs one, an existing test where it is tested, and a point and requirements the matrix holds; the digest of each vendored source's keyword lines against `conformance/obligation-sources.tsv`, so a re-pin fails until the changed sources are reclassified; and the rendered book page against the checklist |
 | `e2e-placement` | `scripts/checks/e2e-placement.sh --self-test`, then `scripts/checks/e2e-placement.sh`: every Rust file that checks the `FERROFED_E2E` gate sits in an `e2e` module of its crate's test binary, and the `e2e (containers)` job still sets the gate and selects `test(/^e2e::/)` across the workspace |
 | `site-links` | `scripts/checks/site-links.sh --self-test`, then `scripts/checks/site-links.sh`: the site assembled by `scripts/site/assemble.sh` with the roadmap block left empty, every internal link and anchor of every page checked by lychee with `--offline --include-fragments`, and `README.md` against the repository tree; lychee is the release binary pinned by version and SHA-256, and no request leaves the runner |
@@ -106,6 +106,20 @@ suite passes that way on an 8-CPU developer machine (#320). It feeds `conclusion
 filter selects it. Locally: `FERROFED_E2E=1 cargo nextest run --locked
 --workspace -E 'package(ferrofed-testkit) or test(/^e2e::/)'` with Docker
 running.
+
+`conformance report` writes the report of the specification's section 16.4
+(#92). The `ci` nextest profile writes a JUnit report and runs past a
+failure, and the `test` and `e2e (containers)` jobs upload theirs as the
+`junit-offline` and `junit-gated` artifacts. This job runs whatever those two
+concluded, joins both with the `// conformance:` markers through
+`scripts/conformance/report.sh`, where a test under `e2e::` counts only from
+the gated run, and reports every section 16.3 track and section 17 point as
+pass, fail, not-run, deferred, not-applicable or open with the issue and
+reason of each row that is not scored. It adds the report to the job summary,
+uploads `target/conformance/` as the `conformance-report` artifact, feeds
+`conclusion`, and fails when a covered track or point did not pass. The
+`conformance-matrix` job runs the script's `--self-test`. Locally: `bash
+scripts/conformance/report.sh --run` with Docker running.
 
 `release compose` holds the compose files every release carries,
 `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`. It builds

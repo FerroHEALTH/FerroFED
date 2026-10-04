@@ -54,6 +54,17 @@ review. A `detect` job gates
 it on the root `Cargo.toml`, which exists, so the tier runs on every change;
 the crate-version guard and dependency review run on pull requests only.
 
+The `conformance report` job reads the JUnit reports of the test run and
+the end-to-end run, and writes the report section 16.4 of the specification
+asks for: every test track of section 16.3 and every conformance point of
+section 17 as pass, fail, not run, deferred, not applicable or open, with
+the issue and the reason of each row that is not scored. The report is in
+the job summary and in the `conformance-report` artifact, and the job fails
+when a covered track or point did not pass. Locally, with Docker running,
+`bash scripts/conformance/report.sh --run` runs the whole workspace with the
+`FERROFED_E2E` gate set and writes `target/conformance/report.md` and
+`report.tsv`.
+
 The `Docs` workflow builds this book and the landing page on every pull
 request, and publishes them from `main`. A book that does not build fails it.
 The required link check is the `site-links` job of `ci.yml`, because the
@@ -69,6 +80,7 @@ bash scripts/checks/file-length.sh --self-test
 bash scripts/checks/file-length.sh
 bash scripts/checks/favicon-sync.sh
 bash scripts/checks/conformance-matrix.sh
+bash scripts/conformance/report.sh --self-test
 bash scripts/checks/e2e-placement.sh --self-test
 bash scripts/checks/e2e-placement.sh
 bash scripts/checks/obligations.sh --self-test

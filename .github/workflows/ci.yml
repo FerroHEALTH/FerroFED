@@ -281,7 +281,8 @@ jobs:
   # `// conformance:` marker against the matrix, the rendered book page against
   # the matrix, and the README conformance badges against the matrix and the
   # AQL golden pass list. Static and offline; a failing marked test, and a
-  # golden case that leaves or joins the pass list, fail in the Rust tier.
+  # golden case that leaves or joins the pass list, fail in the Rust tier. The
+  # conformance report script proves its join here over fixtures.
   conformance-matrix:
     name: conformance-matrix
     runs-on: ubuntu-latest
@@ -292,7 +293,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: bash scripts/checks/conformance-matrix.sh
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/conformance-matrix.sh
+          bash scripts/conformance/report.sh --self-test
 
   # The obligations guard: the checklist of every normative statement of the
   # pinned specification, its rows against the vendored text, the matrix and
@@ -535,6 +539,15 @@ jobs:
       # Every feature: a library feature no workspace member enables yet (the
       # aql rewrite of openehr-federation) still runs its tests.
       - run: cargo nextest run --profile ci --workspace --locked --all-features --no-tests=pass
+      # The JUnit report of the offline run, for the conformance report.
+      - name: Upload the offline JUnit report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-offline
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: error
+          retention-days: 30
       # nextest does not run doctests, so they get their own compile.
       - run: cargo test --doc --workspace --locked --all-features
 
@@ -572,6 +585,63 @@ jobs:
           cargo nextest run --profile ci --locked --workspace --all-features
           -E 'package(ferrofed-testkit) or test(/^e2e::/)'
           --no-tests=pass
+      # The JUnit report of the gated run, for the conformance report.
+      - name: Upload the gated JUnit report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-gated
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: error
+          retention-days: 30
+
+  # The conformance report of section 16.4 (#92; no specification governs its
+  # form: our own design): every section 16.3 track and section 17 point as
+  # pass, fail, not-run, deferred, not-applicable or open, joined from the
+  # conformance markers and the JUnit reports of the offline and the gated
+  # run, where a test under e2e:: counts only from the gated one. It runs
+  # whatever those jobs concluded, fails when a covered point or track did
+  # not pass, and uploads target/conformance/report.md and report.tsv.
+  conformance-report:
+    name: conformance report
+    needs: [detect, test, e2e]
+    if: ${{ !cancelled() && needs.detect.outputs.cargo == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the offline JUnit report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: junit-offline
+          path: junit/offline
+      - name: Download the gated JUnit report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: junit-gated
+          path: junit/gated
+      - name: Write the report
+        run: |
+          set -euo pipefail
+          status=0
+          bash scripts/conformance/report.sh \
+            --offline junit/offline/junit.xml \
+            --gated junit/gated/junit.xml \
+            --out target/conformance || status=$?
+          cat target/conformance/report.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Upload the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conformance-report
+          path: target/conformance/
+          if-no-files-found: error
+          retention-days: 90
 
   # The release compose assets, deploy/compose/compose.yaml, ferrofed.toml and
   # registry.toml (no specification governs them: our own design). No compose
@@ -797,6 +867,7 @@ jobs:
       - clippy
       - test
       - e2e
+      - conformance-report
       - release-compose
       - doc
       - cargo-deny
