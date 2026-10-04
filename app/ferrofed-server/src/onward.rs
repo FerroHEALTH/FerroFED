@@ -5,35 +5,31 @@
 //! or basic credentials, a provider that obtains a token with the OAuth 2.0
 //! client-credentials grant, or one that exchanges each verified caller's
 //! token (RFC 8693), each authenticated by a signed JWT client assertion
-//! (§13.1, N25), and the `DPoP` proofs of a grant whose tokens are bound to
-//! a key (RFC 9449).
+//! (§13.1, N25), and the `DPoP` key of a grant whose tokens are bound to
+//! one (RFC 9449).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_engine::dispatch::SharedCredentials;
-use ferrofed_engine::onward::dpop::DpopTransport;
+use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::exchange::{Exchange, SharedOnBehalf};
 use ferrofed_engine::onward::provider::ClientCredentials;
 use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::settings::{Scheme, Settings};
 use crate::federation::error::FederationError;
 
 /// The HTTP engine every request to a node and to its token endpoint is
-/// sent through: the `reqwest` engine, with a `DPoP` proof on the requests
-/// of a grant whose tokens are bound to a key (RFC 9449).
-pub(crate) type NodeTransport = DpopTransport<ReqwestTransport>;
+/// sent through: the `reqwest` engine.
+pub(crate) type NodeTransport = ReqwestTransport;
 
 /// What the node clients of one federation send each node to authenticate.
 #[derive(Debug)]
 pub(crate) struct Onward {
-    /// The engine every node request and token request is sent through,
-    /// with a `DPoP` proof on each request to a grant's node and token
-    /// endpoint where the grant binds its tokens (RFC 9449).
+    /// The engine every node request and token request is sent through.
     pub(crate) transport: NodeTransport,
     /// The credentials of each endpoint that sends the same to every
     /// caller: a configured secret or a client-credentials grant.
@@ -41,6 +37,9 @@ pub(crate) struct Onward {
     /// The credentials of each endpoint that exchanges each verified
     /// caller's token (RFC 8693).
     pub(crate) on_behalf: BTreeMap<EndpointId, SharedOnBehalf>,
+    /// The key each endpoint whose grant binds its tokens with `DPoP`
+    /// proves its node requests with (RFC 9449).
+    pub(crate) dpop: BTreeMap<EndpointId, Arc<Prover>>,
 }
 
 /// The onward credentials of each endpoint that has a `[credentials]`
@@ -51,8 +50,8 @@ pub(crate) struct Onward {
 /// `[signing]` key signs, waiting at most the per-node timeout for the token
 /// endpoint (§13.1, N25): one token for every caller under the
 /// client-credentials grant, one per verified caller under token exchange. A
-/// grant with a `DPoP` key proves every request to its node, whose URL
-/// `snapshot` holds, and to its token endpoint.
+/// grant with a `DPoP` key proves every request to its token endpoint, and
+/// its node's client proves every request to the node with the same key.
 ///
 /// # Errors
 ///
@@ -60,24 +59,11 @@ pub(crate) struct Onward {
 /// sign its assertion.
 pub(crate) fn onward(
     settings: &Settings,
-    snapshot: &RegistrySnapshot,
     engine: ReqwestTransport,
 ) -> Result<Onward, FederationError> {
-    let mut transport = DpopTransport::new(engine);
-    for (endpoint, scheme) in &settings.credentials {
-        if let Scheme::OAuth2(grant) = scheme
-            && let Some(prover) = grant.dpop()
-        {
-            transport = transport.with_route(grant.token_endpoint().clone(), Arc::clone(prover));
-            // NOTE: no specification governs this: our own design; an endpoint the
-            // registry lacks is legitimately absent here, and the client build refuses it.
-            if let Some(declared) = snapshot.endpoint(endpoint) {
-                transport = transport.with_route(declared.url().clone(), Arc::clone(prover));
-            }
-        }
-    }
     let mut credentials = BTreeMap::new();
     let mut on_behalf = BTreeMap::new();
+    let mut dpop = BTreeMap::new();
     for (endpoint, scheme) in &settings.credentials {
         let grant = match scheme {
             Scheme::Bearer(token) => {
@@ -101,6 +87,9 @@ pub(crate) fn onward(
                 section: format!("credentials.{endpoint}.oauth2"),
             });
         };
+        if let Some(prover) = grant.dpop() {
+            dpop.insert(endpoint.clone(), Arc::clone(prover));
+        }
         let timing = (
             signing.assertion_lifetime,
             settings.federation.budget.per_node(),
@@ -111,7 +100,7 @@ pub(crate) fn onward(
                 Grant::clone(grant),
                 Arc::clone(&signing.keys),
                 timing,
-                transport.clone(),
+                engine.clone(),
                 Arc::new(SystemClock),
             ));
             on_behalf.insert(endpoint.clone(), exchange);
@@ -121,15 +110,16 @@ pub(crate) fn onward(
                 Grant::clone(grant),
                 Arc::clone(&signing.keys),
                 timing,
-                transport.clone(),
+                engine.clone(),
                 Arc::new(SystemClock),
             ));
             credentials.insert(endpoint.clone(), provider);
         }
     }
     Ok(Onward {
-        transport,
+        transport: engine,
         credentials,
         on_behalf,
+        dpop,
     })
 }

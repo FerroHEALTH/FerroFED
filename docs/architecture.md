@@ -69,10 +69,10 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
 | openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
 | openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
-| `openehr-query` | 0.0.81 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |
-| `openehr-its` | 0.0.81 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543) |
+| `openehr-query` | 0.0.82 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |
+| `openehr-its` | 0.0.82 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543); 0.0.82 adds the DPoP credential (FerroEHR #3558) |
 | `openehr-base`, `openehr-rm` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison and, from 0.0.79, the attribute model with the BASE primitives, the `Ordered` marker and the `OBJECT_REF` targets (FerroEHR #3537) |
-| `openehr-sdt` | 0.0.81, the same lockstep line, joined with onward OAuth 2.0 (#81) | the SMART on openEHR scope grammar |
+| `openehr-sdt` | 0.0.82, the same lockstep line, joined with onward OAuth 2.0 (#81) | the SMART on openEHR scope grammar; 0.0.82 adds the `Display` that prints a scope in its canonical form (FerroEHR #3557) |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
 | `fhir-types` | 0.1.107 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
@@ -80,7 +80,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `jsonschema` | 0.58.3 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
-The `openehr-*` rows are the lockstep 0.0.81, published on 2026-10-03. The
+The `openehr-*` rows are the lockstep 0.0.82, published on 2026-10-04. The
 gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`, 0.0.77 closes
 FerroEHR #3529, the function classification the rewrite reads, 0.0.78
@@ -88,9 +88,10 @@ closes FerroEHR #3535, the `Authorization` value configuration load checks,
 0.0.79 closes FerroEHR #3537, the model lookups the rewrite orders keys by,
 and 0.0.80 closes FerroEHR #3539 to #3541 and #3543, the request decoder, the
 path identifier classes, the Simplified Formats CONTRIBUTION and the body
-media types, and 0.0.81 closes FerroEHR #3548, #3551 and #3552, the typed
+media types, 0.0.81 closes FerroEHR #3548, #3551 and #3552, the typed
 `201_EHR` body, the public body media-type picker and the agreeing media
-tables.
+tables, and 0.0.82 closes FerroEHR #3557 and #3558, the printer of a SMART
+on openEHR scope and the DPoP credential with its prover on the client.
 
 ## 2. The openEHR surface: the published crates
 
@@ -806,18 +807,27 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   reaches that authorization server alone, never a node; one whose text or
   JWS payload carries a withheld identifier is not sent (N33). It is
   preferred where available and is the FerroSMART target;
-- **DPoP** (built with #439): an `oauth2` grant with a `dpop_key_file` (a
-  P-256 or P-384 key) binds its tokens to that key (RFC 9449). The
-  `Transport` decorator `ferrofed_engine::onward::dpop::DpopTransport` adds a
-  proof to every request under the node's base URL and to its token
-  endpoint, because the proof binds `htm` and `htu`, which only the
-  transport sees; a request carrying a token is sent under the `DPoP` scheme
-  with the token's hash in `ath`. A token endpoint's `400 use_dpop_nonce` and
-  a node's `401` with a `DPoP` `use_dpop_nonce` challenge are answered once
-  more with the nonce, within the request's own budget (RFC 9449 §8, §9), and
-  a token endpoint that answers a bearer token to such a grant fails the
-  node. `openehr-its` composes every token as `Bearer`; the decorator writes
-  the `DPoP` scheme over it on a bound route (RFC 9449 §7.1).
+- **DPoP** (built with #439, moved onto the client with #448): an `oauth2`
+  grant with a `dpop_key_file` (a P-256 or P-384 key) binds its tokens to
+  that key (RFC 9449). A bound token is `openehr-its`'s `Credentials::Dpop`,
+  which the node client writes under the `DPoP` scheme and never under
+  `Bearer` (RFC 9449 §7.1). The client asks the endpoint's
+  `ferrofed_engine::onward::dpop::NodeProver`, its `DpopProver`, for the
+  proof of every request over the final method and URL with the token's
+  hash in `ath`, and answers a node's `401` with a `DPoP` `use_dpop_nonce`
+  challenge by sending the request once more, as the crate's `Transport`
+  contract documents (§9). The token request is composed by the gateway, so
+  it proves itself and answers a `400 use_dpop_nonce` once more within the
+  token request's budget (§8), with a client assertion, and under token
+  exchange an actor token, signed anew so no `jti` repeats (RFC 7523 §3).
+  Every nonce a server sends is kept per origin and per role for the next
+  proof, so the token endpoint's and the node's never mix even on one
+  origin (§9), and a token endpoint that answers a bearer token to such a
+  grant fails the node. Each node call has a prover of its own that records
+  whether a request of the call left: a deadline that passes before the
+  nonce re-send, or a re-send no proof could be made for, is then the
+  node's `time-out` or `node-error` with the node counted as asked
+  (`Contact::Silent`), never as a request never sent (#470).
 
 **Scope attenuation.** The gateway never requests onward more than the caller
 holds. Under token exchange the requested scope is the caller's granted

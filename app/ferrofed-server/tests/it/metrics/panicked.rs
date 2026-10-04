@@ -75,11 +75,7 @@ async fn a_fan_out_task_that_panics_fails_the_upload_and_blames_no_member() -> T
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
     let panicking: SharedCredentials = Arc::new(Panicking);
     let credentials = BTreeMap::from([(EndpointId::new("node-b-pub")?, panicking)]);
-    let clients = NodeClients::from_snapshot(
-        &snapshot,
-        &ferrofed_engine::onward::dpop::DpopTransport::new(transport),
-        &credentials,
-    )?;
+    let clients = NodeClients::from_snapshot(&snapshot, &transport, &credentials)?;
     let federation = Federation::new(
         FederationId::new("example-federation")?,
         snapshot,

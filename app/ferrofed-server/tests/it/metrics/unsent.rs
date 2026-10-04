@@ -59,11 +59,7 @@ async fn member() -> Server {
 fn overtaken(a: &Server, b: &Server) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
-    let clients = NodeClients::from_snapshot(
-        &snapshot,
-        &ferrofed_engine::onward::dpop::DpopTransport::new(transport),
-        &BTreeMap::new(),
-    )?;
+    let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let federation = Federation::new(
         FederationId::new("example-federation")?,
         snapshot,
