@@ -92,18 +92,6 @@ jobs:
           SECONDS_PER_TARGET: ${{ inputs.seconds || (github.event_name == 'pull_request' && '60') || '300' }}
         run: |
           set -euo pipefail
-          nproc
-          sample() {
-            while :; do
-              mem="$(free -m | awk '/^Mem:/ {printf "mem_used=%sMiB mem_available=%sMiB", $3, $7} /^Swap:/ {printf " swap_used=%sMiB/%sMiB", $3, $2}')"
-              disk="$(df -m / | awk 'NR == 2 {printf "disk_free=%sMiB", $4}')"
-              pressure="$(head -n 1 /proc/pressure/memory)"
-              oom="$(sudo dmesg | grep -ciE 'out of memory|oom' || true)"
-              echo "resources $(date -u +%T) ${mem} ${disk} ${pressure} oom_lines=${oom}"
-              sleep 10
-            done
-          }
-          sample &
           mkdir -p "fuzz/corpus/${TARGET}"
           cp "fuzz/seeds/${TARGET}"/* "fuzz/corpus/${TARGET}/"
           # The prebuilt cargo-fuzz binary is a musl build and defaults to the
@@ -112,13 +100,6 @@ jobs:
           cargo fuzz run --target x86_64-unknown-linux-gnu \
             "${TARGET}" "fuzz/corpus/${TARGET}" \
             -- -max_total_time="${SECONDS_PER_TARGET}" -rss_limit_mb=4096
-      - name: Report the runner's memory, disk and kernel log
-        if: always()
-        run: |
-          free -m
-          df -m /
-          sudo dmesg -T | grep -iE 'oom|out of memory|killed process' || true
-          sudo journalctl --no-pager -q -u systemd-oomd || true
       - name: Upload what reproduces a crash
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
