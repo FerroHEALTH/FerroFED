@@ -53,6 +53,11 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and every outcome shows on `GET /health/dependencies` as `directory`.
   `config check` reads the directory too. Credentials for the directory
   travel over `https` only, outside the development profile (#402).
+  A member organisation of a shared directory may list endpoints of other
+  services: a listing of an `Endpoint` that is no member is ignored and
+  logged by its reference, once per read of the content, where the document
+  refuses it; a listing that named a member endpoint when the running
+  registry was read, and names none now, is refused (#423).
 - `ihe-iti` 0.0.13: the `mcsd` feature carries the ITI-90 Query Client and
   the ITI-91 Update Client (`McsdClient`), every walk bounded by one
   `Budget` (a deadline and caps on pages, bytes and entries), and a replica
@@ -222,6 +227,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 - `scripts/quickstart/signing-key.sh` writes the compose quickstart's
   development signing key before the first `docker compose up`, and the
   quickstart and the release example configuration carry `[signing]`.
+- The book's
+  [§13.4 deployment decisions](https://ferrofed.eu/docs/operate/deployment-decisions.html)
+  page (#84; §13.4, N25, CP-39): FerroFED's own answer to each of the five
+  obligations §13.4 puts on a deployment (the identity verified at each
+  boundary, who authenticates the end user, how purpose of use travels, what
+  the tokens are bound to, and which risks are carried technically and which
+  by agreement), the configuration that changes each answer, and a template
+  an operator fills in for what only a deployment can answer. A test holds
+  the page to one section per obligation.
 
 ### Changed
 
@@ -248,6 +262,10 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   carry names the status the localization service answered once, with the
   binding's own reason, for PIXm and XCPD alike (#420). The log keeps the
   whole cause chain.
+- The boot refusals that ask for a registry (`[dev]`, `[pixm]` and
+  `federation.demographic_endpoint` without one, `federation.node_selection`
+  and `federation.id` missing beside one) name both of its sources,
+  `registry.document` and `[registry.mcsd]` (#425).
 
 ### Fixed
 

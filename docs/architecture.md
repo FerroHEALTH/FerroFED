@@ -840,7 +840,9 @@ the ambiguity is held on #17 (T158). Public keys are public material (RFC 7517),
 and a node is configured with the gateway's `jwks_uri` at admission anyway.
 
 **The §13.4 decisions** (#84, CP-39). FerroFED documents its own answers and
-ships an operator template for what only a deployment can answer:
+ships an operator template for what only a deployment can answer, on the
+book's operate page `deployment-decisions.md`, which a test holds to one
+section per obligation:
 
 1. **The identity verified across the trust boundary.** Gateway to node: the
    gateway's organisation identity, the `client_id` its assertion asserts,
@@ -853,8 +855,10 @@ ships an operator template for what only a deployment can answer:
    and never re-authenticates the user; the node relies on the conveyance JWT.
 3. **Purpose of use.** It travels in the caller's token, is relayed to every
    node, and is required by default.
-4. **What the token is bound to.** Bearer by default at both hops; DPoP or
-   mTLS-bound tokens can be required per deployment and per endpoint.
+4. **What the token is bound to.** Bearer at both hops, as built; DPoP or
+   mTLS-bound tokens per deployment and per endpoint are the design and are
+   not built (the Dutch binding's DPoP comes with #88). Transport identity is
+   never read as an organisation's identity.
 5. **What the technique does not cover.** Addressed in FerroFED: patient
    identifiers never reach a node, the caller's token is never forwarded,
    tokens are audience-restricted where the node's authorization server allows
@@ -948,7 +952,11 @@ the two are never set together. The members are the directory's
 `organisation-id` and `endpoint-id` identifiers, read with ITI-90's
 `identifier=[system]|` search; the rest of the directory is not the
 federation's. `ihe-iti`'s `Replica` holds them, `ferrofed-identity` maps them
-through the FHIR form's own mapping, and the server keeps them in step: every
+through the FHIR form's own mapping, with one difference (#423): a member
+organisation's listing of an `Endpoint` the selection did not take is
+ignored and logged by its reference, where the document refuses it, unless
+it named an endpoint of the content the running registry was read from,
+which is refused as a dangling listing. The server keeps them in step: every
 `refresh_interval_s` an ITI-91 `_history?_since=` per type, asked from 60
 seconds before the `Date` the directory stamped its previous answer with, so
 the directory's clock decides and a version applied twice changes nothing; a
