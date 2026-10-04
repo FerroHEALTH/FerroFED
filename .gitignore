@@ -33,6 +33,10 @@
 # platform under dist/<os>_<arch>/. Built artefacts, never committed.
 /dist/
 
+# The Mitz documents scripts/vendor/mitz.sh fetches: no licence permits
+# redistributing them, so only their PROVENANCE.md is committed.
+/docs/specs/mitz/cache/
+
 # Operator-provided secret files for a local quickstart. Never committed.
 /secrets/
 

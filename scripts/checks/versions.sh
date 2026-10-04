@@ -950,7 +950,8 @@ docs/specs/dk-nsp|Danish NSP documentation (NSPOP)
 docs/specs/se-inera|Swedish RIV-TA and Inera documentation
 docs/specs/no-nhn|Norwegian NHN developer portal
 docs/specs/fi-kanta|Finnish Kanta documents and packages
-docs/specs/fi-hl7|Finnish base profiles (HL7 Finland)"
+docs/specs/fi-hl7|Finnish base profiles (HL7 Finland)
+docs/specs/mitz|Mitz closed authorization question"
 
 agreed=0
 expected=0
