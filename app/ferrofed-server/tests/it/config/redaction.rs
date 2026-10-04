@@ -154,6 +154,7 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
     shows_placeholder("Metrics", &config.metrics);
     shows_placeholder("StoredQueries", &config.stored_queries);
     let composed = ManagerConfig {
+        tls: ferrofed_identity::fhir::Tls::default(),
         base: SecretUrl::new(pix_url_with_userinfo()),
         auth: Authentication::Basic {
             user: String::from("gateway"),
@@ -203,6 +204,7 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
             _ => return Err("the PIX Manager resolves to its bearer token".into()),
         };
         let composed = ManagerConfig {
+            tls: ferrofed_identity::fhir::Tls::default(),
             base: manager.url.clone(),
             auth,
             members: BTreeMap::new(),

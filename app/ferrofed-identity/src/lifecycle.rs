@@ -131,9 +131,11 @@ impl From<ClientError> for LifecycleConfigError {
     }
 }
 
-/// The ITI-94 subscriber of the Registry at `base`, authenticating with
-/// `auth`, by which the Registry authorizes the subscription (§2:3.94.5),
-/// over the IHE FHIR client of [`fhir::http_client`].
+/// The ITI-94 subscriber of the Registry at `base`.
+///
+/// It authenticates with `auth`, by which the Registry authorizes the
+/// subscription (§2:3.94.5), and with the `tls` material, over the IHE FHIR
+/// client of [`fhir::http_client`].
 ///
 /// # Errors
 /// A [`LifecycleConfigError`] for a base that is no `http(s)` URL, a
@@ -142,8 +144,9 @@ impl From<ClientError> for LifecycleConfigError {
 pub fn subscriber(
     base: &SecretUrl,
     auth: &Authentication,
+    tls: &Tls,
 ) -> Result<PmirSubscriber, LifecycleConfigError> {
     let base = Url::parse(base.expose()).map_err(LifecycleConfigError::BaseUrl)?;
-    let http = fhir::http_client(auth, &Tls::default())?;
+    let http = fhir::http_client(auth, tls)?;
     PmirSubscriber::new(base, http).map_err(LifecycleConfigError::Base)
 }

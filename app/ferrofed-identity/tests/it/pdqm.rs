@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ferrofed_identity::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
-use ferrofed_identity::fhir::Authentication;
+use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::pdqm::{PdqmConfig, PdqmConfigError, PdqmDemographics, Transaction};
 use ferrofed_identity::pixm::{ManagerConfig, PixmResolver};
@@ -65,6 +65,7 @@ fn client_patient() -> PatientRef {
 
 fn config(base: &str, transaction: Transaction) -> PdqmConfig {
     PdqmConfig {
+        tls: Tls::default(),
         base: SecretUrl::new(base.to_owned()),
         auth: Authentication::None,
         transaction,
@@ -159,6 +160,7 @@ async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager(
         .await;
     let resolver = PixmResolver::from_config(
         vec![ManagerConfig {
+            tls: Tls::default(),
             base: SecretUrl::new(format!("{}/fhir/", pix.uri())),
             auth: Authentication::None,
             members: BTreeMap::from([
