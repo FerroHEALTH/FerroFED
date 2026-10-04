@@ -6,9 +6,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_identity::pdqm::{PdqmConfig, PdqmDemographics};
-use openehr_its::rest::client::Credentials;
 
 use crate::config::audit::AuditSettings;
 use crate::config::pdqm::PdqmSettings;
@@ -22,13 +22,13 @@ pub(super) fn pdqm_step(
     pdqm: &PdqmSettings,
     audit: &AuditSettings,
 ) -> Result<DemographicsStep, FederationError> {
-    let credentials = match &pdqm.credentials {
-        None => None,
-        Some(Scheme::Bearer(token)) => Some(Credentials::bearer(token.to_secret_string())),
-        Some(Scheme::Basic { user, password }) => Some(Credentials::basic(
-            user.as_str(),
-            password.to_secret_string(),
-        )),
+    let auth = match &pdqm.credentials {
+        None => Authentication::None,
+        Some(Scheme::Bearer(token)) => Authentication::Bearer(token.to_secret_string()),
+        Some(Scheme::Basic { user, password }) => Authentication::Basic {
+            user: user.clone(),
+            password: password.to_secret_string(),
+        },
         Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) => {
             return Err(FederationError::Grant {
                 section: String::from("pdqm.credentials"),
@@ -43,7 +43,7 @@ pub(super) fn pdqm_step(
     }
     let step = PdqmDemographics::from_config(PdqmConfig {
         base: pdqm.url.clone(),
-        credentials,
+        auth,
         transaction: pdqm.transaction,
         master: pdqm.master.clone(),
         namespaces,
