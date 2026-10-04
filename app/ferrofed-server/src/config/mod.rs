@@ -25,6 +25,7 @@ pub mod audit_repository;
 pub mod auth;
 pub mod error;
 mod load;
+pub mod nl_gf;
 mod resolve;
 mod secrets;
 pub mod settings;
@@ -81,6 +82,9 @@ pub struct Config {
     /// The XCPD localizer (`[xcpd]`): the responding gateways and the
     /// community each member serves (Annex A.3, #85).
     pub xcpd: Option<xcpd::Xcpd>,
+    /// The Dutch Generic Functions (`[nl_gf]`): the NVI localizer and the
+    /// care provider each member holds the data of (Annex B, #87).
+    pub nl_gf: Option<nl_gf::NlGf>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
@@ -106,6 +110,7 @@ impl Default for Config {
             dev: None,
             pixm: None,
             xcpd: None,
+            nl_gf: None,
             stored_queries: stored_queries::StoredQueries::default(),
             metrics: Metrics::default(),
             signing: None,
