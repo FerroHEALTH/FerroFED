@@ -86,6 +86,11 @@ jobs:
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
           tool: cargo-fuzz@0.13.2
+      - name: Sample the runner's memory and disk
+        run: |
+          nproc
+          sample() { while :; do { date -u +%T; free -m; df -m /; } >> "$RUNNER_TEMP/resources.log"; sleep 10; done; }
+          sample > /dev/null 2>&1 &
       - name: Run the target over its seeds
         env:
           TARGET: ${{ matrix.target }}
@@ -100,6 +105,12 @@ jobs:
           cargo fuzz run --target x86_64-unknown-linux-gnu \
             "${TARGET}" "fuzz/corpus/${TARGET}" \
             -- -max_total_time="${SECONDS_PER_TARGET}" -rss_limit_mb=4096
+      - name: Report the runner's memory, disk and kernel log
+        if: failure()
+        run: |
+          cat "$RUNNER_TEMP/resources.log" || true
+          sudo dmesg -T | grep -iE 'oom|out of memory|killed process' || true
+          sudo journalctl --no-pager -q -u systemd-oomd || true
       - name: Upload what reproduces a crash
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
