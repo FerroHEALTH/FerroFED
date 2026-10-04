@@ -360,8 +360,10 @@ pub enum Error {
         section: String,
     },
     /// A credentials section that takes a bearer token or basic credentials
-    /// names an OAuth 2.0 grant or a Nuts grant.
-    #[error("{section} takes a bearer token or basic credentials, not an oauth2 or nuts grant")]
+    /// names an OAuth 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
+    #[error(
+        "{section} takes a bearer token or basic credentials, not an oauth2, nuts or fapi2 grant"
+    )]
     GrantNotHere {
         /// The section.
         section: String,
@@ -472,6 +474,10 @@ pub enum Error {
     /// `https`, outside a configuration marked for development.
     #[error(transparent)]
     Cleartext(#[from] CleartextError),
+    /// A FAPI 2.0 grant, or an `oauth2` grant's assertion audience, is
+    /// refused.
+    #[error(transparent)]
+    GrantFault(#[from] crate::config::grant::GrantFault),
     /// A URL the gateway verifies its callers against is plain `http` to a
     /// host that is not loopback.
     #[error(transparent)]

@@ -22,6 +22,7 @@ use secrecy::SecretString;
 use secrecy::zeroize::Zeroizing;
 
 use crate::config::error::{BasicFault, Error};
+use crate::config::grant;
 use crate::config::settings::{Scheme, SigningSettings};
 use crate::config::{ClientAuth, Credentials, GrantKind, Nuts, OAuth2, Signing};
 
@@ -41,6 +42,20 @@ pub(super) fn resolve_credentials(
         credentials.password.as_ref(),
         credentials.password_file.as_deref(),
     )?;
+    if let Some(fapi2) = &credentials.fapi2 {
+        if token.is_some()
+            || credentials.user.is_some()
+            || password.is_some()
+            || credentials.oauth2.is_some()
+            || credentials.nuts.is_some()
+        {
+            return Err(Error::Scheme {
+                section: section.to_owned(),
+            });
+        }
+        return grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2)
+            .map(|grant| Scheme::Fapi2(Box::new(grant)));
+    }
     if let Some(nuts) = &credentials.nuts {
         if token.is_some()
             || credentials.user.is_some()
@@ -219,6 +234,7 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
         source,
     };
     let mut grant = Grant::new(token_endpoint, oauth2.client_id.clone(), scope).map_err(refused)?;
+    grant = grant::with_assertion_audience(section, oauth2, grant)?;
     if let Some(resource) = &oauth2.resource {
         grant = grant.with_resource(resource).map_err(refused)?;
     }

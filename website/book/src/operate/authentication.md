@@ -326,7 +326,7 @@ curl -s http://127.0.0.1:8080/v1/query/aql \
 ## What a node is told about the caller
 
 The gateway authenticates to each node as itself, with that endpoint's own
-credentials ([OAuth 2.0 to a node](configuration.md#oauth-20-to-a-node)),
+credentials ([OAuth 2.0 to a node](onward-credentials.md#oauth-20-to-a-node)),
 and tells the node who asks in a header of its own (§13.1, N24, N25, §12.4).
 Where a node's authorization server exchanges tokens (RFC 8693), the gateway
 also asks it for a token per caller, with the caller's verified token as the
@@ -334,7 +334,7 @@ subject and only the caller's scopes that cover the operation; the caller's
 token reaches that authorization server alone, never the node, and a caller
 the edge mode asserted has no token to exchange, so that node is
 `node-error` with nothing sent
-([A token per caller](configuration.md#a-token-per-caller-token-exchange)).
+([A token per caller](onward-credentials.md#a-token-per-caller-token-exchange)).
 Every request it sends a node carries `openEHR-federation-client`: the
 federated query, every routed read and write, a definition request, the
 ask-all probe and the read of an EHR by subject. The value is a compact JWS
@@ -377,7 +377,7 @@ no caller claim.
 `[signing]` is therefore required whenever a registry is configured, by
 `registry.document` or by `[registry.mcsd]`: a federating gateway without a
 signing key refuses to start, naming the key
-([Signing keys](configuration.md#signing-keys-and-the-jwk-set)). The
+([Signing keys](onward-credentials.md#signing-keys-and-the-jwk-set)). The
 specification leaves end-user conveyance open (§13.1), so the header and its
 claims are FerroFED's own design.
 

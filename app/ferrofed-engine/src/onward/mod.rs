@@ -30,21 +30,29 @@
 //! An endpoint on the Dutch Generic Functions' Nuts track (Annex B §B.4)
 //! obtains its token with a Verifiable Presentation of the gateway's
 //! credentials instead, bound with `DPoP` to its own [`dpop::Prover`]
-//! ([`nuts`]).
+//! ([`nuts`]). An endpoint whose authorization server follows the FAPI 2.0
+//! Security Profile, as the BgZ/eOverdracht track of Annex B §B.4a does,
+//! discovers that server from its issuer and obtains a `DPoP`-bound token
+//! with an ES256 assertion naming the issuer, and RFC 9396
+//! `authorization_details` where configured ([`fapi2`]).
 
 use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 
 use ferrofed_registry::secret::SecretUrl;
+use nl_generic_functions::oauth_metadata::Issuer;
 use openehr_sdt::smart_scopes::{Compartment, SmartScope};
 use url::Url;
 
+use crate::onward::authorization_details::AuthorizationDetails;
 use crate::onward::dpop::Prover;
 
+pub mod authorization_details;
 pub mod conveyance;
 pub mod dpop;
 pub mod exchange;
+pub mod fapi2;
 pub mod keys;
 pub mod nuts;
 pub mod provider;
@@ -145,16 +153,32 @@ impl Scope {
 
 /// What a grant at one node's token endpoint asks for, and as whom.
 ///
-/// `Debug` shows the token endpoint with its credentials redacted.
+/// `Debug` shows the token endpoint with its credentials redacted, and the
+/// types of its `authorization_details` alone.
 #[derive(Clone)]
 pub struct Grant {
     kind: GrantKind,
     token_endpoint: Url,
     client_id: String,
-    scope: Scope,
+    scope: Option<Scope>,
     resource: Option<Url>,
     audience: Option<String>,
+    assertion_audience: AssertionAudience,
+    authorization_details: Option<AuthorizationDetails>,
     dpop: Option<Arc<Prover>>,
+}
+
+/// The `aud` of every client assertion a [`Grant`] signs (RFC 7523 §3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AssertionAudience {
+    /// The token endpoint's URL, which RFC 7523 §3 admits as the
+    /// authorization server's identity.
+    TokenEndpoint,
+    /// The authorization server's issuer identifier (RFC 8414 §2), as a
+    /// string: the one value an authorization server under the FAPI 2.0
+    /// Security Profile accepts (§5.3.2.1, §5.3.3.1).
+    Issuer(Issuer),
 }
 
 /// How a [`Grant`] obtains its tokens.
@@ -213,6 +237,16 @@ impl Grant {
         client_id: impl Into<String>,
         scope: Scope,
     ) -> Result<Self, GrantError> {
+        Self::at(token_endpoint, client_id, Some(scope))
+    }
+
+    /// A grant at `token_endpoint` for the client `client_id`, asking for
+    /// `scope` when one is given, as [`Grant::new`] checks it.
+    pub(crate) fn at(
+        token_endpoint: &SecretUrl,
+        client_id: impl Into<String>,
+        scope: Option<Scope>,
+    ) -> Result<Self, GrantError> {
         let url = Url::parse(token_endpoint.expose())
             .map_err(|source| GrantError::TokenEndpoint(Some(source)))?;
         if !matches!(url.scheme(), "http" | "https") {
@@ -237,8 +271,28 @@ impl Grant {
             scope,
             resource: None,
             audience: None,
+            assertion_audience: AssertionAudience::TokenEndpoint,
+            authorization_details: None,
             dpop: None,
         })
+    }
+
+    /// This grant, naming `issuer`, the authorization server's issuer
+    /// identifier, as the `aud` of every client assertion in place of the
+    /// token endpoint (RFC 7523 §3; FAPI 2.0 Security Profile §5.3.2.1).
+    #[must_use]
+    pub fn with_issuer_audience(mut self, issuer: Issuer) -> Self {
+        self.assertion_audience = AssertionAudience::Issuer(issuer);
+        self
+    }
+
+    /// This grant, asking for `details` with `authorization_details` in
+    /// every token request (RFC 9396 §6), and taking only a token response
+    /// that states the details it granted (§7).
+    #[must_use]
+    pub fn with_authorization_details(mut self, details: AuthorizationDetails) -> Self {
+        self.authorization_details = Some(details);
+        self
     }
 
     /// This grant, obtaining a token per verified caller by token exchange
@@ -311,11 +365,33 @@ impl Grant {
         Ok(self)
     }
 
-    /// The token endpoint, which is also the `aud` of every assertion
-    /// (RFC 7523 §3).
+    /// The token endpoint.
     #[must_use]
     pub fn token_endpoint(&self) -> &Url {
         &self.token_endpoint
+    }
+
+    /// What every assertion names as its `aud`.
+    #[must_use]
+    pub fn assertion_audience(&self) -> &AssertionAudience {
+        &self.assertion_audience
+    }
+
+    /// The `aud` of every assertion, as it is written: the token endpoint's
+    /// URL or the issuer identifier (RFC 7523 §3).
+    #[must_use]
+    pub fn assertion_aud(&self) -> &str {
+        match &self.assertion_audience {
+            AssertionAudience::TokenEndpoint => self.token_endpoint.as_str(),
+            AssertionAudience::Issuer(issuer) => issuer.as_str(),
+        }
+    }
+
+    /// The `authorization_details` every token request asks for, when the
+    /// grant asks for any (RFC 9396 §6).
+    #[must_use]
+    pub fn authorization_details(&self) -> Option<&AuthorizationDetails> {
+        self.authorization_details.as_ref()
     }
 
     /// The `client_id`, the `iss` and `sub` of every assertion (RFC 7523
@@ -325,10 +401,10 @@ impl Grant {
         &self.client_id
     }
 
-    /// The scope the token is requested with.
+    /// The scope the token is requested with, when it is requested with one.
     #[must_use]
-    pub fn scope(&self) -> &Scope {
-        &self.scope
+    pub fn scope(&self) -> Option<&Scope> {
+        self.scope.as_ref()
     }
 
     /// The target service named with `resource`, when one is.
@@ -353,9 +429,11 @@ impl fmt::Debug for Grant {
                 &SecretUrl::new(String::from(self.token_endpoint.clone())),
             )
             .field("client_id", &self.client_id)
-            .field("scope", &self.scope.text)
+            .field("scope", &self.scope.as_ref().map(Scope::as_str))
             .field("resource", &self.resource.as_ref().map(Url::as_str))
             .field("audience", &self.audience)
+            .field("assertion_audience", &self.assertion_audience)
+            .field("authorization_details", &self.authorization_details)
             .field("dpop", &self.dpop)
             .finish()
     }

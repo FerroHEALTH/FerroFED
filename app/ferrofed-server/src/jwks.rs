@@ -6,7 +6,10 @@
 //! the gateway's client assertions against (§13.1, N25).
 //!
 //! The set holds the current key and, during a rotation's overlap window,
-//! the previous one. It is public: a node fetches it without
+//! the previous one, then the ES256 client key of each FAPI 2.0 grant, which
+//! that grant's authorization server verifies its `private_key_jwt`
+//! assertions against (FAPI 2.0 Security Profile §5.4.2; Annex B §B.4a.2).
+//! It is public: a node fetches it without
 //! authenticating, and it holds no private key material. A gateway with no
 //! `[signing]` keys answers `404`.
 
@@ -33,7 +36,17 @@ pub async fn jwks(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Res
     let Some(signing) = federation.signing() else {
         return error::fixed(Code::NotFound, request_id);
     };
-    match serde_json::to_vec(&signing.keys.published()) {
+    let mut published = signing.keys.published();
+    for client_key in federation.client_keys() {
+        if !published
+            .keys
+            .iter()
+            .any(|key| key.common.key_id == client_key.common.key_id)
+        {
+            published.keys.push(client_key.clone());
+        }
+    }
+    match serde_json::to_vec(&published) {
         Ok(body) => (
             StatusCode::OK,
             [(

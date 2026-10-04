@@ -66,8 +66,14 @@ pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Result<Signer, F
     };
     let mut signer = Signer::new(Arc::clone(&signing.keys), id.as_str());
     for (endpoint, scheme) in &settings.credentials {
-        if let Scheme::OAuth2(grant) = scheme {
-            signer = signer.with_issuer_at(endpoint.clone(), grant.client_id());
+        match scheme {
+            Scheme::OAuth2(grant) => {
+                signer = signer.with_issuer_at(endpoint.clone(), grant.client_id());
+            }
+            Scheme::Fapi2(grant) => {
+                signer = signer.with_issuer_at(endpoint.clone(), grant.client_id());
+            }
+            _ => {}
         }
     }
     Ok(signer)

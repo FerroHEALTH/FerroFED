@@ -20,7 +20,9 @@
 //! The protected-payload sites are a registry endpoint with a
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
 //! 2.0 grant, the authorization server of its Nuts grant (sent the gateway's
-//! credentials in a Verifiable Presentation), every PIX Manager, every XCPD
+//! credentials in a Verifiable Presentation), the issuer of its FAPI 2.0
+//! grant (sent the client assertion and the callers' tokens), every PIX
+//! Manager, every XCPD
 //! responding gateway, the NVI Localization Service of `[nl_gf.nvi]` and Mitz
 //! of `[nl_gf.mitz]` (each is sent the patient identifier, and a credential
 //! when one is configured), the Patient Identity Registry of `[pmir]` and its
@@ -200,8 +202,8 @@ pub fn trust_anchor(key: &str, url: &Url) -> Result<(), TrustAnchorError> {
     }
 }
 /// The sites each endpoint's onward credentials send to: the endpoint's own
-/// URL in `registry`, an OAuth 2.0 grant's token endpoint and a Nuts grant's
-/// authorization server, in key order.
+/// URL in `registry`, an OAuth 2.0 grant's token endpoint, a Nuts grant's
+/// authorization server and a FAPI 2.0 grant's issuer, in key order.
 fn credential_sites(
     settings: &Settings,
     registry: Option<&RegistrySnapshot>,
@@ -242,6 +244,17 @@ fn credential_sites(
                 site(
                     format!("{section}.nuts.authorization_server"),
                     format!("{section}.nuts credentials and presentation"),
+                ),
+            ));
+        }
+        // NOTE: FAPI 2.0 Security Profile §5.2.1, every endpoint is TLS-protected; the
+        // token endpoint the metadata names is held to the issuer's origin.
+        if let Scheme::Fapi2(grant) = scheme {
+            sites.push((
+                grant.issuer().as_str().to_owned(),
+                site(
+                    format!("{section}.fapi2.issuer"),
+                    format!("{section}.fapi2 client assertion and caller tokens"),
                 ),
             ));
         }

@@ -176,9 +176,10 @@ pub enum FederationError {
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]
     Localization(#[source] localization::LocalizationError),
-    /// An OAuth 2.0 grant that cannot be used: one in a PIX Manager's
-    /// credentials, or a node's with no `[signing]` key (§13.1, N25).
-    #[error("{section} names an oauth2 grant it cannot use: only a node takes one, with [signing]")]
+    /// An OAuth 2.0 or FAPI 2.0 grant that cannot be used: one in a PIX
+    /// Manager's credentials, or a node's with no `[signing]` key (§13.1,
+    /// N25).
+    #[error("{section} names a grant it cannot use: only a node takes one, with [signing]")]
     Grant {
         /// The credentials section.
         section: String,

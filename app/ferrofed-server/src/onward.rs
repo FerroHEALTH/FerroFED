@@ -6,8 +6,9 @@
 //! client-credentials grant, or one that exchanges each verified caller's
 //! token (RFC 8693), each authenticated by a signed JWT client assertion
 //! (§13.1, N25), a provider that obtains a token with the Nuts grant of
-//! Annex B §B.4, and the `DPoP` key of a grant whose tokens are bound to one
-//! (RFC 9449).
+//! Annex B §B.4, one that obtains it under the FAPI 2.0 Security Profile, as
+//! the track of Annex B §B.4a does, and the `DPoP` key of a grant whose
+//! tokens are bound to one (RFC 9449).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use std::sync::Arc;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::exchange::{Exchange, SharedOnBehalf};
+use ferrofed_engine::onward::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
 use ferrofed_engine::onward::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_engine::onward::provider::ClientCredentials;
 use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
@@ -84,6 +86,18 @@ pub(crate) fn onward(
                 continue;
             }
             Scheme::OAuth2(grant) => grant,
+            Scheme::Fapi2(grant) => {
+                dpop.insert(endpoint.clone(), Arc::clone(grant.dpop()));
+                match fapi2(settings, endpoint, grant, &engine)? {
+                    Provided::Same(provider) => {
+                        credentials.insert(endpoint.clone(), provider);
+                    }
+                    Provided::PerCaller(exchange) => {
+                        on_behalf.insert(endpoint.clone(), exchange);
+                    }
+                }
+                continue;
+            }
             Scheme::Nuts(grant) => {
                 dpop.insert(endpoint.clone(), Arc::clone(grant.dpop()));
                 let provider: SharedCredentials = Arc::new(NutsCredentials::new(
@@ -136,6 +150,55 @@ pub(crate) fn onward(
         credentials,
         on_behalf,
         dpop,
+    })
+}
+
+/// What one endpoint's grant provides its node client.
+enum Provided {
+    /// The same credentials for every caller.
+    Same(SharedCredentials),
+    /// Credentials per verified caller (RFC 8693).
+    PerCaller(SharedOnBehalf),
+}
+
+/// The provider of `endpoint`'s FAPI 2.0 `grant`, discovering its
+/// authorization server over `engine` and signing each assertion valid for
+/// the `[signing]` lifetime.
+///
+/// # Errors
+///
+/// Returns [`FederationError::Grant`] without `[signing]`.
+fn fapi2(
+    settings: &Settings,
+    endpoint: &EndpointId,
+    grant: &Fapi2Grant,
+    engine: &ReqwestTransport,
+) -> Result<Provided, FederationError> {
+    let Some(signing) = &settings.signing else {
+        return Err(FederationError::Grant {
+            section: format!("credentials.{endpoint}.fapi2"),
+        });
+    };
+    let timing = (
+        signing.assertion_lifetime,
+        settings.federation.budget.per_node(),
+    );
+    Ok(if grant.kind() == GrantKind::TokenExchange {
+        Provided::PerCaller(Arc::new(Fapi2Exchange::new(
+            endpoint.clone(),
+            grant.clone(),
+            timing,
+            engine.clone(),
+            Arc::new(SystemClock),
+        )))
+    } else {
+        Provided::Same(Arc::new(Fapi2Credentials::new(
+            endpoint.clone(),
+            grant.clone(),
+            timing,
+            engine.clone(),
+            Arc::new(SystemClock),
+        )))
     })
 }
 

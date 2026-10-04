@@ -6,7 +6,9 @@
 //! the JWK Set (RFC 7517 §5) that publishes them.
 //!
 //! A key is read from PKCS#8 PEM and held to the P-384 curve ES384 signs
-//! with (RFC 7518 §3.4). Its `kid` is its RFC 7638 JWK thumbprint over
+//! with (RFC 7518 §3.4). A grant whose profile admits no ES384, the FAPI 2.0
+//! grant, signs with a P-256 key of its own instead
+//! ([`SigningKey::from_p256_pem`]). Its `kid` is its RFC 7638 JWK thumbprint over
 //! SHA-256, so the same key always has the same `kid` and no operator names
 //! one. The previous key is published, and never signs, for one overlap
 //! window from the moment the ring is built. No specification governs the
@@ -42,6 +44,10 @@ pub enum KeyError {
     /// §3.4).
     #[error("the key is not a P-384 key, the curve ES384 signs with (RFC 7518 §3.4)")]
     Curve(#[source] jsonwebtoken::errors::Error),
+    /// The key is not a P-256 key, the curve ES256 signs with (RFC 7518
+    /// §3.4).
+    #[error("the key is not a P-256 key, the curve ES256 signs with (RFC 7518 §3.4)")]
+    CurveP256(#[source] jsonwebtoken::errors::Error),
     /// The key's RFC 7638 thumbprint could not be computed.
     #[error("the RFC 7638 thumbprint of the key could not be computed")]
     Thumbprint(#[source] jsonwebtoken::errors::Error),
@@ -54,12 +60,13 @@ pub enum KeyError {
     },
 }
 
-/// One ES384 signing key, its public half as a JWK, and its `kid`.
+/// One signing key, ES384 or ES256, its public half as a JWK, and its `kid`.
 ///
-/// `Debug` shows the `kid` alone.
+/// `Debug` shows the `kid` and the algorithm alone.
 #[derive(Clone)]
 pub struct SigningKey {
     kid: String,
+    algorithm: Algorithm,
     private: EncodingKey,
     public: Jwk,
 }
@@ -73,9 +80,30 @@ impl SigningKey {
     /// PKCS#8 PEM, [`KeyError::Curve`] for a key on a curve other than P-384,
     /// and [`KeyError::Thumbprint`] when its `kid` cannot be computed.
     pub fn from_pem(pem: &SecretString) -> Result<Self, KeyError> {
+        Self::read(pem, ALGORITHM, KeyError::Curve)
+    }
+
+    /// Reads the ES256 private key `pem` holds in PKCS#8 PEM.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyError::Pem`] for text that is no EC private key in
+    /// PKCS#8 PEM, [`KeyError::CurveP256`] for a key on a curve other than
+    /// P-256, and [`KeyError::Thumbprint`] when its `kid` cannot be computed.
+    pub fn from_p256_pem(pem: &SecretString) -> Result<Self, KeyError> {
+        Self::read(pem, Algorithm::ES256, KeyError::CurveP256)
+    }
+
+    /// Reads the private key `pem` holds for `algorithm`, refusing a key on
+    /// another curve with `curve`.
+    fn read(
+        pem: &SecretString,
+        algorithm: Algorithm,
+        curve: fn(jsonwebtoken::errors::Error) -> KeyError,
+    ) -> Result<Self, KeyError> {
         let private =
             EncodingKey::from_ec_pem(pem.expose_secret().as_bytes()).map_err(KeyError::Pem)?;
-        let mut public = Jwk::from_encoding_key(&private, ALGORITHM).map_err(KeyError::Curve)?;
+        let mut public = Jwk::from_encoding_key(&private, algorithm).map_err(curve)?;
         let kid = public
             .thumbprint(ThumbprintHash::SHA256)
             .map_err(KeyError::Thumbprint)?;
@@ -83,9 +111,18 @@ impl SigningKey {
         public.common.public_key_use = Some(PublicKeyUse::Signature);
         Ok(Self {
             kid,
+            algorithm,
             private,
             public,
         })
+    }
+
+    /// The algorithm the key signs with: `ES384` for a key read with
+    /// [`SigningKey::from_pem`], `ES256` for one read with
+    /// [`SigningKey::from_p256_pem`].
+    #[must_use]
+    pub fn algorithm(&self) -> Algorithm {
+        self.algorithm
     }
 
     /// The key's `kid`: its RFC 7638 thumbprint over SHA-256, base64url.
@@ -95,7 +132,7 @@ impl SigningKey {
     }
 
     /// The public half, as the JWK the JWK Set publishes, with its `kid`,
-    /// `use` `sig` and `alg` `ES384`.
+    /// `use` `sig` and its `alg`.
     #[must_use]
     pub fn public(&self) -> &Jwk {
         &self.public
@@ -111,6 +148,7 @@ impl fmt::Debug for SigningKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SigningKey")
             .field("kid", &self.kid)
+            .field("algorithm", &self.algorithm)
             .finish_non_exhaustive()
     }
 }

@@ -186,7 +186,10 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(credentials, Some(Scheme::OAuth2(_) | Scheme::Nuts(_))) {
+    if matches!(
+        credentials,
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
+    ) {
         return Err(Error::GrantNotHere { section });
     }
     // NOTE: Implementatiehandleiding §3.3: the question travels over TLS, and it carries

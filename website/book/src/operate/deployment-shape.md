@@ -58,14 +58,14 @@ per endpoint ([Configuration](configuration.md#the-file)):
 - OAuth 2.0 client credentials with an RFC 7523 signed JWT client assertion,
   the default mechanism of §13.1 (N25): the gateway obtains a token at the
   node's token endpoint and sends that
-  ([OAuth 2.0 to a node](configuration.md#oauth-20-to-a-node)).
+  ([OAuth 2.0 to a node](onward-credentials.md#oauth-20-to-a-node)).
 
 For the OAuth 2.0 grant, the node's authorization server needs the gateway
 registered as a client under its `client_id`, with the gateway's JWK Set
 location. The gateway serves the set at `{base}/.well-known/jwks.json`
 without client authentication, and declares its location as
 `federation.auth.jwks_uri` in `OPTIONS {base}/`
-([Signing keys and the JWK Set](configuration.md#signing-keys-and-the-jwk-set)).
+([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)).
 Keep that route reachable from every node's authorization server; client
 authentication guards the rest of the surface and never this route. A PIX Manager takes a
 bearer token or a user and password, or none where the transport

@@ -20,6 +20,7 @@ use openehr_federation::id::FederationId;
 
 use crate::base_path::BasePath;
 use crate::config::error::Error;
+use crate::config::grant::GrantFault;
 use crate::config::secrets::{resolve_credentials, resolve_signing};
 use crate::config::settings::{
     DirectorySettings, FederationSettings, LocalizationSettings, MetricsSettings,
@@ -277,15 +278,26 @@ fn signed_grants(
 ) -> Result<(), Error> {
     // NOTE: §13.1, N25: the client assertion of every grant is signed with the
     // gateway's key, so a grant without one is refused at load.
-    if signing.is_none()
-        && let Some(endpoint) = credentials
-            .iter()
-            .find(|(_, scheme)| matches!(scheme, Scheme::OAuth2(_)))
-            .map(|(endpoint, _)| endpoint)
-    {
-        return Err(Error::GrantWithoutSigning {
-            section: format!("credentials.{endpoint}.oauth2"),
-        });
+    if signing.is_some() {
+        return Ok(());
+    }
+    for (endpoint, scheme) in credentials {
+        match scheme {
+            Scheme::OAuth2(_) => {
+                return Err(Error::GrantWithoutSigning {
+                    section: format!("credentials.{endpoint}.oauth2"),
+                });
+            }
+            // NOTE: FAPI 2.0 Security Profile §5.4.2, the client key is published as a JWK
+            // Set, which the gateway serves only beside its [signing] keys.
+            Scheme::Fapi2(_) => {
+                return Err(GrantFault::WithoutSigning {
+                    section: format!("credentials.{endpoint}.fapi2"),
+                }
+                .into());
+            }
+            _ => {}
+        }
     }
     Ok(())
 }
@@ -314,7 +326,10 @@ fn resolve_pixm(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Error> {
             .as_ref()
             .map(|credentials| resolve_credentials(&section, credentials))
             .transpose()?;
-        if matches!(credentials, Some(Scheme::OAuth2(_) | Scheme::Nuts(_))) {
+        if matches!(
+            credentials,
+            Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
+        ) {
             return Err(Error::GrantNotHere { section });
         }
         // NOTE: no specification governs this: our own design; the Manager is sent
@@ -370,7 +385,10 @@ fn resolve_directory(
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(credentials, Some(Scheme::OAuth2(_) | Scheme::Nuts(_))) {
+    if matches!(
+        credentials,
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
+    ) {
         return Err(Error::GrantNotHere { section });
     }
     // NOTE: no specification governs this: our own design; the credential is

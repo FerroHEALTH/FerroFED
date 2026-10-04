@@ -17,7 +17,7 @@ answer. Copy the template, fill it in, and publish it with your deployment.
 
 The answers rest on three pieces of the gateway:
 [client authentication](authentication.md), OAuth 2.0 from the gateway to
-each node ([Configuration](configuration.md#oauth-20-to-a-node)), and the
+each node ([Configuration](onward-credentials.md#oauth-20-to-a-node)), and the
 `openEHR-federation-client` token that tells each node who asks
 ([What a node is told about the caller](authentication.md#what-a-node-is-told-about-the-caller)).
 
@@ -84,6 +84,15 @@ The gateway relays every purpose the token declares to each node in the
 `purpose_of_use` claim of `openEHR-federation-client`, so the node makes its
 release and consent decision against it (N26, N27).
 
+A `fapi2` section states a purpose to that node's authorization server as
+well: the `purpose_of_use`, and for the query use case the
+`subject_organisation_type`, of its configured `authorization_details`
+(Annex B §B.4a.3). They are configured per endpoint and are the same for
+every request to it, a declaration of the gateway's organisation for the
+token, never derived from the caller. The caller's own purpose still
+reaches the node in `openEHR-federation-client`
+([The FAPI 2.0 grant](onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
+
 **What changes the answer:** `auth.purpose_of_use.required = false` admits a
 token with no purpose. A deployment that sets it records why here, because
 its nodes then decide without one.
@@ -104,13 +113,16 @@ seconds before it expires and audience-restricted when the `oauth2` section
 names a `resource` (RFC 8707) or an `audience`, unless the section names a
 `dpop_key_file`: the token is then bound to that key with DPoP (RFC 9449),
 and a node can refuse it from anyone who does not hold the key
-([Tokens bound to a key](configuration.md#tokens-bound-to-a-key-dpop)). The
+([Tokens bound to a key](onward-credentials.md#tokens-bound-to-a-key-dpop)). The
 `openEHR-federation-client` token lives 60 seconds, names one node as its
 `aud`, and carries a fresh `jti`, so a node that records `jti` values can
 refuse a replay within that window. Certificate-bound tokens (RFC 8705) are
 not built. A `nuts` section binds every token with DPoP, as the Dutch
 binding's Nuts track requires
-([The Nuts grant](configuration.md#the-nuts-grant-annex-b-b4)).
+([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)), and so
+does a `fapi2` section, since the FAPI 2.0 Security Profile issues only
+sender-constrained tokens
+([The FAPI 2.0 grant](onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
 
 **Transport identity.** The gateway never reads a transport identity as an
 organisation's identity. TLS protects the connection: outside the

@@ -190,7 +190,10 @@ fn resolve_nvi(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> {
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(credentials, Some(Scheme::OAuth2(_) | Scheme::Nuts(_))) {
+    if matches!(
+        credentials,
+        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
+    ) {
         return Err(Error::GrantNotHere { section });
     }
     // NOTE: Annex B §B.7: the pseudonym is personal data like the BSN, so the

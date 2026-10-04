@@ -33,6 +33,27 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- A FAPI 2.0 grant as an onward credential, for a node whose authorization
+  server follows the FAPI 2.0 Security Profile, as the BgZ/eOverdracht
+  track of the Dutch binding does (Annex B §B.4a): a
+  `[credentials."<id>".fapi2]` section names the server's issuer, and the
+  gateway reads its RFC 8414 metadata once, holds it to the issuer and to
+  everything the grant sends, authenticates with an ES256
+  `private_key_jwt` assertion whose `aud` is the issuer, binds every token
+  with DPoP, and sends the configured RFC 9396 `authorization_details`,
+  taking only a token response that states the details granted. Token
+  exchange per verified caller works as for `oauth2`. The client key's
+  public half is published in the gateway's JWK Set. The authorization
+  code grant, which needs a user agent, refuses the configuration. The
+  testkit has a harness FAPI 2.0 authorization server, and the book has an
+  Onward credentials page (#497, #88).
+- `assertion_audience = "issuer"` in an `oauth2` section makes every client
+  assertion name the authorization server's issuer, set in `issuer`, as its
+  `aud` in place of the token endpoint (RFC 7523 §3; FAPI 2.0 §5.3.2.1).
+  The token endpoint stays the default (#497).
+- `nl-generic-functions` 0.0.10 adds the `oauth-metadata` feature: the RFC
+  8414 issuer identifier and metadata checks the Nuts grant built, now
+  shared by both Annex B authentication tracks (#497).
 - The Nuts grant of the Dutch Generic Functions (Annex B §B.4) as an onward
   credential: a `[credentials."<id>".nuts]` section makes the gateway obtain
   that node's token from its authorization server with a Verifiable

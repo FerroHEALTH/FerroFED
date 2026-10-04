@@ -25,6 +25,7 @@ pub mod audit;
 pub mod audit_repository;
 pub mod auth;
 pub mod error;
+pub mod grant;
 mod load;
 pub mod mitz;
 pub mod nl_gf;
@@ -551,7 +552,7 @@ pub struct Metrics {
 }
 
 /// The credentials one endpoint expects: a bearer token, basic credentials,
-/// or an OAuth 2.0 grant.
+/// an OAuth 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
 ///
 /// Every secret is reachable inline or through its `_file` sibling; setting
 /// both is a boot error, and so is naming two schemes. An inline secret is a
@@ -577,6 +578,10 @@ pub struct Credentials {
     /// (`[credentials."<endpoint id>".nuts]`), the regional realisation of
     /// §13.3 (Annex B §B.4).
     pub nuts: Option<Nuts>,
+    /// A grant under the FAPI 2.0 Security Profile
+    /// (`[credentials."<endpoint id>".fapi2]`), the BgZ/eOverdracht track of
+    /// Annex B §B.4a.
+    pub fapi2: Option<grant::Fapi2>,
 }
 
 /// The Nuts grant at one node's authorization server (Annex B §B.4).
@@ -639,9 +644,15 @@ pub struct OAuth2 {
     /// How the gateway authenticates at the token endpoint:
     /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2).
     pub client_auth: Option<ClientAuth>,
-    /// The token endpoint, an `http` or `https` URL with no userinfo; it is
-    /// also the `aud` of every client assertion (RFC 7523 §3).
+    /// The token endpoint, an `http` or `https` URL with no userinfo; by
+    /// default also the `aud` of every client assertion (RFC 7523 §3).
     pub token_endpoint: Option<SecretUrl>,
+    /// What every client assertion names as its `aud`: `token_endpoint`,
+    /// the default, or `issuer` (RFC 7523 §3; FAPI 2.0 §5.3.2.1).
+    pub assertion_audience: grant::AssertionAudience,
+    /// The authorization server's issuer identifier (RFC 8414 §2), set with
+    /// `assertion_audience = "issuer"` and never without it.
+    pub issuer: Option<String>,
     /// The client the node's authorization server registered the gateway
     /// as, the `iss` and `sub` of every client assertion (RFC 7523 §3).
     pub client_id: String,

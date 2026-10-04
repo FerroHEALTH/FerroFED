@@ -35,6 +35,7 @@ use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::incident::Incident;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use jsonwebtoken::jwk::Jwk;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
@@ -65,6 +66,7 @@ pub struct Federation {
     stored_query_fan_out: bool,
     signing: Option<SigningSettings>,
     signer: Option<Arc<Signer>>,
+    client_keys: Vec<Jwk>,
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -115,6 +117,14 @@ impl Federation {
     #[must_use]
     pub fn signing(&self) -> Option<&SigningSettings> {
         self.signing.as_ref()
+    }
+
+    /// The public keys of the FAPI 2.0 grants' client keys, which the JWK
+    /// Set publishes beside the `[signing]` keys (FAPI 2.0 Security Profile
+    /// §5.4.2).
+    #[must_use]
+    pub fn client_keys(&self) -> &[Jwk] {
+        &self.client_keys
     }
 
     /// The signer of what every request to a node conveys about its caller

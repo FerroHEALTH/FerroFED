@@ -5,8 +5,9 @@
 //!
 //! The request is the client-credentials grant (RFC 6749 §4.4.2) or token
 //! exchange (RFC 8693 §2.1), authenticated by a signed JWT client assertion
-//! (RFC 7523 §2.2), and the answer a token (RFC 6749 §5.1, RFC 8693 §2.2.1)
-//! or a typed refusal (RFC 6749 §5.2).
+//! (RFC 7523 §2.2), with the grant's `authorization_details` where it has
+//! some (RFC 9396 §6), and the answer a token (RFC 6749 §5.1, RFC 8693
+//! §2.2.1, RFC 9396 §7) or a typed refusal (RFC 6749 §5.2).
 //!
 //! The request is composed here and sent through the same HTTP engine as
 //! the node requests. The token endpoint is no ITS-REST resource, so no
@@ -24,12 +25,14 @@ use openehr_its::rest::client::{
 };
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use url::form_urlencoded;
 
 use crate::dispatch::reported::MESSAGE_LIMIT;
 use crate::onward::Grant;
+use crate::onward::authorization_details::{self, AuthorizationDetailsError};
 use crate::onward::dpop::{self, Prover, Role};
-use crate::onward::keys::{ALGORITHM, SigningKey};
+use crate::onward::keys::SigningKey;
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
 pub const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -141,6 +144,14 @@ pub enum TokenError {
     /// The issued access token cannot be sent as a credential.
     #[error("the issued access token cannot be sent as a credential")]
     Token(#[source] InvalidCredentials),
+    /// The grant asked for `authorization_details`, and the token response
+    /// states none it granted (RFC 9396 §7).
+    #[error("the token response states no authorization_details, which RFC 9396 §7 requires")]
+    AuthorizationDetails,
+    /// The `authorization_details` the token response states it granted do
+    /// not have the shape of RFC 9396 §2.
+    #[error("the authorization_details the token response granted are not of RFC 9396 §2 shape")]
+    GrantedDetails(#[source] AuthorizationDetailsError),
 }
 
 /// An `error` code RFC 6749 §5.2 registers for a token endpoint's refusal.
@@ -159,6 +170,9 @@ pub enum ErrorCode {
     UnsupportedGrantType,
     /// `invalid_scope`.
     InvalidScope,
+    /// `invalid_authorization_details`, which RFC 9396 §5 and §6 add for
+    /// details the server refuses (§14.6).
+    InvalidAuthorizationDetails,
 }
 
 impl ErrorCode {
@@ -173,6 +187,7 @@ impl ErrorCode {
             "unauthorized_client" => Some(Self::UnauthorizedClient),
             "unsupported_grant_type" => Some(Self::UnsupportedGrantType),
             "invalid_scope" => Some(Self::InvalidScope),
+            "invalid_authorization_details" => Some(Self::InvalidAuthorizationDetails),
             _ => None,
         }
     }
@@ -187,6 +202,7 @@ impl ErrorCode {
             Self::UnauthorizedClient => "unauthorized_client",
             Self::UnsupportedGrantType => "unsupported_grant_type",
             Self::InvalidScope => "invalid_scope",
+            Self::InvalidAuthorizationDetails => "invalid_authorization_details",
         }
     }
 }
@@ -232,6 +248,7 @@ struct TokenResponse {
     token_type: String,
     expires_in: Option<u64>,
     issued_token_type: Option<String>,
+    authorization_details: Option<Box<RawValue>>,
 }
 
 /// An RFC 6749 §5.2 error response, the members the gateway reads.
@@ -244,10 +261,13 @@ struct ErrorResponse {
 /// The client assertion for `grant`, signed with `key`, valid for
 /// `lifetime` from now (RFC 7523 §3).
 ///
-/// `iss` and `sub` are the `client_id`, `aud` the token endpoint, `jti` a
+/// `iss` and `sub` are the `client_id`, `aud` the token endpoint or the
+/// issuer identifier as [`Grant::assertion_aud`] writes it, always one
+/// string and never an array (FAPI 2.0 Security Profile §5.3.3.1), `jti` a
 /// fresh version 4 UUID, and `iat` and `exp` whole seconds of the wall
-/// clock. The same form is the `actor_token` of a token exchange, signed
-/// separately so its `jti` is its own.
+/// clock. The header names the key's algorithm and `kid`. The same form is
+/// the `actor_token` of a token exchange, signed separately so its `jti` is
+/// its own.
 ///
 /// # Errors
 ///
@@ -262,12 +282,12 @@ pub fn assertion(
     let claims = Claims {
         iss: grant.client_id(),
         sub: grant.client_id(),
-        aud: grant.token_endpoint().as_str(),
+        aud: grant.assertion_aud(),
         exp: iat.saturating_add(lifetime),
         iat,
         jti: uuid::Uuid::new_v4().to_string(),
     };
-    let mut header = Header::new(ALGORITHM);
+    let mut header = Header::new(key.algorithm());
     header.kid = Some(key.kid().to_owned());
     jsonwebtoken::encode(&header, &claims, key.private()).map_err(TokenError::Sign)
 }
@@ -354,7 +374,9 @@ fn client_credentials_form(grant: &Grant, assertion: &str) -> String {
     let mut form = form_urlencoded::Serializer::new(String::new());
     form.append_pair("grant_type", GRANT_TYPE);
     authenticated(&mut form, assertion);
-    form.append_pair("scope", grant.scope().as_str());
+    if let Some(scope) = grant.scope() {
+        form.append_pair("scope", scope.as_str());
+    }
     targeted(&mut form, grant);
     form.finish()
 }
@@ -382,13 +404,17 @@ fn authenticated(form: &mut form_urlencoded::Serializer<'_, String>, assertion: 
         .append_pair("client_assertion", assertion);
 }
 
-/// Adds the grant's `resource` (RFC 8707 §2) and `audience` to `form`.
+/// Adds the grant's `resource` (RFC 8707 §2), `audience`, and
+/// `authorization_details` (RFC 9396 §6) to `form`.
 fn targeted(form: &mut form_urlencoded::Serializer<'_, String>, grant: &Grant) {
     if let Some(resource) = grant.resource() {
         form.append_pair("resource", resource.as_str());
     }
     if let Some(audience) = grant.audience() {
         form.append_pair("audience", audience);
+    }
+    if let Some(details) = grant.authorization_details() {
+        form.append_pair("authorization_details", details.as_str());
     }
 }
 
@@ -519,6 +545,15 @@ fn issued(grant: &Grant, token: TokenResponse) -> Result<Issued, TokenError> {
             token_type: bounded(&token.token_type),
             expected,
         });
+    }
+    // NOTE: RFC 9396 §7, the server MUST return the authorization_details it
+    // granted, so an answer to a grant that asked for some and states none is refused.
+    if grant.authorization_details().is_some() {
+        let granted = token
+            .authorization_details
+            .as_deref()
+            .ok_or(TokenError::AuthorizationDetails)?;
+        authorization_details::types_of(granted.get()).map_err(TokenError::GrantedDetails)?;
     }
     let access = SecretString::from(token.access_token);
     let credentials = if grant.dpop().is_some() {
