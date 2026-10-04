@@ -87,16 +87,19 @@ pinned_md() {
   printf '%s' "${text//|/\\|}"
 }
 
-# pinned_corpus DIR ITEM TITLE ABOUT [AGENT]
+# pinned_corpus DIR ITEM TITLE ABOUT [AGENT] [READ_BY]
 #
 # Vendors the artefacts declared with `pin` since the last call. DIR is the
 # corpus directory under docs/specs/, ITEM the Item cell of its
 # docs/VERSIONS.md row, TITLE the provenance heading, ABOUT the Markdown
 # paragraphs that say what the corpus is and on what ground each part is or
-# is not redistributed, and AGENT `browser` for a publisher that refuses a
-# non-browser User-Agent.
+# is not redistributed, AGENT `browser` for a publisher that refuses a
+# non-browser User-Agent (empty otherwise), and READ_BY the issue and code
+# that read the corpus, the #488 country research when it is not given.
 pinned_corpus() {
   local dir="$1" item="$2" title="$3" about="$4" agent="${5:-}"
+  local read_by=$'#488 (the country research into identity resolution,\n  localization, consent, addressing and authentication to nodes)'
+  [ -n "${6:-}" ] && read_by="$6"
   local pins="$pinned_table"
   local dest="docs/specs/$dir" cache="$pinned_cache_root/$dir"
   # shellcheck disable=SC2154 # corpus_ua is set by corpus.sh, sourced first
@@ -156,12 +159,12 @@ pinned_corpus() {
     esac
   done <<< "$pins"
 
-  pinned_provenance "$dir" "$title" "$about" "$pins" "$digest" "$ua"
+  pinned_provenance "$dir" "$title" "$about" "$pins" "$digest" "$ua" "$read_by"
 }
 
 # Writes the PROVENANCE.md of one corpus.
 pinned_provenance() {
-  local dir="$1" title="$2" about="$3" pins="$4" digest="$5" ua="$6"
+  local dir="$1" title="$2" about="$3" pins="$4" digest="$5" ua="$6" read_by="$7"
   local dest="docs/specs/$dir" cache="$pinned_cache_root/$dir"
   local mode file version url sha licence note heading
   local n_commit=0 n_cache=0 n_manual=0 fetched files tree body=""
@@ -240,8 +243,7 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
   publisher serves it
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$tree\`
-- Read by: #488 (the country research into identity resolution,
-  localization, consent, addressing and authentication to nodes)
+- Read by: $read_by
 
 $about
 
