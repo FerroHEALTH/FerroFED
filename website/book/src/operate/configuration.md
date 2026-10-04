@@ -63,7 +63,7 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
 |  _|  __/ |  | | | (_) |  _| | |___| |_| |
 |_|  \___|_|  |_|  \___/|_|   |_____|____/
 
-  openEHR federation gateway · v0.0.6
+  openEHR federation gateway · v0.0.7
   Maintained by Ruben Talstra · https://github.com/FerroHEALTH/FerroFED
 
   Federation Tier  0.9.0

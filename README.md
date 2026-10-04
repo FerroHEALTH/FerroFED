@@ -50,14 +50,20 @@ carrying a SMART on openEHR scope for the operation and a purpose of use, or
 through a proxy in the explicit edge mode
 ([client authentication](https://ferrofed.eu/docs/operate/authentication.html)).
 Toward the nodes, the gateway authenticates as itself, with OAuth 2.0 client
-credentials and a signed assertion or with a bearer token or a user and
-password you configure per endpoint, and never sends the client's own token.
+credentials or token exchange and a signed assertion, the token bound to the
+gateway's key with DPoP where you ask for it, or with a bearer token or a
+user and password you configure per endpoint, and never sends the client's
+own token.
 Every request to a node carries the verified client in an
 `openEHR-federation-client` token the gateway signs with its own key, which
 each node can verify against the key set the gateway publishes
 ([what a node is told about the caller](https://ferrofed.eu/docs/operate/authentication.html#what-a-node-is-told-about-the-caller)).
-Localization through XCPD or the PIX Manager, and the registry read from an
-mCSD directory, are built on `main` for v0.0.8 too.
+Localization through XCPD, the PIX Manager or the Dutch NVI, a PDQm step
+ahead of resolution, the identity feed over PMIR, the registry read from an
+mCSD directory, the audit of every IHE transaction to an ATNA repository,
+the Dutch consent pre-filter Mitz, the Nuts and FAPI 2.0 grants toward a
+node, and traces exported through OpenTelemetry are built on `main` for
+v0.0.8 too.
 The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
 lists what each release shipped and what is planned.
@@ -73,19 +79,25 @@ lists what each release shipped and what is planned.
   say which points and statements a test holds.
 - openEHR ITS-REST 1.1.0 on both faces, and openEHR AQL 1.1.0, through the
   published `openehr-*` crates.
-- IHE PIXm ITI-83 for identity resolution and, without XCPD, for
+- IHE PIXm ITI-83 for identity resolution and, without XCPD or the NVI, for
   localization, and IHE mCSD ITI-90 and ITI-91
   for addressing: the registry can be read from a care services directory
-  and kept in step with it. The `ihe-iti` crate also carries the PDQm ITI-78
-  client.
+  and kept in step with it.
+- IHE PDQm ITI-78 and ITI-119 ahead of resolution, for a patient named by an
+  identifier the cross-reference does not know.
 - IHE XCPD ITI-55 for localization: the `xcpd` feature of `ihe-iti` is an
   Initiating Gateway, and an undirected patient query asks only the members
   whose communities it discovers, failing closed when a gateway does not
   answer.
 - IHE PMIR ITI-94 and ITI-93 for the identity lifecycle: the gateway
   subscribes at a Patient Identity Registry, and an authenticated merge drops
-  the resolution bindings it could have made stale. The Dutch Generic
-  Functions are planned for v0.0.8.
+  the resolution bindings it could have made stale.
+- IHE ATNA ITI-20: every IHE transaction the gateway makes or receives is
+  audited to an Audit Record Repository, ITI-55 as a DICOM message over
+  syslog and the FHIR profiles as BALP `AuditEvent`s over the FHIR Feed.
+- The Dutch Generic Functions of Annex B: NVI localization, the Mitz consent
+  pre-filter, the URA of each organisation from an LRZa-sourced directory,
+  and the Nuts and FAPI 2.0 authentication tracks toward a node.
 
 ## Quickstart
 

@@ -31,6 +31,61 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   request, as before, and every trace id and span id an exported span
   carries is one it generated (#446).
 
+- A node is never sent a request without its configured onward credential,
+  and never the caller's own `Authorization` header.
+- The `error` a client sees for a node no token could be obtained for is a
+  fixed sentence and, when the token endpoint refused with one, its
+  registered RFC 6749 §5.2 code. The token endpoint's description, its
+  address and the network error go to the log alone, and the assertion and
+  the token go nowhere.
+- A token endpoint URL with a user name, a password, a query or a fragment is
+  refused at load, so no secret can ride in it into a log.
+- No request reaches a node, a cross-reference service or a store before its
+  caller is verified. A token signed with `none` or an HMAC, of another
+  `typ` than `at+jwt`, from an untrusted issuer, for another audience, or
+  outside its validity window is refused, and an issuer that cannot be asked
+  fails closed with `503`. A `patient/` scope admits nothing, because the
+  gateway cannot bind it to the token's patient context, and a
+  `system/aql-*` scope counts only for a listed backend client. The
+  DEMOGRAPHIC API admits only the clients an issuer lists in
+  `demographic_clients`. The client's token is never forwarded to a node.
+- Outside `profile = "development"`, `serve`, `config check`,
+  `admission check` and every reload refuse a credential sent to a URL that
+  is not `https`, naming the key of the URL and of the credential: a registry
+  endpoint with a `[credentials]` section, an `oauth2` token endpoint, a PIX
+  Manager with credentials, and a `metrics.otlp_endpoint` carrying a user
+  name or a password. A reload keeps the profile the process started with.
+  Under the development profile the same configuration starts, and the
+  startup banner, a `WARN` log line and `config check` name each credential
+  that travels unencrypted, by key, an XCPD responding gateway's XUA
+  assertion included (#402).
+- A PIX Manager and an XCPD responding gateway are sent patient identifiers,
+  so outside the development profile each must be `https`, with or without
+  a credential configured. Under the development profile they are named in
+  the banner, the log and `config check` like a cleartext credential (#402).
+- A reload whose file changes `profile` is refused with class `profile`, and
+  the running configuration stays, so nothing the development profile admits
+  can enter a process that started under another profile. A reload under
+  another profile could admit an `http` XCPD gateway before (#402).
+- One module holds every transport rule: a URL a credential or a patient
+  identifier is sent to must be `https` outside the development profile,
+  and a key set or introspection endpoint the gateway verifies callers
+  against must be `https`, or `http` to loopback, under every profile (#402).
+- Outside the development profile, the stored-query store's PostgreSQL
+  connection string must set `sslmode=require` when it carries a password
+  to a networked host: `disable` and `prefer`, the driver's default, which
+  falls back to no TLS, are refused naming `stored_queries.url` by
+  `config check`, the start and a reload, even though the store itself
+  changes only on a restart. Under the development profile it starts and is
+  named in the banner, the log and `config check` (#416).
+- No request reaches a node without the caller's identity: one that reaches
+  the dispatcher with no verified caller is answered `500` and nothing is
+  sent. The conveyed token never carries a patient identifier (§5.4.1, N33):
+  it holds no IUA `person_id`, and the outbound gate reads every caller
+  claim, refusing with nothing sent a request whose claims would carry the
+  identifier its query was resolved on. A client's own
+  `openEHR-federation-client` header never reaches a node.
+
 ### Added
 
 - Mutual TLS to the PIX Manager, the PDQm Supplier, the PMIR Patient
@@ -695,63 +750,6 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   still shows `down`, and one whose answer is broken `failing`. A directory
   that answers a refresh with a `4xx` shows `failing` where it showed `up`,
   and a `401` or `403` names `directory_fault = "refused-credentials"`.
-
-### Security
-
-- A node is never sent a request without its configured onward credential,
-  and never the caller's own `Authorization` header.
-- The `error` a client sees for a node no token could be obtained for is a
-  fixed sentence and, when the token endpoint refused with one, its
-  registered RFC 6749 §5.2 code. The token endpoint's description, its
-  address and the network error go to the log alone, and the assertion and
-  the token go nowhere.
-- A token endpoint URL with a user name, a password, a query or a fragment is
-  refused at load, so no secret can ride in it into a log.
-- No request reaches a node, a cross-reference service or a store before its
-  caller is verified. A token signed with `none` or an HMAC, of another
-  `typ` than `at+jwt`, from an untrusted issuer, for another audience, or
-  outside its validity window is refused, and an issuer that cannot be asked
-  fails closed with `503`. A `patient/` scope admits nothing, because the
-  gateway cannot bind it to the token's patient context, and a
-  `system/aql-*` scope counts only for a listed backend client. The
-  DEMOGRAPHIC API admits only the clients an issuer lists in
-  `demographic_clients`. The client's token is never forwarded to a node.
-- Outside `profile = "development"`, `serve`, `config check`,
-  `admission check` and every reload refuse a credential sent to a URL that
-  is not `https`, naming the key of the URL and of the credential: a registry
-  endpoint with a `[credentials]` section, an `oauth2` token endpoint, a PIX
-  Manager with credentials, and a `metrics.otlp_endpoint` carrying a user
-  name or a password. A reload keeps the profile the process started with.
-  Under the development profile the same configuration starts, and the
-  startup banner, a `WARN` log line and `config check` name each credential
-  that travels unencrypted, by key, an XCPD responding gateway's XUA
-  assertion included (#402).
-- A PIX Manager and an XCPD responding gateway are sent patient identifiers,
-  so outside the development profile each must be `https`, with or without
-  a credential configured. Under the development profile they are named in
-  the banner, the log and `config check` like a cleartext credential (#402).
-- A reload whose file changes `profile` is refused with class `profile`, and
-  the running configuration stays, so nothing the development profile admits
-  can enter a process that started under another profile. A reload under
-  another profile could admit an `http` XCPD gateway before (#402).
-- One module holds every transport rule: a URL a credential or a patient
-  identifier is sent to must be `https` outside the development profile,
-  and a key set or introspection endpoint the gateway verifies callers
-  against must be `https`, or `http` to loopback, under every profile (#402).
-- Outside the development profile, the stored-query store's PostgreSQL
-  connection string must set `sslmode=require` when it carries a password
-  to a networked host: `disable` and `prefer`, the driver's default, which
-  falls back to no TLS, are refused naming `stored_queries.url` by
-  `config check`, the start and a reload, even though the store itself
-  changes only on a restart. Under the development profile it starts and is
-  named in the banner, the log and `config check` (#416).
-- No request reaches a node without the caller's identity: one that reaches
-  the dispatcher with no verified caller is answered `500` and nothing is
-  sent. The conveyed token never carries a patient identifier (§5.4.1, N33):
-  it holds no IUA `person_id`, and the outbound gate reads every caller
-  claim, refusing with nothing sent a request whose claims would carry the
-  identifier its query was resolved on. A client's own
-  `openEHR-federation-client` header never reaches a node.
 
 ## [0.0.7] - 2026-10-03
 

@@ -637,8 +637,9 @@ What a deployment must provide:
   OAuth 2.0 grant, and a URL that carries a user name or a password is
   refused. The IG asks a requester for authorization attributes (its
   organization, practitioner and role); the gateway sends only the
-  credential configured here, and GF-Authentication on the Nuts profile is
-  tracked in [#88](https://github.com/FerroHEALTH/FerroFED/issues/88).
+  credential configured here. The Nuts grant is built for the nodes
+  ([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)) and is
+  refused here, as every grant is.
 - **A resolver.** The NVI answers where; the PIX Manager of `[pixm]` still
   answers under which `ehr_id` each candidate knows the patient.
 

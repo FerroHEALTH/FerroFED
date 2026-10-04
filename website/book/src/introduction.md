@@ -36,14 +36,20 @@ the gateway:
 - answers the federated query, `POST {base}/v1/query/aql` and its `GET`
   form, with one ITS-REST `RESULT_SET` and a `meta.federation` report that
   names every member with its status;
-- resolves the patient through an IHE PIXm PIX Manager (ITI-83), and refuses
-  any query that would carry the patient identifier to a node;
+- resolves the patient through an IHE PIXm PIX Manager (ITI-83), after an
+  IHE PDQm query (ITI-78 or ITI-119) where the client names the patient by
+  an identifier the cross-reference does not know, and refuses any query
+  that would carry the patient identifier to a node;
 - can ask only the members that may hold the patient, localized through IHE
-  XCPD (ITI-55) or the PIX Manager, and can read its members from an IHE mCSD
-  care services directory;
-- authenticates to each node as itself, with an OAuth 2.0 token or a static
-  credential, and tells each node who is asking in a token it signs for that
-  node;
+  XCPD (ITI-55), the Dutch NVI or the PIX Manager, can leave out the members
+  a consent pre-filter such as the Dutch Mitz denies, and can read its
+  members from an IHE mCSD care services directory;
+- authenticates to each node as itself, with an OAuth 2.0 token, by client
+  credentials or token exchange and optionally bound with DPoP, a token of
+  the Dutch Nuts or FAPI 2.0 track, or a static credential, and tells each
+  node who is asking in a token it signs for that node;
+- audits every IHE transaction it makes or receives to an ATNA Audit Record
+  Repository;
 - fails a query when a node it asked does not answer, unless you ask for a
   partial answer, and shapes the merged rows as one CDR would: `ORDER BY`
   with `LIMIT`, bounded `OFFSET` pages, `DISTINCT`, recombined aggregates and
@@ -57,8 +63,8 @@ the gateway:
   can distribute them to the members;
 - describes itself at `OPTIONS {base}/`;
 - gives you, the operator, a check to run before you admit a node, a
-  registry reload on `SIGHUP`, health probes, and metrics for Prometheus or
-  an OpenTelemetry collector.
+  registry reload on `SIGHUP`, health probes, metrics for Prometheus or
+  an OpenTelemetry collector, and traces over OTLP.
 
 Every client authenticates with an access token from an issuer you trust
 ([Client authentication](operate/authentication.md)). Each page says what is

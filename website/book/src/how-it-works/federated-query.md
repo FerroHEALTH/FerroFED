@@ -57,16 +57,17 @@ sequenceDiagram
   never reads as a patient with no data. Only
   `federation.localization.on_failure = "ask-all"` widens instead (§14.1,
   N4, CP-5).
-- **The localizer** is one of three
+- **The localizer** is one of four
   ([Identity resolution](../operate/identity.md)). IHE XCPD asks every
   responding gateway by the patient identifier alone which communities hold
-  the patient (ITI-55, Annex A.3). Without `[xcpd]`, the PIX Manager
-  localizes: its candidates are the members whose domain holds an identifier
-  for the patient, and the resolution reuses that one ITI-83 answer (§14.2).
-  The development cross-reference localizes under `profile =
-  "development"`. The read of an EHR by subject is localized the same way.
-  The NVI localizer of the Dutch binding is planned for v0.0.8
-  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
+  the patient (ITI-55, Annex A.3). The NVI of the Dutch binding names the
+  care providers that hold data for the patient's pseudonym (Annex B §B.1,
+  [Dutch localization](../operate/identity.md#dutch-localization-nl_gfnvi)).
+  Without either, the PIX Manager localizes: its candidates are the members
+  whose domain holds an identifier for the patient, and the resolution
+  reuses that one ITI-83 answer (§14.2). The development cross-reference
+  localizes under `profile = "development"`. The read of an EHR by subject
+  is localized the same way.
 - **The consent pre-filter** is optional and never the gate: a member it
   denies is `consent-denied`, never resolved and never sent a request, and
   every other member is asked so its node can decide (§13.2.1, N27, N27a).
