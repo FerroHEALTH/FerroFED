@@ -468,6 +468,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `ferrofed config check` over the ConfigMap's configuration with synthetic
   secrets (`scripts/checks/kubernetes-example.sh`), so the example cannot
   drift from what the gateway accepts.
+- A refresh of the mCSD directory whose change the gateway refuses no longer
+  reports the directory `up` on `GET /health/dependencies` while the gateway
+  serves the registry it last accepted (#481). The directory shows
+  `degraded`, with `directory_fault` naming the class of the refusal
+  (`registry-invalid` or `configuration-mismatch`) and never a member or a
+  URL, until a later refresh is accepted. A directory that did not answer
+  still shows `down`, and one whose answer is broken `failing`. A directory
+  that answers a refresh with a `4xx` shows `failing` where it showed `up`,
+  and a `401` or `403` names `directory_fault = "refused-credentials"`.
 
 ### Security
 

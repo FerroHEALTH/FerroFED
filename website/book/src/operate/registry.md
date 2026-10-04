@@ -217,9 +217,21 @@ A refresh that changed something goes through the same checks as a reload:
   HTTP error, the running registry stays and the gateway logs a warning.
 
 `GET {base}/health/dependencies` reports the directory as `directory`: `up`
-after its last answer, `failing` after a `5xx`, a malformed answer or one
-past a cap, and `down` when it did not answer before the deadline or could
-not be reached. The directory's state never gates readiness.
+after an answer the gateway accepted, `degraded` after an answer whose change
+it refused, `failing` after an HTTP error, a malformed answer or one past a
+cap, and `down` when it did not answer before the deadline or could not be
+reached. A `401` or a `403` is `failing` with
+`directory_fault = "refused-credentials"`: the directory refused the
+credentials of `[registry.mcsd]`.
+While the directory is `degraded`, `directory_fault` says which kind of
+refusal holds the change back: `registry-invalid` for a content that breaks a
+registry rule (the `registry-invalid` class above), and
+`configuration-mismatch` for a sound registry the rest of the configuration
+no longer fits (every other class). It stays `degraded`, and the gateway
+serves the registry it last accepted, until a refresh is accepted: the
+directory is put right, or the configuration is changed and reloaded. The
+body names the class only; the log line `registry reload refused` carries
+the precise `class`. The directory's state never gates readiness.
 
 A `SIGHUP` reload with a directory rebuilds the federation over the registry
 the directory gave, applying `[credentials]`, `[dev]`, `[pixm]`, `[xcpd]`
@@ -233,8 +245,9 @@ member the directory adds without a custodian URA (or a community) mapped to
 it makes the change refused as `localization`: the gateway keeps the previous
 registry, logs the refusal and counts it in `ferrofed_registry_reloads_total`
 ([Metrics](metrics.md)), and asks again from the same instant at the next
-refresh. `GET /health/dependencies` still shows the directory `up`, since it
-answered. Map the member first, then publish it.
+refresh. `GET /health/dependencies` shows the directory `degraded` with
+`directory_fault = "configuration-mismatch"` until the change is accepted. Map
+the member first, then publish it.
 
 The registry keeps each organisation's identifiers as the directory
 publishes them, beside the `organisation-id` one: every identifier with a
