@@ -18,8 +18,11 @@
 //! its deadline and its caps on pages, bytes and entries; one that runs past
 //! them, or whose answer breaks ITI-91, is refused and counted the same way.
 //! A directory that cannot be reached leaves the running registry in place;
-//! every outcome shows on `/health/dependencies` as `directory`. A query never waits on the
-//! directory. No specification governs the refresh policy: our own design.
+//! every outcome shows on `/health/dependencies` as `directory`, and a
+//! change the gateway refused shows the directory `degraded`, with the class
+//! of the refusal as `directory_fault`, until a later refresh is accepted. A
+//! query never waits on the directory. No specification governs the refresh
+//! policy: our own design.
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -30,6 +33,7 @@ use ferrofed_identity::directory::mcsd::{
 };
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::Credentials;
+use serde::Serialize;
 
 use crate::config::settings::{DirectorySettings, Scheme, Settings};
 use crate::federation::{error::FederationError, registry::read_registry};
@@ -41,8 +45,35 @@ use crate::reload::{Applied, ReloadError, Reloader};
 pub struct DirectoryRegistry {
     source: DirectorySource,
     held: Mutex<Content>,
-    observed: Mutex<Observed>,
+    seen: Mutex<Seen>,
     interval: Duration,
+}
+
+/// The last state observed of the directory, and why it is degraded.
+#[derive(Debug, Clone, Copy)]
+struct Seen {
+    state: Observed,
+    fault: Option<DirectoryFault>,
+}
+
+/// Why the care services directory is degraded, as `directory_fault` names it.
+///
+/// The directory answered, and the gateway refused the registry its change
+/// makes, so the previous one is served. The fault names a class and never
+/// an identifier or the directory's content; the refusal's log line names
+/// the precise class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum DirectoryFault {
+    /// The changed registry breaks a rule of its own: the connection type of
+    /// §15.2 (N19), one managing organisation per endpoint (N20), unique
+    /// ids (N21), a registry left with no node, or the FHIR form.
+    RegistryInvalid,
+    /// The changed registry is sound, and the rest of the configuration does
+    /// not fit its members: the resolver, the localizer, the credentials or
+    /// another part of the federation refuses them.
+    ConfigurationMismatch,
 }
 
 /// What one refresh of the directory did.
@@ -79,7 +110,10 @@ impl DirectoryRegistry {
         let registry = Self {
             source,
             held: Mutex::new(content),
-            observed: Mutex::new(Observed::Up),
+            seen: Mutex::new(Seen {
+                state: Observed::Up,
+                fault: None,
+            }),
             interval: settings.refresh_interval,
         };
         Ok((registry, snapshot))
@@ -89,7 +123,15 @@ impl DirectoryRegistry {
     /// `/health/dependencies` reports.
     #[must_use]
     pub fn observed(&self) -> Observed {
-        *self.observed.lock().unwrap_or_else(PoisonError::into_inner)
+        self.seen().state
+    }
+
+    /// Why the directory is degraded, which `/health/dependencies` reports
+    /// as `directory_fault`; `None` unless the last change it answered with
+    /// was refused.
+    #[must_use]
+    pub fn fault(&self) -> Option<DirectoryFault> {
+        self.seen().fault
     }
 
     /// Asks the directory for the changes since the registry in place was
@@ -97,7 +139,9 @@ impl DirectoryRegistry {
     /// `reloader`, which replaces the running one or refuses it.
     ///
     /// The directory content advances only with a registry that was applied,
-    /// so a refused or failed refresh asks again from the same instant.
+    /// so a refused or failed refresh asks again from the same instant. The
+    /// directory shows `up` only once its answer is accepted, and `degraded`
+    /// while the change it answered with is refused.
     pub async fn refresh(&self, reloader: &Reloader) -> RefreshOutcome {
         let held = self.held().clone();
         let refreshed = match self.source.refresh(&held).await {
@@ -120,10 +164,10 @@ impl DirectoryRegistry {
                 return RefreshOutcome::Unreachable(error);
             }
         };
-        self.observe(Observed::Up);
         match refreshed {
             Refreshed::Unchanged(replica) => {
                 *self.held() = replica;
+                self.observe(Observed::Up);
                 RefreshOutcome::Unchanged
             }
             Refreshed::Changed(materialised) => {
@@ -131,14 +175,21 @@ impl DirectoryRegistry {
                 match reloader.directory_changed(snapshot) {
                     Ok(applied) => {
                         *self.held() = replica;
+                        self.observe(Observed::Up);
                         RefreshOutcome::Applied(applied)
                     }
-                    Err(error) => RefreshOutcome::Refused(error),
+                    Err(error) => {
+                        self.refuse(fault_of(&error));
+                        RefreshOutcome::Refused(error)
+                    }
                 }
             }
-            Refreshed::Refused(error) => RefreshOutcome::Refused(reloader.directory_refused(
-                directory_error(DirectoryFailure::Read(DirectoryReadError::Registry(error))),
-            )),
+            Refreshed::Refused(error) => {
+                self.refuse(DirectoryFault::RegistryInvalid);
+                RefreshOutcome::Refused(reloader.directory_refused(directory_error(
+                    DirectoryFailure::Read(DirectoryReadError::Registry(error)),
+                )))
+            }
         }
     }
 
@@ -158,8 +209,46 @@ impl DirectoryRegistry {
         self.held.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn observe(&self, observed: Observed) {
-        *self.observed.lock().unwrap_or_else(PoisonError::into_inner) = observed;
+    fn seen(&self) -> Seen {
+        *self.seen.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Records `state` as what the directory's last exchange showed, which
+    /// clears any fault.
+    fn observe(&self, state: Observed) {
+        *self.seen.lock().unwrap_or_else(PoisonError::into_inner) = Seen { state, fault: None };
+    }
+
+    /// Records that the directory answered with a change the gateway refused.
+    // NOTE: no specification governs this: our own design; a refused change is
+    // degraded, apart from no answer (`down`) and a broken one (`failing`).
+    fn refuse(&self, fault: DirectoryFault) {
+        *self.seen.lock().unwrap_or_else(PoisonError::into_inner) = Seen {
+            state: Observed::Degraded,
+            fault: Some(fault),
+        };
+    }
+}
+
+/// The fault a refused change shows: a registry that breaks a rule of its
+/// own, or a sound one the rest of the configuration does not fit.
+fn fault_of(error: &ReloadError) -> DirectoryFault {
+    match error {
+        ReloadError::Federation { source, .. }
+            if matches!(
+                **source,
+                FederationError::Registry { .. }
+                    | FederationError::FhirRegistry { .. }
+                    | FederationError::Directory(_)
+            ) =>
+        {
+            DirectoryFault::RegistryInvalid
+        }
+        ReloadError::Federation { .. }
+        | ReloadError::Config(_)
+        | ReloadError::RegistryPresence
+        | ReloadError::Profile
+        | ReloadError::Cleartext(_) => DirectoryFault::ConfigurationMismatch,
     }
 }
 

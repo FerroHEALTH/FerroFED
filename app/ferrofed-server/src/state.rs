@@ -208,7 +208,7 @@ impl AppState {
     /// Returns the report `GET /health/dependencies` answers with: the last
     /// observed state of each member endpoint, of the resolver, of the
     /// consent pre-filter, of the localizer and of the care services
-    /// directory.
+    /// directory, with why the directory is degraded.
     #[must_use]
     pub fn dependencies(&self) -> crate::health::dependencies::Report {
         let mut report = self
@@ -216,6 +216,7 @@ impl AppState {
             .map(|federation| federation.dependencies().report())
             .unwrap_or_default();
         report.directory = self.directory().map(|directory| directory.observed());
+        report.directory_fault = self.directory().and_then(|directory| directory.fault());
         report
     }
 
