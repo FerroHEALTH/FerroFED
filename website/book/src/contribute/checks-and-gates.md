@@ -45,7 +45,8 @@ The second tier is the Rust lane: formatting, the fuzz crate's lockfile,
 clippy, the tests, the end-to-end suite against two containerised nodes, the
 release compose files (no compose file builds the image, the release
 `compose.yaml` renders, and its example `ferrofed.toml` and `registry.toml`
-pass `ferrofed config check`), rustdoc, `cargo deny`, the MSRV build, every feature of each published crate
+pass `ferrofed config check`, and so does the example Kubernetes
+ConfigMap with synthetic secrets), rustdoc, `cargo deny`, the MSRV build, every feature of each published crate
 on its own, the packaging dry run, the crate-version guard and dependency
 review. A `detect` job gates
 it on the root `Cargo.toml`, which exists, so the tier runs on every change;
