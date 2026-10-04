@@ -13,5 +13,6 @@ mod pix;
 mod pmir;
 mod proxy;
 mod seed;
+mod tls;
 mod unreachable;
 mod xcpd;
