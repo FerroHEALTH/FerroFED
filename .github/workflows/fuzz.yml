@@ -86,17 +86,24 @@ jobs:
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
           tool: cargo-fuzz@0.13.2
-      - name: Sample the runner's memory and disk
-        run: |
-          nproc
-          sample() { while :; do { date -u +%T; free -m; df -m /; } >> "$RUNNER_TEMP/resources.log"; sleep 10; done; }
-          sample > /dev/null 2>&1 &
       - name: Run the target over its seeds
         env:
           TARGET: ${{ matrix.target }}
           SECONDS_PER_TARGET: ${{ inputs.seconds || (github.event_name == 'pull_request' && '60') || '300' }}
         run: |
           set -euo pipefail
+          nproc
+          sample() {
+            while :; do
+              mem="$(free -m | awk '/^Mem:/ {printf "mem_used=%sMiB mem_available=%sMiB", $3, $7} /^Swap:/ {printf " swap_used=%sMiB/%sMiB", $3, $2}')"
+              disk="$(df -m / | awk 'NR == 2 {printf "disk_free=%sMiB", $4}')"
+              pressure="$(head -n 1 /proc/pressure/memory)"
+              oom="$(sudo dmesg | grep -ciE 'out of memory|oom' || true)"
+              echo "resources $(date -u +%T) ${mem} ${disk} ${pressure} oom_lines=${oom}"
+              sleep 10
+            done
+          }
+          sample &
           mkdir -p "fuzz/corpus/${TARGET}"
           cp "fuzz/seeds/${TARGET}"/* "fuzz/corpus/${TARGET}/"
           # The prebuilt cargo-fuzz binary is a musl build and defaults to the
@@ -106,9 +113,10 @@ jobs:
             "${TARGET}" "fuzz/corpus/${TARGET}" \
             -- -max_total_time="${SECONDS_PER_TARGET}" -rss_limit_mb=4096
       - name: Report the runner's memory, disk and kernel log
-        if: failure()
+        if: always()
         run: |
-          cat "$RUNNER_TEMP/resources.log" || true
+          free -m
+          df -m /
           sudo dmesg -T | grep -iE 'oom|out of memory|killed process' || true
           sudo journalctl --no-pager -q -u systemd-oomd || true
       - name: Upload what reproduces a crash
