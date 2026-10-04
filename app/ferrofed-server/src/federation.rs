@@ -22,7 +22,6 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use ferrofed_engine::dispatch::{NodeClients, SetupError};
 use ferrofed_engine::fanout::Budget;
 use ferrofed_engine::onward::conveyance::Signer;
-use ferrofed_engine::onward::dpop::DpopTransport;
 use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
 use ferrofed_identity::consent::ConsentPrefilter;
 use ferrofed_identity::dev::DevCrossRefError;
@@ -50,11 +49,7 @@ use crate::facade::options::{self, DescribeError};
 use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::{Instruments, NodeRequests};
-
-/// The HTTP engine every request to a node and to its token endpoint is
-/// sent through: the `reqwest` engine, with a `DPoP` proof on the requests
-/// of a grant whose tokens are bound to a key (RFC 9449).
-pub type NodeTransport = DpopTransport<ReqwestTransport>;
+use crate::onward::NodeTransport;
 
 /// The federation a server serves the federated query over.
 pub struct Federation {

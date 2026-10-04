@@ -296,6 +296,75 @@ The admission check authenticates the same way.
 
 The caller's own `Authorization` header never reaches a node.
 
+### A token per caller: token exchange
+
+`grant = "token_exchange"` gives each verified caller a token of its own at
+that node, where the node's authorization server supports RFC 8693:
+
+```toml
+[credentials."cdr-c".oauth2]
+grant = "token_exchange"
+client_auth = "private_key_jwt"
+token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
+client_id = "ferrofed-gateway"
+scope = "system/aql-*.s"                         # the gateway's own requests
+resource = "https://cdr-c.example.org/openehr"   # required: the node (RFC 8707)
+```
+
+For a request on behalf of a caller, the gateway sends the token endpoint
+the caller's verified access token as `subject_token`, an assertion of its
+own as `actor_token`, with its own `jti`, and the client assertion as
+above. It asks for the caller's granted scopes that cover the operation,
+and never the rest (N26), and names the node with `resource`. The answer
+must issue an access token (`issued_token_type`, RFC 8693 §2.2.1). The
+token is cached per caller's token and scope, at most 1024 per endpoint,
+until 30 seconds before it expires, and dropped when the node answers
+`401`. The cache keys on a SHA-256 of the caller's token, never the token.
+
+- Only a caller verified by its token's signature or by introspection has a
+  token to exchange. A caller the edge mode asserted has none, so that node
+  is `node-error` and is sent nothing.
+- A request that no granted scope of the caller covers, such as one with no
+  SMART on openEHR family or a demographic request, is never exchanged: the
+  node is `node-error` and is sent nothing. Without `scope` the
+  authorization server would choose the scope itself (RFC 8693 §2.1).
+- The gateway keeps the caller's token only while some node's grant is
+  `token_exchange`, and never writes it to a log, a span, a metric or the
+  `openEHR-federation-client` token.
+- A caller's token whose text or claims carry the patient identifier the
+  query was resolved on is not sent to the token endpoint, and that node is
+  `node-error` (§5.4.1, N33).
+- The gateway's own requests, the admission check and the redistribution of
+  a held stored query, have no caller: they use the client-credentials
+  grant at the same token endpoint, with `scope`.
+
+The caller's token reaches the node's authorization server, which must
+trust the caller's issuer, and never the node itself.
+
+### Tokens bound to a key: DPoP
+
+`dpop_key_file` in an `oauth2` section binds that node's tokens to a key of
+the gateway's (RFC 9449), for a deployment that requires sender-constrained
+tokens. The file holds a P-256 key, which signs ES256, or a P-384 key, which
+signs ES384, in PKCS#8 PEM:
+
+```text
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out cdr-c-dpop.pem
+```
+
+Every request to that node's URL, and to its token endpoint, then carries a
+`DPoP` proof signed with the key: it names the request's method and URL
+without query and fragment, a fresh `jti` and the time, and, on a request
+that carries the token, the token's SHA-256 in `ath`. The token is sent
+under the `DPoP` scheme. The token endpoint must answer `token_type`
+`DPoP`; a bearer token is refused and the node is `node-error`. A token
+endpoint that answers `400 use_dpop_nonce`, or a node that answers `401`
+with a `DPoP` challenge naming `use_dpop_nonce`, is sent the request once
+more with the nonce it gave, within the request's budget, and every later
+proof to that server carries the latest nonce it sent (RFC 9449 §8, §9).
+The key is read at start and on each reload; a key that is no P-256 or
+P-384 key refuses the configuration, naming `dpop_key_file`.
+
 ### Signing keys and the JWK Set
 
 `[signing]` holds the gateway's ES384 keys: P-384 private keys in PKCS#8

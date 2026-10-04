@@ -10,8 +10,10 @@
 //! the node's token endpoint: the caller's verified access token is the
 //! `subject_token`, an RFC 7523 assertion of the gateway the `actor_token`,
 //! and the request names the node with `resource` (RFC 8707 §2) and asks for
-//! the caller's scopes that cover the operation, never more (N26). The
-//! issued token names the caller as its subject and the gateway as the
+//! the caller's scopes that cover the operation, never more (N26). A call
+//! that no scope of the caller covers is refused with nothing sent
+//! ([`ExchangeError::NoScope`]): without `scope` the authorization server
+//! would choose one (RFC 8693 §2.1). The issued token names the caller as its subject and the gateway as the
 //! actor, so the node's own access decision sees both (RFC 8693 §4.1).
 //!
 //! Only a caller verified by its token's signature or by introspection has
@@ -62,8 +64,9 @@ pub struct SubjectToken {
 
 impl SubjectToken {
     /// The caller's verified `token`, exchanged for `scope`: the caller's
-    /// granted scopes that cover the operation, space-separated, or empty
-    /// for an operation no scope covers.
+    /// granted scopes that cover the operation, space-separated. An empty
+    /// scope, an operation no scope covers, is never exchanged
+    /// ([`ExchangeError::NoScope`]).
     #[must_use]
     pub fn new(token: SecretString, scope: impl Into<String>) -> Self {
         Self {
@@ -115,6 +118,11 @@ pub enum ExchangeError {
     /// The call conveys a verified caller but carries no token of it.
     #[error("the call carries no verified token of its caller to exchange")]
     NoSubject,
+    /// No granted scope of the caller covers the operation, so an exchange
+    /// would ask for none and let the authorization server choose (RFC 8693
+    /// §2.1); it is never sent (N26).
+    #[error("no scope of the caller covers the operation, so its token was not exchanged")]
+    NoScope,
     /// The caller's token or scope carries an identifier the request
     /// withholds, so it was not sent to the token endpoint (§5.4.1, N33).
     #[error("the caller's token carries a withheld patient identifier, so it was not exchanged")]
@@ -198,7 +206,12 @@ impl<T: Transport + Clone + 'static> OnBehalf for Exchange<T> {
             Principal::Gateway => Arc::clone(&self.0.gateway),
             Principal::Caller(caller) => Arc::new(OnBehalfOf {
                 inner: Arc::clone(&self.0),
-                edge: caller.verified_by == Verification::Edge,
+                // NOTE: RFC 8693 §2.1, only a token the gateway itself verified is a
+                // caller's subject_token; an edge assertion never is.
+                edge: !matches!(
+                    caller.verified_by,
+                    Verification::Signature | Verification::Introspection
+                ),
                 subject: conveyance.subject().cloned(),
                 withheld: Arc::clone(withheld),
             }),
@@ -242,7 +255,7 @@ impl<T: Transport> Inner<T> {
             &self.grant,
             Subject {
                 token: subject.token(),
-                scope: Some(subject.scope()),
+                scope: subject.scope(),
             },
             (&assertion, &actor),
             &self.transport,
@@ -288,6 +301,9 @@ impl<T> OnBehalfOf<T> {
             return Err(ExchangeError::Edge);
         }
         let subject = self.subject.as_ref().ok_or(ExchangeError::NoSubject)?;
+        if subject.scope().split_whitespace().next().is_none() {
+            return Err(ExchangeError::NoScope);
+        }
         if carries_withheld(subject, &self.withheld) {
             return Err(ExchangeError::Withheld);
         }

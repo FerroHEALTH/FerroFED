@@ -811,8 +811,15 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
 
 **Scope attenuation.** The gateway never requests onward more than the caller
 holds. Under token exchange the requested scope is the caller's granted
-scopes that cover the operation, as the gate's permission table reads them
-(an operation no scope covers asks for none). Under client credentials the
+scopes that cover the operation, as the gate's permission table reads them,
+and every exchange carries it with `resource`. An operation no granted scope
+covers (one with no SMART family, a demographic client, a route that needs
+only a caller) is never exchanged, `node-error` with nothing sent: without
+`scope` the authorization server would choose one, often the whole grant
+(RFC 8693 §2.1). The gate keeps a caller's verified token only while some
+node's grant exchanges it, and only for a caller verified by signature or
+introspection; it is a `SecretString` no `Debug`, log, span, metric or
+conveyed claim carries. Under client credentials the
 node's grant to the gateway is `system/`, so the caller's narrower scope is
 enforced at the gateway and also conveyed, so the node can apply it (N26).
 

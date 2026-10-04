@@ -66,4 +66,14 @@ impl<T: Transport + Clone> NodeClients<T> {
         }
         Ok(self)
     }
+
+    /// Whether any client obtains its credentials on behalf of each
+    /// request's principal, so a caller's verified token is needed (RFC 8693
+    /// §2.1).
+    #[must_use]
+    pub fn exchanging(&self) -> bool {
+        self.clients
+            .values()
+            .any(|client| client.on_behalf.is_some())
+    }
 }

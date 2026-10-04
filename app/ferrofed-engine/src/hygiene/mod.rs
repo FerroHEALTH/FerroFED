@@ -60,6 +60,7 @@ use url::Url;
 
 use crate::onward::conveyance;
 
+mod beside;
 pub(crate) mod decode;
 pub mod mask;
 
@@ -194,17 +195,6 @@ impl Withheld {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
-    }
-
-    /// Whether `text`, raw or percent-decoded, carries a withheld
-    /// identifier: text the gateway sends beside a request rather than in
-    /// it, such as the caller's token a token exchange sends (§5.4.1, N33).
-    #[must_use]
-    pub fn carried_by(&self, text: &str) -> bool {
-        self.0.iter().any(|value| {
-            let value = value.expose_secret();
-            text.contains(value) || decode::percent_decoded(text).contains(value)
-        })
     }
 
     /// The first part of `request` that carries a withheld identifier, in any

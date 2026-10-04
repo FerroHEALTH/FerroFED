@@ -121,10 +121,6 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
-# The base64url of a DPoP proof's `ath` and of a JWS payload the outbound
-# gate reads (#439, RFC 9449 §4.2); the version openehr-its already locks.
-# Verified against crates.io on 2026-10-04.
-base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # The one time library (clippy.toml): the `saved` instant of a stored query
 # (#77).
 jiff = { version = "0.2.37", default-features = false, features = ["std"] }
@@ -144,8 +140,10 @@ rustls-platform-verifier = "0.7.1"
 # tokio-postgres-rustls already lock, so it adds no crate to the graph.
 # Verified against crates.io on 2026-10-04.
 tokio-rustls = { version = "0.26.6", default-features = false }
-# The base64 of the DICOM audit message's query and detail values (#418), at
-# the version reqwest already locks. Verified against crates.io on 2026-10-04.
+# The base64 of the DICOM audit message's query and detail values (#418), and
+# the base64url of a DPoP proof's `ath` and of a JWS payload the outbound gate
+# reads (#439, RFC 9449 §4.2), at the version reqwest already locks. Verified
+# against crates.io on 2026-10-04.
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
 # ImplementationGuide), compiled only in crates/ihe-iti and, for its PIX Manager

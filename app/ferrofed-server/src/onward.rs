@@ -21,7 +21,12 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::settings::{Scheme, Settings};
-use crate::federation::{FederationError, NodeTransport};
+use crate::federation::FederationError;
+
+/// The HTTP engine every request to a node and to its token endpoint is
+/// sent through: the `reqwest` engine, with a `DPoP` proof on the requests
+/// of a grant whose tokens are bound to a key (RFC 9449).
+pub(crate) type NodeTransport = DpopTransport<ReqwestTransport>;
 
 /// What the node clients of one federation send each node to authenticate.
 #[derive(Debug)]

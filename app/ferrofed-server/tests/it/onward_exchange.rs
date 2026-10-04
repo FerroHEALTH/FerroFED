@@ -25,19 +25,21 @@ use ferrofed_server::config::auth::{
     AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
 };
 use ferrofed_server::config::error::Error as ConfigError;
-use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_server::telemetry::{Rendering, traced};
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, Exchanged, TokenEndpoint};
 use ferrofed_testkit::unreachable;
 use http::{HeaderName, Request, StatusCode, header};
 use jsonwebtoken::jwk::JwkSet;
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
 use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, ResponseTemplate};
 
 use crate::facade::{body, crossref, patient_query, post, registry, settings_with_room, wire};
-use crate::support::{AUDIENCE, ISSUER, bearer_as, call, issuer, signed};
+use crate::support::{AUDIENCE, ISSUER, Logs, bearer_as, call, issuer, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -76,6 +78,16 @@ fn gateway(
     tables: &str,
     auth: AuthSettings,
 ) -> Result<Router, Box<dyn Error>> {
+    Ok(served(dir, a, tables, auth)?.0)
+}
+
+/// The gateway of [`gateway`], with the state its metrics are read from.
+fn served(
+    dir: &Path,
+    a: &str,
+    tables: &str,
+    auth: AuthSettings,
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, unreachable::BASE, ""))?;
     let document = toml::Value::String(document.display().to_string());
@@ -84,13 +96,13 @@ fn gateway(
         crossref(&[("node-a", "2222aaaa-2222-4222-8222-222222222222")])
     );
     let settings = Config::from_sources(Some(&signed(&text)), &BTreeMap::new())?.resolve()?;
-    let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
+    let state = Arc::new(AppState::build(&settings)?);
+    if state.federation().is_none() {
+        return Err("a registry is configured".into());
+    }
     let mut server = settings_with_room();
     server.auth = auth;
-    Ok(ferrofed_server::router(
-        Arc::new(AppState::with_federation(federation)),
-        &server,
-    ))
+    Ok((ferrofed_server::router(Arc::clone(&state), &server), state))
 }
 
 /// A node answering the query to a request `matcher` admits, and `401` to
@@ -171,6 +183,77 @@ async fn node_a_receives_a_token_exchanged_for_the_verified_caller() -> TestResu
         !captured.contains(token),
         "the caller's token never reaches the node: {captured}"
     );
+    Ok(())
+}
+
+/// The caller's token, kept for the exchange, appears in no log line at
+/// any level, no exported span, no metric and no claim the
+/// `openEHR-federation-client` token conveys, and the node never receives
+/// it (§13.1, N24; RFC 9700 §2.3).
+// conformance: CP-16 CP-17
+#[tokio::test]
+async fn the_callers_token_reaches_no_log_span_metric_or_conveyed_claim() -> TestResult {
+    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
+    endpoint.accept_exchange(issuer().jwks(), ISSUER);
+    let a = node(endpoint.bearer_for(CALLER)).await;
+    let dir = tempfile::tempdir()?;
+    let tables = exchange_grant(
+        &endpoint.token_url(),
+        &format!("resource = \"{RESOURCE}\"\n"),
+    );
+    let (app, state) = served(dir.path(), &a.uri(), &tables, crate::support::auth())?;
+    endpoint.trust(published(&app).await?);
+    let authorization = bearer_as(CALLER)?;
+    let token = authorization
+        .strip_prefix("Bearer ")
+        .ok_or("a bearer credential")?
+        .to_owned();
+
+    let logs = Logs::default();
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = traced(
+        Rendering::Json,
+        "trace",
+        false,
+        logs.clone(),
+        Some(provider.tracer("ferrofed")),
+    )?;
+    let guard = tracing::subscriber::set_default(subscriber);
+    let (status, text) = call(app, patient_post(&authorization)?).await?;
+    drop(guard);
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(1, endpoint.exchanges().len(), "the token was exchanged");
+
+    provider.force_flush()?;
+    let spans = format!("{:?}", exporter.get_finished_spans()?);
+    let carriers = [
+        ("the log", logs.text()),
+        ("a span", spans),
+        ("a metric", state.metrics().render()?),
+        (
+            "node A's wire and conveyed claims",
+            wire(&a).await?.to_string(),
+        ),
+        ("the answer", text),
+    ];
+    let signature = token.rsplit('.').next().ok_or("a signed token")?;
+    for (carrier, carried) in carriers {
+        assert!(
+            !carried.is_empty() || carrier == "a metric",
+            "{carrier} is read"
+        );
+        assert!(
+            !carried.contains(&token),
+            "{carrier} carries the caller's token"
+        );
+        assert!(
+            !carried.contains(signature),
+            "{carrier} carries the token's signature"
+        );
+    }
     Ok(())
 }
 

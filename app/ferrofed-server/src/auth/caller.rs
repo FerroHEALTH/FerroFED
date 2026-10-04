@@ -162,11 +162,15 @@ impl Caller {
     /// Returns this caller, keeping `token`, the access token the gateway
     /// verified, for a node whose grant exchanges it (RFC 8693 §2.1).
     ///
-    /// A caller the edge asserted keeps none: the gateway verified the
-    /// edge's assertion, which is no token of the caller's.
+    /// Only a caller verified by its token's signature or by introspection
+    /// keeps it. A caller the edge asserted keeps none: the gateway verified
+    /// the edge's assertion, which is no token of the caller's.
     #[must_use]
     pub fn with_token(mut self, token: SecretString) -> Self {
-        if self.verified_by != VerifiedBy::Edge {
+        if matches!(
+            self.verified_by,
+            VerifiedBy::Signature | VerifiedBy::Introspection
+        ) {
             self.token = Some(VerifiedToken(token));
         }
         self

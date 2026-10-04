@@ -66,7 +66,8 @@ use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::security;
 use crate::facade::target::{self, Mechanism, Selected, TargetError};
-use crate::federation::{Federation, NodeTransport};
+use crate::federation::Federation;
+use crate::onward::NodeTransport;
 
 /// The ITS-REST operations that upload a template, ADL 1.4 and ADL 2
 /// (§12.6).

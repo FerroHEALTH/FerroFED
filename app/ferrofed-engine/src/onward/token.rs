@@ -123,6 +123,14 @@ pub enum TokenError {
         /// The `issued_token_type` it named, when it named one.
         issued_token_type: Option<String>,
     },
+    /// A token exchange would ask for no scope, which lets the authorization
+    /// server choose one, so it was not sent (RFC 8693 §2.1).
+    #[error("the token exchange asks for no scope, so it was not sent")]
+    Unscoped,
+    /// A token exchange would name no resource, so it was not sent (RFC 8707
+    /// §2).
+    #[error("the token exchange names no resource, so it was not sent")]
+    Untargeted,
     /// The issued access token cannot be sent as a credential.
     #[error("the issued access token cannot be sent as a credential")]
     Token(#[source] InvalidCredentials),
@@ -193,9 +201,9 @@ impl TokenError {
 pub struct Subject<'a> {
     /// The caller's verified access token, the `subject_token`.
     pub token: &'a SecretString,
-    /// The scope the token is asked for, when the operation is covered by
-    /// one (RFC 8693 §2.1 `scope`).
-    pub scope: Option<&'a str>,
+    /// The scope the token is asked for: the caller's granted scopes that
+    /// cover the operation (RFC 8693 §2.1 `scope`), never empty.
+    pub scope: &'a str,
 }
 
 /// The claims of a client assertion (RFC 7523 §3).
@@ -287,13 +295,17 @@ pub async fn request<T: Transport>(
 /// `transport`, authenticating with `assertion`, naming the gateway as the
 /// actor with `actor`, and waits at most `timeout` (RFC 8693 §2.1).
 ///
-/// The request names the node with `resource` (RFC 8707 §2) and `audience`
-/// where the grant has them, and asks for `subject`'s scope where it has
-/// one. The answer must issue an access token (RFC 8693 §2.2.1).
+/// The request always asks for `subject`'s scope and names the node with
+/// `resource` (RFC 8707 §2), and with `audience` where the grant has one.
+/// An exchange with no scope or no resource is never sent: without `scope`
+/// the authorization server may issue the caller's whole grant (RFC 8693
+/// §2.1). The answer must issue an access token (RFC 8693 §2.2.1).
 ///
 /// # Errors
 ///
-/// Returns a [`TokenError`] as [`request`] does, and
+/// Returns [`TokenError::Unscoped`] for a subject with no scope and
+/// [`TokenError::Untargeted`] for a grant with no resource, both with
+/// nothing sent, a [`TokenError`] as [`request`] does, and
 /// [`TokenError::IssuedTokenType`] for an answer that issues anything else
 /// than an access token.
 pub async fn exchange<T: Transport>(
@@ -303,6 +315,12 @@ pub async fn exchange<T: Transport>(
     transport: &T,
     timeout: Duration,
 ) -> Result<Issued, TokenError> {
+    if subject.scope.split_whitespace().next().is_none() {
+        return Err(TokenError::Unscoped);
+    }
+    if grant.resource().is_none() {
+        return Err(TokenError::Untargeted);
+    }
     let form = exchange_form(grant, subject, (assertion, actor));
     let token = send(grant, form, transport, timeout).await?;
     if token.issued_token_type.as_deref() != Some(ACCESS_TOKEN_TYPE) {
@@ -336,9 +354,7 @@ fn exchange_form(grant: &Grant, subject: Subject<'_>, (assertion, actor): (&str,
         .append_pair("actor_token", actor)
         .append_pair("actor_token_type", JWT_TOKEN_TYPE)
         .append_pair("requested_token_type", ACCESS_TOKEN_TYPE);
-    if let Some(scope) = subject.scope.filter(|scope| !scope.is_empty()) {
-        form.append_pair("scope", scope);
-    }
+    form.append_pair("scope", subject.scope);
     targeted(&mut form, grant);
     form.finish()
 }

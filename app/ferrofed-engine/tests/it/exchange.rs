@@ -405,6 +405,90 @@ async fn a_caller_token_carrying_the_withheld_identifier_is_never_exchanged() ->
     Ok(())
 }
 
+/// A caller none of whose granted scopes covers the operation is never
+/// exchanged: without `scope` the authorization server would choose one,
+/// often the caller's whole grant (RFC 8693 §2.1, N26). The token endpoint
+/// and the node are sent nothing.
+// conformance: CP-17
+#[tokio::test]
+async fn an_operation_no_scope_covers_is_never_exchanged() -> TestResult {
+    let keys = keys()?;
+    let endpoint = endpoint(&keys).await;
+    let node = node(&endpoint, None).await;
+    let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
+    let token = caller_token("clinician-0042")?;
+
+    for uncovered in ["", " "] {
+        let mut caller = caller();
+        caller.verified_by = Verification::Signature;
+        let conveyed = Conveyance::new(shared(), Principal::Caller(caller)).with_subject(
+            SubjectToken::new(SecretString::from(token.clone()), uncovered),
+        );
+        let reply = query(&client, conveyed).await?;
+        assert_eq!(EndpointStatus::NodeError, reply.status(), "{uncovered:?}");
+    }
+    assert!(
+        endpoint.forms().is_empty(),
+        "no exchange was sent without a scope"
+    );
+    let requests = node.received_requests().await.ok_or("recording is on")?;
+    assert!(requests.is_empty(), "the node was sent nothing");
+    Ok(())
+}
+
+/// A token-exchange grant that names no resource is never exchanged, so
+/// the issued token could not be restricted to the node (RFC 8707 §2).
+// conformance: CP-17
+#[tokio::test]
+async fn an_exchange_naming_no_resource_is_never_sent() -> TestResult {
+    let keys = keys()?;
+    let endpoint = endpoint(&keys).await;
+    let node = node(&endpoint, None).await;
+    let untargeted = Grant::new(
+        &SecretUrl::new(endpoint.token_url()),
+        CLIENT_ID,
+        Scope::parse(SCOPE)?,
+    )?
+    .with_token_exchange();
+    let client = client(&node, exchange(untargeted, keys)?)?;
+    let token = caller_token("clinician-0042")?;
+
+    let reply = query(
+        &client,
+        conveyance_of(Some(&token), Verification::Signature),
+    )
+    .await?;
+    assert_eq!(EndpointStatus::NodeError, reply.status());
+    assert!(endpoint.forms().is_empty(), "no exchange was sent");
+    Ok(())
+}
+
+/// Every exchange asks for the covering scope and names the node, so the
+/// token request always carries both (RFC 8693 §2.1, RFC 8707 §2).
+// conformance: CP-17
+#[tokio::test]
+async fn every_exchange_carries_its_scope_and_resource() -> TestResult {
+    let keys = keys()?;
+    let endpoint = endpoint(&keys).await;
+    let node = node(&endpoint, None).await;
+    let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
+    for subject in ["clinician-0042", "clinician-0043"] {
+        let token = caller_token(subject)?;
+        query(
+            &client,
+            conveyance_of(Some(&token), Verification::Signature),
+        )
+        .await?;
+    }
+    let forms = endpoint.forms();
+    assert_eq!(2, forms.len(), "one exchange per caller, none shared");
+    for form in &forms {
+        assert_eq!(Some(COVERING), field(form, "scope"));
+        assert_eq!(Some(RESOURCE), field(form, "resource"));
+    }
+    Ok(())
+}
+
 /// The gateway's own request, which has no caller, uses the
 /// client-credentials grant at the same token endpoint.
 // conformance: CP-17
