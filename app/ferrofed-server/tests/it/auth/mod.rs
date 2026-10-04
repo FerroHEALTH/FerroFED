@@ -12,6 +12,7 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
+mod cited;
 mod config;
 mod edge;
 mod introspection;

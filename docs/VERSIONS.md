@@ -49,7 +49,11 @@ revision below, cited and not vendored: IHE International licenses its own
 text for reproduction (General Introduction ch. 9), but the ITI-55 pages
 reproduce HL7 v3 tables whose rights HL7 reserves. The client is held to the
 revision by synthetic fixtures shaped after its examples
-(`crates/ihe-iti/tests/fixtures/xcpd/`). PDQm is not
+(`crates/ihe-iti/tests/fixtures/xcpd/`). IUA, which client authentication
+reads for the ITI-71 token claims and the ITI-72 bearer presentation, is
+vendored: its supplement is published in IHE's own repository under
+CC-BY-4.0, General Introduction ch. 9 grants reproduction of IHE's own text,
+and it reproduces no base-standard table. PDQm is not
 used by the gateway; its ITI-78 client is a capability of `crates/ihe-iti`
 for other callers (#119), vendored with it. The versions are what the FHIR
 package registry listed as latest on 2026-10-01.
@@ -62,6 +66,7 @@ package registry listed as latest on 2026-10-01.
 | mCSD (ITI-90, ITI-91) | `ihe.iti.mcsd` | 4.0.0, vendored by #86 (the corpus table below) |
 | XCPD (ITI-55) | the IHE ITI Technical Framework, no FHIR package | Vol 2 Rev 20.1 (2024-12-12, Final Text) |
 | ATNA (ITI-20, syslog with the DICOM message) | the IHE ITI Technical Framework, cited and not vendored, with DICOM PS3.15 Annex A.5 (NEMA, reproduction by permission only) and RFC 5424 and RFC 5425 | Vol 2 Rev 20.1 §3.20; no 2024-25 change proposal touched ITI-20, so Rev 20.2's text is the same |
+| IUA (ITI-71, ITI-72) | the IHE ITI Technical Framework Supplement, no FHIR package | Rev 2.5 (2026-06-18, Trial Implementation), vendored by #414 (the corpus table below) |
 | Netherlands Generic Functions | `fhir.nl.gf` | 0.3.0, as Annex B names it |
 
 ## Corpora and machine-readable inputs
@@ -77,11 +82,12 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 |---|---|---|
 | Federation Tier with AQL specification | `syntaric/openehr-federation-spec` commit `7162d0c760d23105d62a743bf0ad1073c45fdb85` | `scripts/vendor/federation-spec.sh`, `docs/specs/federation-spec/PROVENANCE.md` |
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` commit `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` | `scripts/vendor/federation-ref.sh`, `docs/specs/federation-ref/PROVENANCE.md` |
-| openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules and the Query validation document | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
+| openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules, the Query validation document and the SMART on openEHR source (`docs/smart_app_launch/`, DEVELOPMENT status in this release) | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
 | openEHR AQL specification source | `openEHR/specifications-QUERY` tag `Release-1.1.0`, the AQL and AQL examples documents and the grammar | `scripts/vendor/aql.sh`, `docs/specs/aql/PROVENANCE.md` |
 | IHE PIXm FHIR package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`, the ITI-83 artefacts | `scripts/vendor/ihe-pixm.sh`, `docs/specs/ihe-pixm/PROVENANCE.md` |
 | IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 artefacts | `scripts/vendor/ihe-pdqm.sh`, `docs/specs/ihe-pdqm/PROVENANCE.md` |
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
+| IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 

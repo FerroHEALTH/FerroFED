@@ -717,6 +717,14 @@ introspection. Validation fails closed:
 - an introspection endpoint that does not answer is `503`, never a pass;
 - a token with no scope covering the operation is `403`.
 
+The texts this section is held to are vendored (#414). SMART on openEHR is
+the ITS-REST Release-1.1.0 source under
+`docs/specs/its-rest/docs/smart_app_launch/`, whose `manifest_vars.adoc`
+declares it DEVELOPMENT status in that release, so the scope grammar and
+the launch context it defines are a draft the release does not stabilise.
+IHE IUA (ITI-71, ITI-72) is the Revision 2.5 Trial Implementation
+supplement under `docs/specs/ihe-iua/`.
+
 Scopes are read with `openehr_sdt::smart_scopes::SmartScope::parse_all`, never
 a FerroFED parser. `openehr-sdt` joined the workspace with onward OAuth 2.0
 (#81), which checks each scope an endpoint's `oauth2` grant requests, and
@@ -730,12 +738,12 @@ a composition whose template only the node knows, an upload), only a `*` or
 `**` pattern covers it. A scope `SmartScope::parse` maps to `Other` grants
 nothing. A wildcard `system/aql-*` grant is honoured only for backend clients
 the deployment lists, because it "would grant access to all registered and
-ad-hoc AQL queries system-wide" (ITS-REST `master08-scopes`). Three further
+ad-hoc AQL queries system-wide" (`master08-scopes.adoc` §Resource Scopes). Three further
 rules are FerroFED's own design, decided with #80 after a security review:
 
 - **`patient/` grants nothing at the gateway.** SMART on openEHR confines a
   patient grant to the token's launch context, an `ehrId` at one platform
-  (master07 §Context Selection); no claim the specifications define names the
+  (`master07-authorization.adoc` §Context Selection); no claim the specifications define names the
   patient as the identifier and namespace the gateway resolves, so the
   gateway cannot prove a request stays inside the context, on a query, on
   `GET {base}/v1/ehr?subject_id=` or on a route addressed by `ehr_id`. The
@@ -879,7 +887,7 @@ decided with #82:
   key cannot convey the caller, so it refuses to start.
 
 **Purpose of use** (decision A24). Required by default: a request whose token
-carries no purpose of use (an IUA `purpose_of_use` claim, or RAR
+carries no purpose of use (an IUA `purpose_of_use` claim, ITI TF-2 3.71.4.2.2.1.1, or RAR
 `authorization_details`, RFC 9396) is a `403` at the gateway. §13.4 says a
 deployment "MUST NOT rely on a node inferring it from the query", and
 forwarding a request without one leaves exactly that inference to the node. A
@@ -1982,7 +1990,7 @@ R4 is #23, #25 and #27).
 | A15 | XCPD ITI-55 [R2 D2, changed by the owner] | built in FerroFED with the localization seam in v0.0.8 (#85), as the `xcpd` feature of `ihe-iti`, with the SOAP 1.2, HL7 v3 and SAML XUA dependencies confined to it | build what FerroFED needs inside FerroFED first and never block on an unbuilt sibling; the crate can move to FerroPIX later. The report had recommended leaving it unscheduled | decided (owner, 2026-10-01) |
 | A16 | The FHIR model [R2 D3] | `fhir-types` r4, compiled only in `ihe-iti`: the `terminology` root set for PIXm (#42), `resources` from PDQm (#119) and mCSD (#86) | the codegen rule refuses hand-written resource structs; the core never compiles FHIR | decided (owner, 2026-10-01) |
 | A17 | A resolver that cannot answer [R2 D4] | `not-resolved` with the error, `complete` cleared, `424` under all-or-nothing; only a `404` keeps N6's do-not-fail rule; best-effort may degrade it only when requested | a PIX outage must never look like an empty record; §11.1 does not separate the cases (held on #17) | decided (owner, 2026-10-01) |
-| A18 | Vendoring the bindings [R2 D9] | PIXm 3.1.0, mCSD 4.0.0, PMIR 1.6.0 (CC-BY-4.0) and Nuts GF 0.3.0 (EUPL-1.2), each with the issue that first reads it; not the ITI TF volumes or IUA until their terms are read | `.claude/rules/vendored-inputs.md`; the licences were read from each `package.json` | decided (owner, 2026-10-01) |
+| A18 | Vendoring the bindings [R2 D9] | PIXm 3.1.0, mCSD 4.0.0, PMIR 1.6.0 (CC-BY-4.0) and Nuts GF 0.3.0 (EUPL-1.2), each with the issue that first reads it; not the ITI TF volumes or IUA until their terms are read. IUA was vendored with #414 once they were: its supplement is CC-BY-4.0 in IHE's repository and General Introduction ch. 9 grants reproduction | `.claude/rules/vendored-inputs.md`; the licences were read from each `package.json` | decided (owner, 2026-10-01) |
 | A19 | Pseudonyms [R2 D10] | accept a pseudonym or a direct identifier; never pseudonymise in the core; a regional adapter may | §5.3, §B.7; a pseudonym is personal data under the same hygiene | decided (owner, 2026-10-01) |
 | A20 | The resolution cache [reconciles R2 §5 with R3 D2] | session-scoped, in memory, TTL-bounded; no cross-session cache keyed by a hash of the identifier; a consent denial drops the caller's resolution bindings that name the denied member; the shared `ehr_id` index is a routing hint and is kept | §12.5.1 step 2 scopes the binding to the session; a keyed hash is pseudonymised personal data | decided (owner, 2026-10-01) |
 | A21 | Identity conveyance [R2 D5] | RFC 7523 client credentials by default, the gateway-signed `openEHR-federation-client` JWT on every request, RFC 8693 per endpoint where offered | §13.1 leaves end-user conveyance open; production federations convey a signed assertion per request; the caller's token is never forwarded (RFC 9700 §2.3) | decided (owner, 2026-10-01) |

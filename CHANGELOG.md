@@ -33,6 +33,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The texts client authentication is held to are vendored under
+  `docs/specs/`. The ITS-REST Release-1.1.0 fetch now takes the SMART on
+  openEHR source (`docs/smart_app_launch/`), recording that the release
+  declares it DEVELOPMENT status. A new fetch script takes the IHE IUA
+  supplement, Revision 2.5 Trial Implementation (ITI-71, ITI-72), which IHE
+  publishes under CC-BY-4.0. The citations in the authentication code and
+  the security handoff of the architecture point at the vendored text and
+  name the DEVELOPMENT status, and a test holds every cited section,
+  quotation and claim name to the pinned text (#414).
 - `[telemetry] trace_sample_ratio` sets the share of client requests whose
   spans the trace export sends, from `0.0` to `1.0`, `1.0` unless set, and
   refused at load outside that range. The decision is made once at the

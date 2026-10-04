@@ -12,6 +12,10 @@
 //! (the Federation Tier's Annex B §B.4a.3). Every other claim is passed over,
 //! and the IUA `person_id`, a patient identifier, is never read (§5.4.1,
 //! N33).
+//!
+//! IUA is cited from the Revision 2.5 Trial Implementation supplement
+//! vendored at `docs/specs/ihe-iua/IHE_ITI_Suppl_IUA.md`: ITI TF-2 3.71.4.2.2.1
+//! (the JSON Web Token Option) and 3.71.4.2.2.1.1 (the JWT IUA extension).
 
 use serde::Deserialize;
 
