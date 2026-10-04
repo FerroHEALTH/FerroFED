@@ -32,10 +32,15 @@ self-description (§8, §7a.2). v0.0.8 is security and the bindings (§13 to
 §15, Annex A, Annex B): client authentication (#80), onward OAuth 2.0 with a
 signed assertion and a published JWKS (#81), the caller's identity conveyed
 to each node (#82), consent left to the node (#83), XCPD localization (#85),
-mCSD addressing (#86) and the Dutch Generic Functions (#87). v0.0.9 is the
-conformance program. The gateway authenticates no client until #80 lands.
-Each crate gets the rest of its behaviour from its own issue, in milestone
-order.
+mCSD addressing (#86) and the Dutch Generic Functions (#87). `main` carries
+all of these but the Dutch Generic Functions: every caller is authenticated
+at the gateway, each node is reached with its own credential or an OAuth 2.0
+token for an ES384 client assertion, and is told the caller in a token the
+gateway signs; undirected patient queries are localized by XCPD or the PIXm
+resolver, and the registry can be read from an mCSD directory. The ATNA
+audit repository (#418), the Annex B adapters (#87, #88) and traces (#353)
+are planned. v0.0.9 is the conformance program. Each crate gets the rest of
+its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
@@ -77,8 +82,10 @@ the pinned text until that issue lands.
   - `openehr-query`: AQL, parsed and re-emitted by `printer::to_aql` for the
     subject and identifier rewrite;
   - `openehr-sdt`: the SMART on openEHR scope grammar for the §13 security
-    handoff, and the simplified formats and their validation if ever needed;
-    not a dependency until client authentication (#80) first uses it;
+    handoff. It joined the workspace with onward OAuth 2.0 (#81), whose
+    `oauth2` scope it checks, and client authentication (#80) reads each
+    caller's scopes with it; its simplified formats and their validation are
+    used if ever needed;
   - `openehr-base` and `openehr-rm`: the typed identifiers (`HIER_OBJECT_ID`,
     `OBJECT_VERSION_ID`, the `ehr_id` and `system_id` forms) behind §12
     follow-up routing, and every RM fact.
@@ -140,18 +147,22 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-identity` (the role traits, `PatientRef`, the development
-  cross-reference, the PIXm resolver over `ihe-iti`, the session-scoped
-  resolution bindings, and the adapters over the binding crates) and
-  `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing, and the
-  outbound identifier-hygiene gate every request to a node passes, #45).
+  cross-reference, the PIXm resolver and localizer and the XCPD localizer
+  over `ihe-iti`, the mCSD directory, the resolution bindings per verified
+  caller, and the adapters over the binding crates) and `ferrofed-engine`
+  (dispatch, fan-out, budgets, follow-up routing, onward OAuth 2.0 and the
+  signed caller token, and the outbound identifier-hygiene gate every
+  request to a node passes, #45).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):
   `serve` and `config check`, the TOML and `FERROFED__` environment
   configuration with `_file` secrets and per-endpoint outbound credentials,
   the console, the request log that carries no body, query text, header value
   or unmatched path, the health family over an indicator registry, the
-  `tower-http` stack, the bounded drain and the startup banner. The façade
-  (#38) serves the federated AQL query, the stored queries the gateway holds
+  `tower-http` stack, the bounded drain and the startup banner. The gate
+  (`auth`, #80) authenticates every caller before the façade reads the
+  request, and the gateway's JWK Set is served at
+  `{base}/.well-known/jwks.json` (#81). The façade (#38) serves the federated AQL query, the stored queries the gateway holds
   (`stored`: an embedded, a PostgreSQL and a read-only files backend), the
   follow-up routes to the owning node, the definition routes to a chosen
   node, and `OPTIONS {base}/`, with its two `serde_json::Value` seams

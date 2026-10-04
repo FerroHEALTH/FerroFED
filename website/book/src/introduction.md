@@ -38,6 +38,12 @@ the gateway:
   names every member with its status;
 - resolves the patient through an IHE PIXm PIX Manager (ITI-83), and refuses
   any query that would carry the patient identifier to a node;
+- can ask only the members that may hold the patient, localized through IHE
+  XCPD (ITI-55) or the PIX Manager, and can read its members from an IHE mCSD
+  care services directory;
+- authenticates to each node as itself, with an OAuth 2.0 token or a static
+  credential, and tells each node who is asking in a token it signs for that
+  node;
 - fails a query when a node it asked does not answer, unless you ask for a
   partial answer, and shapes the merged rows as one CDR would: `ORDER BY`
   with `LIMIT`, bounded `OFFSET` pages, `DISTINCT`, recombined aggregates and

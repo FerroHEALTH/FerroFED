@@ -66,8 +66,7 @@ was tagged.
 
 ### v0.0.7: definitions and membership
 
-The v0.0.7 milestone. `main` carries it, and its release is cut from `main`
-once the milestone closes.
+Released on 2026-10-03.
 
 - Definition requests routed to one named node, the opt-in fan-out template
   upload, and stored-query distribution with drift reporting and an
@@ -84,14 +83,64 @@ once the milestone closes.
   §12b.2 (N42a), the registry reload on `SIGHUP`, the stored-query registry
   on `redb`, PostgreSQL or read-only files, health probes, and metrics.
 
-### v0.0.8, on `main` so far
+### v0.0.8, on `main`, in the next release
 
-The v0.0.8 milestone is in progress; `main` carries these parts of it.
+The v0.0.8 milestone, security and the bindings (§13 to §15, Annex A), is in
+progress. `main` carries these parts of it, and v0.0.8 is cut from `main`
+once the milestone closes.
 
-- Undirected patient queries localized by IHE XCPD ITI-55: a member whose
-  community no responding gateway names is `not-localized` and never asked,
-  and a localizer that does not answer fails closed, with its error on every
-  member and in `meta.federation` (N4, N10, §14.1, Annex A.3, CP-5).
+- Client authentication at the gateway: RFC 9068 access tokens checked by
+  key set or by introspection, SMART on openEHR scopes per route, the purpose
+  of use, and an explicit edge mode for a proxy that authenticates callers
+  (§13.1, N25, CP-17;
+  [#80](https://github.com/FerroHEALTH/FerroFED/issues/80),
+  [Client authentication](../operate/authentication.md)).
+- OAuth 2.0 client credentials to each node with an RFC 7523 assertion
+  signed ES384, the node tokens cached, and the gateway's JWK Set published
+  at `{base}/.well-known/jwks.json` (§13.1, N25, N30, CP-17;
+  [#81](https://github.com/FerroHEALTH/FerroFED/issues/81)).
+- The caller's identity conveyed on every request to a node, in a token the
+  gateway signs for that node and a node verifies against the published JWK
+  Set (§13.1, N24, CP-16;
+  [#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
+  [What a node is told about the caller](../operate/authentication.md#what-a-node-is-told-about-the-caller)).
+- Consent left to the node, with the optional Step-1 pre-filter on every
+  patient route, the read of an EHR by subject included, its outage carried
+  in `meta.federation`, on the health report and in the metrics, and a
+  node's own refusal reported as `consent-denied` (§13.2, N27, N27a;
+  [#83](https://github.com/FerroHEALTH/FerroFED/issues/83),
+  [#399](https://github.com/FerroHEALTH/FerroFED/issues/399),
+  [#400](https://github.com/FerroHEALTH/FerroFED/issues/400)).
+- The §13.4 deployment decisions, answered for the gateway, with an
+  operator's template for the rest (CP-39;
+  [#84](https://github.com/FerroHEALTH/FerroFED/issues/84),
+  [The §13.4 deployment decisions](../operate/deployment-decisions.md)).
+- Undirected patient queries localized by IHE XCPD ITI-55 or by the PIXm
+  resolver, which shares one ITI-83 answer between localization and
+  resolution. A member no localizer names is `not-localized` and never
+  asked, and a localizer that does not answer fails closed, with its error on
+  every member and in `meta.federation`. The read of an EHR by subject is
+  localized too, the localizer is on the health report and in the metrics,
+  and every XCPD exchange is audited to a log target (N4, N10, §14.1, §14.2,
+  Annex A.3, CP-5;
+  [#85](https://github.com/FerroHEALTH/FerroFED/issues/85),
+  [#408](https://github.com/FerroHEALTH/FerroFED/issues/408),
+  [#409](https://github.com/FerroHEALTH/FerroFED/issues/409),
+  [#410](https://github.com/FerroHEALTH/FerroFED/issues/410)).
+- The registry read from an IHE mCSD care services directory with ITI-90 and
+  kept in step with ITI-91, a shared directory included (§15.1, §15.2, N21,
+  Annex A.5;
+  [#86](https://github.com/FerroHEALTH/FerroFED/issues/86),
+  [#423](https://github.com/FerroHEALTH/FerroFED/issues/423)).
+- The §12.5.1 resolution bindings kept per verified caller (N41;
+  [#412](https://github.com/FerroHEALTH/FerroFED/issues/412)).
+- A credential or a patient identifier sent only over `https` outside the
+  development profile, and the stored-query store's PostgreSQL password only
+  over TLS
+  ([#402](https://github.com/FerroHEALTH/FerroFED/issues/402),
+  [#416](https://github.com/FerroHEALTH/FerroFED/issues/416)).
+- A Kubernetes example that starts, checked in CI
+  ([#428](https://github.com/FerroHEALTH/FerroFED/issues/428)).
 
 ## Planned
 
@@ -99,32 +148,25 @@ Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-v0.0.8, security and the bindings (§13 to §15, Annex A, Annex B):
+The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
 
-- client authentication at the gateway, built: RFC 9068 access tokens by key
-  set or introspection, SMART on openEHR scopes per route, the purpose of
-  use, and an edge mode
-  ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80),
-  [Client authentication](../operate/authentication.md)); the client's
-  identity conveyed on every request to a node, built: a token the gateway
-  signs for each node, verifiable against its published JWKS
-  ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
-  [What a node is told about the caller](../operate/authentication.md#what-a-node-is-told-about-the-caller));
-- OAuth 2.0 client credentials with an RFC 7523 signed JWT assertion to each
-  node, and the gateway's JWKS published
-  ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81));
-- consent left to the node with the optional Step-1 pre-filter
-  ([#83](https://github.com/FerroHEALTH/FerroFED/issues/83)), and the §13.4
-  deployment decisions, documented with an operator's template
-  ([#84](https://github.com/FerroHEALTH/FerroFED/issues/84),
-  [The §13.4 deployment decisions](../operate/deployment-decisions.md));
-- the registry read from an mCSD directory
-  ([#86](https://github.com/FerroHEALTH/FerroFED/issues/86)), and PMIR
+- the XCPD audit sent to an ATNA Audit Record Repository with ITI-20
+  ([#418](https://github.com/FerroHEALTH/FerroFED/issues/418));
+- how a `patient/` scope is confined to its patient across a federation,
+  which grants nothing at the gateway until then
+  ([#413](https://github.com/FerroHEALTH/FerroFED/issues/413)), and the
+  SMART on openEHR pages the client authentication cites, vendored
+  ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414));
+- in-scope deletions recorded in the mCSD directory replica, so a dangling
+  listing is judged the same at boot and on refresh
+  ([#433](https://github.com/FerroHEALTH/FerroFED/issues/433)), and PMIR
   identity-lifecycle notifications
   ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147));
-- the Dutch Generic Functions as optional regional adapters
-  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87),
-  [#88](https://github.com/FerroHEALTH/FerroFED/issues/88));
+- the Dutch Generic Functions as optional regional adapters, NVI
+  localization, the Mitz consent pre-filter and LRZa addressing
+  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), and the Annex B
+  authentication tracks
+  ([#88](https://github.com/FerroHEALTH/FerroFED/issues/88));
 - a `CONTRIBUTION` in canonical XML
   ([#308](https://github.com/FerroHEALTH/FerroFED/issues/308)), and traces
   exported through OpenTelemetry
