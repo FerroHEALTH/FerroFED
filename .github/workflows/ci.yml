@@ -409,12 +409,38 @@ jobs:
           persist-credentials: false
       - run: bash scripts/checks/crate-version-guard.sh --self-test
 
+  # The manifest guard (#454), the one tier-1 job with a toolchain: every
+  # Cargo manifest of the workspace and of fuzz/ parses, read by `cargo
+  # metadata --no-deps` with nothing resolved and nothing compiled. A manifest
+  # a merge broke, a dependency written twice, fails here once with Cargo's
+  # own message; `detect` needs this job, so the Rust tier then never starts.
+  # No build cache: nothing is built.
+  manifests:
+    name: manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/manifests.sh --self-test
+          bash scripts/checks/manifests.sh
+
   # ---- Tier 2: the Rust lanes, gated on the workspace existing --------------
 
   # The one job that decides whether the cargo tier runs at all: it checks out
-  # and looks for a root Cargo.toml. Every Rust job below `needs` it.
+  # and looks for a root Cargo.toml. Every Rust job below `needs` it, and it
+  # waits for the manifest guard, so a broken manifest starts no Rust job.
   detect:
     name: detect workspace
+    needs: manifests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -764,6 +790,7 @@ jobs:
       - site-links
       - tracker-helpers
       - crate-version-guard-self-test
+      - manifests
       - detect
       - fmt
       - fuzz-lockfile

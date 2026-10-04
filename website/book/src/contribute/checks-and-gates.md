@@ -21,7 +21,8 @@ A pull request merges into `main` only when two checks pass:
 
 ## The two tiers of `ci.yml`
 
-The first tier runs on every change, because it needs no Rust:
+The first tier runs on every change, because it needs no Rust build (the
+manifest check installs the toolchain only to read the manifests):
 
 | Check | What it guards |
 |---|---|
@@ -40,6 +41,7 @@ The first tier runs on every change, because it needs no Rust:
 | site-links | every internal link and anchor of the assembled site (the landing page and this book) and of the README, checked offline by lychee, so a page or an anchor that does not exist fails the change |
 | tracker-helpers | the self-tests of the `scripts/gh` tracker helpers |
 | crate-version-guard self-test | the crate-version guard judges only what a pull request changes, against a stub repository |
+| manifests | every Cargo manifest, of the workspace and of `fuzz/`, parses, read by `cargo metadata` without compiling, so a manifest a merge broke fails here first; the one first-tier check that installs the pinned toolchain |
 
 The second tier is the Rust lane: formatting, the fuzz crate's lockfile,
 clippy, the tests, the end-to-end suite against two containerised nodes, the
@@ -74,6 +76,8 @@ bash scripts/checks/obligations.sh
 bash scripts/checks/site-links.sh --self-test
 bash scripts/checks/site-links.sh
 bash scripts/checks/crate-version-guard.sh --self-test
+bash scripts/checks/manifests.sh --self-test
+bash scripts/checks/manifests.sh
 for helper in fields labels migrate-fields rel; do bash "scripts/gh/$helper.sh" --self-test; done
 find scripts .claude/hooks -name '*.sh' -exec shellcheck --severity=style {} +
 actionlint

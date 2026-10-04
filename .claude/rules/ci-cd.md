@@ -24,8 +24,11 @@ Twelve workflows:
   Kubernetes manifests, the comment-style guard, the versions guard, the
   favicon guard, the site link guard over the assembled site, the
   conformance-matrix guard, the obligations guard, the
-  e2e-placement guard, the tracker-helper self-tests); tier 2 is the Rust set, gated behind a `detect`
-  job that looks for the root `Cargo.toml`, so it runs on every change. The
+  e2e-placement guard, the tracker-helper self-tests), plus the manifest
+  guard, the one tier-1 job with a toolchain, which reads every Cargo
+  manifest with `cargo metadata --no-deps` and compiles nothing; tier 2 is the
+  Rust set, gated behind a `detect` job that needs the manifest guard and looks
+  for the root `Cargo.toml`, so it runs on every change. The
   `conclusion` job is the single required status check on `main`. The design
   is `docs/ci-cd.md`.
 - `.github/workflows/contribution-licence.yml`: `contribution-licence-guard`,
