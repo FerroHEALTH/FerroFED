@@ -47,6 +47,8 @@ use crate::config::{Config, Credentials, transport};
 pub struct NlGf {
     /// The NVI localizer (`[nl_gf.nvi]`).
     pub nvi: Option<Nvi>,
+    /// The Mitz consent pre-filter (`[nl_gf.mitz]`).
+    pub mitz: Option<crate::config::mitz::Mitz>,
 }
 
 /// The NVI localizer, as the configuration writes it.
@@ -82,6 +84,8 @@ pub struct Nvi {
 pub struct NlGfSettings {
     /// The NVI localizer, when `[nl_gf.nvi]` is set.
     pub nvi: Option<NviSettings>,
+    /// The Mitz consent pre-filter, when `[nl_gf.mitz]` is set.
+    pub mitz: Option<crate::config::mitz::MitzSettings>,
 }
 
 /// The NVI localizer, with every secret and file read.
@@ -136,7 +140,12 @@ pub(super) fn resolve(config: &Config) -> Result<Option<NlGfSettings>, Error> {
         .as_ref()
         .map(|nvi| resolve_nvi(config, nvi))
         .transpose()?;
-    Ok(Some(NlGfSettings { nvi }))
+    let mitz = nl_gf
+        .mitz
+        .as_ref()
+        .map(|mitz| crate::config::mitz::resolve(config, mitz))
+        .transpose()?;
+    Ok(Some(NlGfSettings { nvi, mitz }))
 }
 
 /// Resolves `[nl_gf.nvi]`.

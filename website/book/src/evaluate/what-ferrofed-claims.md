@@ -119,6 +119,11 @@ once the milestone closes.
   [#83](https://github.com/FerroHEALTH/FerroFED/issues/83),
   [#399](https://github.com/FerroHEALTH/FerroFED/issues/399),
   [#400](https://github.com/FerroHEALTH/FerroFED/issues/400)).
+- Mitz as that pre-filter in the Netherlands: the closed authorization
+  question asked once per data holder, a member Mitz denies reported
+  `consent-denied` and never asked (Annex B §B.6, N27a;
+  [#475](https://github.com/FerroHEALTH/FerroFED/issues/475),
+  [Dutch consent](../operate/identity.md#dutch-consent-nl_gfmitz)).
 - The §13.4 deployment decisions, answered for the gateway, with an
   operator's template for the rest (CP-39;
   [#84](https://github.com/FerroHEALTH/FerroFED/issues/84),
@@ -177,7 +182,7 @@ The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
 - the SMART on openEHR pages the client authentication cites, vendored
   ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414));
 - the Dutch Generic Functions as optional regional adapters, NVI
-  localization, the Mitz consent pre-filter and LRZa addressing
+  localization and LRZa addressing
   ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), and the Annex B
   authentication tracks
   ([#88](https://github.com/FerroHEALTH/FerroFED/issues/88));

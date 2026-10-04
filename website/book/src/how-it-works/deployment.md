@@ -130,9 +130,7 @@ flowchart TB
   `[metrics] listen` is set and on loopback unless you allow otherwise
   ([Metrics](../operate/metrics.md)).
 - **The planned services** are the Dutch
-  Generic Functions, NVI localization, the Mitz consent pre-filter and LRZa
-  addressing
- 
+  Generic Functions, NVI localization and LRZa addressing
   ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)). The
   localization, pre-filter and directory seams they plug into are built.
 

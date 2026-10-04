@@ -44,6 +44,7 @@ mod lifecycle;
 mod localization;
 mod localizer_surface;
 mod metrics;
+mod mitz;
 mod nl_gf;
 mod no_destination;
 mod onward;

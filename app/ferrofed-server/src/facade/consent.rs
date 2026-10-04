@@ -18,7 +18,7 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use ferrofed_identity::consent::{ConsentDecision, ON_UNAVAILABLE};
+use ferrofed_identity::consent::{ConsentDecision, ConsentError, ON_UNAVAILABLE};
 use ferrofed_identity::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use openehr_federation::outcome::ErrorDetail;
@@ -67,10 +67,7 @@ pub(crate) async fn prefilter(
     federation.requests().prefiltered(&decision);
     match decision {
         ConsentDecision::Denied(refused) => Prefiltered {
-            denied: refused
-                .into_iter()
-                .filter(|member| candidates.contains(member))
-                .collect(),
+            denied: among(refused, candidates),
             unavailable: None,
         },
         ConsentDecision::NoSignal => Prefiltered::default(),
@@ -84,10 +81,37 @@ pub(crate) async fn prefilter(
             );
             Prefiltered {
                 denied: BTreeSet::new(),
-                unavailable: Some(ErrorDetail::Text(format!(
-                    "the consent pre-filter could not answer: {failure}"
-                ))),
+                unavailable: Some(unanswered(&failure)),
+            }
+        }
+        ConsentDecision::Partial { denied, failure } => {
+            // NOTE: N26, N27, N27a, §13.2.1: a candidate the pre-filter could not answer
+            // for has no consent signal, so it is asked and its node is the sole gate.
+            tracing::warn!(
+                error = %failure,
+                policy = ON_UNAVAILABLE,
+                denied = denied.len(),
+                "the consent pre-filter could not answer for every candidate; the others are asked"
+            );
+            Prefiltered {
+                denied: among(denied, candidates),
+                unavailable: Some(unanswered(&failure)),
             }
         }
     }
+}
+
+/// The members of `refused` that are candidates.
+fn among(refused: BTreeSet<NodeId>, candidates: &[NodeId]) -> BTreeSet<NodeId> {
+    refused
+        .into_iter()
+        .filter(|member| candidates.contains(member))
+        .collect()
+}
+
+/// The `consent.error` of a pre-filter that could not answer for `failure`.
+fn unanswered(failure: &ConsentError) -> ErrorDetail {
+    ErrorDetail::Text(format!(
+        "the consent pre-filter could not answer: {failure}"
+    ))
 }

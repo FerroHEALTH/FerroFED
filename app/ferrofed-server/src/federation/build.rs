@@ -28,6 +28,7 @@ use crate::metrics::nodes::NodeRequests;
 use crate::onward::NodeTransport;
 
 use super::error::FederationError;
+use super::mitz::mitz_prefilter;
 use super::pixm::pixm_resolver;
 use super::registry::read_registry;
 use super::{Federation, Observed, Reconciled, widened};
@@ -167,6 +168,14 @@ impl Federation {
         let resolving = localization::Resolving { development, pixm };
         let localization = localization::policy(settings, selection, resolving, &snapshot)
             .map_err(FederationError::Localization)?;
+        if let Some(mitz) = mitz_prefilter(settings, &snapshot)? {
+            // NOTE: N27a: at most one consent pre-filter is active, so the
+            // development rows and Mitz are never combined.
+            if consent.is_some() {
+                return Err(FederationError::TwoConsentPrefilters);
+            }
+            consent = Some(mitz);
+        }
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.
         let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
