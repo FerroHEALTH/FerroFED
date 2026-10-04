@@ -19,7 +19,8 @@
 //!
 //! The protected-payload sites are a registry endpoint with a
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
-//! 2.0 grant, every PIX Manager, every XCPD responding gateway and the NVI
+//! 2.0 grant, the authorization server of its Nuts grant (sent the gateway's
+//! credentials in a Verifiable Presentation), every PIX Manager, every XCPD responding gateway and the NVI
 //! Localization Service of `[nl_gf.nvi]` (each is sent the patient
 //! identifier, and a credential when one is configured), the Patient
 //! Identity Registry of `[pmir]` and its callback URL, which carry patient
@@ -245,6 +246,17 @@ pub fn check(
                 site(
                     format!("{section}.oauth2.token_endpoint"),
                     format!("{section}.oauth2"),
+                ),
+            )?;
+        }
+        // NOTE: Nuts RFC021 §7, every endpoint is TLS-protected; the token and
+        // definition endpoints the metadata names are held to it by the client.
+        if let Scheme::Nuts(grant) = scheme {
+            hold(
+                grant.grant().authorization_server(),
+                site(
+                    format!("{section}.nuts.authorization_server"),
+                    format!("{section}.nuts credentials and presentation"),
                 ),
             )?;
         }

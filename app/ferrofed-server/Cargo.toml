@@ -49,6 +49,9 @@ ferrofed-registry.workspace = true
 # header, spool, connection and forwarder, and the PMIR
 # ITI-94 subscriber and ITI-93 feed reader of the identity feed (#147).
 ihe-iti = { workspace = true, features = ["atna", "pmir", "xcpd"] }
+# The Nuts grant of an endpoint's onward credentials, Annex B §B.4 (#88):
+# its grant, holder and client are built from the configuration.
+nl-generic-functions = { workspace = true, features = ["nuts-auth"] }
 # The version uid a follow-up read names, read for its creating_system_id
 # (§12.3, #64).
 openehr-base.workspace = true

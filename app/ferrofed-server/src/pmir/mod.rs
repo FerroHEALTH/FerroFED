@@ -96,8 +96,8 @@ impl IdentityFeed {
                 password: password.to_secret_string(),
             },
             // NOTE: no specification governs this: our own design; configuration
-            // refuses an OAuth 2.0 grant here, so only the transport remains.
-            Some(Scheme::OAuth2(_)) | None => RegistryAuth::None,
+            // refuses an OAuth 2.0 or Nuts grant here, so only the transport remains.
+            Some(Scheme::OAuth2(_) | Scheme::Nuts(_)) | None => RegistryAuth::None,
         };
         let subscriber = lifecycle::subscriber(&settings.url, &auth)?;
         let criteria = match &settings.identifier_system {

@@ -13,6 +13,7 @@ use std::time::Duration;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_engine::onward::Grant;
 use ferrofed_engine::onward::keys::KeyRing;
+use ferrofed_engine::onward::nuts::NutsGrant;
 use ferrofed_identity::dev::Profile;
 use ferrofed_identity::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
@@ -260,6 +261,9 @@ pub enum Scheme {
     /// An OAuth 2.0 client-credentials grant with a JWT client assertion
     /// (RFC 6749 §4.4, RFC 7523 §2.2).
     OAuth2(Box<Grant>),
+    /// The Nuts grant of Annex B §B.4: a `DPoP`-bound token for a
+    /// Verifiable Presentation of the gateway's credentials (Nuts RFC021).
+    Nuts(Box<NutsGrant>),
 }
 
 impl Settings {
