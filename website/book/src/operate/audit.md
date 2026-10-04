@@ -10,7 +10,7 @@ Audit Event. Two configurations decide where the records go:
 - `[xcpd] audit` and `[xcpd.audit_repository]` for the XCPD localizer's
   ITI-55 exchanges, which XCPD audits as a DICOM audit message over syslog
   ([The audit repository](identity.md#the-audit-repository));
-- `[audit]` for the PIXm, mCSD and PMIR transactions, which each profile
+- `[audit]` for the PIXm, PDQm, mCSD and PMIR transactions, which each profile
   audits as a FHIR `AuditEvent` built on the IHE Basic Audit Log Patterns
   (BALP). BALP has the gateway send it over the ATX: FHIR Feed Option of
   ITI-20: a FHIR `create` at the repository's FHIR base (the RESTful ATNA
@@ -22,15 +22,13 @@ Audit Event. Two configurations decide where the records go:
 |---|---|---|---|---|
 | ITI-55 Cross Gateway Patient Discovery | each discovery the XCPD localizer makes | the Initiating Gateway's DICOM audit message, over syslog | inside the base64 query parameters | `[xcpd]` |
 | ITI-83 Mobile Patient Identifier Cross-reference Query | each query the PIXm resolver or localizer asks a PIX Manager | PIXm Query Consumer audit (BALP Patient Query): the request as sent, base64 | the source identifier, system and value | `[audit]` |
+| ITI-78 Mobile Patient Demographics Query | each search the `[pdqm]` step sends the PDQm Supplier | PDQm Query Consumer audit (BALP Query): the request as sent, base64 | inside the base64 request; a demographics search identifies no patient on its own | `[audit]` |
+| ITI-119 Patient Demographics Match | each match the `[pdqm]` step sends under `transaction = "iti-119"` | PDQm Match Consumer audit (BALP Query): the request as sent, base64 | the identifier on the input Patient, system and value | `[audit]` |
 | ITI-90 Find Matching Care Services | each search of the mCSD directory the registry is read from, one per resource type | mCSD Care Services Query audit (BALP Query): the first request of the search, base64 | none | `[audit]` |
 | ITI-91 Request Care Services Updates | each history of a registry refresh, one per resource type | mCSD Care Services Updates audit: the first request, base64 | none | `[audit]` |
 | ITI-93 Mobile Patient Identity Feed | each message the Patient Identity Registry sends to the feed route | PMIR Feed audit, the Registry as the source and the gateway's callback as the destination: the `MessageHeader` | one entity per Patient Master Identity the message names, by its `Patient/<id>` reference or an identifier | `[audit]` |
 | ITI-94 Subscribe to Patient Updates | each subscription create, read and delete the identity feed makes | PMIR Subscription Create, Read and Delete audits (BALP Create, Read, Delete): the `Subscription` and, for a create, its criteria | none: a subscription names an identifier system at most | `[audit]` |
 | The search of the Registry's subscriptions by callback | before each create | BALP Query: the request as sent, base64; ITI-94 defines no search | none | `[audit]` |
-
-PDQm (ITI-78) is not used by the gateway yet (#487). The ITI-78 client of
-`crates/ihe-iti` records the PDQm Query Consumer audit when it is given a
-recorder, so the gateway records it from the day it asks a PDQm Supplier.
 
 Every record names the gateway as `source.observer` and as its own agent,
 by `source_id` (the hostname by default), at the network address
@@ -51,6 +49,7 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # enterprise_site = "2.999.40"         # source.site
 # spool_max_bytes = 67108864
 # spool_max_events = 100000
+# spool_write_timeout_ms = 2000        # storing one record in the spool
 # timeout_ms = 5000                    # each delivery
 # retry_max_ms = 60000                 # the longest wait between two attempts
 client_identity_file = "/run/secrets/atna-client.pem"  # when the repository asks
@@ -58,7 +57,7 @@ trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
 ```
 
 - `destination` has no default outside `profile = "development"` once
-  `[pixm]`, `[registry.mcsd]` or `[pmir]` is set: `config check`, `serve`
+  `[pixm]`, `[pdqm]`, `[registry.mcsd]` or `[pmir]` is set: `config check`, `serve`
   and a reload refuse the configuration without it, naming
   `audit.destination`. `off` is refused outside development; under
   development an unset `destination` records nothing.
@@ -89,9 +88,10 @@ file that is no FHIR `AuditEvent` is quarantined the same way. A quarantined
 record stays counted under the spool's bounds until you remove it.
 
 Only a record the gateway can neither deliver nor store is an audit
-failure: a full spool (`spool_max_events` or `spool_max_bytes`) or one that
-cannot be written. The transaction then fails closed, and its answer is
-never used:
+failure: a full spool (`spool_max_events` or `spool_max_bytes`), one that
+cannot be written, or one that does not store the record in time
+([A slow disk](#a-slow-disk)). The transaction then fails closed, and its
+answer is never used:
 
 | Transaction | When its record cannot be stored |
 |---|---|
@@ -99,6 +99,49 @@ never used:
 | ITI-90, ITI-91 | the directory read fails as a directory that did not answer: the boot is refused, or a refresh keeps the registry in place |
 | ITI-93 | the message is answered `503` and nothing is applied, so the Registry sends it again |
 | ITI-94 | the exchange fails, and `GET /health/dependencies` reports the Registry `failing` with the fault `audit-failed` |
+
+## A slow disk
+
+Storing a record flushes it to the device twice, once for the file and once
+for its directory, and the transaction waits for that before it uses its
+answer. A disk that is slow or has stalled could hold the transaction
+without limit, so the wait is bounded, on both spools:
+
+- by `spool_write_timeout_ms` (2000 by default), in `[audit.repository]`
+  and in `[xcpd.audit_repository]`, the longest one record may take to be
+  stored, the wait for the write before it included;
+- and, for an ITI-83 query, an ITI-78 search or ITI-119 match of the
+  `[pdqm]` step, or an ITI-55 discovery, by the time the transaction was
+  given: what is left of the patient query's budget, of the step's
+  `timeout_ms`, or of the localization's time. Whichever of the two bounds
+  comes first applies.
+
+A record that `spool_write_timeout_ms` cuts off is an audit failure, as a
+full spool is, with the outcomes in the table above, and an ITI-55
+discovery fails closed under every `on_failure` policy
+([The audit repository](identity.md#the-audit-repository)). A record still
+being stored when an ITI-83 query's time runs out fails a query that
+succeeded the same way. A transaction that failed already, such as a PIX
+Manager that did not answer, reports its own failure instead, which the
+late record would only hide. A localization whose time runs out while a
+record is still being stored ends as a localizer that did not answer in
+time, which `on_failure` decides. Either way the query never waits on the
+disk past its budget.
+
+The write that missed its bound is not abandoned. It runs on until the disk
+answers. Once it stores the record, the record is delivered like any other,
+and the gateway logs a warning with the record's sequence number; a write
+that fails in the end is logged as an error. Neither log line carries the
+record. The spool's depth counts the record only once the write has stored
+it. A transaction that failed this way may therefore still appear in the
+repository, as the transaction it was: the gateway made or received it, and
+ITI-20 has every stored record sent (ITI TF-2 §3.20.4.1.1).
+
+One write runs at a time. While a write is stalled, every record behind it
+waits for its turn and is refused at its own bound, so a stalled disk holds
+one thread of the gateway, never one per transaction. The mCSD directory
+reads and the PMIR subscription exchanges run outside any patient query,
+so `spool_write_timeout_ms` alone bounds their records.
 
 The spool holds records that name patients. The gateway creates the
 directory readable by its own user alone (`0700`) and every file `0600`,

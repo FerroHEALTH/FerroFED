@@ -366,6 +366,47 @@ async fn a_discovery_whose_audit_is_refused_fails_closed() -> TestResult {
     }
 }
 
+/// A recorder that never accepts, as a spool whose disk stalled does not.
+struct Stalled;
+
+#[async_trait::async_trait]
+impl ihe_iti::xcpd::audit::AuditRecorder for Stalled {
+    async fn record(
+        &self,
+        _event: ihe_iti::xcpd::audit::AuditEvent,
+    ) -> Result<(), ihe_iti::xcpd::audit::AuditError> {
+        std::future::pending().await
+    }
+}
+
+// conformance: CP-5
+#[tokio::test]
+async fn a_discovery_whose_audit_is_not_stored_by_the_deadline_fails_closed_in_time() -> TestResult
+{
+    let stub = RespondingGateway::answering(holds(COMMUNITY_A)).await;
+    let localizer = localizer(&[&stub])?.audited(Arc::new(Stalled));
+    let budget = Duration::from_millis(300);
+    let asked = Instant::now();
+    let answer = localizer
+        .localize(&patient()?, &members()?, asked + budget)
+        .await;
+    let waited = asked.elapsed();
+    if waited >= budget + Duration::from_secs(3) {
+        return Err(format!("answered within the budget: {waited:?}").into());
+    }
+    match answer {
+        Localization::Unavailable(error @ LocalizerError::AuditFailed(_)) => {
+            let rendered = ferrofed_chain(&error);
+            if rendered.contains("audit record was not stored") {
+                Ok(())
+            } else {
+                Err(format!("the late record is named: {rendered}").into())
+            }
+        }
+        other => Err(format!("no candidate without its audit (§3.55.5.1): {other:?}").into()),
+    }
+}
+
 /// A recorder that refuses the audit of every exchange that was answered,
 /// and accepts the others.
 struct RefusingAnswers;

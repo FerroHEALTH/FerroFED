@@ -29,6 +29,7 @@ pub mod grant;
 mod load;
 pub mod mitz;
 pub mod nl_gf;
+pub mod pdqm;
 pub mod pmir;
 mod resolve;
 mod secrets;
@@ -93,6 +94,10 @@ pub struct Config {
     /// gateway subscribes to with ITI-94, and the path its ITI-93 messages
     /// arrive at (track 8 of §16.3, Annex A.4).
     pub pmir: Option<pmir::Pmir>,
+    /// The PDQm demographics step (`[pdqm]`): the Patient Demographics
+    /// Supplier asked for the master identity of an identifier the
+    /// cross-reference does not map (Annex A §A.2, #487).
+    pub pdqm: Option<pdqm::Pdqm>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
     /// The metrics surface (`[metrics]`): the admin listener and the OTLP
@@ -104,7 +109,7 @@ pub struct Config {
     pub signing: Option<Signing>,
     /// How a caller authenticates to the gateway (`[auth]`, §13.1, N25).
     pub auth: auth::Auth,
-    /// Where the audit records of the PIXm, mCSD and PMIR transactions go
+    /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go
     /// (`[audit]`, #486).
     pub audit: audit::Audit,
 }
@@ -123,6 +128,7 @@ impl Default for Config {
             xcpd: None,
             nl_gf: None,
             pmir: None,
+            pdqm: None,
             stored_queries: stored_queries::StoredQueries::default(),
             metrics: Metrics::default(),
             signing: None,

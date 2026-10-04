@@ -17,10 +17,15 @@
 //!   members might hold a patient's data (N4, §14.1);
 //! - [`consent`]: the optional Step-1
 //!   [`ConsentPrefilter`](consent::ConsentPrefilter) seam (N27a, §13.2.1);
+//! - [`demographics`]: the optional
+//!   [`Demographics`](demographics::Demographics) seam, the master identity of
+//!   an identifier the cross-reference does not map (Annex A §A.2);
 //! - [`fhir`]: the HTTP client every IHE FHIR server is asked through, with
 //!   its [`Authentication`](fhir::Authentication) and [`Tls`](fhir::Tls)
 //!   material;
 //! - [`pixm`]: the [`Resolver`](resolver::Resolver) over PIXm ITI-83 (#43);
+//! - [`pdqm`]: the [`Demographics`](demographics::Demographics) step over
+//!   PDQm ITI-78 or ITI-119 (Annex A §A.2);
 //! - [`xcpd`]: the [`Localizer`](localizer::Localizer) over XCPD ITI-55
 //!   (Annex A.3);
 //! - [`nvi`]: the [`Localizer`](localizer::Localizer) over the NVI
@@ -38,9 +43,10 @@
 //!   `Endpoint` resources read through `ihe_iti`'s mCSD reader (N19, N20),
 //!   and the registry read from an mCSD directory and kept in step with it
 //!   ([`directory::mcsd`], §15.1, N21);
-//! - [`balp`]: the audit recorders of the PIXm, mCSD and PMIR transactions,
-//!   the BALP `AuditEvent` sent to an ATNA Audit Record Repository over the
-//!   FHIR Feed of ITI-20, or written to the audit log target.
+//! - [`balp`]: the audit recorders of the PIXm, PDQm, mCSD and PMIR
+//!   transactions, the BALP `AuditEvent` sent to an ATNA Audit Record
+//!   Repository over the FHIR Feed of ITI-20, or written to the audit log
+//!   target.
 //!
 //! How the gateway authenticates to each node as itself (§13.1, N25) is the
 //! engine's, in `ferrofed_engine::onward`.
@@ -50,6 +56,7 @@ pub mod atna;
 pub mod balp;
 pub mod binding;
 pub mod consent;
+pub mod demographics;
 pub mod dev;
 pub mod directory;
 pub mod fhir;
@@ -58,6 +65,7 @@ pub mod localizer;
 pub mod mitz;
 pub mod nvi;
 pub mod patient;
+pub mod pdqm;
 pub mod pixm;
 pub mod resolver;
 pub mod xcpd;

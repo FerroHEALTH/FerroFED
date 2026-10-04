@@ -70,6 +70,11 @@ pub const CONSENT_PREFILTER_REQUESTS: &str = "ferrofed.consent.prefilter.request
 /// `ferrofed_localizer_requests_total`.
 pub const LOCALIZER_REQUESTS: &str = "ferrofed.localizer.requests";
 
+/// The calls to the demographics service, by `outcome` (`identified`,
+/// `no-match`, `ambiguous`, `unavailable` or `audit-failed`); Prometheus
+/// `ferrofed_demographics_requests_total`.
+pub const DEMOGRAPHICS_REQUESTS: &str = "ferrofed.demographics.requests";
+
 /// The registry reloads, by `result`; Prometheus
 /// `ferrofed_registry_reloads_total`.
 pub const REGISTRY_RELOADS: &str = "ferrofed.registry.reloads";

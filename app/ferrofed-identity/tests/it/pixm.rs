@@ -269,6 +269,45 @@ async fn a_manager_slower_than_the_deadline_is_unavailable() {
     );
 }
 
+/// A recorder that never accepts, as a spool whose disk stalled does not.
+struct Stalled;
+
+#[async_trait::async_trait]
+impl ihe_iti::balp::AuditRecorder for Stalled {
+    async fn record(
+        &self,
+        _exchange: ihe_iti::balp::Exchange,
+    ) -> Result<(), ihe_iti::balp::AuditError> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test]
+async fn an_answer_whose_record_is_not_stored_by_the_deadline_is_unavailable_in_time() {
+    let server = stub(200, parameters(&[(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)])).await;
+    let recorder: std::sync::Arc<dyn ihe_iti::balp::AuditRecorder> = std::sync::Arc::new(Stalled);
+    let budget = Duration::from_millis(300);
+    let asked = Instant::now();
+    let resolutions = resolver(&server)
+        .audited(&recorder)
+        .resolve(
+            &patient(),
+            &[node("node-a"), node("node-b")],
+            asked + budget,
+        )
+        .await;
+    assert!(
+        asked.elapsed() < budget + Duration::from_secs(3),
+        "{:?}",
+        asked.elapsed()
+    );
+    assert!(is_unavailable(&resolutions, "node-a"), "{resolutions:?}");
+    assert!(is_unavailable(&resolutions, "node-b"), "{resolutions:?}");
+    let text = rendered(&resolutions);
+    assert!(text.contains("audit record was not stored"), "{text}");
+    assert!(!text.contains(SENTINEL), "{text}");
+}
+
 #[tokio::test]
 async fn two_identifiers_in_one_domain_are_never_guessed_between() {
     let server = stub(

@@ -131,3 +131,32 @@ fn outside_development_the_repository_is_https_with_a_spool_on_disk() -> TestRes
     assert!(!repository.cleartext);
     Ok(())
 }
+
+#[test]
+fn the_spool_write_timeout_bounds_each_record_and_is_never_zero() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let spool = toml::Value::String(dir.path().join("spool").display().to_string());
+    let table = |extra: &str| {
+        format!(
+            "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {spool}\n{extra}"
+        )
+    };
+    let settings = resolve(&text(dir.path(), "production", &table(""))?)?
+        .map_err(|error| error.to_string())?;
+    let repository = settings.audit.repository.ok_or("a repository")?;
+    assert_eq!(
+        std::time::Duration::from_secs(2),
+        repository.bounds.write_timeout,
+        "the default bound"
+    );
+    let message = refusal(&text(
+        dir.path(),
+        "production",
+        &table("spool_write_timeout_ms = 0\n"),
+    )?)?;
+    assert!(
+        message.contains("audit.repository.spool_write_timeout_ms"),
+        "{message}"
+    );
+    Ok(())
+}

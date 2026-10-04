@@ -1859,7 +1859,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.18"
+version = "0.0.20"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -1878,6 +1878,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
  "wiremock",

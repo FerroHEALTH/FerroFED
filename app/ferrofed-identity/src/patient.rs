@@ -115,6 +115,14 @@ impl PatientRef {
     pub(crate) fn value(&self) -> &str {
         self.value.expose_secret()
     }
+
+    /// The identifier, still a [`SecretString`], for the outbound gate to
+    /// withhold from every request to a node (§5.4.1, N33): a master identity
+    /// the demographics step found is as identifying as the client's own.
+    #[must_use]
+    pub fn withheld(&self) -> SecretString {
+        self.value.clone()
+    }
 }
 
 impl fmt::Debug for PatientRef {

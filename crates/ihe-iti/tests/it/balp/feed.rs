@@ -30,6 +30,7 @@ use crate::timing;
 const BOUNDS: Bounds = Bounds {
     max_messages: 16,
     max_bytes: 64 << 20,
+    write_timeout: Duration::from_secs(10),
 };
 
 /// The timeout of each request to the repository.

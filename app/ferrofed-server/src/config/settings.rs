@@ -60,6 +60,8 @@ pub struct Settings {
     pub nl_gf: Option<crate::config::nl_gf::NlGfSettings>,
     /// The PMIR identity feed, with every secret read.
     pub pmir: Option<crate::config::pmir::PmirSettings>,
+    /// The PDQm demographics step, with every secret read.
+    pub pdqm: Option<crate::config::pdqm::PdqmSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
     /// The metrics surface.
@@ -67,7 +69,7 @@ pub struct Settings {
     /// The gateway's signing keys and where they are published, when
     /// `[signing]` is set (§13.1, N25).
     pub signing: Option<SigningSettings>,
-    /// Where the audit records of the PIXm, mCSD and PMIR transactions go.
+    /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go.
     pub audit: crate::config::audit::AuditSettings,
 }
 
@@ -323,6 +325,7 @@ impl Settings {
             fan_out_stored_queries = self.federation.fan_out_stored_queries,
             pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
             pmir_feed = self.pmir.is_some(),
+            pdqm_transaction = self.pdqm.as_ref().map(|pdqm| pdqm.transaction.as_str()),
             stored_query_backend = self
                 .stored_queries
                 .as_ref()

@@ -47,12 +47,21 @@ use crate::state::AppState;
 ///
 /// `registry` is the registry document, its path and its form, `credentials`
 /// the outbound credentials of each endpoint, `dev` and `pixm` the
-/// resolver, `xcpd` and `nl_gf` the localizer, and `dev` and `nl_gf` the
-/// consent pre-filter, all of which name the members. A
+/// resolver, `pdqm` the demographics step ahead of it, `xcpd` and `nl_gf` the
+/// localizer, and `dev` and `nl_gf` the consent pre-filter, all of which
+/// serve the resolution of the members. A
 /// registry read from a care services directory changes with the directory,
 /// never with a reload: a reload rebuilds the federation over the registry in
 /// place, and a change to `[registry.mcsd]` takes a restart.
-pub const RELOADABLE: [&str; 6] = ["registry", "credentials", "dev", "pixm", "xcpd", "nl_gf"];
+pub const RELOADABLE: [&str; 7] = [
+    "registry",
+    "credentials",
+    "dev",
+    "pixm",
+    "pdqm",
+    "xcpd",
+    "nl_gf",
+];
 
 /// Reloads the registry the server started with.
 ///
@@ -421,6 +430,7 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
         // NOTE: no specification governs this: our own design; the identity feed
         // outlives every federation a reload builds, so a change to it takes a restart.
         pmir: None,
+        pdqm: fresh.pdqm,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
@@ -603,6 +613,9 @@ fn federation_class(error: &FederationError) -> &'static str {
         | FederationError::PixmMember { .. }
         | FederationError::PixmNamespace(_)
         | FederationError::Pixm(_) => "pixm",
+        FederationError::PdqmWithoutResolver
+        | FederationError::PdqmNamespace(_)
+        | FederationError::Pdqm(_) => "pdqm",
         FederationError::TwoResolvers => "resolvers",
         FederationError::TwoConsentPrefilters
         | FederationError::MitzMember { .. }
@@ -669,5 +682,30 @@ mod tests {
 
         let same = settings("log", "");
         assert!(needs_restart(&boot, &same).is_empty());
+    }
+
+    /// The settings of a development gateway asking the PDQm Supplier at
+    /// `url` with `transaction`.
+    fn with_pdqm(url: &str, transaction: &str) -> Settings {
+        let text = format!(
+            "profile = \"development\"\n\n[audit]\ndestination = \"log\"\n\n[pdqm]\nurl = \"{url}\"\ntransaction = \"{transaction}\"\nmaster = \"urn:oid:2.999.1\"\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n"
+        );
+        Config::from_sources(Some(&text), &BTreeMap::new())
+            .and_then(|config| config.resolve())
+            .expect("the settings resolve")
+    }
+
+    #[test]
+    fn a_change_to_the_demographics_step_reloads_with_the_resolver() {
+        let boot = with_pdqm("https://pdq.example.org/fhir/", "iti-78");
+        let fresh = with_pdqm("https://other.example.org/fhir/", "iti-119");
+        assert!(
+            needs_restart(&boot, &fresh).is_empty(),
+            "[pdqm] is reloadable, as [pixm] is"
+        );
+        let applied = effective(&boot, fresh)
+            .pdqm
+            .expect("the pdqm section reloads");
+        assert_eq!("https://other.example.org/fhir/", applied.url.expose());
     }
 }

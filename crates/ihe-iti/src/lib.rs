@@ -5,7 +5,7 @@
 //! index binds, one feature per profile:
 //!
 //! - `pixm`: Patient Identifier Cross-reference for Mobile, ITI-83.
-//! - `pdqm`: Patient Demographics Query for Mobile, ITI-78.
+//! - `pdqm`: Patient Demographics Query for Mobile, ITI-78 and ITI-119.
 //! - `mcsd`: Mobile Care Services Discovery, ITI-90 and ITI-91.
 //! - `pmir`: Patient Master Identity Registry, ITI-93 and ITI-94.
 //! - `xcpd`: Cross-Community Patient Discovery, ITI-55, the one profile on
@@ -36,6 +36,11 @@ pub mod pdqm;
 pub mod pixm;
 #[cfg(feature = "pmir")]
 pub mod pmir;
+#[cfg(any(
+    all(feature = "balp", any(feature = "pixm", feature = "pdqm")),
+    feature = "xcpd"
+))]
+pub mod recording;
 #[cfg(any(
     feature = "atna",
     feature = "pixm",

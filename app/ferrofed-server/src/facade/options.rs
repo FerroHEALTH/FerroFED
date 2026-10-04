@@ -69,6 +69,10 @@ pub const LOCALIZATION_AUDIT: &str = "audit";
 /// milliseconds.
 pub const LOCALIZATION_MS: &str = "localization_ms";
 
+/// The `timeout` member that carries the demographics step's budget, in
+/// milliseconds.
+pub const DEMOGRAPHICS_MS: &str = "demographics_ms";
+
 /// The `federation` member that declares the Step-1 consent pre-filter.
 pub const CONSENT: &str = "consent";
 
@@ -232,8 +236,8 @@ fn localization(policy: &LocalizationPolicy) -> Result<Localization, DescribeErr
 }
 
 /// The `timeout` member: the configured budget, under which a node past it
-/// is abandoned and marked `time-out` (§11.5, N38), and, with a localizer
-/// configured, the localizer's own part of it.
+/// is abandoned and marked `time-out` (§11.5, N38), and, with a localizer or
+/// a demographics step configured, its own part of it.
 fn timeout(federation: &Federation) -> Result<TimeoutPolicy, DescribeError> {
     let budget = federation.budget();
     let millis = |member: &'static str, duration: std::time::Duration| {
@@ -245,6 +249,10 @@ fn timeout(federation: &Federation) -> Result<TimeoutPolicy, DescribeError> {
         // NOTE: §11.5 declares the budgets and its `timeout` object is open: our own
         // design, the localizer's budget is declared beside the two N38 names.
         extra.insert_serialized(LOCALIZATION_MS, &localization)?;
+    }
+    if let Some(step) = federation.demographics() {
+        let demographics = millis(DEMOGRAPHICS_MS, step.timeout())?;
+        extra.insert_serialized(DEMOGRAPHICS_MS, &demographics)?;
     }
     Ok(TimeoutPolicy {
         per_node_ms: millis("per_node_ms", budget.per_node())?,

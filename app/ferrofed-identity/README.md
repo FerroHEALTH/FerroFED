@@ -12,7 +12,9 @@ merges what comes back with each node's provenance.
 
 It holds `PatientRef`, the patient identifier as the gateway carries it
 (redacted in every rendering and never serialized), the `Resolver` seam that
-turns a patient into each member's local `ehr_id`, and the static development
+turns a patient into each member's local `ehr_id`, the `Demographics` seam
+and its PDQm step, which finds the master identity of an identifier the
+cross-reference does not map (Annex A §A.2), and the static development
 cross-reference, a testing device accepted only under the development profile.
 It also reads the registry document in FHIR form, a Bundle of `Organization`
 and `Endpoint` resources read through `ihe-iti`'s mCSD reader, into the

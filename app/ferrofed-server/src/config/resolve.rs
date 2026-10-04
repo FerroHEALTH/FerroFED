@@ -167,6 +167,7 @@ impl Config {
             xcpd,
             nl_gf,
             pmir,
+            pdqm: crate::config::pdqm::resolve(self)?,
             stored_queries,
             metrics,
             signing,

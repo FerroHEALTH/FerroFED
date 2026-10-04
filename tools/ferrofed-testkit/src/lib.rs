@@ -41,6 +41,9 @@
 //!   (RFC 8693) and binds a token to a `DPoP` key (RFC 9449) (#439);
 //! - [`otlp`]: an in-process OTLP/gRPC trace collector, which keeps every
 //!   span the gateway exports (#437);
+//! - [`pdq`]: the harness PDQm Supplier, a test device that answers ITI-78
+//!   searches by identifier and ITI-119 matches from synthetic Patients in the
+//!   `urn:oid:2.999` example arc (#487);
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
 //!   what an ITI-104 feed delivered (#47);
 //! - [`pmir`]: the harness Patient Identity Registry, a test device that
@@ -70,6 +73,7 @@ pub mod nuts;
 pub mod nvi;
 pub mod oauth;
 pub mod otlp;
+pub mod pdq;
 pub mod pix;
 pub mod pmir;
 pub mod proxy;
