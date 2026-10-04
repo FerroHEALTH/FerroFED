@@ -23,6 +23,7 @@
 - [Obligations checklist](evaluate/obligations.md)
 - [Pinned versions](evaluate/versions.md)
 - [Licensing](evaluate/licensing.md)
+- [Regulatory status](evaluate/regulatory-status.md)
 
 # Operate
 
