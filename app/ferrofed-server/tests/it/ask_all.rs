@@ -118,7 +118,7 @@ async fn an_undirected_patient_query_over_three_members_dispatches_to_the_two_th
     let app = gateway(
         dir.path(),
         &registry([&a.uri(), &b.uri(), &c.uri()]),
-        "",
+        "profile = \"development\"",
         &pixm(&format!("{}/fhir/", proxy.origin())),
     )?;
     let (status, answer) = call(app, post(body(&query())?)?).await?;

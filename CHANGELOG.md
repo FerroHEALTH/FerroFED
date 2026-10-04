@@ -33,6 +33,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The registry keeps the identifiers a care services directory publishes
+  for each organisation (mCSD `Organization.identifier`), and the NVI
+  localizer reads its custodian map from them: each member organisation's
+  URA, by the LRZa rules of Annex B §B.2, maps to the members it operates,
+  so a Dutch directory needs no `[nl_gf.nvi.custodians]` table. A table
+  given beside it must agree, a member no URA maps to is refused, and a
+  reload or directory refresh rebuilds the map. `nl-generic-functions` adds
+  `lrza::ura_in`, and `ihe-iti` reads every identifier of a directory
+  `Organization` (#87).
 - `[nl_gf.nvi]` localizes undirected patient queries through the NVI, the
   national localization index of the Dutch Generic Functions (Annex B
   §B.1). The client names the patient by a pseudonymised BSN; the NVI's
@@ -421,6 +430,10 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- A `[[pixm.manager]]` URL that is not `https` outside
+  `profile = "development"` is refused while the configuration loads, as an
+  XCPD gateway URL already was, naming its key; before, only `serve`,
+  `config check` and a reload caught it (#464).
 - The example Kubernetes manifests start a gateway again (#428): the
   ConfigMap trusts an example issuer in `[auth]` and names the gateway's
   signing key in `[signing]`, read from the `ferrofed-secrets` Secret the

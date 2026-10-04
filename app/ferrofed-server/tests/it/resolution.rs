@@ -98,10 +98,16 @@ fn pixm(pix: &str) -> String {
     )
 }
 
-/// A production gateway over node A and node B, resolving through the PIX
-/// Manager at `pix`.
+/// A gateway over node A and node B, resolving through the PIX Manager at
+/// `pix`, under the development profile, the only one that admits the mock
+/// Manager's plain `http`.
 fn pix_gateway(dir: &Path, a: &str, b: &str, pix: &str) -> Result<Router, Box<dyn Error>> {
-    gateway(dir, &registry(a, b, ""), "", &pixm(pix))
+    gateway(
+        dir,
+        &registry(a, b, ""),
+        "profile = \"development\"",
+        &pixm(pix),
+    )
 }
 
 /// Every byte the PIX Manager received.
@@ -346,7 +352,7 @@ fn a_pix_manager_and_the_dev_cross_reference_together_refuse_to_boot() -> TestRe
     );
     let error = load_refusal(
         dir.path(),
-        &format!("{dev}\n{}", pixm("http://127.0.0.1:9")),
+        &format!("{dev}\n{}", pixm("https://127.0.0.1:9")),
     )?;
     assert!(
         matches!(error, FederationError::TwoResolvers),
@@ -359,7 +365,7 @@ fn a_pix_manager_and_the_dev_cross_reference_together_refuse_to_boot() -> TestRe
 fn a_pix_manager_that_leaves_a_member_unresolved_refuses_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;
     let text = format!(
-        "[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
+        "[[pixm.manager]]\nurl = \"https://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
     );
     let error = load_refusal(dir.path(), &text)?;
     assert!(
@@ -383,7 +389,7 @@ fn a_registry_without_a_declared_node_selection_refuses_to_boot() -> TestResult 
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
         "{}\n[registry]\ndocument = {document}\n",
-        pixm("http://127.0.0.1:9")
+        pixm("https://127.0.0.1:9")
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
@@ -411,7 +417,7 @@ fn a_node_selection_the_gateway_does_not_know_refuses_to_boot() -> TestResult {
 #[test]
 fn a_pix_manager_without_a_registry_refuses_to_boot() -> TestResult {
     let settings = Config::from_sources(
-        Some(&crate::support::signed(&pixm("http://127.0.0.1:9"))),
+        Some(&crate::support::signed(&pixm("https://127.0.0.1:9"))),
         &BTreeMap::new(),
     )?
     .resolve()?;
@@ -492,7 +498,7 @@ fn a_zero_binding_lifetime_refuses_to_boot() -> TestResult {
 fn a_pix_manager_secret_never_reaches_debug_output() -> TestResult {
     let text = format!(
         "{}\n[pixm.manager.credentials]\nbearer_token = \"synthetic-pix-token\"\n",
-        pixm("http://127.0.0.1:9")
+        pixm("https://127.0.0.1:9")
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;

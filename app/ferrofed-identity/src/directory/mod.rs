@@ -12,7 +12,10 @@
 //! server that holds the resource (no specification governs this: our own
 //! design):
 //!
-//! - an `Organization` carries one [`ORGANISATION_ID_SYSTEM`] identifier;
+//! - an `Organization` carries one [`ORGANISATION_ID_SYSTEM`] identifier, and
+//!   every other identifier it carries with a system and a value is kept on
+//!   the organisation beside that one, such as the URA of a Dutch care provider (Annex B
+//!   §B.2);
 //! - an `Endpoint` carries one [`ENDPOINT_ID_SYSTEM`] identifier, its stable
 //!   `endpoint_id` (N19), one [`NODE_ID_SYSTEM`] identifier and one
 //!   [`SYSTEM_ID_SYSTEM`] identifier, the node it belongs to and that node's
@@ -84,7 +87,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use ferrofed_registry::document::{
-    CreatingSystemDoc, Document, EndpointDoc, NodeDoc, OrganisationDoc,
+    CreatingSystemDoc, Document, EndpointDoc, NodeDoc, OrganisationDoc, OrganisationIdentifierDoc,
 };
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
@@ -203,9 +206,28 @@ fn document(
             return Err(FhirFormError::OrganisationInactive(id));
         }
         organisation_at.insert(organisation.entry(), id.clone());
+        // NOTE: no specification governs this: our own design; the registry id is the
+        // organisation's id already, and a half identifier cannot be matched on.
+        let identifiers = organisation
+            .identifiers()
+            .filter_map(|(system, value)| match (system, value) {
+                (Some(system), Some(value))
+                    if system != ORGANISATION_ID_SYSTEM
+                        && !system.is_empty()
+                        && !value.is_empty() =>
+                {
+                    Some(OrganisationIdentifierDoc {
+                        system: system.to_owned(),
+                        value: value.to_owned(),
+                    })
+                }
+                _ => None,
+            })
+            .collect();
         organisations.push(OrganisationDoc {
             id,
             name: organisation.name().map(str::to_owned),
+            identifiers,
         });
     }
     let mut ignored = BTreeSet::new();

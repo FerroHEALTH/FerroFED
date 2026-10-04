@@ -124,6 +124,25 @@ impl Member {
         Ok(organisation)
     }
 
+    /// The member's `Organization` of [`Member::organisation`], carrying each
+    /// `(system, value)` of `identifiers` after its registry id: a care
+    /// provider's URA in the Dutch directory, for instance (Annex B §B.2).
+    ///
+    /// # Errors
+    /// [`McsdHarnessError::Example`] when the vendored example cannot be read.
+    pub fn organisation_identified_by(
+        &self,
+        identifiers: &[(&str, &str)],
+    ) -> Result<Organization, McsdHarnessError> {
+        let mut organisation = self.organisation()?;
+        organisation.identifier.extend(
+            identifiers
+                .iter()
+                .map(|(system, value)| identifier(system, value)),
+        );
+        Ok(organisation)
+    }
+
     /// The member's `Organization` of [`Member::organisation`], whose
     /// `endpoint` list also names each literal of `references`, after the
     /// member's endpoint: an organisation of a shared directory that lists

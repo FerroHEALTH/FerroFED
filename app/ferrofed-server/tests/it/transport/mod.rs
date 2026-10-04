@@ -24,10 +24,10 @@ use std::sync::Arc;
 
 use ferrofed_identity::dev::Profile;
 use ferrofed_server::banner::{Deployment, render};
-use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::Store;
 use ferrofed_server::config::transport::{self, CleartextError, Encryption, ProtectedSite};
+use ferrofed_server::config::{Config, error};
 use ferrofed_server::federation::registry::read_registry;
 use ferrofed_server::reload::{ReloadError, Reloader};
 use ferrofed_server::state::{AppState, StateError};
@@ -211,8 +211,28 @@ fn a_plain_http_token_endpoint_is_refused_outside_development() -> TestResult {
 fn a_pix_manager_with_credentials_over_plain_http_is_refused_outside_development() -> TestResult {
     let dir = tempfile::tempdir()?;
     let tables = pix("http://pix.example.org/fhir/");
-    let settings = resolved(dir.path(), "production", HTTPS_A, &tables)?;
+    refused_at_load(dir.path(), &tables, &pix_site())?;
+    let mut settings = resolved(dir.path(), "development", HTTPS_A, &tables)?;
+    settings.profile = Profile::Production;
     refused_on(&settings, &pix_site())
+}
+
+/// Asserts that resolving `tables` under the production profile is refused
+/// at load on `site`, before any check or boot, and carries no secret.
+fn refused_at_load(dir: &Path, tables: &str, site: &ProtectedSite) -> TestResult {
+    let text = configuration("production", &document(dir, HTTPS_A)?, tables);
+    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+        Err(error::Error::Cleartext(refused)) => {
+            assert_eq!(
+                CleartextError { site: site.clone() },
+                refused,
+                "the load names the site"
+            );
+            assert!(!refused.to_string().contains(SECRET), "{refused}");
+            Ok(())
+        }
+        other => Err(format!("the load refuses {site:?}: {other:?}").into()),
+    }
 }
 
 #[test]
@@ -223,10 +243,11 @@ fn a_pix_manager_without_credentials_still_carries_identifiers_and_needs_https()
         "the patient identifiers asked of pixm.manager[0]",
     );
     let http = bare_pix("http://pix.example.org/fhir/");
-    let settings = resolved(dir.path(), "production", HTTPS_A, &http)?;
+    refused_at_load(dir.path(), &http, &identifiers)?;
+    let mut settings = resolved(dir.path(), "development", HTTPS_A, &http)?;
+    reported(&settings, std::slice::from_ref(&identifiers))?;
+    settings.profile = Profile::Production;
     refused_on(&settings, &identifiers)?;
-    let settings = resolved(dir.path(), "development", HTTPS_A, &http)?;
-    reported(&settings, &[identifiers])?;
     let https = bare_pix("https://pix.example.org/fhir/");
     let settings = resolved(dir.path(), "production", HTTPS_A, &https)?;
     reported(&settings, &[])
