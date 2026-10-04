@@ -35,6 +35,8 @@
 //!   span the gateway exports (#437);
 //! - [`pix`]: the harness PIX Manager, a test device that answers ITI-83 from
 //!   what an ITI-104 feed delivered (#47);
+//! - [`pmir`]: the harness Patient Identity Registry, a test device that
+//!   takes ITI-94 subscriptions and sends ITI-93 messages to them (#147);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
 //!   reach, the unreachable node of a test;
 //! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
@@ -56,6 +58,7 @@ pub mod nvi;
 pub mod oauth;
 pub mod otlp;
 pub mod pix;
+pub mod pmir;
 pub mod proxy;
 pub mod seed;
 pub mod unreachable;

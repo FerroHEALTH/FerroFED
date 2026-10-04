@@ -418,9 +418,21 @@ fn effective(boot: &Settings, fresh: Settings) -> Settings {
             xcpd
         }),
         nl_gf: fresh.nl_gf,
+        // NOTE: no specification governs this: our own design; the identity feed
+        // outlives every federation a reload builds, so a change to it takes a restart.
+        pmir: None,
         stored_queries: boot.stored_queries.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),
+    }
+}
+
+/// Whether `fresh` sets, unsets or changes `[pmir]`.
+fn pmir_changed(boot: &Settings, fresh: &Settings) -> bool {
+    match (&boot.pmir, &fresh.pmir) {
+        (Some(was), Some(now)) => !was.same_as(now),
+        (None, None) => false,
+        (Some(_), None) | (None, Some(_)) => true,
     }
 }
 
@@ -546,6 +558,7 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
         ),
         ("stored_queries", stored_queries_changed(boot, fresh)),
         ("xcpd.audit", audit_changed(boot, fresh)),
+        ("pmir", pmir_changed(boot, fresh)),
         (
             "metrics.listen",
             boot.metrics.listen != fresh.metrics.listen,

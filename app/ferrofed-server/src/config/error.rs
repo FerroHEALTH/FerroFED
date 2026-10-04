@@ -422,6 +422,16 @@ pub enum Error {
     /// registry has one source.
     #[error("set registry.document or [registry.mcsd], not both: the registry has one source")]
     TwoRegistrySources,
+    /// The path the ITI-93 feed is served at is not a path of its own: it
+    /// must start with `/`, carry no query or fragment, and stay off the
+    /// ITS-REST surface, the health family and the well-known documents.
+    #[error(
+        "{key} must be a path that starts with /, carries no query or fragment, and is not under /v1, /health or /.well-known"
+    )]
+    FeedPath {
+        /// The key that carries the path.
+        key: String,
+    },
     /// The localizer's budget does not end before the overall budget, so the
     /// localizer could leave no time to resolve and ask the members (§11.5,
     /// §14.1).

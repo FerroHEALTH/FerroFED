@@ -572,7 +572,7 @@ are FerroFED's own design; the missing signal is report T151 on #212.
 | Resolver | the static development cross-reference | #36 | none: FerroFED's own, not a binding of N3 |
 | Resolver | PIXm ITI-83 `$ihe-pix` against any conformant PIX Manager (a FerroPIX instance once it exists), one call per PIX Manager with `targetSystem` repeated per member domain (`targetSystem` is `0..*` in the OperationDefinition) | #42, #43 | PIXm 3.1.0 |
 | Harness | a PIX Manager answering ITI-83 and seeded by ITI-104 | #47 | PIXm 3.1.0 |
-| Lifecycle | the PMIR hook: a merge or split (an ITI-93 notification to an ITI-94 subscription) drops every resolution binding it could have made stale, and the TTL bounds the rest; track 8 is provisional and not claimed | #48 (the hook); the subscription is unscheduled | PMIR 1.6.0, vendored with the subscription that first reads it |
+| Lifecycle | the PMIR hook, driven by an ITI-94 subscription at a Patient Identity Registry: an authenticated ITI-93 merge or delete drops the bindings of the `ehr_id`s it carries in a member's `ehr_id` domain, an update or an unscoped change drops every binding, and the TTL bounds the rest; track 8 is provisional and not claimed | #48 (the hook), #147 (the subscription and the feed) | PMIR 1.6.0, vendored by #147 |
 | Localizer | none (ask-all); the static development cross-reference, whose `StaticResolver` names the members that hold a row for the patient | #46, #36 | none: FerroFED's own, development profile only |
 | Localizer | the PIXm resolver as a registry-scoped localizer, the members whose domain returned an identifier (§14.2's "demographic-registration" kind), over the same ITI-83 call its resolution reuses | #408 | PIXm 3.1.0 |
 | Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, behind the `xcpd` feature of `ihe-iti` | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
@@ -667,12 +667,29 @@ is provisional: §16.3 marks it so and §18 lets full propagation be deferred.
 What FerroFED owes is that no binding outlives a change it could have learned
 of. Two parts give that: every binding expires at the configured TTL
 (`federation.binding_ttl_ms`), and `ResolutionBindings::identity_changed` is
-the hook a PMIR subscription calls on a merge or split. The hook drops the
-bindings that name the touched `ehr_id`s in every session, or every binding
-when the change cannot be scoped. A dropped binding costs one re-resolution,
-never a misrouted follow-up. The ITI-94 subscription that would call it is not
-built, so track 8 stays deferred in `conformance/tracks.tsv`, and FerroFED
-claims no propagation.
+the hook the PMIR identity feed calls (#147). The hook drops the bindings
+that name the touched `ehr_id`s in every session, or every binding when the
+change cannot be scoped. A dropped binding costs one re-resolution, never a
+misrouted follow-up.
+
+**The PMIR identity feed** (#147). Under `[pmir]` the gateway creates an
+ITI-94 `Subscription` at the Patient Identity Registry with a `message`
+channel to its own feed route, reads it back every check interval and
+subscribes again when the Registry has lost it, and deletes it on a drain.
+The route sits under `{base}` outside the ITS-REST surface. The subscription
+carries no credential for the feed (PMIR §2:3.94.5) and ITI-93 leaves the
+client authentication to an agreement between the two parties (§2:3.93.5),
+so the Registry presents a bearer token agreed out of band, compared in
+constant time; a message without it, or one that breaks the PMIR profiles,
+changes nothing. A merge or a delete is scoped by the identifiers its Patient
+carries in a member's `ehr_id` domain (the `[pixm]` map, Annex A.1); an
+update states only the identity as it now is, so it is unscoped, and so is a
+merge or delete that carries no member `ehr_id`. The `ehr_id` index is kept,
+since a merge moves no EHR. PMIR 1.6.0 has no unmerge (§2:3.93.4.1.3), so no
+split is ever reported. A subsequent federated query re-resolves in any case,
+because no resolution outlives its session, so track 8 stays deferred in
+`conformance/tracks.tsv`, and FerroFED claims no propagation. No
+specification governs the retry policy or the scoping rule: our own design.
 
 **The development cross-reference** (#36). A TOML table
 (`[[dev.crossref]]` with `namespace`, `value`, `member` and `ehr_id`) read by
@@ -1931,7 +1948,8 @@ the milestone in progress.
   Manager and usable against any PIX Manager (#42, A16, A18), the resolution step with the resolver-unavailable
   rule (#43, A17), both carriers (#44), the hygiene guard with string-function
   folding (#45, A4), ask-all (#46), the PIX Manager fake (#47, A39), and the
-  PMIR hooks (#48, track 8 deferred).
+  PMIR hooks (#48, track 8 deferred), driven by the PMIR identity feed from
+  v0.0.8 (#147).
 - **v0.0.4, the federated answer** (#49 to #60). The endpoint report (#49),
   completeness (#50), timeouts (#51), `ORDER BY` with `LIMIT` and the visible-order
   check (#52, A28, A43), bounded `OFFSET` (#53, A29), decomposable aggregates

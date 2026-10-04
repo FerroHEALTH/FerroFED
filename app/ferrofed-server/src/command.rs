@@ -304,7 +304,9 @@ fn healthcheck_command(settings: &Settings) -> ExitCode {
 /// reloading the registry on `SIGHUP` from `config`, the file `settings`
 /// were read from ([`reload`]), and serving `GET /metrics` and the operator's
 /// stored-query distribution on the admin listener when `metrics.listen` is
-/// set ([`admin`]).
+/// set ([`admin`]). With `[pmir]`, the identity feed subscribes in the
+/// background and deletes its subscription once the drain ends
+/// ([`crate::pmir`]).
 ///
 /// The metrics are flushed once the gateway has stopped, while the runtime
 /// an OTLP push runs on is still up.
@@ -349,12 +351,17 @@ fn serve_command(
         if let Some(directory) = directory {
             tokio::spawn(directory.keep_in_step(Arc::clone(&reloader)));
         }
+        if let Some(feed) = state.identity_feed() {
+            tokio::spawn(Arc::clone(feed).keep_subscribed());
+        }
         tokio::spawn(reload::on_hangup(reloader));
         let app = router(Arc::clone(state), &server);
         state.lifecycle().booted();
-        serve(listener, app, &server, state.lifecycle().clone())
-            .await
-            .context("serving HTTP")?;
+        let stopped = serve(listener, app, &server, state.lifecycle().clone()).await;
+        if let Some(feed) = state.identity_feed() {
+            feed.unsubscribe().await;
+        }
+        stopped.context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
         anyhow::Ok(())
     });

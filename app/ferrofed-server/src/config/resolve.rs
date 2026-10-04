@@ -127,6 +127,7 @@ impl Config {
             .transpose()?;
         let xcpd = crate::config::xcpd::resolve(self)?;
         let nl_gf = crate::config::nl_gf::resolve(self)?;
+        let pmir = crate::config::pmir::resolve(self)?;
         if self.registry.document.is_some() && self.registry.mcsd.is_some() {
             return Err(Error::TwoRegistrySources);
         }
@@ -169,6 +170,7 @@ impl Config {
             pixm,
             xcpd,
             nl_gf,
+            pmir,
             stored_queries,
             metrics,
             signing,

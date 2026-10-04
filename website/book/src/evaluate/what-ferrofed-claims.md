@@ -144,6 +144,12 @@ once the milestone closes.
   [#433](https://github.com/FerroHEALTH/FerroFED/issues/433)).
 - The §12.5.1 resolution bindings kept per verified caller (N41;
   [#412](https://github.com/FerroHEALTH/FerroFED/issues/412)).
+- The identity lifecycle over IHE PMIR: an ITI-94 subscription at a Patient
+  Identity Registry, and an authenticated ITI-93 feed whose merges and
+  deletes drop the resolution bindings they could have made stale; track 8
+  stays deferred, since the specification marks it provisional (Annex A.4;
+  [#147](https://github.com/FerroHEALTH/FerroFED/issues/147),
+  [The identity feed](../operate/identity.md#the-identity-feed-pmir)).
 - A credential or a patient identifier sent only over `https` outside the
   development profile, and the stored-query store's PostgreSQL password only
   over TLS
@@ -165,8 +171,6 @@ The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
   ([#443](https://github.com/FerroHEALTH/FerroFED/issues/443)), and the
   SMART on openEHR pages the client authentication cites, vendored
   ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414));
-- PMIR identity-lifecycle notifications
-  ([#147](https://github.com/FerroHEALTH/FerroFED/issues/147));
 - the Dutch Generic Functions as optional regional adapters, NVI
   localization, the Mitz consent pre-filter and LRZa addressing
   ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), and the Annex B

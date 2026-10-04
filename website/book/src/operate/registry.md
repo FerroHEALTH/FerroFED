@@ -349,9 +349,9 @@ never a wrong node.
 The lifetime is a correctness bound. An identity merge or split at the
 identity source can make a binding stale, and a binding never outlives its
 lifetime, so set it no longer than you would accept a follow-up being routed
-on a superseded identity. A PMIR subscription that reports a merge or split
-as it happens is planned for v0.0.8
-([#147](https://github.com/FerroHEALTH/FerroFED/issues/147)); the
+on a superseded identity. With `[pmir]`, a merge the
+identity source reports drops the bindings it could have made stale as it
+happens ([The identity feed](identity.md#the-identity-feed-pmir)); the
 specification marks this lifecycle track provisional.
 
 ## The `ehr_id` index

@@ -1146,6 +1146,7 @@ version = "0.0.7"
 dependencies = [
  "anyhow",
  "async-trait",
+ "aws-lc-rs",
  "axum",
  "clap",
  "ferrofed-engine",
@@ -1855,7 +1856,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "async-trait",
  "base64 0.23.1",

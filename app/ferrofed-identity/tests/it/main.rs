@@ -15,6 +15,7 @@ mod atna;
 mod binding;
 #[cfg(test)]
 mod directory;
+mod lifecycle;
 mod localizer;
 mod nvi_localizer;
 mod patient;

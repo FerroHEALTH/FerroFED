@@ -402,9 +402,6 @@ spool's depth, its quarantine, the deliveries and the retries
 ([Metrics](metrics.md)). The audit FHIR feed of RESTful ATNA is an option
 of ITI-20 this gateway does not send.
 
-PMIR notifications of a merge or split are planned for v0.0.8
-([#147](https://github.com/FerroHEALTH/FerroFED/issues/147)).
-
 ## Dutch localization: `[nl_gf.nvi]`
 
 A deployment in the Netherlands can localize through the national index of
@@ -492,3 +489,72 @@ Set `[nl_gf.nvi]` or `[xcpd]`, never both: both refuse the configuration.
 it refuses the configuration. The Mitz consent pre-filter of the Dutch
 binding is not built: the IG defines no interface for it
 ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)).
+
+## The identity feed: `[pmir]`
+
+A merge at the identity source can leave a caller's
+[resolution bindings](registry.md) naming the `ehr_id` of an identity that no
+longer exists. The bindings expire with their lifetime in any case. With
+`[pmir]` set, the gateway also hears of each change as it happens: it
+subscribes at your IHE PMIR Patient Identity Registry with ITI-94, and the
+Registry sends every Patient Master Identity change to the gateway as an
+ITI-93 message (PMIR 1.6.0, Annex A.4).
+
+```toml
+[pmir]
+url = "https://pmir.example.org/fhir"                    # the Registry's FHIR base
+callback_url = "https://gateway.example.org/pmir/feed"   # where the Registry sends the feed
+path = "/pmir/feed"                                       # the route under {base}, the default
+feed_token_file = "/run/secrets/pmir-feed-token"          # the token the Registry sends
+# identifier_system = "urn:oid:2.999.1"                  # only Patients with an identifier here
+# timeout_ms = 5000
+# check_interval_s = 60
+
+[pmir.credentials]                    # how the gateway authenticates to the Registry
+bearer_token_file = "/run/secrets/pmir-registry-token"
+```
+
+- **The subscription.** At start the gateway creates a `Subscription` at
+  `url` with a `message` channel to `callback_url` and a FHIR JSON payload.
+  Its criteria is `Patient`, or `Patient?identifier=<system>|` with
+  `identifier_system` set, so the Registry sends only the Patients that
+  carry an identifier from that authority. Every `check_interval_s` the
+  gateway reads the subscription back, and it subscribes again when the
+  Registry no longer holds it. On a drain it deletes the subscription.
+- **Authenticating the feed.** The subscription carries no credential for the
+  feed (PMIR §2:3.94.5), so you agree the feed token with the Registry's
+  operator and configure it on both sides. The Registry sends it as
+  `Authorization: Bearer <token>`. A message without that token is answered
+  `401` and changes nothing.
+- **The route.** `POST {base}{path}` takes one ITI-93 message. The route
+  sits outside the ITS-REST surface and its client authentication, so the
+  path may not be under `/v1`, `/health` or `/.well-known`. A message that
+  does not hold to the PMIR profiles is answered `400` (`415` for a media
+  type other than FHIR JSON) with an `OperationOutcome`, and changes
+  nothing. An applied message is answered with the ITI-93 response.
+- **What a message changes.** Only routing state, never a record. A merge
+  or a delete drops every binding of the `ehr_id`s its Patient carries in a
+  member's `ehr_id` domain, the domains `[pixm]` maps. An update states the
+  identity as it now is and never what it lost, so it drops every binding,
+  as does a merge or delete that carries no such `ehr_id`. A create drops
+  nothing. A dropped binding costs one resolution, never a wrong node. The
+  `ehr_id` index stays: a merge moves no EHR between nodes.
+- **What is logged.** The kind of each change and their counts, and how many
+  bindings went. The messages carry patient identifiers and demographics, so
+  no identifier reaches a log line, a metric or an answer.
+
+`url` and `callback_url` carry patient identities, so both are `https`
+outside `profile = "development"`, and neither may carry a user name or a
+password. `GET /health/dependencies` reports the Registry as
+`identity_registry`: `up` while it holds the subscription `requested` or
+`active`; `failing` after a refusal, an answer that breaks ITI-94, or a
+subscription in `error` or `off`; and `down` when it did not answer
+([Health](health.md)). Each message is counted by result in
+`ferrofed_identity_feed_messages_total` ([Metrics](metrics.md)). A change to
+`[pmir]` takes a restart.
+
+PMIR 1.6.0 defines no unmerge (§2:3.93.4.1.3), so the gateway hears of a
+merge and never of a split. The specification marks this lifecycle track
+provisional, and FerroFED claims no propagation of an identity change to a
+later resolution: the [conformance matrix](../evaluate/conformance.md) keeps
+track 8 deferred.

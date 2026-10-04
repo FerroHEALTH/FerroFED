@@ -4,6 +4,7 @@
 //! What every handler shares: the phase of the process, the health registry,
 //! the federation, and the stored-query registry.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
@@ -18,6 +19,7 @@ use crate::federation::{Federation, error::FederationError, registry::read_regis
 use crate::health::lifecycle::Lifecycle;
 use crate::health::{Built, HealthIndicator, Registry};
 use crate::metrics::{Metrics, MetricsError};
+use crate::pmir::{IdentityFeed, IdentityFeedError};
 use crate::stored;
 
 /// The state the router is built over.
@@ -44,6 +46,9 @@ pub struct AppState {
     /// The care services directory the registry is kept in step with, when
     /// it is read from one; it outlives every federation a refresh builds.
     directory: Option<Arc<DirectoryRegistry>>,
+    /// The PMIR identity feed, when `[pmir]` is set; it outlives every
+    /// federation a reload builds, whose bindings it drives.
+    identity_feed: Option<Arc<IdentityFeed>>,
 }
 
 /// A state that cannot be built from the settings.
@@ -81,6 +86,9 @@ pub enum StateError {
     /// development profile.
     #[error(transparent)]
     Cleartext(#[from] CleartextError),
+    /// The PMIR identity feed cannot be built.
+    #[error(transparent)]
+    IdentityFeed(#[from] IdentityFeedError),
 }
 
 impl AppState {
@@ -142,6 +150,7 @@ impl AppState {
             definitions: definitions.map(Arc::new),
             metrics,
             directory: None,
+            identity_feed: identity_feed(settings)?,
         })
     }
 
@@ -160,6 +169,7 @@ impl AppState {
     pub fn check(settings: &Settings) -> Result<Vec<ProtectedSite>, StateError> {
         let federation = Federation::load(settings)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
+        identity_feed(settings)?;
         if let (Some(store @ Store::Files(_)), Some(federation)) =
             (&settings.stored_queries, federation.as_ref())
         {
@@ -179,6 +189,7 @@ impl AppState {
             definitions: None,
             metrics: Arc::default(),
             directory: None,
+            identity_feed: None,
         }
     }
 
@@ -194,6 +205,7 @@ impl AppState {
             definitions: None,
             metrics,
             directory: None,
+            identity_feed: None,
         }
     }
 
@@ -203,6 +215,20 @@ impl AppState {
     pub fn watching(mut self, directory: Arc<DirectoryRegistry>) -> Self {
         self.directory = Some(directory);
         self
+    }
+
+    /// Returns this state applying the ITI-93 messages of `feed` to its
+    /// federation's resolution bindings.
+    #[must_use]
+    pub fn with_identity_feed(mut self, feed: Arc<IdentityFeed>) -> Self {
+        self.identity_feed = Some(feed);
+        self
+    }
+
+    /// Returns the PMIR identity feed, when `[pmir]` is set.
+    #[must_use]
+    pub fn identity_feed(&self) -> Option<&Arc<IdentityFeed>> {
+        self.identity_feed.as_ref()
     }
 
     /// Returns the report `GET /health/dependencies` answers with: the last
@@ -216,6 +242,7 @@ impl AppState {
             .map(|federation| federation.dependencies().report())
             .unwrap_or_default();
         report.directory = self.directory().map(|directory| directory.observed());
+        report.identity_registry = self.identity_feed().map(|feed| feed.observed());
         report
     }
 
@@ -275,6 +302,21 @@ impl AppState {
     pub fn definitions(&self) -> Option<&Arc<Definitions>> {
         self.definitions.as_ref()
     }
+}
+
+/// The PMIR identity feed `settings` describe, scoped by the `ehr_id`
+/// domain of every member `[pixm]` maps (Annex A.1).
+fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, StateError> {
+    let Some(pmir) = &settings.pmir else {
+        return Ok(None);
+    };
+    let domains: BTreeSet<String> = settings
+        .pixm
+        .iter()
+        .flat_map(|pixm| pixm.managers.iter())
+        .flat_map(|manager| manager.members.values().cloned())
+        .collect();
+    Ok(Some(Arc::new(IdentityFeed::new(pmir, domains)?)))
 }
 
 /// Refuses a federating gateway whose `[auth]` trusts no issuer, which would

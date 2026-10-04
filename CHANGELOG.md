@@ -52,6 +52,23 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   an NL-GF `Organization`. The source of the IG (`fhir.nl.gf` 0.3.0,
   EUPL-1.2) is vendored under `docs/specs/nl-gf/` by a new fetch script,
   pinned by tag and commit because the IG has no registry package (#87).
+- The PMIR identity feed, `[pmir]`: the gateway subscribes at an IHE PMIR
+  Patient Identity Registry with ITI-94 and serves `POST {base}{path}` for
+  the ITI-93 messages it sends. A message is applied only with the bearer
+  token agreed with the Registry out of band, read from `feed_token_file`,
+  and only when it holds to the PMIR profiles; otherwise it is answered `401`,
+  `400` or `415` and changes nothing. An applied merge or delete drops the
+  resolution bindings of the `ehr_id`s it carries in a member's `ehr_id`
+  domain, and an update, or a change that names no member `ehr_id`, drops
+  every binding. The log and the new `ferrofed_identity_feed_messages_total`
+  counter carry the change kinds, counts and results, never an identifier.
+  `GET /health/dependencies` reports the Registry as `identity_registry`, and
+  the subscription is checked, renewed when lost, and deleted on a drain.
+  The Registry URL and the callback URL are `https` outside the development
+  profile. The `ihe-iti` crate gains the `pmir` feature: the ITI-94
+  subscriber and the ITI-93 feed reader and response, held to the PMIR 1.6.0
+  package, now vendored under `docs/specs/ihe-pmir/`; the testkit gains a
+  harness Patient Identity Registry. Track 8 stays deferred (#147).
 - The texts client authentication is held to are vendored under
   `docs/specs/`. The ITS-REST Release-1.1.0 fetch now takes the SMART on
   openEHR source (`docs/smart_app_launch/`), recording that the release

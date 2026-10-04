@@ -9,6 +9,7 @@
 mod e2e;
 mod mcsd;
 mod pix;
+mod pmir;
 mod proxy;
 mod seed;
 mod unreachable;

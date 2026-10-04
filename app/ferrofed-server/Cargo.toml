@@ -35,6 +35,9 @@ postgres = [
 
 [dependencies]
 anyhow.workspace = true
+# The constant-time comparison of the PMIR feed token (#147), from the crypto
+# library the engine already uses.
+aws-lc-rs.workspace = true
 axum.workspace = true
 clap.workspace = true
 # The federated query (#38): the registry, the resolver seam, the rewrite, and
@@ -43,8 +46,9 @@ ferrofed-engine.workspace = true
 ferrofed-identity.workspace = true
 ferrofed-registry.workspace = true
 # The ITI-20 audit repository of the XCPD localizer (#418): its syslog
-# header, spool, connection and forwarder.
-ihe-iti = { workspace = true, features = ["atna", "xcpd"] }
+# header, spool, connection and forwarder, and the PMIR
+# ITI-94 subscriber and ITI-93 feed reader of the identity feed (#147).
+ihe-iti = { workspace = true, features = ["atna", "pmir", "xcpd"] }
 # The version uid a follow-up read names, read for its creating_system_id
 # (§12.3, #64).
 openehr-base.workspace = true

@@ -15,7 +15,7 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_registry::incident::Kind;
-use ferrofed_server::metrics::ReloadResult;
+use ferrofed_server::metrics::{FeedResult, ReloadResult};
 use http::{Request, header};
 use openehr_federation::status::EndpointStatus;
 
@@ -76,6 +76,7 @@ async fn no_label_carries_what_a_request_sent() -> TestResult {
     let kinds: BTreeSet<&str> = Kind::ALL.iter().map(|kind| kind.as_str()).collect();
     let outcomes: BTreeSet<&str> = EndpointStatus::ALL.iter().map(|s| s.as_str()).collect();
     let results: BTreeSet<&str> = ReloadResult::ALL.iter().map(|r| r.as_str()).collect();
+    let fed: BTreeSet<&str> = FeedResult::ALL.iter().map(|r| r.as_str()).collect();
     let endpoints = BTreeSet::from(["node-a-pub", "node-b-pub"]);
     for sample in gateway.scraped()? {
         for (key, value) in &sample.labels {
@@ -83,6 +84,7 @@ async fn no_label_carries_what_a_request_sent() -> TestResult {
                 ("target_info", key) => RESOURCE.contains(&key),
                 (_, "kind") => kinds.contains(value.as_str()),
                 (_, "outcome") => outcomes.contains(value.as_str()),
+                ("ferrofed_identity_feed_messages_total", "result") => fed.contains(value.as_str()),
                 (_, "result") => results.contains(value.as_str()),
                 (_, "endpoint") => endpoints.contains(value.as_str()),
                 (_, "le") => value == "+Inf" || value.parse::<f64>().is_ok(),

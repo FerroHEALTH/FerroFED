@@ -21,7 +21,9 @@
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
 //! 2.0 grant, every PIX Manager, every XCPD responding gateway and the NVI
 //! Localization Service of `[nl_gf.nvi]` (each is sent the patient
-//! identifier, and a credential when one is configured), the
+//! identifier, and a credential when one is configured), the Patient
+//! Identity Registry of `[pmir]` and its callback URL, which carry patient
+//! identities and the feed token, the
 //! care services directory of `[registry.mcsd]` when it has credentials,
 //! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
 //! a user name or a password, and the ATNA Audit Record Repository the XCPD
@@ -299,6 +301,7 @@ pub fn check(
         let requires_tls = !crate::stored::postgres::exposes_password(url);
         cleartext.extend(encrypted_connection(profile, requires_tls, site)?);
     }
+    cleartext.extend(crate::config::pmir::sites(profile, settings.pmir.as_ref())?);
     cleartext.extend(audit);
     Ok(cleartext)
 }

@@ -20,11 +20,11 @@ so the guard can hold every row here to its source.
 | IHE PIXm FHIR package | `ihe.iti.pixm`, version 3.1.0 | the identifier cross-reference binding (ITI-83) |
 | IHE PDQm FHIR package | `ihe.iti.pdqm`, version 3.2.0 | the demographics query capability of `ihe-iti` (ITI-78) |
 | IHE mCSD FHIR package | `ihe.iti.mcsd`, version 4.0.0 | the addressing binding: the registry read from a care services directory (ITI-90, ITI-91) |
+| IHE PMIR FHIR package | `ihe.iti.pmir`, version 1.6.0 | the identity lifecycle: the subscription and the identity feed (ITI-94, ITI-93) |
 | IHE IUA supplement | tag 2.5 | the access token claims and the bearer presentation client authentication reads (ITI-71, ITI-72), Revision 2.5, Trial Implementation |
 | Rust toolchain | 1.98.1, edition 2024 | the toolchain the workspace builds with |
 
-The other identity bindings (IHE PMIR, XCPD and the Dutch Generic
-Functions) are listed in `docs/VERSIONS.md` with the version each
+The other identity bindings (XCPD and the Dutch Generic Functions) are listed in `docs/VERSIONS.md` with the version each
 binding uses, and each package is vendored by the issue that first reads it.
 
 ## Vendored specifications

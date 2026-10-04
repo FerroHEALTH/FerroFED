@@ -68,9 +68,10 @@ wiremock.workspace = true
 
 [dev-dependencies]
 # The PIXm client the harness PIX Manager is held to (#42), the XCPD client
-# the stub responding gateway is held to (#85), and the mCSD client the
-# harness directory is held to (#86).
-ihe-iti = { workspace = true, features = ["mcsd", "pixm", "xcpd"] }
+# the stub responding gateway is held to (#85), the mCSD client the harness
+# directory is held to (#86), and the PMIR subscriber and feed reader the
+# harness Patient Identity Registry is held to (#147).
+ihe-iti = { workspace = true, features = ["mcsd", "pixm", "pmir", "xcpd"] }
 secrecy.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync"] }
 

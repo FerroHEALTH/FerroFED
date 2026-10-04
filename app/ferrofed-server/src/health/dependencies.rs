@@ -294,6 +294,7 @@ impl Dependencies {
                 .as_ref()
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
             directory: None,
+            identity_registry: None,
             audit_repository: self
                 .audit_repository
                 .as_ref()
@@ -324,6 +325,13 @@ pub struct Report {
     /// `down` when it did not answer.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<Observed>,
+    /// The state of the PMIR Patient Identity Registry the identity feed
+    /// subscribes at, absent without `[pmir]`: `up` while it holds the
+    /// subscription `requested` or `active`, `failing` after a refusal, an
+    /// answer that breaks ITI-94, or a subscription in `error` or `off`, and
+    /// `down` when it did not answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_registry: Option<Observed>,
     /// The audit repository's state, absent when no audit message goes to
     /// one.
     #[serde(skip_serializing_if = "Option::is_none")]

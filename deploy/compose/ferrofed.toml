@@ -141,6 +141,19 @@ bearer_token_file = "/run/secrets/ferrofed/pix-token"
 # spool_dir = "/var/lib/ferrofed/audit-spool"
 # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 
+# Optionally, hear of identity merges as they happen: subscribe at your IHE
+# PMIR Patient Identity Registry, which sends each change to callback_url with
+# the feed token you agree with its operator. A merge drops the resolution
+# bindings it could have made stale.
+# https://ferrofed.eu/docs/operate/identity.html#the-identity-feed-pmir
+# [pmir]
+# url = "https://pmir.example.org/fhir"                    # EDIT
+# callback_url = "https://gateway.example.org/pmir/feed"   # EDIT
+# feed_token_file = "/run/secrets/ferrofed/pmir-feed-token"
+#
+# [pmir.credentials]
+# bearer_token_file = "/run/secrets/ferrofed/pmir-registry-token"
+
 # EDIT: the credentials the gateway sends each endpoint of registry.toml, one
 # section per endpoint id: a bearer token, or a user and a password. Leave an
 # endpoint out when it needs none.

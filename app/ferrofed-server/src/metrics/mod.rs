@@ -73,6 +73,11 @@ pub const LOCALIZER_REQUESTS: &str = "ferrofed.localizer.requests";
 /// `ferrofed_registry_reloads_total`.
 pub const REGISTRY_RELOADS: &str = "ferrofed.registry.reloads";
 
+/// The ITI-93 messages the identity feed received, by `result` (`applied`,
+/// `refused` or `unauthenticated`); Prometheus
+/// `ferrofed_identity_feed_messages_total`.
+pub const IDENTITY_FEED_MESSAGES: &str = "ferrofed.identity_feed.messages";
+
 /// The ITI-20 audit messages waiting in the spool for the audit repository;
 /// Prometheus `ferrofed_audit_spool_events`.
 pub const AUDIT_SPOOL_EVENTS: &str = "ferrofed.audit.spool.events";
@@ -126,6 +131,34 @@ impl ReloadResult {
     }
 }
 
+/// How an ITI-93 message ended, the `result` label of
+/// [`IDENTITY_FEED_MESSAGES`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FeedResult {
+    /// The message was applied to the resolution bindings.
+    Applied,
+    /// The message does not hold to the PMIR profiles, and nothing was
+    /// applied.
+    Refused,
+    /// The message did not carry the feed token, and nothing was applied.
+    Unauthenticated,
+}
+
+impl FeedResult {
+    /// Every result, in declaration order.
+    pub const ALL: [Self; 3] = [Self::Applied, Self::Refused, Self::Unauthenticated];
+
+    /// The label value.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Applied => "applied",
+            Self::Refused => "refused",
+            Self::Unauthenticated => "unauthenticated",
+        }
+    }
+}
+
 /// The metrics surface could not be built, rendered or flushed.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -154,6 +187,7 @@ pub struct Metrics {
     registry: prometheus::Registry,
     nodes: Instruments,
     reloads: Counter<u64>,
+    identity_feed: Counter<u64>,
     /// Kept for the life of the provider: its callback reads the incident
     /// counts at each collection.
     _incidents: ObservableCounter<u64>,
@@ -237,6 +271,13 @@ impl Metrics {
         for result in ReloadResult::ALL {
             reloads.add(0, &[KeyValue::new("result", result.as_str())]);
         }
+        let identity_feed = meter
+            .u64_counter(IDENTITY_FEED_MESSAGES)
+            .with_description("ITI-93 messages the identity feed received, by result")
+            .build();
+        for result in FeedResult::ALL {
+            identity_feed.add(0, &[KeyValue::new("result", result.as_str())]);
+        }
         let nodes = Instruments::new(&meter);
         let audit = audit_instruments(&meter);
         Ok(Self {
@@ -244,6 +285,7 @@ impl Metrics {
             registry,
             nodes,
             reloads,
+            identity_feed,
             _incidents: incidents,
             _audit: audit,
         })
@@ -258,6 +300,12 @@ impl Metrics {
     /// Counts a registry reload that ended as `result`.
     pub fn reloaded(&self, result: ReloadResult) {
         self.reloads
+            .add(1, &[KeyValue::new("result", result.as_str())]);
+    }
+
+    /// Counts an ITI-93 message that ended as `result`.
+    pub fn identity_feed(&self, result: FeedResult) {
+        self.identity_feed
             .add(1, &[KeyValue::new("result", result.as_str())]);
     }
 
