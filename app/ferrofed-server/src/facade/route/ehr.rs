@@ -96,9 +96,7 @@ pub(super) async fn route(
     let (endpoint, step, probed) = match located {
         owner::Located::At { endpoint, step } => (endpoint, step, None),
         owner::Located::Collision(claimed) => return collision(&ehr_id, claimed, request_id),
-        owner::Located::Unreachable { .. } => {
-            return error::fixed(Code::NoDestination, request_id);
-        }
+        owner::Located::Unreachable { .. } => return error::fixed(Code::NoDestination, request_id),
         owner::Located::Unknown if arrived.method.is_safe() => {
             // NOTE: §5.4.1, N33: the probe reaches members the client never named,
             // so an ehr_id that may be a patient identifier is never probed.
@@ -112,6 +110,7 @@ pub(super) async fn route(
                 per_node: budget.per_node(),
                 overall: budget.overall(),
                 request_id: arrived.outbound,
+                conveyance: arrived.conveyance.clone(),
             };
             match ask_all(federation, &probe, &logged).await {
                 Ok((endpoint, answer)) => {
@@ -153,7 +152,7 @@ pub(super) async fn route(
     let forwarded = if let Some(answer) = probed {
         Ok(answer)
     } else {
-        let sent = (request, arrived.outbound);
+        let sent = (request, arrived.outbound, &arrived.conveyance);
         forward(federation, endpoint, sent, &budget, &logged).await
     };
     match forwarded {
