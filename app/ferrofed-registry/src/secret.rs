@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn a_url_with_userinfo_renders_without_it() {
-        let url = SecretUrl::new("postgres://ferrofed:Qz7sentinel@db.example.org:5432/ferrofed");
+        let url = SecretUrl::new("postgres://ferrofed:Qz7example@db.example.org:5432/ferrofed");
         let redacted = "postgres://***@db.example.org:5432/ferrofed";
         assert_eq!(redacted, url.redacted());
         assert_eq!(redacted, url.to_string());
@@ -311,7 +311,7 @@ mod tests {
             toml::Value::try_from(&url).expect("a URL serializes")
         );
         assert_eq!(
-            "postgres://ferrofed:Qz7sentinel@db.example.org:5432/ferrofed",
+            "postgres://ferrofed:Qz7example@db.example.org:5432/ferrofed",
             url.expose()
         );
     }
@@ -351,7 +351,7 @@ mod tests {
                 "postgres://***@db.example.org:5432/ferrofed",
             ),
             (
-                "postgres://ferrofed:Qz7?sentinel@db.example.org/ferrofed?sslmode=require",
+                "postgres://ferrofed:Qz7?example@db.example.org/ferrofed?sslmode=require",
                 "postgres://***@db.example.org/ferrofed?***",
             ),
             (

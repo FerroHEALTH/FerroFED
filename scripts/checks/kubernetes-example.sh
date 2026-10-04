@@ -24,7 +24,7 @@ cd "$(dirname "$0")/../.."
 
 readonly EXAMPLE=deploy/kubernetes
 
-if [ "$#" -ne 1 ] || [ ! -x "$1" ]; then
+if [[ "$#" -ne 1 ]] || [[ ! -x "$1" ]]; then
   sed -n '/^# Usage:/,/^# Needs/p' "$0" >&2
   exit 2
 fi
@@ -32,14 +32,16 @@ binary="$1"
 
 fail=0
 bad() {
-  echo "::error::$1" >&2
+  local message="$1"
+  echo "::error::$message" >&2
   fail=1
 }
 
 # data_key NAME: the block scalar NAME holds under data: in configmap.yaml,
 # its four-space indent removed.
 data_key() {
-  awk -v key="  $1: |" '
+  local name="$1"
+  awk -v key="  $name: |" '
     $0 == key { inside = 1; next }
     inside && /^    / { print substr($0, 5); next }
     inside && /^[[:space:]]*$/ { print ""; next }
@@ -55,7 +57,7 @@ echo "== the ConfigMap's files"
 data_key ferrofed.toml > "$work/ferrofed.toml"
 data_key registry.toml > "$work/registry.toml"
 for file in ferrofed.toml registry.toml; do
-  if [ -s "$work/$file" ]; then
+  if [[ -s "$work/$file" ]]; then
     echo "OK: configmap.yaml carries $file"
   else
     bad "configmap.yaml carries no $file under data"
@@ -89,7 +91,8 @@ sed -i.orig -e "s|/run/secrets/ferrofed/|$work/secrets/|g" \
 
 # check FILE: config check over FILE, as the image runs it.
 check() {
-  env -u FERROFED_CONFIG "$binary" config check --config "$1"
+  local file="$1"
+  env -u FERROFED_CONFIG "$binary" config check --config "$file"
 }
 
 echo "== config check over the example"
@@ -113,7 +116,7 @@ else
   echo "OK: the example without [signing] is refused by name"
 fi
 
-if [ "$fail" -ne 0 ]; then
+if [[ "$fail" -ne 0 ]]; then
   echo "kubernetes example: FAILED" >&2
   exit 1
 fi

@@ -43,36 +43,40 @@ die() {
 
 # api_root MEMBER: the host URL of the member's ITS-REST API root.
 api_root() {
-  local port
-  case "$1" in
+  local member="$1" port
+  case "$member" in
     node-a) port="${FERROEHR_A_PORT:-8081}" ;;
     node-b) port="${FERROEHR_B_PORT:-8082}" ;;
     node-c) port="${FERROEHR_C_PORT:-8083}" ;;
     node-d) port="${FERROEHR_D_PORT:-8084}" ;;
-    *) die "member '$1' is not a quickstart node" ;;
+    *) die "member '$member' is not a quickstart node" ;;
   esac
+  # The quickstart nodes publish plain HTTP on the bind host (loopback by
+  # default) and serve no TLS, so this URL cannot be https.
   printf 'http://%s:%s/ferroehr/rest/openehr' "$HOST" "$port"
 }
 
 # call METHOD URL CONTENT_TYPE BODY_FILE: sends one request and prints the
 # status; the answer body is kept in $work/answer for a refusal message.
 call() {
-  curl -sS -u "$USER_PASS" -X "$1" "$2" \
-    -H "Content-Type: $3" -H 'Accept: application/json' \
-    -H 'Prefer: return=minimal' --data-binary "@$4" \
+  local method="$1" url="$2" content_type="$3" body_file="$4"
+  curl -sS -u "$USER_PASS" -X "$method" "$url" \
+    -H "Content-Type: $content_type" -H 'Accept: application/json' \
+    -H 'Prefer: return=minimal' --data-binary "@$body_file" \
     -o "$work/answer" -w '%{http_code}'
 }
 
 # accept STEP STATUS: 0 when the node created the resource, 1 when it already
 # held it (409); any other status ends the run.
 accept() {
-  case "$2" in
+  local step="$1" status="$2"
+  case "$status" in
     200 | 201 | 204) return 0 ;;
     409)
-      echo "  $1: already there"
+      echo "  $step: already there"
       return 1
       ;;
-    *) die "$1 was answered $2: $(head -c 400 "$work/answer")" ;;
+    *) die "$step was answered $status: $(head -c 400 "$work/answer")" ;;
   esac
 }
 
@@ -95,12 +99,12 @@ rows() {
   ' "$CONFIG"
 }
 
-[ -f "$TEMPLATE" ] || die "the vendored template $TEMPLATE is missing"
+[[ -f "$TEMPLATE" ]] || die "the vendored template $TEMPLATE is missing"
 command -v curl >/dev/null || die "curl is required"
 
 rows >"$work/rows"
 count="$(wc -l <"$work/rows" | tr -d ' ')"
-[ "$count" -gt 0 ] || die "$CONFIG holds no [[dev.crossref]] row"
+[[ "$count" -gt 0 ]] || die "$CONFIG holds no [[dev.crossref]] row"
 
 seen=" "
 while read -r member ehr_id namespace value <&3; do

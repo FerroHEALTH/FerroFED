@@ -73,13 +73,13 @@ printf '%s\n' "$*" >> "$GH_STUB_CALLS"
 filter=""
 previous=""
 for argument in "$@"; do
-  if [ "$previous" = --jq ]; then
+  if [[ "$previous" = "--jq" ]]; then
     filter="$argument"
   fi
   previous="$argument"
 done
 emit() {
-  if [ -n "$filter" ]; then
+  if [[ -n "$filter" ]]; then
     printf '%s' "$1" | jq -r "$filter"
   else
     printf '%s\n' "$1"
@@ -114,7 +114,7 @@ case "${1:-} ${2:-}" in
     ;;
   "issue create")
     printf '%s\n' "$*" > "$GH_STUB_CREATED"
-    if [ "${GH_STUB_CREATE:-ok}" != ok ]; then
+    if [[ "${GH_STUB_CREATE:-ok}" != "ok" ]]; then
       echo "stub: gh issue create refused" >&2
       exit 1
     fi
@@ -144,7 +144,7 @@ STUB
   }
   # untouched NAME: the case made no gh call at all.
   untouched() {
-    if [ -s "$calls" ]; then
+    if [[ -s "$calls" ]]; then
       echo "gh-fields: self-test failed: $1 called gh." >&2
       cat "$work/out" "$work/err" "$calls" >&2
       exit 1
@@ -242,21 +242,22 @@ NAME="${REPO##*/}"
 
 # Title-case the lower-case word the command line takes: bug -> Bug.
 titled() {
-  printf '%s%s' "$(printf '%s' "${1:0:1}" | tr '[:lower:]' '[:upper:]')" "${1:1}"
+  local word="$1"
+  printf '%s%s' "$(printf '%s' "${word:0:1}" | tr '[:lower:]' '[:upper:]')" "${word:1}"
 }
 
 issue_id() {
-  local id
+  local number="$1" id
   id="$(gh api graphql -f query='query($o:String!,$n:String!,$i:Int!){ repository(owner:$o,name:$n){ issue(number:$i){ id } } }' \
-    -f o="$OWNER" -f n="$NAME" -F i="$1" --jq '.data.repository.issue.id' 2>/dev/null)" ||
-    die "could not resolve issue #$1"
-  [[ -n "$id" && "$id" != "null" ]] || die "no issue #$1 in $REPO"
+    -f o="$OWNER" -f n="$NAME" -F i="$number" --jq '.data.repository.issue.id' 2>/dev/null)" ||
+    die "could not resolve issue #$number"
+  [[ -n "$id" && "$id" != "null" ]] || die "no issue #$number in $REPO"
   printf '%s' "$id"
 }
 
 type_id() {
-  local want id
-  want="$(titled "$1")"
+  local kind="$1" want id
+  want="$(titled "$kind")"
   id="$(gh api graphql -f query='query($o:String!){ organization(login:$o){ issueTypes(first:20){ nodes{ id name isEnabled } } } }' \
     -f o="$OWNER" 2>/dev/null | jq -r --arg w "$want" '.data.organization.issueTypes.nodes[] | select(.name==$w and .isEnabled) | .id')" ||
     die "could not read the issue types of $OWNER"
@@ -267,8 +268,8 @@ type_id() {
 # Prints "<field id> <option id>" for the option named on the single-select
 # field named: field_option Priority high -> "IFSS_... IFSSO_...".
 field_option() {
-  local field="$1" want out
-  want="$(titled "$2")"
+  local field="$1" level="$2" want out
+  want="$(titled "$level")"
   out="$(gh api graphql -f query='query($o:String!){ organization(login:$o){ issueFields(first:20){ nodes{ ... on IssueFieldSingleSelect{ id name options{ id name } } } } } }' \
     -f o="$OWNER" 2>/dev/null | jq -r --arg fl "$field" --arg w "$want" '.data.organization.issueFields.nodes[] | select(.name==$fl) | .id as $f | .options[] | select(.name==$w) | "\($f) \(.id)"')" ||
     die "could not read the issue fields of $OWNER"
@@ -346,4 +347,5 @@ case "$1" in
   effort)   set_field "$2" Effort "$3" ;;
   show)     show "$2" ;;
   new)      shift; new "$@" ;;
+  *)        usage ;;
 esac

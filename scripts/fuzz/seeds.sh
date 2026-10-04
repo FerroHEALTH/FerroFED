@@ -36,21 +36,23 @@ die() {
 }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
-[ -d "$golden" ] || die "no golden cases at $golden (scripts/vendor/federation-ref.sh)"
-[ -d "$pages" ] || die "no specification pages at $pages (scripts/vendor/federation-spec.sh)"
+[[ -d "$golden" ]] || die "no golden cases at $golden (scripts/vendor/federation-ref.sh)"
+[[ -d "$pages" ]] || die "no specification pages at $pages (scripts/vendor/federation-spec.sh)"
 
 # The lines of the "== facade" section of a golden case, joined by spaces.
 facade_of() {
-  awk '/^== /{inside = ($0 == "== facade"); next} inside && NF {print}' "$1" | paste -sd ' ' -
+  local file="$1"
+  awk '/^== /{inside = ($0 == "== facade"); next} inside && NF {print}' "$file" | paste -sd ' ' -
 }
 
 # The body of the first [source,json] block of an AsciiDoc page.
 json_block_of() {
+  local page="$1"
   awk '
     /^\[source,json\]/ {armed = 1; next}
     armed && /^----$/ {if (open) exit; open = 1; next}
     open {print}
-  ' "$1"
+  ' "$page"
 }
 
 generate() {
@@ -61,7 +63,7 @@ generate() {
   for case in "$golden"/*.case; do
     name="$(basename "$case" .case)"
     query="$(facade_of "$case")"
-    [ -n "$query" ] || die "$name has no facade section"
+    [[ -n "$query" ]] || die "$name has no facade section"
     printf '%s' "$query" >"$out/aql_rewrite/gen-$name.aql"
     jq -cn --arg q "$query" '{q: $q}' >"$out/adhoc_query/gen-$name.json"
     jq -cn --arg q "$query" \
@@ -92,7 +94,7 @@ case "${1:-}" in
   for target in "${targets[@]}"; do
     mkdir -p "$scratch/committed/$target"
     for seed in "$root/fuzz/seeds/$target"/gen-*; do
-      [ -f "$seed" ] && cp "$seed" "$scratch/committed/$target/"
+      [[ -f "$seed" ]] && cp "$seed" "$scratch/committed/$target/"
     done
   done
   diff -r "$scratch/fresh" "$scratch/committed" >&2 ||

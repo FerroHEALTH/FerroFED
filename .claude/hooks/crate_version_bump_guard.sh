@@ -27,7 +27,7 @@ else
   command_text="$payload"
 fi
 
-[ -n "${command_text:-}" ] || exit 0
+[[ -n "${command_text:-}" ]] || exit 0
 
 case "$command_text" in
 *"git commit"*) head=WORKTREE ;;
@@ -37,8 +37,8 @@ esac
 
 repo_root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 guard="$repo_root/scripts/checks/crate-version-guard.sh"
-[ -x "$guard" ] || exit 0
-[ -d "$repo_root/crates" ] || exit 0
+[[ -x "$guard" ]] || exit 0
+[[ -d "$repo_root/crates" ]] || exit 0
 
 cd "$repo_root" || exit 0
 

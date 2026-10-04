@@ -98,7 +98,7 @@ pub fn unauthenticated(
         "no onward credential could be obtained, so nothing was sent to the node"
     );
     let code = cause
-        .and_then(|cause| cause.downcast_ref::<TokenError>())
+        .and_then(<dyn std::error::Error>::downcast_ref::<TokenError>)
         .and_then(TokenError::code);
     match code {
         Some(code) => ErrorDetail::Text(format!(

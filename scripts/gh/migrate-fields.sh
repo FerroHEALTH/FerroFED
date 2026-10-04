@@ -128,13 +128,13 @@ set -euo pipefail
 filter=""
 previous=""
 for argument in "$@"; do
-  if [ "$previous" = --jq ]; then
+  if [[ "$previous" = "--jq" ]]; then
     filter="$argument"
   fi
   previous="$argument"
 done
 emit() {
-  if [ -n "$filter" ]; then
+  if [[ -n "$filter" ]]; then
     printf '%s' "$1" | jq -r "$filter"
   else
     printf '%s\n' "$1"
@@ -197,8 +197,9 @@ STUB
   # node NUMBER STATE TYPE PRIORITY EFFORT LABELS TITLE: one issue as GraphQL
   # answers it, with "" for an absent type, priority or effort.
   node() {
-    jq -cn --argjson n "$1" --arg s "$2" --arg t "$3" --arg p "$4" --arg e "$5" \
-      --arg l "$6" --arg title "$7" '{number:$n, state:$s, title:$title,
+    local number="$1" state="$2" type="$3" priority="$4" effort="$5" labels="$6" title="$7"
+    jq -cn --argjson n "$number" --arg s "$state" --arg t "$type" --arg p "$priority" --arg e "$effort" \
+      --arg l "$labels" --arg title "$title" '{number:$n, state:$s, title:$title,
         issueType: (if $t == "" then null else {name:$t} end),
         issueFieldValues:{nodes:(
           (if $p == "" then [] else [{field:{name:"Priority"}, value:$p}] end)
@@ -309,20 +310,24 @@ ROWS="$(gh api graphql --paginate \
 
 # judged TABLE NUMBER: the value a table above holds for an issue, or nothing.
 judged() {
-  awk -v n="$2" '$1 == n { print $2 }' <<<"$1"
+  local table="$1" number="$2"
+  awk -v n="$number" '$1 == n { print $2 }' <<<"$table"
 }
 
 # has LABELS NAME: whether the comma-joined label list carries NAME.
 has() {
-  [[ ",$1," == *",$2,"* ]]
+  local labels="$1" name="$2"
+  [[ ",$labels," == *",$name,"* ]]
 }
 
 lower() {
-  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+  local word="$1"
+  printf '%s' "$word" | tr '[:upper:]' '[:lower:]'
 }
 
 titled() {
-  printf '%s%s' "$(printf '%s' "${1:0:1}" | tr '[:lower:]' '[:upper:]')" "${1:1}"
+  local word="$1"
+  printf '%s%s' "$(printf '%s' "${word:0:1}" | tr '[:lower:]' '[:upper:]')" "${word:1}"
 }
 
 changes=0
@@ -333,14 +338,14 @@ efforts=0 kinds=0
 
 # change NUMBER WHAT: say a change, and make it when applying.
 change() {
-  local n="$1"
-  shift
+  local n="$1" what="$2" value="$3"
   changes=$((changes + 1))
   case "$mode" in
     apply)
-      case "$1" in
-        type | priority | effort) "$FIELDS" "$1" "$n" "$(lower "$2")" ;;
-        label) gh issue edit "$n" --add-label "$2" >/dev/null && echo "ok: #$n carries $2" ;;
+      case "$what" in
+        type | priority | effort) "$FIELDS" "$what" "$n" "$(lower "$value")" ;;
+        label) gh issue edit "$n" --add-label "$value" >/dev/null && echo "ok: #$n carries $value" ;;
+        *) ;;
       esac
       ;;
     *) ;;
@@ -349,7 +354,8 @@ change() {
 
 # was VALUE: the "(was …)" suffix for a value that is replaced.
 was() {
-  if [[ "$1" == "-" ]]; then printf ''; else printf ' (was %s)' "$1"; fi
+  local value="$1"
+  if [[ "$value" == "-" ]]; then printf ''; else printf ' (was %s)' "$value"; fi
 }
 
 problem() {
@@ -465,6 +471,7 @@ while read -r line; do
       read -r at what value <<<"$line"
       change "${at#@}" "$what" "$value"
       ;;
+    *) ;;
   esac
 done <<<"$plan_lines"
 

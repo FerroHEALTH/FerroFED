@@ -194,19 +194,11 @@ pub(super) fn recombine(
                 .try_fold(0_i128, i128::checked_add)
                 .and_then(cell::integer)
                 .ok_or(overflow)?,
-            Recombine::Sum { .. } => {
-                let sums: Vec<Num> = parts
-                    .filter_map(|part| match part {
-                        Part::Sum(sum) => *sum,
-                        _ => None,
-                    })
-                    .collect();
-                match total(&sums).ok_or(overflow)? {
-                    Total::Null => cell::null(),
-                    Total::Integer(sum) => cell::integer(sum).ok_or(overflow)?,
-                    Total::Real(sum) => cell::exact_real(sum).ok_or(overflow)?,
-                }
-            }
+            Recombine::Sum { .. } => match summed(parts).ok_or(overflow)? {
+                Total::Null => cell::null(),
+                Total::Integer(sum) => cell::integer(sum).ok_or(overflow)?,
+                Total::Real(sum) => cell::exact_real(sum).ok_or(overflow)?,
+            },
             Recombine::Min { column } | Recombine::Max { column } => {
                 let wanted = if matches!(recombine, Recombine::Max { .. }) {
                     Ordering::Greater
@@ -217,32 +209,50 @@ pub(super) fn recombine(
                     .and_then(|answer| answer.row.get(column).cloned())
                     .unwrap_or_else(cell::null)
             }
-            Recombine::Avg { .. } => {
-                let mut sums = Vec::new();
-                let mut counted = 0_i128;
-                for part in parts {
-                    if let Part::Mean(sum, count) = part {
-                        sums.extend(*sum);
-                        counted = counted.checked_add(*count).ok_or(overflow)?;
-                    }
-                }
-                if counted == 0 {
-                    cell::null()
-                } else {
-                    match total(&sums).ok_or(overflow)? {
-                        Total::Null => integer_mean(0, counted).and_then(cell::integer),
-                        Total::Integer(sum) => integer_mean(sum, counted).and_then(cell::integer),
-                        Total::Real(sum) => decimal(Num::Int(counted))
-                            .and_then(|counted| sum.checked_div(counted))
-                            .and_then(cell::nearest_real),
-                    }
-                    .ok_or(overflow)?
-                }
-            }
+            Recombine::Avg { .. } => match averaged(parts).ok_or(overflow)? {
+                Total::Null => cell::null(),
+                Total::Integer(mean) => cell::integer(mean).ok_or(overflow)?,
+                Total::Real(mean) => cell::nearest_real(mean).ok_or(overflow)?,
+            },
         };
         row.push(cell);
     }
     Ok(row)
+}
+
+/// The `SUM` of the node sums in `parts`, or `None` when it cannot be held
+/// exactly.
+fn summed<'a>(parts: impl Iterator<Item = &'a Part>) -> Option<Total> {
+    let sums: Vec<Num> = parts
+        .filter_map(|part| match part {
+            Part::Sum(sum) => *sum,
+            _ => None,
+        })
+        .collect();
+    total(&sums)
+}
+
+/// The `AVG` over the node sums and counts in `parts`, [`Total::Null`] when no
+/// node counted a value, or `None` when it cannot be held exactly.
+fn averaged<'a>(parts: impl Iterator<Item = &'a Part>) -> Option<Total> {
+    let mut sums = Vec::new();
+    let mut counted = 0_i128;
+    for part in parts {
+        if let Part::Mean(sum, count) = part {
+            sums.extend(*sum);
+            counted = counted.checked_add(*count)?;
+        }
+    }
+    if counted == 0 {
+        return Some(Total::Null);
+    }
+    match total(&sums)? {
+        Total::Null => integer_mean(0, counted).map(Total::Integer),
+        Total::Integer(sum) => integer_mean(sum, counted).map(Total::Integer),
+        Total::Real(sum) => decimal(Num::Int(counted))
+            .and_then(|counted| sum.checked_div(counted))
+            .map(Total::Real),
+    }
 }
 
 /// The mean `sum / counted`, rounded once to the nearest integer with a tie
@@ -270,14 +280,14 @@ fn integer_mean(sum: i128, counted: i128) -> Option<i128> {
     }
 }
 
-/// A recombined sum.
+/// A recombined sum or mean, before it is written as a cell.
 #[derive(Debug)]
 enum Total {
     /// No node holds a value.
     Null,
-    /// Every node sum is an integer.
+    /// Every node sum is an integer, so the value is one.
     Integer(i128),
-    /// A node sum is a real.
+    /// A node sum is a real, so the value is one.
     Real(Decimal),
 }
 

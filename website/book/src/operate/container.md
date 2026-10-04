@@ -177,12 +177,15 @@ Secret, which you create before you apply the manifests. The Deployment:
   gateway creates the spool under it with mode `0700`. An `emptyDir` keeps
   the spool across a container restart only: for a spool that outlives the
   pod, run a StatefulSet with a `volumeClaimTemplate` on an encrypted
-  storage class;
+  storage class. Its `sizeLimit` of `512Mi` holds the default spool bounds
+  (`spool_max_bytes`, `spool_max_events`); the kubelet evicts the pod past
+  it, so raise it with either bound;
 - runs as the numeric user `65532` with `runAsNonRoot`, a read-only root
   filesystem, `allowPrivilegeEscalation: false`, every capability dropped and
   the `RuntimeDefault` seccomp profile;
 - sets resource requests and limits, a starting point to size from your own
-  load;
+  load, ephemeral storage among them (a `1Gi` limit covering the container
+  log and the spool's `emptyDir`);
 - gives the pod a `terminationGracePeriodSeconds` of 30, longer than the
   10-second `server.shutdown_timeout_ms` of the example configuration, so the
   kubelet never kills a drain in progress. Keep the grace period longer than

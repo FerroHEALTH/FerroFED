@@ -49,6 +49,10 @@ readonly SPEC_TOOLS=docs/specs/federation-spec/tools
 readonly PASS_LIST=conformance/aql-golden/pass-list.txt
 readonly GOLDEN=docs/specs/federation-ref/src/test/resources/aql-golden
 readonly BADGES=conformance/badges
+# The sed script that indents a diff under its finding, and the class tr
+# deletes from a count.
+readonly INDENT='s/^/  /'
+readonly SPACE='[:space:]'
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -57,15 +61,20 @@ fail=0
 problem() {
   echo "conformance-matrix: $*" >&2
   fail=1
+  return 0
 }
 
 for f in "$MATRIX" "$TRACKS" "$REQUIREMENTS" "$PAGE"; do
-  [ -f "$f" ] || problem "$f is missing"
+  [[ -f "$f" ]] || problem "$f is missing"
 done
-[ "$fail" -eq 0 ] || exit 1
+[[ "$fail" -eq 0 ]] || exit 1
 
 # The data rows of a table, comments dropped, header kept.
-rows() { grep -v '^#' "$1"; }
+rows() {
+  local file="$1"
+  grep -v '^#' "$file"
+  return
+}
 
 # 1. The derived columns against a fresh derivation.
 bash scripts/conformance/matrix.sh --derived "$work/derived" || exit 1
@@ -79,13 +88,13 @@ for pair in "matrix.derived:cps.tsv:$MATRIX" "tracks.derived:tracks.tsv:$TRACKS"
   file="${rest#*:}"
   if ! diff -u "$work/derived/$fresh" "$work/$held" > "$work/diff" 2>&1; then
     problem "the derived columns of $file differ from the vendored specification (run scripts/conformance/matrix.sh --derive):"
-    sed 's/^/  /' "$work/diff" >&2
+    sed "$INDENT" "$work/diff" >&2
   fi
 done
 
 # 2. The direct points per requirement against the vendored traceability.tsv.
 # Its tracks column is never filled, so only the points compare.
-if [ -f "$SPEC_TOOLS/traceability.tsv" ]; then
+if [[ -f "$SPEC_TOOLS/traceability.tsv" ]]; then
   # One "requirement <TAB> point" pair per line, so the two sides compare as
   # sorted sets whatever order each file lists its points in.
   awk -F'\t' 'NR > 1 {
@@ -98,7 +107,7 @@ if [ -f "$SPEC_TOOLS/traceability.tsv" ]; then
     }' | sort > "$work/trace.ours"
   if ! diff -u "$work/trace.vendored" "$work/trace.ours" > "$work/diff" 2>&1; then
     problem "the points reaching each requirement disagree with $SPEC_TOOLS/traceability.tsv:"
-    sed 's/^/  /' "$work/diff" >&2
+    sed "$INDENT" "$work/diff" >&2
   fi
 else
   problem "$SPEC_TOOLS/traceability.tsv is missing"
@@ -110,7 +119,7 @@ rows "$REQUIREMENTS" | awk -F'\t' '$4 == "orphan" { print $1 }' | while read -r 
   grep -qx "$req" "$work/exceptions" || echo "$req"
 done > "$work/orphans"
 while read -r req; do
-  [ -n "$req" ] && problem "$req is reached by no conformance point and no track, and is not in $SPEC_TOOLS/traceability-exceptions.txt"
+  [[ -n "$req" ]] && problem "$req is reached by no conformance point and no track, and is not in $SPEC_TOOLS/traceability-exceptions.txt"
 done < "$work/orphans"
 
 # 4. The hand-kept vocabulary.
@@ -138,7 +147,7 @@ vocab="$(
       if ($5 == "deferred" && ($7 == "-" || $7 == "")) print file ": track " $1 " is deferred and gives no reason"
     }'
 )"
-if [ -n "$vocab" ]; then
+if [[ -n "$vocab" ]]; then
   while IFS= read -r line; do problem "$line"; done <<< "$vocab"
 fi
 
@@ -147,7 +156,7 @@ fi
 git ls-files --cached --others --exclude-standard -- '*.rs' ':!docs/specs/**' > "$work/sources" 2> /dev/null || true
 : > "$work/marks"
 while IFS= read -r src; do
-  [ -f "$src" ] || continue
+  [[ -f "$src" ]] || continue
   awk -v src="$src" '
     pending != "" {
       line = $0
@@ -191,7 +200,7 @@ marker_findings="$(
     }
   ' "$work/cp-status" "$work/track-status" "$work/marks"
 )"
-if [ -n "$marker_findings" ]; then
+if [[ -n "$marker_findings" ]]; then
   while IFS= read -r line; do problem "$line"; done <<< "$marker_findings"
 fi
 
@@ -199,22 +208,22 @@ fi
 bash scripts/conformance/matrix.sh --render > "$work/page.md" || exit 1
 if ! diff -u "$PAGE" "$work/page.md" > "$work/diff" 2>&1; then
   problem "$PAGE is stale (run scripts/conformance/matrix.sh --render-write):"
-  sed 's/^/  /' "$work/diff" | head -40 >&2
+  sed "$INDENT" "$work/diff" | head -40 >&2
 fi
 
 # 8. The golden pass list: sorted and unique, every case a vendored file, and
 # its total the size of the vendored corpus.
-if [ -f "$PASS_LIST" ]; then
+if [[ -f "$PASS_LIST" ]]; then
   grep -vE '^(#|total |$)' "$PASS_LIST" > "$work/listed"
   if ! LC_ALL=C sort -u -c "$work/listed" 2> /dev/null; then
     problem "$PASS_LIST is not sorted and unique (rerun the golden test with FERROFED_CONFORMANCE_UPDATE=1)"
   fi
   while IFS= read -r case; do
-    [ -f "$GOLDEN/$case" ] || problem "$PASS_LIST names $case, which is not in $GOLDEN"
+    [[ -f "$GOLDEN/$case" ]] || problem "$PASS_LIST names $case, which is not in $GOLDEN"
   done < "$work/listed"
   listed_total="$(sed -n 's/^total \([0-9][0-9]*\)$/\1/p' "$PASS_LIST")"
-  corpus_total="$(find "$GOLDEN" -maxdepth 1 -name '*.case' | wc -l | tr -d '[:space:]')"
-  if [ "$listed_total" != "$corpus_total" ]; then
+  corpus_total="$(find "$GOLDEN" -maxdepth 1 -name '*.case' | wc -l | tr -d "$SPACE")"
+  if [[ "$listed_total" != "$corpus_total" ]]; then
     problem "$PASS_LIST records a total of ${listed_total:-none} and $GOLDEN holds $corpus_total cases (rerun the golden test with FERROFED_CONFORMANCE_UPDATE=1)"
   fi
 else
@@ -227,13 +236,13 @@ if bash scripts/conformance/matrix.sh --badges "$work/badges" > /dev/null; then
   (cd "$BADGES" 2> /dev/null && ls -- *.json 2> /dev/null) > "$work/badges.held" || true
   if ! diff -u "$work/badges.fresh" "$work/badges.held" > "$work/diff" 2>&1; then
     problem "the files under $BADGES differ from the badge set (run scripts/conformance/matrix.sh --badges-write):"
-    sed 's/^/  /' "$work/diff" >&2
+    sed "$INDENT" "$work/diff" >&2
   fi
   while IFS= read -r badge; do
-    [ -f "$BADGES/$badge" ] || continue
+    [[ -f "$BADGES/$badge" ]] || continue
     if ! diff -u "$BADGES/$badge" "$work/badges/$badge" > "$work/diff" 2>&1; then
       problem "$BADGES/$badge disagrees with the matrix or the pass list (run scripts/conformance/matrix.sh --badges-write):"
-      sed 's/^/  /' "$work/diff" >&2
+      sed "$INDENT" "$work/diff" >&2
     fi
   done < "$work/badges.fresh"
 else
@@ -243,12 +252,12 @@ bash scripts/conformance/matrix.sh --readme-block > "$work/block.md" || exit 1
 sed -n '/^<!-- conformance:begin -->$/,/^<!-- conformance:end -->$/p' README.md > "$work/block.held"
 if ! diff -u "$work/block.held" "$work/block.md" > "$work/diff" 2>&1; then
   problem "the README.md conformance block is stale (run scripts/conformance/matrix.sh --badges-write):"
-  sed 's/^/  /' "$work/diff" >&2
+  sed "$INDENT" "$work/diff" >&2
 fi
 
-if [ "$fail" -ne 0 ]; then
+if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
-gateway="$(rows "$MATRIX" | awk -F'\t' 'NR > 1 && $2 == "Gateway"' | wc -l | tr -d '[:space:]')"
-covered="$(rows "$MATRIX" | awk -F'\t' 'NR > 1 && $2 == "Gateway" && $5 == "covered"' | wc -l | tr -d '[:space:]')"
-echo "conformance-matrix: OK (gateway points covered: $covered of $gateway; $(wc -l < "$work/marks" | tr -d '[:space:]') marker entries)"
+gateway="$(rows "$MATRIX" | awk -F'\t' 'NR > 1 && $2 == "Gateway"' | wc -l | tr -d "$SPACE")"
+covered="$(rows "$MATRIX" | awk -F'\t' 'NR > 1 && $2 == "Gateway" && $5 == "covered"' | wc -l | tr -d "$SPACE")"
+echo "conformance-matrix: OK (gateway points covered: $covered of $gateway; $(wc -l < "$work/marks" | tr -d "$SPACE") marker entries)"

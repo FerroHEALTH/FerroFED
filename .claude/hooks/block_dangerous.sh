@@ -20,16 +20,16 @@ if command -v jq >/dev/null 2>&1; then
 else
   cmd="$payload"
 fi
-[ -n "${cmd:-}" ] || exit 0
+[[ -n "${cmd:-}" ]] || exit 0
 
 # A delete carrying both -r and -f (combined or separate flags), unless it is
 # scoped under /tmp.
-if printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])rm[[:space:]]+-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])' ||
-  printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*-[a-zA-Z]*[rR][a-zA-Z]*([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*f'; then
-  if ! printf '%s' "$cmd" | grep -qE 'rm[[:space:]]+-[a-zA-Z]+[[:space:]]+"?(/private)?/tmp/'; then
-    echo "BLOCKED: a recursive forced delete is not allowed (block_dangerous hook). Delete specific files with 'git rm' or a plain 'rm <file>', or operate under /tmp." >&2
-    exit 2
-  fi
+if {
+  printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])rm[[:space:]]+-[a-zA-Z]*([rR][a-zA-Z]*f|f[a-zA-Z]*[rR])' ||
+    printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*-[a-zA-Z]*[rR][a-zA-Z]*([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*f'
+} && ! printf '%s' "$cmd" | grep -qE 'rm[[:space:]]+-[a-zA-Z]+[[:space:]]+"?(/private)?/tmp/'; then
+  echo "BLOCKED: a recursive forced delete is not allowed (block_dangerous hook). Delete specific files with 'git rm' or a plain 'rm <file>', or operate under /tmp." >&2
+  exit 2
 fi
 
 # Force pushes: never to main or master; a bare force-push is refused too.

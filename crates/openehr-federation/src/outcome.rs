@@ -282,7 +282,7 @@ pub struct EndpointOutcome {
 
 impl EndpointOutcome {
     /// The member names this type models, as the schema spells them.
-    pub const MEMBERS: &'static [&'static str] = &[
+    pub const MEMBERS: &[&str] = &[
         "id",
         "status",
         "latency_ms",

@@ -20,7 +20,7 @@ else
   file_path="$(printf '%s' "$payload" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
 fi
 
-[ -n "${file_path:-}" ] || exit 0
+[[ -n "${file_path:-}" ]] || exit 0
 
 repo_root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 rel="${file_path#"$repo_root"/}"
@@ -29,16 +29,19 @@ base="$(basename "$file_path")"
 watched=0
 case "$rel" in
 docs/VERSIONS.md | docs/architecture.md | LICENSE | NOTICE | Cargo.toml | rust-toolchain.toml | CITATION.cff | compose.yaml | README.md) watched=1 ;;
+*) ;;
 esac
 case "$base" in
 VERSIONS.md | architecture.md | LICENSE | NOTICE | rust-toolchain.toml | CITATION.cff | compose.yaml | README.md | Dockerfile | PROVENANCE.md) watched=1 ;;
+*) ;;
 esac
 case "$rel" in
 scripts/vendor/*.sh) watched=1 ;;
+*) ;;
 esac
 
-[ "$watched" -eq 1 ] || exit 0
-[ -x "$repo_root/scripts/checks/versions.sh" ] || exit 0
+[[ "$watched" -eq 1 ]] || exit 0
+[[ -x "$repo_root/scripts/checks/versions.sh" ]] || exit 0
 
 findings="$("$repo_root/scripts/checks/versions.sh" 2>&1)" || {
   printf '%s\n' "$findings" >&2

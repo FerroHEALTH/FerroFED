@@ -129,7 +129,7 @@ do_publish() {
     esac
   done <<<"$selected"
   [[ -z "$failed" ]] || {
-    echo "::error::failed to publish:$failed"
+    echo "::error::failed to publish:$failed" >&2
     return 1
   }
   echo "publish-crates: every publishable crate is at its manifest version or was already there"
@@ -167,7 +167,7 @@ do_verify() {
     [[ -n "$got" ]] || bad="$bad $crate@$want"
   done <<<"$selected"
   [[ -z "$bad" ]] || {
-    echo "::error::the published set is incomplete:$bad"
+    echo "::error::the published set is incomplete:$bad" >&2
     return 1
   }
   echo "publish-crates: confirmed on crates.io, all $count crates at their manifest versions"

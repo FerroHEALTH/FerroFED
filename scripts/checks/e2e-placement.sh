@@ -26,21 +26,25 @@ readonly WORKFLOW=.github/workflows/ci.yml
 
 # is_gated FILE: whether FILE reads the gate on a line that is not a comment.
 is_gated() {
-  grep -v -E '^[[:space:]]*//' "$1" | grep -q -E 'e2e_enabled[[:space:]]*\(|FERROFED_E2E|E2E_GATE'
+  local file="$1"
+  grep -v -E '^[[:space:]]*//' "$file" | grep -q -E 'e2e_enabled[[:space:]]*\(|FERROFED_E2E|E2E_GATE'
 }
 
 # may_be_gated PATH: whether a gated file may sit at the repository path PATH.
 may_be_gated() {
-  case "$1" in
+  local path="$1"
+  case "$path" in
     tools/ferrofed-testkit/src/*) return 0 ;;
+    *) ;;
   esac
-  [[ "$1" =~ ^[^/]+/[^/]+/tests/it/e2e(\.rs|/.+\.rs)$ ]]
+  [[ "$path" =~ ^[^/]+/[^/]+/tests/it/e2e(\.rs|/.+\.rs)$ ]]
 }
 
 # check_file PATH FILE: reports PATH when FILE is gated where it may not be.
 check_file() {
-  if is_gated "$2" && ! may_be_gated "$1"; then
-    echo "::error file=$1::$1 checks the FERROFED_E2E gate outside tests/it/e2e, so no CI job runs it; move it under the e2e module of its crate's test binary." >&2
+  local path="$1" file="$2"
+  if is_gated "$file" && ! may_be_gated "$path"; then
+    echo "::error file=$path::$path checks the FERROFED_E2E gate outside tests/it/e2e, so no CI job runs it; move it under the e2e module of its crate's test binary." >&2
     return 1
   fi
 }
@@ -50,7 +54,7 @@ check_file() {
 check_workflow() {
   local fail=0 job
   job="$(awk '/^  e2e:$/ { inside = 1; next } inside && /^  [^ #][^ ]*:$/ { inside = 0 } inside' "$1")"
-  if [ -z "$job" ]; then
+  if [[ -z "$job" ]]; then
     echo "::error file=$1::$1 has no e2e job, so no gated test runs." >&2
     return 1
   fi
@@ -71,10 +75,10 @@ check_tree() {
     count=$((count + 1))
     check_file "$path" "$path" || fail=1
   done < <(git ls-files -- '*.rs' ':(exclude)docs/specs/**' ':(glob,exclude)**/vendor/**')
-  if [ -f "$WORKFLOW" ]; then
+  if [[ -f "$WORKFLOW" ]]; then
     check_workflow "$WORKFLOW" || fail=1
   fi
-  if [ "$fail" -eq 0 ]; then
+  if [[ "$fail" -eq 0 ]]; then
     echo "e2e-placement: $count Rust files, every gated test under e2e::."
   fi
   return "$fail"
@@ -98,10 +102,10 @@ self_test() {
   local failed=0
   # expect WANT PATH FILE: check_file over PATH holding FILE exits WANT.
   expect() {
-    local want=$1 status=0
-    check_file "$2" "$3" 2> /dev/null || status=$?
-    if [ "$status" -ne "$want" ]; then
-      echo "e2e-placement: self-test failed: $2 ($(basename "$3")) exited $status, wanted $want." >&2
+    local want="$1" path="$2" file="$3" status=0
+    check_file "$path" "$file" 2> /dev/null || status=$?
+    if [[ "$status" -ne "$want" ]]; then
+      echo "e2e-placement: self-test failed: $path ($(basename "$file")) exited $status, wanted $want." >&2
       failed=1
     fi
   }
@@ -125,7 +129,7 @@ self_test() {
   expect_workflow() {
     local want=$1 status=0
     check_workflow "$job" 2> /dev/null || status=$?
-    if [ "$status" -ne "$want" ]; then
+    if [[ "$status" -ne "$want" ]]; then
       echo "e2e-placement: self-test failed: workflow $2 exited $status, wanted $want." >&2
       failed=1
     fi
@@ -152,7 +156,7 @@ self_test() {
   printf 'jobs:\n  test:\n    env:\n      FERROFED_E2E: "1"\n    steps:\n      - run: cargo nextest run --workspace -E %s\n' "$filter" > "$job"
   expect_workflow 1 "with no e2e job"
 
-  if [ "$failed" -ne 0 ]; then
+  if [[ "$failed" -ne 0 ]]; then
     exit 1
   fi
   echo "e2e-placement: self-test OK."

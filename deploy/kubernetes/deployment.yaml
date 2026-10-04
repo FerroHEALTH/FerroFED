@@ -85,13 +85,18 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 1
+          # Ephemeral storage holds the container log and the audit-spool
+          # emptyDir, whose sizeLimit below is 512Mi, so the limit covers both.
+          # The kubelet evicts a pod past it; raise it with the sizeLimit.
           resources:
             requests:
               cpu: 100m
               memory: 64Mi
+              ephemeral-storage: 128Mi
             limits:
               cpu: "1"
               memory: 256Mi
+              ephemeral-storage: 1Gi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -126,6 +131,9 @@ spec:
         # Each replica needs a spool of its own: two gateways must never
         # drain one directory. This emptyDir keeps it across a container
         # restart only; a StatefulSet volumeClaimTemplate keeps it across a
-        # reschedule too.
+        # reschedule too. The size limit holds the default spool bounds
+        # (64 MiB in spool_max_bytes, 100000 messages of at least one 4 KiB
+        # block each) with headroom; raise it with either bound.
         - name: audit-spool
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 512Mi

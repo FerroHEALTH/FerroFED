@@ -31,7 +31,7 @@ pub struct BasePath(String);
 
 impl BasePath {
     /// The root, `/`.
-    const ROOT: &'static str = "/";
+    const ROOT: &str = "/";
 
     /// Whether this is the root, `/`.
     #[must_use]

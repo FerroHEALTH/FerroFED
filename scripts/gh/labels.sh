@@ -65,13 +65,13 @@ set -euo pipefail
 filter=""
 previous=""
 for argument in "$@"; do
-  if [ "$previous" = --jq ]; then
+  if [[ "$previous" = "--jq" ]]; then
     filter="$argument"
   fi
   previous="$argument"
 done
 emit() {
-  if [ -n "$filter" ]; then
+  if [[ -n "$filter" ]]; then
     printf '%s' "$1" | jq -r "$filter"
   else
     printf '%s\n' "$1"
@@ -86,7 +86,7 @@ case "${1:-} ${2:-}" in
     emit "$GH_STUB_LABELS"
     ;;
   "label create")
-    if [ "${GH_STUB_CREATE:-ok}" != ok ]; then
+    if [[ "${GH_STUB_CREATE:-ok}" != "ok" ]]; then
       echo "stub: gh label create refused" >&2
       exit 1
     fi
@@ -140,7 +140,7 @@ STUB
 
   # untouched NAME: the case made no gh call at all.
   untouched() {
-    if [ -s "$calls" ]; then
+    if [[ -s "$calls" ]]; then
       echo "gh-labels: self-test failed: $1 called gh." >&2
       cat "$work/out" "$work/err" "$calls" >&2
       exit 1
@@ -217,16 +217,19 @@ EXISTING="$(gh label list --limit 200 --json name --jq '.[].name')"
 
 # label <name> <hex-color> <description>
 label() {
-  gh label create "$1" --color "$2" --description "$3" --force >/dev/null
-  echo "ok: $1"
+  local name="$1" color="$2" description="$3"
+  gh label create "$name" --color "$color" --description "$description" --force >/dev/null
+  echo "ok: $name"
 }
 
 # retire <name>: delete a label the taxonomy no longer carries, if it exists.
 retire() {
-  if grep -qx -- "$1" <<<"$EXISTING"; then
-    gh label delete "$1" --yes >/dev/null
-    echo "retired: $1"
+  local name="$1"
+  if grep -qx -- "$name" <<<"$EXISTING"; then
+    gh label delete "$name" --yes >/dev/null
+    echo "retired: $name"
   fi
+  return 0
 }
 
 echo "== retired labels (the native issue type and the Priority field carry these now) =="
