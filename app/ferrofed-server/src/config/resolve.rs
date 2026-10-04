@@ -22,7 +22,8 @@ use crate::config::error::Error;
 use crate::config::grant::GrantFault;
 use crate::config::secrets::{resolve_credentials, resolve_signing};
 use crate::config::settings::{
-    FederationSettings, LocalizationSettings, MetricsSettings, Scheme, ServerSettings, Settings,
+    ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
+    ServerSettings, Settings,
     SigningSettings, TelemetrySettings,
 };
 use crate::config::{
@@ -254,6 +255,7 @@ impl Config {
             demographic_endpoint,
             fan_out_template_upload: self.federation.fan_out_template_upload,
             fan_out_stored_queries: self.federation.fan_out_stored_queries,
+            consent_disclosure: ConsentDisclosure::of(self.federation.consent.disclose),
         })
     }
 }

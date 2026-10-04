@@ -211,6 +211,13 @@ pub enum Code {
     /// token's `patient/` grant at every member, so the grant cannot be
     /// confined and nothing is sent (§5.2, §11.2).
     PatientContextUnavailable,
+    /// No member the gateway may ask holds an EHR for the subject of
+    /// `GET {base}/v1/ehr`, in a deployment that does not disclose consent
+    /// exclusions, where a subject no member knows and one only a member
+    /// the consent pre-filter denied holds get this one answer (Regulation
+    /// (EU) 2025/327 Art 8; RFC 9110 §15.5.5). The body never names the
+    /// subject or an endpoint.
+    SubjectUnavailable,
 }
 
 /// The code of a refused query: the refusal's stable kind

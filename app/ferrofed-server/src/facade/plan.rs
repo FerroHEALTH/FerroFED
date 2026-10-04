@@ -167,6 +167,16 @@ struct Membership {
 /// candidate it does not deny is not cleared by that, and neither is one
 /// localization named: its node checks consent itself (N26, N27, §14.3).
 ///
+/// A deployment that does not disclose consent exclusions
+/// ([`Federation::discloses_consent`]) still never sends a denied candidate a
+/// request, but resolves it with the others and reports it as a member the
+/// cross-reference does not know the patient at: `not-resolved`, with the
+/// one error text such a member carries there, or the resolver's own failure
+/// where it could not answer. That status clears `complete` and fails
+/// nothing, as `consent-denied` does (§11.1, §11.3), so the answer never
+/// presents itself as whole; `not-localized` would leave `complete` true,
+/// which N37 requires of a member that was not in scope.
+///
 /// The patient is then resolved at every remaining candidate before
 /// `deadline`. A member that knows the patient is asked its node query; one
 /// that does not is `not-resolved`, which fails nothing (N6); one the
@@ -215,8 +225,12 @@ pub async fn patient(
         }
         _ => consent::Prefiltered::default(),
     };
-    plan = settle_denied(plan, &mut membership.asked, &consented)?;
-    candidates.retain(|member| !consented.denied.contains(member));
+    let disclosed = federation.discloses_consent();
+    plan = settle_denied(plan, &mut membership.asked, &consented, disclosed)?;
+    if disclosed {
+        candidates.retain(|member| !consented.denied.contains(member));
+    }
+    let unknown = if disclosed { UNKNOWN } else { UNAVAILABLE };
     let resolutions = match (resolver, &patient, &unidentified) {
         (Some(resolver), Some(patient), None) if !candidates.is_empty() => {
             resolve(resolver, patient, &candidates, deadline).await
@@ -239,8 +253,11 @@ pub async fn patient(
             plan = settle(plan, endpoint, Outcome::NotResolved { error })?;
             continue;
         }
+        // NOTE: Regulation (EU) 2025/327 Art 8, §11.1: `not-resolved` clears `complete` and fails
+        // nothing, as `consent-denied` does, so a hidden exclusion reads as a member without the patient.
+        let hidden = !disclosed && consented.denied.contains(&member);
         match resolutions.get(&member) {
-            Some(Resolution::Resolved(ehr_id)) => {
+            Some(Resolution::Resolved(ehr_id)) if !hidden => {
                 let node = query.for_node(ehr_id.hier_object_id());
                 sources.get_or_insert_with(|| node.columns().to_vec());
                 plan = plan
@@ -253,22 +270,9 @@ pub async fn patient(
                     .map_err(TargetsError::Plan)?;
                 bound.push((member.clone(), ehr_id.clone()));
             }
-            Some(Resolution::Unknown) => {
-                let error = detail("the patient is not known at this member")?;
-                plan = settle(plan, endpoint, Outcome::NotResolved { error })?;
-            }
-            Some(Resolution::Unavailable(failure)) => {
-                resolution_failed = true;
-                let error = detail(&format!("the cross-reference could not answer: {failure}"))?;
-                plan = settle(plan, endpoint, Outcome::NotResolved { error })?;
-            }
-            None => {
-                resolution_failed = true;
-                let error = if resolver.is_some() {
-                    detail("the cross-reference gave no answer for this member")?
-                } else {
-                    detail("no cross-reference service is configured")?
-                };
+            answer => {
+                let (error, failed) = unresolved(answer, resolver.is_some(), unknown)?;
+                resolution_failed |= failed;
                 plan = settle(plan, endpoint, Outcome::NotResolved { error })?;
             }
         }
@@ -284,6 +288,31 @@ pub async fn patient(
         denied: consented.denied,
         resolver: Observed::of_resolutions(&resolutions),
     })
+}
+
+/// The `not-resolved` error of a member the plan does not ask after the
+/// cross-reference gave `answer`, with whether it fails the query: a member
+/// it does not know the patient at carries `unknown` and fails nothing (N6);
+/// one it could not answer for, or where no cross-reference service is
+/// `configured`, fails the query (§11.3 covers only an answered lookup; no
+/// specification governs this: our own design).
+fn unresolved(
+    answer: Option<&Resolution>,
+    configured: bool,
+    unknown: &str,
+) -> Result<(ErrorDetail, bool), TargetsError> {
+    match answer {
+        Some(Resolution::Resolved(_) | Resolution::Unknown) => Ok((detail(unknown)?, false)),
+        Some(Resolution::Unavailable(failure)) => Ok((
+            detail(&format!("the cross-reference could not answer: {failure}"))?,
+            true,
+        )),
+        None if configured => Ok((
+            detail("the cross-reference gave no answer for this member")?,
+            true,
+        )),
+        None => Ok((detail("no cross-reference service is configured")?, true)),
+    }
 }
 
 /// Asks `resolver` for `patient`'s `ehr_id` at each of `members` before
@@ -411,19 +440,35 @@ async fn identified(
     }
 }
 
-/// `plan` with every member `consented` denies settled `consent-denied`, each
-/// leaving `asked`, and the pre-filter's failure, if it could not answer,
-/// carried as `meta.federation.consent.error` (N27a, N40).
+/// The `not-resolved` error of a member the cross-reference does not know
+/// the patient at, in a deployment that discloses consent exclusions.
+const UNKNOWN: &str = "the patient is not known at this member";
+
+/// The `not-resolved` error of a member the cross-reference does not know
+/// the patient at, and of a member the consent pre-filter excluded, in a
+/// deployment that does not disclose consent exclusions: one text for both,
+/// true of both (Regulation (EU) 2025/327 Art 8).
+const UNAVAILABLE: &str = "no record of the patient at this member is available to this request";
+
+/// `plan` with every member `consented` denies settled `consent-denied` when
+/// the deployment discloses consent exclusions, each leaving `asked`, and the
+/// pre-filter's failure, if it could not answer, carried as
+/// `meta.federation.consent.error` (N27a, N40).
 ///
 /// A denied member is never resolved and never sent a request, so its record
 /// carries no `latency_ms`. A candidate the pre-filter did not deny stays,
-/// and its node checks consent itself (N27, §14.3).
+/// and its node checks consent itself (N27, §14.3). When the deployment does
+/// not disclose them, a denied member stays in `asked`, to be resolved and
+/// reported as any member the cross-reference answered for, and is never
+/// sent a request either.
 fn settle_denied(
     mut plan: Plan,
     asked: &mut BTreeMap<NodeId, EndpointId>,
     consented: &consent::Prefiltered,
+    disclosed: bool,
 ) -> Result<Plan, TargetsError> {
-    for member in &consented.denied {
+    let denied = consented.denied.iter().filter(|_| disclosed);
+    for member in denied {
         let Some(endpoint) = asked.remove(member) else {
             continue;
         };

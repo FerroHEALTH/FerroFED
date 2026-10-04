@@ -86,6 +86,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   line of its own; the registry directory, PIX Manager, PMIR and PDQm fields
   move from the first line to the IHE binding's (#489).
 
+- `[federation.consent] disclose = false` keeps a consent exclusion out of
+  what a client sees, for Regulation (EU) 2025/327 Art 8, under which the
+  fact that a patient restricted access "shall not be visible to healthcare
+  providers". A member the consent pre-filter excludes is still never sent a
+  request, and a federated query reports it `not-resolved`, with the same
+  `error` as a member the cross-reference does not know the patient at, so
+  `meta.federation.complete` stays `false` and nothing fails. A read of an
+  EHR by subject that only an excluded member could serve answers
+  `404 subject-unavailable`, the same answer as for a subject no member
+  knows, a new code in the error vocabulary. `OPTIONS {base}/` declares the
+  choice as `federation.consent.disclose`, the pre-filter metrics still count
+  every exclusion for the operator, and the default stays the
+  specification's `consent-denied` (N27a) (#493).
+
 ## [0.0.8] - 2026-10-04
 
 ### Security

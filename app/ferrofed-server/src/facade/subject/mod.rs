@@ -38,11 +38,21 @@
 //! - no member knows it: `404`, the operation's own answer for a subject with
 //!   no EHR (ITS-REST 1.1.0 `404_EHR_subject`, §11.2).
 //!
+//! A deployment that does not disclose consent exclusions resolves a denied
+//! member with the others, never contacts it, and never counts it a holder.
+//! A subject no member it may ask holds an EHR for is then `404
+//! subject-unavailable`, whether no member knows the subject or only a denied
+//! one does, so the answer never shows that a restriction exists (Regulation
+//! (EU) 2025/327 Art 8; RFC 9110 §15.5.5).
+//!
 //! Every `{node, ehr_id}` pair the resolution produced teaches the `ehr_id`
 //! index (§12.5.1 step 3). No answer and no log line names the subject: an
 //! error body names endpoints and query parameter positions only (§5.4.3).
 
-use std::collections::{BTreeMap, BTreeSet};
+mod resolved;
+mod unserved;
+
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -54,27 +64,26 @@ use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::localizer::OnFailure;
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
-use ferrofed_identity::resolver::Resolution;
-use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
+use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, Method};
 use openehr_its::rest::client::path_segment;
 use openehr_its::rest::generated::ehr::EhrGetBySubjectParams;
 use openehr_its::rest::routes::RouteMatch;
-use openehr_its::rest::runtime::ApiError;
 use secrecy::SecretString;
 
 use crate::error::{self, Code};
 use crate::facade::demographics::{self, Identified};
 use crate::facade::localize::{Localized, localize};
-use crate::facade::owner::{self, Listed};
+use crate::facade::owner;
 use crate::facade::provenance::Provenance;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
 use crate::facade::security;
+use crate::facade::subject::resolved::resolve;
+use crate::facade::subject::unserved::Unserved;
 use crate::facade::{confined, consent};
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
 
 /// The ITS-REST operation that reads an EHR by its subject.
 const OPERATION: &str = "ehr_get_by_subject";
@@ -140,16 +149,12 @@ pub(crate) async fn serve(
         budget.overall(),
     )
     .await;
-    let (denied, candidates): (Vec<&Endpoint>, Vec<&Endpoint>) = candidates
-        .into_iter()
-        .partition(|endpoint| consented.denied.contains(endpoint.node()));
-    let mut resolved = resolve(federation, candidates, patient, budget.overall()).await;
-    resolved.denied = denied
-        .iter()
-        .map(|endpoint| endpoint.id().clone())
-        .collect();
+    let unbound = (patient, &consented.denied);
+    let resolved = resolve(federation, candidates, unbound, budget.overall()).await;
     let holders = resolved.holders.clone();
-    let settled = resolved.settled();
+    let settled = resolved
+        .settled()
+        .map_err(|unserved| unserved.disclosed_as(federation.discloses_consent()));
     // NOTE: §5.2, §12.5: a confined grant reads its own patient's EHR alone, and the gateway
     // records nothing of another subject, no session binding and no index entry.
     if confined::is_confined(&arrived.conveyance)
@@ -274,7 +279,9 @@ async fn identified(
     match demographics::identify(federation, patient, deadline).await {
         Identified::AsNamed => Ok(None),
         Identified::Master(master) => Ok(Some(master)),
-        Identified::NoMatch(_) => Err(Unserved::Nowhere),
+        Identified::NoMatch(_) => {
+            Err(Unserved::Nowhere.disclosed_as(federation.discloses_consent()))
+        }
         Identified::Ambiguous(error) => Err(Unserved::Unidentified {
             reason: error,
             closed: false,
@@ -383,99 +390,6 @@ fn candidates<'a>(
     Ok((every, false))
 }
 
-/// What the cross-reference said about each candidate.
-#[derive(Debug)]
-struct Resolved<'a> {
-    /// The candidates that know the subject, with its local `ehr_id` there.
-    holders: Vec<(&'a Endpoint, EhrId)>,
-    /// The candidates the cross-reference could not answer for.
-    silent: Vec<EndpointId>,
-    /// The candidates the consent pre-filter denied, never resolved or
-    /// contacted (N27a).
-    denied: Vec<EndpointId>,
-}
-
-impl<'a> Resolved<'a> {
-    /// The one endpoint that holds the subject's EHR, with its `ehr_id`.
-    ///
-    /// Two holders are a `409` whatever the others answered. Otherwise a
-    /// candidate the cross-reference could not answer for may hold it too,
-    /// so neither one holder nor none is an answer then (§11.5). A candidate
-    /// the consent pre-filter denied was never asked, so with no holder among
-    /// the others the answer names the denial and never claims no EHR exists
-    /// (N27a); with one holder among them, that holder answers.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Unserved::Several`], [`Unserved::Unresolved`],
-    /// [`Unserved::ConsentDenied`] or [`Unserved::Nowhere`].
-    fn settled(self) -> Result<(&'a Endpoint, EhrId), Unserved> {
-        let Self {
-            mut holders,
-            silent,
-            denied,
-        } = self;
-        if holders.len() > 1 {
-            // NOTE: §12.5.2: the gateway never breaks a tie by where the patient
-            // resolved, so several holders are listed and none is chosen.
-            let endpoints = holders
-                .iter()
-                .map(|(endpoint, _)| endpoint.id().clone())
-                .collect();
-            return Err(Unserved::Several(endpoints));
-        }
-        if !silent.is_empty() {
-            return Err(Unserved::Unresolved(silent));
-        }
-        if holders.is_empty() && !denied.is_empty() {
-            return Err(Unserved::ConsentDenied(denied));
-        }
-        // NOTE: ITS-REST 1.1.0 answers 404 for a subject with no EHR; this is
-        // one EHR resource, never the §11.3 result set, so §11.3's 200 does not apply.
-        holders.pop().ok_or(Unserved::Nowhere)
-    }
-}
-
-/// Resolves `patient` at every endpoint of `candidates` before `deadline`.
-///
-/// Without a cross-reference service, every candidate is unanswered: the
-/// gateway fails closed, as a federated query does.
-async fn resolve<'a>(
-    federation: &Federation,
-    candidates: Vec<&'a Endpoint>,
-    patient: &PatientRef,
-    deadline: Instant,
-) -> Resolved<'a> {
-    let members: Vec<NodeId> = candidates
-        .iter()
-        .map(|endpoint| endpoint.node().clone())
-        .collect();
-    let mut answers = match federation.resolver() {
-        Some(resolver) if !members.is_empty() => {
-            resolver.resolve(patient, &members, deadline).await
-        }
-        Some(_) | None => BTreeMap::new(),
-    };
-    if let Some(observed) = Observed::of_resolutions(&answers) {
-        federation.dependencies().resolver(observed);
-    }
-    let mut resolved = Resolved {
-        holders: Vec::new(),
-        silent: Vec::new(),
-        denied: Vec::new(),
-    };
-    for endpoint in candidates {
-        match answers.remove(endpoint.node()) {
-            Some(Resolution::Resolved(ehr_id)) => resolved.holders.push((endpoint, ehr_id)),
-            Some(Resolution::Unknown) => {}
-            Some(Resolution::Unavailable(_)) | None => {
-                resolved.silent.push(endpoint.id().clone());
-            }
-        }
-    }
-    resolved
-}
-
 /// Teaches the `ehr_id` index, and the verified caller's resolution
 /// bindings, every `{node, ehr_id}` pair `holders` names, as a federated
 /// query's resolution does (§12.5.1 steps 2 and 3).
@@ -500,251 +414,5 @@ fn learn(
     }
     for (endpoint, ehr_id) in holders {
         owner::learn(federation.index(), ehr_id, endpoint.node());
-    }
-}
-
-/// Why the read of an EHR by subject is answered by the gateway, with no
-/// node's answer to pass on.
-///
-/// Every message names query parameters by position and members by endpoint
-/// id, and never the subject (§5.4.3).
-#[derive(Debug, thiserror::Error)]
-enum Unserved {
-    /// The query string carries a parameter the operation does not declare.
-    #[error(
-        "query parameter {position} is not one the ITS-REST operation declares, so nothing is sent (§5.4.1, N33)"
-    )]
-    Undeclared {
-        /// The parameter's position in the query string, counted from 1.
-        position: usize,
-    },
-    /// The query string is no `ehr_get_by_subject` query: `subject_id` or
-    /// `subject_namespace` is absent or repeated, or a pair does not
-    /// percent-decode to UTF-8 text.
-    #[error(
-        "GET {{base}}/v1/ehr names its subject by subject_id and subject_namespace, each given once as UTF-8 text (ITS-REST 1.1.0)"
-    )]
-    Malformed(#[source] ApiError),
-    /// The subject cannot form a patient reference.
-    #[error("the subject cannot form a patient reference (§5.2)")]
-    Patient(#[source] PatientRefError),
-    /// The targeting headers name no one registry endpoint.
-    #[error(transparent)]
-    Target(#[from] owner::Untargeted),
-    /// The targeting headers name a suspended endpoint.
-    #[error(
-        "the targeted endpoint is suspended, so the request can be routed to no destination (§11.1, §11.2)"
-    )]
-    Suspended,
-    /// No candidate knows the subject.
-    #[error(
-        "no member holds an EHR for this subject, so the request can be routed to no destination (§11.2)"
-    )]
-    Nowhere,
-    /// Several candidates know the subject.
-    #[error(
-        "the subject resolves at endpoints {}, and the gateway never chooses between them: name one in the openEHR-federation-endpoint header (§8.4, §12.5.2)",
-        Listed(.0)
-    )]
-    Several(Vec<EndpointId>),
-    /// The cross-reference could not answer for these candidates.
-    #[error(
-        "the cross-reference could not answer for endpoints {}, so whether the subject has an EHR there is unknown (§5.2, §11.2)",
-        Listed(.0)
-    )]
-    Unresolved(Vec<EndpointId>),
-    /// The consent pre-filter denied these candidates, and no other one
-    /// holds the subject's EHR.
-    #[error(
-        "the consent pre-filter does not permit asking endpoints {} about this subject, and no other member holds an EHR for it (N27a, §13.2.1)",
-        Listed(.0)
-    )]
-    ConsentDenied(Vec<EndpointId>),
-    /// The localizer could not answer, the deployment fails closed, and so no
-    /// member was asked (§14.1, N4).
-    #[error(
-        "the localizer could not answer, or its exchange could not be audited, so no member was asked and whether the subject has an EHR is unknown (§14.1, N4)"
-    )]
-    Unlocalized,
-    /// The demographics step named no one master identity for the subject,
-    /// or could not answer; `closed` when the outage of an undirected read
-    /// fails closed as a localizer's does (Annex A §A.2, §14.1).
-    #[error("{reason}, so whether the subject has an EHR is unknown")]
-    Unidentified {
-        /// Why, as every member would report it; it names no identifier.
-        reason: String,
-        /// Whether the read failed closed under the localization policy.
-        closed: bool,
-    },
-    /// The request's deadline cannot be represented.
-    #[error("the request's deadline cannot be represented")]
-    Clock,
-}
-
-impl Unserved {
-    /// The stable code the error body names.
-    fn code(&self) -> Code {
-        match self {
-            Self::Undeclared { .. } => Code::QueryParameterRefused,
-            Self::Malformed(_) | Self::Patient(_) => Code::PatientInvalid,
-            Self::Target(untargeted) => untargeted.code(),
-            Self::Suspended | Self::Nowhere => Code::NoDestination,
-            Self::Several(_) => Code::SubjectSeveral,
-            Self::Unresolved(_) | Self::Unidentified { closed: false, .. } => {
-                Code::ResolutionUnavailable
-            }
-            Self::ConsentDenied(_) => Code::ConsentDenied,
-            Self::Unlocalized | Self::Unidentified { closed: true, .. } => {
-                Code::LocalizationUnavailable
-            }
-            Self::Clock => Code::Internal,
-        }
-    }
-
-    /// The error answer, naming the client's `request_id`; a refused query
-    /// parameter is a security event and a failed resolution is logged, both
-    /// under the gateway's `logged` id.
-    fn respond(self, request_id: &str, logged: &str) -> Response {
-        let code = self.code();
-        match &self {
-            Self::Undeclared { position } => security::query_parameter_refused(*position, logged),
-            Self::Unresolved(_) | Self::Unlocalized | Self::Unidentified { .. } | Self::Clock => {
-                tracing::error!(
-                    code = code.as_str(),
-                    error = %self,
-                    request_id = logged,
-                    "the read of an EHR by subject was not served"
-                );
-            }
-            _ => {}
-        }
-        if code == Code::Internal {
-            return error::fixed(code, request_id);
-        }
-        error::response(code, crate::chain(&self), request_id)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Code, Resolved, Unserved};
-    use ferrofed_identity::patient::PatientRefError;
-    use ferrofed_registry::id::EndpointId;
-    use http::StatusCode;
-    use openehr_its::rest::runtime::ApiError;
-
-    fn endpoint(id: &str) -> EndpointId {
-        EndpointId::new(id).unwrap()
-    }
-
-    #[test]
-    fn each_refusal_answers_its_code_and_status() {
-        let table = [
-            (
-                Unserved::Undeclared { position: 2 },
-                "query-parameter-refused",
-                StatusCode::BAD_REQUEST,
-            ),
-            (
-                Unserved::Malformed(ApiError::BadRequest(
-                    "the query parameter `subject_id` is given more than once".to_owned(),
-                )),
-                "patient-invalid",
-                StatusCode::BAD_REQUEST,
-            ),
-            (
-                Unserved::Patient(PatientRefError::EmptyValue),
-                "patient-invalid",
-                StatusCode::BAD_REQUEST,
-            ),
-            (Unserved::Suspended, "no-destination", StatusCode::NOT_FOUND),
-            (Unserved::Nowhere, "no-destination", StatusCode::NOT_FOUND),
-            (
-                Unserved::Several(vec![endpoint("a"), endpoint("b")]),
-                "subject-several",
-                StatusCode::CONFLICT,
-            ),
-            (
-                Unserved::Unresolved(vec![endpoint("a")]),
-                "resolution-unavailable",
-                StatusCode::FAILED_DEPENDENCY,
-            ),
-            (
-                Unserved::ConsentDenied(vec![endpoint("a")]),
-                "consent-denied",
-                StatusCode::FORBIDDEN,
-            ),
-            (
-                Unserved::Unlocalized,
-                "localization-unavailable",
-                StatusCode::FAILED_DEPENDENCY,
-            ),
-            (
-                Unserved::Unidentified {
-                    reason: String::from("the patient could not be identified"),
-                    closed: false,
-                },
-                "resolution-unavailable",
-                StatusCode::FAILED_DEPENDENCY,
-            ),
-            (
-                Unserved::Unidentified {
-                    reason: String::from("the demographics service could not answer"),
-                    closed: true,
-                },
-                "localization-unavailable",
-                StatusCode::FAILED_DEPENDENCY,
-            ),
-            (
-                Unserved::Clock,
-                "internal",
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ),
-        ];
-        for (unserved, code, status) in table {
-            let answered: Code = unserved.code();
-            assert_eq!(code, answered.as_str(), "{unserved:?}");
-            assert_eq!(status, answered.status(), "{unserved:?}");
-        }
-    }
-
-    #[test]
-    fn two_holders_list_their_endpoints_by_id() {
-        let message =
-            Unserved::Several(vec![endpoint("node-a-pub"), endpoint("node-b-pub")]).to_string();
-        assert!(message.contains("[node-a-pub, node-b-pub]"), "{message}");
-    }
-
-    #[test]
-    fn nothing_resolved_and_nothing_silent_is_nowhere() {
-        let resolved = Resolved {
-            holders: Vec::new(),
-            silent: Vec::new(),
-            denied: Vec::new(),
-        };
-        assert!(matches!(resolved.settled(), Err(Unserved::Nowhere)));
-    }
-
-    #[test]
-    fn a_silent_candidate_leaves_the_holder_unknown() {
-        let resolved = Resolved {
-            holders: Vec::new(),
-            silent: vec![endpoint("node-b-pub")],
-            denied: Vec::new(),
-        };
-        assert!(matches!(resolved.settled(), Err(Unserved::Unresolved(_))));
-    }
-
-    #[test]
-    fn denied_candidates_and_no_holder_is_consent_denied() {
-        let resolved = Resolved {
-            holders: Vec::new(),
-            silent: Vec::new(),
-            denied: vec![endpoint("node-b-pub")],
-        };
-        assert!(matches!(
-            resolved.settled(),
-            Err(Unserved::ConsentDenied(ref endpoints)) if endpoints == &[endpoint("node-b-pub")]
-        ));
     }
 }
