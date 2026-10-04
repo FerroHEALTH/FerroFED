@@ -410,6 +410,10 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Fixed
 
+- A `[[pixm.manager]]` URL that is not `https` outside
+  `profile = "development"` is refused while the configuration loads, as an
+  XCPD gateway URL already was, naming its key; before, only `serve`,
+  `config check` and a reload caught it (#464).
 - The example Kubernetes manifests start a gateway again (#428): the
   ConfigMap trusts an example issuer in `[auth]` and names the gateway's
   signing key in `[signing]`, read from the `ferrofed-secrets` Secret the
