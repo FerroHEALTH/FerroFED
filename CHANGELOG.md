@@ -21,6 +21,26 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+### Added
+
+- Track 11, the integrity suite, against the two FerroEHR nodes of the
+  harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
+  §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at
+  both nodes for two different synthetic patients. A read and a query scoped
+  to it are refused `409` `ehr-id-collision` listing both claimants, with one
+  integrity incident, and the proxy journals show the ask-all probe as the
+  only request either node received. Once two targeted reads teach the
+  `ehr_id` index both claimants, which raises the index-insert alarm once, a
+  read and two writes are refused the same way and reach neither node. A
+  versioned write no earlier step of §12.5.1 routes is refused `400`
+  `target-required` and probes nobody, although its `If-Match` names node
+  A's `system_id`. As the federation operator, the harness then applies the
+  admission check to a FerroEHR candidate deployed with member A's
+  `system_id`: recorded under that `system_id`, the registry load refuses it
+  as a duplicate, and recorded under one of its own, the check fails the
+  `system_id` condition naming member A. The conformance matrix records
+  track 11 as covered.
+
 ## [0.0.8] - 2026-10-04
 
 ### Security

@@ -61,12 +61,12 @@ const OID_EHR: &str = "2.999.1.4417";
 
 /// One integrity incident as the JSON log records it.
 #[derive(Debug, Deserialize)]
-struct Logged {
-    level: String,
-    kind: String,
-    ehr_id: Option<String>,
-    detection: Option<String>,
-    claimants: String,
+pub(crate) struct Logged {
+    pub(crate) level: String,
+    pub(crate) kind: String,
+    pub(crate) ehr_id: Option<String>,
+    pub(crate) detection: Option<String>,
+    pub(crate) claimants: String,
 }
 
 /// The target of one JSON log line.
@@ -76,7 +76,7 @@ struct Targeted {
 }
 
 /// Every integrity incident in `text`, in order.
-fn incidents(text: &str) -> Result<Vec<Logged>, serde_json::Error> {
+pub(crate) fn incidents(text: &str) -> Result<Vec<Logged>, serde_json::Error> {
     let mut found = Vec::new();
     for line in text.lines() {
         let targeted: Targeted = serde_json::from_str(line)?;
@@ -106,11 +106,11 @@ fn incident_fields(text: &str) -> Result<Vec<Vec<String>>, serde_json::Error> {
 
 /// What a request answered: its status, the acting endpoint and the body
 /// text.
-type Answered = (StatusCode, Option<String>, String);
+pub(crate) type Answered = (StatusCode, Option<String>, String);
 
 /// Sends `requests` through `app` one after another under a capturing JSON
 /// subscriber, and returns each answer and everything logged.
-async fn captured(
+pub(crate) async fn captured(
     app: &Router,
     requests: Vec<Request<Body>>,
 ) -> Result<(Vec<Answered>, String), Box<dyn Error>> {

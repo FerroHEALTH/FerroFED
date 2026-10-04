@@ -51,6 +51,9 @@ nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.10
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
+# The application, a dev-dependency of the harness alone: the harness plays the
+# federation operator of track 11 with the gateway's admission check (#91).
+ferrofed-server = { path = "app/ferrofed-server" }
 # Path-only, with no version: cargo strips the dev-dependency from a packaged
 # crates/* manifest instead of looking it up on crates.io.
 ferrofed-testkit = { path = "tools/ferrofed-testkit" }
