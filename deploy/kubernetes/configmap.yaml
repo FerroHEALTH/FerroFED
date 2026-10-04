@@ -3,10 +3,20 @@
 #
 # An example configuration for the gateway: the configuration file and the
 # registry document, mounted read-only at /etc/ferrofed by deployment.yaml.
-# It holds no secret. An endpoint that needs credentials gets a
-# [credentials."<endpoint id>"] section whose bearer_token_file or
-# password_file names a file of a Secret mounted beside this one; the value
-# itself never goes in a ConfigMap.
+# It holds no secret. Every secret is a key of the ferrofed-secrets Secret,
+# which deployment.yaml mounts at /run/secrets/ferrofed, named here by a
+# `_file` key: the signing key below, and for an endpoint that needs
+# credentials, the bearer_token_file or password_file of its
+# [credentials."<endpoint id>"] section. Make the Secret with, for example:
+#
+#   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
+#     -out signing-key.pem
+#   kubectl create secret generic ferrofed-secrets \
+#     --from-file=signing-key.pem
+#
+# The value itself never goes in a ConfigMap.
+# scripts/checks/kubernetes-example.sh runs `ferrofed config check` over this
+# configuration with synthetic secrets in CI.
 #
 # The member URLs are placeholders under example.org: replace them, the
 # organisations, the nodes and their system_ids with your own members.
@@ -38,6 +48,33 @@ data:
     node_selection = "ask-all"
     per_node_timeout_ms = 10000
     overall_timeout_ms = 25000
+
+    # Client authentication: every caller presents an RFC 9068 access
+    # token from an issuer listed here. A gateway that federates refuses to
+    # start without an issuer.
+    # https://ferrofed.eu/docs/operate/authentication.html
+    [auth]
+    # EDIT: the audience your issuers name this gateway by in `aud`.
+    audience = "https://gateway.example.org/fed"
+
+    # EDIT: an authorization server your callers get their tokens from,
+    # verified by its JWK Set. For RFC 7662 introspection instead, set
+    # introspection_endpoint, client_id and client_secret_file, the secret
+    # a key of the ferrofed-secrets Secret:
+    # client_secret_file = "/run/secrets/ferrofed/introspection-secret"
+    [[auth.issuer]]
+    issuer = "https://idp.example.org"
+    jwks_uri = "https://idp.example.org/jwks"
+
+    # The gateway's ES384 signing key, required with a registry: every
+    # request to a node carries the caller's identity signed with it
+    # (§13.1, N24). It is the signing-key.pem key of the ferrofed-secrets
+    # Secret that deployment.yaml mounts at /run/secrets/ferrofed.
+    # https://ferrofed.eu/docs/operate/configuration.html#signing-keys-and-the-jwk-set
+    [signing]
+    key_file = "/run/secrets/ferrofed/signing-key.pem"
+    # EDIT: the address the nodes fetch the JWK Set from.
+    jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
 
   registry.toml: |
     [[organisation]]

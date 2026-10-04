@@ -5,17 +5,40 @@
 //! the test EHRs are created and read back over ITS-REST alone, the node
 //! reports the `system_id` the registry records, and the proxy journal shows
 //! that the only subjects sent were fresh synthetic ones, in the `EHR_STATUS`
-//! body and nowhere else (§12b.1, §12b.2, §5.4.1; N33, N42a).
+//! body and nowhere else, the claims of each conveyed `openEHR-federation-client`
+//! token included (§12b.1, §12b.2, §5.4.1, §13.1; N24, N33, N42a).
 //!
 //! FerroEHR is a node here, never the oracle: the test asserts what the
 //! check reports about it, and does not assume which UUID version it mints.
 
+use ferrofed_engine::onward::conveyance;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::admission::report::{Condition, Verdict};
 use ferrofed_server::admission::subject::VALUE_PREFIX;
 use ferrofed_testkit::containers::{self, API_PATH};
 
 use crate::e2e::{TestResult, federation_resolving};
+use crate::support::searched_claims;
+
+/// Whether the header `name` with `value` carries `needle`: in its raw
+/// bytes, and for the gateway's `openEHR-federation-client` token in the
+/// claims a node decodes from it ([`searched_claims`]); a token that does not
+/// decode counts as carrying it.
+fn header_carries(name: &str, value: &[u8], needle: &str) -> bool {
+    let found = |haystack: &[u8]| {
+        haystack
+            .windows(needle.len())
+            .any(|window| window == needle.as_bytes())
+    };
+    if found(value) {
+        return true;
+    }
+    name.eq_ignore_ascii_case(conveyance::HEADER)
+        && std::str::from_utf8(value)
+            .ok()
+            .and_then(|token| searched_claims(token).ok())
+            .is_none_or(|claims| found(claims.as_bytes()))
+}
 
 #[tokio::test]
 async fn the_check_reaches_a_ferroehr_node_with_synthetic_subjects_only() -> TestResult {
@@ -90,12 +113,34 @@ async fn the_check_reaches_a_ferroehr_node_with_synthetic_subjects_only() -> Tes
                 "a subject travelled in the request target (§5.4.1, N33)"
             );
             assert!(
-                !other.headers.iter().any(|(_, value)| value
-                    .windows(subject.len())
-                    .any(|window| window == subject.as_bytes())),
-                "a subject travelled in a header (§5.4.1, N33)"
+                !other
+                    .headers
+                    .iter()
+                    .any(|(name, value)| header_carries(name, value, &subject)),
+                "a subject travelled in a header or a conveyed claim (§5.4.1, N33)"
             );
         }
+    }
+    for capture in &journal {
+        let conveyed: Vec<&[u8]> = capture
+            .headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case(conveyance::HEADER))
+            .map(|(_, value)| value.as_slice())
+            .collect();
+        let [token] = conveyed.as_slice() else {
+            return Err(format!(
+                "{} carries {} conveyed tokens",
+                capture.path,
+                conveyed.len()
+            )
+            .into());
+        };
+        let claims = searched_claims(std::str::from_utf8(token)?)?;
+        assert!(
+            !claims.contains(VALUE_PREFIX),
+            "no synthetic subject in the conveyed claims (§5.4.1, N33): {claims}"
+        );
     }
     Ok(())
 }
