@@ -189,6 +189,10 @@ covers every key, the registry and the identity service.
 - [Evaluate](https://ferrofed.eu/docs/evaluate/the-federation-tier.html):
   the specification, what FerroFED claims, conformance, versions and the
   licence.
+- [Regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html):
+  FerroFED's intended purpose and its classification as an EHR system under
+  the European Health Data Space Regulation, (EU) 2025/327, with what is
+  built and what is planned.
 - [Operate](https://ferrofed.eu/docs/operate/deployment-shape.html):
   deployment, the container, configuration, admission, health and metrics.
 - [Integrate](https://ferrofed.eu/docs/integrate/client-contract.html): what
