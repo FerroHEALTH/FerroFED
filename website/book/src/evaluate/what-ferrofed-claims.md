@@ -85,9 +85,9 @@ Released on 2026-10-03.
 
 ### v0.0.8, on `main`, in the next release
 
-The v0.0.8 milestone, security and the bindings (§13 to §15, Annex A), is in
-progress. `main` carries these parts of it, and v0.0.8 is cut from `main`
-once the milestone closes.
+The v0.0.8 milestone, security and the bindings (§13 to §15, Annex A,
+Annex B), is in progress. `main` carries these parts of it, and v0.0.8 is
+cut from `main` once the milestone closes.
 
 - Client authentication at the gateway: RFC 9068 access tokens checked by
   key set or by introspection, SMART on openEHR scopes per route, the purpose
@@ -99,6 +99,23 @@ once the milestone closes.
   signed ES384, the node tokens cached, and the gateway's JWK Set published
   at `{base}/.well-known/jwks.json` (§13.1, N25, N30, CP-17;
   [#81](https://github.com/FerroHEALTH/FerroFED/issues/81)).
+- RFC 8693 token exchange per endpoint, which gives each verified caller a
+  token of its own at a node, and node tokens bound to a key of the
+  gateway's with DPoP (RFC 9449), the proof written and a node's nonce
+  answered by the `openehr-its` 0.0.82 client
+  ([#439](https://github.com/FerroHEALTH/FerroFED/issues/439),
+  [#448](https://github.com/FerroHEALTH/FerroFED/issues/448),
+  [Onward credentials](../operate/onward-credentials.md)).
+- The two authentication tracks of the Dutch binding as onward credentials:
+  the Nuts grant, a Verifiable Presentation of the gateway's credentials for
+  a DPoP-bound token (Annex B §B.4, Nuts RFC021), and the FAPI 2.0 grant of
+  the BgZ/eOverdracht track: client credentials or token exchange with a
+  `private_key_jwt` assertion, DPoP-bound tokens, and the healthcare
+  attributes in an RFC 9396 `authorization_details` object (Annex B §B.4a)
+  ([#88](https://github.com/FerroHEALTH/FerroFED/issues/88),
+  [#497](https://github.com/FerroHEALTH/FerroFED/issues/497),
+  [The Nuts grant](../operate/onward-credentials.md#the-nuts-grant-annex-b-b4),
+  [The FAPI 2.0 grant](../operate/onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
 - A `patient/` grant honoured only for an issuer the deployment binds to one
   member: the token's `ehrId` resolved through the cross-reference at every
   member (§5.2), every request held to the patient's own `{node, ehr_id}`
@@ -140,13 +157,36 @@ once the milestone closes.
   [#408](https://github.com/FerroHEALTH/FerroFED/issues/408),
   [#409](https://github.com/FerroHEALTH/FerroFED/issues/409),
   [#410](https://github.com/FerroHEALTH/FerroFED/issues/410)).
+- NVI localization in the Netherlands: an undirected patient query asks the
+  national index which care providers hold data for the patient's
+  pseudonym, and the members that hold those providers' data are the
+  candidates, with the custodian map read from the URAs a care services
+  directory with the LRZa as its source publishes (Annex B §B.1, §B.2;
+  [#87](https://github.com/FerroHEALTH/FerroFED/issues/87),
+  [Dutch localization](../operate/identity.md#dutch-localization-nl_gfnvi)).
+- A PDQm step ahead of localization and resolution, for a patient named by
+  an identifier the cross-reference does not know: the Patient Demographics
+  Supplier is asked with ITI-78 or ITI-119 for the patient's identifier in
+  the master domain, and an ambiguous match is never picked (Annex A §A.2,
+  §A.7;
+  [#487](https://github.com/FerroHEALTH/FerroFED/issues/487),
+  [Demographics first](../operate/identity.md#demographics-first-pdqm)).
 - The XCPD audit sent to an ATNA Audit Record Repository with ITI-20: the
   DICOM PS3.15 audit message in RFC 5424 syslog over TLS, stored in a
   bounded spool on disk first and delivered from it, so a repository outage
   fails no discovery and a full spool fails it closed (ITI TF-2 §3.20,
   §3.55.5.1.1;
   [#418](https://github.com/FerroHEALTH/FerroFED/issues/418),
+  [#512](https://github.com/FerroHEALTH/FerroFED/issues/512),
   [The audit repository](../operate/identity.md#the-audit-repository)).
+- Every other IHE transaction the gateway makes or receives audited as its
+  profile requires: ITI-83, ITI-78, ITI-119, ITI-90, ITI-91, ITI-93 and
+  ITI-94, each as a FHIR `AuditEvent` on the IHE Basic Audit Log Patterns
+  (BALP), sent to the repository with the FHIR Feed of ITI-20 through the
+  same spool, and a transaction whose record cannot be stored failed
+  ([#486](https://github.com/FerroHEALTH/FerroFED/issues/486),
+  [#469](https://github.com/FerroHEALTH/FerroFED/issues/469),
+  [The audit trail](../operate/audit.md)).
 - The registry read from an IHE mCSD care services directory with ITI-90 and
   kept in step with ITI-91, a shared directory included, with in-scope
   deletions recorded in the replica so a dangling listing is judged the same
@@ -170,6 +210,23 @@ once the milestone closes.
   [#416](https://github.com/FerroHEALTH/FerroFED/issues/416)).
 - A Kubernetes example that starts, checked in CI
   ([#428](https://github.com/FerroHEALTH/FerroFED/issues/428)).
+- Traces exported through OpenTelemetry over OTLP, with a sample ratio and a
+  `traceparent` of the gateway's own trace on every node request; nothing
+  of a client's trace context is recorded, so no client-chosen trace id
+  reaches the collector
+  ([#353](https://github.com/FerroHEALTH/FerroFED/issues/353),
+  [#437](https://github.com/FerroHEALTH/FerroFED/issues/437),
+  [#446](https://github.com/FerroHEALTH/FerroFED/issues/446),
+  [Tracing](../operate/tracing.md)).
+- The texts this work cites, vendored with their provenance: the SMART on
+  openEHR source and the IHE IUA supplement
+  ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414)), PMIR, BALP,
+  the Dutch Generic Functions IG, the Nuts specifications, and the country
+  research corpora
+  ([#498](https://github.com/FerroHEALTH/FerroFED/pull/498)). The Mitz
+  documents state no licence, so they are pinned by digest and fetched into
+  a local cache, never committed
+  ([#501](https://github.com/FerroHEALTH/FerroFED/issues/501)).
 
 ## Planned
 
@@ -177,19 +234,16 @@ Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-The rest of v0.0.8 (§13 to §15, Annex A, Annex B):
+The rest of v0.0.8: one TLS type and one credential mapping for every
+outbound client, with mutual TLS toward the PIX Manager, the PMIR Registry
+and the mCSD directory
+([#507](https://github.com/FerroHEALTH/FerroFED/issues/507)), and an audit
+record still queued behind another spool write when its exchange's time
+runs out, which is dropped silently today
+([#532](https://github.com/FerroHEALTH/FerroFED/issues/532)).
 
-- the SMART on openEHR pages the client authentication cites, vendored
-  ([#414](https://github.com/FerroHEALTH/FerroFED/issues/414));
-- the Dutch Generic Functions as optional regional adapters, NVI
-  localization and LRZa addressing
-  ([#87](https://github.com/FerroHEALTH/FerroFED/issues/87)), and the Annex B
-  authentication tracks
-  ([#88](https://github.com/FerroHEALTH/FerroFED/issues/88));
-- a `CONTRIBUTION` in canonical XML
-  ([#308](https://github.com/FerroHEALTH/FerroFED/issues/308)), and traces
-  exported through OpenTelemetry
-  ([#353](https://github.com/FerroHEALTH/FerroFED/issues/353)).
+A `CONTRIBUTION` in canonical XML waits on the openEHR XSD and `openehr-its`
+([#308](https://github.com/FerroHEALTH/FerroFED/issues/308)).
 
 v0.0.9, conformance (§16, §17): every conformance point scored
 ([#89](https://github.com/FerroHEALTH/FerroFED/issues/89)), the Connectathon

@@ -480,10 +480,16 @@ whether); the core never assumes it does.
 | `OnwardAuth` | per endpoint: a `CredentialsProvider`, the conveyance header, an optional transport layer | how the gateway authenticates to each node (section 7) |
 
 No seam returns an error to the core. A backend that did not answer is an
-`Unavailable` outcome carrying its reason. Each seam runs inside its own
-budget, declared in `OPTIONS` beside the N38 timeouts, and every seam budget is
-a strict part of the overall budget. A configuration whose seam budgets sum
-above the overall budget is refused at startup. The order is `Directory`, then
+`Unavailable` outcome carrying its reason. Every seam a request awaits is
+cut at the request's overall deadline. The localizer's budget
+(`federation.localization.timeout_ms`) and the demographics step's
+(`pdqm.timeout_ms`) are declared in `OPTIONS` beside the N38 timeouts and held
+to the overall budget at load: a configuration whose localizer budget, or
+whose demographics and localizer budgets together, reach the overall budget is
+refused. The consent pre-filter's own bound (`nl_gf.mitz.timeout_ms`) caps
+each exchange with Mitz and is neither declared in `OPTIONS` nor checked
+against the overall budget. No specification governs the seam budgets: our
+own design. The order is `Directory`, then
 `Demographics` for an identifier in a namespace it handles, then `Localizer`,
 then `ConsentPrefilter`, then `Resolver`; only `Resolved` members are
 dispatched (N8).
@@ -656,7 +662,7 @@ are FerroFED's own design; the missing signal is report T151 on #212.
 | Localizer | the PIXm resolver as a registry-scoped localizer, the members whose domain returned an identifier (§14.2's "demographic-registration" kind), over the same ITI-83 call its resolution reuses | #408 | PIXm 3.1.0 |
 | Localizer | XCPD ITI-55 initiating gateway: HL7 v3 over SOAP 1.2 and, in every US network, a SAML XUA assertion, behind the `xcpd` feature of `ihe-iti` | #85 (decision A15) | ITI TF Vol 2 Rev 20.1 |
 | Localizer | the Annex B NVI adapter | #87 | `fhir.nl.gf` 0.3.0 |
-| Directory | the static registry document, or an mCSD directory: ITI-90 reads at boot, then ITI-91 `_history`/`_since` synchronised into the snapshot (section 8) | #36, #74, #86 | mCSD 4.0.0 |
+| Directory | the static registry document, or an mCSD directory: ITI-90 reads at boot, then ITI-91 `_history`/`_since` synchronised into the snapshot (section 8); under the Dutch binding, the URA each `Organization` carries with the LRZa as its source, read by the `lrza` feature of `nl-generic-functions`, gives the NVI custodian map (Annex B §B.2) | #36, #74, #86, #87 | mCSD 4.0.0; `fhir.nl.gf` 0.3.0 for the URA |
 | ConsentPrefilter | none; the static development pre-filter (`[[dev.consent_denied]]`, development profile only); or the Annex B Mitz adapter (`[nl_gf.mitz]`), the closed authorization question | #83, #475 | none for the development table; for Mitz, the VZVZ Implementatiehandleiding Open en gesloten autorisatievraag 3.8.2, pinned and not redistributed |
 
 **Built here, movable later.** The protocols live in two published crates
@@ -803,6 +809,30 @@ the coverage rule: our own design. Each resolution's `{node, ehr_id}` set is
 recorded as the session's resolution bindings (decision A20), the session
 being the verified caller's issuer, subject and client (#412); follow-up
 routing reads them (#62).
+
+**A national PIX Manager may restrict `targetSystem`** (#488). §5.2's
+proposed call asks the cross-reference for `targetSystem=<the domain's ehr_id
+system>`, and a national profile can refuse it. The Swiss CH:PIXm Manager
+(CH EPR FHIR 5.0.0, ITI-83, vendored under `docs/specs/ch-epr-fhir/`) takes a
+`targetSystem` that "SHALL be the Assigning authority of the EPR-SPID and MAY
+be the Assigning authority of the community", and answers `403` to any other.
+Such a Manager is never the cross-reference to an `ehr_id`: asked for a
+member's `ehr_id` domain it refuses, which the resolver reports as
+`Unavailable` and the query fails `424` (decision A17). N34 lets the role
+come from the node itself, its organisation's MPI or a regional service, so in
+such a deployment each member's `[[pixm.manager]]` names a PIX Manager of the
+member's own organisation, keyed on an identifier that organisation knows,
+such as the community's MPI-PID or a local id.
+
+**Cross-border access in the EU.** Regulation (EU) 2025/327 Art 11(2) has
+cross-border access, where the Member State of affiliation and the Member
+State of treatment differ, "provided through the cross-border infrastructure
+referred to in Article 23", MyHealth@EU, through each Member State's national
+contact point. The Federation Tier text does not say whether a federation
+whose nodes sit in different Member States is in scope, and FerroFED neither
+detects nor refuses one: whether such a deployment is lawful, and for which
+data categories, is the deployment's to answer. No specification governs
+this: our own design, pending report T183 on #212.
 
 ## 7. The security handoff
 
@@ -1170,10 +1200,12 @@ section per obligation:
    and never re-authenticates the user; the node relies on the conveyance JWT.
 3. **Purpose of use.** It travels in the caller's token, is relayed to every
    node, and is required by default.
-4. **What the token is bound to.** Bearer at both hops, as built; DPoP or
-   mTLS-bound tokens per deployment and per endpoint are the design and are
-   not built (the Dutch binding's DPoP comes with #88). Transport identity is
-   never read as an organisation's identity.
+4. **What the token is bound to.** Bearer by default at both hops, and
+   sender-constrained toward a node where the deployment configures it: an
+   `oauth2` grant with a `dpop_key_file` binds its tokens with DPoP (#439,
+   on the client since #448), and the Nuts grant (#88) and the FAPI 2.0
+   grant (#497) always do. mTLS-bound tokens (RFC 8705) are not built
+   (#492). Transport identity is never read as an organisation's identity.
 5. **What the technique does not cover.** Addressed in FerroFED: patient
    identifiers never reach a node, the caller's token is never forwarded,
    tokens are audience-restricted where the node's authorization server allows
@@ -2177,8 +2209,9 @@ specification wins.
 
 Each milestone is a release; the issues are the plan, and the decisions above
 change what some of them carry. v0.0.1 was released on 2026-10-01, and
-v0.0.2 and v0.0.3 shipped together as release 0.0.3 on 2026-10-02; v0.0.4 is
-the milestone in progress.
+v0.0.2 and v0.0.3 shipped together as release 0.0.3 on 2026-10-02, release
+0.0.6 carried the milestones v0.0.4 to v0.0.6 on 2026-10-03, and v0.0.7 was
+released the same day; v0.0.8 is the milestone in progress.
 
 - **v0.0.1, setup and the architecture of record.** The setup issues (#5 to
   #15) and this research program (#16 to #27). It closed with the register
@@ -2270,7 +2303,7 @@ R4 is #23, #25 and #27).
 | A19 | Pseudonyms [R2 D10] | accept a pseudonym or a direct identifier; never pseudonymise in the core; a regional adapter may | §5.3, §B.7; a pseudonym is personal data under the same hygiene | decided (owner, 2026-10-01) |
 | A20 | The resolution cache [reconciles R2 §5 with R3 D2] | session-scoped, in memory, TTL-bounded; no cross-session cache keyed by a hash of the identifier; a consent denial drops the caller's resolution bindings that name the denied member; the shared `ehr_id` index is a routing hint and is kept | §12.5.1 step 2 scopes the binding to the session; a keyed hash is pseudonymised personal data | decided (owner, 2026-10-01) |
 | A21 | Identity conveyance [R2 D5] | RFC 7523 client credentials by default, the gateway-signed `openEHR-federation-client` JWT on every request, RFC 8693 per endpoint where offered | §13.1 leaves end-user conveyance open; production federations convey a signed assertion per request; the caller's token is never forwarded (RFC 9700 §2.3) | decided (owner, 2026-10-01) |
-| A22 | FerroEHR #3511 and #3512 [R2 D6] | confirmed; DPoP as a `Transport` decorator, no new issue | both are built on FerroEHR's side and ship in 0.0.74 | decided (owner, 2026-10-01; built on FerroEHR's side) |
+| A22 | FerroEHR #3511 and #3512 [R2 D6] | confirmed; DPoP on the client: `openehr-its`'s `Credentials::Dpop` writes the `DPoP` scheme and its `DpopProver` proves each request and answers a node's nonce challenge, with no `Transport` decorator (section 7) | both are built on FerroEHR's side and ship in 0.0.74; the DPoP credential and its prover ship in 0.0.82 (FerroEHR #3558) | decided (owner, 2026-10-01; built on FerroEHR's side); the client-side prover replaced the decorator on 2026-10-04 with `openehr-its` 0.0.82 (#448), on `main` for v0.0.8 |
 | A23 | `OPTIONS {base}/` [R2 D7] | authenticated, `401` otherwise; the JWKS public | the stricter of §7a.2's two sentences; T158 holds the ambiguity | decided (owner, 2026-10-01) |
 | A24 | Purpose of use [R2 D8] | required by default, `403` without it; relaxed only by a declared setting | §13.4: a node must not be left to infer it | decided (owner, 2026-10-01) |
 | A25 | Storage [R3 D1] | membership as a reviewed document with no write API; learned state in memory; incidents as events; stored queries behind `DefinitionStore`, with the `PUT` registration API, on `redb` for one gateway, PostgreSQL 18 when several replicas run, or read-only | stored versions are immutable and must survive a restart (N44); replicas must see one version and one refusal; the clinical path holds no store handle; admission is an operator act (§12b.1) | decided (owner, 2026-10-01) |

@@ -25,10 +25,12 @@ governs this: our own design.
 | Role | What it does | Binding |
 |---|---|---|
 | Member CDRs | answer standard AQL scoped to one `ehr_id`, and the reads and writes routed to them | openEHR ITS-REST 1.1.0, over each node's own base URL |
+| Demographics (optional) | names the master identity of a patient the client names by an identifier the cross-reference does not know | IHE PDQm ITI-78 or ITI-119 ([Demographics first](identity.md#demographics-first-pdqm)) |
 | Identifier cross-reference | maps a patient identifier to each node's local `ehr_id`, or reports it not found | IHE PIXm ITI-83 ([Identity resolution](identity.md)) |
-| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every member's cross-reference | none, where every member is a candidate (`ask-all`), or IHE XCPD ITI-55 under `node_selection = "localized"` ([XCPD localization](identity.md#xcpd-localization-xcpd)) |
+| Localization (optional) | returns the candidate communities for a patient; without it the gateway asks every member's cross-reference | none, where every member is a candidate (`ask-all`); under `node_selection = "localized"`, IHE XCPD ITI-55 ([XCPD localization](identity.md#xcpd-localization-xcpd)), the Dutch NVI ([Dutch localization](identity.md#dutch-localization-nl_gfnvi)) or the PIX Manager itself |
+| Consent pre-filter (optional) | names the members that may not be asked about the patient, never the gate | the Dutch Mitz closed authorization question ([Dutch consent](identity.md#dutch-consent-nl_gfmitz)) |
 | Addressing | resolves each community to its CDR base URLs | the registry document, in TOML or as FHIR `Organization` and `Endpoint` resources, or an mCSD care services directory read with ITI-90 and kept in step with ITI-91 ([The registry](registry.md)) |
-| Authentication and authorization | authenticates the client, and the gateway to each node | client authentication by RFC 9068 access tokens from the issuers you trust, or an explicit edge mode ([Client authentication](authentication.md)); outbound credentials per endpoint, a bearer token, basic credentials or OAuth 2.0 client credentials with an RFC 7523 assertion ([below](#authentication)) |
+| Authentication and authorization | authenticates the client, and the gateway to each node | client authentication by RFC 9068 access tokens from the issuers you trust, or an explicit edge mode ([Client authentication](authentication.md)); outbound credentials per endpoint, a bearer token, basic credentials, OAuth 2.0 client credentials or token exchange with an RFC 7523 assertion and optional DPoP, or the Nuts and FAPI 2.0 grants of the Dutch binding ([below](#authentication)) |
 
 The specification references the internals of each service out (§2.2): how
 an MPI matches identities, how a locator decides where data is, and the
@@ -45,8 +47,8 @@ a purpose of use, or, in the explicit edge mode, an assertion your proxy
 signed. A request without one is refused before any node is asked
 ([Client authentication](authentication.md)). The listener speaks plain HTTP,
 so terminate TLS in front of it. The gateway never forwards a client's
-`Authorization` header to a node. Requests do not yet belong to a client
-session, so the per-session resolution bindings of §12.5.1 are never held
+`Authorization` header to a node. The resolution bindings of §12.5.1 are
+kept per verified caller
 ([The registry](registry.md#resolution-bindings)).
 
 Toward the nodes, the gateway authenticates with credentials you configure
@@ -58,7 +60,13 @@ per endpoint ([Configuration](configuration.md#the-file)):
 - OAuth 2.0 client credentials with an RFC 7523 signed JWT client assertion,
   the default mechanism of §13.1 (N25): the gateway obtains a token at the
   node's token endpoint and sends that
-  ([OAuth 2.0 to a node](onward-credentials.md#oauth-20-to-a-node)).
+  ([OAuth 2.0 to a node](onward-credentials.md#oauth-20-to-a-node)), or
+  RFC 8693 token exchange for a token per verified caller
+  ([Token exchange](onward-credentials.md#a-token-per-caller-token-exchange)),
+  either bound to a key of the gateway's with DPoP where you configure one
+  ([DPoP](onward-credentials.md#tokens-bound-to-a-key-dpop));
+- the Nuts grant and the FAPI 2.0 grant of the Dutch binding (Annex B §B.4,
+  §B.4a; [Onward credentials](onward-credentials.md)).
 
 For the OAuth 2.0 grant, the node's authorization server needs the gateway
 registered as a client under its `client_id`, with the gateway's JWK Set
@@ -127,5 +135,5 @@ the same on every replica and a second `PUT` of it refused on every replica
   `403` is reported `consent-denied`, and fails nothing, only when its
   ITS-REST `Error` carries a code the registry lists for that endpoint;
   every other refusal is `node-error`. An optional Step-1 pre-filter drops
-  members before dispatch, and today only the development table provides
-  one ([Consent](identity.md#consent)).
+  members before dispatch: the development table, or Mitz in the
+  Netherlands ([Consent](identity.md#consent)).

@@ -117,7 +117,7 @@ and a node can refuse it from anyone who does not hold the key
 `openEHR-federation-client` token lives 60 seconds, names one node as its
 `aud`, and carries a fresh `jti`, so a node that records `jti` values can
 refuse a replay within that window. Certificate-bound tokens (RFC 8705) are
-not built. A `nuts` section binds every token with DPoP, as the Dutch
+not built ([#492](https://github.com/FerroHEALTH/FerroFED/issues/492)). A `nuts` section binds every token with DPoP, as the Dutch
 binding's Nuts track requires
 ([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)), and so
 does a `fapi2` section, since the FAPI 2.0 Security Profile issues only
