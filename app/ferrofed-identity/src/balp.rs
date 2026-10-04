@@ -13,9 +13,9 @@
 //! supplement, ITI TF-2 §3.20.4.2). The record is stored in the spool and
 //! delivered from there in order by `ihe_iti`'s forwarder; it counts as
 //! recorded once it is stored, a repository that cannot be reached delays
-//! its delivery, and a spool that is full or cannot be written refuses the
-//! record, which fails the transaction closed, as the ITI-55 audit trail
-//! does.
+//! its delivery, and a spool that is full, cannot be written, or does not
+//! store the record within its write bound refuses the record, which fails
+//! the transaction closed, as the ITI-55 audit trail does.
 //!
 //! [`LogFeedAudit`] writes each record as a structured event at the
 //! [`AUDIT_TARGET`] log target, for a deployment

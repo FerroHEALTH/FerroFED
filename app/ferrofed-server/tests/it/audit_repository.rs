@@ -456,6 +456,24 @@ fn a_spool_in_memory_outside_development_refuses_to_boot() -> TestResult {
 }
 
 #[test]
+fn a_spool_write_timeout_of_zero_refuses_to_load_naming_its_key() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let text = unreachable(
+        dir.path(),
+        "development",
+        "url = \"tls://arr.example.org\"\nspool_write_timeout_ms = 0",
+    )?;
+    match Config::from_sources(Some(&text), &BTreeMap::new())?.resolve() {
+        Err(error::Error::Zero { key })
+            if key == "xcpd.audit_repository.spool_write_timeout_ms" =>
+        {
+            Ok(())
+        }
+        other => Err(format!("a zero bound would refuse every message: {other:?}").into()),
+    }
+}
+
+#[test]
 fn the_repository_table_and_the_destination_go_together() -> TestResult {
     let dir = tempfile::tempdir()?;
     let unused = unreachable(dir.path(), "development", "url = \"tls://arr.example.org\"")?
