@@ -214,13 +214,16 @@ pub struct ServerSettings {
     pub auth: AuthSettings,
 }
 
-/// The console, resolved.
+/// The console and the trace export, resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TelemetrySettings {
     /// The rendering.
     pub format: Format,
     /// The `tracing` filter directive, already known to parse.
     pub filter: String,
+    /// The OTLP collector the spans are exported to, already known to be an
+    /// `http://` URL; `None` exports nothing.
+    pub otlp_endpoint: Option<SecretUrl>,
 }
 
 /// The metrics surface, resolved.
@@ -305,6 +308,7 @@ impl Settings {
                 .map(|store| store.backend().name()),
             metrics_listen = self.metrics.listen.map(|address| address.to_string()),
             metrics_otlp_push = self.metrics.otlp_endpoint.is_some(),
+            traces_otlp_export = self.telemetry.otlp_endpoint.is_some(),
             credentials = endpoints.join(","),
             auth_issuers = self.server.auth.issuers.len(),
             auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),

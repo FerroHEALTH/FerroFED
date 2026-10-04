@@ -972,11 +972,15 @@ the two are never set together. The members are the directory's
 `organisation-id` and `endpoint-id` identifiers, read with ITI-90's
 `identifier=[system]|` search; the rest of the directory is not the
 federation's. `ihe-iti`'s `Replica` holds them, `ferrofed-identity` maps them
-through the FHIR form's own mapping, with one difference (#423): a member
-organisation's listing of an `Endpoint` the selection did not take is
-ignored and logged by its reference, where the document refuses it, unless
-it named an endpoint of the content the running registry was read from,
-which is refused as a dangling listing. The server keeps them in step: every
+through the FHIR form's own mapping, with one difference (#423, #433): a
+member organisation's listing that names no selected `Endpoint` (another
+service's, one that left the selection, or one the directory deleted) is
+ignored and logged by its reference, at a start and on a refresh alike,
+where the document refuses it. An ITI-91 entry whose `request.method` is
+`DELETE` drops the resource from the `Replica`, so a deleted endpoint leaves
+the registry and is no longer called; refusing that refresh would keep
+routing to it, and N20 binds an endpoint's managing organisation, never an
+organisation's list. The server keeps them in step: every
 `refresh_interval_s` an ITI-91 `_history?_since=` per type, asked from 60
 seconds before the `Date` the directory stamped its previous answer with, so
 the directory's clock decides and a version applied twice changes nothing; a

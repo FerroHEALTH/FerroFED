@@ -23,7 +23,9 @@ use http::{Request, StatusCode};
 use serde::Deserialize;
 
 use super::{Gateway, member, members};
-use crate::facade::{Answer, body, node_answering, patient_query, post, received, statuses};
+use crate::facade::{
+    Answer, EHR_B, body, crossref, node_answering, patient_query, post, received, statuses,
+};
 use crate::metrics::{count, parse};
 use crate::support::call;
 
@@ -204,10 +206,55 @@ async fn a_refresh_that_gives_two_nodes_one_system_id_is_refused_and_the_registr
     Ok(())
 }
 
-/// A refresh that deletes a member's endpoint leaves its organisation
-/// listing an endpoint the registry no longer holds, and is refused.
+/// A refresh that deletes a member's endpoint drops it and is applied, while
+/// its organisation still lists it: the listing names no member and is
+/// ignored, and no request reaches the deleted endpoint again (no
+/// specification governs this: our own design).
 #[tokio::test]
-async fn a_refresh_that_deletes_a_listed_endpoint_is_refused_and_the_registry_kept() -> TestResult {
+async fn a_refresh_that_deletes_a_listed_endpoint_drops_it_and_is_applied() -> TestResult {
+    let a = node_answering("uid-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-b::cdr-b.example.org::1").await;
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&members(&a.uri(), &b.uri()))?;
+    // The cross-reference resolves the patient at node A alone, so it names
+    // no member the deletion removes.
+    let text = super::config(&harness.base(), 5_000).replace(&crossref(&[("node-b", EHR_B)]), "");
+    let gateway = Gateway::boot_from(&text)?;
+
+    harness.delete_endpoint("node-b-pub");
+    let outcome = gateway.directory.refresh(&gateway.reloader).await;
+    let RefreshOutcome::Applied(applied) = &outcome else {
+        return Err(format!("the deletion is applied: {outcome:?}").into());
+    };
+    assert_eq!(
+        vec!["node-b-pub".to_owned()],
+        applied
+            .endpoints_removed
+            .iter()
+            .map(|id| id.as_str().to_owned())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        !gateway.addresses()?.contains_key("node-b-pub"),
+        "the deleted endpoint left the running registry"
+    );
+    assert_eq!(
+        vec![("node-a-pub".to_owned(), "active".to_owned())],
+        asked(&gateway).await?
+    );
+    assert!(
+        received(&b).await?.is_empty(),
+        "the deleted endpoint is not asked"
+    );
+    assert_eq!(Some("1".to_owned()), reloads(&gateway, "applied")?);
+    Ok(())
+}
+
+/// A refresh that deletes the endpoint of a member the development
+/// cross-reference names leaves a row naming no member, and is refused with
+/// the running registry kept: the resolver's rule, not the listing.
+#[tokio::test]
+async fn a_refresh_that_deletes_a_member_the_cross_reference_names_is_refused() -> TestResult {
     let harness = HarnessDirectory::start().await;
     harness.publish(&members(
         "https://cdr-a.example.org/openehr",
@@ -217,7 +264,10 @@ async fn a_refresh_that_deletes_a_listed_endpoint_is_refused_and_the_registry_ke
     let before = gateway.addresses()?;
     harness.delete_endpoint("node-b-pub");
     let outcome = gateway.directory.refresh(&gateway.reloader).await;
-    assert!(matches!(outcome, RefreshOutcome::Refused(_)), "{outcome:?}");
+    let RefreshOutcome::Refused(error) = &outcome else {
+        return Err(format!("the refresh is refused: {outcome:?}").into());
+    };
+    assert_eq!("dev-cross-reference", error.class());
     assert_eq!(before, gateway.addresses()?);
     Ok(())
 }

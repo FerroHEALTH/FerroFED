@@ -58,6 +58,7 @@ use openehr_its::rest::client::{ErrorBody, ReqwestTransport};
 use openehr_its::rest::routes::RouteMatch;
 use serde::Serialize;
 use tokio::task::{JoinError, JoinSet};
+use tracing::Instrument as _;
 
 use super::chosen::{Chooser, named, to_named};
 use super::{Arrived, DEFINITION_GROUP, Deadlines, held, unheld};
@@ -249,16 +250,19 @@ where
             continue;
         };
         let asked = call(client, options.clone());
-        tasks.spawn(async move {
-            let started = Instant::now();
-            // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a
-            // request the budget overtook before it left ends unsent, never abandoned.
-            let asked = match tokio::time::timeout_at(until, asked).await {
-                Ok(answer) => Asked::Ended(answer),
-                Err(_elapsed) => Asked::Abandoned,
-            };
-            (index, asked, elapsed_ms(started))
-        });
+        tasks.spawn(
+            async move {
+                let started = Instant::now();
+                // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a
+                // request the budget overtook before it left ends unsent, never abandoned.
+                let asked = match tokio::time::timeout_at(until, asked).await {
+                    Ok(answer) => Asked::Ended(answer),
+                    Err(_elapsed) => Asked::Abandoned,
+                };
+                (index, asked, elapsed_ms(started))
+            }
+            .in_current_span(),
+        );
     }
     while let Some(joined) = tasks.join_next().await {
         let (index, asked, latency_ms) = joined.map_err(Unfinished::Task)?;
@@ -357,6 +361,10 @@ async fn fan_out(
             async move { client.forward_held(request, &options).await }
         },
     )
+    .instrument(tracing::info_span!(
+        "template_fan_out",
+        members = targets.len()
+    ))
     .await;
     let sent = match sent {
         Ok(sent) => sent,

@@ -63,6 +63,7 @@ use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::generated::definition::StoredQuery;
 use openehr_query::federation::{parse_federated, to_federated_aql};
 use serde::Serialize;
+use tracing::Instrument as _;
 
 use super::{Refused, its_rest};
 use crate::error::Code;
@@ -238,6 +239,10 @@ pub(super) async fn distribute(
             }
         },
     )
+    .instrument(tracing::info_span!(
+        "stored_query_distribution",
+        members = targets.len()
+    ))
     .await;
     let sent = finished(sent, &logged)?;
     let mut outcomes = Vec::with_capacity(targets.len());
@@ -307,6 +312,10 @@ pub(super) async fn drift(
             }
         },
     )
+    .instrument(tracing::info_span!(
+        "stored_query_drift",
+        members = targets.len()
+    ))
     .await;
     let sent = finished(sent, &logged)?;
     let mut outcomes = Vec::with_capacity(targets.len());

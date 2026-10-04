@@ -60,6 +60,9 @@ opentelemetry_sdk.workspace = true
 opentelemetry-prometheus.workspace = true
 opentelemetry-otlp.workspace = true
 prometheus.workspace = true
+# The trace export (#353): the gateway's own spans as OpenTelemetry spans,
+# over the same OTLP exporter crate as the metrics push.
+tracing-opentelemetry.workspace = true
 # The EHR_STATUS of the test EHRs an admission check creates (§12b.1, #79).
 openehr-rm.workspace = true
 # The healthcheck job asks the server beside it for its readiness, over the
@@ -91,6 +94,9 @@ ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 # The JWK Set the gateway publishes, read as the onward tests verify it (#81).
 jsonwebtoken.workspace = true
+# The in-memory span exporter the trace tests read every exported span from
+# (#353).
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 wiremock.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "test-util"] }

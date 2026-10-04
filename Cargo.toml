@@ -89,16 +89,22 @@ tokio = { version = "1.53.1", default-features = false }
 tracing = "0.1.44"
 # The console: the env filter, the JSON line format and the pretty one.
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt", "env-filter", "json", "ansi"] }
-# The metrics surface (#281; no specification governs it: our own design): one
-# OpenTelemetry MeterProvider feeds the Prometheus pull reader and the optional
-# OTLP push, so an instrument cannot exist on one surface and not the other.
+# The metrics surface (#281) and the trace export (#353); no specification
+# governs either: our own design. One OpenTelemetry MeterProvider feeds the
+# Prometheus pull reader and the optional OTLP push, so an instrument cannot
+# exist on one surface and not the other, and one TracerProvider exports the
+# gateway's own spans over OTLP when a collector is configured.
 # The four opentelemetry crates are released in lockstep and move together;
 # scripts/checks/versions.sh holds them equal against docs/VERSIONS.md.
-# Verified against crates.io on 2026-10-03.
-opentelemetry = { version = "0.33.0", default-features = false, features = ["metrics", "internal-logs"] }
-opentelemetry_sdk = { version = "0.33.0", default-features = false, features = ["metrics", "internal-logs", "rt-tokio", "experimental_metrics_custom_reader"] }
+# Verified against crates.io on 2026-10-03, the trace features on 2026-10-04.
+opentelemetry = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs"] }
+opentelemetry_sdk = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs", "rt-tokio", "experimental_metrics_custom_reader"] }
 opentelemetry-prometheus = "0.33.0"
-opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["metrics", "internal-logs", "grpc-tonic"] }
+opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs", "grpc-tonic"] }
+# The bridge from the gateway's tracing spans to OpenTelemetry spans (#353),
+# the release paired with the opentelemetry 0.33 line. Verified against
+# crates.io on 2026-10-04.
+tracing-opentelemetry = { version = "0.34.0", default-features = false }
 # The registry and text encoder the Prometheus reader renders through.
 prometheus = { version = "0.14.0", default-features = false }
 # The minted request id when a client sends none or sends an illegal one.

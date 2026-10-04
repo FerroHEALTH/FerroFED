@@ -55,6 +55,11 @@ tokio = { workspace = true, features = ["rt", "sync", "time"] }
 # The onward grant says when a token was obtained and why one was not, never
 # the token (#81).
 tracing.workspace = true
+# The W3C traceparent of each node request, written from the span of that
+# request by the W3C Trace Context propagator (#353).
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+tracing-opentelemetry.workspace = true
 url.workspace = true
 uuid.workspace = true
 

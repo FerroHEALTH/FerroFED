@@ -28,6 +28,7 @@ use openehr_its::rest::generated::definition::{
 
 use super::{Contact, DispatchError, DispatchOptions, NodeClient, classify, reported};
 use crate::hygiene::{Composed, Outbound};
+use crate::trace_context;
 
 /// The query language a distributed definition is stored as, the ITS-REST
 /// `query_type`.
@@ -106,6 +107,26 @@ impl<T: Transport> NodeClient<T> {
         aql: &str,
         options: &DispatchOptions,
     ) -> Result<Stored, DispatchError> {
+        trace_context::node_request(
+            &self.endpoint,
+            "definition_query_version_store_yaml",
+            self.store_definition_once(definition, aql, options),
+            |stored| match stored {
+                Ok(stored) => (Some(stored.contact), Some(stored.outcome.status())),
+                Err(_unsent) => (Some(Contact::Unsent), None),
+            },
+        )
+        .await
+    }
+
+    /// Stores the definition once, as [`NodeClient::store_definition`]
+    /// describes.
+    async fn store_definition_once(
+        &self,
+        definition: DefinitionAt<'_>,
+        aql: &str,
+        options: &DispatchOptions,
+    ) -> Result<Stored, DispatchError> {
         self.gate_definition(definition, aql, options)?;
         let params = DefinitionQueryVersionStoreYamlParams {
             qualified_query_name: definition.name.to_owned(),
@@ -144,6 +165,25 @@ impl<T: Transport> NodeClient<T> {
     /// gateway: a withheld identifier in it, no credential, or a request the
     /// client runtime refuses to build.
     pub async fn read_definition(
+        &self,
+        definition: DefinitionAt<'_>,
+        options: &DispatchOptions,
+    ) -> Result<NodeCopy, DispatchError> {
+        trace_context::node_request(
+            &self.endpoint,
+            "definition_query_version_get",
+            self.read_definition_once(definition, options),
+            |copy| match copy {
+                Ok(copy) => (Some(copy.contact()), None),
+                Err(_unsent) => (Some(Contact::Unsent), None),
+            },
+        )
+        .await
+    }
+
+    /// Reads the node's copy once, as [`NodeClient::read_definition`]
+    /// describes.
+    async fn read_definition_once(
         &self,
         definition: DefinitionAt<'_>,
         options: &DispatchOptions,

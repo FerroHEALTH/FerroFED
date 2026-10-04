@@ -22,6 +22,7 @@ use ferrofed_identity::consent::{ConsentDecision, ON_UNAVAILABLE};
 use ferrofed_identity::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use openehr_federation::outcome::ErrorDetail;
+use tracing::Instrument as _;
 
 use crate::federation::Federation;
 use crate::health::dependencies::Observed;
@@ -55,7 +56,11 @@ pub(crate) async fn prefilter(
     if candidates.is_empty() {
         return Prefiltered::default();
     }
-    let decision = prefilter.prefilter(patient, candidates, deadline).await;
+    let span = tracing::info_span!("consent_prefilter", members = candidates.len());
+    let decision = prefilter
+        .prefilter(patient, candidates, deadline)
+        .instrument(span)
+        .await;
     federation
         .dependencies()
         .consent(Observed::of_consent(&decision));

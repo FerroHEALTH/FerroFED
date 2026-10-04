@@ -8,13 +8,15 @@
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_identity::directory::error::{FhirFormError, ReferenceFault};
+use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::directory::mcsd::{
     DirectoryConfig, DirectoryReadError, DirectorySource, Refreshed,
 };
 use ferrofed_identity::directory::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM};
-use ferrofed_registry::id::{NodeId, OrganisationId};
+use ferrofed_registry::error::LoadError;
+use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mcsd::{self, HarnessDirectory, Member};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -85,6 +87,8 @@ async fn a_member_relying_on_hl7_fhir_rest_is_no_registry() -> TestResult {
     Ok(())
 }
 
+/// A refresh that deletes the one member's endpoint leaves no node, which no
+/// registry admits, and is refused with the content read kept.
 #[tokio::test]
 async fn a_refresh_into_a_broken_registry_is_refused_and_the_content_kept() -> TestResult {
     let harness = HarnessDirectory::start().await;
@@ -93,7 +97,13 @@ async fn a_refresh_into_a_broken_registry_is_refused_and_the_content_kept() -> T
     let read = source.read().await?;
     harness.delete_endpoint("node-a-pub");
     let refreshed = source.refresh(read.content()).await?;
-    assert!(matches!(refreshed, Refreshed::Refused(_)), "{refreshed:?}");
+    assert!(
+        matches!(
+            refreshed,
+            Refreshed::Refused(FhirFormError::Registry(LoadError::NoNode))
+        ),
+        "{refreshed:?}"
+    );
     assert_eq!(
         (1, 1),
         read.content().len(),
@@ -211,37 +221,59 @@ async fn a_refresh_that_adds_a_listing_outside_the_selection_is_applied() -> Tes
     Ok(())
 }
 
-/// A refresh that deletes a member's endpoint while its organisation still
-/// lists it leaves a listing of an endpoint the selection took dangling, and
-/// is refused naming the organisation and the reference.
+/// The nodes of a registry, in id order.
+fn nodes(snapshot: &RegistrySnapshot) -> Vec<NodeId> {
+    snapshot
+        .nodes()
+        .map(ferrofed_registry::snapshot::Node::id)
+        .cloned()
+        .collect()
+}
+
+/// The registry a refresh changed into, or the refresh's own outcome as the
+/// error.
+fn changed(refreshed: &Refreshed) -> Result<&RegistrySnapshot, Box<dyn Error>> {
+    match refreshed {
+        Refreshed::Changed(materialised) => Ok(materialised.snapshot()),
+        other => Err(format!("the refresh changes the registry: {other:?}").into()),
+    }
+}
+
+/// A refresh that reads an ITI-91 `DELETE` of a member's endpoint drops it,
+/// and its node with it, while the organisation still lists it: the listing
+/// names no member and is ignored, as at a start. The directory deleted the
+/// endpoint, so the gateway stops routing to it (no specification governs
+/// this: our own design).
 #[tokio::test]
-async fn a_dangling_listing_of_a_selected_endpoint_is_refused() -> TestResult {
+async fn a_refresh_that_deletes_a_listed_endpoint_drops_it() -> TestResult {
     let harness = HarnessDirectory::start().await;
     harness.publish(&[member("a"), member("b")])?;
     let source = source(&harness)?;
     let read = source.read().await?;
     harness.delete_endpoint("node-b-pub");
     let refreshed = source.refresh(read.content()).await?;
-    let Refreshed::Refused(FhirFormError::OrganisationEndpoint {
-        organisation,
-        fault,
-    }) = &refreshed
-    else {
-        return Err(format!("the dangling listing is refused: {refreshed:?}").into());
-    };
-    assert_eq!(&"org-b".parse::<OrganisationId>()?, organisation);
-    assert_eq!(
-        &ReferenceFault::Outside("Endpoint/node-b-pub".to_owned()),
-        fault
+    let snapshot = changed(&refreshed)?;
+    assert_eq!(vec!["node-a".parse::<NodeId>()?], nodes(snapshot));
+    assert!(
+        snapshot
+            .endpoint(&"node-b-pub".parse::<EndpointId>()?)
+            .is_none(),
+        "the deleted endpoint left the registry"
+    );
+    assert!(
+        snapshot
+            .organisation(&"org-b".parse::<OrganisationId>()?)
+            .is_some(),
+        "its organisation stays a member"
     );
     Ok(())
 }
 
-/// An endpoint that leaves the selection while its organisation still lists
-/// it cannot be told from one that was deleted, so the refresh is refused as
-/// a dangling listing is.
+/// An endpoint that loses the federation's identifier leaves the selection,
+/// and the refresh drops it as a deletion does, its organisation's listing
+/// ignored.
 #[tokio::test]
-async fn a_listed_endpoint_that_leaves_the_selection_is_refused() -> TestResult {
+async fn a_listed_endpoint_that_leaves_the_selection_is_dropped() -> TestResult {
     let harness = HarnessDirectory::start().await;
     let b = member("b");
     harness.publish(&[member("a"), b.clone()])?;
@@ -251,15 +283,34 @@ async fn a_listed_endpoint_that_leaves_the_selection_is_refused() -> TestResult 
     unselected.identifier.clear();
     harness.put_endpoint(unselected);
     let refreshed = source.refresh(read.content()).await?;
-    assert!(
-        matches!(
-            &refreshed,
-            Refreshed::Refused(FhirFormError::OrganisationEndpoint {
-                fault: ReferenceFault::Outside(reference),
-                ..
-            }) if reference == "Endpoint/node-b-pub"
-        ),
-        "{refreshed:?}"
+    assert_eq!(
+        vec!["node-a".parse::<NodeId>()?],
+        nodes(changed(&refreshed)?)
     );
+    Ok(())
+}
+
+/// A start and a refresh over the same directory content give the same
+/// registry: a deletion, an endpoint that left the selection, another
+/// service's endpoint and a listing of nothing at all are each read alike.
+#[tokio::test]
+async fn a_start_and_a_refresh_over_the_same_content_agree() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish_examples()?;
+    let (a, b, c) = (member("a"), member("b"), member("c"));
+    harness.publish(&[a.clone(), b, c.clone()])?;
+    let source = source(&harness)?;
+    let read = source.read().await?;
+
+    harness.delete_endpoint("node-b-pub");
+    let mut unselected = c.endpoint()?;
+    unselected.identifier.clear();
+    harness.put_endpoint(unselected);
+    harness.put_organization(a.organisation_also_listing(&[XCA_QUERY, "Endpoint/node-gone"])?);
+    let refreshed = source.refresh(read.content()).await?;
+    let started = source.read().await?;
+
+    assert_eq!(started.snapshot(), changed(&refreshed)?);
+    assert_eq!(vec!["node-a".parse::<NodeId>()?], nodes(started.snapshot()));
     Ok(())
 }
