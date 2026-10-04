@@ -109,7 +109,7 @@ self_test() {
   expect 1 app/ferrofed-server/tests/it/attributes.rs "$gated"
   expect 1 app/ferrofed-server/tests/it/routing/e2e/attributes.rs "$gated"
   expect 1 app/ferrofed-server/tests/it/e2e_x/attributes.rs "$gated"
-  expect 1 app/ferrofed-server/src/federation.rs "$gated"
+  expect 1 app/ferrofed-server/src/federation/build.rs "$gated"
   expect 1 app/ferrofed-engine/tests/it/dispatch.rs "$by_name"
   expect 1 crates/ihe-iti/tests/it/pixm.rs "$by_const"
   expect 0 app/ferrofed-server/tests/it/e2e/attributes.rs "$gated"

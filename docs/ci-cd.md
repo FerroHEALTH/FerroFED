@@ -45,7 +45,8 @@ under the pins below.
 
 `ci.yml` splits on whether a check needs Rust.
 
-**Tier 1 needs no Rust toolchain.**
+**Tier 1 needs no Rust toolchain**, but for the `manifests` guard, which
+reads the manifests with `cargo metadata` and compiles nothing.
 
 | Job | Runs |
 |---|---|
@@ -64,6 +65,7 @@ under the pins below.
 | `site-links` | `scripts/checks/site-links.sh --self-test`, then `scripts/checks/site-links.sh`: the site assembled by `scripts/site/assemble.sh` with the roadmap block left empty, every internal link and anchor of every page checked by lychee with `--offline --include-fragments`, and `README.md` against the repository tree; lychee is the release binary pinned by version and SHA-256, and no request leaves the runner |
 | `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh`, `migrate-fields.sh` and `rel.sh`, each driven against a stub `gh` on `PATH` |
 | `crate-version-guard-self-test` | `scripts/checks/crate-version-guard.sh --self-test`, the guard over a stub repository whose `main` bumped a crate after the branch forked: an untouched crate passes, and packaged content changed without a bump fails |
+| `manifests` | `scripts/checks/manifests.sh --self-test`, then `scripts/checks/manifests.sh`: `cargo metadata --locked --format-version 1 --no-deps` over the root `Cargo.toml` and `fuzz/Cargo.toml`, so a manifest that does not parse (a dependency written twice by a merge) fails here with Cargo's own message; the self-test proves a manifest with a key written twice fails. It is the one tier-1 job that installs the pinned toolchain, with no build cache, and `detect` needs it, so a broken manifest starts no Rust job |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
 reference implementation ships its own shell scripts, Dockerfile and
