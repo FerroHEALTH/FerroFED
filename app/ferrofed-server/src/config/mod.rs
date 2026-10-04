@@ -50,6 +50,11 @@ pub const CONFIG_PATH_ENV: &str = "FERROFED_CONFIG";
 pub const COMBINING_MARGIN_MS: u64 = 1_000;
 
 /// The whole configuration tree, as a file and the environment state it.
+///
+/// The sections of a binding exist only in a build with its feature
+/// (`binding-ihe`, `binding-nl`), so a build without it refuses them as
+/// unknown keys; each binding resolves its own
+/// ([`Binding::resolve`](crate::binding::Binding::resolve)).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {

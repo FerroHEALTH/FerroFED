@@ -24,6 +24,12 @@
 //! answers `501` where none is declared (§7a.1, §12.6, N32); every other
 //! path under `{base}/v1/` answers `501` until its issue lands.
 //!
+//! [`binding`] holds the regional and national bindings, each one module
+//! behind one Cargo feature (`binding-ihe`, `binding-nl`) and the always-built
+//! development binding, from which the server builds the roles of resolution,
+//! localization, demographics and the consent pre-filter, and the processes
+//! that outlive a reload.
+//!
 //! [`admission`] is the `admission check` job: one member exercised against
 //! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
 //! [`healthcheck`] is the `healthcheck` job a container runtime runs beside
