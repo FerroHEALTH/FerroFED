@@ -53,11 +53,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and every outcome shows on `GET /health/dependencies` as `directory`.
   `config check` reads the directory too. Credentials for the directory
   travel over `https` only, outside the development profile (#402).
-  A member organisation of a shared directory may list endpoints of other
-  services: a listing of an `Endpoint` that is no member is ignored and
-  logged by its reference, once per read of the content, where the document
-  refuses it; a listing that named a member endpoint when the running
-  registry was read, and names none now, is refused (#423).
+  A member organisation of a shared directory may list endpoints that are no
+  member: another service's, one that lost the federation's identifier, or
+  one the directory deleted. Such a listing is ignored and logged by its
+  reference, once per read of the content, at a start and on a refresh
+  alike, where the document refuses it, and a deleted endpoint leaves the
+  registry (#423, #433).
 - `ihe-iti` 0.0.13: the `mcsd` feature carries the ITI-90 Query Client and
   the ITI-91 Update Client (`McsdClient`), every walk bounded by one
   `Budget` (a deadline and caps on pages, bytes and entries), and a replica
