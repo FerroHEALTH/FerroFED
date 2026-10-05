@@ -74,10 +74,12 @@ struct Session {
 
 impl Session {
     /// Drops every `{node, ehr_id}` binding that expired by `now`, and every
-    /// `ehr_id` left with none.
+    /// `ehr_id` left with none, keeping every claimant of a collision.
     fn prune(&mut self, now: Instant) {
         self.by_ehr.retain(|_, nodes| {
-            nodes.retain(|_, expires| *expires > now);
+            if !collided(nodes) {
+                nodes.retain(|_, expires| *expires > now);
+            }
             !nodes.is_empty()
         });
     }
@@ -105,8 +107,10 @@ impl ResolutionBindings {
     ///
     /// A `{node, ehr_id}` binding that no resolution of its session has
     /// returned for `ttl` is never routed on, however many other resolutions
-    /// the session makes meanwhile. At most [`DEFAULT_CAPACITY`] `ehr_id`
-    /// bindings are held.
+    /// the session makes meanwhile. An `ehr_id` the session has seen at two
+    /// members or more stays a collision for the life of the session: a
+    /// lapsed claimant never leaves the other to be routed on (§12.5.2,
+    /// N42). At most [`DEFAULT_CAPACITY`] `ehr_id` bindings are held.
     #[must_use]
     pub fn new(ttl: Duration) -> Self {
         Self {
@@ -187,28 +191,27 @@ impl ResolutionBindings {
 
     /// What the live bindings of `session` say about `ehr_id` at `now`.
     ///
-    /// A binding counts only while it lives: a member whose binding of
-    /// `ehr_id` expired is no claimant of it, even when another member's
-    /// binding of the same `ehr_id` lives on.
+    /// A lone binding counts only while it lives. An `ehr_id` the session has
+    /// seen at two members or more is [`Bound::Several`] with every claimant
+    /// while the session lives, whichever claimant's binding has lapsed.
     #[must_use]
     pub fn lookup(&self, session: &SessionKey, now: Instant, ehr_id: &EhrId) -> Bound {
         let sessions = self.lock();
         let Some(nodes) = sessions
             .get(session)
+            .filter(|held| held.expires > now)
             .and_then(|held| held.by_ehr.get(ehr_id))
         else {
             return Bound::None;
         };
-        let mut nodes = nodes
-            .iter()
-            .filter(|(_, expires)| **expires > now)
-            .map(|(node, _)| node.clone());
-        match (nodes.next(), nodes.next()) {
-            (None, _) => Bound::None,
-            (Some(only), None) => Bound::One(only),
-            (Some(first), Some(second)) => {
-                Bound::Several([first, second].into_iter().chain(nodes).collect())
-            }
+        // NOTE: §12.5.2 (N42) bars breaking a collision by where a patient resolved; a session's
+        // bindings span patients, so a lapsed claimant never narrows one to the other.
+        if collided(nodes) {
+            return Bound::Several(nodes.keys().cloned().collect());
+        }
+        match nodes.iter().next() {
+            Some((only, expires)) if *expires > now => Bound::One(only.clone()),
+            _ => Bound::None,
         }
     }
 
@@ -342,6 +345,12 @@ impl ResolutionBindings {
 /// How many `ehr_id` bindings `sessions` hold.
 fn held(sessions: &BTreeMap<SessionKey, Session>) -> usize {
     sessions.values().map(|held| held.by_ehr.len()).sum()
+}
+
+/// Whether the claimants of one `ehr_id` are a collision: two members or
+/// more, which no lapse of a binding narrows.
+fn collided(nodes: &BTreeMap<NodeId, Instant>) -> bool {
+    nodes.len() > 1
 }
 
 /// Whether `nodes` names no member of `members`.

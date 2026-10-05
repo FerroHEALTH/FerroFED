@@ -440,33 +440,49 @@ fn a_binding_each_resolution_returns_keeps_routing() {
     );
 }
 
-#[test]
-fn a_claimant_no_later_resolution_returns_expires_on_its_own() {
+/// Patient X resolved to `(node-c, EHR_A)` and patient Y to `(node-a, EHR_A)`
+/// in one session, which then resolves only Y.
+fn a_collision_whose_one_claimant_lapsed(start: Instant) -> (ResolutionBindings, SessionKey) {
     let bindings = ResolutionBindings::new(Duration::from_secs(60));
     let session = SessionKey::new("session-1");
+    bindings.record(&session, start, [(&node("node-c"), &ehr(EHR_A))]);
+    for seconds in [10, 50, 90, 130] {
+        bindings.record(
+            &session,
+            start + Duration::from_secs(seconds),
+            [(&node("node-a"), &ehr(EHR_A))],
+        );
+    }
+    (bindings, session)
+}
+
+#[test]
+fn a_collision_persists_after_one_claimant_lapses() {
     let start = Instant::now();
-    bindings.record(
-        &session,
-        start,
-        [
-            (&node("node-a"), &ehr(EHR_A)),
-            (&node("node-c"), &ehr(EHR_A)),
-        ],
-    );
-    bindings.record(
-        &session,
-        start + Duration::from_secs(40),
-        [(&node("node-a"), &ehr(EHR_A))],
-    );
+    let (bindings, session) = a_collision_whose_one_claimant_lapsed(start);
     assert_eq!(
         Bound::Several(vec![node("node-a"), node("node-c")]),
-        bindings.lookup(&session, start + Duration::from_secs(59), &ehr(EHR_A)),
-        "both claimants live, so step 2 yields no answer (§12.5.2, N42)"
+        bindings.lookup(&session, start + Duration::from_secs(150), &ehr(EHR_A)),
+        "node-c's binding lapsed, yet the ehr_id stays a collision: routing it to node-a would \
+         break the tie by where one patient resolved (§12.5.2, N42)"
     );
+}
+
+#[test]
+fn an_identity_change_clears_a_sticky_collision() {
+    let start = Instant::now();
+    let (bindings, session) = a_collision_whose_one_claimant_lapsed(start);
+    assert_eq!(
+        1,
+        bindings.identity_changed(&IdentityChange::Ehrs(vec![ehr(EHR_A)]))
+    );
+    let later = start + Duration::from_secs(140);
+    assert_eq!(Bound::None, bindings.lookup(&session, later, &ehr(EHR_A)));
+    bindings.record(&session, later, [(&node("node-a"), &ehr(EHR_A))]);
     assert_eq!(
         Bound::One(node("node-a")),
-        bindings.lookup(&session, start + Duration::from_secs(61), &ehr(EHR_A)),
-        "node-c's binding is a lifetime old and claims nothing; node-a's was returned since"
+        bindings.lookup(&session, later, &ehr(EHR_A)),
+        "a resolution after the change binds afresh"
     );
 }
 
