@@ -196,7 +196,7 @@ aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-
 # reads the certificate of a mutual-TLS grant's client identity with (#492).
 # It stays on 3 while jsonwebtoken requires `pem ^3`, so the binary carries
 # one pem; rcgen's pem 4 is test-only. Move both when jsonwebtoken moves.
-pem = { version = "3.0.6", default-features = false, features = ["std"] }
+pem = { version = "4.0.0", default-features = false, features = ["std"] }
 # Test-only for the ATNA audit repository (#418): the testkit's harness
 # repository generates its CA and server certificate at run time over the
 # crypto library rustls already builds on, so no private key is ever
