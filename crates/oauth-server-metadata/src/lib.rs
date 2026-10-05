@@ -17,6 +17,9 @@
 //!   [`Issuer::is_identical_to`];
 //! - every endpoint the client sends to must be on the issuer's origin,
 //!   without userinfo or a fragment, [`Issuer::endpoint`];
+//! - a mutual-TLS endpoint alias (RFC 8705 §5) may also be on an `https`
+//!   host the client names beforehand, an [`AliasHost`],
+//!   [`Issuer::mtls_alias`];
 //! - an answer whose objects repeat a name at any depth is refused before it
 //!   is read, [`repeats_no_name`].
 //!
@@ -66,6 +69,68 @@ pub struct Issuer {
     "the issuer is not an http(s) URL without userinfo, query or fragment (RFC 8414 §2), in canonical form"
 )]
 pub struct InvalidIssuer;
+
+/// A host the client trusts, beside the issuer's origin, for the endpoints
+/// of `mtls_endpoint_aliases` (RFC 8705 §5): the `https` origin of a host
+/// name, or of a host name and a port.
+///
+/// RFC 8705 §5 places an alias on any host, as its example on
+/// `mtls.example.com` shows, so the client names the hosts it sends a
+/// credential to (no specification governs the list: our own design).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AliasHost {
+    text: String,
+    origin: url::Origin,
+}
+
+/// A host that cannot be an [`AliasHost`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "the alias host is not a host name, or a host name and a port, in the canonical form the URL parser gives it, without a scheme, userinfo, path, query or fragment"
+)]
+pub struct InvalidAliasHost;
+
+impl AliasHost {
+    /// Reads `text`, such as `mtls.example.com` or `mtls.example.com:8443`,
+    /// as the `https` origin of that host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidAliasHost`] for text that is no host, carries a
+    /// scheme, userinfo, a path, a query or a fragment, or is not written in
+    /// the canonical form the URL parser gives it (a lower-case host, no
+    /// port `443`).
+    pub fn parse(text: &str) -> Result<Self, InvalidAliasHost> {
+        let written = format!("https://{text}/");
+        let url = Url::parse(&written).map_err(|_unparsable| InvalidAliasHost)?;
+        if text.is_empty()
+            || url.as_str() != written
+            || url.path() != "/"
+            || url.query().is_some()
+            || url.fragment().is_some()
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return Err(InvalidAliasHost);
+        }
+        Ok(Self {
+            text: text.to_owned(),
+            origin: url.origin(),
+        })
+    }
+
+    /// The host, as written.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.text
+    }
+}
+
+impl fmt::Display for AliasHost {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.text)
+    }
+}
 
 /// Why an endpoint the metadata names is not one the client sends to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -153,6 +218,34 @@ impl Issuer {
         // NOTE: no specification governs this: our own design; RFC 8414 places no
         // endpoint, and what the client sends goes to the issuer's origin alone.
         if url.origin() != self.url.origin() {
+            return Err(EndpointError::OtherOrigin);
+        }
+        if !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() {
+            return Err(EndpointError::Insecure);
+        }
+        Ok(url)
+    }
+
+    /// The mutual-TLS endpoint alias `text` names (RFC 8705 §5), when the
+    /// client may send to it: an endpoint [`Issuer::endpoint`] takes, or an
+    /// `https` URL on the origin of one of `hosts`, with no userinfo and no
+    /// fragment.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EndpointError::NotAUrl`] for text that is no URL,
+    /// [`EndpointError::OtherOrigin`] for one off the issuer's origin and
+    /// every origin of `hosts`, and [`EndpointError::Insecure`] for one with
+    /// userinfo or a fragment.
+    pub fn mtls_alias(&self, text: &str, hosts: &[AliasHost]) -> Result<Url, EndpointError> {
+        match self.endpoint(text) {
+            Err(EndpointError::OtherOrigin) => {}
+            taken => return taken,
+        }
+        let url = Url::parse(text).map_err(|_unparsable| EndpointError::NotAUrl)?;
+        // NOTE: RFC 8705 §5 places an alias on any host; no specification governs
+        // which: our own design, an alias goes only to a host the client named.
+        if !hosts.iter().any(|host| host.origin == url.origin()) {
             return Err(EndpointError::OtherOrigin);
         }
         if !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() {
@@ -347,6 +440,98 @@ mod tests {
             );
         }
         assert_eq!(Err(EndpointError::NotAUrl), issuer().endpoint("token"));
+    }
+
+    fn hosts(names: &[&str]) -> Vec<AliasHost> {
+        names
+            .iter()
+            .map(|name| AliasHost::parse(name).expect("alias host"))
+            .collect()
+    }
+
+    #[test]
+    fn an_alias_host_is_a_canonical_host_with_an_optional_port() {
+        for text in ["mtls.example.com", "mtls.example.com:8443", "192.0.2.10"] {
+            assert_eq!(
+                Ok(text),
+                AliasHost::parse(text).as_ref().map(AliasHost::as_str)
+            );
+        }
+        for text in [
+            "",
+            "https://mtls.example.com",
+            "mtls.example.com/",
+            "mtls.example.com/token",
+            "user@mtls.example.com",
+            "mtls.example.com?q=1",
+            "mtls.example.com#f",
+            "MTLS.example.com",
+            "mtls.example.com:443",
+            "mtls example.com",
+        ] {
+            assert_eq!(Err(InvalidAliasHost), AliasHost::parse(text), "{text}");
+        }
+    }
+
+    #[test]
+    fn an_alias_on_a_named_host_is_taken() {
+        let named = hosts(&["mtls.example.com", "mtls2.example.com:8443"]);
+        for alias in [
+            "https://mtls.example.com/token",
+            "https://mtls2.example.com:8443/oauth2/token",
+        ] {
+            let url = issuer().mtls_alias(alias, &named).expect("taken");
+            assert_eq!(alias, url.as_str());
+        }
+    }
+
+    #[test]
+    fn an_alias_on_the_issuers_origin_is_taken_without_a_named_host() {
+        let alias = format!("{ISSUER}/mtls/token");
+        let url = issuer().mtls_alias(&alias, &[]).expect("taken");
+        assert_eq!(alias, url.as_str());
+    }
+
+    #[test]
+    fn an_alias_on_an_unnamed_host_is_refused() {
+        let named = hosts(&["mtls.example.com"]);
+        for alias in [
+            "https://elsewhere.example.org/token",
+            "http://mtls.example.com/token",
+            "https://mtls.example.com:8443/token",
+            "https://sub.mtls.example.com/token",
+            "https://mtls.example.com.evil.example/token",
+        ] {
+            assert_eq!(
+                Err(EndpointError::OtherOrigin),
+                issuer().mtls_alias(alias, &named),
+                "{alias}"
+            );
+        }
+        assert_eq!(
+            Err(EndpointError::OtherOrigin),
+            issuer().mtls_alias("https://mtls.example.com/token", &[]),
+            "no host named"
+        );
+    }
+
+    #[test]
+    fn an_alias_on_a_named_host_with_userinfo_or_a_fragment_is_refused() {
+        let named = hosts(&["mtls.example.com"]);
+        for alias in [
+            "https://user@mtls.example.com/token",
+            "https://mtls.example.com/token#f",
+        ] {
+            assert_eq!(
+                Err(EndpointError::Insecure),
+                issuer().mtls_alias(alias, &named),
+                "{alias}"
+            );
+        }
+        assert_eq!(
+            Err(EndpointError::NotAUrl),
+            issuer().mtls_alias("token", &named)
+        );
     }
 
     #[test]

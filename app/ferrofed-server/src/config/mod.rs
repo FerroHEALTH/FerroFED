@@ -532,6 +532,11 @@ pub struct Credentials {
     /// A PEM bundle of trust roots, beside the platform's, the node and its
     /// authorization server are trusted by; a node's section alone takes it.
     pub trust_roots_file: Option<PathBuf>,
+    /// The hosts, each a host name with an optional port, beside the
+    /// issuer's origin, on which the `fapi2` grant takes a `token_endpoint`
+    /// of `mtls_endpoint_aliases` (RFC 8705 §5), always over `https`; only a
+    /// `fapi2` grant that uses mutual TLS takes it.
+    pub mtls_alias_hosts: Vec<String>,
 }
 
 impl Credentials {

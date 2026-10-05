@@ -23,6 +23,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- A mutual-TLS token endpoint alias on a host you name (#560; RFC 8705 §5).
+  A node's `[credentials."<id>"]` section takes `mtls_alias_hosts`, each a
+  host name with an optional port, and a `fapi2` grant that uses mutual TLS
+  then takes a `token_endpoint` of `mtls_endpoint_aliases` on one of those
+  hosts, over `https` alone, as well as on the issuer's origin. An alias on
+  any other host is still refused before a token request is sent. An entry
+  that is no host, or the key in a section with no `fapi2` grant over mutual
+  TLS, refuses the configuration, naming the key. `oauth-server-metadata`
+  0.0.2 adds `AliasHost` and `Issuer::mtls_alias`.
 - Mutual TLS toward a node and its authorization server, with RFC 8705
   client authentication and certificate-bound tokens (#492; §13.1, §13.4,
   N25, CP-17; FAPI 2.0 Security Profile §5.3.2.1). A node's
