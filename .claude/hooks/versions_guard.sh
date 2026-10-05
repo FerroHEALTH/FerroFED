@@ -22,10 +22,22 @@ fi
 
 [[ -n "${file_path:-}" ]] || exit 0
 
-# The checkout that holds the file, so an edit inside a git worktree is judged
-# by that worktree's guard against its own tree; CLAUDE_PROJECT_DIR names the
-# main checkout even then. A file outside any checkout is not a pin.
+# The checkout that holds the file is judged, so an edit inside a git worktree
+# is checked against that worktree's tree; CLAUDE_PROJECT_DIR names the main
+# checkout even then. That tree is data only: it is accepted when it is a
+# worktree of this same repository (the same common git directory), and it is
+# always judged by the versions script of CLAUDE_PROJECT_DIR, never by a script
+# in it. A file outside this repository's checkouts is not a pin.
+trusted="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+common_dir() {
+  local dir
+  dir="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  realpath "$dir"
+}
+trusted_common="$(common_dir "$trusted")" || exit 0
 repo_root="$(git -C "$(dirname "$file_path")" rev-parse --show-toplevel 2>/dev/null)" || exit 0
+tree_common="$(common_dir "$repo_root")" || exit 0
+[[ "$tree_common" == "$trusted_common" ]] || exit 0
 rel="${file_path#"$repo_root"/}"
 base="$(basename "$file_path")"
 
@@ -44,9 +56,10 @@ scripts/vendor/*.sh) watched=1 ;;
 esac
 
 [[ "$watched" -eq 1 ]] || exit 0
-[[ -x "$repo_root/scripts/checks/versions.sh" ]] || exit 0
+guard="$trusted/scripts/checks/versions.sh"
+[[ -f "$guard" ]] || exit 0
 
-findings="$("$repo_root/scripts/checks/versions.sh" 2>&1)" || {
+findings="$(bash "$guard" --root "$repo_root" 2>&1)" || {
   printf '%s\n' "$findings" >&2
   exit 2
 }

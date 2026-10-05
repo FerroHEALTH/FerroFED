@@ -46,9 +46,23 @@ esac
 [[ -f "$file_path" ]] || exit 0
 
 # The checkout that holds the file, so an edit inside a git worktree is
-# checked by that worktree's own guard, against that worktree's root.
+# checked against that worktree's root. It is data only: accepted when it is a
+# worktree of this same repository (the same common git directory), and
+# always checked by the guard of repo_root, never by a script in it.
+common_dir() {
+  local dir
+  dir="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  realpath "$dir"
+}
 file_root="$(git -C "$(dirname "$file_path")" rev-parse --show-toplevel 2>/dev/null)" ||
-  file_root="$repo_root"
+  file_root=""
+if [[ -n "$file_root" ]]; then
+  trusted_common="$(common_dir "$repo_root")" || trusted_common=""
+  tree_common="$(common_dir "$file_root")" || tree_common=""
+  if [[ -z "$trusted_common" || "$tree_common" != "$trusted_common" ]]; then
+    file_root=""
+  fi
+fi
 
 case "$file_path" in
 *.rs)
@@ -69,9 +83,10 @@ esac
 
 # The comment-style guard reads the file when it is one of the kinds CI
 # checks and passes any other. Exit 2 feeds its findings back as a correction.
-guard="$file_root/scripts/checks/comment-style.sh"
-if [[ -x "$guard" ]]; then
-  findings="$("$guard" --files "$file_path" 2>&1)" || {
+# A file outside this repository's checkouts is not checked.
+guard="$repo_root/scripts/checks/comment-style.sh"
+if [[ -n "$file_root" && -f "$guard" ]]; then
+  findings="$(bash "$guard" --root "$file_root" --files "$file_path" 2>&1)" || {
     printf '%s\n' "$findings" >&2
     exit 2
   }
