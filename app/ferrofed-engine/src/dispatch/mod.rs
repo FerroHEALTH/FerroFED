@@ -341,18 +341,16 @@ impl Contact {
             EhrCallError::Withheld { .. }
             | EhrCallError::Expired { .. }
             | EhrCallError::Conveyance { .. } => Self::Unsent,
-            EhrCallError::Failed { source, sent, .. } => match Self::of_client_error(source) {
-                Self::Unsent if *sent => Self::Silent,
-                contact => contact,
-            },
+            EhrCallError::Failed { source, .. } => Self::of_client_error(source),
         }
     }
 
     /// Returns what a call that ended in `error` showed of the node: the
     /// status of an answer, [`Contact::Silent`] for a request that left with
     /// no answer, and [`Contact::Unsent`] for a failure on the gateway's
-    /// side. A deadline or a missing proof whose `sent` names an earlier send
-    /// of the call is read by its caller as that request's.
+    /// side. A deadline that passed, or a proof that could not be made, after
+    /// an earlier send of the call left, as the error's `sent` says, is
+    /// [`Contact::Silent`]: that request left and got no answer.
     #[must_use]
     pub fn of_client_error(error: &ClientError) -> Self {
         match error {
@@ -361,7 +359,9 @@ impl Contact {
             ClientError::ServiceFailure { status, .. }
             | ClientError::UndocumentedStatus { status, .. }
             | ClientError::Body { status, .. } => Self::Answered(*status),
-            ClientError::Transport { .. } => Self::Silent,
+            ClientError::Transport { .. }
+            | ClientError::DeadlineElapsed { sent: true, .. }
+            | ClientError::DpopProof { sent: true, .. } => Self::Silent,
             ClientError::BaseUrl { .. }
             | ClientError::DeadlineElapsed { .. }
             | ClientError::Credentials { .. }
