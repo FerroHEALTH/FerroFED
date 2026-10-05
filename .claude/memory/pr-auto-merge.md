@@ -1,6 +1,6 @@
 ---
 name: pr-auto-merge
-description: "Every pull request gets auto-merge armed the moment it is opened (gh pr merge <n> --auto --squash --delete-branch); clean up local branches after each merge and branch from origin/HEAD; family rule carried from FerroBRIDGE (2026-09-04, 2026-09-13)"
+description: "Every pull request gets auto-merge armed the moment it is opened (gh pr merge <n> --auto, which adds it to the merge queue); clean up local branches after each merge and branch from origin/HEAD; family rule carried from FerroBRIDGE (2026-09-04, 2026-09-13)"
 metadata:
   type: feedback
 ---
@@ -11,8 +11,12 @@ metadata:
 After opening a pull request, arm auto-merge at once:
 
 ```sh
-gh pr create ... && gh pr merge <n> --auto --squash --delete-branch
+gh pr create ... && gh pr merge <n> --auto
 ```
+
+`main` merges through GitHub's merge queue (2026-10-05), which sets the
+merge method itself and refuses `--squash` and `--delete-branch`. The
+repository deletes a merged head branch on its own.
 
 Never leave a pull request waiting for a manual merge.
 
@@ -24,9 +28,8 @@ trigger auto merge okay!! so when the CI is green it will be merged". The
 
 - Until `ci.yml` reports a `conclusion` check on `main`, an armed auto-merge
   waits. Say so in the hand-off; never use `--admin` without the owner asking.
-- In a worktree, `gh pr merge --auto --squash --delete-branch` can end with
-  `fatal: 'main' is already used by worktree`; the merge already succeeded.
-  Confirm with `gh pr view --json state,mergedAt`.
+- A merge-queue entry waits for its own checks; confirm with
+  `gh pr view --json state,mergedAt` after the queue reports.
 - After every merge: `git fetch --prune`, delete each local branch whose
   upstream is `[gone]` and every `worktree-agent-*` branch, keep only `main`
   and branches with an open pull request (owner, FerroBRIDGE 2026-09-13:
