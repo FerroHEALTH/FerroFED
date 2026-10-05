@@ -13,7 +13,16 @@ version = 2
 # Fail on any RustSec advisory. Add exceptions explicitly, dated, and each
 # naming the event that deletes it.
 yanked = "deny"
-ignore = []
+ignore = [
+  # 2026-10-05: both are compile-time proc-macro crates under the Leptos 0.8
+  # family the operator console builds on (#275), with no runtime code in
+  # either binary, and 0.8.21 is the newest Leptos. Deleted by the first
+  # Leptos release that drops each.
+  # https://rustsec.org/advisories/RUSTSEC-2024-0436
+  { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained; a compile-time proc-macro under the Leptos 0.8 family of the operator console, with no runtime surface" },
+  # https://rustsec.org/advisories/RUSTSEC-2026-0173
+  { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is unmaintained; a compile-time proc-macro under leptos_macro of the operator console, with no runtime surface" },
+]
 
 [licenses]
 version = 2
@@ -64,6 +73,13 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ferrofed-engine" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-server" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-testkit" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-viewer" },
+  # The operator console's Leptos stack (#275): two permissive licences, each
+  # allowed for its one crate. xxhash-rust under server_fn is under the Boost
+  # Software License 1.0 (OSI-listed); base16 under wasm_split_macros is
+  # dedicated to the public domain under CC0-1.0.
+  { allow = ["BSL-1.0"], crate = "xxhash-rust" },
+  { allow = ["CC0-1.0"], crate = "base16" },
   # The AQL front end the federated query parses and prints with (#38).
   { allow = ["BUSL-1.1"], crate = "openehr-query" },
   # The SMART on openEHR scope grammar the onward grant requests with (#81)

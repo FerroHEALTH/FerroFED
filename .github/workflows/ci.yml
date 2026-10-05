@@ -145,7 +145,8 @@ jobs:
           } | { grep -zc . >/dev/null && xargs -0 -r shellcheck --severity=style; } \
             || echo "no shell files to check"
 
-  # hadolint over every tracked Dockerfile (docker/Dockerfile today), under the
+  # hadolint over every tracked Dockerfile (docker/Dockerfile and
+  # docker/viewer/Dockerfile today), under the
   # committed .hadolint.yaml (failure-threshold: warning).
   dockerfile-lint:
     name: hadolint
@@ -795,6 +796,40 @@ jobs:
           --package ferrofed-server
           -- -D warnings
 
+  # The operator console, app/ferrofed-viewer (#275; no specification governs
+  # it: our own design). The workspace lanes build, lint and test its server
+  # half on the host; this job lints its browser half on the target it ships
+  # to, so a dependency that cannot compile for wasm32 fails here, and builds
+  # the release site bundle the release lane packs into the viewer image. The
+  # console has no Cargo feature, so the cargo-hack feature run has nothing to
+  # add for it.
+  viewer:
+    name: viewer (wasm32 and site bundle)
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+          target: wasm32-unknown-unknown
+      - run: cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings
+      - name: Install cargo-leptos
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        with:
+          tool: cargo-leptos@0.3.11
+      - name: Install the wasm-bindgen CLI
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        with:
+          tool: wasm-bindgen@0.2.129
+      - run: bash scripts/release/viewer-site.sh --release
+
   # The library crates stay publishable while the workspace `publish` switch is
   # off (the Cargo reference, the `publish` field; no specification governs the
   # policy: our own design): `cargo package` builds
@@ -906,6 +941,7 @@ jobs:
       - cargo-deny
       - msrv
       - features
+      - viewer
       - publish-dry-run
       - crate-version-guard
       - dependency-review

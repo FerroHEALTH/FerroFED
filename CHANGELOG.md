@@ -55,6 +55,28 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `http` token endpoint or node, and TLS material in a service's own
   `credentials` section refuse the configuration. RFC 8705 is vendored
   under `docs/specs/ietf-oauth/`.
+- The operator console's skeleton, `app/ferrofed-viewer` (#275): a Leptos app
+  rendered on the server and hydrated in the browser, with a
+  backend-for-frontend, as its own binary, `ferrofed-viewer`, and its own
+  image, `ghcr.io/ferrohealth/ferrofed-viewer`. It reaches the gateway over
+  HTTP alone, as any client does, and holds no clinical data. Built so far: a
+  landing page, `GET /health` and the `healthcheck` command, operator sign-in
+  at an OpenID Provider with the authorization code grant, a `nonce` and
+  PKCE, its `state`, `nonce` and verifier held on the server behind an
+  opaque `HttpOnly` cookie in a bounded, short-lived pool of pending
+  sign-ins that a flood of login starts cannot grow and that never touches
+  the separate, bounded pool of signed-in sessions with their idle and
+  absolute timeouts, configuration refusals that name a key and a line and
+  never a value, and a typed client of the gateway's `OPTIONS {base}/`
+  and ITS-REST surface called with the operator's own token. Every answer
+  carries a per-response script nonce in its Content-Security-Policy. The
+  console reads a TOML file with `FERROFED_VIEWER__` overrides and a
+  `client_secret_file`. The code exchange, the operator views (#276) and the
+  query console (#277) are planned. The release lane builds, attests and
+  pushes the image with the same SLSA provenance and SBOM attestations as
+  the gateway image, CI lints the browser half for `wasm32` and builds the
+  site bundle, and the book's "The operator console (planned screens)" page
+  says what is built and what is planned.
 - The NVI localizer authenticates with the Nuts grant (#539; Annex B §B.1,
   §B.4; the IG's Localization page, GF-Authentication, GFI-004 and
   GFI-005). `[nl_gf.nvi.credentials.nuts]` takes the table a node's onward

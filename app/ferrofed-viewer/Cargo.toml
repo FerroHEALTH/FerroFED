@@ -1,0 +1,97 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+[package]
+name = "ferrofed-viewer"
+description = "The FerroFED operator console: a Leptos server-rendered web app and backend-for-frontend over the gateway's public surface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+# The application is never published, whatever the workspace switch says.
+publish = false
+
+# One crate, two halves (the Leptos book, server-side rendering): the rlib
+# feeds the server binary and the cdylib is the WebAssembly bundle the
+# browser hydrates with. cargo-leptos builds the cdylib for wasm32 and the
+# binary for the host.
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "ferrofed-viewer"
+path = "src/main.rs"
+
+# Both halves on every target. The server half and the browser half are
+# chosen by target rather than by Cargo feature, so `--all-features` over the
+# workspace can never turn both on at once; a target dependency's features
+# apply only to a build for that target (the Cargo reference, resolver
+# version 2 and later). No specification governs this: our own design.
+[dependencies]
+leptos.workspace = true
+leptos_meta.workspace = true
+leptos_router.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+leptos = { workspace = true, features = ["hydrate"] }
+wasm-bindgen.workspace = true
+console_error_panic_hook.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The per-request script nonce of the Content-Security-Policy rides `nonce`.
+leptos = { workspace = true, features = ["ssr", "nonce"] }
+leptos_axum.workspace = true
+leptos_meta = { workspace = true, features = ["ssr"] }
+leptos_router = { workspace = true, features = ["ssr"] }
+# The random session ids, PKCE verifiers and states, and the SHA-256 of the
+# PKCE challenge (RFC 7636 §4.2), from the crypto library rustls already
+# builds on.
+aws-lc-rs.workspace = true
+axum.workspace = true
+base64.workspace = true
+clap.workspace = true
+cookie.workspace = true
+# The type every credential the console is configured with is held in, which
+# never renders its value.
+ferrofed-registry.workspace = true
+http.workspace = true
+# The gateway's self-description, `OPTIONS {base}/` (§7a.2).
+openehr-federation.workspace = true
+# The ITS-REST client the gateway is called through.
+openehr-its = { workspace = true, features = ["rest-client"] }
+# The healthcheck job asks the viewer beside it, over the client openehr-its
+# already brings in.
+reqwest.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "time"] }
+toml.workspace = true
+tower-http = { workspace = true, features = ["set-header"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
+tower.workspace = true
+wiremock.workspace = true
+
+[lints]
+workspace = true
+
+# cargo-leptos: the site bundle (the WebAssembly, its JavaScript glue and the
+# stylesheet) under target/site, the server binary beside it.
+[package.metadata.leptos]
+output-name = "ferrofed-viewer"
+site-root = "target/site"
+site-pkg-dir = "pkg"
+style-file = "style/main.css"
+site-addr = "127.0.0.1:3000"
+reload-port = 3001
+lib-profile-release = "wasm-release"
