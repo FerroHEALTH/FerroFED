@@ -235,7 +235,7 @@ pipeline stage produced it. Spec-defined things keep the specification's names
 verbatim (`ENDPOINT`, `ORGANISATION`, `ehr_id`, `system_id`,
 `creating_system_id`, the result-set keys the schemas define), camelCase
 becoming Rust snake_case for fields. When two views of one thing would
-collide, the module path disambiguates (`ihe::` versus `nl_gf::`),
+collide, the module path disambiguates (`ihe::` versus `nl::`),
 never a prefix. Modules are named for their contents, verbs only for a stage
 that is genuinely a transformation (`lower`, `render`, `emit`).
 

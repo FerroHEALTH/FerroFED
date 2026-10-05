@@ -1,6 +1,6 @@
 ---
 name: postgresql-18
-description: "Every PostgreSQL FerroFED itself tests against or documents is the latest release (18.6 on 2026-09-12), never 16; family ruling carried from FerroBRIDGE; it applies to FerroFED's own optional stored-query backend, and the harness nodes run FerroEHR's own database image (on 18.6), owner 2026-10-01 and 2026-10-02"
+description: "Every PostgreSQL FerroFED itself tests against or documents is the latest release (18.6 on 2026-09-12), never 16; family ruling carried from FerroBRIDGE; it applies to FerroFED's own optional stored-query backend, and the harness nodes run FerroEHR's own database image (on 18.6), with EHRbase's documented 16.2 image for the node profile (#549), owner 2026-10-01 and 2026-10-02"
 metadata:
   type: project
 ---
@@ -23,8 +23,10 @@ reference implementation's all-PostgreSQL registry is evidence, never a
 decision.
 
 **A member node runs its product's documented database image,** because the
-node's database is part of the product under test. Both harness nodes are
-FerroEHR (owner ruling 2026-10-02, decision A44, [[two-ferroehr-nodes]]), and
-FerroEHR's `ghcr.io/rubentalstra/ferroehr-postgres` image is built on
-`postgres:18.6`, so no node runs an older PostgreSQL. The PostgreSQL 16.2
-exception for EHRbase's database (decision A40) left with EHRbase.
+node's database is part of the product under test. Both federation nodes of
+the harness are FerroEHR (owner ruling 2026-10-02, decision A44,
+[[two-ferroehr-nodes]]), and FerroEHR's `ghcr.io/ferrohealth/ferroehr-postgres`
+image (published there since FerroEHR 4.3.3) is built on `postgres:18.6`. The
+one older PostgreSQL is EHRbase's own `ehrbase/ehrbase-v2-postgres:16.2`,
+which the node profile's second CDR product runs on because it is the image
+EHRbase documents beside its release (#549); `docs/VERSIONS.md` pins both.

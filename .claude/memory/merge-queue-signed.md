@@ -1,6 +1,6 @@
 ---
 name: merge-queue-signed
-description: "When main requires signed commits and an up-to-date branch, pull requests merge one at a time after a LOCAL signed rebase; gh pr update-branch --rebase strips the signature; carried from FerroBRIDGE (2026-09-13)"
+description: "When main requires signed commits and an up-to-date branch, pull requests merge one at a time after a LOCAL signed rebase; gh pr update-branch --rebase strips the signature; carried from FerroBRIDGE (2026-09-13); FerroFED merges through the merge queue since 2026-10-05, so a branch is rebased only on a conflict"
 metadata:
   type: feedback
 ---
@@ -25,3 +25,11 @@ locally onto `origin/HEAD` (signed by `commit.gpgsign`), push with
 next. Dependabot branches get `@dependabot rebase`. Never
 `gh pr update-branch --rebase`, never `--admin` unasked. Opening a new pull
 request while the queue drains makes every queued branch stale again.
+
+**FerroFED since 2026-10-05:** `main` merges through GitHub's merge queue,
+and its ruleset no longer requires an up-to-date branch (read on
+2026-10-05). Arming auto-merge adds a pull request to the queue, which tests
+it on top of the ones ahead of it, so the serial drain above is no longer
+needed and a branch is rebased locally only when it conflicts. Signatures
+are still required, so that rebase is still local and signed, and
+`gh pr update-branch --rebase` is still never used.

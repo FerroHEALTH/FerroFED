@@ -1,6 +1,6 @@
 ---
 name: oldest-pr-merges-first
-description: "The oldest open PR merges first; a newer PR opens without auto-merge until the older ones land, so long-standing PRs stop falling behind under the strict up-to-date rule; owner 2026-10-03"
+description: "The oldest open PR merges first; a newer PR opens without auto-merge until the older ones land, so long-standing PRs stop falling behind under the strict up-to-date rule; owner 2026-10-03; since 2026-10-05 main merges through the merge queue with that rule off"
 metadata:
   type: feedback
 ---
@@ -8,8 +8,8 @@ metadata:
 <!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-`main` requires a branch to be up to date before it merges, and CI takes about
-20 minutes. On 2026-10-03 newer PRs kept turning green first and merging, so
+On 2026-10-03 `main` required a branch to be up to date before it merged, and
+CI took about 20 minutes. That day newer PRs kept turning green first and merging, so
 #306, #296 and #316 fell behind again and again and needed a rebase each time.
 #316 grew to 41 files with conflicts. The owner: "we should put some big
 pressure on the long standing PR's because the rebasing is horrendous right
@@ -30,3 +30,9 @@ merges and pushes every other PR behind, so the oldest ones never land.
   quick, or land it first: it conflicts with everything.
 - Admin merge (`gh pr merge --admin`) is the owner's call. The session's
   permission settings deny it to the agent ([[pr-auto-merge]]).
+
+**Since 2026-10-05** `main` merges through GitHub's merge queue, and its
+ruleset no longer requires an up-to-date branch (the strict status-check
+policy is off, read on 2026-10-05): the queue tests each pull request on top
+of the ones ahead of it, so a PR falls behind only when it conflicts. The
+rule above was given for the strict policy ([[merge-queue-signed]]).

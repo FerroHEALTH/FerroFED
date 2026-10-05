@@ -31,23 +31,51 @@ with follow-up routing (§7a, §12, §12a), and targeting with the
 self-description (§8, §7a.2). v0.0.8 carries security and the bindings (§13
 to §15, Annex A, Annex B): every caller is authenticated at the gateway
 (#80); each node is reached with its own
-credential, an OAuth 2.0 token for an ES384 client assertion with token
-exchange and DPoP (#81, #439), the Nuts grant (#88) or the FAPI 2.0 grant
-(#497), and is told the caller in a token the gateway signs (#82); consent
-stays with the node, with the optional Step-1 pre-filter (#83) and Mitz
-(#475); undirected patient queries are localized by XCPD (#85), PIXm or the
-NVI (#87), with PDQm ahead of resolution (#487) and PMIR identity changes
+credential, an OAuth 2.0 token for a client assertion the gateway signs, with
+token exchange and DPoP (#81, #439), the Nuts grant (#88) or the FAPI 2.0
+grant (#497), and is told the caller in a token the gateway signs (#82);
+consent stays with the node, with the optional Step-1 pre-filter (#83) and
+Mitz (#475); undirected patient queries are localized by XCPD (#85), PIXm or
+the NVI (#87), with PDQm ahead of resolution (#487) and PMIR identity changes
 dropping stale bindings (#147); the registry can be read from an mCSD
 directory (#86) with LRZa addressing; every IHE transaction is audited over
 ATNA ITI-20, the BALP records with a bounded spool (#418, #486, #512);
 traces export over OpenTelemetry (#353); and the identity clients share one
-TLS type with mutual TLS (#507). v0.0.9, being built, is the conformance
-program (#89), with the re-pin to the specification's 1.0 release (#17, #354),
-the country research (#488) and the national binding refactor (#489).
-v0.0.10 is EHDS readiness (#519): FerroFED is an EHR system under Regulation (EU)
-2025/327, and its harmonised components are due before the dates the
-Regulation applies. Each crate gets the rest of its behaviour from its own
-issue, in milestone order.
+TLS type with mutual TLS (#507).
+
+v0.0.9, being built, carries the conformance program (#89): the Connectathon
+tracks 1 to 9 as scenarios with a per-track and per-point report (#92), the
+leakage and integrity suites of tracks 10 and 11 (#90, #91), the node
+profile run against FerroEHR 4.3.3 and EHRbase 2.36.0 pinned by digest (#93,
+#549), a differential run against the reference implementation (#94), and
+`ferrofed conformance run`, which scores a configured deployment, runs the
+node profile with `--node-profile` and reads the seed data each release
+attaches (#546, #573); the conformance statement is #95. It also carries the
+regional binding refactor: one `Binding` trait with the `binding-ihe` and
+`binding-nl` features of the server, `ihe` and `nl` of the identity crate and
+`nl` of the engine, and RFC 8414 in its own crate, `oauth-server-metadata`
+(#489, #551); the identity crate laid out as `role/`, `ihe/` and `nl/`, and
+the engine's onward grants under `onward::grant` beside `single_node`
+(#587, #588); mutual TLS to a node with RFC 8705 client authentication and
+certificate-bound tokens (#492, #560); DPoP proofs read from `openehr-its`
+at 0.0.84 (#574); the FAPI 2.0 client key rotated with an overlap (#514); an
+ES256 `[signing]` key beside ES384 (#513); the Nuts grant toward the NVI
+(#539) and the gateway's did:web DID document (#503); the consent
+non-disclosure setting `[federation.consent] disclose` (#493) and a
+pre-filter that says it did not ask, with a closed `NotAsked` reason (#496,
+#568); PIXm asked by POST (#494); the verified caller as the user agent of
+each IHE audit record (#500); the operator console, `app/ferrofed-viewer`,
+with its own image (#275) and the operator views (#276), with the operator
+surface, sign-out, the bundle serving and the query console in flight (#583,
+#584, #600, #277); the country research (#488); FerroFED's intended
+purpose and EHDS classification (#520); changelog fragments (#598); and
+Cadasto B.V. as the Licensor (#602). The re-pin to the specification's 1.0
+release moved to v0.0.10 (#17, #354).
+v0.0.10 is EHDS readiness (#519): FerroFED is an EHR system under Regulation
+(EU) 2025/327, and its harmonised components are due before the dates the
+Regulation applies. v0.0.11 plans configuration from the file and from the
+console as one set of versioned revisions (#575). Each crate gets the rest of
+its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the
@@ -125,11 +153,27 @@ Today:
   `docs/VERSIONS.md`: the Federation Tier specification source (CC0) and the
   reference implementation (Apache-2.0), the second as evidence, never an
   oracle and never a source of code.
-- `scripts/checks/`: the committed guards, starting with
-  `contribution-licence.sh` (the pull-request licence checkbox).
+- `docs/architecture.md` (the design of record), `docs/VERSIONS.md` (the pin
+  matrix), `docs/ci-cd.md` and `docs/release.md` (the cut checklist).
+- `conformance/`: the §17 matrix (`matrix.tsv`), the §16.3 tracks
+  (`tracks.tsv`), the requirements and obligations tables, the golden AQL
+  pass list and the rendered badges.
+- `changelog.d/`: one changelog fragment per change, assembled into
+  `CHANGELOG.md` at the cut by `scripts/release/changelog.sh --assemble`.
+- `scripts/checks/`: the committed guards CI tier 1 runs (comment style, file
+  length, versions, copyright holder, conformance matrix, obligations, e2e
+  placement, the contribution licence and the rest), each runnable by hand.
+- `scripts/conformance/`: the matrix, obligations and per-run report
+  (`report.sh`) scripts.
+- `scripts/release/`: the changelog assembly, the crates.io lane, the
+  release staging, the seed data and the console site bundle.
 - `scripts/gh/`: the tracker helpers (`rel.sh`, `project.sh`, `fields.sh`,
   `labels.sh`, `migrate-fields.sh`).
 - `scripts/vendor/`: the fetch scripts for every vendored corpus.
+- `website/`: the mdBook (`book/`) and the landing page (`landing/`);
+  `deploy/`: the release compose file and the example Kubernetes manifests;
+  `docker/`: the gateway and console Dockerfiles, the quickstart
+  configuration of the root `compose.yaml` and the node database init script.
 - `assets/brand/`: the mark and the "Azure & Iron" tokens.
 - `.github/`: issue and pull-request templates, CODEOWNERS, Dependabot, and
   the workflows. `ci.yml` runs the tier-1 guards and the Rust tier, and its
@@ -148,10 +192,15 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `openehr-federation` (the Federation Tier: the wire additions always on, the
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
   `merge`), `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`,
-  `xcpd`, and the ATNA audit as `atna` and `balp`) and `nl-generic-functions`
-  (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, and the shared
-  `oauth-metadata`). The binding crates depend on nothing in FerroFED, so
-  FerroPIX can use them as they are.
+  `xcpd`, and the ATNA audit as `atna` and `balp`), `nl-generic-functions`
+  (the Annex B functions: `nvi`, `mitz`, `lrza`, `nuts-auth`, and the BSN
+  naming systems in `identification`) and `oauth-server-metadata` (RFC 8414,
+  the issuer and the checks a client holds authorization server metadata to,
+  with no feature; #551). A library may depend on another library
+  (`nuts-auth` on `oauth-server-metadata`), and `cargo package` resolves it
+  through a `patch.crates-io` per depended-on member while the switch is off
+  (`.claude/rules/crates-publishing.md`). The library crates depend on
+  nothing in FerroFED, so FerroPIX can use them as they are.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-identity` (laid out by role and binding: `role/` holds
@@ -170,7 +219,11 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   request to a node passes, #45).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):
-  `serve` and `config check`, the TOML and `FERROFED__` environment
+  `serve`, `config check`, `admission check`, `healthcheck` and `conformance run`
+  (`conformance`, #546: the Connectathon tracks scored against a configured
+  deployment, with `--node-profile` for the members), the regional bindings
+  behind one `Binding` trait, each a module under `binding/` and a default
+  feature (`binding-ihe`, `binding-nl`; #489), the TOML and `FERROFED__` environment
   configuration with `_file` secrets and per-endpoint outbound credentials,
   the console, the request log that carries no body, query text, header value
   or unmatched path, the health family over an indicator registry, the
@@ -201,10 +254,18 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
   reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
   and the harness of `docs/architecture.md` §13 (#39): FerroEHR nodes pinned
-  by digest behind the `FERROFED_E2E` gate (`containers`, #155), the
-  capturing and fault proxy in front of each node (`proxy`), and the synthetic
-  seed builder that writes over ITS-REST alone inside the `urn:oid:2.999`
-  example arc (`seed`) (`.claude/memory/e2e-gate.md`), and the harness
+  by digest behind the `FERROFED_E2E` gate (`containers`, #155), with EHRbase
+  as the node profile's second CDR product (`containers::ehrbase`, #549); the
+  capturing and fault proxy in front of each node (`proxy`, with
+  `Fault::Reply` for an ITS-REST `Error` answer and
+  `CapturingProxy::start_reachable` for a proxy a container dials); the
+  synthetic seed builder that writes over ITS-REST alone inside the
+  `urn:oid:2.999` example arc (`seed`); where the node profile findings of
+  each product are written (`node_profile`, #93); and the reference
+  implementation built from its vendored source, digest-pinned, as the second
+  gateway of the differential run (`reference`, #94)
+  (`.claude/memory/e2e-gate.md`). The Connectathon scenarios themselves sit in
+  `app/ferrofed-server/tests/it/e2e/` (#545). It also carries the harness
   services every binding is tested against: the PIX Manager, PDQm Supplier,
   XCPD responding gateway, mCSD directory, PMIR Registry, Audit Record
   Repositories, NVI, Mitz, Nuts node and the OAuth 2.0 and FAPI 2.0

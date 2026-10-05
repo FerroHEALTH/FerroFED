@@ -26,8 +26,9 @@ model, nothing redone. FerroEHR publishes the family as one lockstep line at the
   hygiene gate (§5.4, N33).
 - `openehr-sdt`: the SMART on openEHR scope grammar (`smart_scopes`) for the
   §13 authentication and authorization handoff; the simplified formats and
-  their validation if FerroFED ever needs them. It is not a dependency until
-  client authentication (#80) first uses it.
+  their validation if FerroFED ever needs them. It joined the workspace with
+  onward OAuth 2.0 (#81), and client authentication (#80) reads each
+  caller's scopes with it.
 - `openehr-base` and `openehr-rm`: the typed identifiers (`HIER_OBJECT_ID`,
   `OBJECT_VERSION_ID`, the `ehr_id`, `system_id` and `creating_system_id`
   forms) behind §12 and §12a follow-up routing, and every RM fact

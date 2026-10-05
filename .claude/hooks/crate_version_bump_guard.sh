@@ -16,26 +16,63 @@
 # checked, and HEAD for a `git push`, where the commits already exist. Exit 2
 # blocks the tool call and returns the guard's findings; every other path is a
 # quiet exit 0.
+#
+# The tree judged is the one the command runs in, never CLAUDE_PROJECT_DIR,
+# which names the main checkout even when the command commits in a git
+# worktree: the `git -C <dir>` of the command, else a leading `cd <dir>`,
+# else the payload's `cwd`, each taken to its `git rev-parse --show-toplevel`.
 
 set -uo pipefail
 
 payload="$(cat)" || true
 
+cwd=""
 if command -v jq > /dev/null 2>&1; then
   command_text="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null)" || true
+  cwd="$(printf '%s' "$payload" | jq -r '.cwd // empty' 2>/dev/null)" || true
 else
   command_text="$payload"
 fi
 
 [[ -n "${command_text:-}" ]] || exit 0
 
-case "$command_text" in
-*"git commit"*) head=WORKTREE ;;
-*"git push"*) head=HEAD ;;
-*) exit 0 ;;
-esac
+[[ -n "$cwd" ]] || cwd="$PWD"
 
-repo_root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+dir_word="(\"[^\"]+\"|'[^']+'|[^[:space:];&|]+)"
+git_word="git([[:space:]]+-C[[:space:]]+$dir_word)?[[:space:]]+"
+if [[ "$command_text" =~ ${git_word}commit ]]; then
+  head=WORKTREE
+elif [[ "$command_text" =~ ${git_word}push ]]; then
+  head=HEAD
+else
+  exit 0
+fi
+
+# A directory word of the command, its quotes removed.
+unquote() {
+  local word="$1"
+  word="${word#\"}"
+  word="${word%\"}"
+  word="${word#\'}"
+  word="${word%\'}"
+  printf '%s' "$word"
+}
+
+target="$cwd"
+if [[ "$command_text" =~ ^[[:space:]]*cd[[:space:]]+$dir_word ]]; then
+  target="$(unquote "${BASH_REMATCH[1]}")"
+  [[ "$target" == /* ]] || target="$cwd/$target"
+fi
+if [[ "$command_text" =~ git[[:space:]]+-C[[:space:]]+$dir_word ]]; then
+  git_dir="$(unquote "${BASH_REMATCH[1]}")"
+  if [[ "$git_dir" == /* ]]; then
+    target="$git_dir"
+  else
+    target="$target/$git_dir"
+  fi
+fi
+
+repo_root="$(git -C "$target" rev-parse --show-toplevel 2>/dev/null)" || exit 0
 guard="$repo_root/scripts/checks/crate-version-guard.sh"
 [[ -x "$guard" ]] || exit 0
 [[ -d "$repo_root/crates" ]] || exit 0

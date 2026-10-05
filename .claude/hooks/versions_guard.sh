@@ -22,7 +22,10 @@ fi
 
 [[ -n "${file_path:-}" ]] || exit 0
 
-repo_root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+# The checkout that holds the file, so an edit inside a git worktree is judged
+# by that worktree's guard against its own tree; CLAUDE_PROJECT_DIR names the
+# main checkout even then. A file outside any checkout is not a pin.
+repo_root="$(git -C "$(dirname "$file_path")" rev-parse --show-toplevel 2>/dev/null)" || exit 0
 rel="${file_path#"$repo_root"/}"
 base="$(basename "$file_path")"
 
