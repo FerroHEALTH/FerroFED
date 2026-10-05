@@ -73,6 +73,8 @@ lists what each release shipped and what is planned.
 - The openEHR Federation Working Group's
   [Federation Tier with AQL](https://syntaric.github.io/openehr-federation-spec/)
   specification, release candidate v0.9.0 at commit `7162d0c`. The
+  [conformance statement](https://ferrofed.eu/docs/evaluate/conformance-statement.html)
+  claims its Federation-Gateway profile, point by point; the
   [conformance matrix](https://ferrofed.eu/docs/evaluate/conformance.html)
   and the
   [obligations checklist](https://ferrofed.eu/docs/evaluate/obligations.html)

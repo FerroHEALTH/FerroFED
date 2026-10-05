@@ -15,15 +15,18 @@
 #   3. a requirement is reached by no point and no track and is not listed in
 #      tools/traceability-exceptions.txt;
 #   4. a status, issue or reason cell breaks the vocabulary: a status outside
-#      the set, a status that does not fit the actor, a row other than covered
-#      without its issue, or a deferred, node-profile or operator row without
-#      its reason;
+#      the set, a planned row (refused since #89), a status that does not fit
+#      the actor, a row other than covered without its issue, or a deferred,
+#      node-profile or operator row without its reason;
 #   5. a marker names a point or track the matrix does not hold, carries any
 #      other word, or does not sit directly above a #[test] or #[tokio::test]
 #      attribute;
 #   6. a covered row has no marker, a planned or deferred row has one, or a
 #      node-profile or operator row is marked outside the harness (tools/);
-#   7. the book page differs from `scripts/conformance/matrix.sh --render`;
+#   7. the matrix page, the statement block of the conformance statement or
+#      the tests page differs from a fresh rendering
+#      (`scripts/conformance/matrix.sh --check-pages`, which the docs build
+#      runs too);
 #   8. conformance/aql-golden/pass-list.txt is unsorted, names a case the
 #      vendored corpus does not hold, or records another total than it holds;
 #   9. a file under conformance/badges/ or the README conformance block
@@ -33,8 +36,9 @@
 # an unlisted case passes, so the pass list this reads is what the tests hold.
 #
 # Run `scripts/conformance/matrix.sh --derive` after a re-pin, and
-# `scripts/conformance/matrix.sh --render-write` and `--badges-write` after a
-# status change or a pass-list rewrite.
+# `scripts/conformance/matrix.sh --render-write`, `--statement-write` and
+# `--badges-write` after a status change, a marker change or a pass-list
+# rewrite.
 
 set -uo pipefail
 
@@ -45,6 +49,8 @@ readonly MATRIX=conformance/matrix.tsv
 readonly TRACKS=conformance/tracks.tsv
 readonly REQUIREMENTS=conformance/requirements.tsv
 readonly PAGE=website/book/src/evaluate/conformance.md
+readonly STATEMENT=website/book/src/evaluate/conformance-statement.md
+readonly TESTS_PAGE=website/book/src/evaluate/conformance-tests.md
 readonly SPEC_TOOLS=docs/specs/federation-spec/tools
 readonly PASS_LIST=conformance/aql-golden/pass-list.txt
 readonly GOLDEN=docs/specs/federation-ref/src/test/resources/aql-golden
@@ -64,7 +70,7 @@ problem() {
   return 0
 }
 
-for f in "$MATRIX" "$TRACKS" "$REQUIREMENTS" "$PAGE"; do
+for f in "$MATRIX" "$TRACKS" "$REQUIREMENTS" "$PAGE" "$STATEMENT" "$TESTS_PAGE"; do
   [[ -f "$f" ]] || problem "$f is missing"
 done
 [[ "$fail" -eq 0 ]] || exit 1
@@ -130,6 +136,7 @@ vocab="$(
       if (NF != 7) { print file ": " $1 " has " NF " columns, not 7"; next }
       s = $5; a = $2
       if (s !~ /^(covered|planned|deferred|node-profile|operator)$/) print file ": " $1 " has status \"" s "\", outside the vocabulary"
+      else if (s == "planned") print file ": " $1 " is planned; score it with a marked test or record the owner deferral (planned is refused since #89)"
       else if (a == "Node" && s != "node-profile") print file ": " $1 " is a Node point, so its status is node-profile"
       else if (a == "Operator" && s != "operator") print file ": " $1 " is an Operator point, so its status is operator"
       else if (a == "Gateway" && (s == "node-profile" || s == "operator")) print file ": " $1 " is a Gateway point and cannot be " s
@@ -142,6 +149,7 @@ vocab="$(
     {
       if (NF != 7) { print file ": track " $1 " has " NF " columns, not 7"; next }
       if ($5 !~ /^(covered|planned|deferred)$/) print file ": track " $1 " has status \"" $5 "\", outside covered, planned, deferred"
+      else if ($5 == "planned") print file ": track " $1 " is planned; score it with a marked test or record the owner deferral (planned is refused since #89)"
       if ($6 !~ /^(-|#[0-9]+(,#[0-9]+)*)$/) print file ": track " $1 " has issue \"" $6 "\"; write #n or #n,#m"
       else if ($5 != "covered" && $6 == "-") print file ": track " $1 " is " $5 " and names no issue"
       if ($5 == "deferred" && ($7 == "-" || $7 == "")) print file ": track " $1 " is deferred and gives no reason"
@@ -204,11 +212,10 @@ if [[ -n "$marker_findings" ]]; then
   while IFS= read -r line; do problem "$line"; done <<< "$marker_findings"
 fi
 
-# 7. The rendered book page.
-bash scripts/conformance/matrix.sh --render > "$work/page.md" || exit 1
-if ! diff -u "$PAGE" "$work/page.md" > "$work/diff" 2>&1; then
-  problem "$PAGE is stale (run scripts/conformance/matrix.sh --render-write):"
-  sed "$INDENT" "$work/diff" | head -40 >&2
+# 7. The rendered book pages: the matrix page, the statement block and the
+# tests page. The renderer names each stale page and its diff.
+if ! bash scripts/conformance/matrix.sh --check-pages; then
+  problem "a rendered conformance page is stale (see above)"
 fi
 
 # 8. The golden pass list: sorted and unique, every case a vendored file, and

@@ -19,6 +19,8 @@
 
 - [The Federation Tier with AQL](evaluate/the-federation-tier.md)
 - [What FerroFED claims](evaluate/what-ferrofed-claims.md)
+- [Conformance statement](evaluate/conformance-statement.md)
+  - [Conformance tests](evaluate/conformance-tests.md)
 - [Conformance matrix](evaluate/conformance.md)
 - [Obligations checklist](evaluate/obligations.md)
 - [Pinned versions](evaluate/versions.md)
