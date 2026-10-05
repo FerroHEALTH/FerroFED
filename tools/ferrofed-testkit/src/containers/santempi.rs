@@ -170,11 +170,15 @@ fn debugging_application() -> Client {
 // and `fiddler`; santedb/dev-doc@a7951d6 "SanteDB within Instant OpenHIE" signs in so.
 const ADMINISTRATOR: (&str, &str) = ("administrator", "Mohawk123");
 
-/// The policy that admits an application to the client-credentials grant,
-/// which the Manager denies an application it is not granted to.
-// NOTE: santedb/santedb-data@490cf38 SQL/PSQL/santedb-ddl.sql names this policy; a
-// policy granted in the AMI create is added to the application (santedb-restsvc@ecafe70).
-const CLIENT_CREDENTIALS_POLICY: &str = "1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1";
+/// The policies that admit an application to the client-credentials grant
+/// with no device credential, which the Manager denies an application they
+/// are not granted to.
+// NOTE: santedb/santedb-restsvc@1a9fdb3 DefaultClientCredentialsTokenRequestHandler demands
+// both; a policy granted in the AMI create is added to the application (ibid. @ecafe70).
+const CLIENT_CREDENTIALS_POLICIES: [&str; 2] = [
+    "1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1",
+    "1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1.0",
+];
 
 /// Returns the application the gateway asks the Manager as, its PIX
 /// Consumer.
@@ -476,6 +480,9 @@ pub async fn santempi(
         .with_env_var("SDB_DB_MAIN_PROVIDER", "Npgsql")
         .with_env_var("SDB_DB_AUDIT_PROVIDER", "Npgsql")
         .with_env_var("SDB_DATA_POLICY_ACTION", "HIDE")
+        // NOTE: santedb/santedb-restsvc@1a9fdb3 OauthDockerFeature: the OPENID feature's
+        // INSECURE_CLIENT_AUTH admits a client-credentials grant with no device credential.
+        .with_env_var("SDB_OPENID_INSECURE_CLIENT_AUTH", "true")
         .with_env_var("SDB_DELAY_START", "5000")
         .start()
         .await
@@ -518,14 +525,15 @@ fn record_id(kind: u16, number: u16) -> Uuid {
 /// Returns the AMI request that creates the security application `client`
 /// as `id`.
 fn application(id: Uuid, client: &Client) -> String {
+    let policies = CLIENT_CREDENTIALS_POLICIES
+        .map(|oid| format!("<policy oid=\"{oid}\" grant=\"Grant\" />"))
+        .concat();
     format!(
         "<SecurityApplicationInfo xmlns=\"http://santedb.org/ami\"><entity>\
          <id xmlns=\"http://santedb.org/model\">{id}</id>\
          <applicationSecret xmlns=\"http://santedb.org/model\">{}</applicationSecret>\
          <name xmlns=\"http://santedb.org/model\">{}</name>\
-         </entity><id>{id}</id>\
-         <policy oid=\"{CLIENT_CREDENTIALS_POLICY}\" grant=\"Grant\" />\
-         </SecurityApplicationInfo>",
+         </entity><id>{id}</id>{policies}</SecurityApplicationInfo>",
         client.secret, client.name
     )
 }
@@ -676,7 +684,7 @@ async fn send(
 #[cfg(test)]
 mod tests {
     use super::{
-        CLIENT_CREDENTIALS_POLICY, FEED_DESTINATION, application, authority, consumer,
+        CLIENT_CREDENTIALS_POLICIES, FEED_DESTINATION, application, authority, consumer,
         feed_message, record_id, source,
     };
     use crate::seed::{EhrDomain, PatientId};
@@ -692,12 +700,12 @@ mod tests {
     #[test]
     fn each_application_is_admitted_to_the_client_credentials_grant() {
         let xml = application(record_id(0, 0), &consumer());
-        assert!(
-            xml.contains(&format!(
-                "<policy oid=\"{CLIENT_CREDENTIALS_POLICY}\" grant=\"Grant\" />"
-            )),
-            "{xml}"
-        );
+        for oid in CLIENT_CREDENTIALS_POLICIES {
+            assert!(
+                xml.contains(&format!("<policy oid=\"{oid}\" grant=\"Grant\" />")),
+                "{xml}"
+            );
+        }
     }
 
     #[test]
