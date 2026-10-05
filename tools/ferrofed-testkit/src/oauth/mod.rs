@@ -41,6 +41,10 @@
 //! [`TokenEndpoint::bind_to_certificate`] binds every later token to a
 //! certificate thumbprint (RFC 8705 §3), issued as a JWT whose `cnf` claim
 //! names it (§3.1).
+//! Once a test calls [`TokenEndpoint::accept_client_secret`], the endpoint
+//! authenticates the client by its secret, in the Basic scheme or the
+//! request body (RFC 6749 §2.3.1), as an IHE IUA Authorization Server does
+//! (ITI-71 §3.71.4.1.3.1).
 //!
 //! [`es384_pem`] and [`p256_pem`] generate a synthetic private key in PKCS#8
 //! PEM at run time, so no key is ever committed. No specification governs the
@@ -272,6 +276,9 @@ enum ClientAuth {
     Assertion,
     /// The TLS client certificate, with `client_id` (RFC 8705 §2).
     Tls,
+    /// The client secret, in the Basic scheme or the request body (RFC 6749
+    /// §2.3.1).
+    Secret,
 }
 
 #[derive(Debug, Default)]
@@ -291,6 +298,8 @@ struct State {
     details: Option<BTreeSet<String>>,
     details_omitted: bool,
     client_auth: ClientAuth,
+    secret: Option<String>,
+    secret_methods: Vec<&'static str>,
     certificate: Option<String>,
     accepted: BTreeSet<String>,
     subjects: BTreeMap<String, String>,
@@ -423,6 +432,23 @@ impl TokenEndpoint {
     /// certificate its CA signed.
     pub fn accept_tls_client_auth(&self) {
         self.shared.lock().client_auth = ClientAuth::Tls;
+    }
+
+    /// Authenticates every later request by the client secret `secret` (RFC
+    /// 6749 §2.3.1): in the Basic scheme, the client id and the secret each
+    /// form-urlencoded, or as `client_id` and `client_secret` in the body,
+    /// never both and never beside an assertion.
+    pub fn accept_client_secret(&self, secret: &str) {
+        let mut state = self.shared.lock();
+        state.client_auth = ClientAuth::Secret;
+        state.secret = Some(secret.to_owned());
+    }
+
+    /// The method each request a client secret authenticated used, in
+    /// arrival order: `client_secret_basic` or `client_secret_post`.
+    #[must_use]
+    pub fn secret_methods(&self) -> Vec<&'static str> {
+        self.shared.lock().secret_methods.clone()
     }
 
     /// Binds every later token to the certificate of `thumbprint`, its

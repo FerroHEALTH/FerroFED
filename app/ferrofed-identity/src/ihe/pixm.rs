@@ -40,8 +40,9 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError, Tls};
 use crate::ihe::audit::balp::audited_as;
+use crate::ihe::iua;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
@@ -109,6 +110,10 @@ pub enum PixmConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for a PIX Manager could not be built")]
     Client(#[source] reqwest::Error),
+    /// The credential is a grant the client was built to send in a default
+    /// header, where its token cannot ride.
+    #[error("the grant of a PIX Manager cannot ride in a default header")]
+    Grant,
 }
 
 impl From<ClientError> for PixmConfigError {
@@ -116,6 +121,7 @@ impl From<ClientError> for PixmConfigError {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
             ClientError::Build(source) => Self::Client(source),
+            ClientError::Grant => Self::Grant,
         }
     }
 }
@@ -213,11 +219,14 @@ impl PixmResolver {
                 seen.push(member.clone());
                 members.push((member, target));
             }
-            let http = fhir::http_client(&manager.auth, &manager.tls)?;
+            let (http, authorizer) = iua::client(&manager.auth, &manager.tls)?;
             let base = Url::parse(manager.base.expose()).map_err(PixmConfigError::BaseUrl)?;
-            let client = PixmClient::new(base, http)
+            let mut client = PixmClient::new(base, http)
                 .map_err(PixmConfigError::Base)?
                 .invoked_by(manager.invocation);
+            if let Some(authorizer) = authorizer {
+                client = client.with_authorizer(authorizer);
+            }
             built.push(Arc::new(Manager { client, members }));
         }
         if let Some(uncovered) = registry

@@ -13,6 +13,7 @@
 mod architecture;
 mod audience;
 mod cap;
+mod client_secret;
 mod confined;
 mod conveyance;
 mod conveyed;

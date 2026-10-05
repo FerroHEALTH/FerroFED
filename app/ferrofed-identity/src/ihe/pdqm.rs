@@ -48,8 +48,9 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-use crate::fhir::{Authentication, ClientError, Tls, http_client};
+use crate::fhir::{Authentication, ClientError, Tls};
 use crate::ihe::audit::balp::audited_as;
+use crate::ihe::iua;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
 use crate::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
@@ -196,9 +197,13 @@ impl PdqmDemographics {
                 return Err(PdqmConfigError::MasterNamespace(namespace.clone()));
             }
         }
-        let http = http_client(&config.auth, &config.tls).map_err(PdqmConfigError::Client)?;
+        let (http, authorizer) =
+            iua::client(&config.auth, &config.tls).map_err(PdqmConfigError::Client)?;
         let base = Url::parse(config.base.expose()).map_err(PdqmConfigError::BaseUrl)?;
-        let client = PdqmClient::new(base, http).map_err(PdqmConfigError::Base)?;
+        let mut client = PdqmClient::new(base, http).map_err(PdqmConfigError::Base)?;
+        if let Some(authorizer) = authorizer {
+            client = client.with_authorizer(authorizer);
+        }
         Ok(Self {
             client,
             transaction: config.transaction,

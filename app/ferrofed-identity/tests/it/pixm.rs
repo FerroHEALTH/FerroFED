@@ -13,6 +13,8 @@
 )]
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use ferrofed_identity::fhir::{Authentication, Tls};
@@ -24,7 +26,9 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
 use ihe_iti::pixm::Invocation;
-use openehr_its::rest::client::InvalidCredentials;
+use openehr_its::rest::client::{
+    Credentials, CredentialsError, CredentialsProvider, InvalidCredentials,
+};
 use secrecy::SecretString;
 use wiremock::matchers::{body_string_contains, header, method, path, query_param};
 use wiremock::{Mock, ResponseTemplate};
@@ -295,7 +299,7 @@ impl ihe_iti::balp::AuditRecorder for Stalled {
 #[tokio::test]
 async fn an_answer_whose_record_is_not_stored_by_the_deadline_is_unavailable_in_time() {
     let server = stub(200, parameters(&[(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)])).await;
-    let recorder: std::sync::Arc<dyn ihe_iti::balp::AuditRecorder> = std::sync::Arc::new(Stalled);
+    let recorder: Arc<dyn ihe_iti::balp::AuditRecorder> = Arc::new(Stalled);
     let budget = Duration::from_millis(300);
     let asked = Instant::now();
     let resolutions = resolver(&server)
@@ -411,6 +415,96 @@ async fn a_namespace_with_no_pix_domain_asks_nobody() {
             .expect("recording is on")
             .is_empty(),
         "nothing is sent for a namespace the Manager has no domain for"
+    );
+}
+
+/// A grant's provider that hands out `token-1`, `token-2`, … and counts the
+/// tokens the Manager refused.
+#[derive(Debug, Default)]
+struct Tokens {
+    issued: AtomicUsize,
+    refused: AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl CredentialsProvider for Tokens {
+    async fn credentials(&self) -> Result<Credentials, CredentialsError> {
+        let issued = self.issued.fetch_add(1, Ordering::SeqCst) + 1;
+        Ok(Credentials::bearer(SecretString::from(format!(
+            "token-{issued}"
+        ))))
+    }
+
+    fn refused(&self) {
+        self.refused.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[tokio::test]
+async fn a_grant_token_the_manager_refuses_is_replaced_once() {
+    let server = Server::start().await;
+    Mock::given(method("GET"))
+        .and(path(OPERATION))
+        .and(header("authorization", "Bearer token-2"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(parameters(&[(DOMAIN_A, EHR_A)]).into_bytes(), FHIR_JSON),
+        )
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(OPERATION))
+        .respond_with(ResponseTemplate::new(401))
+        .with_priority(2)
+        .mount(&server)
+        .await;
+    let tokens = Arc::new(Tokens::default());
+    let resolver = PixmResolver::from_config(
+        vec![manager(
+            &server,
+            Authentication::Grant(tokens.clone()),
+            &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
+        )],
+        namespaces(),
+        &registry(),
+    )
+    .expect("the resolver builds");
+    let resolutions = resolve(&resolver).await;
+    assert_eq!(
+        Some(EHR_A.to_owned()),
+        resolved_at(&resolutions, "node-a"),
+        "the refused token is replaced and the request sent once more (IUA ITI-72 §3.72.4.3): {resolutions:?}"
+    );
+    assert_eq!(1, tokens.refused.load(Ordering::SeqCst));
+    assert_eq!(2, tokens.issued.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn a_grant_the_manager_keeps_refusing_leaves_the_member_unavailable() {
+    let server = stub(401, "").await;
+    let tokens = Arc::new(Tokens::default());
+    let resolver = PixmResolver::from_config(
+        vec![manager(
+            &server,
+            Authentication::Grant(tokens.clone()),
+            &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
+        )],
+        namespaces(),
+        &registry(),
+    )
+    .expect("the resolver builds");
+    let resolutions = resolve(&resolver).await;
+    assert!(is_unavailable(&resolutions, "node-a"), "{resolutions:?}");
+    assert!(is_unavailable(&resolutions, "node-b"), "{resolutions:?}");
+    assert_eq!(
+        2,
+        server
+            .received_requests()
+            .await
+            .expect("recording is on")
+            .len(),
+        "one ITI-83 call, sent at most twice"
     );
 }
 

@@ -3,14 +3,14 @@
 
 //! How the harness token endpoint answers one request: the RFC 6749 §4.4.2
 //! client-credentials grant and RFC 8693 token exchange, each authenticated
-//! by an RFC 7523 §2.2 client assertion or, behind a mutual-TLS front, by
-//! the client's certificate (RFC 8705 §2), and a `DPoP` proof where one is
-//! required (RFC 9449 §5).
+//! by an RFC 7523 §2.2 client assertion, by the client secret (RFC 6749
+//! §2.3.1) or, behind a mutual-TLS front, by the client's certificate (RFC
+//! 8705 §2), and a `DPoP` proof where one is required (RFC 9449 §5).
 
 use std::sync::Arc;
 
 use base64::Engine as _;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use wiremock::{Request, Respond, ResponseTemplate};
@@ -59,10 +59,16 @@ impl Respond for Responder {
             .get(dpop::HEADER)
             .and_then(|value| value.to_str().ok())
             .map(str::to_owned);
+        let basic = request
+            .headers
+            .get(http::header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Basic "))
+            .map(str::to_owned);
         let mut state = self.0.lock();
         state.forms.push(form.clone());
         let delay = state.delay;
-        let answer = self.answer(&mut state, &form, proof.as_deref());
+        let answer = self.answer(&mut state, &form, (proof.as_deref(), basic.as_deref()));
         match delay {
             Some(delay) => answer.set_delay(delay),
             None => answer,
@@ -74,13 +80,13 @@ impl Respond for Responder {
 type Failure = (&'static str, String);
 
 impl Responder {
-    /// The answer to a request carrying `form` and `proof`, recorded in
-    /// `state`.
+    /// The answer to a request carrying `form`, `proof` and the `basic`
+    /// credentials of its `Authorization` header, recorded in `state`.
     fn answer(
         &self,
         state: &mut State,
         form: &[(String, String)],
-        proof: Option<&str>,
+        (proof, basic): (Option<&str>, Option<&str>),
     ) -> ResponseTemplate {
         if let Some(refusal) = state.refusal.clone() {
             state.verdicts.push(Verdict::Refused(refusal.error.clone()));
@@ -90,7 +96,7 @@ impl Responder {
             Ok(jkt) => jkt,
             Err(answer) => return *answer,
         };
-        let outcome = self.granted(state, form).and_then(|subject| {
+        let outcome = self.granted(state, form, basic).and_then(|subject| {
             let details = Self::detailed(state, form)?;
             Ok((subject, details))
         });
@@ -175,6 +181,7 @@ impl Responder {
         &self,
         state: &mut State,
         form: &[(String, String)],
+        basic: Option<&str>,
     ) -> Result<Option<String>, Failure> {
         let field = |name: &str| {
             form.iter()
@@ -186,7 +193,10 @@ impl Responder {
             Some(TOKEN_EXCHANGE) if state.callers.is_some() => true,
             _ => return Err(("unsupported_grant_type", "grant_type".to_owned())),
         };
-        if field("client_secret").is_some() {
+        if state.client_auth == ClientAuth::Secret {
+            let method = self.secret(state, form, basic)?;
+            state.secret_methods.push(method);
+        } else if field("client_secret").is_some() || basic.is_some() {
             return Err(("invalid_request", "a client secret was sent".to_owned()));
         }
         if state.client_auth == ClientAuth::Tls {
@@ -199,7 +209,9 @@ impl Responder {
                     "an assertion was sent beside the certificate".to_owned(),
                 ));
             }
-        } else if field("client_assertion_type").as_deref() != Some(JWT_BEARER) {
+        } else if state.client_auth == ClientAuth::Assertion
+            && field("client_assertion_type").as_deref() != Some(JWT_BEARER)
+        {
             return Err(("invalid_client", "client_assertion_type".to_owned()));
         }
         if let Some(expected) = &state.scope
@@ -243,6 +255,65 @@ impl Responder {
             resource: field("resource"),
         });
         Ok(Some(subject))
+    }
+
+    /// The method a request authenticated by the client secret used, the
+    /// `basic` credentials of its `Authorization` header or the
+    /// `client_id` and `client_secret` of its body, never both and never
+    /// beside an assertion (RFC 6749 §2.3.1).
+    fn secret(
+        &self,
+        state: &State,
+        form: &[(String, String)],
+        basic: Option<&str>,
+    ) -> Result<&'static str, Failure> {
+        let field = |name: &str| {
+            form.iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+        };
+        if field("client_assertion").is_some() || field("client_assertion_type").is_some() {
+            return Err((
+                "invalid_request",
+                "an assertion was sent beside the secret".to_owned(),
+            ));
+        }
+        let expected = state.secret.as_deref().unwrap_or_default();
+        let (method, client_id, secret) = match (basic, field("client_secret")) {
+            (Some(_), Some(_)) => {
+                return Err((
+                    "invalid_request",
+                    "the secret was sent twice, in the header and the body".to_owned(),
+                ));
+            }
+            (Some(basic), None) => {
+                let decoded = STANDARD
+                    .decode(basic)
+                    .ok()
+                    .and_then(|bytes| String::from_utf8(bytes).ok())
+                    .ok_or(("invalid_client", "the Basic credentials".to_owned()))?;
+                let (user, password) = decoded
+                    .split_once(':')
+                    .ok_or(("invalid_client", "the Basic credentials".to_owned()))?;
+                let decode = |text: &str| -> String {
+                    url::form_urlencoded::parse(format!("v={text}").as_bytes())
+                        .map(|(_, value)| value.into_owned())
+                        .next()
+                        .unwrap_or_default()
+                };
+                ("client_secret_basic", decode(user), decode(password))
+            }
+            (None, Some(secret)) => (
+                "client_secret_post",
+                field("client_id").unwrap_or_default(),
+                secret,
+            ),
+            (None, None) => return Err(("invalid_client", "no client secret".to_owned())),
+        };
+        if client_id != self.0.client_id || secret != expected {
+            return Err(("invalid_client", "the client id or secret".to_owned()));
+        }
+        Ok(method)
     }
 
     /// The `authorization_details` a request asks for, read and held to the
