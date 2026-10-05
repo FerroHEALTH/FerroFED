@@ -83,6 +83,7 @@ pub mod pdq;
 pub mod pix;
 pub mod pmir;
 pub mod proxy;
+pub mod reference;
 pub mod seed;
 pub mod tls;
 pub mod unreachable;

@@ -2295,11 +2295,14 @@ node's `EHR_STATUS.subject` (section 6), so the subject is there for the
 hygiene tracks: a leaked subject predicate would match it, and the journals
 show that none reached a node.
 
-**The differential run** (#94). The reference implementation's image refused an
-anonymous pull on 2026-10-01, so the run builds from the vendored tree's
-`Dockerfile` outside CI, or waits for a public image (decision A42). Its answers
-are evidence in a comparison; where they and the specification disagree, the
-specification wins.
+**The differential run** (#94). The reference implementation's image needs
+credentials to pull, so the testkit builds it in CI, behind the `FERROFED_E2E`
+gate (decision A42): the vendored source at the pinned commit, with the Maven
+manifest fetched from that commit and held to the sha256 its `PROVENANCE.md`
+records, on digest-pinned Maven and Java images. It runs beside FerroFED over
+the same two FerroEHR nodes, each gateway behind capturing proxies of its own,
+and a register adjudicates every difference. Its answers are evidence in a
+comparison; where they and the specification disagree, the specification wins.
 
 ## 14. The milestone map
 
@@ -2420,7 +2423,7 @@ R4 is #23, #25 and #27).
 | A39 | The PIX Manager [R4 D5] | an in-testkit PIXm fake now; the PIXm client also runs against FerroPIX once it exists, as a differential | no lightweight image answers `$ihe-pix` and accepts ITI-104 | decided (owner, 2026-10-01) |
 | A40 | EHRbase's PostgreSQL 16.2 [R4 D6] | the PostgreSQL 18 rule governs FerroFED's own database; a member node runs its product's documented image, recorded in the memory | the node's database is part of the product under test | superseded by A44 (owner, 2026-10-02: EHRbase leaves the topology, so no member node runs PostgreSQL 16.2) |
 | A41 | The number of nodes [R4 D7] | two products, a second FerroEHR for three-node cases | no third open CDR image was evaluated | superseded by A44 (owner, 2026-10-02: "we should use two FerroEHR setups for the test because EHRbase will not work") |
-| A42 | The reference implementation's image [R4 D8] | build from the vendored `Dockerfile` outside CI, or wait for a public image | its image refused an anonymous pull on 2026-10-01 | decided (owner, 2026-10-01) |
+| A42 | The reference implementation's image [R4 D8] | build it in CI from the vendored source at the pinned commit, the manifest fetched from that commit and held to its recorded sha256, on digest-pinned Maven and Java images | its GHCR image needs credentials to pull (refused anonymously on 2026-10-01), and a digest-pinned build from the pinned commit is reproducible | decided (owner, 2026-10-01: build outside CI or wait for a public image); revised (orchestrator under the owner's standing delegation, 2026-10-05: build in CI, #94) |
 | A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |
 | A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject; a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
 | A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (upstream report on #212) | decided (owner, 2026-10-02) |
