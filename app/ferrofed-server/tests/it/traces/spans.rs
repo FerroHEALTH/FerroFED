@@ -163,3 +163,47 @@ async fn a_read_routed_to_a_named_node_leaves_one_node_request_under_the_request
     assert!(unlisted(&spans).is_empty(), "{:?}", unlisted(&spans));
     Ok(())
 }
+
+#[tokio::test]
+async fn an_unknown_method_is_recorded_as_other_and_never_as_the_client_sent_it() -> TestResult {
+    let exported = Exported::install()?;
+    let a = node_answering("uid-at-a").await;
+    let b = node_answering("uid-at-b").await;
+    let dir = tempfile::tempdir()?;
+    let app = dev_gateway(dir.path(), &a.uri(), &b.uri(), &[("node-a", EHR_A)])?;
+    let unusual = Request::builder()
+        .method(http::Method::from_bytes(b"SYNTHETIC-METHOD-1")?)
+        .uri("/v1/query/aql")
+        .body(Body::empty())?;
+    send(app, unusual).await?;
+    let spans = exported.spans()?;
+
+    let requests: Vec<_> = spans
+        .iter()
+        .filter(|span| attribute(span, "http.request.method").is_some())
+        .collect();
+    let [request] = requests.as_slice() else {
+        return Err(format!("one request span: {requests:?}").into());
+    };
+    assert_eq!(
+        Some("_OTHER".to_owned()),
+        attribute(request, "http.request.method"),
+        "OpenTelemetry HTTP conventions: an unknown method is _OTHER"
+    );
+    assert!(
+        request.name.starts_with("HTTP "),
+        "an unknown method names the span HTTP: {}",
+        request.name
+    );
+    for span in &spans {
+        assert!(!span.name.contains("SYNTHETIC"), "{}", span.name);
+        for pair in &span.attributes {
+            assert!(
+                !pair.value.as_str().contains("SYNTHETIC"),
+                "{} carries the client's method",
+                pair.key
+            );
+        }
+    }
+    Ok(())
+}

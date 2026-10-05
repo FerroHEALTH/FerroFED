@@ -35,6 +35,10 @@ pub const ACTIVE_REQUESTS: &str = "http.server.active_requests";
 /// class; Prometheus `ferrofed_http_requests_total`.
 pub const REQUESTS: &str = "ferrofed.http.requests";
 
+/// The `http.request.method` value of a method no RFC the gateway knows
+/// defines ([`method_label`]).
+pub const OTHER_METHOD: &str = "_OTHER";
+
 /// The bucket boundaries of [`REQUEST_DURATION`], in seconds: the advisory
 /// boundaries of the semantic conventions, with `30` past the default
 /// request timeout of 30 seconds.
@@ -147,7 +151,7 @@ pub fn method_label(method: &Method) -> &'static str {
         Method::POST => "POST",
         Method::PUT => "PUT",
         Method::TRACE => "TRACE",
-        _ => "_OTHER",
+        _ => OTHER_METHOD,
     }
 }
 

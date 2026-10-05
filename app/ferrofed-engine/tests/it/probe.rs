@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Write as _;
+use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::{Contact, NodeClients};
@@ -89,15 +90,21 @@ async fn probed_at(
         EndpointId::new("node-a-pub")?,
         EndpointId::new("node-b-pub")?,
     ];
-    let probe = Probe {
+    let probe = probe_until(per_node, overall)?;
+    Ok(probe::ask_all(&clients, &endpoints, &probe).await?)
+}
+
+/// The probe for [`EHR`] under the per-node deadline `per_node` and the
+/// overall budget `overall`.
+fn probe_until(per_node: Instant, overall: Instant) -> Result<Probe, Box<dyn Error>> {
+    Ok(Probe {
         ehr_id: ProbedEhrId::try_from(&EhrId::new(EHR)?)?,
         headers: HeaderMap::new(),
         per_node,
         overall,
         request_id: OutboundId::mint(),
         conveyance: crate::conveyed::conveyance(),
-    };
-    Ok(probe::ask_all(&clients, &endpoints, &probe).await?)
+    })
 }
 
 async fn received(server: &Server) -> Result<usize, Box<dyn Error>> {
@@ -209,5 +216,54 @@ async fn a_member_that_cannot_be_reached_is_unreachable_and_silent() -> TestResu
         unreachable.answer
     );
     assert_eq!(Contact::Silent, unreachable.contact(), "{silent}");
+    Ok(())
+}
+
+// NOTE: §11.1, §11.5, N38: a probe that never got a slot of the member's cap was never sent, so it
+// is `time-out` with nothing sent, never a member abandoned without an answer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_probe_that_never_got_a_slot_of_the_cap_is_capped_and_never_sent() -> TestResult {
+    let held = member(timing::SILENT).await;
+    let snapshot = registry(&held.uri(), ferrofed_testkit::unreachable::BASE)?;
+    let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
+    let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?
+        .with_in_flight_cap(NonZeroU32::MIN);
+    let endpoint = [EndpointId::new("node-a-pub")?];
+    let holder = tokio::spawn({
+        let clients = clients.clone();
+        let endpoint = endpoint.clone();
+        let probe = probe_until(timing::deadline()?, timing::deadline()?)?;
+        async move { probe::ask_all(&clients, &endpoint, &probe).await }
+    });
+    for _ in 0..500 {
+        if received(&held).await? > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(
+        1,
+        received(&held).await?,
+        "the first probe holds the one slot"
+    );
+
+    // The per-node deadline and the overall budget end together, so the
+    // budget runs out while the probe still waits for a slot.
+    let budget = Instant::now()
+        .checked_add(Duration::from_millis(300))
+        .ok_or("the budget is past the platform clock")?;
+    let answers = probe::ask_all(&clients, &endpoint, &probe_until(budget, budget)?).await?;
+    holder.abort();
+    let [(waiting, capped)] = answers.as_slice() else {
+        return Err(format!("one answer per member: {answers:?}").into());
+    };
+    assert!(
+        matches!(capped.answer, Answer::Failed(ForwardError::Capped(_))),
+        "§11.5: {waiting} was never sent the probe: {:?}",
+        capped.answer
+    );
+    assert_eq!(Contact::Capped, capped.contact(), "{waiting}");
+    assert!(!capped.contact().sent(), "{waiting}: nothing was sent");
+    assert_eq!(1, received(&held).await?, "the capped probe never left");
     Ok(())
 }

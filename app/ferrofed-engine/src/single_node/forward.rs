@@ -35,7 +35,7 @@ use std::fmt;
 
 use crate::conveyance::ConveyanceError;
 use crate::declared::{self, Refusal};
-use crate::dispatch::cap::Capped;
+use crate::dispatch::cap::{Capped, Slot};
 use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
@@ -367,7 +367,8 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// Returns [`ForwardError::Withheld`] with nothing sent,
     /// [`ForwardError::Credentials`] and [`ForwardError::Compose`] when the
     /// request could not leave, [`ForwardError::Expired`] when the deadline
-    /// passed before it left, [`ForwardError::TimeOut`] and
+    /// passed before it left, [`ForwardError::Capped`] when the endpoint's
+    /// in-flight cap stayed full until the deadline, [`ForwardError::TimeOut`] and
     /// [`ForwardError::Unreachable`] when the node gave no answer, and
     /// [`ForwardError::Refused`] when it answered `401`.
     pub async fn forward_held(
@@ -384,6 +385,45 @@ impl<T: Transport + Clone> NodeClient<T> {
         .await
     }
 
+    /// Forwards the held `request` as [`NodeClient::forward_held`] does, and
+    /// abandons it when the overall budget `until` runs out after it left,
+    /// returning `None`.
+    ///
+    /// A request still waiting for a slot of the endpoint's in-flight cap is
+    /// never abandoned: the deadline of `options`, which a caller sets no
+    /// later than `until`, ends that wait with [`ForwardError::Capped`] and
+    /// nothing sent (§11.1, §11.5, N38).
+    pub(crate) async fn forward_held_until(
+        &self,
+        request: HeldRequest,
+        options: &DispatchOptions,
+        until: tokio::time::Instant,
+    ) -> Option<Result<Forwarded, ForwardError>> {
+        let operation = request.operation.operation_id;
+        let budgeted = async {
+            let outgoing = match self.outgoing(request, options) {
+                Ok(outgoing) => outgoing,
+                Err(refused) => return Some(Err(refused)),
+            };
+            let slot = match self.slot(options.deadline()).await {
+                Ok(slot) => slot,
+                Err(capped) => return Some(Err(capped.into())),
+            };
+            // NOTE: §11.5, N38: an elapsed budget is the abandonment `None` reports; tokio's
+            // timeout_at (docs.rs) polls the send first, so a request that never left ends `Expired`.
+            tokio::time::timeout_at(until, self.sent(outgoing, slot, options))
+                .await
+                .ok()
+        };
+        trace_context::node_request(self.endpoint(), operation, budgeted, |outcome| {
+            let contact = outcome
+                .as_ref()
+                .map_or(Contact::Silent, Contact::of_forwarded);
+            (Some(contact), None)
+        })
+        .await
+    }
+
     /// Forwards the held `request` once, as [`NodeClient::forward_held`]
     /// describes.
     async fn forward_once(
@@ -391,6 +431,18 @@ impl<T: Transport + Clone> NodeClient<T> {
         request: HeldRequest,
         options: &DispatchOptions,
     ) -> Result<Forwarded, ForwardError> {
+        let outgoing = self.outgoing(request, options)?;
+        let slot = self.slot(options.deadline()).await?;
+        self.sent(outgoing, slot, options).await
+    }
+
+    /// The request the held `request` leaves as, with the options of
+    /// `options` applied, once the outbound gate admitted it.
+    fn outgoing(
+        &self,
+        request: HeldRequest,
+        options: &DispatchOptions,
+    ) -> Result<Request, ForwardError> {
         let HeldRequest {
             method,
             path,
@@ -421,7 +473,17 @@ impl<T: Transport + Clone> NodeClient<T> {
             outgoing.raw_body(body, None);
         }
         self.gate_forward(&operation, &outgoing, options)?;
-        let _slot = self.slot(options.deadline()).await?;
+        Ok(outgoing)
+    }
+
+    /// Sends `outgoing` once, holding `slot` of the endpoint's cap until the
+    /// node answered or failed.
+    async fn sent(
+        &self,
+        outgoing: Request,
+        _slot: Slot,
+        options: &DispatchOptions,
+    ) -> Result<Forwarded, ForwardError> {
         let client = self.client_for(options);
         match client.forward(outgoing).await {
             Ok(answer) if answer.status() == StatusCode::UNAUTHORIZED => {
