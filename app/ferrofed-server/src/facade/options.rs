@@ -19,7 +19,7 @@
 //! (asynchronous queries, §11.7) is declared by its absence.
 //! A configured Step-1 consent pre-filter is declared under
 //! `federation.consent`, with what a query does when it cannot answer
-//! (N27a, §13.2.1).
+//! (N27a, §13.2.1) and whether an answer names a member it excludes.
 
 use std::sync::Arc;
 
@@ -188,10 +188,14 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
 }
 
 /// The `consent` member of `federation`, present only where a Step-1 consent
-/// pre-filter is configured: the pre-filter's mode, and what a query does
-/// when it cannot answer (N27a, §13.2.1).
+/// pre-filter is configured: the pre-filter's mode, what a query does when it
+/// cannot answer (N27a, §13.2.1), and as `disclose` whether an answer names a
+/// member it excludes as `consent-denied`.
 ///
 /// A deployment with no pre-filter declares nothing, and N27 is its sole gate.
+/// `disclose: false` tells a client that this deployment reports an excluded
+/// member as one without the patient (Regulation (EU) 2025/327 Art 8), so a
+/// `not-resolved` member there may be one the pre-filter excluded.
 // NOTE: §7a.2 leaves the `federation` object open and names no consent member (N30
 // requires none), so the member is our own design.
 fn consent(federation: &Federation) -> Result<Extra, DescribeError> {
@@ -199,12 +203,14 @@ fn consent(federation: &Federation) -> Result<Extra, DescribeError> {
     struct Consent {
         prefilter: &'static str,
         on_unavailable: &'static str,
+        disclose: bool,
     }
     let mut extra = Extra::new();
     if let Some(prefilter) = federation.consent_prefilter() {
         let declared = Consent {
             prefilter: prefilter.mode(),
             on_unavailable: ON_UNAVAILABLE,
+            disclose: federation.discloses_consent(),
         };
         extra.insert_serialized(CONSENT, &declared)?;
     }

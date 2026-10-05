@@ -9,19 +9,55 @@ use std::collections::BTreeMap;
 
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use http::StatusCode;
+use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::aggregate::Recombination;
 use openehr_federation::attribute::EndpointAttribute;
 use openehr_federation::dedup::DedupMode;
+use openehr_federation::envelope;
+use openehr_federation::error::WireError;
 use openehr_federation::merge::{Disagreement, Merged, NodeAnswer, combine, merge};
 use openehr_federation::meta::FederationMeta;
 use openehr_federation::object::Uri;
 use openehr_federation::order::ResultOrder;
-use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
-use openehr_its::rest::generated::query::ResultSetRow;
+use openehr_federation::outcome::{ConsentRefusal, EndpointOutcome, ErrorDetail, Outcome};
+use openehr_its::rest::generated::query::{
+    ResultSet, ResultSetColumn, ResultSetMetadata, ResultSetRow,
+};
 use tracing::field::Empty;
 
 use super::seen::{self, Seen};
-use super::{Budget, Completion, FanOutError, FederatedAnswer, decide};
+use super::{Budget, Completion, FanOutError, FederatedAnswer, Verdict, decide};
+use crate::dispatch::Contact;
+
+/// The outcome the answer reports for a node that failed with `outcome`, and
+/// the outcome it replaced, when the plan withholds consent with `concealed`.
+///
+/// A node's own consent refusal becomes `not-resolved` carrying `concealed`,
+/// with no `latency_ms`, so its record is the one a member that does not know
+/// the patient has; every other outcome stays as it is.
+// NOTE: Regulation (EU) 2025/327 Art 8 against N40: a dispatched member keeps no latency here,
+// since a `not-resolved` record with one would show the refusal to the clinician.
+pub(super) fn concealed(
+    outcome: Outcome,
+    concealed: Option<&ErrorDetail>,
+) -> (Outcome, Option<Outcome>) {
+    match (concealed, &outcome) {
+        (
+            Some(error),
+            Outcome::ConsentDenied {
+                refused_by: ConsentRefusal::Node { .. },
+                ..
+            },
+        ) => (
+            Outcome::NotResolved {
+                error: error.clone(),
+            },
+            Some(outcome),
+        ),
+        _ => (outcome, None),
+    }
+}
 
 /// How the rows of the `active` endpoints become the answer's rows.
 #[derive(Debug, Clone, Copy)]
@@ -135,6 +171,7 @@ pub(super) fn answer(
             .map(|((endpoint, _), version)| (endpoint, version))
             .collect(),
         contacts: BTreeMap::new(),
+        observed: BTreeMap::new(),
     })
 }
 
@@ -250,4 +287,108 @@ pub(super) fn report_unavailable(
         .insert_serialized(member, &report)
         .map_err(FanOutError::Envelope)?;
     Ok(())
+}
+
+impl FederatedAnswer {
+    /// The decision under the plan's completion strategy.
+    #[must_use]
+    pub fn verdict(&self) -> Verdict {
+        self.verdict
+    }
+
+    /// The HTTP status of the answer.
+    #[must_use]
+    pub fn status(&self) -> StatusCode {
+        self.verdict.status()
+    }
+
+    /// The `meta.federation` record, present on a failing answer too
+    /// (§11.4).
+    #[must_use]
+    pub fn federation(&self) -> &FederationMeta {
+        &self.federation
+    }
+
+    /// The rows of the `active` endpoints in endpoint id order, empty when the
+    /// query failed: a failing query MUST NOT return the rows it did obtain,
+    /// and a best-effort answer returns exactly those (§11.4). Unresponsive
+    /// nodes never contribute rows (§11.1).
+    #[must_use]
+    pub fn rows(&self) -> &[ResultSetRow] {
+        &self.rows
+    }
+
+    /// The values of the plan's ENDPOINT attributes beside each row, in
+    /// [`FederatedAnswer::rows`] order, from the registry entry of the
+    /// endpoint the row came from (§9.3, N12; [`super::Plan::annotating`]). An entry
+    /// is empty when the plan adds no attribute, and for the one row of a
+    /// recombined aggregate, which comes from no single endpoint.
+    #[must_use]
+    pub fn attributes(&self) -> &[Vec<String>] {
+        &self.attributes
+    }
+
+    /// The versions the rows of each answering endpoint show it holding, one
+    /// per endpoint and `creating_system_id`, in endpoint id order: what the
+    /// follow-up routing table learns from (§12.2, N21).
+    ///
+    /// They are read from every endpoint that sent rows, a failing answer's
+    /// included.
+    pub fn seen(&self) -> impl Iterator<Item = (&EndpointId, &ObjectVersionId)> {
+        self.seen
+            .iter()
+            .map(|(endpoint, version)| (endpoint, version))
+    }
+
+    /// What the request to each endpoint the plan dispatched to showed of
+    /// the node, in endpoint id order: its own HTTP status where it answered,
+    /// which the §11.1 record in [`FederatedAnswer::federation`] carries only
+    /// as text. An endpoint settled with no request has none.
+    pub fn contacts(&self) -> impl Iterator<Item = (&EndpointId, Contact)> {
+        self.contacts
+            .iter()
+            .map(|(endpoint, contact)| (endpoint, *contact))
+    }
+
+    /// The outcome the gateway observed of `endpoint`, where the answer
+    /// reports another: a node's consent refusal the plan withholds
+    /// ([`super::Plan::withholding_consent`]) is `not-resolved` in
+    /// [`FederatedAnswer::federation`] and `consent-denied` here, with its
+    /// latency, for the operator's metrics.
+    #[must_use]
+    pub fn observed(&self, endpoint: &EndpointId) -> Option<&Outcome> {
+        self.observed.get(endpoint)
+    }
+
+    /// The federated ITS-REST `RESULT_SET` of this answer, with the façade's
+    /// own `q` and `columns[]` (N17, §9.2) and `meta.federation` under `meta`
+    /// (§9.1). A failing answer gets the same shape with no rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WireError`] when the envelope cannot be encoded.
+    pub fn into_result_set(
+        self,
+        q: Option<String>,
+        columns: Option<Vec<ResultSetColumn>>,
+    ) -> Result<ResultSet, WireError> {
+        let mut meta = ResultSetMetadata {
+            _href: None,
+            _type: None,
+            _schema_version: None,
+            _created: None,
+            _generator: None,
+            _executed_aql: None,
+            additional_properties: BTreeMap::new(),
+        };
+        envelope::attach(&self.federation, &mut meta)?;
+        Ok(ResultSet {
+            meta: Some(meta),
+            name: None,
+            q,
+            columns,
+            rows: self.rows,
+            additional_properties: BTreeMap::new(),
+        })
+    }
 }

@@ -653,6 +653,66 @@ settled before dispatch. Either form clears `complete` and fails the query
 under neither strategy (§11.1, §11.3, §11.4, N37). The key and the extension
 are FerroFED's own design; the missing signal is report T151 on #212.
 
+**Withholding consent exclusions** (#493, A53). Regulation (EU) 2025/327
+Art 8: "The fact that a natural person has restricted access ... shall not
+be visible to healthcare providers" (and Art 11(5)). `consent-denied` tells
+the requesting clinician that a restriction exists at that member, so
+`[federation.consent] disclose = false` keeps every consent exclusion out of
+what a client sees; the default, `true`, is N27a's `consent-denied`. With
+it off:
+
+- **The status is `not-resolved`.** A member the pre-filter excludes, and a
+  node that refuses with a listed consent code, are reported as a member the
+  cross-reference does not know the patient at: `not-resolved`, with the one
+  error text such a member carries in this mode, and no `latency_ms`.
+  `not-resolved` is in scope, clears `complete` and fails nothing, the
+  consequences §11.1 and §11.3 give `consent-denied`, so the answer is never
+  presented as whole (N16, N37). `not-localized` was rejected: N37 says such a
+  member "MUST NOT clear" `complete`, so `complete: false` beside it
+  contradicts the §11.4 derivation (the `FederationMeta` reader refuses it as
+  `CompleteMismatch`, and a client spotting the mismatch learns of the
+  exclusion), while `complete: true` presents a partial answer as whole. A
+  refusing node keeps no `latency_ms`, against N40's "every endpoint the
+  gateway actually dispatched a query to", because a `not-resolved` record
+  with one would show the refusal; the conflict with N40 is part of T182.
+- **The cross-reference is asked about an excluded member.** The query and
+  the read by subject resolve it with the other candidates and never send it
+  a request, so its record, a resolver outage included, is the one any member
+  carries. The cross-reference is the gateway's own service, the node learns
+  nothing, and without the lookup the exclusion would show through a
+  differing record; the data-minimisation purpose of §13.2.1 (no disclosure
+  to the node) holds.
+- **A read the gateway cannot serve is `404 subject-unavailable`.** A read by
+  subject that only an excluded or refusing member could serve, a routed read
+  or a request routed to a chosen node that the node refuses on consent, and
+  an ask-all probe the holder refuses all answer one gateway code, the same
+  answer as for a subject or an `ehr_id` no member holds in this mode. RFC
+  9110 §15.5.5 defines `404` for a resource the server did not find "or is
+  not willing to disclose that one exists" (and §15.5.4 lets a server hide a
+  forbidden resource behind it), so it claims no absence the gateway does not
+  know. `no-destination` was rejected: it asserts the request routes nowhere,
+  which is false when an excluded member holds the EHR. A routed answer still
+  names the endpoint the request was routed to (N31); a read by subject names
+  none, as for a subject no member holds. On a path where the gateway's `404`
+  would otherwise arise only from a refusal (a request under `{base}/v1/ehr/`,
+  the creation of an EHR, a DEMOGRAPHIC request), a node's own `404` gets the
+  same answer in this mode in place of §11.2's pass-through, and the node's
+  body, which may name the refusal, is never passed on; the definition area
+  holds no patient's data and is left as §11.2 has it. Every such answer
+  carries one fixed message. A read by subject a holder refuses still costs
+  one node request that a subject no member knows does not, a timing
+  difference the gateway cannot remove without asking a node it need not.
+- **The operator still sees every exclusion.** The pre-filter metrics count
+  each denial, the node request metrics count a node's refusal as
+  `consent-denied` on every path, a refusal on a routed path is logged, and an
+  outage of the consent service stays in `meta.federation.consent.error` and
+  on `/health/dependencies`, since it says nothing about a patient. `OPTIONS
+  {base}/` declares the choice as `federation.consent.disclose`.
+
+The specification's side, a declared non-disclosure mode in place of N27a's
+reporting duty, is report T182 on #212. No specification governs the setting
+itself: our own design.
+
 **The bindings.**
 
 | Role | Binding | Issue | Version |
@@ -2312,7 +2372,8 @@ released the same day; v0.0.8 is the milestone in progress.
 Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
 and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48, A49, which amends
-A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, and A52 on #489. The bracket names the report and its
+A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, A52 on #489, and
+A53 on 2026-10-05. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -2370,6 +2431,7 @@ R4 is #23, #25 and #27).
 | A50 | The metrics surface and the incident webhook [#281] | one OpenTelemetry `MeterProvider` (`opentelemetry` 0.33 with the Prometheus pull reader and an optional OTLP gRPC push), the family FerroEHR runs; `GET /metrics` on an admin listener of its own, off by default and on loopback unless `allow_remote`; the incident counter by `kind`, the node request counter by `endpoint` and §11.1 `outcome` with a duration histogram by `endpoint`, the reload counter by `result`, every label from an enum or the registry; no webhook | an operator alerts on a counter, and a webhook adds an outbound channel with its own credentials, retries and failure handling for no gain over a scrape; one provider keeps the two surfaces equal; a listener the client face never reaches needs no gateway authentication; no specification governs metrics: our own design | decided on #281 (2026-10-03) |
 | A51 | FerroFED under Regulation (EU) 2025/327 [#519] | an EHR system under Art 2(2)(k), its intended purpose covering every priority category its member CDRs hold, all six of Art 14(1)(a) to (f); the harmonised software components of Art 25(1) delivered before 26 March 2029 for (a) to (c) and 26 March 2031 for (d) to (f); cross-border care through the national contact point | FerroFED intermediates priority-category data for healthcare providers providing patient care and selects none by category; Art 25(2) excludes only "general purpose software"; Art 105 applies Art 25 and 26 from 26 March 2029 to a system intended to process categories (a) to (c) and from 26 March 2031 for (d) to (f); Art 11(2) and Art 23 route cross-border access through MyHealth@EU; section 16 | decided on #519 (2026-10-04, by the orchestrator under the owner's standing delegation); legal review can only narrow it |
 | A52 | The regional bindings [#489] | one `Binding` trait in the server; one module under `app/ferrofed-server/src/binding/` and one Cargo feature per binding: development always built, `binding-ihe` for Annex A, `binding-nl` for Annex B, both default; one `RoleConflict` naming the sections in place of one error per pair; FAPI 2.0 stays in the core | every country otherwise touched about eight files of the server, and a third localizer added a third pair of exclusion checks; a binding is a trait implementation, never a branch in the core (§2.4, N27, N27a); the research on #488 maps the next countries; the trait sits in the server because every hook it fills (configuration, settings, errors, transport, reload, state, health, metrics) is a server type; no specification governs the layout: our own design | decided on #489 |
+| A53 | Consent exclusions under Regulation (EU) 2025/327 Art 8 [#493] | `[federation.consent] disclose`, `true` by default (N27a's `consent-denied`); with `false`, a member the pre-filter excludes and a node's listed consent refusal are `not-resolved` with one neutral error text and no `latency_ms`, the excluded member resolved at the cross-reference with the others and never sent a request; a read by subject, a routed read and an ask-all probe the gateway cannot serve answer `404 subject-unavailable`, also for an EHR no member holds; `OPTIONS {base}/` declares `federation.consent.disclose`; the metrics keep counting every exclusion | Art 8 and Art 11(5) forbid showing a restriction to a healthcare provider; `not-resolved` clears `complete` and fails nothing as §11.1 and §11.3 give `consent-denied`, while N37 forbids a `not-localized` member from clearing `complete`; the cross-reference is the gateway's own service and a differing record would show the exclusion; RFC 9110 §15.5.5 admits a `404` for a resource the server will not disclose; the conflicts with N27a and N40 are report T182 on #212; no specification governs the setting: our own design | decided on #493 (2026-10-05, by the orchestrator under the owner's standing delegation) |
 
 ## 16. Regulatory status
 

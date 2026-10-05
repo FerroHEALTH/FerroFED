@@ -138,6 +138,41 @@ pub struct FederationSettings {
     /// `definition.stored_query_fan_out` declares it (§7a.2); only ever on
     /// beside the stored-query registry.
     pub fan_out_stored_queries: bool,
+    /// Whether an answer names a member the Step-1 consent pre-filter
+    /// excludes as `consent-denied` (N27a), as `consent.disclose` declares
+    /// it where a pre-filter is configured (§7a.2).
+    pub consent_disclosure: ConsentDisclosure,
+}
+
+/// Whether an answer names a member the Step-1 consent pre-filter excludes
+/// (N27a, `[federation.consent] disclose`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsentDisclosure {
+    /// The specification's behaviour: the member is `consent-denied` (N27a,
+    /// §11.1).
+    Disclosed,
+    /// The member is reported as one that does not know the patient, for a
+    /// deployment under Regulation (EU) 2025/327 Art 8, where the fact of a
+    /// restriction "shall not be visible to healthcare providers".
+    Withheld,
+}
+
+impl ConsentDisclosure {
+    /// The disclosure `[federation.consent] disclose` sets.
+    #[must_use]
+    pub fn of(disclose: bool) -> Self {
+        if disclose {
+            Self::Disclosed
+        } else {
+            Self::Withheld
+        }
+    }
+
+    /// Whether an answer names the exclusion.
+    #[must_use]
+    pub fn is_disclosed(self) -> bool {
+        self == Self::Disclosed
+    }
 }
 
 /// The localizer's failure policy and budget, resolved (§14.1).
@@ -272,6 +307,7 @@ impl Settings {
                 .map(EndpointId::as_str),
             fan_out_template_upload = self.federation.fan_out_template_upload,
             fan_out_stored_queries = self.federation.fan_out_stored_queries,
+            consent_disclose = self.federation.consent_disclosure.is_disclosed(),
             stored_query_backend = self
                 .stored_queries
                 .as_ref()

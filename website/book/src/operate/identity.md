@@ -249,8 +249,10 @@ pre-filter applies to every patient route: a federated query and the read
 of an EHR by subject
 ([Follow-ups](../integrate/follow-ups.md#reading-an-ehr-by-subject)).
 `OPTIONS {base}/` declares a configured pre-filter under `federation.consent`,
-with its mode and that policy; a deployment with no pre-filter declares
-nothing there.
+with its mode, that policy and `disclose`; a deployment with no pre-filter
+declares nothing there. A deployment under Regulation (EU) 2025/327 Art 8
+sets `[federation.consent] disclose = false`, so an answer never shows an
+exclusion ([Withholding consent exclusions](consent-exclusions.md)).
 
 For development, rows under `[[dev.consent_denied]]` beside the
 cross-reference are a static pre-filter, accepted only under

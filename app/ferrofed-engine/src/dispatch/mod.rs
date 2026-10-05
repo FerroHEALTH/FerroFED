@@ -56,7 +56,7 @@ use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId
 use openehr_federation::outcome::Outcome;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{
-    CallOptions, Client, ClientError, CredentialsProvider, RetryPolicy, Transport,
+    CallOptions, Client, ClientError, CredentialsProvider, ErrorBody, RetryPolicy, Transport,
 };
 use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
 use url::Url;
@@ -508,6 +508,20 @@ impl DispatchError {
     }
 }
 
+/// Whether `forwarded`, a node's answer, is a refusal on consent grounds.
+///
+/// That is a `403` whose ITS-REST `Error` carries a `code` among
+/// `refusal_codes`, the endpoint's consent refusal codes (§11.1, N27).
+#[must_use]
+pub fn is_consent_refusal(forwarded: &Forwarded, refusal_codes: &BTreeSet<String>) -> bool {
+    forwarded.status() == StatusCode::FORBIDDEN
+        && classify::refused_on_consent(
+            &ErrorBody::from_bytes(forwarded.body().to_vec()),
+            refusal_codes,
+        )
+        .is_some()
+}
+
 /// The ITS-REST client of one registry endpoint.
 #[derive(Debug, Clone)]
 pub struct NodeClient<T> {
@@ -566,6 +580,15 @@ impl<T: Transport + Clone> NodeClient<T> {
     #[must_use]
     pub fn endpoint(&self) -> &EndpointId {
         &self.endpoint
+    }
+
+    /// Whether `forwarded`, the node's answer to a forwarded request, is a
+    /// refusal on consent grounds: a `403` whose ITS-REST `Error` carries a
+    /// `code` the registry lists among this endpoint's consent refusal codes,
+    /// as a query's refusal is read (§11.1, N27).
+    #[must_use]
+    pub fn refuses_on_consent(&self, forwarded: &Forwarded) -> bool {
+        is_consent_refusal(forwarded, &self.consent_refusal_codes)
     }
 
     /// The ITS-REST service root every path is resolved under.

@@ -16,6 +16,7 @@ mod completeness;
 mod config;
 mod consent;
 mod consent_everywhere;
+mod consent_withheld;
 mod contribution_write;
 mod conveyance;
 mod created_ehr_id;

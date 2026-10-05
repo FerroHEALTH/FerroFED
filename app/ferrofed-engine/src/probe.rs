@@ -44,6 +44,10 @@ pub enum Answer {
     Holds(Forwarded),
     /// `404 Not Found`: the member does not hold the EHR.
     Absent,
+    /// A `403` whose ITS-REST `Error` carries one of the endpoint's consent
+    /// refusal codes: the member decided on consent, which says nothing
+    /// about whether it holds the EHR (§11.1, N27).
+    ConsentRefused,
     /// Any other status, which says nothing about whether the member holds
     /// the EHR.
     Erred(StatusCode),
@@ -78,6 +82,7 @@ impl Probed {
         match &self.answer {
             Answer::Holds(forwarded) => Contact::Answered(forwarded.status()),
             Answer::Absent => Contact::Answered(StatusCode::NOT_FOUND),
+            Answer::ConsentRefused => Contact::Answered(StatusCode::FORBIDDEN),
             Answer::Erred(status) => Contact::Answered(*status),
             Answer::Failed(error) => Contact::of_forward_error(error),
             Answer::Abandoned => Contact::Silent,
@@ -223,7 +228,9 @@ where
                 // NOTE: tokio::time::timeout_at (docs.rs) polls the call before the budget, so a
                 // probe the budget overtook before it left ends `Expired`, never abandoned.
                 let answer = match tokio::time::timeout_at(until, forwarded).await {
-                    Ok(forwarded) => classified(forwarded),
+                    Ok(forwarded) => {
+                        classified(forwarded, |answer| client.refuses_on_consent(answer))
+                    }
                     Err(_elapsed) => Answer::Abandoned,
                 };
                 (
@@ -265,11 +272,17 @@ where
         .collect())
 }
 
-/// What a member's reply says about whether it holds the EHR.
-fn classified(forwarded: Result<Forwarded, ForwardError>) -> Answer {
+/// What a member's reply says about whether it holds the EHR, where
+/// `refuses_on_consent` says whether an answer is the member's consent
+/// refusal.
+fn classified(
+    forwarded: Result<Forwarded, ForwardError>,
+    refuses_on_consent: impl FnOnce(&Forwarded) -> bool,
+) -> Answer {
     match forwarded {
         Ok(answer) if answer.status().is_success() => Answer::Holds(answer),
         Ok(answer) if answer.status() == StatusCode::NOT_FOUND => Answer::Absent,
+        Ok(answer) if refuses_on_consent(&answer) => Answer::ConsentRefused,
         Ok(answer) => Answer::Erred(answer.status()),
         Err(failure) => Answer::Failed(failure),
     }
