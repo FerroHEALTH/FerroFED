@@ -307,7 +307,7 @@ fn a_postgres_url_file_resolves_into_its_redacting_type() -> TestResult {
         Some(&format!(
             "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n\
              [stored_queries]\nbackend = \"postgres\"\nurl_file = {path}\n{}",
-            crate::support::AUDIT_TOML
+            crate::support::audit_toml()
         )),
         &BTreeMap::new(),
     )?

@@ -105,13 +105,27 @@ data:
     # EDIT: the address the nodes fetch the JWK Set from.
     jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
 
-    # Every access to patient data is recorded, with the caller who made it,
-    # and a gateway with a registry refuses to start without a destination.
-    # EDIT: "repository" with [audit.repository] keeps the whole record at
-    # your Audit Record Repository; "log" writes only what it names of no one.
+    # Every access to patient data is recorded, with the caller who made it
+    # and the patient, at your ATNA Audit Record Repository over the FHIR
+    # Feed of ITI-20 (Regulation (EU) 2025/327 Annex II 3.2). Outside the
+    # development profile a gateway with a registry refuses to start without
+    # it: "log" names no caller and no patient. Each record is stored in the
+    # spool first, on the audit-spool volume claim statefulset.yaml gives
+    # each replica at /var/lib/ferrofed.
     # https://ferrofed.eu/docs/operate/audit.html#the-access-log
     [audit]
-    destination = "log"
+    destination = "repository"
+
+    [audit.repository]
+    # EDIT: your Audit Record Repository's FHIR base.
+    url = "https://arr.example.org/fhir"
+    # EDIT: the gateway's network address each record names.
+    hostname = "gateway.example.org"
+    spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+    # When the repository asks for a client certificate, add it to the
+    # ferrofed-secrets Secret:
+    # client_identity_file = "/run/secrets/ferrofed/atna-client.pem"
+    # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 
   registry.toml: |
     [[organisation]]

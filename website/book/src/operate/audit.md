@@ -162,7 +162,10 @@ its record.
 No record content reaches a node, the operator log, a span or a metric
 label (§5.4, N33). The `log` destination writes the record's pattern,
 action, outcome and the count of its entities, never the patient, the
-caller, a template or archetype id or the client. A failure to store a
+caller, a template or archetype id or the client, so it is accepted for
+the access log under the development profile alone: a production gateway
+with a registry sends its access records to your Audit Record Repository
+with `destination = "repository"`. A failure to store a
 record is logged under the gateway's request id with the error chain, which
 names no value.
 
@@ -209,7 +212,7 @@ so author one from the templates your members hold
 
 ```toml
 [audit]
-destination = "repository"             # or "log", or "off" under development
+destination = "repository"             # "log" or "off" under development, or without a registry
 
 [audit.repository]
 url = "https://arr.example.org/fhir"   # the repository's FHIR base
@@ -236,8 +239,14 @@ trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
 - `log` writes each record as a structured event at the `ferrofed::audit`
   log target: the profile, the subtypes, the action, the outcome, the other
   party, and how many patient, query and resource entities the record
-  holds. It never writes a patient identifier, a patient reference or the
-  request, which may name one.
+  holds. It never writes a patient identifier, a patient reference, the
+  caller or the request, which may name one. An access record written
+  there names no one, so outside development a gateway with a registry
+  refuses `log`: `config check`, `serve` and a reload name
+  `audit.destination` and ask for `repository` (Regulation (EU) 2025/327
+  Annex II 3.2). `log` stays accepted under development, and outside it
+  for a gateway with no registry, whose PIXm, PDQm or PMIR records it
+  writes.
 - `repository` posts each record to `[url]/AuditEvent` as FHIR JSON. The
   url is `https` outside development; under development plain `http` is
   accepted and named on the banner, and without `spool_dir` the spool is

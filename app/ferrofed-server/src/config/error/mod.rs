@@ -481,6 +481,16 @@ pub enum Error {
         /// The key that turned the audit off.
         key: String,
     },
+    /// `[audit] destination = "log"` outside development while a registry
+    /// is configured, whose accesses the log target cannot record.
+    #[error(
+        "{key} = \"log\" records no caller and no patient, so the access log of a gateway with a registry needs \"repository\" outside profile = \"development\" (Regulation (EU) 2025/327 Annex II 3.2)"
+    )]
+    #[cfg(feature = "binding-ihe")]
+    AccessAuditLog {
+        /// The key that sent the access log to the log target.
+        key: String,
+    },
     /// `[audit.repository]` is set while the records go elsewhere.
     #[error(
         "[audit.repository] applies only under audit.destination = \"repository\"; remove it, or send the audit records there"

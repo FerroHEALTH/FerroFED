@@ -21,7 +21,11 @@
 #   6. runs `ferrofed config check` over that configuration, with a synthetic
 #      file for each `_file` secret it names and a synthetic ES384 key for each
 #      `key_file`, the mount paths rewritten to a temporary directory; and
-#   7. runs it again without the [signing] table, which it must refuse.
+#   7. runs it again without the [signing] table, which it must refuse; and
+#   8. checks that a configuration with a registry sends its access records
+#      to an Audit Record Repository, never to the log target, which names
+#      no caller and no patient (Regulation (EU) 2025/327 Annex II 3.2), and
+#      that config check refuses the example with destination = "log".
 #
 # Usage:
 #   scripts/checks/kubernetes-example.sh <ferrofed binary>
@@ -201,6 +205,42 @@ elif ! grep -q 'signing' <<< "$out"; then
   bad "ferrofed config check refuses the example without [signing] without naming it: $out"
 else
   echo "OK: the example without [signing] is refused by name"
+fi
+
+echo "== the access log names the caller and the patient"
+# audit_destination FILE: the destination key of FILE's [audit] table.
+audit_destination() {
+  local file="$1"
+  awk '
+    /^\[/ { inside = ($0 == "[audit]"); next }
+    inside && $1 == "destination" && $2 == "=" { print $3; exit }
+  ' "$file"
+}
+destination="$(audit_destination "$work/ferrofed.toml")"
+if ! grep -qE '^\[registry(\.[a-z]+)?\]$' "$work/ferrofed.toml"; then
+  echo "OK: the example configures no registry, so it records no access"
+elif [[ "$destination" != '"repository"' ]]; then
+  bad "configmap.yaml configures a registry and sends its access records to ${destination:-nowhere}; it needs [audit] destination = \"repository\""
+else
+  echo "OK: the example sends its access records to an Audit Record Repository"
+fi
+# The check has teeth: the example with its access records on the log target
+# is refused, naming the key.
+awk '
+  /^\[audit\.repository\]$/ { skip = 1; next }
+  /^\[/ { skip = 0 }
+  skip { next }
+  $1 == "destination" && $2 == "=" { print "destination = \"log\""; next }
+  { print }
+' "$work/ferrofed.toml" > "$work/logged.toml"
+if [[ "$(audit_destination "$work/logged.toml")" != '"log"' ]]; then
+  bad "the example names no [audit] destination to rewrite"
+elif out="$(check "$work/logged.toml" 2>&1)"; then
+  bad "ferrofed config check accepts the Kubernetes example with destination = \"log\""
+elif ! grep -q 'audit.destination' <<< "$out"; then
+  bad "ferrofed config check refuses destination = \"log\" without naming audit.destination: $out"
+else
+  echo "OK: the example with destination = \"log\" is refused by name"
 fi
 
 if [[ "$fail" -ne 0 ]]; then

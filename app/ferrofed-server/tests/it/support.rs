@@ -498,16 +498,16 @@ pub(crate) fn signing_key_file() -> &'static str {
 }
 
 /// `text` with the [`signing_toml`] table appended when it configures a
-/// registry and no `[signing]` of its own, and with an `[audit]` table that
-/// sends the access log to the log target when it configures a registry and
-/// no `[audit]` of its own (Regulation (EU) 2025/327 Annex II 3.2).
+/// registry and no `[signing]` of its own, and with the [`audit_toml`]
+/// tables when it configures a registry and no `[audit]` of its own
+/// (Regulation (EU) 2025/327 Annex II 3.2).
 pub(crate) fn signed(text: &str) -> String {
     let mut text = text.to_owned();
     if text.contains("[registry") && !text.contains("[signing]") {
         text.push_str(&signing_toml());
     }
     if text.contains("[registry") && !text.contains("[audit") {
-        text.push_str(AUDIT_TOML);
+        text.push_str(&audit_toml());
     }
     text
 }
@@ -530,9 +530,34 @@ pub(crate) fn signing_only(text: &str) -> String {
     }
 }
 
-/// The `[audit]` table a test gateway that federates carries unless it names
-/// its own: the access records go to the log target.
-pub(crate) const AUDIT_TOML: &str = "\n[audit]\ndestination = \"log\"\n";
+/// The spool directory of [`audit_toml`]: one per test process, in a
+/// directory that lives as long as the process, so every gateway of a test
+/// shares one forwarder.
+#[expect(
+    clippy::expect_used,
+    reason = "a test process that cannot make a temporary directory cannot test anything"
+)]
+static AUDIT_SPOOL: LazyLock<(tempfile::TempDir, String)> = LazyLock::new(|| {
+    let dir = tempfile::tempdir().expect("a temporary directory should be made");
+    let spool = dir.path().join("audit-feed-spool").display().to_string();
+    (dir, spool)
+});
+
+/// The `[audit]` tables a test gateway that federates carries unless it
+/// names its own. Outside development a registry needs a repository for its
+/// access records, since `log` names no caller and no patient (Regulation
+/// (EU) 2025/327 Annex II 3.2). The repository is an `https` base no
+/// connection reaches, because the testkit's harness repository speaks plain
+/// `http`, which production refuses: each record is stored in the spool on
+/// disk, and so recorded, and its delivery is retried. A test of what the
+/// repository receives names its own `[audit]` over the harness.
+pub(crate) fn audit_toml() -> String {
+    format!(
+        "\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
+        ferrofed_testkit::unreachable::ADDRESS,
+        toml::Value::String(AUDIT_SPOOL.1.clone())
+    )
+}
 
 /// A signer over a fresh synthetic key, naming the gateway `federation`,
 /// for a test that assembles its own federation.

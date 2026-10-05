@@ -42,7 +42,7 @@ fn text(dir: &Path, table: &str) -> Result<String, Box<dyn Error>> {
     Ok(format!(
         "[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\n\
          node_selection = \"ask-all\"\n\n[stored_queries]\n{table}\n{}",
-        crate::support::AUDIT_TOML
+        crate::support::audit_toml()
     ))
 }
 
