@@ -19,7 +19,11 @@
 //! the same server alone, its port published to the host, for the gateway's
 //! own PostgreSQL store, a database per use.
 //!
-//! No specification governs the harness; it is FerroFED's own design.
+//! The node profile also runs against a second CDR product, EHRbase, which
+//! [`ehrbase`] starts on its own pinned database image.
+//!
+//! No specification governs the harness, and none governs which CDR products
+//! it runs: our own design.
 
 use crate::proxy::{CapturingProxy, ProxyError};
 use std::path::Path;
@@ -29,6 +33,8 @@ use std::time::Duration;
 use testcontainers::core::{Healthcheck, IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ContainerRequest, CopyTargetOptions, GenericImage, ImageExt};
+
+pub mod ehrbase;
 
 /// The environment variable that admits the container-backed tests.
 pub const E2E_GATE: &str = "FERROFED_E2E";
@@ -47,6 +53,24 @@ pub const API_PATH: &str = "/ferroehr/rest/openehr";
 
 /// The path that answers `200` once FerroEHR serves requests.
 const READINESS_PATH: &str = "/health/readiness";
+
+/// What the harness needs to know of a CDR product to reach a started one.
+#[derive(Debug, Clone, Copy)]
+struct Product {
+    /// The repository of the product's image, which names it in an error.
+    image: &'static str,
+    /// The path of its ITS-REST API root, the path `/v1/ehr` lives under.
+    api_path: &'static str,
+    /// The path that answers `200` once it serves requests.
+    readiness_path: &'static str,
+}
+
+/// FerroEHR, as the harness reaches it.
+const FERROEHR_PRODUCT: Product = Product {
+    image: FERROEHR.repository,
+    api_path: API_PATH,
+    readiness_path: READINESS_PATH,
+};
 
 /// The `system_id` node A stamps into every EHR and version it creates.
 pub const NODE_A_SYSTEM_ID: &str = "cdr-a.example.org";
@@ -163,6 +187,22 @@ pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
     digest: "sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9",
 };
 
+/// EHRbase, an openEHR CDR of another vendor speaking ITS-REST, which the
+/// node profile runs against beside FerroEHR.
+pub const EHRBASE: PinnedImage = PinnedImage {
+    repository: "ehrbase/ehrbase",
+    tag: "2.36.0",
+    digest: "sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a",
+};
+
+/// The database image EHRbase documents beside that release, which creates
+/// its database, its two login roles and its schemas.
+pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
+    repository: "ehrbase/ehrbase-v2-postgres",
+    tag: "16.2",
+    digest: "sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7",
+};
+
 /// The Maven image the Federation Tier reference implementation is built
 /// in, on the Java release its build declares (`java.version` 21).
 pub const MAVEN: PinnedImage = PinnedImage {
@@ -231,6 +271,8 @@ struct DatabaseServer {
 /// other nodes started beside it, so the server stops with the last of them.
 #[derive(Debug)]
 pub struct Node {
+    /// The product the CDR runs.
+    product: Product,
     /// The `system_id` the CDR was configured with.
     system_id: &'static str,
     /// The CDR itself.
@@ -258,7 +300,14 @@ impl Node {
     /// Returns the ITS-REST API root reached directly, bypassing any proxy.
     #[must_use]
     pub fn api_root(&self) -> String {
-        format!("{}{API_PATH}", self.origin)
+        format!("{}{}", self.origin, self.product.api_path)
+    }
+
+    /// Returns the path of the CDR's ITS-REST API root, the path `/v1/ehr`
+    /// lives under: [`API_PATH`] for FerroEHR.
+    #[must_use]
+    pub fn api_path(&self) -> &'static str {
+        self.product.api_path
     }
 
     /// Returns the CDR container.
@@ -285,7 +334,7 @@ impl Node {
             .stop()
             .await
             .map_err(|source| HarnessError::Container {
-                image: FERROEHR.repository,
+                image: self.product.image,
                 source,
             })
     }
@@ -317,7 +366,7 @@ impl ProxiedNode {
     /// gateway under test is configured with.
     #[must_use]
     pub fn api_root(&self) -> String {
-        format!("{}{API_PATH}", self.proxy.origin())
+        format!("{}{}", self.proxy.origin(), self.node.api_path())
     }
 }
 
@@ -442,7 +491,7 @@ pub async fn postgres(first: &str, others: &[&str]) -> Result<Postgres, HarnessE
 /// The image's own init script creates `first`, and
 /// [`NODE_DATABASES_SCRIPT`] runs it once more for each of `others`.
 async fn database_server(first: &str, others: &[&str]) -> Result<DatabaseServer, HarnessError> {
-    let (network, host) = names();
+    let (network, host) = names("ferroehr");
     let container = FERROEHR_POSTGRES
         .image()
         .with_exposed_port(POSTGRES_PORT.tcp())
@@ -488,7 +537,7 @@ async fn ferroehr_on(
             image: FERROEHR.repository,
             source,
         })?;
-    ready(system_id, server, Arc::clone(database)).await
+    ready(FERROEHR_PRODUCT, system_id, server, Arc::clone(database)).await
 }
 
 /// The FerroEHR container as `system_id` on the database `name` of
@@ -584,27 +633,29 @@ pub async fn ferroehr_restricted(system_id: &'static str) -> Result<Node, Harnes
             image: FERROEHR.repository,
             source,
         })?;
-    ready(system_id, server, database).await
+    ready(FERROEHR_PRODUCT, system_id, server, database).await
 }
 
-/// Returns a network name and a database server container name unique to
-/// this process and call.
-fn names() -> (String, String) {
+/// Returns a network name and a database server container name for a node
+/// of `product`, unique to this process and call.
+fn names(product: &str) -> (String, String) {
     let sequence = NETWORK_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let process = std::process::id();
     (
-        format!("ferrofed-e2e-ferroehr-{process}-{sequence}"),
-        format!("ferrofed-e2e-ferroehr-db-{process}-{sequence}"),
+        format!("ferrofed-e2e-{product}-{process}-{sequence}"),
+        format!("ferrofed-e2e-{product}-db-{process}-{sequence}"),
     )
 }
 
-/// Resolves the host origin of `server` and waits until it is ready.
+/// Resolves the host origin of `server`, a CDR running `product`, and waits
+/// until it is ready.
 async fn ready(
+    product: Product,
     system_id: &'static str,
     server: ContainerAsync<GenericImage>,
     database: Arc<DatabaseServer>,
 ) -> Result<Node, HarnessError> {
-    let image = FERROEHR.repository;
+    let image = product.image;
     let host = server
         .get_host()
         .await
@@ -614,8 +665,9 @@ async fn ready(
         .await
         .map_err(|source| HarnessError::Container { image, source })?;
     let origin = format!("http://{host}:{port}");
-    await_readiness(&format!("{origin}{READINESS_PATH}")).await?;
+    await_readiness(&format!("{origin}{}", product.readiness_path)).await?;
     Ok(Node {
+        product,
         system_id,
         server,
         database,

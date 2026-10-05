@@ -56,11 +56,18 @@ fn rows(answer: &Answer) -> Option<usize> {
 
 /// Returns the body of `answer` decoded with the strict canonical JSON
 /// reader, or `None` when it is not one.
-// NOTE: no specification governs the checks: our own design; an undecodable body is evidence.
+// NOTE: no specification governs the checks: our own design; an decoded_or_reason body is evidence.
 fn decoded<T: serde::de::DeserializeOwned>(answer: &Answer) -> Option<T> {
     std::str::from_utf8(&answer.body)
         .ok()
         .and_then(|text| from_canonical_json(text).ok())
+}
+
+/// Returns the body of `answer` decoded with the strict canonical JSON
+/// reader, or why it is not one, for an evidence line.
+fn decoded_or_reason<T: serde::de::DeserializeOwned>(answer: &Answer) -> Result<T, String> {
+    let text = std::str::from_utf8(&answer.body).map_err(|error| error.to_string())?;
+    from_canonical_json(text).map_err(|error| error.to_string())
 }
 
 /// Checks that the node is invocable on `ehr_id` alone: the EHR, its
@@ -81,24 +88,37 @@ pub async fn invocable_on_ehr_id(
     let mut seen = Vec::new();
 
     let ehr = interface.get(&format!("ehr/{ehr_id}"), None).await?;
-    seen.push(if ehr.status != StatusCode::OK {
-        (
-            Verdict::Fail,
-            format!("GET /ehr/{ehr_id} answered {}", ehr.status),
-        )
-    } else if decoded::<Ehr>(&ehr).is_some_and(|read| {
-        read.ehr_id
-            .value()
-            .eq_ignore_ascii_case(&ehr_id.to_string())
-    }) {
-        (
-            Verdict::Pass,
-            format!("GET /ehr/{ehr_id} answered 200 with that EHR"),
-        )
+    seen.push(if ehr.status == StatusCode::OK {
+        match decoded_or_reason::<Ehr>(&ehr) {
+            Ok(read)
+                if read
+                    .ehr_id
+                    .value()
+                    .eq_ignore_ascii_case(&ehr_id.to_string()) =>
+            {
+                (
+                    Verdict::Pass,
+                    format!("GET /ehr/{ehr_id} answered 200 with that EHR"),
+                )
+            }
+            Ok(read) => (
+                Verdict::Fail,
+                format!(
+                    "GET /ehr/{ehr_id} answered 200 with the EHR {}",
+                    read.ehr_id.value()
+                ),
+            ),
+            Err(reason) => (
+                Verdict::Fail,
+                format!(
+                    "GET /ehr/{ehr_id} answered 200 with a body the canonical JSON reader refuses as an EHR: {reason}"
+                ),
+            ),
+        }
     } else {
         (
             Verdict::Fail,
-            format!("GET /ehr/{ehr_id} answered 200 with no EHR of that ehr_id"),
+            format!("GET /ehr/{ehr_id} answered {}", ehr.status),
         )
     });
 
