@@ -100,6 +100,10 @@ pub enum TokenError {
     /// nothing was sent, and the source names no part of the secret.
     #[error("the client id and secret cannot be sent in the Basic scheme")]
     ClientSecret(#[source] InvalidCredentials),
+    /// The grant authenticates with a client secret and holds none, so
+    /// nothing was sent (RFC 6749 §2.3.1).
+    #[error("the token request needs the client secret, and the grant holds none")]
+    NoSecret,
     /// The token request could not be composed.
     #[error("the token request could not be composed")]
     Compose(#[source] http::Error),
@@ -340,6 +344,7 @@ pub fn assertion(
 ///
 /// Returns a [`TokenError`] for every request that produced no usable
 /// token: an assertion that could not be signed or has no key to sign it, a
+/// secret the grant authenticates with and does not hold, a
 /// request that could not be composed or sent, an RFC 6749 §5.2 refusal,
 /// another status, a body that is no token response, a token of another
 /// type than the grant asks for or that cannot be sent, and a token bound
@@ -414,7 +419,13 @@ fn client_assertion(
     signer: Option<(&SigningKey, Duration)>,
 ) -> Result<Option<String>, TokenError> {
     match grant.client_authentication() {
-        ClientAuthentication::Tls(_) | ClientAuthentication::ClientSecret(_) => Ok(None),
+        ClientAuthentication::Tls(_) => Ok(None),
+        // NOTE: RFC 6749 §2.3.1, a client authenticated by a secret sends it, so a
+        // grant that names the method and holds no secret sends nothing at all.
+        ClientAuthentication::ClientSecret(_) => grant
+            .client_secret()
+            .map(|_| None)
+            .ok_or(TokenError::NoSecret),
         ClientAuthentication::PrivateKeyJwt => {
             let (key, lifetime) = signer.ok_or(TokenError::Unsigned)?;
             assertion(grant, key, lifetime).map(Some)

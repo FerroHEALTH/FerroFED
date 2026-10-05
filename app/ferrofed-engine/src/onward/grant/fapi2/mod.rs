@@ -149,13 +149,6 @@ pub enum Fapi2GrantError {
     /// §5.4.1).
     #[error("the DPoP key does not sign ES256, which FAPI 2.0 §5.4.1 requires of it")]
     DpopKey,
-    /// The grant authenticates with a client secret, where the profile
-    /// authenticates a client with `private_key_jwt` or its TLS client
-    /// certificate (FAPI 2.0 Security Profile §5.3.2.1).
-    #[error(
-        "a FAPI 2.0 grant authenticates with private_key_jwt or mutual TLS, never a client secret"
-    )]
-    ClientSecret,
     /// The grant authenticates with `private_key_jwt` and has no client key
     /// to sign its assertions with.
     #[error("the grant authenticates with private_key_jwt and has no client key")]
@@ -217,7 +210,6 @@ impl Fapi2Grant {
     /// # Errors
     ///
     /// Returns [`Fapi2GrantError::ClientId`] for an empty `client_id`,
-    /// [`Fapi2GrantError::ClientSecret`] for a client secret,
     /// [`Fapi2GrantError::NoClientKey`] for `private_key_jwt` without a
     /// client key, [`Fapi2GrantError::ClientKey`] and
     /// [`Fapi2GrantError::DpopKey`] for a key that does not sign `ES256`,
@@ -232,9 +224,6 @@ impl Fapi2Grant {
         let client_id = client_id.into();
         if client_id.is_empty() {
             return Err(Fapi2GrantError::ClientId);
-        }
-        if matches!(security.client_auth, ClientAuthentication::ClientSecret(_)) {
-            return Err(Fapi2GrantError::ClientSecret);
         }
         if security.client_auth == ClientAuthentication::PrivateKeyJwt
             && security.client_key.is_none()
