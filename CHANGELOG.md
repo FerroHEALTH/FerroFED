@@ -93,6 +93,31 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   request's headers and is handed the request URL without the query that
   holds the pseudonym (0.0.12).
 
+- `ferrofed conformance run --config <file>` scores a configured deployment
+  against the Connectathon tracks 1 to 7, 9 and 11 over ITS-REST (#546;
+  §16.3, §16.4). It starts the gateway in-process from the configuration, or
+  drives one already serving at `--gateway <url>`, as a client holding a
+  bearer token from `--token-file`. It seeds a synthetic patient in the
+  `urn:oid:2.999` arc at every member the deployment's own cross-reference
+  names, through each node's ITS-REST writes: the patient's EHR, the vendored
+  template and one vendored composition, three EHRs with no subject, and the
+  writes the scenarios make. It reads no EHR it did not create and removes
+  nothing. It refuses to start without `--allow-writes`, against a profile
+  other than `development` without
+  `--i-understand-this-writes-synthetic-data-to-the-nodes`, for a patient
+  outside the example arc, and for seed files other than the vendored ones,
+  which it checks by SHA-256. The `--gateway` URL and every member endpoint
+  are held to `https`, or `http` to a loopback host under the development
+  profile alone, which the report names; the gateway client follows no
+  redirect, and the caller's token is held as a secret that no report, log
+  line or error carries. It writes the per-track and per-point report the
+  harness run writes, with the same columns and results, and reports every
+  scenario that needs fault injection, node-side capture or a gateway
+  configured for it `not-run` with the reason, never `pass`; `--node-profile`
+  adds the admission check of every member as the node profile findings. The
+  end-to-end tracks call the same scenario checks, and a run against the
+  harness reads what the harness scores and nothing more.
+
 - An end-to-end check that the `AVG` the gateway declares decomposable in
   `OPTIONS {base}/` is the mean weighted by each node's count (§11.6.3, N39,
   CP-10, CP-32), behind `FERROFED_E2E`. With two values at one FerroEHR node

@@ -46,9 +46,10 @@ postgres = [
 
 [dependencies]
 anyhow.workspace = true
-# The constant-time comparison of the PMIR feed token (#147) and the keyed
-# caller references of the security log (#500), from the crypto library the
-# engine already uses.
+# The constant-time comparison of the PMIR feed token (#147), the keyed
+# caller references of the security log (#500), and the SHA-256 a conformance
+# run checks its synthetic seed files against (#546), from the crypto library
+# the engine already uses.
 aws-lc-rs.workspace = true
 axum.workspace = true
 clap.workspace = true

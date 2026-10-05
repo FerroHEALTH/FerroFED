@@ -9,30 +9,27 @@
 //! and track 4; N4, N10, N11, N12, N35; CP-5, CP-6, CP-11, CP-28, CP-30,
 //! CP-37).
 //!
-//! Selected ENDPOINT attributes in the rows are scored in `e2e::attributes`.
+//! The client-visible checks of the directives and the header are the
+//! conformance run's own
+//! ([`ferrofed_server::conformance::scenarios::track3`]); this suite adds
+//! what reached each node, and the localizer it makes fail. Selected
+//! ENDPOINT attributes in the rows are scored in `e2e::attributes`.
 
+use ferrofed_server::conformance::client::Federated;
+use ferrofed_server::conformance::scenarios::track3;
 use ferrofed_testkit::containers::{self, TwoNodes};
 use ferrofed_testkit::proxy::{CapturingProxy, Fault};
 use http::StatusCode;
-use openehr_federation::headers::ENDPOINT;
 use openehr_federation::options::OptionsRoot;
 
 use crate::e2e::pixm::{DOMAIN_A, nodes_and_pix, pixm_resolver, pixm_resolver_at};
 use crate::e2e::scenario::{
-    Federated, Options, Reply, asked, clear, exchange, gateway_with, nobody_asked,
-    patient_compositions, patient_predicate, post_aql, queries, seed_both,
+    Options, Reply, asked, clear, exchange, fixture, gateway_with, in_process, nobody_asked,
+    patient_predicate, post_aql, queries, seed_both,
 };
 use crate::e2e::{EHR_A, TestResult, assert_no_patient_identifier_on_the_wire};
 
-/// The patient's compositions from the members `directive` selects.
-fn directed(directive: &str) -> String {
-    format!(
-        "SELECT c/uid/value AS uid FROM {directive} CONTAINS EHR e CONTAINS COMPOSITION c WHERE {}",
-        patient_predicate()
-    )
-}
-
-/// The undirected form of [`directed`].
+/// The undirected patient query.
 fn undirected() -> String {
     format!(
         "SELECT c/uid/value AS uid FROM EHR e CONTAINS COMPOSITION c WHERE {}",
@@ -75,25 +72,9 @@ async fn a_directive_selects_the_node_set_and_leaves_the_row_shape_alone() -> Te
     seed_both(&nodes).await?;
     let dir = tempfile::tempdir()?;
     let app = gateway_with(dir.path(), &nodes, &Options::default())?;
+    let (gateway, fixture) = (in_process(&app), fixture(Some(1), Some(1))?);
 
-    let by_endpoint = answered(
-        &exchange(
-            &app,
-            post_aql(&directed(r#"ENDPOINT ["node-a-pub"]"#), &[])?,
-        )
-        .await?,
-    )?;
-    assert_eq!(
-        vec![("node-a-pub", "active"), ("node-b-pub", "excluded")],
-        by_endpoint.statuses(),
-        "CP-6: the directive selects node A and reports node B excluded"
-    );
-    assert_eq!(1, by_endpoint.rows.len(), "node A's one composition");
-    assert_eq!(
-        vec!["uid"],
-        by_endpoint.names(),
-        "CP-37: no ENDPOINT attribute selected, so the row shape is the client's"
-    );
+    track3::directive_endpoint(&gateway, &fixture, "node-a-pub").await?;
     assert!(asked(&nodes.b).is_empty(), "CP-6: node B was not named");
     let sent = queries(&nodes.a);
     assert!(
@@ -104,13 +85,7 @@ async fn a_directive_selects_the_node_set_and_leaves_the_row_shape_alone() -> Te
     no_targeting_on_the_wire(&nodes);
 
     clear(&nodes);
-    let by_organisation =
-        answered(&exchange(&app, post_aql(&directed(r#"ORGANISATION ["org-b"]"#), &[])?).await?)?;
-    assert_eq!(
-        vec![("node-a-pub", "excluded"), ("node-b-pub", "active")],
-        by_organisation.statuses(),
-        "CP-6: the organisation's endpoints are the node set"
-    );
+    track3::directive_organisation(&gateway, &fixture, "org-b").await?;
     assert!(asked(&nodes.a).is_empty(), "CP-6: node A was not named");
     no_targeting_on_the_wire(&nodes);
     Ok(())
@@ -130,18 +105,13 @@ async fn a_named_member_where_the_patient_does_not_resolve_is_reported_not_error
     };
     let app = gateway_with(dir.path(), &nodes, &options)?;
 
-    let reply = exchange(
-        &app,
-        post_aql(&directed(r#"ENDPOINT ["node-a-pub", "node-b-pub"]"#), &[])?,
+    track3::named_unresolved(
+        &in_process(&app),
+        &fixture(Some(1), None)?,
+        "node-a-pub",
+        "node-b-pub",
     )
     .await?;
-    let answer = answered(&reply)?;
-    assert_eq!(
-        vec![("node-a-pub", "active"), ("node-b-pub", "not-resolved")],
-        answer.statuses(),
-        "CP-6: a named member where the patient is unknown is reported, not an error"
-    );
-    assert_eq!(1, answer.rows.len(), "node A's rows: {}", reply.text);
     assert!(asked(&nodes.b).is_empty(), "N8: node B is never asked");
     assert_no_patient_identifier_on_the_wire(&nodes);
     Ok(())
@@ -157,55 +127,17 @@ async fn the_endpoint_header_selects_what_the_directive_selects() -> TestResult 
     seed_both(&nodes).await?;
     let dir = tempfile::tempdir()?;
     let app = gateway_with(dir.path(), &nodes, &Options::default())?;
+    let (gateway, fixture) = (in_process(&app), fixture(Some(1), Some(1))?);
 
-    let by_directive = answered(
-        &exchange(
-            &app,
-            post_aql(&directed(r#"ENDPOINT ["node-b-pub"]"#), &[])?,
-        )
-        .await?,
-    )?;
-    let by_header =
-        answered(&exchange(&app, post_aql(&undirected(), &[(ENDPOINT, "node-b-pub")])?).await?)?;
-    assert_eq!(
-        by_directive.statuses(),
-        by_header.statuses(),
-        "CP-28: the header and the directive select the same node set"
-    );
-    assert_eq!(by_directive.sorted_rows(), by_header.sorted_rows());
-    assert_eq!(
-        vec![("node-a-pub", "excluded"), ("node-b-pub", "active")],
-        by_header.statuses()
-    );
+    track3::header_selects(&gateway, &fixture, "node-b-pub").await?;
     assert!(asked(&nodes.a).is_empty(), "node A is named by neither");
     no_targeting_on_the_wire(&nodes);
 
     clear(&nodes);
-    let conflicting = exchange(
-        &app,
-        post_aql(
-            &directed(r#"ENDPOINT ["node-b-pub"]"#),
-            &[(ENDPOINT, "node-a-pub")],
-        )?,
-    )
-    .await?;
-    assert_eq!(
-        StatusCode::BAD_REQUEST,
-        conflicting.status,
-        "CP-28: conflicting node sets in one request: {}",
-        conflicting.text
-    );
-    assert_eq!("targeting-conflict", conflicting.code()?);
+    track3::conflict_refused(&gateway, &fixture, "node-b-pub", "node-a-pub").await?;
     nobody_asked(&nodes, "CP-28: a refused request asks no node");
 
-    let mut parameter = post_aql(&patient_compositions(), &[])?;
-    *parameter.uri_mut() = "/v1/query/aql?endpoint=node-b-pub".parse()?;
-    let unpinned = answered(&exchange(&app, parameter).await?)?;
-    assert_eq!(
-        vec![("node-a-pub", "active"), ("node-b-pub", "active")],
-        unpinned.statuses(),
-        "CP-28: ?endpoint= is not a targeting mechanism"
-    );
+    track3::parameter_targets_nothing(&gateway, &fixture, "node-b-pub").await?;
     for node in [&nodes.a, &nodes.b] {
         assert!(
             !node.proxy.journal_contains(b"endpoint="),

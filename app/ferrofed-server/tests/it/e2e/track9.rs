@@ -9,35 +9,29 @@
 //! federation header, no `/rest/openehr`. It reads the self-description,
 //! queries one EHR in both addressing forms of N29, reads the EHR at the
 //! canonical path, and commits a composition there, which the `ehr_id` index
-//! routes (§12.5.1 step 3). The nodes are asked at their own base, and the
-//! gateway's base reaches neither.
+//! routes (§12.5.1 step 3). Those are the conformance run's own checks
+//! ([`ferrofed_server::conformance::scenarios::track9`]), driven through its
+//! own HTTP client; this suite adds that the nodes are asked at their own
+//! base, and the gateway's base reaches neither.
 
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_testkit::containers::{self, API_PATH, TwoNodes};
+use ferrofed_server::conformance::client::HttpGateway;
+use ferrofed_server::conformance::scenarios::track9;
+use ferrofed_testkit::containers::{self, TwoNodes};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{self, DemoComposition, EhrSeed, SeedPlan};
-use http::StatusCode;
+use secrecy::SecretString;
 use tokio::net::TcpListener;
 
+use crate::e2e::scenario::{Validated, fixture};
 use crate::e2e::{
-    Answer, EHR_A, EHR_B, PATIENT, TestResult, composition_carrying, dev_resolver, gateway_mounted,
-    plan,
+    EHR_A, EHR_B, PATIENT, TestResult, composition_carrying, dev_resolver, gateway_mounted, plan,
 };
 
 /// The prefix the deployment mounts the gateway at.
 const BASE: &str = "/fed/openehr";
-
-/// The query of node A's one EHR in the `WHERE` form of N29.
-fn where_form() -> String {
-    format!("SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '{EHR_A}'")
-}
-
-/// The same query in the `FROM EHR` form of N29.
-fn from_form() -> String {
-    format!("SELECT c/uid/value FROM EHR e[ehr_id/value='{EHR_A}'] CONTAINS COMPOSITION c")
-}
 
 /// Seeds node A with [`EHR_A`] and one composition, and node B with
 /// [`EHR_B`], and clears both journals.
@@ -60,30 +54,6 @@ pub(crate) async fn seeded() -> Result<TwoNodes, Box<dyn Error>> {
     nodes.a.proxy.clear_journal();
     nodes.b.proxy.clear_journal();
     Ok(nodes)
-}
-
-/// The rows of the answer to `aql`, posted under `base` as an ITS-REST
-/// `AdhocQueryExecute`.
-async fn rows(
-    client: &reqwest::Client,
-    base: &str,
-    aql: &str,
-) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
-    #[derive(serde::Serialize)]
-    struct Adhoc<'a> {
-        q: &'a str,
-    }
-    let response = client
-        .post(format!("{base}/v1/query/aql"))
-        .header(http::header::CONTENT_TYPE, "application/json")
-        .body(serde_json::to_string(&Adhoc { q: aql })?)
-        .send()
-        .await?;
-    let status = response.status();
-    let text = response.text().await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    crate::facade::schema::validate(&text)?;
-    Ok(serde_json::from_str::<Answer>(&text)?.rows)
 }
 
 /// Whether `capture` is the commit of a composition.
@@ -112,55 +82,20 @@ async fn an_unmodified_client_given_only_the_base_url_reads_and_writes_at_a_pref
             let _signalled = stopped.await;
         },
     ));
-    let client = crate::support::authenticated_client()?;
+    let client = Validated(HttpGateway::new(
+        base.parse()?,
+        SecretString::from(crate::support::token()?),
+    )?);
+    let fixture = fixture(Some(1), Some(0))?;
+    let node_a = fixture.member("node-a-pub").ok_or("node A is a member")?;
 
-    let options = client
-        .request(reqwest::Method::OPTIONS, format!("{base}/"))
-        .send()
-        .await?;
-    assert_eq!(StatusCode::OK, options.status(), "OPTIONS {{base}}/");
-    crate::facade::schema::validate_options(&options.text().await?)?;
-
-    let where_rows = rows(&client, &base, &where_form()).await?;
-    let from_rows = rows(&client, &base, &from_form()).await?;
-    assert_eq!(1, where_rows.len(), "node A's one composition");
-    assert_eq!(
-        where_rows, from_rows,
-        "N29: both forms answer the same rows"
-    );
-
-    let read = client.get(format!("{base}/v1/ehr/{EHR_A}")).send().await?;
-    assert_eq!(
-        StatusCode::OK,
-        read.status(),
-        "the read at the canonical path"
-    );
-    assert_eq!(
-        Some("node-a-pub"),
-        read.headers()
-            .get("openEHR-federation-endpoint")
-            .and_then(|value| value.to_str().ok()),
-        "N31"
-    );
-
-    let write = client
-        .post(format!("{base}/v1/ehr/{EHR_A}/composition"))
-        .header(http::header::CONTENT_TYPE, "application/json")
-        .body(composition_carrying(PATIENT)?)
-        .send()
-        .await?;
-    let status = write.status();
-    let location = write
-        .headers()
-        .get(http::header::LOCATION)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned);
-    let text = write.text().await?;
-    assert_eq!(StatusCode::CREATED, status, "the write: {text}");
-    assert!(
-        location.is_some_and(|location| location.contains(API_PATH)),
-        "the node's own Location, unmodified (N31)"
-    );
+    track9::plain_client(
+        &client,
+        node_a,
+        (&EHR_A.to_string(), 1),
+        &composition_carrying(PATIENT)?,
+    )
+    .await?;
 
     let (a, b) = (nodes.a.proxy.journal(), nodes.b.proxy.journal());
     for capture in a.iter().chain(&b) {

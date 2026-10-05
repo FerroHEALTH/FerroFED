@@ -8,7 +8,9 @@
 //! deployment pipeline tests a configuration without binding a socket.
 //! `admission check` exercises one configured member against the
 //! identifier-integrity conditions of §12b.2 and writes the report to
-//! standard output (§12b.1, N42a, CP-33a). `healthcheck` asks the gateway on
+//! standard output (§12b.1, N42a, CP-33a). `conformance run` drives the
+//! Connectathon tracks of §16.3 against the configured deployment and writes
+//! the per-track and per-point report (§16.4). `healthcheck` asks the gateway on
 //! this host for its readiness, for a container runtime with no HTTP client
 //! of its own. No specification governs the command line: our own design.
 
@@ -50,6 +52,12 @@ pub enum Command {
         #[command(subcommand)]
         command: AdmissionCommand,
     },
+    /// Scores a deployment against the Connectathon tracks of §16.3.
+    Conformance {
+        /// The job to run.
+        #[command(subcommand)]
+        command: ConformanceCommand,
+    },
     /// Asks the gateway running on this host whether it is ready, and exits
     /// `0` only when readiness answers `200`.
     Healthcheck,
@@ -85,9 +93,58 @@ pub enum AdmissionCommand {
     },
 }
 
+/// The `conformance` jobs.
+#[derive(Debug, Subcommand, PartialEq, Eq)]
+pub enum ConformanceCommand {
+    /// Drives tracks 1 to 7, 9 and 11 against the configured deployment over
+    /// ITS-REST and writes the per-track and per-point report (§16.3,
+    /// §16.4).
+    ///
+    /// The run seeds a synthetic patient at every member the cross-reference
+    /// names, through each node's own ITS-REST writes, and removes nothing.
+    Run(RunArgs),
+}
+
+/// The arguments of `conformance run`.
+#[derive(Debug, clap::Args, PartialEq, Eq)]
+pub struct RunArgs {
+    /// Allows the run's writes: a synthetic patient's EHR, the vendored
+    /// template and compositions, EHRs with no subject, and stored queries.
+    #[arg(long)]
+    pub allow_writes: bool,
+    /// Allows a run against a deployment whose profile is not development.
+    #[arg(long = "i-understand-this-writes-synthetic-data-to-the-nodes")]
+    pub acknowledged: bool,
+    /// The synthetic patient's namespace, `urn:oid:2.999` or an OID under it.
+    #[arg(long, value_name = "OID")]
+    pub patient_namespace: String,
+    /// The synthetic patient's identifier, which the deployment's
+    /// cross-reference resolves.
+    #[arg(long, value_name = "VALUE")]
+    pub patient_value: String,
+    /// A file holding the bearer token the run presents as the caller.
+    #[arg(long, value_name = "PATH")]
+    pub token_file: PathBuf,
+    /// The directory holding the vendored template and compositions the run
+    /// writes, checked by their SHA-256.
+    #[arg(long, value_name = "DIR")]
+    pub seed_data: PathBuf,
+    /// The base URL of a gateway already serving the configuration; without
+    /// it, the run starts the gateway in-process.
+    #[arg(long, value_name = "URL")]
+    pub gateway: Option<url::Url>,
+    /// The directory the report is written to.
+    #[arg(long, value_name = "DIR", default_value = "conformance-report")]
+    pub out: PathBuf,
+    /// Also runs the admission check against every active member and
+    /// reports its findings as the node profile.
+    #[arg(long)]
+    pub node_profile: bool,
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AdmissionCommand, Cli, Command, ConfigCommand};
+    use super::{AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand};
     use clap::Parser;
     use std::path::PathBuf;
 
@@ -157,6 +214,71 @@ mod tests {
             Cli::try_parse_from(["ferrofed", "config"]).is_err(),
             "a job group needs its job"
         );
+    }
+
+    #[test]
+    fn a_conformance_run_parses_and_defaults_to_no_writes() {
+        let base = [
+            "ferrofed",
+            "conformance",
+            "run",
+            "--patient-namespace",
+            "urn:oid:2.999.1.1",
+            "--patient-value",
+            "ffd-test-0038",
+            "--token-file",
+            "/run/token",
+            "--seed-data",
+            "/data",
+        ];
+        let cli = Cli::try_parse_from(base).expect("the run parses");
+        let Command::Conformance {
+            command: ConformanceCommand::Run(args),
+        } = cli.command
+        else {
+            panic!("a conformance run");
+        };
+        assert!(!args.allow_writes, "writes are never allowed by default");
+        assert!(!args.acknowledged, "nor a non-development deployment");
+        assert_eq!(None, args.gateway, "the gateway starts in-process");
+        assert_eq!(PathBuf::from("conformance-report"), args.out);
+        let mut flagged = base.to_vec();
+        flagged.extend([
+            "--allow-writes",
+            "--i-understand-this-writes-synthetic-data-to-the-nodes",
+            "--gateway",
+            "https://gw.example.org/fed/",
+            "--node-profile",
+        ]);
+        let Command::Conformance {
+            command: ConformanceCommand::Run(args),
+        } = Cli::try_parse_from(flagged)
+            .expect("the flags parse")
+            .command
+        else {
+            panic!("a conformance run");
+        };
+        assert!(args.allow_writes && args.acknowledged && args.node_profile);
+        assert_eq!(
+            Some("https://gw.example.org/fed/"),
+            args.gateway.as_ref().map(url::Url::as_str)
+        );
+        for missing in ["--patient-value", "--token-file", "--seed-data"] {
+            let without: Vec<&str> = base
+                .iter()
+                .copied()
+                .scan(false, |skip, arg| {
+                    let keep = !*skip && arg != missing;
+                    *skip = arg == missing;
+                    Some(keep.then_some(arg))
+                })
+                .flatten()
+                .collect();
+            assert!(
+                Cli::try_parse_from(without).is_err(),
+                "{missing} is required"
+            );
+        }
     }
 
     #[test]
