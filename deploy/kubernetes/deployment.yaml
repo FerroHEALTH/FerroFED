@@ -54,7 +54,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: ferrofed
-          image: ghcr.io/ferrohealth/ferrofed:0.0.8
+          image: ghcr.io/ferrohealth/ferrofed:0.0.9
           imagePullPolicy: IfNotPresent
           args: ["serve"]
           ports:

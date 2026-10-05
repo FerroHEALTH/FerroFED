@@ -63,7 +63,7 @@
     <section class="hero">
       <div class="wrap">
         <img class="hero-logo" src="./assets/brand/ferrofed-icon.svg" alt="FerroFED" width="88" height="88">
-        <p class="status" role="note">v0.0.8 released. Linux binaries and a container image, signed, and a compose file to start it.</p>
+        <p class="status" role="note">v0.0.9 released. Linux binaries, the gateway and console images, signed, and a compose file to start it.</p>
         <h1>Where else the record is.</h1>
         <p class="sub">
           FerroFED is an openEHR federation gateway. A client sends it an
@@ -123,9 +123,8 @@ EOF</code></pre>
             start it. <a href="./docs/operate/container.html">The container
             page</a> covers the image, the ports and the verification, and
             <a href="./docs/operate/configuration.html">the configuration
-            page</a> covers the registry and the identity service. The gateway
-            authenticates no client yet, so keep it where only trusted clients
-            reach it; client authentication is planned for v0.0.8.
+            page</a> covers the registry, the identity service and client
+            authentication.
           </p>
         </div>
       </div>
@@ -246,6 +245,20 @@ EOF</code></pre>
             </p>
           </article>
 
+          <article class="card">
+            <span class="tag">In v0.0.9</span>
+            <h3>An operator console, and a conformance statement</h3>
+            <p>
+              The operator console shows the members, incidents and stored
+              queries and runs a federated query with every node's status and
+              completeness, signed in through OpenID Connect with no
+              JavaScript of its own. The conformance statement scores every
+              conformance point of the Federation Tier against FerroEHR and
+              EHRbase, and <code>ferrofed conformance run</code> repeats it
+              against your own nodes.
+            </p>
+          </article>
+
         </div>
       </div>
     </section>
@@ -335,13 +348,14 @@ EOF</code></pre>
         <div class="status-panel">
           <h2>Where the project is</h2>
           <p>
-            v0.0.8 is the current release. It answers one federated AQL query
+            v0.0.9 is the current release. It answers one federated AQL query
             over many nodes with the patient resolved outside AQL, merges the
             rows as one CDR would, and routes reads, writes and definitions to
             the node that owns them. Every caller is authenticated, each node
             is told who is asking in a token the gateway signs, and the IHE and
             Dutch bindings locate the patient, check consent and audit each
-            exchange. v0.0.9 is the conformance program. The tracker's milestones are the
+            exchange. v0.0.9 adds the operator console and the conformance
+            statement; v0.0.10 is EHDS readiness. The tracker's milestones are the
             roadmap; every issue carries its acceptance criteria, and a
             release is cut when its milestone has no open issue left.
           </p>
