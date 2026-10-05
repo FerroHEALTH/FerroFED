@@ -315,16 +315,76 @@ impl Report {
                 );
             }
         }
+        self.findings_markdown(&mut text);
+        self.appendix(&mut text);
+        text
+    }
+
+    /// Appends the node profile findings to `text`, as `report.sh` renders
+    /// them: one row per point and check with a verdict column per product,
+    /// products in name order and checks in the order first recorded, the
+    /// worse verdict where a product recorded one check on one point twice,
+    /// then one table per product with the evidence.
+    fn findings_markdown(&self, text: &mut String) {
         text.push_str("\n## Node profile findings\n\n");
         if self.findings.is_empty() {
             text.push_str("No node profile finding was recorded in this run.\n");
-        } else {
-            text.push_str("What the admission check observed at each member, per point it assists (section 16.2).\n\n| Product | Point | Check | Verdict | Evidence |\n|---|---|---|---|---|\n");
-            for finding in &self.findings {
+            return;
+        }
+        text.push_str("What the node profile checks observed at each member's CDR product, per point they assist (section 16.2). A Node point above reads the worst verdict any product earned on it; this table shows each product apart, and a dash marks a check that product recorded no finding for.\n\n");
+        let rank = |verdict: &str| match verdict {
+            "fail" => 3,
+            "not-observable" => 2,
+            _ => 1,
+        };
+        let products: std::collections::BTreeSet<&str> = self
+            .findings
+            .iter()
+            .map(|finding| finding.product.as_str())
+            .collect();
+        let mut keys: Vec<(&str, &str)> = Vec::new();
+        let mut verdicts: BTreeMap<(&str, &str, &str), &str> = BTreeMap::new();
+        for finding in &self.findings {
+            let key = (finding.point.as_str(), finding.check.as_str());
+            if !keys.contains(&key) {
+                keys.push(key);
+            }
+            let slot = verdicts
+                .entry((key.0, key.1, finding.product.as_str()))
+                .or_insert(finding.verdict.as_str());
+            if rank(&finding.verdict) > rank(slot) {
+                *slot = finding.verdict.as_str();
+            }
+        }
+        let mut header = "| Point | Check |".to_owned();
+        let mut rule = "|---|---|".to_owned();
+        for product in &products {
+            let _column = write!(header, " {} |", md_cell(product));
+            rule.push_str("---|");
+        }
+        let _summary = writeln!(text, "{header}\n{rule}");
+        for (point, check) in &keys {
+            let mut line = format!("| {point} | {} |", md_cell(check));
+            for product in &products {
+                let verdict = verdicts.get(&(*point, *check, *product)).unwrap_or(&"-");
+                let _cell = write!(line, " {verdict} |");
+            }
+            let _line = writeln!(text, "{line}");
+        }
+        for product in &products {
+            let _table = write!(
+                text,
+                "\n### {}\n\n| Point | Check | Verdict | Evidence |\n|---|---|---|---|\n",
+                md_cell(product)
+            );
+            for finding in self
+                .findings
+                .iter()
+                .filter(|finding| finding.product == *product)
+            {
                 let _finding = writeln!(
                     text,
-                    "| {} | {} | {} | {} | {} |",
-                    md_cell(&finding.product),
+                    "| {} | {} | {} | {} |",
                     finding.point,
                     md_cell(&finding.check),
                     finding.verdict,
@@ -332,8 +392,6 @@ impl Report {
                 );
             }
         }
-        self.appendix(&mut text);
-        text
     }
 
     /// Appends the scenarios that did not pass, the unencrypted connections
@@ -610,6 +668,36 @@ mod tests {
                 .findings_tsv()
                 .contains("Example CDR 1.0\tCP-27\tehr_id exchange\tpass\tseen")
         );
+    }
+
+    #[test]
+    fn the_findings_render_a_column_per_product_as_the_harness_report_does() {
+        let finding = |product: &str, point: &str, verdict: &str| Finding {
+            product: product.to_owned(),
+            point: point.to_owned(),
+            check: "a check".to_owned(),
+            verdict: verdict.to_owned(),
+            evidence: "seen".to_owned(),
+        };
+        let findings = vec![
+            finding("Other CDR 2.0", "CP-27", "pass"),
+            finding("Demo CDR 1.0", "CP-27", "pass"),
+            finding("Demo CDR 1.0", "CP-27", "fail"),
+            finding("Demo CDR 1.0", "CP-33a", "not-observable"),
+        ];
+        let markdown = Report::new(&harness_only(), findings, Vec::new(), "a test").to_markdown();
+        for line in [
+            "| Point | Check | Demo CDR 1.0 | Other CDR 2.0 |",
+            "| CP-27 | a check | fail | pass |",
+            "| CP-33a | a check | not-observable | - |",
+            "### Other CDR 2.0",
+            "| CP-27 | a check | fail | seen |",
+        ] {
+            assert!(
+                markdown.lines().any(|candidate| candidate == line),
+                "{line}: {markdown}"
+            );
+        }
     }
 
     #[test]

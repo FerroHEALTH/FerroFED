@@ -30,6 +30,7 @@ use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::EndpointStatus;
@@ -387,7 +388,12 @@ async fn resolve(
         .checked_add(federation.budget().per_node())
         .ok_or(SeedError::Clock)?;
     let answer = resolver
-        .resolve(&patient.patient_ref()?, &nodes, deadline)
+        .resolve(
+            &patient.patient_ref()?,
+            &nodes,
+            &OnBehalfOf::Gateway,
+            deadline,
+        )
         .await;
     let mut named = Vec::new();
     for node in &nodes {
