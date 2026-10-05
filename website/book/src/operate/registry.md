@@ -374,7 +374,9 @@ identity source can make a binding stale, and a binding never outlives its
 lifetime, so set it no longer than you would accept a follow-up being routed
 on a superseded identity. With `[pmir]`, a merge the
 identity source reports drops the bindings it could have made stale as it
-happens ([The identity feed](identity.md#the-identity-feed-pmir)); the
+happens, on the replica that receives it
+([The identity feed](identity.md#the-identity-feed-pmir),
+[Several replicas](identity.md#several-replicas)); the
 specification marks this lifecycle track provisional.
 
 ## The `ehr_id` index

@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+use ferrofed_server::binding::ihe::pmir::config::OnDrain;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::settings::Settings;
@@ -45,6 +46,24 @@ fn a_development_gateway_resolves_the_table() -> TestResult {
     let pmir = settings.pmir.ok_or("[pmir] is resolved")?;
     assert_eq!("/pmir/feed", pmir.path);
     assert_eq!(TOKEN, pmir.feed_token.expose());
+    Ok(())
+}
+
+/// A drain keeps the subscription unless `on_drain` says to unsubscribe, and
+/// any other value is refused.
+#[test]
+fn a_drain_keeps_the_subscription_unless_told_otherwise() -> TestResult {
+    let (_dir, text) = development("")?;
+    let settings = resolve(&text)?.map_err(|error| error.to_string())?;
+    let pmir = settings.pmir.ok_or("[pmir] is resolved")?;
+    assert_eq!(OnDrain::Keep, pmir.on_drain);
+    let (_dir, text) = development("on_drain = \"unsubscribe\"\n")?;
+    let settings = resolve(&text)?.map_err(|error| error.to_string())?;
+    let pmir = settings.pmir.ok_or("[pmir] is resolved")?;
+    assert_eq!(OnDrain::Unsubscribe, pmir.on_drain);
+    let (_dir, text) = development("on_drain = \"delete\"\n")?;
+    let error = Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new());
+    assert!(error.is_err(), "an unknown on_drain is refused");
     Ok(())
 }
 

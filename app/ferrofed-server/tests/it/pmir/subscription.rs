@@ -230,10 +230,14 @@ async fn each_failed_check_doubles_the_wait_and_a_success_resets_it() -> TestRes
 }
 
 #[tokio::test]
-async fn a_drain_with_a_create_in_flight_leaves_no_subscription() -> TestResult {
+async fn an_unsubscribing_drain_with_a_create_in_flight_leaves_no_subscription() -> TestResult {
     let registry = PatientIdentityRegistry::start().await?;
     registry.delay_creates(Some(Duration::from_millis(300)));
-    let (_dir, gateway) = subscribing(&registry.base_url(), "http://127.0.0.1:9/pmir/feed", "")?;
+    let (_dir, gateway) = subscribing(
+        &registry.base_url(),
+        "http://127.0.0.1:9/pmir/feed",
+        "on_drain = \"unsubscribe\"\n",
+    )?;
     let running = feed(&gateway)?.start();
     for _ in 0..200 {
         if registry.creates() > 0 {

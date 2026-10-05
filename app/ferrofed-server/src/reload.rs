@@ -427,6 +427,7 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
             (
                 signing.keys.current().kid().to_owned(),
                 signing.keys.retiring().map(|key| key.kid().to_owned()),
+                signing.keys.next().map(|key| key.kid().to_owned()),
                 signing.jwks_uri.as_str().to_owned(),
                 signing.assertion_lifetime,
             )

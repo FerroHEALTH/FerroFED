@@ -261,7 +261,8 @@ pub enum Error {
         source: InvalidCredentials,
     },
     /// A signing key cannot be used: it is no P-256 or P-384 private key in
-    /// PKCS#8 PEM, or the previous key is the current one.
+    /// PKCS#8 PEM, the previous key is the current one, or the next key is
+    /// the current or the previous one.
     #[error("{key} is not a usable signing key")]
     SigningKey {
         /// The key the file was named by.
@@ -269,6 +270,20 @@ pub enum Error {
         /// Why the key is refused; it quotes no part of the key.
         #[source]
         source: ferrofed_engine::onward::keys::KeyError,
+    },
+    /// The next signing key is on another curve than the algorithm it is
+    /// meant to sign with: `signing.next_key_algorithm`, or the current key's
+    /// when that is unset (RFC 7518 §3.4).
+    #[error(
+        "{key} holds a key that signs {found}, and the next key is meant to sign {intended}; set signing.next_key_algorithm when the rotation changes the algorithm"
+    )]
+    NextKeyAlgorithm {
+        /// The key the file was named by.
+        key: String,
+        /// The algorithm the key's curve signs with.
+        found: &'static str,
+        /// The algorithm the next key is meant to sign with.
+        intended: &'static str,
     },
     /// A `DPoP` key cannot be used: it is no P-256 or P-384 private key in
     /// PKCS#8 PEM (RFC 9449).

@@ -192,3 +192,72 @@ fn a_rotation_across_curves_publishes_both_and_signs_with_the_new() -> TestResul
     conveyed::verified(&signed_by_new, &rotated, (conveyed::GATEWAY, NODE))?;
     Ok(())
 }
+
+/// The next key is published beside the current one and never signs, so a
+/// node that fetched the set before the rotation already verifies what the
+/// next key signs once it is made current (RFC 7517 §5, RFC 7515 §4.1.4).
+// conformance: CP-16
+#[test]
+fn a_next_key_is_published_ahead_and_never_signs() -> TestResult {
+    let old = read(oauth::es384_pem()?)?;
+    let new = read(oauth::es384_pem()?)?;
+    let node = EndpointId::new(NODE)?;
+    let ahead = Arc::new(
+        KeyRing::new(old.clone(), None, Duration::ZERO, Arc::new(SystemClock))?
+            .with_next(new.clone())?,
+    );
+    let published: Vec<Option<String>> = ahead
+        .published()
+        .keys
+        .iter()
+        .map(|jwk| jwk.common.key_id.clone())
+        .collect();
+    assert_eq!(
+        vec![Some(old.kid().to_owned()), Some(new.kid().to_owned())],
+        published,
+        "the current key, then the next one"
+    );
+    assert_eq!(Some(new.kid()), ahead.next().map(SigningKey::kid));
+    assert_eq!(old.kid(), ahead.current().kid(), "the next key never signs");
+    let signed_ahead = Conveyance::new(
+        Arc::new(Signer::new(Arc::clone(&ahead), conveyed::GATEWAY)),
+        Principal::Caller(conveyed::caller()),
+    )
+    .signed_for(&node)?;
+    let header = jsonwebtoken::decode_header(&signed_ahead)?;
+    assert_eq!(Some(old.kid()), header.kid.as_deref());
+
+    let rotated = Arc::new(KeyRing::new(
+        new.clone(),
+        Some(old.clone()),
+        Duration::from_mins(65),
+        Arc::new(SystemClock),
+    )?);
+    let signed_by_new = Conveyance::new(
+        Arc::new(Signer::new(rotated, conveyed::GATEWAY)),
+        Principal::Caller(conveyed::caller()),
+    )
+    .signed_for(&node)?;
+    conveyed::verified(&signed_by_new, &ahead, (conveyed::GATEWAY, NODE))?;
+    Ok(())
+}
+
+#[test]
+fn a_next_key_that_is_the_current_or_the_previous_key_is_refused() -> TestResult {
+    let current_pem = oauth::es384_pem()?;
+    let previous_pem = oauth::es384_pem()?;
+    for reused in [&current_pem, &previous_pem] {
+        let ring = KeyRing::new(
+            read(current_pem.clone())?,
+            Some(read(previous_pem.clone())?),
+            Duration::from_mins(65),
+            Arc::new(SystemClock),
+        )?;
+        let refused = ring.with_next(read(reused.clone())?);
+        assert!(
+            matches!(refused, Err(KeyError::NextReused { .. })),
+            "{refused:?}"
+        );
+    }
+    Ok(())
+}

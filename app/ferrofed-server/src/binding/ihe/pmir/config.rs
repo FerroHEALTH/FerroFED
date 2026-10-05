@@ -14,6 +14,7 @@
 //! path = "/pmir/feed"
 //! feed_token_file = "/run/secrets/pmir-feed-token"
 //! identifier_system = "urn:oid:2.999.1"
+//! on_drain = "keep"
 //!
 //! [pmir.credentials]
 //! bearer_token_file = "/run/secrets/pmir-registry-token"
@@ -86,6 +87,28 @@ pub struct Pmir {
     /// How often the gateway checks its subscription and subscribes again
     /// when the Registry no longer holds it, in seconds.
     pub check_interval_s: u64,
+    /// What a drain does with the subscription: `keep` it at the Registry,
+    /// the default, or `unsubscribe`.
+    pub on_drain: OnDrain,
+}
+
+/// What a draining gateway does with its subscription at the Registry.
+///
+/// Every gateway that shares a `callback_url` shares the one subscription
+/// that names it, so a drain deletes it only when the operator says no other
+/// gateway relies on it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum OnDrain {
+    /// The subscription stays at the Registry, for the other replicas behind
+    /// the same `callback_url` and for this gateway's next start, which
+    /// adopts it.
+    #[default]
+    Keep,
+    /// The subscription is deleted (§2:3.94.4.5): for the last gateway of a
+    /// `callback_url`, or one whose `callback_url` is its own.
+    Unsubscribe,
 }
 
 impl Default for Pmir {
@@ -103,6 +126,7 @@ impl Default for Pmir {
             identifier_system: None,
             timeout_ms: 5_000,
             check_interval_s: 60,
+            on_drain: OnDrain::Keep,
         }
     }
 }
@@ -129,11 +153,13 @@ pub struct PmirSettings {
     pub timeout: Duration,
     /// How often the subscription is checked.
     pub check_interval: Duration,
+    /// What a drain does with the subscription.
+    pub on_drain: OnDrain,
 }
 
 impl PmirSettings {
     /// Whether `other` names the same Registry, credentials, TLS material,
-    /// callback, path, feed token, criteria and timings.
+    /// callback, path, feed token, criteria, timings and drain.
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
@@ -157,6 +183,7 @@ impl PmirSettings {
             && self.identifier_system == other.identifier_system
             && self.timeout == other.timeout
             && self.check_interval == other.check_interval
+            && self.on_drain == other.on_drain
     }
 }
 
@@ -303,6 +330,7 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
             "pmir.check_interval_s",
             Duration::from_secs(pmir.check_interval_s),
         )?,
+        on_drain: pmir.on_drain,
     };
     // NOTE: PMIR §2:3.93.5: the feed and the subscription carry patient identities,
     // so both URLs are held to https before anything is sent.

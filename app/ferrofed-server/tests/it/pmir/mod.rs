@@ -10,6 +10,7 @@
 
 mod config;
 mod feed;
+mod replicas;
 mod subscription;
 
 use std::collections::BTreeMap;

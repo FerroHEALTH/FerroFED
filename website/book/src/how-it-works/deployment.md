@@ -170,3 +170,9 @@ use the `postgres` backend, or the read-only `files` backend when your
 operator publishes the definitions
 ([Running several replicas](../operate/deployment-shape.md#running-several-replicas)).
 The Kubernetes example runs two replicas under a PodDisruptionBudget.
+
+Replicas behind one address share the PMIR subscription that names it, and
+a draining replica leaves it for the others
+([Several replicas](../operate/identity.md#several-replicas)). A new signing
+key is published by every replica before any replica signs with it
+([Rotating the signing key](../operate/onward-credentials.md#rotating-the-signing-key)).

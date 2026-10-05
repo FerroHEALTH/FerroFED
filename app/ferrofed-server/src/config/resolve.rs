@@ -64,7 +64,8 @@ impl Config {
     /// P-256 or P-384 key ([`Error::SigningKey`]), an assertion lifetime past five
     /// minutes ([`Error::AssertionLifetime`]), an overlap window shorter than
     /// that lifetime plus the nodes' cache time ([`Error::RotationOverlap`]),
-    /// and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
+    /// a next key on another curve than it is meant for
+    /// ([`Error::NextKeyAlgorithm`]), and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
     /// `[auth]` is refused as
     /// [`Auth::resolve`](crate::config::auth::Auth::resolve) refuses it.
     pub fn resolve(&self) -> Result<Settings, Error> {

@@ -3,14 +3,19 @@
 
 //! The ITI-94 subscription the identity feed keeps (PMIR 1.6.0 §2:3.94.4).
 //!
-//! The gateway holds at most one subscription, and never leaves one it made
-//! behind for the Registry to send a second feed to:
+//! The subscription is named by its channel endpoint, `callback_url`. Every
+//! gateway that shares a `callback_url`, the replicas behind one balancer,
+//! shares the one subscription that names it, and the Registry sends each
+//! ITI-93 message once, to whichever replica the balancer picks. A gateway
+//! never leaves a second subscription of its own for the Registry to send a
+//! second feed to:
 //!
 //! - Before it creates one, it searches the Registry for its own, by the
 //!   channel endpoint (`GET [base]/Subscription?url=<callback>`, the R4
-//!   `Subscription` search parameter), and adopts one whose criteria and
-//!   channel are its request's. A create the Registry answered late, or
-//!   whose answer was lost, is found that way. A Registry that answers the
+//!   `Subscription` search parameter), and adopts the usable one whose
+//!   location sorts first, deleting every other. Replicas that read the same
+//!   list adopt the same subscription. A create the Registry answered late,
+//!   or whose answer was lost, is found that way. A Registry that answers the
 //!   search `400` or `404` does not support it, and the gateway creates.
 //! - A create answered `201` with no `Location`, or one outside the base,
 //!   leaves a subscription the gateway cannot read or delete. It never creates
@@ -18,14 +23,20 @@
 //!   `unmanageable`.
 //! - A subscription the Registry reports `error` or `off` is deleted and
 //!   created again (§2:3.94.4.1.3, §2:3.94.4.4), and one it no longer holds
-//!   is created again.
+//!   is created again. A delete the Registry answers `404` or `410` found the
+//!   subscription already gone, removed by another replica.
 //! - Each failed check doubles the wait before the next, from
 //!   `check_interval_s` to 32 times it, and a check that succeeds resets it.
-//! - At a drain the loop is stopped first, letting the check in flight end,
-//!   and the subscription is deleted after it, or found by the search and
-//!   deleted when the gateway never learned where it was.
+//! - At a drain the loop is stopped first, letting the check in flight end.
+//!   With `on_drain = "keep"`, the default, the subscription stays for the
+//!   other replicas and the next start. With `on_drain = "unsubscribe"` it is
+//!   deleted after the check, or found by the search and deleted when the
+//!   gateway never learned where it was.
 //!
-//! No specification governs the retry policy or the drain: our own design.
+//! PMIR lets a Subscriber delete a subscription (§2:3.94.4.5) and is silent
+//! on when, and on several Subscribers sharing one channel endpoint. No
+//! specification governs the sharing, the retry policy or the drain: our own
+//! design.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,6 +49,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use super::IdentityFeed;
+use super::config::OnDrain;
 use ferrofed_registry::health::Observed;
 
 /// How many doublings the wait between two failed checks grows by at most:
@@ -212,9 +224,19 @@ impl IdentityFeed {
 
     /// Adopts the gateway's own subscription from a search, deleting any
     /// other of its own the Registry lists, or creates one.
+    ///
+    /// The usable subscription whose location sorts first is adopted, so
+    /// replicas sharing the `callback_url` that read the same list adopt the
+    /// same one, and two creates made at once settle on one.
     async fn establish(&self) -> Result<(), RegistryFault> {
         match self.subscriber.find(&self.request, self.timeout).await {
-            Ok(Search::Found(listed)) => {
+            Ok(Search::Found(mut listed)) => {
+                listed.sort_by(|one, other| {
+                    one.subscribed
+                        .location()
+                        .as_str()
+                        .cmp(other.subscribed.location().as_str())
+                });
                 let mut adopted = None;
                 for found in listed {
                     let usable = matches!(
@@ -273,14 +295,30 @@ impl IdentityFeed {
         }
     }
 
-    /// Deletes `subscribed` (§2:3.94.4.5).
+    /// Deletes `subscribed` (§2:3.94.4.5); one the Registry no longer holds
+    /// is already gone.
     async fn delete(&self, subscribed: &Subscribed) -> Result<(), RegistryFault> {
-        self.subscriber
-            .unsubscribe(subscribed, self.timeout)
-            .await
-            .map_err(|error| fault_of("the PMIR subscription could not be deleted", &error))?;
-        tracing::info!("the PMIR subscription was deleted");
-        Ok(())
+        match self.subscriber.unsubscribe(subscribed, self.timeout).await {
+            Ok(()) => {
+                tracing::info!("the PMIR subscription was deleted");
+                Ok(())
+            }
+            // NOTE: no specification governs this: our own design; another replica
+            // sharing the callback_url deleted it first, which is the state asked for.
+            Err(error)
+                if matches!(
+                    error.status(),
+                    Some(StatusCode::NOT_FOUND | StatusCode::GONE)
+                ) =>
+            {
+                tracing::info!("the PMIR subscription to delete was already gone");
+                Ok(())
+            }
+            Err(error) => Err(fault_of(
+                "the PMIR subscription could not be deleted",
+                &error,
+            )),
+        }
     }
 
     /// Deletes the subscription the gateway holds, or, when it knows of none,
@@ -357,9 +395,11 @@ pub struct Running {
 }
 
 impl Running {
-    /// Stops the loop, lets the check in flight end, and deletes the
-    /// subscription, so none is left for the Registry to send to and none is
-    /// created after the delete.
+    /// Stops the loop and lets the check in flight end, so nothing is
+    /// created after it; then, under `on_drain = "unsubscribe"`, deletes the
+    /// subscription, so none is left for the Registry to send to. Under
+    /// `on_drain = "keep"` the subscription stays for the replicas that share
+    /// its `callback_url`.
     ///
     /// A check that does not end within the time its exchanges may take is
     /// aborted, and the delete then finds the subscription by searching.
@@ -379,7 +419,14 @@ impl Running {
                 self.task.abort();
             }
         }
-        self.feed.unsubscribe().await;
+        match self.feed.on_drain {
+            OnDrain::Keep => {
+                tracing::info!(
+                    "the PMIR subscription is kept at the Registry for the gateways that share its callback_url"
+                );
+            }
+            OnDrain::Unsubscribe => self.feed.unsubscribe().await,
+        }
     }
 }
 
