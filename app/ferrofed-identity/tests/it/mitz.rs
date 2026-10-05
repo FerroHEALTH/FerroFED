@@ -3,14 +3,17 @@
 
 //! The Mitz consent pre-filter over the stub Mitz: the data holder of each
 //! candidate asked once, a member ruled out only when Mitz denies its holder,
-//! a patient Mitz cannot be asked about left with no signal, and every
+//! a patient or a caller Mitz cannot be asked about answered as not asked,
+//! with its reason, and every
 //! refused configuration (Annex B §B.6, N27a, §14.3).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::consent::{ConsentDecision, ConsentError, ConsentPrefilter, Requester};
+use ferrofed_identity::consent::{
+    ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester,
+};
 use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::mitz::{
     HolderConfig, MITZ_MODE, MitzConfig, MitzConfigError, MitzPrefilter,
@@ -147,8 +150,8 @@ async fn a_caller_whose_token_names_no_requester_asks_nothing() -> TestResult {
         .prefilter(&patient(BSN_ALIAS)?, None, &candidates()?, soon())
         .await;
     assert!(
-        matches!(decision, ConsentDecision::NoSignal),
-        "N27: nothing is filtered, and each node decides: {decision:?}"
+        matches!(decision, ConsentDecision::NotAsked(NotAsked::CallerClaims)),
+        "N27: Mitz is not asked, nothing is filtered, and each node decides: {decision:?}"
     );
     assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
     Ok(())
@@ -274,7 +277,7 @@ async fn a_patient_named_by_a_pseudonym_is_never_sent_to_mitz() -> TestResult {
         .prefilter(&pseudonym, Some(&caller()?), &candidates()?, soon())
         .await;
     assert!(
-        matches!(decision, ConsentDecision::NoSignal),
+        matches!(decision, ConsentDecision::NotAsked(NotAsked::Namespace)),
         "{decision:?}"
     );
     assert!(
@@ -282,6 +285,44 @@ async fn a_patient_named_by_a_pseudonym_is_never_sent_to_mitz() -> TestResult {
         "Mitz is asked by BSN only"
     );
     Ok(())
+}
+
+#[tokio::test]
+async fn a_patient_in_a_namespace_not_standing_for_the_bsn_is_not_asked_about() -> TestResult {
+    let mitz = Mitz::start().await;
+    let prefilter = over(&mitz)?;
+    let elsewhere = patient("2.999.9")?;
+    let decision = prefilter
+        .prefilter(&elsewhere, Some(&caller()?), &candidates()?, soon())
+        .await;
+    assert!(
+        matches!(decision, ConsentDecision::NotAsked(NotAsked::Namespace)),
+        "§3.2.4.2: Mitz is asked by BSN, and the namespace does not stand for it: {decision:?}"
+    );
+    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_patient_mitz_cannot_be_asked_about_is_the_namespace_reason_whatever_the_caller()
+-> TestResult {
+    let mitz = Mitz::start().await;
+    let prefilter = over(&mitz)?;
+    let elsewhere = patient("2.999.9")?;
+    let decision = prefilter
+        .prefilter(&elsewhere, None, &candidates()?, soon())
+        .await;
+    assert!(
+        matches!(decision, ConsentDecision::NotAsked(NotAsked::Namespace)),
+        "the patient is checked before the caller: {decision:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn each_not_asked_reason_has_a_closed_name() {
+    assert_eq!("namespace", NotAsked::Namespace.as_str());
+    assert_eq!("caller-claims", NotAsked::CallerClaims.as_str());
 }
 
 #[tokio::test]

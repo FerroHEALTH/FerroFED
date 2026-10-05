@@ -42,9 +42,13 @@ use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, node_answering,
     patient_query, post, received, registry, schema, statuses, wire,
 };
+use crate::metrics::{count, parse};
 use crate::support::{Logs, call};
 
 type TestResult = Result<(), Box<dyn Error>>;
+
+/// The Prometheus name of the pre-filter call counter.
+const PREFILTER_CALLS: &str = "ferrofed_consent_prefilter_requests_total";
 
 /// The URA of node A's and node B's care provider.
 const URA_A: &str = "ura-test-0001";
@@ -89,7 +93,16 @@ fn requester_claims() -> RequesterClaims {
 /// The development gateway over node A and node B, resolving the patient at
 /// both, with the Mitz pre-filter asking `mitz`, and the test issuer's
 /// tokens naming their requester in [`requester_claims`].
-fn gateway_over(dir: &Path, (a, b): (&str, &str), mitz: &str) -> Result<Router, Box<dyn Error>> {
+fn gateway_over(dir: &Path, nodes: (&str, &str), mitz: &str) -> Result<Router, Box<dyn Error>> {
+    Ok(metered_over(dir, nodes, mitz)?.0)
+}
+
+/// The gateway of [`gateway_over`], with its state for the metrics.
+fn metered_over(
+    dir: &Path,
+    (a, b): (&str, &str),
+    mitz: &str,
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
@@ -105,10 +118,8 @@ fn gateway_over(dir: &Path, (a, b): (&str, &str), mitz: &str) -> Result<Router, 
     for issuer in &mut server.auth.issuers {
         issuer.requester = Some(requester_claims());
     }
-    Ok(ferrofed_server::router(
-        Arc::new(AppState::with_federation(federation)),
-        &server,
-    ))
+    let state = Arc::new(AppState::with_federation(federation));
+    Ok((ferrofed_server::router(Arc::clone(&state), &server), state))
 }
 
 /// The `Authorization` value of a caller whose token names the professional
@@ -262,6 +273,34 @@ async fn a_token_without_the_requester_claims_asks_mitz_nothing_and_filters_no_o
         "N27: no signal, so each node checks consent itself"
     );
     assert_eq!(None, consent_error(&text)?, "no signal is no outage");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_token_without_the_requester_claims_is_counted_not_asked_for_the_caller_claims()
+-> TestResult {
+    let a = node_answering("uid-at-a").await;
+    let b = node_answering("uid-at-b").await;
+    let mitz = Mitz::start().await;
+    let dir = tempfile::tempdir()?;
+    let (app, state) = metered_over(dir.path(), (&a.uri(), &b.uri()), &mitz.endpoint())?;
+
+    let (status, text, _) = ask_as(app, None).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let samples = parse(&state.metrics().render()?)?;
+    assert_eq!(
+        Some("1".to_owned()),
+        count(
+            &samples,
+            PREFILTER_CALLS,
+            &[("outcome", "not-asked"), ("reason", "caller-claims")]
+        ),
+        "Mitz was never asked, and the metric says why"
+    );
+    assert_eq!(
+        None,
+        count(&samples, PREFILTER_CALLS, &[("outcome", "no-signal")])
+    );
     Ok(())
 }
 

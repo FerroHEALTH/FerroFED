@@ -150,6 +150,17 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- A consent pre-filter that did not ask its service says so, with a closed
+  reason, in place of answering as one that was asked and denied nothing
+  (#496). Mitz is not asked about a patient named outside the BSN, such as by
+  a pseudonymised BSN (reason `namespace`), or for a caller whose token does
+  not state the requester claims (reason `caller-claims`). Such a call is
+  counted in `ferrofed_consent_prefilter_requests_total` with
+  `outcome="not-asked"` and its `reason`, no longer as `no-signal`, and it
+  leaves the pre-filter's state on `GET /health/dependencies` as it was.
+  The client's answer is unchanged: every candidate is asked, nothing appears
+  in `meta.federation.consent`, and under `[federation.consent] disclose =
+  false` the answer is the one a pre-filter that found nothing gives.
 - Two sections that fill a role exactly one may, two resolvers, two consent
   pre-filters or two localizers of a binding's own, are refused with one
   error that names every section, such as `[nl_gf.nvi] and [xcpd] are both

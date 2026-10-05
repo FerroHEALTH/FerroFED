@@ -175,20 +175,24 @@ impl NodeRequests {
 
     /// Counts one call to the consent pre-filter that ended in `decision`, in
     /// a series of its own: the pre-filter is no member, so it has no
-    /// `endpoint` and no §11.1 outcome.
+    /// `endpoint` and no §11.1 outcome. A call that did not ask the service
+    /// is `not-asked`, labelled with the closed reason.
     pub fn prefiltered(&self, decision: &ConsentDecision) {
         let Some(instruments) = &self.instruments else {
             return;
         };
-        let outcome = match decision {
-            ConsentDecision::Denied(_) => "denied",
-            ConsentDecision::NoSignal => "no-signal",
-            ConsentDecision::Unavailable(_) => "unavailable",
-            ConsentDecision::Partial { .. } => "partial",
+        let (outcome, reason) = match decision {
+            ConsentDecision::Denied(_) => ("denied", None),
+            ConsentDecision::NoSignal => ("no-signal", None),
+            ConsentDecision::NotAsked(reason) => ("not-asked", Some(reason.as_str())),
+            ConsentDecision::Unavailable(_) => ("unavailable", None),
+            ConsentDecision::Partial { .. } => ("partial", None),
         };
-        instruments
-            .prefilter
-            .add(1, &[KeyValue::new("outcome", outcome)]);
+        // NOTE: §5.4.1, N33: the reason is a closed enum name, never a value of the
+        // request, so no identifier reaches the label.
+        let mut labels = vec![KeyValue::new("outcome", outcome)];
+        labels.extend(reason.map(|reason| KeyValue::new("reason", reason)));
+        instruments.prefilter.add(1, &labels);
     }
 
     /// Counts one call to the localizer that ended in `localization`, in a

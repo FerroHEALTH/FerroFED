@@ -106,14 +106,16 @@ impl Observed {
     /// Returns what a consent pre-filter's decision says of its service, by
     /// the rule the members follow: a decision, or any answer below `500`, is
     /// [`Observed::Up`], a `5xx` is [`Observed::Failing`], and no answer is
-    /// [`Observed::Down`].
+    /// [`Observed::Down`]; `None` when the pre-filter did not ask its
+    /// service, which then showed nothing of itself.
     #[must_use]
-    pub fn of_consent(decision: &ConsentDecision) -> Self {
+    pub fn of_consent(decision: &ConsentDecision) -> Option<Self> {
         match decision {
-            ConsentDecision::Denied(_) | ConsentDecision::NoSignal => Self::Up,
+            ConsentDecision::NotAsked(_) => None,
+            ConsentDecision::Denied(_) | ConsentDecision::NoSignal => Some(Self::Up),
             ConsentDecision::Unavailable(error)
             | ConsentDecision::Partial { failure: error, .. } => {
-                error.status().map_or(Self::Down, Self::of_answer)
+                Some(error.status().map_or(Self::Down, Self::of_answer))
             }
         }
     }
@@ -373,6 +375,7 @@ mod tests {
     use super::{Dependencies, Observed};
     use ferrofed_engine::dispatch::Contact;
     use ferrofed_engine::dispatch::definition::NodeCopy;
+    use ferrofed_identity::consent::{ConsentDecision, NotAsked};
     use ferrofed_registry::id::EndpointId;
     use http::StatusCode;
     use openehr_federation::outcome::{ErrorDetail, Outcome};
@@ -463,6 +466,22 @@ mod tests {
         assert_eq!(
             Some(Observed::Failing),
             Observed::of_contact(failed.contact())
+        );
+    }
+
+    #[test]
+    fn a_prefilter_that_did_not_ask_its_service_is_no_observation() {
+        for reason in [NotAsked::Namespace, NotAsked::CallerClaims] {
+            assert_eq!(
+                None,
+                Observed::of_consent(&ConsentDecision::NotAsked(reason)),
+                "{reason:?}: the service saw nothing, so it showed nothing"
+            );
+        }
+        assert_eq!(
+            Some(Observed::Up),
+            Observed::of_consent(&ConsentDecision::NoSignal),
+            "an answer with no signal is an answer"
         );
     }
 }
