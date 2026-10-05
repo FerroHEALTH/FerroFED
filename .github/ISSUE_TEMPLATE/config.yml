@@ -7,3 +7,9 @@ contact_links:
     about: >-
       Report a vulnerability privately through GitHub Security Advisories. Do not
       open a public issue for a security problem. See SECURITY.md.
+  - name: Make a complaint, or report harm
+    url: https://ferrofed.eu/docs/evaluate/post-market.html
+    about: >-
+      FerroFED's manufacturer, Cadasto B.V., takes complaints at
+      info@cadasto.com. Anything that may have harmed a person goes there with
+      "FerroFED incident" in the subject. Never include patient data.

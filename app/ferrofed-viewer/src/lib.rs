@@ -10,7 +10,7 @@
 //! engine. It holds the operator's sign-in session on the server
 //! ([`session`], [`oidc`]), so the browser carries an opaque cookie and never
 //! a token, and it holds no clinical data. [`app`] is the page tree both
-//! halves share; [`server`] serves it with the health route and the sign-in
+//! halves share, with [`manufacturer`] named in its footer; [`server`] serves it with the health route and the sign-in
 //! routes, [`config`] reads the TOML configuration, [`cli`] and [`command`]
 //! run the binary, and [`healthcheck`] is the job a container runtime runs
 //! beside it. No specification governs the viewer: our own design.
@@ -21,6 +21,12 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod app;
+/// The manufacturer of FerroFED, compiled from the one file the gateway
+/// reads it from, so the console's footer and the gateway never disagree.
+// NOTE: Regulation (EU) 2025/327 Art 30(1)(g): the browser half links no FerroFED crate,
+// so the console compiles the registry's own file (the Rust reference, the `path` attribute).
+#[path = "../../ferrofed-registry/src/manufacturer.rs"]
+pub mod manufacturer;
 pub mod query;
 pub mod views;
 

@@ -27,6 +27,17 @@ const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
 struct Root {
     product: String,
     version: String,
+    manufacturer: Manufacturer,
+}
+
+/// The manufacturer the root document names.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Manufacturer {
+    name: String,
+    postal_address: String,
+    email: String,
+    website: String,
 }
 
 /// A liveness or readiness document's aggregate state.
@@ -40,12 +51,24 @@ struct Aggregate {
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
-async fn the_root_document_names_the_product_and_the_version() -> Result<(), Box<dyn StdError>> {
+async fn the_root_document_names_the_product_the_version_and_the_manufacturer()
+-> Result<(), Box<dyn StdError>> {
     let (status, body) = call(app(), Request::get("/").body(Body::empty())?).await?;
     assert_eq!(StatusCode::OK, status);
     let document: Root = serde_json::from_str(&body)?;
     assert_eq!("FerroFED", document.product);
     assert_eq!(env!("CARGO_PKG_VERSION"), document.version);
+    // Regulation (EU) 2025/327 Art 30(1)(g): the manufacturer in the system.
+    assert_eq!("Cadasto B.V.", document.manufacturer.name);
+    assert_eq!(
+        "Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands",
+        document.manufacturer.postal_address
+    );
+    assert_eq!("info@cadasto.com", document.manufacturer.email);
+    assert_eq!(
+        "https://www.cadasto.com/contact/",
+        document.manufacturer.website
+    );
     Ok(())
 }
 

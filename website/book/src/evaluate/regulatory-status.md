@@ -247,6 +247,19 @@ them:
   record is not the European logging component, whose content Annex II,
   point 3.2, and the implementing acts set.
 
+Three of the manufacturer's obligations have a first answer:
+
+- The running system names its manufacturer, with the postal address and the
+  single point of contact (Art 30(1)(g)): `GET {base}/`, `OPTIONS {base}/`,
+  the startup banner, `ferrofed --version`, the operator console's footer and
+  the image labels.
+- The complaint channels, the two registers, corrective action and the
+  serious-incident report (Art 30(1)(i) to (o), Art 44(7)) are written
+  procedures ([Complaints and incidents](post-market.md)).
+- Every public text is reviewed against Art 28 at each release, and the
+  completeness default, the budgets and the consent pre-filter are assessed
+  against Annex II, point 2.5 ([Claims review](claims-review.md)).
+
 The planned work is filed under
 [#519](https://github.com/FerroHEALTH/FerroFED/issues/519), in the v0.0.10
 milestone, which is due before the Regulation applies on 26 March 2027:

@@ -53,6 +53,7 @@ mod localization;
 #[cfg(feature = "binding-ihe")]
 mod localizer_audit;
 mod localizer_surface;
+mod manufacturer;
 mod metrics;
 #[cfg(feature = "binding-nl")]
 mod mitz;

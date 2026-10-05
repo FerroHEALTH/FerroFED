@@ -7,6 +7,7 @@
 //! The error bodies are [`crate::error`]'s. No specification governs these
 //! documents: our own design.
 
+use ferrofed_registry::manufacturer::{MANUFACTURER, Manufacturer};
 use serde::Serialize;
 
 /// The product name the root document reports.
@@ -15,13 +16,16 @@ pub const PRODUCT: &str = "FerroFED";
 /// The product version the root document reports.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// `GET /`: the product and its version.
+/// `GET /`: the product, its version and its manufacturer.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Root {
     /// The product name.
     pub product: &'static str,
     /// The product version.
     pub version: &'static str,
+    /// The manufacturer, named in the running system as Regulation (EU)
+    /// 2025/327 Art 30(1)(g) asks.
+    pub manufacturer: Manufacturer,
 }
 
 impl Default for Root {
@@ -29,6 +33,7 @@ impl Default for Root {
         Self {
             product: PRODUCT,
             version: VERSION,
+            manufacturer: MANUFACTURER,
         }
     }
 }

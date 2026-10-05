@@ -25,12 +25,13 @@ An openEHR federation gateway, in pure Rust: where else the record is.
 
 A record held by another organisation is out of reach today. FerroFED is a
 transparent ITS-REST intermediary in front of several openEHR CDRs: a client
-sends it an ordinary AQL query and never learns it was federated. The gateway
-resolves the patient outside the query, through an identifier
-cross-reference service, so no directly identifying identifier travels to a
-node. It sends each node standard AQL scoped to that node's own `ehr_id`, and
-merges the answers with each node's provenance. It holds no clinical data of
-its own.
+sends it an ordinary AQL query, with no federation syntax, and gets back an
+ordinary ITS-REST result set whose `meta.federation` names each node with its
+status. The gateway resolves the patient outside the query, through an
+identifier cross-reference service, so no request the gateway composes for a
+node carries a directly identifying patient identifier. It sends each node
+standard AQL scoped to that node's own `ehr_id`, and merges the answers with
+each node's provenance. It holds no clinical data of its own.
 
 FerroFED is one of the [FerroHEALTH](https://ferrohealth.eu/) family. The
 documentation is at <https://ferrofed.eu/docs/>, and the design of record is
@@ -38,22 +39,21 @@ documentation is at <https://ferrofed.eu/docs/>, and the design of record is
 
 ## Status
 
-FerroFED is at v0.0.7 on its 0.0.x line, where each milestone is a release.
+FerroFED is at v0.0.9 on its 0.0.x line, where each milestone is a release.
 The gateway serves the federated query with the patient resolved outside AQL,
 shapes the merged rows as one CDR would, routes follow-up reads and writes to
 the node that owns them, sends definition requests to the node you name, and
 holds stored queries itself.
 
-Built on `main` for v0.0.8, and not in a release yet: every client
-authenticates with an RFC 9068 access token from an issuer you trust,
-carrying a SMART on openEHR scope for the operation and a purpose of use, or
-through a proxy in the explicit edge mode
+Every client authenticates with an RFC 9068 access token from an issuer you
+trust, carrying a SMART on openEHR scope for the operation and a purpose of
+use, or through a proxy in the explicit edge mode
 ([client authentication](https://ferrofed.eu/docs/operate/authentication.html)).
 Toward the nodes, the gateway authenticates as itself, with OAuth 2.0 client
 credentials or token exchange and a signed assertion, the token bound to the
-gateway's key with DPoP where you ask for it, or with a bearer token or a
-user and password you configure per endpoint, and never sends the client's
-own token.
+gateway's key with DPoP or to its TLS client certificate where you ask for
+it, or with a bearer token or a user and password you configure per
+endpoint, and never sends the client's own token.
 Every request to a node carries the verified client in an
 `openEHR-federation-client` token the gateway signs with its own key, which
 each node can verify against the key set the gateway publishes
@@ -62,11 +62,15 @@ Localization through XCPD, the PIX Manager or the Dutch NVI, a PDQm step
 ahead of resolution, the identity feed over PMIR, the registry read from an
 mCSD directory, the audit of every IHE transaction to an ATNA repository,
 the Dutch consent pre-filter Mitz, the Nuts and FAPI 2.0 grants toward a
-node, and traces exported through OpenTelemetry are built on `main` for
-v0.0.8 too.
+node, and traces exported through OpenTelemetry shipped in v0.0.8. v0.0.9
+added the conformance statement, `ferrofed conformance run` and the operator
+console. v0.0.10, being built, is EHDS readiness: the European
+interoperability and logging components are not built yet
+([regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html)).
 The
 [claims page](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html)
-lists what each release shipped and what is planned.
+lists what each release shipped, what is planned, and the limitations to
+know before you deploy it.
 
 ## What it implements
 
@@ -80,7 +84,10 @@ lists what each release shipped and what is planned.
   [obligations checklist](https://ferrofed.eu/docs/evaluate/obligations.html)
   say which points and statements a test holds.
 - openEHR ITS-REST 1.1.0 on both faces, and openEHR AQL 1.1.0, through the
-  published `openehr-*` crates.
+  published `openehr-*` crates. The gateway never federates the DEMOGRAPHIC
+  area: it answers `501` there unless you name one member to serve it, and
+  `501` for any ITS-REST path it does not serve
+  ([queries and API areas](https://ferrofed.eu/docs/operate/queries-and-areas.html#the-demographic-area)).
 - IHE PIXm ITI-83 for identity resolution and, without XCPD or the NVI, for
   localization, and IHE mCSD ITI-90 and ITI-91
   for addressing: the registry can be read from a care services directory
@@ -127,7 +134,7 @@ generates with `openssl` on its first run:
 ```sh
 curl -s http://127.0.0.1:8080/v1/query/aql \
   -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
-  -H 'Content-Type: application/json' -d 5820 <<'EOF'
+  -H 'Content-Type: application/json' -d @- <<'EOF'
 {"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF
 ```
