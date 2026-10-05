@@ -338,7 +338,8 @@ Testing release, which `browser-actions/setup-chrome` installs in the
 `journeys (browser)` job of `ci.yml`, so the browser and its driver always
 match. `thirtyfour` was the latest on crates.io on 2026-10-05, and the Chrome
 for Testing release was the newest stable one. `scripts/checks/versions.sh`
-holds both rows.
+holds both rows, and the weekly `scripts/checks/pin-freshness.sh` reports a
+newer stable Chrome for Testing release.
 
 | Item | Pin | Repeated in |
 |---|---|---|

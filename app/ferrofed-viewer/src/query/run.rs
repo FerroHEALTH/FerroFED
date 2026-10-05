@@ -13,51 +13,62 @@
 use leptos::prelude::*;
 
 use crate::query::model::{QueryForm, QueryOptionsView, RenderedAnswer};
-use crate::views::model::ViewError;
+use crate::views::model::{Outcome, ViewError};
 
 /// Loads what the gateway's self-description offers a query, `OPTIONS
 /// {base}/` (§7a.2).
 ///
 /// # Errors
 /// Returns [`ViewError::SignedOut`] without a live session, and the
-/// gateway's refusal or failure as its [`ViewError`].
+/// console's fault as its [`ViewError`]; the gateway's refusal is an
+/// [`Outcome::Refused`].
 #[server(endpoint = "query-options")]
-pub async fn query_options() -> Result<QueryOptionsView, ViewError> {
-    let (state, token) = crate::views::load::server::signed_in()?;
-    let description = state
-        .gateway()
-        .self_description(&token)
-        .await
-        .map_err(|error| crate::views::load::server::refused(&error))?;
-    Ok(server::options(&description))
+pub async fn query_options() -> Result<Outcome<QueryOptionsView>, ViewError> {
+    crate::views::load::server::settled(async {
+        let (state, token) = crate::views::load::server::signed_in()?;
+        let description = state.gateway().self_description(&token).await?;
+        Ok(server::options(&description))
+    })
+    .await
 }
 
 /// Runs the query `form` describes through the gateway as the operator.
 ///
+/// A form that cannot be sent and a query the gateway refuses are answers:
+/// the refusal rendered on the server, with the gateway's status and code. A
+/// failing all-or-nothing answer that carries the diagnostic envelope is an
+/// answer too (§11.4).
+///
 /// # Errors
-/// Returns [`ViewError::SignedOut`] without a live session,
-/// [`ViewError::Invalid`] for a form that cannot be sent, and the gateway's
-/// refusal or failure as its [`ViewError`]. A failing all-or-nothing answer
-/// that carries the diagnostic envelope is an answer, not an error (§11.4).
-/// A plain form post, which a page without its bundle sends, is
-/// [`ViewError::Invalid`] before the gateway is asked, because no page would
-/// show its answer.
+/// Returns [`ViewError::SignedOut`] without a live session, the console's
+/// fault as its [`ViewError`], and [`ViewError::PlainPost`] for a plain form
+/// post, which a page without its bundle sends, before the gateway is asked,
+/// because no page would show its answer.
 #[server(endpoint = "query")]
 pub async fn run_query(
     /// The query console's form.
     form: QueryForm,
 ) -> Result<RenderedAnswer, ViewError> {
+    use crate::views::load::server::Stop;
+
     let (state, token) = crate::views::load::server::signed_in()?;
     server::from_the_hydrated_page()?;
-    let call = server::call(&form)?;
-    let answer = state
-        .gateway()
-        .query(&token, &call)
-        .await
-        .map_err(|error| crate::views::load::server::refused(&error))?;
+    let call = match server::call(&form) {
+        Ok(call) => call,
+        Err(refused) => return Ok(crate::query::answer::refused(&refused)),
+    };
+    let answer = match state.gateway().query(&token, &call).await {
+        Ok(answer) => answer,
+        Err(error) => {
+            return match crate::views::load::server::refused(&error) {
+                Stop::Refused(refused) => Ok(crate::query::answer::refused(&refused)),
+                Stop::Fault(error) => Err(error),
+            };
+        }
+    };
     let answer = server::answer(&answer);
     Ok(RenderedAnswer {
-        status: answer.status,
+        status: Some(answer.status),
         complete: answer.complete,
         html: crate::query::answer::html(&answer),
     })
@@ -79,7 +90,7 @@ pub mod server {
 
     use crate::gateway::{FederatedAnswer, QueryCall, QueryTarget};
     use crate::query::model::{ColumnLine, EndpointLine, QueryAnswer, QueryForm, QueryOptionsView};
-    use crate::views::model::ViewError;
+    use crate::views::model::{Refusal, ViewError};
 
     /// The choices `description` offers a query.
     #[must_use]
@@ -107,7 +118,7 @@ pub mod server {
     /// would show.
     ///
     /// # Errors
-    /// Returns [`ViewError::Invalid`] for a request whose `Accept` names
+    /// Returns [`ViewError::PlainPost`] for a request whose `Accept` names
     /// `text/html`.
     pub fn from_the_hydrated_page() -> Result<(), ViewError> {
         let plain = leptos::context::use_context::<http::request::Parts>().is_some_and(|parts| {
@@ -118,16 +129,14 @@ pub mod server {
                 .any(|accept| accept.to_str().is_ok_and(|text| text.contains("text/html")))
         });
         if plain {
-            return Err(invalid(
-                "The query console runs a query once its page has loaded; reload the page and run it again.",
-            ));
+            return Err(ViewError::PlainPost);
         }
         Ok(())
     }
 
     /// A refusal of the form, naming the field and never its value.
-    fn invalid(reason: impl Into<String>) -> ViewError {
-        ViewError::Invalid {
+    fn invalid(reason: impl Into<String>) -> Refusal {
+        Refusal::Invalid {
             reason: reason.into(),
         }
     }
@@ -141,11 +150,11 @@ pub mod server {
     /// The gateway call `form` describes.
     ///
     /// # Errors
-    /// Returns [`ViewError::Invalid`] for a form that names no query, a
+    /// Returns [`Refusal::Invalid`] for a form that names no query, a
     /// parameter that is not `name=value` or is given twice, an `offset` or
     /// `fetch` that is not a whole number from 0, or a header value that is
     /// not legal on the wire. No message quotes what the operator entered.
-    pub fn call(form: &QueryForm) -> Result<QueryCall, ViewError> {
+    pub fn call(form: &QueryForm) -> Result<QueryCall, Refusal> {
         let target = match form.kind.as_str() {
             "aql" => QueryTarget::Aql(
                 given(&form.aql)
@@ -189,14 +198,14 @@ pub mod server {
     }
 
     /// `value` as the value of the header the form calls `field`.
-    fn header_value(field: &str, value: &str) -> Result<String, ViewError> {
+    fn header_value(field: &str, value: &str) -> Result<String, Refusal> {
         HeaderValue::from_str(value)
             .map(|_legal| value.to_owned())
             .map_err(|_illegal| invalid(format!("The {field} cannot be sent as a header.")))
     }
 
     /// The whole number `text` holds, or `None` when it is empty.
-    fn whole(field: &str, text: &str) -> Result<Option<i64>, ViewError> {
+    fn whole(field: &str, text: &str) -> Result<Option<i64>, Refusal> {
         let Some(text) = given(text) else {
             return Ok(None);
         };
@@ -208,7 +217,7 @@ pub mod server {
 
     /// The query parameters `text` holds, one `name=value` per line, each
     /// value sent as a string.
-    fn parameters(text: &str) -> Result<QueryParameters, ViewError> {
+    fn parameters(text: &str) -> Result<QueryParameters, Refusal> {
         let mut parameters = BTreeMap::new();
         for (index, line) in text.lines().enumerate() {
             let number = index.saturating_add(1);

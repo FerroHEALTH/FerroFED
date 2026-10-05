@@ -196,6 +196,17 @@ the orchestrator, never made in a slice.
 - Errors are typed: the gateway's `StatusCode` and error body are carried as
   data, never stringified into `ServerFnError::ServerError`, and a non-2xx
   answer is never an empty value.
+- **An expected outcome is a successful server-function answer.** A server
+  function returns `Result<Outcome<T>, ViewError>`: the view as
+  `Outcome::Shown`, and a gateway refusal or input it cannot send as
+  `Outcome::Refused(Refusal)`, with the gateway's status and code. Only the
+  console's own faults are a `ViewError`, and so a `5xx`: no live session, a
+  gateway it cannot reach, a body it cannot read, a broken session store.
+  Chrome logs every `4xx` and `5xx` a page fetches as a console error, which
+  the browser journeys fail on, and a caller branches on the two, so they
+  are distinct types (`.claude/rules/reliability.md`, errors are types at a
+  boundary that branches). The query console renders a refusal on the
+  server into its answer (`query::answer::refused`).
 - Shared state reaches a render through `leptos_routes_with_context` and
   `provide_context`, and the plain axum handlers through `Extension`
   (`server/26_extractors`).
@@ -223,6 +234,13 @@ the orchestrator, never made in a slice.
   HTML is a hydration error.
 - No non-determinism in the initial render (random ids, timestamps) that
   differs between the server pass and hydration.
+- **A route whose content comes from the gateway renders `SsrMode::Async`**
+  (`ssr/23_ssr_modes`): the server waits for every resource and sends the
+  whole page, so nothing arrives in a `<template>` for an inline script to
+  swap in, and the page reads with no script. `PartiallyBlocked` was
+  measured to stream a blocking resource out of order on a multi-threaded
+  runtime; `views::every_gateway_page_is_whole_in_the_html_the_server_sends`
+  and the testkit's `console` test hold the rule.
 - `leptos_meta` (`<Title>`, `<Stylesheet>`, `<Meta>`) is used from component
   bodies, never by editing the shell's `<head>` by hand (`metadata`). Every
   routed page sets a `<Title>`.

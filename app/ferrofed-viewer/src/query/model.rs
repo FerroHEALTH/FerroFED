@@ -78,14 +78,16 @@ pub struct QueryOptionsView {
 }
 
 /// A federated answer as the server rendered it for the page: the status
-/// and completeness the answer carries, and its HTML.
+/// and completeness the answer carries, and its HTML, or the refusal that
+/// kept the query from running, rendered the same way.
 ///
 /// Its `Debug` output names the status, the completeness and the size of the
 /// HTML alone: the HTML holds the rows, which can name a patient (N33).
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderedAnswer {
-    /// The status the gateway answered with.
-    pub status: u16,
+    /// The status the gateway answered with, or `None` when the console
+    /// refused the form before asking it.
+    pub status: Option<u16>,
     /// `meta.federation.complete` (§11.4, N37).
     pub complete: bool,
     /// The answer rendered as HTML: its status and completeness in words,
@@ -209,7 +211,7 @@ mod tests {
             ..QueryAnswer::default()
         };
         let rendered = RenderedAnswer {
-            status: 200,
+            status: Some(200),
             complete: true,
             html: format!("<td>{PATIENT}</td>"),
         };

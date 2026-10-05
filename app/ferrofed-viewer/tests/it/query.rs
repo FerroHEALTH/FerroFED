@@ -191,7 +191,7 @@ async fn a_query_over_two_nodes_shows_the_rows_every_endpoint_and_complete()
     let gateway = gateway(200, complete_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     let answer = answered(&service, &session, patient_query()).await?;
-    assert_eq!(200, answer.status);
+    assert_eq!(Some(200), answer.status);
     assert!(answer.complete);
     let html = &answer.html;
     assert!(html.contains("Every node in scope answered."), "{html}");
@@ -219,7 +219,7 @@ async fn a_best_effort_answer_a_node_did_not_complete_is_flagged_incomplete()
     let gateway = gateway(200, incomplete_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     let answer = answered(&service, &session, patient_query()).await?;
-    assert_eq!(200, answer.status);
+    assert_eq!(Some(200), answer.status);
     assert!(!answer.complete, "{answer:?}");
     let html = &answer.html;
     assert!(html.contains("Incomplete answer."), "{html}");
@@ -238,7 +238,7 @@ async fn an_all_or_nothing_failure_shows_its_status_and_every_endpoint()
     let gateway = gateway(504, failed_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     let answer = answered(&service, &session, patient_query()).await?;
-    assert_eq!(504, answer.status);
+    assert_eq!(Some(504), answer.status);
     assert!(!answer.complete);
     let html = &answer.html;
     assert!(
@@ -265,11 +265,17 @@ async fn a_refused_query_shows_its_status_and_stable_code() -> Result<(), Box<dy
     )
     .await?;
     let (service, session) = signed_in_console(&gateway)?;
-    let (response, text) = send(&service, run(patient_query(), Some(&session))?).await?;
-    assert_ne!(StatusCode::OK, response.status(), "{text}");
-    assert!(text.contains("Refused"), "{text}");
-    assert!(text.contains("400"), "{text}");
-    assert!(text.contains("aql-not-federable"), "{text}");
+    // A refusal is an answer of the server function, not its failure, which
+    // the browser would log as an error.
+    let answer = answered(&service, &session, patient_query()).await?;
+    assert_eq!(Some(400), answer.status);
+    assert!(!answer.complete);
+    let html = &answer.html;
+    assert!(html.contains(r#"<p role="alert">"#), "{html}");
+    assert!(
+        html.contains("The gateway refused this view: 400 (aql-not-federable)."),
+        "{html}"
+    );
     Ok(())
 }
 
@@ -399,9 +405,16 @@ async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<()
             ("organisation", "Org\u{7}A"),
         ]),
     ] {
+        // A form that cannot be sent is refused in the answer, as an alert
+        // naming the field, never as a failure of the server function.
         let (response, text) = send(&service, run(body.clone(), Some(&session))?).await?;
-        assert_ne!(StatusCode::OK, response.status(), "{body}");
-        assert!(text.contains("Invalid"), "{body}: {text}");
+        assert_eq!(StatusCode::OK, response.status(), "{body}: {text}");
+        let answer: RenderedAnswer = serde_json::from_str(&text)?;
+        assert_eq!(None, answer.status, "{body}");
+        assert!(
+            answer.html.contains(r#"<p role="alert">"#),
+            "{body}: {text}"
+        );
         assert!(!text.contains(PATIENT), "{body}: {text}");
     }
     let asked = gateway

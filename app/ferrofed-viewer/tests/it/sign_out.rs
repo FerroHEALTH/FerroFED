@@ -243,6 +243,33 @@ async fn the_policy_lets_the_sign_out_form_reach_the_end_session_endpoint()
     Ok(())
 }
 
+// The `form-action` sources come from the configuration alone: an origin a
+// request names, in any header, never joins them.
+#[tokio::test]
+async fn no_origin_a_request_names_joins_the_form_action() -> Result<(), Box<dyn Error>> {
+    const FOREIGN: &str = "https://attacker.example.net";
+    for (text, expected) in [
+        (
+            with_end_session(),
+            "form-action 'self' https://idp.example.org",
+        ),
+        (WITH_OIDC.to_owned(), "form-action 'self'"),
+    ] {
+        let (_state, service) = console(&text)?;
+        let request = Request::get("/")
+            .header("host", "attacker.example.net")
+            .header("origin", FOREIGN)
+            .header("referer", format!("{FOREIGN}/page"))
+            .header("forwarded", "host=attacker.example.net;proto=https")
+            .header("x-forwarded-host", "attacker.example.net")
+            .body(Body::empty())?;
+        let (response, _body) = send(&service, request).await?;
+        let directive = form_action(&response);
+        assert_eq!(expected, directive);
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn without_an_end_session_endpoint_forms_lead_only_to_the_console()
 -> Result<(), Box<dyn Error>> {

@@ -31,7 +31,8 @@ use leptos_meta::Title;
 
 use crate::query::model::{QueryForm, QueryOptionsView};
 use crate::query::run::RunQuery;
-use crate::views::{refusal, titled};
+use crate::views::model::Outcome;
+use crate::views::{fault, refusal, titled};
 
 /// The path of the query console.
 pub const QUERY: &str = "/query";
@@ -54,8 +55,9 @@ pub fn QueryPage() -> impl IntoView {
         }>
             {move || Suspend::new(async move {
                 match options.await {
-                    Ok(offered) => form_section(action, &offered),
-                    Err(error) => refusal(&error),
+                    Ok(Outcome::Shown(offered)) => form_section(action, &offered),
+                    Ok(Outcome::Refused(refused)) => refusal(&refused),
+                    Err(error) => fault(&error),
                 }
             })}
         </Suspense>
@@ -279,7 +281,7 @@ fn answer_section(action: ServerAction<RunQuery>) -> AnyView {
                             let html = rendered.html.clone();
                             view! { <div inner_html=html></div> }.into_any()
                         }
-                        Some(Err(error)) => refusal(error),
+                        Some(Err(error)) => fault(error),
                     })
             }}
         </section>
@@ -298,12 +300,29 @@ fn answer_section(action: ServerAction<RunQuery>) -> AnyView {
 pub mod answer {
     use leptos::prelude::*;
 
-    use crate::query::model::QueryAnswer;
+    use crate::query::model::{QueryAnswer, RenderedAnswer};
+    use crate::views::model::Refusal;
 
     /// The HTML of `answer`.
     #[must_use]
     pub fn html(answer: &QueryAnswer) -> String {
         answered(answer).to_html()
+    }
+
+    /// What the page shows of a query `refused` kept from running: the
+    /// gateway's status and code, or what is wrong with the form.
+    #[must_use]
+    pub fn refused(refused: &Refusal) -> RenderedAnswer {
+        let status = match refused {
+            Refusal::Gateway { status, .. } => Some(*status),
+            Refusal::NotAuthenticated { .. } => Some(http::StatusCode::UNAUTHORIZED.as_u16()),
+            Refusal::Invalid { .. } => None,
+        };
+        RenderedAnswer {
+            status,
+            complete: false,
+            html: crate::views::refusal(refused).to_html(),
+        }
     }
 
     /// A federated answer: its status, its completeness, every endpoint and the
@@ -469,6 +488,7 @@ pub mod answer {
     mod tests {
         use super::answered;
         use crate::query::model::{ColumnLine, EndpointLine, QueryAnswer};
+        use crate::views::model::Refusal;
         use leptos::prelude::RenderHtml as _;
 
         fn endpoint(id: &str, status: &str, error: Option<&str>) -> EndpointLine {
@@ -597,6 +617,37 @@ pub mod answer {
             );
             assert!(!html.contains("did not answer"), "{html}");
             assert!(!html.contains("answered with an error"), "{html}");
+        }
+
+        // A refusal reaches the page through `inner_html` as the answer does,
+        // so the code and the reason the gateway or the form gave arrive
+        // escaped, never as markup.
+        #[test]
+        fn a_refusal_renders_its_status_and_code_escaped() {
+            let refused = super::refused(&Refusal::Gateway {
+                status: 400,
+                code: Some(String::from(r#"<script>x</script>" onmouseover="y"#)),
+            });
+            assert_eq!(Some(400), refused.status);
+            assert!(!refused.complete);
+            let html = &refused.html;
+            assert!(html.contains(r#"<p role="alert">"#), "{html}");
+            assert!(
+                html.contains("The gateway refused this view: 400 ("),
+                "{html}"
+            );
+            assert!(html.contains("&lt;script&gt;x&lt;/script&gt;"), "{html}");
+            assert!(!html.contains("<script"), "{html}");
+            let invalid = super::refused(&Refusal::Invalid {
+                reason: String::from("<b>The offset</b> is a whole number from 0."),
+            });
+            assert_eq!(None, invalid.status);
+            assert!(
+                invalid.html.contains("&lt;b&gt;The offset"),
+                "{}",
+                invalid.html
+            );
+            assert!(!invalid.html.contains("<b>"), "{}", invalid.html);
         }
 
         #[test]

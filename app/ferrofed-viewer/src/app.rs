@@ -82,33 +82,23 @@ pub fn App() -> impl IntoView {
                 </form>
             </nav>
             <main>
+                // NOTE: the Leptos book, `ssr/23_ssr_modes`: a page the gateway fills renders
+                // `Async`, whole in one sweep, so no content waits on a script to be swapped in.
                 <Routes fallback=NotFound>
                     <Route path=path!("/") view=Landing />
-                    <Route
-                        path=path!("/members")
-                        view=views::MembersPage
-                        ssr=SsrMode::PartiallyBlocked
-                    />
-                    <Route
-                        path=path!("/integrity")
-                        view=views::IntegrityPage
-                        ssr=SsrMode::PartiallyBlocked
-                    />
+                    <Route path=path!("/members") view=views::MembersPage ssr=SsrMode::Async />
+                    <Route path=path!("/integrity") view=views::IntegrityPage ssr=SsrMode::Async />
                     <Route
                         path=path!("/stored-queries")
                         view=views::StoredQueriesPage
-                        ssr=SsrMode::PartiallyBlocked
+                        ssr=SsrMode::Async
                     />
                     <Route
                         path=path!("/federation")
                         view=views::FederationPage
-                        ssr=SsrMode::PartiallyBlocked
+                        ssr=SsrMode::Async
                     />
-                    <Route
-                        path=path!("/query")
-                        view=crate::query::QueryPage
-                        ssr=SsrMode::PartiallyBlocked
-                    />
+                    <Route path=path!("/query") view=crate::query::QueryPage ssr=SsrMode::Async />
                 </Routes>
             </main>
         </Router>

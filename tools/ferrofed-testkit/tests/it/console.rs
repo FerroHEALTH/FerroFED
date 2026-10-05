@@ -216,3 +216,39 @@ async fn the_self_description_view_renders_the_gateways_options() -> Result<(), 
     assert!(page.contains("example-federation"), "{page}");
     Ok(())
 }
+
+// A page whose content comes from the gateway is whole in the HTML the
+// console sends, every time: nothing waits in a `<template>` for an inline
+// script to move it into place, so the page reads with no script at all.
+#[tokio::test(flavor = "multi_thread")]
+async fn every_gateway_page_is_whole_in_the_html_the_console_sends() -> Result<(), Box<dyn Error>> {
+    let running = Running::start().await?;
+    for (path, content) in [
+        ("/members", "<th scope=\"row\">node-a-pub</th>"),
+        (
+            "/integrity",
+            "<caption>The creating_system_id routing table</caption>",
+        ),
+        ("/stored-queries", "The gateway holds no stored query."),
+        ("/federation", "example-federation"),
+        (
+            "/query",
+            r#"<button type="submit" disabled>Run the query</button>"#,
+        ),
+    ] {
+        for round in 1..=10 {
+            let (status, page) = running.view(path).await?;
+            assert_eq!(reqwest::StatusCode::OK, status, "{path} #{round}: {page}");
+            let document = page
+                .split_once("</html>")
+                .map_or(page.as_str(), |(document, _after)| document);
+            assert!(document.contains(content), "{path} #{round}: {page}");
+            assert!(!page.contains("<template id="), "{path} #{round}: {page}");
+            assert!(
+                !page.contains("createTreeWalker"),
+                "{path} #{round}: {page}"
+            );
+        }
+    }
+    Ok(())
+}

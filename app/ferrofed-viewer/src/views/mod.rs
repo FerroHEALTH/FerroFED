@@ -6,9 +6,11 @@
 //! queries, and the gateway's self-description.
 //!
 //! Each view reads the gateway's own public surface as the signed-in
-//! operator, through a server function of [`load`], and renders on the
-//! server before the page is sent, so it needs no script to be read. None
-//! renders a patient identifier or clinical data (§5.4.1, N33).
+//! operator, through a server function of [`load`]. Its route renders
+//! `SsrMode::Async`: the server waits for every answer and sends the whole
+//! page at once, so the view is in the HTML the browser receives and needs
+//! no script to be read (the Leptos book, `ssr/23_ssr_modes`). None renders
+//! a patient identifier or clinical data (§5.4.1, N33).
 
 // The browser half of each server function, which the server macro writes,
 // is a network call that awaits nothing, and the lint names the macro alone.
@@ -27,7 +29,7 @@ use leptos_meta::Title;
 use leptos_router::hooks::use_query_map;
 
 use crate::views::model::{
-    FederationView, IntegrityView, MembersView, PAGE_SIZE, StoredView, ViewError,
+    FederationView, IntegrityView, MembersView, Outcome, PAGE_SIZE, Refusal, StoredView, ViewError,
 };
 
 /// The path of the members view.
@@ -119,14 +121,7 @@ pub fn MembersPage() -> impl IntoView {
         <h1>"Members"</h1>
         <Suspense fallback=|| {
             view! { <p>"Loading the members."</p> }
-        }>
-            {move || Suspend::new(async move {
-                match loaded.await {
-                    Ok(view) => members_section(view),
-                    Err(error) => refusal(&error),
-                }
-            })}
-        </Suspense>
+        }>{move || Suspend::new(async move { shown(loaded.await, members_section) })}</Suspense>
     }
 }
 
@@ -207,14 +202,7 @@ pub fn IntegrityPage() -> impl IntoView {
         <h1>"Integrity"</h1>
         <Transition fallback=|| {
             view! { <p>"Loading the incidents."</p> }
-        }>
-            {move || Suspend::new(async move {
-                match loaded.await {
-                    Ok(view) => integrity_section(view),
-                    Err(error) => refusal(&error),
-                }
-            })}
-        </Transition>
+        }>{move || Suspend::new(async move { shown(loaded.await, integrity_section) })}</Transition>
     }
 }
 
@@ -321,14 +309,7 @@ pub fn StoredQueriesPage() -> impl IntoView {
         <h1>"Stored queries"</h1>
         <Transition fallback=|| {
             view! { <p>"Loading the stored queries."</p> }
-        }>
-            {move || Suspend::new(async move {
-                match loaded.await {
-                    Ok(view) => stored_section(view),
-                    Err(error) => refusal(&error),
-                }
-            })}
-        </Transition>
+        }>{move || Suspend::new(async move { shown(loaded.await, stored_section) })}</Transition>
     }
 }
 
@@ -390,14 +371,7 @@ pub fn FederationPage() -> impl IntoView {
         <h1>"Self-description"</h1>
         <Suspense fallback=|| {
             view! { <p>"Loading the self-description."</p> }
-        }>
-            {move || Suspend::new(async move {
-                match loaded.await {
-                    Ok(view) => federation_section(view),
-                    Err(error) => refusal(&error),
-                }
-            })}
-        </Suspense>
+        }>{move || Suspend::new(async move { shown(loaded.await, federation_section) })}</Suspense>
     }
 }
 
@@ -417,19 +391,21 @@ fn federation_section(view: FederationView) -> AnyView {
     .into_any()
 }
 
-/// The inline notice of a view that could not be rendered: the gateway's
-/// status and stable error code, never an empty view.
-pub(crate) fn refusal(error: &ViewError) -> AnyView {
-    match error {
-        ViewError::SignedOut => view! {
-            <p role="alert">
-                "Sign in to see this view. " <a href=crate::app::SIGN_IN rel="external">
-                    "Sign in"
-                </a>
-            </p>
-        }
-        .into_any(),
-        ViewError::NotAuthenticated { code } => {
+/// The section `section` draws of a view `loaded`, the notice of the refusal
+/// that kept it, or the notice of the console's fault: never an empty view.
+fn shown<T>(loaded: Result<Outcome<T>, ViewError>, section: fn(T) -> AnyView) -> AnyView {
+    match loaded {
+        Ok(Outcome::Shown(view)) => section(view),
+        Ok(Outcome::Refused(refused)) => refusal(&refused),
+        Err(error) => fault(&error),
+    }
+}
+
+/// The inline notice of an expected refusal: the gateway's status and
+/// stable error code, or what is wrong with the input.
+pub(crate) fn refusal(refused: &Refusal) -> AnyView {
+    match refused {
+        Refusal::NotAuthenticated { code } => {
             let code = code.clone().unwrap_or_else(|| String::from("no code"));
             view! {
                 <p role="alert">
@@ -441,7 +417,7 @@ pub(crate) fn refusal(error: &ViewError) -> AnyView {
             }
             .into_any()
         }
-        ViewError::Refused { status, code } => {
+        Refusal::Gateway { status, code } => {
             let code = code.clone().unwrap_or_else(|| String::from("no code"));
             let hint = if code == "scope-insufficient" {
                 " Your access token may carry no operator scope."
@@ -451,9 +427,28 @@ pub(crate) fn refusal(error: &ViewError) -> AnyView {
             view! { <p role="alert">{format!("The gateway refused this view: {status} ({code}).{hint}")}</p> }
             .into_any()
         }
+        Refusal::Invalid { reason } => {
+            let reason = reason.clone();
+            view! { <p role="alert">{reason}</p> }.into_any()
+        }
+    }
+}
+
+/// The inline notice of a view the console could not serve: never an empty
+/// view.
+pub(crate) fn fault(error: &ViewError) -> AnyView {
+    match error {
+        ViewError::SignedOut => view! {
+            <p role="alert">
+                "Sign in to see this view. " <a href=crate::app::SIGN_IN rel="external">
+                    "Sign in"
+                </a>
+            </p>
+        }
+        .into_any(),
         ViewError::Unreadable { .. }
         | ViewError::Unreachable
-        | ViewError::Invalid { .. }
+        | ViewError::PlainPost
         | ViewError::Unavailable
         | ViewError::Fetch { .. } => {
             let text = error.to_string();
