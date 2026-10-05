@@ -60,6 +60,7 @@ use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
 use crate::auth::claims::{AccessToken, Introspected};
 use crate::auth::fetch::{FetchError, Fetcher};
 use crate::auth::keys::{KeyError, KeySet};
+use crate::auth::permission::grant;
 use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::Refusal;
 use crate::base_path::BasePath;
@@ -169,7 +170,7 @@ impl Gate {
             Requirement::Refused => return Err(Refusal::Operation),
             Requirement::Operator => {
                 let scope = trusted.settings.operator_scope.as_deref();
-                return permission::operator(scope, caller.granted())
+                return grant::operator(scope, caller.granted())
                     .then_some(caller)
                     .ok_or(Refusal::Scope);
             }
@@ -183,7 +184,7 @@ impl Gate {
                 }
                 // NOTE: SMART on openEHR master08 §Resource Scopes: a patient scope reaches "data
                 // within that patient's EHR", so listing its client never widens it to parties.
-                if permission::patient_grant(caller.scopes()) {
+                if grant::patient_grant(caller.scopes()) {
                     return Err(Refusal::PatientDemographic);
                 }
             }
@@ -196,14 +197,11 @@ impl Gate {
                     Resource::Unnamed => None,
                     Resource::Path(_) => named,
                 };
-                let honoured = permission::Honoured {
-                    backend: permission::backend(
-                        &trusted.settings.backend_clients,
-                        caller.client_id(),
-                    ),
+                let honoured = grant::Honoured {
+                    backend: grant::backend(&trusted.settings.backend_clients, caller.client_id()),
                     patient: trusted.settings.patient.is_some(),
                 };
-                if !permission::granted(caller.scopes(), (family, permission), named, honoured) {
+                if !grant::granted(caller.scopes(), (family, permission), named, honoured) {
                     return Err(Refusal::Scope);
                 }
                 // NOTE: N26, RFC 8693 §2.1 scope: an exchanged token asks for the
@@ -212,7 +210,7 @@ impl Gate {
                     .scopes()
                     .iter()
                     .filter(|scope| {
-                        permission::granted(
+                        grant::granted(
                             std::slice::from_ref(*scope),
                             (family, permission),
                             named,
@@ -220,7 +218,7 @@ impl Gate {
                         )
                     })
                     .collect();
-                let confined = permission::confined(
+                let confined = grant::confined(
                     &covering
                         .iter()
                         .map(|scope| (*scope).clone())
