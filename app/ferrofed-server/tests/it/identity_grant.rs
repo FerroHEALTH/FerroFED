@@ -245,11 +245,14 @@ fn config_check_names_the_key_it_refuses_and_never_the_secret() -> TestResult {
     Ok(())
 }
 
+/// Whether a refusal is the one a case expects, naming the key it is given.
+type Refused = fn(&ConfigError, &str) -> bool;
+
 #[test]
 fn a_service_grant_holds_each_key_to_its_rule() -> TestResult {
     let key = "pixm.manager[0].credentials.oauth2";
     let endpoint = "token_endpoint = \"https://as.example.org/token\"\n";
-    let cases: [(&str, fn(&ConfigError, &str) -> bool, String); 5] = [
+    let cases: [(&str, Refused, String); 5] = [
         (
             "client_auth = \"client_secret_basic\"\ndpop_key_file = \"/nonexistent/dpop.pem\"\nclient_secret = \"s\"\n",
             |error, key| matches!(error, ConfigError::GrantFault(GrantFault::NodeOnly { key: named }) if named == key),

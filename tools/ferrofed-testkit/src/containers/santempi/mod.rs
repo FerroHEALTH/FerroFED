@@ -47,8 +47,8 @@ const PORT: u16 = 8080;
 /// The path of the FHIR interface, the PIX Manager's FHIR base.
 pub const FHIR_PATH: &str = "/fhir/";
 
-/// The path of SanteMPI's OAuth 2.0 token endpoint.
-const TOKEN_PATH: &str = "/auth/oauth2_token";
+/// The path of SanteMPI's OAuth 2.0 token endpoint, beside [`FHIR_PATH`].
+pub const TOKEN_PATH: &str = "/auth/oauth2_token";
 
 /// The database role, which also names the main database, as SanteSuite's
 /// compose file names it.
