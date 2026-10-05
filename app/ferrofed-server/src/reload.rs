@@ -17,6 +17,10 @@
 //! entries and resolution bindings naming a member that left are dropped.
 //! A configuration that does not load leaves the running registry in place.
 //!
+//! The same signal reads the certificate, the key and the client CA of each
+//! listener that serves TLS again from its files
+//! ([`Reloader::reload_certificates`]); a changed path takes a restart.
+//!
 //! The sections [`reloadable`](crate::binding::reloadable) names take effect
 //! on a reload: the registry, the onward credentials, and each section a
 //! binding declares as one a reload applies
@@ -41,6 +45,7 @@ use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
+use crate::listener::certificates::Certificates;
 use crate::metrics::ReloadResult;
 use crate::state::AppState;
 
@@ -57,6 +62,7 @@ pub struct Reloader {
     boot: Settings,
     state: Arc<AppState>,
     serial: Mutex<Option<Settings>>,
+    certificates: Vec<Arc<Certificates>>,
 }
 
 /// What an applied reload changed.
@@ -151,7 +157,42 @@ impl Reloader {
             boot,
             state,
             serial: Mutex::new(None),
+            certificates: Vec::new(),
         }
+    }
+
+    /// Returns this reloader with `certificates`, the TLS of the listeners,
+    /// which [`Reloader::reload_certificates`] reads again from their files.
+    #[must_use]
+    pub fn with_certificates(mut self, certificates: Vec<Arc<Certificates>>) -> Self {
+        self.certificates = certificates;
+        self
+    }
+
+    /// Reads the certificate, the key and the client CA of every listener
+    /// that serves TLS again from the files it started with, logs each
+    /// outcome, and returns the tables whose files were refused.
+    ///
+    /// A listener whose files read puts them in place for every handshake
+    /// that starts afterwards; one whose files do not keeps the certificate it
+    /// serves. No connection already open changes.
+    pub fn reload_certificates(&self) -> Vec<&'static str> {
+        let mut refused = Vec::new();
+        for certificates in &self.certificates {
+            let table = certificates.files().table;
+            match certificates.reload() {
+                Ok(()) => tracing::info!(table, "listener certificate reloaded"),
+                Err(error) => {
+                    tracing::error!(
+                        table,
+                        error = crate::chain(&error),
+                        "listener certificate reload refused, the running certificate stays"
+                    );
+                    refused.push(table);
+                }
+            }
+        }
+        refused
     }
 
     /// Reloads the registry, logs the outcome, and returns it.
@@ -359,7 +400,8 @@ impl std::fmt::Debug for Reloader {
     }
 }
 
-/// Reloads the registry each time the process receives `SIGHUP`.
+/// Reloads the registry, and the certificate of every listener that serves
+/// TLS, each time the process receives `SIGHUP`.
 ///
 /// The reload reads files, so it runs on the blocking pool. A failure to
 /// install the handler is logged, and the registry then changes only on a
@@ -377,9 +419,14 @@ pub async fn on_hangup(reloader: Arc<Reloader>) {
         }
     };
     while hangup.recv().await.is_some() {
-        tracing::info!("SIGHUP received, reloading the registry");
+        tracing::info!("SIGHUP received, reloading the registry and the listener certificates");
         let reloader = Arc::clone(&reloader);
-        if let Err(error) = tokio::task::spawn_blocking(move || reloader.reload()).await {
+        let outcome = tokio::task::spawn_blocking(move || {
+            let registry = reloader.reload();
+            reloader.reload_certificates();
+            registry
+        });
+        if let Err(error) = outcome.await {
             tracing::error!(
                 panicked = error.is_panic(),
                 "the registry reload did not finish; the running registry stays"
@@ -447,6 +494,8 @@ const RESTART_KEYS: &[RestartKey] = &[
     ("server.listen", |boot, fresh| {
         boot.server.listen != fresh.server.listen
     }),
+    ("server.tls", |boot, fresh| boot.server.tls != fresh.server.tls),
+    ("metrics.tls", |boot, fresh| boot.metrics.tls != fresh.metrics.tls),
     ("server.base_path", |boot, fresh| {
         boot.server.base_path != fresh.server.base_path
     }),

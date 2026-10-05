@@ -21,13 +21,14 @@ use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::grant::GrantFault;
 use crate::config::secrets::{resolve_node_credentials, resolve_signing};
+use crate::config::server::{METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
     ServerSettings, Settings, SigningSettings, TelemetrySettings,
 };
 use crate::config::{
-    COMBINING_MARGIN_MS, Config, Federation, Localization, Metrics, NodeSelection, OffsetPaging,
-    Telemetry, stored_queries,
+    COMBINING_MARGIN_MS, Config, Federation, Localization, NodeSelection, OffsetPaging, Telemetry,
+    stored_queries,
 };
 use crate::telemetry::SampleRatio;
 
@@ -68,6 +69,10 @@ impl Config {
     /// ([`Error::NextKeyAlgorithm`]), and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
     /// `[auth]` is refused as
     /// [`Auth::resolve`](crate::config::auth::Auth::resolve) refuses it.
+    /// `[server.tls]` and `[metrics.tls]` refuse an unset certificate or key
+    /// ([`Error::Missing`]), a file that does not read or a key that does not
+    /// match its certificate ([`Error::ListenerTls`]), and a healthcheck
+    /// identity it never presents ([`Error::HealthcheckIdentityUnused`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -137,6 +142,7 @@ impl Config {
                 body_limit: self.server.body_limit_bytes,
                 auth: self.auth.resolve()?,
                 overload: self.server.resolve_overload()?,
+                tls: resolve_tls(self.server.tls.as_ref(), SERVER_TLS)?,
             },
             telemetry,
             registry_document: self.registry.document.clone(),
@@ -351,6 +357,7 @@ fn resolve_metrics(metrics: &Metrics, server: SocketAddr) -> Result<MetricsSetti
     Ok(MetricsSettings {
         listen,
         otlp_endpoint: otlp_collector("metrics.otlp_endpoint", metrics.otlp_endpoint.as_ref())?,
+        tls: resolve_tls(metrics.tls.as_ref(), METRICS_TLS)?,
     })
 }
 
