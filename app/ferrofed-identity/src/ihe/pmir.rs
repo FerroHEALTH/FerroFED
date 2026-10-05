@@ -102,7 +102,7 @@ fn carried(identity: &PatientIdentity, domains: &BTreeSet<String>) -> Touched {
 /// A subscriber that cannot be built.
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum LifecycleConfigError {
+pub enum PmirConfigError {
     /// The Registry's base URL does not parse as a URL.
     #[error("the Patient Identity Registry base URL is not a URL")]
     BaseUrl(#[source] url::ParseError),
@@ -122,7 +122,7 @@ pub enum LifecycleConfigError {
     Client(#[source] reqwest::Error),
 }
 
-impl From<ClientError> for LifecycleConfigError {
+impl From<ClientError> for PmirConfigError {
     fn from(error: ClientError) -> Self {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
@@ -138,15 +138,15 @@ impl From<ClientError> for LifecycleConfigError {
 /// client of [`fhir::http_client`].
 ///
 /// # Errors
-/// A [`LifecycleConfigError`] for a base that is no `http(s)` URL, a
+/// A [`PmirConfigError`] for a base that is no `http(s)` URL, a
 /// credential that forms no `Authorization` value, or a client that cannot be
 /// built.
 pub fn subscriber(
     base: &SecretUrl,
     auth: &Authentication,
     tls: &Tls,
-) -> Result<PmirSubscriber, LifecycleConfigError> {
-    let base = Url::parse(base.expose()).map_err(LifecycleConfigError::BaseUrl)?;
+) -> Result<PmirSubscriber, PmirConfigError> {
+    let base = Url::parse(base.expose()).map_err(PmirConfigError::BaseUrl)?;
     let http = fhir::http_client(auth, tls)?;
-    PmirSubscriber::new(base, http).map_err(LifecycleConfigError::Base)
+    PmirSubscriber::new(base, http).map_err(PmirConfigError::Base)
 }
