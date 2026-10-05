@@ -17,6 +17,7 @@ mod backends;
 mod declaration;
 mod files;
 mod invocation;
+mod operator;
 mod storage;
 pub(crate) mod suite;
 

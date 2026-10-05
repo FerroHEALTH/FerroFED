@@ -8,13 +8,17 @@
 //! operator with the operator's own access token, so the gateway
 //! authenticates the console's requests exactly as it does any other
 //! client's. [`Gateway::its`] is the ITS-REST surface at `{base}/v1`, for the
-//! generated group clients of `openehr_its::rest::generated`, and
+//! generated group clients of `openehr_its::rest::generated`;
 //! [`Gateway::self_description`] reads `OPTIONS {base}/` into the typed
-//! federation body (§7a.2, N30). A refusal or a failure is a typed
+//! federation body (§7a.2, N30), [`Gateway::dependencies`] the health of
+//! each member and service, and the operator reads the gateway's read-only
+//! operator surface into the reports of `ferrofed_registry::operator`. A refusal or a failure is a typed
 //! [`GatewayError`] carrying the gateway's status, never an empty answer.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
+use ferrofed_registry::operator::{CreatingSystemReport, IncidentReport, StoredQueryReport};
 use http::{Method, StatusCode};
 use openehr_federation::options::OptionsRoot;
 use openehr_its::rest::client::{
@@ -24,6 +28,19 @@ use secrecy::SecretString;
 use url::Url;
 
 use crate::config::settings::GatewaySettings;
+
+/// What `GET {base}/health/dependencies` answers, as far as the console
+/// renders it: each member endpoint's last observed state, and each other
+/// service the gateway reports by key.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
+pub struct Dependencies {
+    /// Each member endpoint's state, by `endpoint_id`.
+    pub endpoints: BTreeMap<String, String>,
+    /// Every other dependency the gateway names, by key: the resolver, the
+    /// consent pre-filter, the localizer and each binding's services.
+    #[serde(flatten)]
+    pub services: BTreeMap<String, String>,
+}
 
 /// The operator's access token, sent to the gateway as a bearer credential.
 #[derive(Clone)]
@@ -75,6 +92,45 @@ pub enum GatewayError {
         /// The body it sent with it.
         body: ErrorBody,
     },
+}
+
+impl GatewayError {
+    /// The status the gateway answered with and the stable error `code` its
+    /// body carries, when the gateway answered at all.
+    #[must_use]
+    pub fn refusal(&self) -> Option<(StatusCode, Option<String>)> {
+        let (status, body) = match self {
+            Self::Status { status, body }
+            | Self::Call {
+                source:
+                    ClientError::ServiceFailure { status, body, .. }
+                    | ClientError::UndocumentedStatus { status, body, .. },
+            } => (*status, body),
+            Self::Call {
+                source: ClientError::Unauthorized { body, .. },
+            } => (StatusCode::UNAUTHORIZED, body),
+            Self::Call {
+                source: ClientError::Forbidden { body, .. },
+            } => (StatusCode::FORBIDDEN, body),
+            Self::Transport { .. } | Self::Base { .. } | Self::Call { .. } => return None,
+        };
+        Some((status, code_of(body)))
+    }
+}
+
+/// The `code` member the gateway writes into its ITS-REST `Error` body.
+#[derive(serde::Deserialize)]
+struct Coded {
+    code: Option<String>,
+}
+
+/// The stable error code `body` carries, if it is the gateway's error body.
+fn code_of(body: &ErrorBody) -> Option<String> {
+    // NOTE: no specification governs this: our own design; a body that is not
+    // the gateway's error document carries no code, which is not a failure.
+    serde_json::from_slice::<Coded>(body.raw())
+        .ok()
+        .and_then(|coded| coded.code)
 }
 
 /// The gateway the console is a client of.
@@ -131,9 +187,64 @@ impl Gateway {
     /// [`GatewayError::Call`] when the call failed or the body is not a
     /// conformant `OPTIONS {base}/` body.
     pub async fn self_description(&self, token: &AccessToken) -> Result<OptionsRoot, GatewayError> {
+        self.read(Method::OPTIONS, "/", token).await
+    }
+
+    /// Reads the last state the gateway observed of each member and service,
+    /// `GET {base}/health/dependencies`.
+    ///
+    /// # Errors
+    /// As [`Gateway::self_description`].
+    pub async fn dependencies(&self, token: &AccessToken) -> Result<Dependencies, GatewayError> {
+        self.read(Method::GET, "/health/dependencies", token).await
+    }
+
+    /// Reads the integrity incidents, `GET {base}/operator/incidents`.
+    ///
+    /// # Errors
+    /// As [`Gateway::self_description`]; a `403` when the operator's token
+    /// carries no operator scope.
+    pub async fn incidents(&self, token: &AccessToken) -> Result<IncidentReport, GatewayError> {
+        self.read(Method::GET, "/operator/incidents", token).await
+    }
+
+    /// Reads the `creating_system_id` routing table,
+    /// `GET {base}/operator/creating-systems`.
+    ///
+    /// # Errors
+    /// As [`Gateway::incidents`].
+    pub async fn creating_systems(
+        &self,
+        token: &AccessToken,
+    ) -> Result<CreatingSystemReport, GatewayError> {
+        self.read(Method::GET, "/operator/creating-systems", token)
+            .await
+    }
+
+    /// Reads every held stored-query version,
+    /// `GET {base}/operator/stored-queries`.
+    ///
+    /// # Errors
+    /// As [`Gateway::incidents`].
+    pub async fn stored_queries(
+        &self,
+        token: &AccessToken,
+    ) -> Result<StoredQueryReport, GatewayError> {
+        self.read(Method::GET, "/operator/stored-queries", token)
+            .await
+    }
+
+    /// Sends `method` to `path` below `{base}` as the operator and decodes a
+    /// `200` answer.
+    async fn read<T: serde::de::DeserializeOwned>(
+        &self,
+        method: Method,
+        path: &str,
+        token: &AccessToken,
+    ) -> Result<T, GatewayError> {
         let client = self.client(self.base.clone(), token)?;
         let answer = client
-            .execute(Request::new(Method::OPTIONS, String::from("/")))
+            .execute(Request::new(method, path.to_owned()))
             .await
             .map_err(|source| GatewayError::Call { source })?;
         if answer.status() != StatusCode::OK {

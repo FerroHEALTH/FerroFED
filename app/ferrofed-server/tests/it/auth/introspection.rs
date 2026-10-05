@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use ferrofed_registry::secret::Secret;
-use ferrofed_server::auth::Refusal;
+use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::{AuthSettings, Introspection, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::ACT_REASON;
 use ferrofed_testkit::mock::Server;
@@ -48,6 +48,7 @@ fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
             }),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            operator_scope: None,
             patient: None,
             requester: None,
         }],

@@ -26,7 +26,7 @@ use ferrofed_engine::onward::conveyance::HEADER;
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::EXIT_CONFIG;
-use ferrofed_server::auth::Refusal;
+use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::{AuthSettings, PatientBinding};
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};

@@ -23,6 +23,25 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The operator views of the operator console (#276). After sign-in, which
+  now exchanges the code at the provider's token endpoint with the PKCE
+  verifier and checks the ID Token's signature, issuer, audience and `nonce`
+  before a session begins (the new `[oidc]` keys `token_endpoint` and
+  `jwks_uri`), the console shows the member endpoints with their membership
+  standing and last observed health (`/members`), the integrity incidents
+  and the `creating_system_id` routing table (`/integrity`), the stored
+  queries with their AQL (`/stored-queries`), and the gateway's
+  self-description (`/federation`), each rendered on the server from the
+  gateway's surface with the operator's own token. A view without a
+  signed-in session sends the browser to sign-in, and a refusal shows the
+  gateway's status and stable error code.
+- A read-only operator surface on the gateway: `GET {base}/operator/incidents`
+  (each incident kind's count and the last 100 incidents),
+  `/operator/creating-systems` (the routing table) and
+  `/operator/stored-queries` (every held version), admitted only for a token
+  carrying the `operator_scope` its `[[auth.issuer]]` entry names. It answers
+  routing ids, counts and stored definitions only, and an incident names an
+  `ehr_id` only when it is a bare UUID (§5.4.1, N33).
 - A mutual-TLS token endpoint alias on a host you name (#560; RFC 8705 §5).
   A node's `[credentials."<id>"]` section takes `mtls_alias_hosts`, each a
   host name with an optional port, and a `fapi2` grant that uses mutual TLS

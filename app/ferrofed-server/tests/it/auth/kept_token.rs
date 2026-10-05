@@ -76,6 +76,7 @@ async fn an_edge_assertion_is_never_kept_as_a_token() -> TestResult {
             verification: Verification::KeySet(KeySource::Set(edge.jwks())),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            operator_scope: None,
             patient: None,
             requester: None,
         }],

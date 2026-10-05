@@ -66,6 +66,7 @@ mod onward_fapi2;
 mod onward_mtls;
 #[cfg(feature = "binding-nl")]
 mod onward_nuts;
+mod operator;
 mod options;
 mod order;
 mod order_key;

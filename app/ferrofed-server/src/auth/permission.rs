@@ -58,6 +58,11 @@ pub enum Requirement {
     Demographic,
     /// No caller: an admin operation, or one the table does not list.
     Refused,
+    /// A verified caller whose token carries the operator scope its issuer's
+    /// entry names: the read-only operator surface, `{base}/operator/`,
+    /// which no SMART on openEHR resource family covers. No purpose of use
+    /// is asked, because the surface returns no clinical data.
+    Operator,
     /// A verified caller with a purpose of use and a resource scope that
     /// grants `permission` on the resource.
     Scope {
@@ -463,6 +468,16 @@ pub fn of(matched: &RouteMatch) -> Option<Requirement> {
         .iter()
         .find(|(group, operation, _)| *group == matched.group && *operation == matched.operation_id)
         .map(|&(_, _, requirement)| requirement)
+}
+
+/// Returns whether `granted` holds the operator scope of the caller's issuer.
+///
+/// `granted` is the space-separated `scope` claim, and `operator_scope` is
+/// matched as one whole token of it (RFC 6749 §3.3); an issuer that names
+/// none admits no operator.
+#[must_use]
+pub fn operator(operator_scope: Option<&str>, granted: &str) -> bool {
+    operator_scope.is_some_and(|scope| granted.split(' ').any(|token| token == scope))
 }
 
 /// What a caller's issuer entry lets the gateway honour beyond a `user/`

@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_server::auth::Refusal;
+use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, KeySource, Verification};
 use ferrofed_testkit::issuer::{Claims, Issuer, JWKS_PATH};
 use ferrofed_testkit::mock::Server;
@@ -41,6 +41,7 @@ fn trusting(source: KeySource, refetch: Duration) -> AuthSettings {
             verification: Verification::KeySet(source),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            operator_scope: None,
             patient: None,
             requester: None,
         }],

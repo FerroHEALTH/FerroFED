@@ -140,6 +140,10 @@ pub struct TrustedIssuer {
     /// The `client_id`s of the clients admitted to the DEMOGRAPHIC API,
     /// which no SMART on openEHR resource scope covers; none by default.
     pub demographic_clients: Vec<String>,
+    /// The scope value that admits a caller of this issuer to the read-only
+    /// operator surface, `{base}/operator/`; absent by default, and then no
+    /// caller of this issuer reaches it.
+    pub operator_scope: Option<String>,
     /// The opt-in that honours this issuer's `patient/` grants
     /// (`[auth.issuer.patient]`); absent by default, and then a `patient/`
     /// grant of this issuer admits nothing.
@@ -256,6 +260,9 @@ pub struct IssuerSettings {
     pub backend_clients: BTreeSet<String>,
     /// The clients admitted to the DEMOGRAPHIC API.
     pub demographic_clients: BTreeSet<String>,
+    /// The scope value that admits a caller to the operator surface, when
+    /// this issuer may admit one.
+    pub operator_scope: Option<String>,
     /// Where this issuer's `patient/` grants are confined, when they are
     /// honoured at all.
     pub patient: Option<PatientBinding>,
@@ -331,6 +338,8 @@ pub enum AuthFault {
     EdgeIssuer,
     /// `[auth.edge]` is set without `mode = "edge"`.
     EdgeWithoutMode,
+    /// The operator scope is not one scope token.
+    OperatorScope,
 }
 
 impl fmt::Display for AuthFault {
@@ -353,6 +362,7 @@ impl fmt::Display for AuthFault {
                 "needs exactly one [[auth.issuer]], the edge, verified by jwks_uri, jwks_file or jwks"
             }
             Self::EdgeWithoutMode => "is set, but mode is not \"edge\"",
+            Self::OperatorScope => "is not one scope token (RFC 6749 §3.3)",
         })
     }
 }
@@ -525,11 +535,25 @@ fn resolve_issuer(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, 
             }
         }
     }
+    // NOTE: RFC 6749 §3.3: a scope token is one or more %x21 / %x23-5B / %x5D-7E,
+    // so the operator scope is matched as one whole token of the `scope` claim.
+    if let Some(scope) = &written.operator_scope
+        && (scope.is_empty()
+            || !scope
+                .bytes()
+                .all(|byte| matches!(byte, 0x21 | 0x23..=0x5B | 0x5D..=0x7E)))
+    {
+        return Err(fault(
+            &format!("{key}.operator_scope"),
+            AuthFault::OperatorScope,
+        ));
+    }
     Ok(IssuerSettings {
         issuer: written.issuer.clone(),
         verification,
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
+        operator_scope: written.operator_scope.clone(),
         patient,
         requester: written.requester.clone(),
     })
