@@ -67,7 +67,7 @@ name: ferrofed
 # What the four nodes share; each service below merges it and adds its own
 # database, system_id and port.
 x-ferroehr-node: &ferroehr-node
-  image: ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6
+  image: ghcr.io/ferrohealth/ferroehr:4.3.3@sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f
   restart: unless-stopped
   depends_on:
     ferroehr-postgres:
@@ -153,7 +153,7 @@ services:
 
   # The one database server of the four nodes, FerroEHR's own PostgreSQL image.
   ferroehr-postgres:
-    image: ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9
+    image: ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa
     restart: unless-stopped
     environment:
       # The development superuser password of FerroEHR's own quickstart.

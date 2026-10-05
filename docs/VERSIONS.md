@@ -189,7 +189,7 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.82 since 2026-10-04.
+pin is the latest version on crates.io, 0.0.83 since 2026-10-05.
 `openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
 family pin with its default features off, so only the grammar is compiled:
 the onward grant (#81) writes and checks the scope it requests with it, and client
@@ -197,11 +197,11 @@ authentication (#80) reads every caller's scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.82 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.82 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.82 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.82 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-sdt` | 0.0.82 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.83 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.83 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.83 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.83 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-sdt` | 0.0.83 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -244,6 +244,14 @@ form (#456). The second is a DPoP credential on the generated client
 proof and answers a `use_dpop_nonce` challenge with one re-send. The node
 clients prove their requests through it, so the `Transport` decorator that
 rewrote the scheme is gone (#448).
+0.0.83, published on 2026-10-05, carries FerroEHR #3560: the client's
+`ClientError::DeadlineElapsed` gains a `sent` field, true when an earlier
+send of the call went out, such as the first send of a request a node
+answered with a `use_dpop_nonce` challenge. The node clients read a deadline
+before the nonce re-send as the node's time-out from that field, where they
+inferred it from what the call's prover saw (#470, #566). The prover's
+record still reads a `DpopProof` failure of the re-send, which carries no
+such field.
 
 ## FHIR model crate (crates.io)
 
@@ -335,14 +343,17 @@ member CDRs beside it, four FerroEHR instances on the same pin, each with its
 own `system_id` and its own database on one FerroEHR PostgreSQL container
 (`docs/architecture.md` §13, decisions A44 and A47). Every
 image is pinned by tag and by the digest of its image index, resolved on
-2026-10-01. `scripts/checks/versions.sh` holds every row equal to the file
-that repeats it.
+2026-10-01. The two FerroEHR images were resolved on 2026-10-05 from FerroEHR
+v4.3.3, which publishes them under `ghcr.io/ferrohealth` and makes AQL
+honour `EHR_ACCESS` on every query form (FerroEHR #3562, #566).
+`scripts/checks/versions.sh` holds every row equal to the file that repeats
+it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM` |
-| FerroEHR node image | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers.rs` |
-| FerroEHR node database image | `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:4.3.3@sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |

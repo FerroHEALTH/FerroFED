@@ -30,22 +30,23 @@ publish = false
 # The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
 # one lockstep family at the latest published release, moved together by the
 # dependency sweep and checked against docs/VERSIONS.md by
-# scripts/checks/versions.sh. The pin is 0.0.82, whose scope grammar prints a
-# scope in its canonical form (FerroEHR #3557) and whose ITS-REST client sends
-# a DPoP-bound token with a proof from a prover (FerroEHR #3558).
-openehr-base = "0.0.82"
-openehr-rm = "0.0.82"
-openehr-query = { version = "0.0.82", features = ["federation"] }
-openehr-its = { version = "0.0.82", default-features = false }
+# scripts/checks/versions.sh. The pin is 0.0.83, whose ITS-REST client says
+# whether a request had left when its deadline passed (FerroEHR #3560); 0.0.82
+# printed a scope in its canonical form (FerroEHR #3557) and sent a DPoP-bound
+# token with a proof from a prover (FerroEHR #3558).
+openehr-base = "0.0.83"
+openehr-rm = "0.0.83"
+openehr-query = { version = "0.0.83", features = ["federation"] }
+openehr-its = { version = "0.0.83", default-features = false }
 # The SMART on openEHR scope grammar alone, with no default feature: the
 # scope an onward token is requested with is written and checked with it
 # (#81), and every caller's scope claim is read with it (#80).
-openehr-sdt = { version = "0.0.82", default-features = false }
+openehr-sdt = { version = "0.0.83", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.38" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.39" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.23" }
 nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.13" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.1" }

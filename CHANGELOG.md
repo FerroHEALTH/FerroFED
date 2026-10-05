@@ -222,6 +222,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The `openehr-*` family moves from 0.0.82 to 0.0.83 (FerroEHR #3560,
+  #566). A deadline that passes before the re-send answering a node's
+  `DPoP` nonce challenge is the node's `time-out`, with the node counted as
+  asked, read from the client's `DeadlineElapsed { sent }` in place of the
+  call's prover record (#470). The record still reads a re-send that no
+  `DPoP` proof could be made for, which the client reports with no such
+  field. `openehr-federation` 0.0.39 takes the new family.
+- The harness and the quickstart run FerroEHR 4.3.3, pinned by digest at
+  its new home under `ghcr.io/ferrohealth`, node and database image alike
+  (#566). That release makes AQL honour `EHR_ACCESS` on every query form
+  (FerroEHR #3562), which the node profile's "access decided at the node"
+  check (CP-18) reads.
 - A consent pre-filter that did not ask its service says so, with a closed
   reason, in place of answering as one that was asked and denied nothing
   (#496). Mitz is not asked about a patient named outside the BSN, such as by

@@ -154,7 +154,7 @@ impl PinnedImage {
     ///
     /// ```
     /// let reference = ferrofed_testkit::containers::FERROEHR.reference();
-    /// assert!(reference.starts_with("ghcr.io/rubentalstra/ferroehr:"));
+    /// assert!(reference.starts_with("ghcr.io/ferrohealth/ferroehr:"));
     /// assert!(reference.contains("@sha256:"));
     /// ```
     #[must_use]
@@ -174,17 +174,17 @@ impl PinnedImage {
 
 /// FerroEHR, an openEHR CDR speaking ITS-REST 1.1.0, which both nodes run.
 pub const FERROEHR: PinnedImage = PinnedImage {
-    repository: "ghcr.io/rubentalstra/ferroehr",
-    tag: "4.3.1",
-    digest: "sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6",
+    repository: "ghcr.io/ferrohealth/ferroehr",
+    tag: "4.3.3",
+    digest: "sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f",
 };
 
 /// The database image FerroEHR documents, which carries the role, the
 /// database and the extensions its migrations expect.
 pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
-    repository: "ghcr.io/rubentalstra/ferroehr-postgres",
-    tag: "4.3.1",
-    digest: "sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9",
+    repository: "ghcr.io/ferrohealth/ferroehr-postgres",
+    tag: "4.3.3",
+    digest: "sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa",
 };
 
 /// EHRbase, an openEHR CDR of another vendor speaking ITS-REST, which the

@@ -102,7 +102,7 @@ cut from `main` once the milestone closes.
 - RFC 8693 token exchange per endpoint, which gives each verified caller a
   token of its own at a node, and node tokens bound to a key of the
   gateway's with DPoP (RFC 9449), the proof written and a node's nonce
-  answered by the `openehr-its` 0.0.82 client
+  answered by the `openehr-its` 0.0.83 client
   ([#439](https://github.com/FerroHEALTH/FerroFED/issues/439),
   [#448](https://github.com/FerroHEALTH/FerroFED/issues/448),
   [Onward credentials](../operate/onward-credentials.md)).

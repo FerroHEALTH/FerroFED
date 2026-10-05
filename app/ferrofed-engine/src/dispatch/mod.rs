@@ -554,8 +554,8 @@ impl<T: Transport + Clone> NodeClient<T> {
                 source: Box::new(source),
             })?
             // NOTE: openehr-its Client::execute (docs.rs) raises DeadlineElapsed before an attempt or
-            // before a DPoP nonce re-send, so with one attempt the request is unsent unless the
-            // call's prover saw a send, which every Contact reading here relies on (dpop::Sent).
+            // a DPoP nonce re-send, its `sent` naming an earlier send, and one attempt keeps the
+            // prover's evidence of a re-send (dpop::Sent) to the one request of the call.
             .with_retry(RetryPolicy {
                 max_attempts: 1,
                 ..RetryPolicy::default()
