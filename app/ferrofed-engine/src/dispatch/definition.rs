@@ -26,6 +26,7 @@ use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
 };
 
+use super::oversized::Oversized;
 use super::{Contact, DispatchError, DispatchOptions, NodeClient, cap, classify, dpop, reported};
 use crate::hygiene::{Composed, Outbound};
 use crate::trace_context;
@@ -248,6 +249,12 @@ impl<T: Transport + Clone> NodeClient<T> {
         options: &DispatchOptions,
     ) -> Result<Stored, DispatchError> {
         let withheld = options.withheld();
+        if let Some(over) = Oversized::of_client_error(&error) {
+            return Ok(node_error(
+                (latency_ms, over.status()),
+                ErrorDetail::Text(over.to_string()),
+            ));
+        }
         // A deadline or a missing proof after a nonce challenge ends a call whose request left.
         let unanswered = if dpop::sent_before(&error) {
             Contact::Silent

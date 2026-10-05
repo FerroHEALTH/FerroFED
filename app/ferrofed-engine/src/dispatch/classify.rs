@@ -14,6 +14,7 @@ use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use openehr_its::rest::client::{ClientError, ErrorBody, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
+use super::oversized::Oversized;
 use super::reported::{self, chain, excerpt_of};
 use super::{Contact, DispatchError, DispatchOptions, NodeReply, dpop};
 use crate::hygiene::Withheld;
@@ -86,7 +87,9 @@ pub(super) fn answered(
 /// `options` withholds.
 ///
 /// A `403` whose body carries one of `refusal_codes`, the endpoint's
-/// consent refusal codes, is `consent-denied` ([`refused_on_consent`]). A
+/// consent refusal codes, is `consent-denied` ([`refused_on_consent`]). An
+/// answer the engine stopped reading at the gateway's bound is `node-error`
+/// with the node's status ([`Oversized`], §11.1). A
 /// deadline or a missing proof the client says came after a request of the
 /// call left ([`dpop::sent_before`]) is read as that request's, never as
 /// one never sent.
@@ -98,6 +101,9 @@ pub(super) fn failed(
 ) -> Result<NodeReply, DispatchError> {
     let withheld = options.withheld();
     let failure = |outcome, contact| Ok(NodeReply::Failed { outcome, contact });
+    if let Some(over) = Oversized::of_client_error(&error) {
+        return Ok(node_error((latency_ms, over.status()), text(over.to_string())));
+    }
     let contacted = dpop::sent_before(&error);
     match error {
         ClientError::DeadlineElapsed { .. } if contacted => failure(
