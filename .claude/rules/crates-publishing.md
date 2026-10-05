@@ -52,8 +52,10 @@ an owner decision recorded per crate when the switch flips, never assumed.
   SemVer line. A name is held on crates.io by a 0.0.0 placeholder published
   before the crate has content (`openehr-federation`, `ihe-iti` and
   `nl-generic-functions`, published on 2026-10-01), and the crate's line in
-  the workspace starts at 0.0.1, above the placeholder. `oauth-server-metadata`
-  (#551) has no placeholder on crates.io yet (read on 2026-10-05).
+  the workspace starts at 0.0.1, above the placeholder. The name
+  `oauth-server-metadata` (#551) is not reserved on crates.io yet: the owner
+  decided not to claim it while publishing is off, and it must be claimed
+  before the `publish` switch is turned on.
 
 ## The bump rule
 
@@ -64,9 +66,13 @@ an owner decision recorded per crate when the switch flips, never assumed.
   `[workspace.dependencies]` entry a member consumes is packaged content too,
   because `cargo package` renders the concrete requirement.
 - The member's own `Cargo.toml`, any internal requirement in the root
-  `[workspace.dependencies]` table, and `Cargo.lock` move together
-  (`cargo update -w` in the same PR). The guard fails a half-done bump and a
-  stale lock.
+  `[workspace.dependencies]` table, `Cargo.lock` and `fuzz/Cargo.lock` move
+  together in the same PR. `cargo update -w` refreshes the root lock. The fuzz
+  lock, which no other build reads, is refreshed with
+  `cargo metadata --manifest-path fuzz/Cargo.toml --format-version 1 > /dev/null`
+  and checked by the same command with `--locked`. The guard fails a half-done
+  bump and a stale root lock, and the `fuzz lockfile` CI job fails a stale
+  fuzz lock.
 - Escape: the `no-crate-bump` PR label, only when the diff provably alters no
   packaged bytes.
 - Not every bumped version is published; gaps in the published sequence are

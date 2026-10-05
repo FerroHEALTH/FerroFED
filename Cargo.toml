@@ -49,8 +49,8 @@ openehr-sdt = { version = "0.0.84", default-features = false }
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.42" }
 ihe-iti = { path = "crates/ihe-iti", version = "0.0.25" }
-nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.18" }
-oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.4" }
+nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.19" }
+oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
