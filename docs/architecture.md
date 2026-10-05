@@ -1197,7 +1197,9 @@ a configuration of it, with no branch for a region:
   `tls_client_certificate_bound_access_tokens` as `true` for a grant bound
   to its certificate (RFC 8705 §3.3). A grant that uses mutual TLS takes
   the `token_endpoint` of `mtls_endpoint_aliases` in preference (RFC 8705
-  §5), held to the issuer's origin as the other endpoint is. RFC 8414 §2
+  §5), held to the issuer's origin as the other endpoint is, or to an
+  `https` host the endpoint's `mtls_alias_hosts` names (#560; our own
+  design, since RFC 8705 §5 places an alias on any host). RFC 8414 §2
   defaults read strictly: an omitted method list is `client_secret_basic`,
   an omitted grant list `authorization_code` and `implicit`;
 - **client authentication:** `private_key_jwt` (FAPI 2.0 §5.3.2.1), the

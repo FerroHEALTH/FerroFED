@@ -16,7 +16,8 @@
 //!   §3.2, §3.3), and a `token_endpoint` on the issuer's origin; a grant
 //!   that uses mutual TLS takes the `token_endpoint` of
 //!   `mtls_endpoint_aliases` in preference where one is named (RFC 8705
-//!   §5), held to the same origin;
+//!   §5), held to the same origin or to an `https` host the grant names
+//!   ([`Fapi2Grant::mtls_alias_hosts`]);
 //! - `token_endpoint_auth_methods_supported` naming the client
 //!   authentication the grant uses (FAPI 2.0 §5.3.2.1): `private_key_jwt`,
 //!   with `token_endpoint_auth_signing_alg_values_supported` present and
@@ -236,16 +237,18 @@ fn read(body: &[u8], grant: &Fapi2Grant) -> Result<Url, DiscoveryError> {
         .as_ref()
         .and_then(|aliases| aliases.token_endpoint.as_deref())
         .filter(|_| grant.uses_mutual_tls());
-    let token_endpoint = issuer
-        .endpoint(
-            alias
-                .or(raw.token_endpoint.as_deref())
+    let token_endpoint = match alias {
+        Some(alias) => issuer.mtls_alias(alias, grant.mtls_alias_hosts()),
+        None => issuer.endpoint(
+            raw.token_endpoint
+                .as_deref()
                 .ok_or(DiscoveryError::TokenEndpoint)?,
-        )
-        .map_err(|refused| match refused {
-            EndpointError::NotAUrl => DiscoveryError::TokenEndpoint,
-            other => DiscoveryError::Endpoint(other),
-        })?;
+        ),
+    }
+    .map_err(|refused| match refused {
+        EndpointError::NotAUrl => DiscoveryError::TokenEndpoint,
+        other => DiscoveryError::Endpoint(other),
+    })?;
     let lists = |list: Option<&Vec<String>>, value: &str| {
         list.is_some_and(|list| list.iter().any(|item| item == value))
     };

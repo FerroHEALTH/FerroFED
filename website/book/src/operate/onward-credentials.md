@@ -400,6 +400,31 @@ its token requests to the `token_endpoint` of `mtls_endpoint_aliases` where
 the metadata names one (RFC 8705 §5), held to the issuer's origin like the
 other endpoint, and its `issuer` must be `https`.
 
+RFC 8705 §5 lets a server put that alias on another host, as its own
+example does with `mtls.example.com`. The gateway sends there only when you
+name the host in the node's `[credentials."<id>"]` section:
+
+```toml
+[credentials."cdr-e"]
+client_identity_file = "/run/secrets/cdr-e-client.pem"
+mtls_alias_hosts = ["mtls.cdr-e.example.org"]   # or "mtls.cdr-e.example.org:8443"
+
+[credentials."cdr-e".fapi2]
+issuer = "https://as.cdr-e.example.org"
+client_auth = "tls_client_auth"
+tls_client_certificate_bound_access_tokens = true
+# ... as above
+```
+
+Each entry is a host name, or a host name and a port, in lower case and
+without a scheme or a path; port `443` is left out. An alias on a named
+host is taken over `https` alone, without userinfo or a fragment. An alias
+on any other host is refused before a token request is sent, as the
+top-level `token_endpoint` on another origin always is. The key is refused
+for a section without a `fapi2` grant that uses mutual TLS, since no other
+grant reads `mtls_endpoint_aliases`. Which hosts to trust is FerroFED's own
+design: no specification names them.
+
 | Key | What it is |
 |---|---|
 | `issuer` | The issuer identifier of the node's authorization server (RFC 8414 §2), in its canonical form. `https` outside the development profile. |

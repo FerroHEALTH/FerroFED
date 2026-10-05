@@ -121,8 +121,15 @@ fn scheme(
         {
             return Err(refused());
         }
-        return grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2, certificate)
+        let resolved = grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2, certificate)?;
+        return grant::with_mtls_alias_hosts(section, &credentials.mtls_alias_hosts, resolved)
             .map(|grant| Scheme::Fapi2(Box::new(grant)));
+    }
+    if !credentials.mtls_alias_hosts.is_empty() {
+        return Err(grant::GrantFault::AliasHostsUnused {
+            key: format!("{section}.mtls_alias_hosts"),
+        }
+        .into());
     }
     if let [binding] = bound.as_slice() {
         if token.is_some()
