@@ -23,6 +23,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- An end-to-end check that the `AVG` the gateway declares decomposable in
+  `OPTIONS {base}/` is the mean weighted by each node's count (§11.6.3, N39,
+  CP-10, CP-32), behind `FERROFED_E2E`. With two values at one FerroEHR node
+  and one at the other, each node is asked its `SUM` and `COUNT`, and the
+  answer equals the mean weighted by the counts each node returns for the
+  query it was sent, which differs from a mean of the node means.
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at
