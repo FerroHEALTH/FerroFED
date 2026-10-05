@@ -123,6 +123,10 @@ pub fn router(state: ViewerState) -> axum::Router {
         .route(HEALTH, get(health))
         .route(crate::oidc::LOGIN, get(crate::oidc::login))
         .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
+        .route(
+            crate::oidc::logout::LOGOUT,
+            axum::routing::post(crate::oidc::logout::logout),
+        )
         .leptos_routes_with_context(&options, routes, context.clone(), {
             let options = options.clone();
             move || crate::app::shell(options.clone())

@@ -24,6 +24,8 @@ mod server;
 #[cfg(test)]
 mod sign_in;
 #[cfg(test)]
+mod sign_out;
+#[cfg(test)]
 mod support;
 #[cfg(test)]
 mod views;

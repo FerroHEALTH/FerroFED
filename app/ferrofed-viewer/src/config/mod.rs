@@ -28,6 +28,8 @@
 //! client_id = "ferrofed-viewer"
 //! client_secret_file = "/run/secrets/viewer-client-secret"
 //! redirect_uri = "https://console.example.org/auth/callback"
+//! end_session_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/logout"
+//! post_logout_redirect_uri = "https://console.example.org/"
 //! ```
 
 pub mod error;
@@ -162,6 +164,14 @@ pub struct Oidc {
     pub redirect_uri: String,
     /// The scopes requested, `openid` among them.
     pub scopes: Vec<String>,
+    /// The provider's end-session endpoint, where a sign-out sends the
+    /// operator (OpenID Connect RP-Initiated Logout 1.0 §2); without it a
+    /// sign-out ends the console's session alone.
+    pub end_session_endpoint: Option<String>,
+    /// Where the provider sends the operator after it signed them out, as
+    /// registered with the provider (OpenID Connect RP-Initiated Logout 1.0
+    /// §3).
+    pub post_logout_redirect_uri: Option<String>,
 }
 
 impl Default for Oidc {
@@ -176,6 +186,8 @@ impl Default for Oidc {
             client_secret_file: None,
             redirect_uri: String::new(),
             scopes: vec![String::from("openid")],
+            end_session_endpoint: None,
+            post_logout_redirect_uri: None,
         }
     }
 }

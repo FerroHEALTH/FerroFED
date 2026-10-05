@@ -33,6 +33,17 @@ behaviour to the gateway. It holds no clinical data.
   operator's access token on the server, and the browser goes back to `/`. A
   session the browser already held ends when the new one begins. An ID Token that fails a check is
   `401`, and a provider that refuses or cannot be reached is `502`.
+- **Operator sign-out:** the navigation bar's "Sign out" button posts to
+  `POST /logout`, which ends the signed-in session on the console's server
+  and removes the session cookie. Where `[oidc]` names the provider's
+  `end_session_endpoint`, the console then redirects the browser there with
+  the session's ID Token as `id_token_hint`, its `client_id`, and the
+  `post_logout_redirect_uri` you registered with the provider (OpenID
+  Connect RP-Initiated Logout 1.0 §2); without one the browser goes back to
+  `/`. The console takes a sign-out only from its own pages: a request the
+  browser marks `Sec-Fetch-Site: same-origin`, or, without fetch metadata,
+  one whose `Origin` is the origin of `redirect_uri`. Any other is `403`
+  and leaves the session as it was, and a `GET /logout` is `405`.
 - **Two separate pools of server-side state.** Pending sign-ins live for
   `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
   its oldest pending sign-in, so a flood of `GET /login` holds at most that
@@ -128,6 +139,8 @@ client_id = "ferrofed-viewer"
 client_secret_file = "/run/secrets/viewer-client-secret"
 redirect_uri = "https://console.example.org/auth/callback"
 scopes = ["openid"]
+end_session_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/logout"
+post_logout_redirect_uri = "https://console.example.org/"
 ```
 
 With `secure_cookie = true` the session and sign-in cookies carry the
@@ -136,7 +149,8 @@ With `secure_cookie = true` the session and sign-in cookies carry the
 
 Without an `[oidc]` table the console offers no sign-in, and `GET /login`
 answers `503`. The provider's URLs must be `https` unless their host is
-loopback, and `scopes` must include `openid`. `ferrofed-viewer config check`
+loopback, and `scopes` must include `openid`. `end_session_endpoint` is
+optional, and `post_logout_redirect_uri` needs it. `ferrofed-viewer config check`
 reads and checks a configuration without binding a socket.
 
 The image sets `server.listen` to `0.0.0.0:3000` and `server.site_root` to

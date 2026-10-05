@@ -75,11 +75,16 @@ pub(crate) fn header<'a>(response: &'a Response<()>, name: &str) -> &'a str {
 /// The synthetic access token every test operator signs in with.
 pub(crate) const OPERATOR_TOKEN: &str = "synthetic-operator-token";
 
-/// What a completed sign-in leaves a session: [`OPERATOR_TOKEN`].
+/// The synthetic ID Token every test operator's sign-in leaves.
+pub(crate) const OPERATOR_ID_TOKEN: &str = "synthetic.operator.id-token";
+
+/// What a completed sign-in leaves a session: [`OPERATOR_TOKEN`] and
+/// [`OPERATOR_ID_TOKEN`].
 pub(crate) fn signed_in() -> SignedIn {
     SignedIn {
         access_token: SecretString::from(OPERATOR_TOKEN),
         expires_in: None,
+        id_token: Some(SecretString::from(OPERATOR_ID_TOKEN)),
     }
 }
 

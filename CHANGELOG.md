@@ -26,6 +26,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Operator sign-out in the operator console (#584). The navigation bar's
+  "Sign out" posts to `POST /logout`, which ends the server-side session,
+  removes the session cookie and, where the new `[oidc]` key
+  `end_session_endpoint` names the provider's end-session endpoint, sends
+  the browser there with the ID Token hint, the client id and the optional
+  `post_logout_redirect_uri` (OpenID Connect RP-Initiated Logout 1.0). A
+  sign-out that does not come from the console's own pages is a `403`.
 - The operator views of the operator console (#276). After sign-in, which
   now exchanges the code at the provider's token endpoint with the PKCE
   verifier and checks the ID Token's signature, issuer, single audience,

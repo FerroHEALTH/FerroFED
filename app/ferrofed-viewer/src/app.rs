@@ -18,6 +18,9 @@ pub const PRODUCT: &str = "FerroFED operator console";
 /// The path of the sign-in route the server serves.
 pub const SIGN_IN: &str = "/login";
 
+/// The path of the sign-out route the server serves.
+pub const SIGN_OUT: &str = "/logout";
+
 /// The whole HTML document the server renders around [`App`].
 #[cfg(not(target_arch = "wasm32"))]
 #[must_use]
@@ -69,6 +72,11 @@ pub fn App() -> impl IntoView {
                         <a href=views::FEDERATION>"Self-description"</a>
                     </li>
                 </ul>
+                // The sign-out route is the server's: a plain form post it
+                // answers with a redirect, which no client router takes.
+                <form method="post" action=SIGN_OUT>
+                    <button type="submit">"Sign out"</button>
+                </form>
             </nav>
             <main>
                 <Routes fallback=NotFound>

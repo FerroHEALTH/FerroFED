@@ -185,15 +185,22 @@ struct Session {
     access_token: SecretString,
     /// When the access token expires, when the provider said.
     expires: Option<Instant>,
+    /// The ID Token of the sign-in, the hint a sign-out sends the provider.
+    id_token: Option<SecretString>,
 }
 
-/// What a completed sign-in leaves the session: the operator's access
-/// token and how long the provider says it lasts (RFC 6749 §5.1).
+/// What a completed sign-in leaves the session.
+///
+/// It is the operator's access token, how long the provider says it lasts
+/// (RFC 6749 §5.1), and the ID Token a sign-out hints with (OpenID Connect
+/// RP-Initiated Logout 1.0 §2).
 pub struct SignedIn {
     /// The access token.
     pub access_token: SecretString,
     /// Its lifetime, `expires_in`, when the provider sent one.
     pub expires_in: Option<std::time::Duration>,
+    /// The verified ID Token of the sign-in.
+    pub id_token: Option<SecretString>,
 }
 
 impl fmt::Debug for SignedIn {
@@ -339,6 +346,7 @@ impl Sessions {
                 expires: signed_in
                     .expires_in
                     .and_then(|lifetime| now.checked_add(lifetime)),
+                id_token: signed_in.id_token,
             },
         );
         Ok(id)
@@ -387,13 +395,17 @@ impl Sessions {
         }
     }
 
-    /// Ends the signed-in session `id`, if it is held.
+    /// Ends the signed-in session `id`, if it is held, and returns the ID
+    /// Token its sign-in left, for the provider's end-session request.
     ///
     /// # Errors
     /// Returns [`SessionError::Poisoned`] when the store is unusable.
-    pub fn end(&self, id: &SessionId) -> Result<(), SessionError> {
-        self.lock()?.sessions.remove(id);
-        Ok(())
+    pub fn end(&self, id: &SessionId) -> Result<Option<SecretString>, SessionError> {
+        Ok(self
+            .lock()?
+            .sessions
+            .remove(id)
+            .and_then(|session| session.id_token))
     }
 
     /// The `Set-Cookie` value that hands the browser the pending sign-in
@@ -419,6 +431,14 @@ impl Sessions {
     #[must_use]
     pub fn session_cookie(&self, id: &SessionId) -> Cookie<'static> {
         self.cookie(COOKIE, id.as_str()).build()
+    }
+
+    /// The `Set-Cookie` value that removes the signed-in session cookie.
+    #[must_use]
+    pub fn session_cookie_removal(&self) -> Cookie<'static> {
+        self.cookie(COOKIE, "")
+            .max_age(cookie::time::Duration::ZERO)
+            .build()
     }
 
     /// A cookie that no script reads (`HttpOnly`), that a cross-site
@@ -496,6 +516,7 @@ mod tests {
         SignedIn {
             access_token: SecretString::from("synthetic-access-token"),
             expires_in: None,
+            id_token: Some(SecretString::from("synthetic-id-token")),
         }
     }
 
@@ -634,11 +655,26 @@ mod tests {
     }
 
     #[test]
-    fn an_ended_session_is_no_longer_live() {
+    fn an_ended_session_is_no_longer_live_and_hands_back_its_id_token() {
         let sessions = Sessions::new(settings());
         let id = sessions.establish(signed_in()).expect("room");
-        sessions.end(&id).expect("usable");
+        let hint = sessions.end(&id).expect("usable");
+        assert_eq!(
+            Some("synthetic-id-token"),
+            hint.as_ref().map(ExposeSecret::expose_secret)
+        );
         assert!(sessions.access_token(&id).expect("usable").is_none());
+        assert!(sessions.end(&id).expect("usable").is_none());
+        assert_eq!(0, sessions.occupancy().expect("usable").sessions);
+    }
+
+    #[test]
+    fn the_session_cookie_removal_expires_the_same_host_bound_cookie() {
+        let sessions = Sessions::new(settings());
+        assert_eq!(
+            "__Host-ferrofed_viewer_session=; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=0",
+            sessions.session_cookie_removal().to_string()
+        );
     }
 
     #[test]

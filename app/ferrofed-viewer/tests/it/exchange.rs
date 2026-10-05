@@ -187,6 +187,9 @@ async fn a_verified_sign_in_begins_a_session_and_returns_to_the_console()
         .access_token(&id)?
         .ok_or("a live session")?;
     assert_eq!(OPERATOR_TOKEN, held.expose_secret());
+    // The verified ID Token stays on the server as a sign-out's hint.
+    let hint = state.sessions().end(&id)?.ok_or("the ID Token")?;
+    assert_eq!(token, hint.expose_secret());
     Ok(())
 }
 
