@@ -43,10 +43,16 @@ pub const STORED_QUERIES: &str = "/stored-queries";
 pub const FEDERATION: &str = "/federation";
 
 /// Every view path, each of which needs a signed-in operator.
-pub const PATHS: [&str; 4] = [MEMBERS, INTEGRITY, STORED_QUERIES, FEDERATION];
+pub const PATHS: [&str; 5] = [
+    MEMBERS,
+    INTEGRITY,
+    STORED_QUERIES,
+    FEDERATION,
+    crate::query::QUERY,
+];
 
 /// The page title of a view called `section`.
-fn titled(section: &str) -> String {
+pub(crate) fn titled(section: &str) -> String {
     format!("{section} · {}", crate::app::PRODUCT)
 }
 
@@ -413,7 +419,7 @@ fn federation_section(view: FederationView) -> AnyView {
 
 /// The inline notice of a view that could not be rendered: the gateway's
 /// status and stable error code, never an empty view.
-fn refusal(error: &ViewError) -> AnyView {
+pub(crate) fn refusal(error: &ViewError) -> AnyView {
     match error {
         ViewError::SignedOut => view! {
             <p role="alert">
@@ -447,6 +453,7 @@ fn refusal(error: &ViewError) -> AnyView {
         }
         ViewError::Unreadable { .. }
         | ViewError::Unreachable
+        | ViewError::Invalid { .. }
         | ViewError::Unavailable
         | ViewError::Fetch { .. } => {
             let text = error.to_string();

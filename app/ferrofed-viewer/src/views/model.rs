@@ -48,6 +48,13 @@ pub enum ViewError {
     /// The gateway gave no answer at all.
     #[error("the gateway could not be reached")]
     Unreachable,
+    /// The operator's input cannot be sent as it stands. The reason names
+    /// the field and never quotes what was entered (N33).
+    #[error("{reason}")]
+    Invalid {
+        /// What is wrong, by field.
+        reason: String,
+    },
     /// The console could not serve the view.
     #[error("the console could not serve this view")]
     Unavailable,

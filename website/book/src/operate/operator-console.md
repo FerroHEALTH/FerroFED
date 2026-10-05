@@ -15,7 +15,7 @@ behaviour to the gateway. It holds no clinical data.
 ## What is built
 
 - **A landing page** that names the console and offers sign-in, and a
-  navigation bar to the four operator views.
+  navigation bar to the four operator views and the query console.
 - **Operator sign-in at an OpenID Provider:** `GET /login` redirects the
   browser to the provider's authorization endpoint with the authorization
   code grant, a `nonce` and a PKCE challenge (RFC 6749 §4.1, RFC 7636). The
@@ -80,6 +80,31 @@ behaviour to the gateway. It holds no clinical data.
   carrying the [operator scope](authentication.md#the-operator-surface) its
   issuer names. No view shows a patient identifier, a token or clinical
   data.
+- **The query console, `/query`:** an AQL query, or a stored query by name
+  and optional version, runs through the gateway's own query surface,
+  `POST {base}/v1/query/aql` or `POST {base}/v1/query/{name}`, as the
+  signed-in operator, exactly as any client sends it. The form offers what
+  the gateway's `OPTIONS {base}/` declares: the member endpoints and
+  organisations to target (`openEHR-federation-endpoint`,
+  `openEHR-federation-organisation`, §8.4), its dedup modes
+  (`openEHR-federation-dedup`, §10), and the best-effort opt-in
+  (`openEHR-federation-completeness: partial`, §11.4) where it offers one.
+  `offset` and `fetch` are optional. The answer shows the rows under
+  `columns[]` as the gateway renders them, and every endpoint of
+  `meta.federation.endpoints[]` with its status, latency, row count and
+  error. An answer whose `meta.federation.complete` is `false` says
+  "Incomplete answer" in words before its rows. A `504` or `424` the gateway
+  answers under its all-or-nothing default shows its status and the
+  endpoints that failed, from the diagnostic envelope it carries (§11.4). A
+  refusal shows its status and stable error code, and a result set with no
+  readable `meta.federation` is shown as unreadable, never as an answer.
+
+  Name a patient through a parameter, one `name=value` per line, never in
+  the AQL text; each value is sent as a string. The form posts its fields in
+  the request body to the console, which sends them to the gateway in the
+  request body, so nothing you enter reaches a URL or the browser history.
+  The fields carry `autocomplete="off"`, and the console logs a refusal by
+  its status and code alone, never the query or a parameter.
 - **`GET /health`**, which answers `200` while the process serves, and the
   `healthcheck` command the image runs against it.
 
@@ -88,13 +113,9 @@ minted for that answer, `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`, and no page is
 stored by a cache.
 
-## What is planned
-
-- **The query console (#277):** an AQL query, or a stored query by name, run
-  through the gateway, with every node's status and latency and whether the
-  answer is complete shown plainly, and a refusal's stable code. A patient is
-  named through a parameter, and an identifier entered in the console never
-  appears in a URL, the browser history or the console's logs.
+The query console renders its answer in the browser, so it needs the
+console's WebAssembly bundle: without it the form still posts, and the
+browser shows the answer as the console's JSON.
 
 ## Why a console of its own
 

@@ -18,6 +18,8 @@ mod exchange;
 #[cfg(test)]
 mod gateway;
 #[cfg(test)]
+mod query;
+#[cfg(test)]
 mod secrets;
 #[cfg(test)]
 mod server;

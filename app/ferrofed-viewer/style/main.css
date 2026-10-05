@@ -30,3 +30,22 @@ main {
 a {
   color: var(--ferrofed-brand);
 }
+:focus-visible {
+  outline: 2px solid var(--ferrofed-brand);
+  outline-offset: 2px;
+}
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  font-family: ui-monospace, monospace;
+}
+/* An answer's completeness is a sentence; the rule beside it repeats it. */
+.incomplete,
+.complete {
+  border-left: 0.25rem solid currentColor;
+  padding-left: 0.75rem;
+}
+.incomplete {
+  border-left-style: double;
+  border-left-width: 0.5rem;
+}

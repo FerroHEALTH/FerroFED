@@ -71,6 +71,9 @@ pub fn App() -> impl IntoView {
                     <li>
                         <a href=views::FEDERATION>"Self-description"</a>
                     </li>
+                    <li>
+                        <a href=crate::query::QUERY>"Query"</a>
+                    </li>
                 </ul>
                 // The sign-out route is the server's: a plain form post it
                 // answers with a redirect, which no client router takes.
@@ -101,6 +104,11 @@ pub fn App() -> impl IntoView {
                         view=views::FederationPage
                         ssr=SsrMode::PartiallyBlocked
                     />
+                    <Route
+                        path=path!("/query")
+                        view=crate::query::QueryPage
+                        ssr=SsrMode::PartiallyBlocked
+                    />
                 </Routes>
             </main>
         </Router>
@@ -118,8 +126,9 @@ fn Landing() -> impl IntoView {
         </p>
         <p>
             "Sign in to see the members and their health, the integrity incidents and the "
-            "creating_system_id routing table, the stored queries, and the gateway's "
-            "self-description. The query console is planned."
+            "creating_system_id routing table, the stored queries, the gateway's "
+            "self-description, and the query console, which runs an AQL or a stored query "
+            "through the gateway and shows every node's status beside the rows."
         </p>
         <p>
             // The sign-in route is the server's, so the client router must not
