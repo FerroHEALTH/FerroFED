@@ -18,8 +18,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::dispatch::NodeClient;
-use ferrofed_engine::onward::fapi2::metadata::DiscoveryError;
-use ferrofed_engine::onward::fapi2::{
+use ferrofed_engine::onward::grant::fapi2::metadata::DiscoveryError;
+use ferrofed_engine::onward::grant::fapi2::{
     Fapi2Credentials, Fapi2Error, Fapi2Grant, Fapi2GrantError, Fapi2Security,
 };
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};

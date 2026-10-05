@@ -444,16 +444,16 @@ fn consent_rows_outside_the_development_profile_refuse_to_start() -> TestResult 
 struct BothKnown;
 
 #[async_trait::async_trait]
-impl ferrofed_identity::resolver::Resolver for BothKnown {
+impl ferrofed_identity::role::resolver::Resolver for BothKnown {
     async fn resolve(
         &self,
-        _patient: &ferrofed_identity::patient::PatientRef,
+        _patient: &ferrofed_identity::role::patient::PatientRef,
         members: &[ferrofed_registry::id::NodeId],
-        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
         _deadline: std::time::Instant,
     ) -> std::collections::BTreeMap<
         ferrofed_registry::id::NodeId,
-        ferrofed_identity::resolver::Resolution,
+        ferrofed_identity::role::resolver::Resolution,
     > {
         members
             .iter()
@@ -466,7 +466,7 @@ impl ferrofed_identity::resolver::Resolver for BothKnown {
                 let ehr = ferrofed_registry::id::EhrId::new(ehr).ok()?;
                 Some((
                     member.clone(),
-                    ferrofed_identity::resolver::Resolution::Resolved(ehr),
+                    ferrofed_identity::role::resolver::Resolution::Resolved(ehr),
                 ))
             })
             .collect()
@@ -477,16 +477,16 @@ impl ferrofed_identity::resolver::Resolver for BothKnown {
 struct Down;
 
 #[async_trait::async_trait]
-impl ferrofed_identity::consent::ConsentPrefilter for Down {
+impl ferrofed_identity::role::consent::ConsentPrefilter for Down {
     async fn prefilter(
         &self,
-        _patient: &ferrofed_identity::patient::PatientRef,
-        _requester: Option<&ferrofed_identity::consent::Requester>,
+        _patient: &ferrofed_identity::role::patient::PatientRef,
+        _requester: Option<&ferrofed_identity::role::consent::Requester>,
         _candidates: &[ferrofed_registry::id::NodeId],
         _deadline: std::time::Instant,
-    ) -> ferrofed_identity::consent::ConsentDecision {
-        ferrofed_identity::consent::ConsentDecision::Unavailable(
-            ferrofed_identity::consent::ConsentError::DeadlineExceeded,
+    ) -> ferrofed_identity::role::consent::ConsentDecision {
+        ferrofed_identity::role::consent::ConsentDecision::Unavailable(
+            ferrofed_identity::role::consent::ConsentError::DeadlineExceeded,
         )
     }
 

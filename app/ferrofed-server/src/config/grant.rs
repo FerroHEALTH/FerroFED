@@ -39,7 +39,7 @@ use ferrofed_engine::onward::authorization_details::{
     AuthorizationDetails, AuthorizationDetailsError,
 };
 use ferrofed_engine::onward::dpop::Prover;
-use ferrofed_engine::onward::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
+use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
 use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstraint};

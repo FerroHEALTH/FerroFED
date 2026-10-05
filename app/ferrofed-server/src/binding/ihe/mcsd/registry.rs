@@ -27,7 +27,7 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_identity::directory::mcsd::{
+use ferrofed_identity::ihe::mcsd::source::{
     Content, DirectoryConfig, DirectoryConfigError, DirectoryReadError, DirectorySource,
     ExchangeError, Materialised, Refreshed,
 };

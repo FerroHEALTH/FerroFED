@@ -21,7 +21,7 @@
 //! | `Content-Type` | `application/json` | `openehr-its`'s client runtime, for the JSON body |
 //! | `Authorization` | `Basic` or `Bearer` | the endpoint's onward credential from the gateway's configuration, or the access token its OAuth 2.0 grant obtained ([`crate::onward`]), only when one is configured |
 //! | `X-Request-Id` | a version 4 UUID | [`OutboundId::mint`], only when the caller passes one |
-//! | `openEHR-federation-client` | a compact JWS | the caller's verified identity, or the gateway's own for its operator, signed for the node with the gateway's key ([`crate::onward::conveyance`]) |
+//! | `openEHR-federation-client` | a compact JWS | the caller's verified identity, or the gateway's own for its operator, signed for the node with the gateway's key ([`crate::conveyance`]) |
 //! | `traceparent` | a W3C Trace Context version `00` value | the node request's own span in the trace the gateway started for the client request, with a random trace id ([`crate::trace_context`]), only when the gateway exports traces; never a trace id or span id of the client's |
 //! | `Host`, `Content-Length` | the endpoint's authority, the body length | the HTTP engine, from the registry URL and the composed body |
 //! | `Accept-Encoding` | the codings the engine decodes | the HTTP engine, from its compression features |
@@ -144,10 +144,9 @@ mod tests {
         let deadline = Instant::now()
             .checked_add(Duration::from_secs(5))
             .ok_or("the deadline is past the platform clock")?;
-        let options =
-            DispatchOptions::new(deadline, crate::onward::conveyance::tests::conveyance())
-                .with_withheld(Arc::new(Withheld::new([SecretString::from(IN_FIXED_ID)])))
-                .with_request_id(OutboundId::fixed(uuid::Uuid::parse_str(FIXED_ID)?));
+        let options = DispatchOptions::new(deadline, crate::conveyance::tests::conveyance())
+            .with_withheld(Arc::new(Withheld::new([SecretString::from(IN_FIXED_ID)])))
+            .with_request_id(OutboundId::fixed(uuid::Uuid::parse_str(FIXED_ID)?));
         let reply = client.query(&NodeQuery::new(aql), &options).await;
         let requests = server.received_requests().await.ok_or("recording is on")?;
         let ids = requests

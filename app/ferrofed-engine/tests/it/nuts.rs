@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::dpop::Prover;
-use ferrofed_engine::onward::nuts::{NutsCredentials, NutsGrant};
+use ferrofed_engine::onward::grant::nl::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};

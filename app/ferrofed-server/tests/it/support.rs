@@ -503,7 +503,7 @@ pub(crate) fn signed(text: &str) -> String {
 /// for a test that assembles its own federation.
 pub(crate) fn signer(
     federation: &str,
-) -> Result<Arc<ferrofed_engine::onward::conveyance::Signer>, Box<dyn StdError>> {
+) -> Result<Arc<ferrofed_engine::conveyance::Signer>, Box<dyn StdError>> {
     use ferrofed_engine::onward::SystemClock;
     use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
     let pem = secrecy::SecretString::from(ferrofed_testkit::oauth::es384_pem()?);
@@ -513,7 +513,7 @@ pub(crate) fn signer(
         Duration::ZERO,
         Arc::new(SystemClock),
     )?;
-    Ok(Arc::new(ferrofed_engine::onward::conveyance::Signer::new(
+    Ok(Arc::new(ferrofed_engine::conveyance::Signer::new(
         Arc::new(keys),
         federation,
     )))
@@ -521,9 +521,8 @@ pub(crate) fn signer(
 
 /// A conveyance of a synthetic verified caller, for a test that dispatches
 /// through the engine itself.
-pub(crate) fn conveyance()
--> Result<ferrofed_engine::onward::conveyance::Conveyance, Box<dyn StdError>> {
-    use ferrofed_engine::onward::conveyance::{Caller, Conveyance, Principal, Verification};
+pub(crate) fn conveyance() -> Result<ferrofed_engine::conveyance::Conveyance, Box<dyn StdError>> {
+    use ferrofed_engine::conveyance::{Caller, Conveyance, Principal, Verification};
     let caller = Caller {
         issuer: ISSUER.to_owned(),
         subject: "clinician-0042".to_owned(),

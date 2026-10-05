@@ -17,11 +17,11 @@ use std::error::Error;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::conveyance::{self, Conveyance, Principal, Verification};
 use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::onward::conveyance::{self, Conveyance, Principal, Verification};
-use ferrofed_engine::onward::exchange::{Exchange, SubjectToken};
+use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::token::{ACCESS_TOKEN_TYPE, JWT_TOKEN_TYPE, TOKEN_EXCHANGE};
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};

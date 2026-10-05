@@ -12,11 +12,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::conveyance::{Conveyance, Principal, Verification};
 use ferrofed_engine::dispatch::{
     Contact, DispatchOptions, NodeClient, NodeQuery, SharedCredentials,
 };
-use ferrofed_engine::onward::conveyance::{Conveyance, Principal, Verification};
-use ferrofed_engine::onward::exchange::{Exchange, SubjectToken};
+use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
 use ferrofed_engine::onward::keys::KeyRing;
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;

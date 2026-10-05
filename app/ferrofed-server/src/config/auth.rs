@@ -17,7 +17,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::Secret;
 use http::HeaderName;

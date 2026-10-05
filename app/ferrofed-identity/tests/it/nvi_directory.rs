@@ -14,19 +14,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::directory;
 use ferrofed_identity::fhir::{Authentication, Tls};
-use ferrofed_identity::localizer::{Localization, Localizer};
-use ferrofed_identity::nvi::{NviConfig, NviConfigError, NviLocalizer};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::ihe::mcsd;
+use ferrofed_identity::nl::nvi::{NviConfig, NviConfigError, NviLocalizer};
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::localizer::{Localization, Localizer};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::nvi::{LocalizationService, PSEUDO_BSN_SYSTEM};
 use serde_json::json;
 
-use crate::directory::{ORG_A, ORG_REGION, fhir, resource};
+use crate::mcsd::{ORG_A, ORG_REGION, fhir, resource};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -50,9 +50,7 @@ fn registry(a: &[&str], region: &[&str]) -> Result<RegistrySnapshot, Box<dyn Err
         );
         resource(&mut bundle, index)["identifier"] = identifiers.into();
     }
-    Ok(directory::snapshot_from_json(
-        bundle.to_string().as_bytes(),
-    )?)
+    Ok(mcsd::snapshot_from_json(bundle.to_string().as_bytes())?)
 }
 
 fn node(id: &str) -> Result<NodeId, Box<dyn Error>> {

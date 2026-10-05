@@ -154,14 +154,19 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   FerroPIX can use them as they are.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
-  trait), `ferrofed-identity` (the role traits, `PatientRef`, the development
-  cross-reference, the PIXm resolver and localizer, the PDQm demographics
-  step and the XCPD localizer over `ihe-iti`, the PMIR identity feed, the
-  mCSD directory, the NVI localizer and the Mitz pre-filter over
-  `nl-generic-functions`, the audit recorders, the one IHE FHIR client and
-  TLS type, and the resolution bindings per verified caller) and `ferrofed-engine`
-  (dispatch, fan-out, budgets, follow-up routing, the onward grants (OAuth
-  2.0, token exchange, DPoP, Nuts, FAPI 2.0) and the signed caller token, and the outbound identifier-hygiene gate every
+  trait), `ferrofed-identity` (laid out by role and binding: `role/` holds
+  the seams and `PatientRef`; `ihe/`, behind feature `ihe`, the PIXm
+  resolver and localizer, the PDQm demographics step, the XCPD localizer,
+  the PMIR identity feed, the mCSD directory and the audit recorders over
+  `ihe-iti`; `nl/`, behind feature `nl`, the NVI localizer and the Mitz
+  pre-filter over `nl-generic-functions`; and at the top `session`, the
+  resolution bindings per verified caller, `fhir`, the one IHE FHIR client
+  and TLS type, and `dev`, the development cross-reference) and
+  `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing, the calls
+  to one node in `single_node`, the onward grants in `onward::grant`
+  (client credentials, token exchange, FAPI 2.0, and the Nuts grant under
+  `nl`) beside the DPoP and mutual TLS sender constraints, the signed caller
+  token in `conveyance`, and the outbound identifier-hygiene gate every
   request to a node passes, #45).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):
@@ -319,9 +324,13 @@ Discipline is unchanged for subagents: they obey the hard rules below.
   licensing box ticked, or `contribution-licence-guard` fails
   (`.claude/memory/pr-body-licence-checkbox.md`). Arm auto-merge on open
   (`.claude/memory/pr-auto-merge.md`).
-- **Keep the changelog.** `CHANGELOG.md` follows Keep a Changelog 1.1.0: every
-  change with user-visible effect adds an entry under `[Unreleased]` in the
-  same PR. Releases are cut from the changelog.
+- **Keep the changelog.** `CHANGELOG.md` follows Keep a Changelog 1.1.0, and
+  every change with user-visible effect adds its entry in the same PR as a
+  fragment, `changelog.d/<issue>-<kebab-slug>.<section>.md` (#598), never as
+  an edit of `CHANGELOG.md`. The format is `changelog.d/README.md`;
+  `changelog-guard` fails a PR with no entry unless it carries `no-changelog`.
+  The release cut assembles the fragments with
+  `scripts/release/changelog.sh --assemble`.
 - **Never weaken, skip, or delete a test** to make a build pass, and never edit
   a test to route around a bug it exposes (`.claude/rules/testing.md`).
 - **No patient data** in the repository, a fixture, an issue, or a prompt.

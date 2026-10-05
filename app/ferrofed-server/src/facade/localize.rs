@@ -15,9 +15,9 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::localizer::{Localization, LocalizerError, OnFailure};
-use ferrofed_identity::patient::PatientRef;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::localizer::{Localization, LocalizerError, OnFailure};
+use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use tracing::Instrument as _;
@@ -210,7 +210,7 @@ fn client_text(error: &LocalizerError) -> String {
 mod tests {
     use std::fmt;
 
-    use ferrofed_identity::localizer::LocalizerError;
+    use ferrofed_identity::role::localizer::LocalizerError;
     use http::StatusCode;
 
     use super::client_text;

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 
-use ferrofed_identity::mitz::MitzConfigError;
+use ferrofed_identity::nl::mitz::MitzConfigError;
 use ferrofed_server::binding::Role;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::{Config, error, transport};

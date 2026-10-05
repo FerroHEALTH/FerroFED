@@ -17,8 +17,8 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::atna::RepositoryAudit;
-use ferrofed_identity::localizer::{Localization, Localizer as _, LocalizerError};
+use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
+use ferrofed_identity::role::localizer::{Localization, Localizer as _, LocalizerError};
 use ferrofed_testkit::atna::AuditRepository;
 use ferrofed_testkit::xcpd::RespondingGateway;
 use ihe_iti::atna::forwarder::Forwarder;

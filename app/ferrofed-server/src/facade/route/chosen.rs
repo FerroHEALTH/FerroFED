@@ -12,7 +12,7 @@
 use std::time::Instant;
 
 use axum::response::Response;
-use ferrofed_engine::forward::HeldRequest;
+use ferrofed_engine::single_node::forward::HeldRequest;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::HeaderMap;

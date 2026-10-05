@@ -22,7 +22,7 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_identity::consent::Requester;
+use ferrofed_identity::role::consent::Requester;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 

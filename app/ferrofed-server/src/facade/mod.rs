@@ -82,9 +82,9 @@ use axum::Extension;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::Response;
-use ferrofed_engine::onward::conveyance::Conveyance;
+use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::session::SessionKey;
 use http::{HeaderMap, Method, Uri};
 use openehr_its::rest::routes::{self, Lookup};
 

@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::binding::ResolutionBindings;
-use ferrofed_identity::resolver::Resolver;
+use ferrofed_identity::role::resolver::Resolver;
+use ferrofed_identity::session::ResolutionBindings;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use jsonwebtoken::jwk::Jwk;

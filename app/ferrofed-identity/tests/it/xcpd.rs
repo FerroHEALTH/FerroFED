@@ -10,13 +10,13 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::fhir::Tls;
-use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::xcpd::{
+use ferrofed_identity::ihe::xcpd::{
     FixedAssertion, GatewayConfig, Transport, XcpdConfig, XcpdConfigError, XcpdLocalizer,
 };
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::tls::MutualTls;

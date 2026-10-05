@@ -18,13 +18,15 @@ use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
 use ferrofed_identity::fhir::{Authentication, Tls};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::pdqm::{PdqmConfig, PdqmConfigError, PdqmDemographics, Transaction};
-use ferrofed_identity::pixm::{ManagerConfig, PixmResolver};
-use ferrofed_identity::resolver::{Resolution, Resolver};
+use ferrofed_identity::ihe::pdqm::{PdqmConfig, PdqmConfigError, PdqmDemographics, Transaction};
+use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver};
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::demographics::{
+    Ambiguity, Demographics, DemographicsError, Identification,
+};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;

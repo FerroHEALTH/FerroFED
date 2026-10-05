@@ -10,8 +10,8 @@
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use ferrofed_identity::consent::{ConsentDecision, ConsentPrefilter, NotAsked, Requester};
-use ferrofed_identity::patient::PatientRef;
+use ferrofed_identity::role::consent::{ConsentDecision, ConsentPrefilter, NotAsked, Requester};
+use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use ferrofed_server::config::settings::ConsentDisclosure;
 use http::StatusCode;

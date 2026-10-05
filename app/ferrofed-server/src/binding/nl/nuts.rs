@@ -20,7 +20,7 @@ use std::sync::Arc;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::dpop::Prover;
-use ferrofed_engine::onward::nuts::{NutsCredentials, NutsGrant};
+use ferrofed_engine::onward::grant::nl::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use nl_generic_functions::nuts_auth::NutsClient;

@@ -11,7 +11,7 @@
 //! FerroEHR is a node here, never the oracle: the test asserts what the
 //! check reports about it, and does not assume which UUID version it mints.
 
-use ferrofed_engine::onward::conveyance;
+use ferrofed_engine::conveyance;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::admission::report::{Condition, Verdict};
 use ferrofed_server::admission::subject::VALUE_PREFIX;

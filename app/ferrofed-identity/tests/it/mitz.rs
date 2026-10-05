@@ -11,14 +11,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::consent::{
-    ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester,
-};
 use ferrofed_identity::fhir::{Authentication, Tls};
-use ferrofed_identity::mitz::{
+use ferrofed_identity::nl::mitz::{
     HolderConfig, MITZ_MODE, MitzConfig, MitzConfigError, MitzPrefilter,
 };
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::role::consent::{
+    ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester,
+};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mitz::Mitz;

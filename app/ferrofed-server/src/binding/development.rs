@@ -13,10 +13,10 @@
 use std::fmt;
 use std::sync::Arc;
 
-use ferrofed_identity::consent::ConsentPrefilter;
 use ferrofed_identity::dev::{DevTable, StaticConsentPrefilter, StaticResolver};
-use ferrofed_identity::localizer::Localizer;
-use ferrofed_identity::resolver::Resolver;
+use ferrofed_identity::role::consent::ConsentPrefilter;
+use ferrofed_identity::role::localizer::Localizer;
+use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 

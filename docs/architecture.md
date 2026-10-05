@@ -1025,7 +1025,7 @@ rules are FerroFED's own design, decided with #80 after a security review:
   not and listed in `demographic_clients` or not: a patient scope reaches
   its patient's own compartment only (`master08-scopes.adoc` §Resource
   Scopes). The pair is compared, never the bare `ehr_id`
-  (`onward::conveyance::Confinement::admits`). Each node's conveyance
+  (`conveyance::Confinement::admits`). Each node's conveyance
   carries an `ehrId` claim with that node's own `ehr_id` in T and narrows
   `scope` to the covering `patient/` scopes, so the node can enforce the
   grant (N26); an endpoint outside T is signed no conveyance
@@ -1090,7 +1090,7 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   and carries the caller as the delegating subject in `act`. It is cached per
   endpoint by the SHA-256 of the caller's token and the scope, at most 1024
   tokens, until 30 s before it expires, and dropped on a `401`
-  (`ferrofed_engine::onward::exchange`). Only a caller verified by signature
+  (`ferrofed_engine::onward::grant::exchange`). Only a caller verified by signature
   or introspection has a token to exchange: a caller the edge asserted is
   refused for that node, `node-error` with nothing sent. The gateway's own
   requests, the admission check and the stored-query redistribution, use the
@@ -1159,11 +1159,11 @@ the DID, `aud` the issuer, `nbf` to `exp` five seconds, a fresh `nonce`
 submission and the scope. The token is always `DPoP`-bound (GFI-005): the
 crate takes a `DpopProver` trait, which the engine implements over the
 endpoint's `Prover` in the authorization server's role
-(`ferrofed_engine::onward::nuts::AuthorizationProver`), so the same key and
+(`ferrofed_engine::onward::grant::nl::nuts::AuthorizationProver`), so the same key and
 the same `DPoP` code prove the token request and every node request through
 the endpoint's `NodeProver`. A demanded nonce is answered once with a new
 presentation. The token is cached as the client-credentials token is
-(`ferrofed_engine::onward::nuts::NutsCredentials`). The IG's own
+(`ferrofed_engine::onward::grant::nl::nuts::NutsCredentials`). The IG's own
 GFI-004 names the RFC 7523 JWT bearer grant with a presentation in both
 `assertion` and `client_assertion`; Nuts RFC021 defines the
 `vp_token-bearer` grant with no client assertion instead, and FerroFED speaks
@@ -1182,7 +1182,7 @@ Localization Service.
 endpoint whose `[credentials]` name a `fapi2` grant authenticates to an
 authorization server under the FAPI 2.0 Security Profile, the harmonised
 BgZ/eOverdracht track's choice (the VWS memo, concept v0.9, §B.4a.2). The
-grant is generic FAPI 2.0 in `ferrofed_engine::onward::fapi2`; the track is
+grant is generic FAPI 2.0 in `ferrofed_engine::onward::grant::fapi2`; the track is
 a configuration of it, with no branch for a region:
 
 - **discovery:** at the first token request the metadata is read once from
@@ -1227,7 +1227,7 @@ a configuration of it, with no branch for a region:
   asks for a scope, details, or both, never neither (FAPI 2.0 §5.3.3.1,
   least privilege);
 - **token exchange:** per verified caller where the endpoint's `grant` is
-  `token_exchange`, through `onward::exchange` at the discovered token
+  `token_exchange`, through `onward::grant::exchange` at the discovered token
   endpoint, with the same caching, scope narrowing and withheld-identifier
   refusal.
 
@@ -2103,11 +2103,18 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth` | the clients each function needs, `oauth-server-metadata` under `nuts-auth` | anything in FerroFED |
 | `crates/oauth-server-metadata` | OAuth 2.0 Authorization Server Metadata (RFC 8414): the issuer identifier, the well-known metadata URL, the identical-issuer and same-origin endpoint checks, and the refusal of an answer that repeats a name; no feature | `serde`, `serde_json`, `url` | anything in FerroFED, any national crate |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait, and the reports of the read-only operator surface (`operator`); a leaf | `openehr-base` | the engine, identity, any storage implementation |
-| `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` (feature `ihe`) and `nl-generic-functions` (feature `nl`) into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
-| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`, onward OAuth 2.0, FAPI 2.0 and, under feature `nl`, the Nuts grant, and the signed caller token (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken`, `oauth-server-metadata` | any storage implementation (#40), the server |
+| `app/ferrofed-identity` | the role traits of section 6 and `PatientRef` (`role`), the adapters that plug `ihe-iti` (`ihe`, feature `ihe`) and `nl-generic-functions` (`nl`, feature `nl`) into the seams, the resolution bindings of a client session (`session`), the one HTTP client and TLS type of the identity services (`fhir`), and the development cross-reference (`dev`) | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
+| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, the calls to one node (`single_node`: forwarding on `Client::forward`, the admission check's EHR calls and the ask-all probe), the budgets, the completeness decision, follow-up routing on `creating_system_id`, the onward grants (`onward::grant`: client credentials, token exchange, FAPI 2.0 and, under feature `nl`, the Nuts grant) beside the token request, keys and sender constraints they share, and the signed caller token (`conveyance`) (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken`, `oauth-server-metadata` | any storage implementation (#40), the server |
 | `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), the read-only operator surface under `{base}/operator/` behind an issuer's `operator_scope` (#276), telemetry, health, the storage implementations, the bindings (`src/binding/`, one module and one feature each), wiring | everything | is never depended on |
 | `app/ferrofed-viewer` (binary `ferrofed-viewer`) | the operator console (decision A55): the Leptos pages rendered on the server and hydrated in the browser, the OpenID Connect sign-in with its code exchange, ID Token check and server-side session, the operator views (#276), and the client of the gateway's public surface on `rest-client` | `openehr-federation` (the `OPTIONS {base}/` body), `openehr-its` (`rest-client`), `ferrofed-registry` (the `Secret` its configuration holds a credential in, and the operator reports), `jsonwebtoken`, `leptos`, `axum` | the engine, the identity crate, the server, any storage implementation |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
+
+Inside `ferrofed-identity` the seams sit in `role`, and each binding's
+adapters in a module of their own behind its feature, `ihe` and `nl`; the
+engine groups its onward grants the same way, a binding's grants in a folder
+of `onward::grant` behind its feature. A third binding adds one folder and one
+feature to each, with no change outside them (#587, #588; no specification
+governs the layout: our own design).
 
 `ihe-iti` and `nl-generic-functions` know nothing of FerroFED. The adapters in
 `ferrofed-identity` turn their clients into the seams, so a binding can move

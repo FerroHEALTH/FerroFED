@@ -26,8 +26,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use axum::Router;
 use axum::body::Body;
-use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError, OnFailure};
-use ferrofed_identity::patient::PatientRef;
+use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError, OnFailure};
+use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use ferrofed_server::binding::development::DEVELOPMENT_STATIC;
 use ferrofed_server::config::Config;
@@ -94,7 +94,7 @@ impl Localizer for StubLocalizer {
         &self,
         _patient: &PatientRef,
         _members: &[NodeId],
-        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> Localization {
         self.asked.fetch_add(1, Ordering::SeqCst);

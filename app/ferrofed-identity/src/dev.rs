@@ -40,11 +40,11 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::behalf::OnBehalfOf;
-use crate::consent::{ConsentDecision, ConsentPrefilter, Requester};
-use crate::localizer::{Localization, Localizer};
-use crate::patient::{IdentifierNamespace, PatientRef};
-use crate::resolver::{Resolution, Resolver};
+use crate::role::behalf::OnBehalfOf;
+use crate::role::consent::{ConsentDecision, ConsentPrefilter, Requester};
+use crate::role::localizer::{Localization, Localizer};
+use crate::role::patient::{IdentifierNamespace, PatientRef};
+use crate::role::resolver::{Resolution, Resolver};
 
 /// The deployment profile a server configuration declares.
 ///

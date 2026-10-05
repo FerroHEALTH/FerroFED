@@ -33,9 +33,9 @@
 use std::fmt;
 use std::time::Instant;
 
-use ferrofed_engine::forward::{ForwardError, Forwarded};
-use ferrofed_engine::probe::Answer;
-use ferrofed_identity::binding::{Bound, ResolutionBindings, SessionKey};
+use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
+use ferrofed_engine::single_node::probe::Answer;
+use ferrofed_identity::session::{Bound, ResolutionBindings, SessionKey};
 use ferrofed_registry::ehr_index::{EhrIndex, Indexed};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::incident::{Detection, Incident};

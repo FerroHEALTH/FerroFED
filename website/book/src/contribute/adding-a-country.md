@@ -30,8 +30,13 @@ can use it as it is. Vendor the specification it implements first, with a
 ## 2. The adapters and the binding module
 
 The adapters that turn the crate's clients into the role traits
-(`Localizer`, `Resolver`, `ConsentPrefilter`, `Demographics`) sit in
-`app/ferrofed-identity`, beside the IHE and Dutch adapters.
+(`Localizer`, `Resolver`, `ConsentPrefilter`, `Demographics`, in
+`app/ferrofed-identity/src/role/`) sit in a folder of their own,
+`app/ferrofed-identity/src/<name>/`, behind a feature of the same name,
+beside the IHE adapters in `ihe/` and the Dutch adapters in `nl/`. An onward
+grant the country's nodes need is a folder of its own under
+`app/ferrofed-engine/src/onward/grant/`, behind a feature, as the Nuts grant
+is under `nl/`.
 
 The binding itself is one module, `app/ferrofed-server/src/binding/<name>/`,
 with a unit struct that implements `Binding`. It declares:

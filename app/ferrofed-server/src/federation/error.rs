@@ -8,15 +8,15 @@ use std::path::PathBuf;
 use ferrofed_engine::dispatch::SetupError;
 use ferrofed_identity::dev::DevCrossRefError;
 #[cfg(feature = "binding-ihe")]
-use ferrofed_identity::directory::error::FhirFormError;
+use ferrofed_identity::ihe::mcsd::error::FhirFormError;
+#[cfg(feature = "binding-ihe")]
+use ferrofed_identity::ihe::pdqm::PdqmConfigError;
+#[cfg(feature = "binding-ihe")]
+use ferrofed_identity::ihe::pixm::PixmConfigError;
 #[cfg(feature = "binding-nl")]
-use ferrofed_identity::mitz::MitzConfigError;
+use ferrofed_identity::nl::mitz::MitzConfigError;
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
-use ferrofed_identity::patient::PatientRefError;
-#[cfg(feature = "binding-ihe")]
-use ferrofed_identity::pdqm::PdqmConfigError;
-#[cfg(feature = "binding-ihe")]
-use ferrofed_identity::pixm::PixmConfigError;
+use ferrofed_identity::role::patient::PatientRefError;
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::error::LoadError;

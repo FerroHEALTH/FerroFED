@@ -35,7 +35,7 @@ pub mod seam;
 use std::fmt;
 use std::sync::Arc;
 
-use ferrofed_identity::consent::ConsentPrefilter;
+use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::seam::{Indicator, LocalizerSeam, OnwardGrant, PublicDocument, ResolverSeam};

@@ -93,7 +93,11 @@ synthetic.
 - Every first-party file carries the SPDX header
   (`SPDX-FileCopyrightText: Cadasto B.V.`,
   `SPDX-License-Identifier: BUSL-1.1`).
-- Add a `CHANGELOG.md` entry under `[Unreleased]` for any user-visible change.
+- Record any user-visible change as a changelog fragment,
+  `changelog.d/<issue>-<kebab-slug>.<section>.md`, in the format
+  `changelog.d/README.md` describes. Do not edit `CHANGELOG.md`: the release
+  cut assembles the fragments into it. A pull request with no user-visible
+  effect carries the `no-changelog` label instead.
 - Never weaken, skip, or delete a test to make a build pass.
 - Every workflow `uses:` is pinned to a full commit SHA with a trailing version
   comment; `permissions:` is `{}` at the workflow level with the minimum

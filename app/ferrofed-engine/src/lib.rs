@@ -1,41 +1,50 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The federation engine: dispatch and fan-out to each node over ITS-REST, the
-//! per-node and overall budgets, the completeness decision and the outbound
-//! identifier-hygiene gate.
+//! The federation engine: every request the gateway sends to a node, how it
+//! authenticates there, and the checks each request passes before it leaves.
 //!
-//! [`dispatch`] holds the per-endpoint node client and the mapping from a
-//! node's answer to its §11.1 endpoint status (#34). [`fanout`] sends one
-//! request per in-scope node under one deadline, builds `meta.federation` from
-//! every outcome and applies the all-or-nothing decision (#37; §11.4, §11.5,
-//! N37, N38). [`ehr`] creates and reads an EHR on one node for the admission
-//! check (§12b.1, #79). [`forward`] passes one client request to one node once,
-//! byte-identical (§7a.3, N22, N31). [`probe`] asks every member at once
-//! whether it holds a path `ehr_id`, the read-only last step of §12.5.1.
-//! A fan-out answer names the versions each endpoint's rows show it holding,
-//! which the follow-up routing table learns from (§12.2, N21).
-//! [`hygiene`] is the outbound gate every
-//! request to a node passes before it is sent (#45), and [`declared`] holds
-//! each header and query value a routed request forwards to the kind its
-//! ITS-REST operation declares (§5.4.1, N33). [`outbound_id`] is the
-//! correlation id the gateway mints for a node request, with the inventory of
-//! every header a node request carries (§5.4.1, N33). [`onward`] is how the
-//! gateway authenticates to a node as itself: an OAuth 2.0 client-credentials
-//! grant with a signed JWT client assertion, and the keys it publishes
-//! (§13.1, N25). [`trace_context`] is the span of each node request and the
-//! W3C `traceparent` it carries when the gateway exports traces.
+//! - [`dispatch`]: the per-endpoint node client over `openehr-its`'s
+//!   `rest-client`, and the mapping from a node's answer to its §11.1
+//!   endpoint status (N16, N40).
+//! - [`fanout`]: one request per in-scope node under one deadline, the
+//!   `meta.federation` envelope built from every outcome, and the
+//!   all-or-nothing decision (§11.4, §11.5, N37, N38). A fan-out answer names
+//!   the versions each endpoint's rows show it holding, which the follow-up
+//!   routing table learns from (§12.2, N21).
+//! - [`single_node`]: the calls that send one request to one node: EHR
+//!   creation and retrieval for the admission check (`single_node::ehr`,
+//!   §12b.1), one client request forwarded byte-identical
+//!   (`single_node::forward`, §7a.3, N22, N31), and the read-only probe of
+//!   §12.5.1 step 4 (`single_node::probe`).
+//! - [`hygiene`]: the outbound gate every request to a node passes before it
+//!   is sent (§5.4.1, N33).
+//! - [`declared`]: each header and query value a routed request forwards,
+//!   held to the kind its ITS-REST operation declares (§5.4.1, N33).
+//! - [`outbound_id`]: the correlation id the gateway mints for a node
+//!   request, with the inventory of every header a node request carries
+//!   (§5.4.1, N33).
+//! - [`onward`]: how the gateway authenticates to a node as itself (§13.1,
+//!   N25): the grant kinds in `onward::grant` (client credentials, RFC 8693
+//!   token exchange, FAPI 2.0, and under feature `nl` the Nuts grant of
+//!   Annex B §B.4), the token request and the signed client assertion they
+//!   share, the keys the gateway publishes as its JWK Set, and the two sender
+//!   constraints, `DPoP` (RFC 9449) and mutual TLS (RFC 8705).
+//! - [`conveyance`]: what a node is told about the caller, a token the
+//!   gateway signs for that node and sends in a header of every request
+//!   (§13.1, N24).
+//! - [`trace_context`]: the span of each node request, and the W3C
+//!   `traceparent` it carries when the gateway exports traces.
 #![doc(test(attr(deny(warnings))))]
 
+pub mod conveyance;
 pub mod declared;
 pub mod dispatch;
-pub mod ehr;
 pub mod fanout;
-pub mod forward;
 pub mod hygiene;
 pub mod onward;
 pub mod outbound_id;
-pub mod probe;
+pub mod single_node;
 pub mod trace_context;
 
 /// The openEHR ITS-REST release the engine dispatches to each node.

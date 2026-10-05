@@ -39,8 +39,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::patient::IdentifierNamespace;
-use ferrofed_identity::pdqm::{PdqmConfig, PdqmDemographics, Transaction};
+use ferrofed_identity::ihe::pdqm::{PdqmConfig, PdqmDemographics, Transaction};
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 

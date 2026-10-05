@@ -17,7 +17,7 @@
 //! refusal of an unauthenticated caller is the conformance run's own check
 //! ([`ferrofed_server::conformance::scenarios::track7`]).
 
-use ferrofed_engine::onward::conveyance;
+use ferrofed_engine::conveyance;
 use ferrofed_server::conformance::scenarios::track7;
 use ferrofed_testkit::containers::{self, TwoNodes};
 use ferrofed_testkit::oauth::{TokenEndpoint, Verdict};

@@ -14,8 +14,8 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
-use ferrofed_engine::onward::provider::ClientCredentials;
 use ferrofed_engine::onward::{AssertionAudience, Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;

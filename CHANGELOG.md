@@ -10,8 +10,11 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Maintenance rule: every pull request that changes user-visible behaviour adds
-an entry under **[Unreleased]** in the same PR. Cutting a release renames
-[Unreleased] to the version and date, and adds a fresh link reference.
+its entry in the same PR as a fragment under `changelog.d/`, in the format
+`changelog.d/README.md` describes, and leaves this file alone. Cutting a
+release runs `scripts/release/changelog.sh --assemble <version> <date>`, which
+writes the fragments and any entry still under **[Unreleased]** into the new
+version's section and moves the link references on.
 
 The architecture is `docs/architecture.md`, the output of the research
 program on the v0.0.1 milestone. Releases on the 0.0.x line started with the

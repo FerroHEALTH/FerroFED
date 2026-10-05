@@ -16,12 +16,12 @@ use std::error::Error;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::conveyance::{Conveyance, Principal, Verification};
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
-use ferrofed_engine::onward::conveyance::{Conveyance, Principal, Verification};
 use ferrofed_engine::onward::dpop::{DpopKeyError, Prover};
-use ferrofed_engine::onward::exchange::{Exchange, SubjectToken};
+use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
+use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
-use ferrofed_engine::onward::provider::ClientCredentials;
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;

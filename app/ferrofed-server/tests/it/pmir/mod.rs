@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::Router;
-use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;

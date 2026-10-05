@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
-use ferrofed_identity::localizer::Localizer;
-use ferrofed_identity::resolver::Resolver;
+use ferrofed_identity::role::localizer::Localizer;
+use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_registry::health::Indication;
 use ferrofed_registry::id::EndpointId;
 

@@ -14,7 +14,7 @@
 //! constant time; one without it is answered `401`, one that does not hold to
 //! the PMIR profiles `400` (`415` for another media type), and either changes
 //! nothing. An applied message drops the resolution bindings it could have
-//! made stale ([`ferrofed_identity::lifecycle::change_of`]) and is answered
+//! made stale ([`ferrofed_identity::ihe::pmir::change_of`]) and is answered
 //! with the ITI-93 response (§2:3.93.4.2). The message carries Patient Master
 //! Identities: the log, the metrics and every answer name the change kinds
 //! and their counts, never an identifier. The bindings' time-to-live bounds
@@ -29,7 +29,7 @@ use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_identity::lifecycle::{self, LifecycleConfigError};
+use ferrofed_identity::ihe::pmir::{self, LifecycleConfigError};
 use ferrofed_registry::secret::Secret;
 use http::HeaderMap;
 use http::header::AUTHORIZATION;
@@ -114,7 +114,7 @@ impl IdentityFeed {
         let auth = service::authentication("pmir.credentials", settings.credentials.as_ref())
             .map_err(IdentityFeedError::Grant)?;
         let tls = service::tls_of("pmir", &settings.tls).map_err(IdentityFeedError::Tls)?;
-        let subscriber = lifecycle::subscriber(&settings.url, &auth, &tls)?;
+        let subscriber = pmir::subscriber(&settings.url, &auth, &tls)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose
         // record is refused fails like a Registry that did not answer.
         let subscriber = match &audit {

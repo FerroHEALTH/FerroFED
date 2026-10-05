@@ -33,10 +33,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ferrofed_identity::dev::Profile;
-use ferrofed_identity::patient::IdentifierNamespace;
-use ferrofed_identity::xcpd::{
+use ferrofed_identity::ihe::xcpd::{
     AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Transport, XcpdConfig, XcpdLocalizer,
 };
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;

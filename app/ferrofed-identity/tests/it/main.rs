@@ -13,13 +13,10 @@
 
 #[cfg(feature = "ihe")]
 mod atna;
-mod binding;
+mod localizer;
 #[cfg(test)]
 #[cfg(feature = "ihe")]
-mod directory;
-#[cfg(feature = "ihe")]
-mod lifecycle;
-mod localizer;
+mod mcsd;
 #[cfg(feature = "nl")]
 mod mitz;
 #[cfg(all(feature = "ihe", feature = "nl"))]
@@ -33,6 +30,9 @@ mod pdqm;
 mod pixm;
 #[cfg(feature = "ihe")]
 mod pixm_localizer;
+#[cfg(feature = "ihe")]
+mod pmir;
+mod session;
 mod static_consent;
 mod static_resolver;
 mod support;

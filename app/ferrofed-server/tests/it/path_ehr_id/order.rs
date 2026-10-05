@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::binding::{ResolutionBindings, SessionKey};
+use ferrofed_identity::session::{ResolutionBindings, SessionKey};
 use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::incident::Detection;
 use ferrofed_server::config::{Config, error};

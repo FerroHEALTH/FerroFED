@@ -20,7 +20,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_engine::onward::nuts::{NutsAuthorizer, NutsGrant};
+use ferrofed_engine::onward::grant::nl::nuts::{NutsAuthorizer, NutsGrant};
 use ferrofed_engine::onward::{Clock, SystemClock};
 use ferrofed_testkit::dpop;
 use ferrofed_testkit::nvi::LocalizationService;

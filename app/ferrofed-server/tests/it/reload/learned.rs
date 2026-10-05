@@ -6,7 +6,7 @@
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::binding::{Bound, ResolutionBindings, SessionKey};
+use ferrofed_identity::session::{Bound, ResolutionBindings, SessionKey};
 use ferrofed_registry::creating_system::{CreatingSystemRoute, Sighting};
 use ferrofed_registry::ehr_index::{EhrIndex, Indexed};
 use ferrofed_registry::error::CreatingSystemMiss;

@@ -20,8 +20,9 @@ step of a milestone; a hand-back is unfinished work.
 
 1. A version-bump pull request that moves the version everywhere it is named
    (`Cargo.toml` once it exists, `CITATION.cff`, `docs/VERSIONS.md`, the
-   README, the site, the `CHANGELOG.md` section), checked by
-   `scripts/checks/versions.sh` once that guard exists.
+   README, the site, the `CHANGELOG.md` section, written by
+   `scripts/release/changelog.sh --assemble X.Y.Z <date>` from the fragments
+   under `changelog.d/`), checked by `scripts/checks/versions.sh`.
 2. Its merge, then `git tag -s vX.Y.Z -m vX.Y.Z` and `git push origin vX.Y.Z`
    from the session, then reading the release run and fixing what fails.
 3. A new milestone for stragglers if needed, and the emptied milestone closed

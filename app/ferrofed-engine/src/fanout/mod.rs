@@ -67,9 +67,9 @@ use openehr_its::rest::client::Transport;
 use openehr_its::rest::generated::query::ResultSetRow;
 use tokio::task::{JoinError, JoinSet};
 
+use crate::conveyance::Conveyance;
 use crate::dispatch::{Contact, DispatchError, DispatchOptions, NodeClients, NodeQuery, NodeReply};
 use crate::hygiene::Withheld;
-use crate::onward::conveyance::Conveyance;
 use crate::outbound_id::OutboundId;
 
 /// The completion policy the budget applies under, as `OPTIONS {base}/` and

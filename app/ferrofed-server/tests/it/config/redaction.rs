@@ -15,7 +15,7 @@ use std::error::Error;
 use std::fmt::Debug;
 
 use ferrofed_identity::fhir::Authentication;
-use ferrofed_identity::pixm::ManagerConfig;
+use ferrofed_identity::ihe::pixm::ManagerConfig;
 use ferrofed_registry::document::Document;
 use ferrofed_registry::secret::{REDACTED, Secret, SecretUrl};
 use ferrofed_server::config::Config;

@@ -273,7 +273,7 @@ mod tests {
                 0,
                 &DispatchOptions::new(
                     std::time::Instant::now(),
-                    crate::onward::conveyance::tests::conveyance(),
+                    crate::conveyance::tests::conveyance(),
                 ),
             ),
             Err(DispatchError::Compose { .. })

@@ -42,7 +42,7 @@ fn read_document(path: &Path, format: RegistryFormat) -> Result<RegistrySnapshot
             })
         }
         #[cfg(feature = "binding-ihe")]
-        RegistryFormat::Fhir => ferrofed_identity::directory::read(path).map_err(|source| {
+        RegistryFormat::Fhir => ferrofed_identity::ihe::mcsd::read(path).map_err(|source| {
             FederationError::FhirRegistry {
                 path: path.to_path_buf(),
                 source: Box::new(source),

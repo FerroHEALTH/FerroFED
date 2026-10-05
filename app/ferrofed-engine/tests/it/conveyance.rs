@@ -19,18 +19,16 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::conveyance::{Caller, Conveyance, HEADER, LIFETIME, Principal, Signer};
 use ferrofed_engine::dispatch::definition::DefinitionAt;
 use ferrofed_engine::dispatch::{
     DispatchError, DispatchOptions, NodeClient, NodeClients, NodeQuery,
 };
-use ferrofed_engine::ehr::EhrCallError;
-use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::{Part, Withheld};
-use ferrofed_engine::onward::conveyance::{
-    Caller, Conveyance, HEADER, LIFETIME, Principal, Signer,
-};
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_engine::probe::{self, Probe, ProbedEhrId};
+use ferrofed_engine::single_node::ehr::EhrCallError;
+use ferrofed_engine::single_node::forward::{ClientRequest, ForwardError};
+use ferrofed_engine::single_node::probe::{self, Probe, ProbedEhrId};
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mock::Server;

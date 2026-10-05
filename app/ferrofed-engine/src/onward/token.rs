@@ -56,6 +56,15 @@ pub const ACCESS_TOKEN_TYPE: &str = "urn:ietf:params:oauth:token-type:access_tok
 /// of the gateway's assertion.
 pub const JWT_TOKEN_TYPE: &str = "urn:ietf:params:oauth:token-type:jwt";
 
+/// How long before the end of its stated lifetime a cached token is
+/// replaced.
+pub const REFRESH_MARGIN: Duration = Duration::from_secs(30);
+
+/// The longest lifetime a client assertion may have.
+// NOTE: no specification governs this bound: our own design, the five
+// minutes SMART Backend Services sets for the same RFC 7523 assertion.
+pub const MAX_ASSERTION_LIFETIME: Duration = Duration::from_secs(300);
+
 /// A token the endpoint issued: the access token, ready to send as a
 /// credential, and its lifetime when the endpoint stated one.
 ///

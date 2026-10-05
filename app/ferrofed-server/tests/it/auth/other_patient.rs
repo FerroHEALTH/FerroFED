@@ -24,10 +24,10 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::consent::{ConsentDecision, ConsentPrefilter};
-use ferrofed_identity::localizer::{Localization, Localizer, OnFailure};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::resolver::{Resolution, Resolver};
+use ferrofed_identity::role::consent::{ConsentDecision, ConsentPrefilter};
+use ferrofed_identity::role::localizer::{Localization, Localizer, OnFailure};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::auth::{AuthSettings, PatientBinding};
@@ -95,7 +95,7 @@ impl Resolver for Recording {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
-        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         record(&self.0, patient, members);
@@ -130,7 +130,7 @@ impl Localizer for Locating {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
-        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> Localization {
         record(&self.0, patient, members);
@@ -146,7 +146,7 @@ impl ConsentPrefilter for Prefiltering {
     async fn prefilter(
         &self,
         _patient: &PatientRef,
-        _requester: Option<&ferrofed_identity::consent::Requester>,
+        _requester: Option<&ferrofed_identity::role::consent::Requester>,
         _candidates: &[NodeId],
         _deadline: Instant,
     ) -> ConsentDecision {

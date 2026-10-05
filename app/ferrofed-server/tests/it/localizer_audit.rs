@@ -21,8 +21,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_identity::fhir::Tls;
-use ferrofed_identity::localizer::OnFailure;
-use ferrofed_identity::xcpd::{GatewayConfig, Transport, XcpdConfig, XcpdLocalizer};
+use ferrofed_identity::ihe::xcpd::{GatewayConfig, Transport, XcpdConfig, XcpdLocalizer};
+use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::binding::ihe::XCPD;
 use ferrofed_server::config::Config;

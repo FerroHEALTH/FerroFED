@@ -17,10 +17,8 @@
 use std::sync::Arc;
 
 use axum::response::Response;
-use ferrofed_engine::onward::conveyance::{
-    self, Conveyance, Principal, Purpose, Signer, Verification,
-};
-use ferrofed_engine::onward::exchange::SubjectToken;
+use ferrofed_engine::conveyance::{self, Conveyance, Principal, Purpose, Signer, Verification};
+use ferrofed_engine::onward::grant::exchange::SubjectToken;
 use openehr_federation::id::FederationId;
 
 use crate::auth::caller::{Caller, VerifiedBy};
