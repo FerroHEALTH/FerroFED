@@ -9,3 +9,8 @@
 
 pub mod atna;
 pub mod balp;
+
+/// The `tracing` target the log recorders write to: the ITI-55 recorder
+/// [`LogAudit`](crate::ihe::xcpd::LogAudit) and the BALP recorder
+/// [`LogFeedAudit`](balp::LogFeedAudit).
+pub const AUDIT_TARGET: &str = "ferrofed::audit";
