@@ -44,6 +44,14 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `differential-report` artifact. No difference is a FerroFED defect; three
   reference divergences and one specification question are new upstream
   reports (#212 T190 to T193).
+- A `fapi2` grant's client key rotates with an overlap (#514): the new
+  `previous_client_key_file` names the previous P-256 client key, which
+  the JWK Set at `{base}/.well-known/jwks.json` publishes after the current
+  key until it is removed from the configuration. Only the current key
+  signs. An authorization server that fetches the set during the rotation
+  verifies both the new assertions and one the previous key signed before
+  it (FAPI 2.0 Security Profile §5.4.2). A previous key that is no P-256
+  key, or is the current key, refuses the configuration, naming the key.
 - `[signing]` holds a P-256 key as well as a P-384 key, and reads the
   algorithm from the key: a P-256 key signs ES256 and a P-384 key ES384
   (RFC 7518 §3.4) (#513). The current key signs the

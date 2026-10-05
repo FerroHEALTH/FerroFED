@@ -442,3 +442,153 @@ fn the_oauth2_assertion_audience_is_configured() -> TestResult {
     );
     Ok(())
 }
+
+/// Every client assertion the harness server has received, in order.
+fn assertions_at(authority: &AuthorizationServer) -> Vec<String> {
+    authority
+        .endpoint()
+        .forms()
+        .into_iter()
+        .flatten()
+        .filter(|(name, _)| name == "client_assertion")
+        .map(|(_, value)| value)
+        .collect()
+}
+
+/// A rotation of the client key while the authorization server still holds
+/// the JWK Set published before it: the gateway publishes the new key and
+/// the previous one, and signs only with the new key, so the server holding
+/// the previous set refuses the new assertion and node A is sent nothing.
+/// Once the server fetches the set again, both the assertion the previous
+/// key signed before the rotation and the new ones verify against it (FAPI
+/// 2.0 §5.4.2; RFC 7517 §5).
+// conformance: CP-17
+#[tokio::test]
+async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_signs() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (authority, material) = material(dir.path()).await?;
+    let a = node(authority.endpoint().dpop_bound(None)).await;
+    let (before, _state) = gateway(dir.path(), &a.uri(), &material.tables)?;
+    let previous_set = published(&before).await?;
+    authority.endpoint().trust(previous_set);
+    let (status, text) = call(before, patient_post()?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let [signed_by_old]: [String; 1] = assertions_at(&authority)
+        .try_into()
+        .map_err(|_more| "one assertion before the rotation")?;
+
+    let old = SigningKey::from_p256_pem(&SecretString::from(material.client_pem.clone()))?;
+    let new_pem = oauth::p256_pem()?;
+    let new = SigningKey::from_p256_pem(&SecretString::from(new_pem.clone()))?;
+    let new_file = dir.path().join("fapi2-client-new.pem");
+    std::fs::write(&new_file, &new_pem)?;
+    let new_file = toml::Value::String(new_file.display().to_string());
+    let rotated = material.tables.replace(
+        "client_key_file = ",
+        &format!("client_key_file = {new_file}\nprevious_client_key_file = "),
+    );
+    let (after, _state) = gateway(dir.path(), &a.uri(), &rotated)?;
+    let rotated_set = published(&after).await?;
+    let kids: Vec<Option<&str>> = rotated_set
+        .keys
+        .iter()
+        .map(|key| key.common.key_id.as_deref())
+        .collect();
+    let at = |kid: &str| kids.iter().position(|known| *known == Some(kid));
+    let (Some(new_at), Some(old_at)) = (at(new.kid()), at(old.kid())) else {
+        return Err(format!("both client keys are published: {kids:?}").into());
+    };
+    assert!(new_at < old_at, "the current key, then the previous one");
+
+    let (status, text) = call(after.clone(), patient_post()?).await?;
+    assert_ne!(
+        StatusCode::OK,
+        status,
+        "the previous set lacks the new key: {text}"
+    );
+    assert_eq!(
+        1,
+        a.received_requests().await.ok_or("recording is on")?.len(),
+        "node A was sent nothing after the refusal"
+    );
+
+    authority.endpoint().trust(rotated_set.clone());
+    let (status, text) = call(after, patient_post()?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let issuer = authority.issuer();
+    oauth::verify_signed(
+        &signed_by_old,
+        &rotated_set,
+        (CLIENT_ID, &issuer),
+        Some(jsonwebtoken::Algorithm::ES256),
+    )?;
+    let sent = assertions_at(&authority);
+    let rotated_assertions = sent.get(1..).ok_or("assertions after the rotation")?;
+    assert_eq!(2, rotated_assertions.len(), "{rotated_assertions:?}");
+    for assertion in rotated_assertions {
+        let header = jsonwebtoken::decode_header(assertion)?;
+        assert_eq!(
+            Some(new.kid()),
+            header.kid.as_deref(),
+            "only the new key signs"
+        );
+        oauth::verify_signed(
+            assertion,
+            &rotated_set,
+            (CLIENT_ID, &issuer),
+            Some(jsonwebtoken::Algorithm::ES256),
+        )?;
+    }
+    Ok(())
+}
+
+/// The previous client key is held to the client key's rule, a P-256 key
+/// (FAPI 2.0 §5.4.1), and is never the current key itself; the refusal
+/// quotes no part of either key.
+#[tokio::test]
+async fn the_configuration_refuses_a_previous_client_key_it_cannot_publish() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (_authority, material) = material(dir.path()).await?;
+    let p384 = dir.path().join("p384.pem");
+    std::fs::write(&p384, oauth::es384_pem()?)?;
+    let p384 = toml::Value::String(p384.display().to_string());
+    let error = refused(&format!(
+        "{}previous_client_key_file = {p384}\n",
+        material.tables
+    ))?;
+    assert!(
+        matches!(
+            &error,
+            ConfigError::GrantFault(GrantFault::ClientKey { key, .. })
+                if key == "credentials.node-a-pub.fapi2.previous_client_key_file"
+        ),
+        "{error:?}"
+    );
+    let current = material
+        .tables
+        .lines()
+        .find_map(|line| line.strip_prefix("client_key_file = "))
+        .ok_or("the client key file")?;
+    let error = refused(&format!(
+        "{}previous_client_key_file = {current}\n",
+        material.tables
+    ))?;
+    assert!(
+        matches!(
+            error,
+            ConfigError::GrantFault(GrantFault::Fapi2 {
+                source: Fapi2GrantError::Keys(_),
+                ..
+            })
+        ),
+        "{error:?}"
+    );
+    let shown = format!("{error:?} {error}");
+    let key_body: String = material
+        .client_pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+    assert!(!shown.contains(&key_body), "{shown}");
+    Ok(())
+}

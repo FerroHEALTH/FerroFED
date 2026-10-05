@@ -275,6 +275,7 @@ authorization_details = '''[{"type": "nl-gis-v1",
 | `grant` | `client_credentials` or `token_exchange`. `authorization_code` refuses the configuration. |
 | `client_id` | The client the server registered the gateway as, the assertion's `iss` and `sub`. On the §B.4a track, the organisation's URA-based identifier. |
 | `client_key_file` | The key every assertion is signed with: a P-256 private key in PKCS#8 PEM. The profile admits PS256, ES256 and EdDSA for a JWT (§5.4.1), so a P-384 key cannot sign here. |
+| `previous_client_key_file` | Optional, while the client key is rotated: the previous client key, a P-256 private key in PKCS#8 PEM. It is published beside the current key until you remove it, and it never signs. |
 | `dpop_key_file` | A P-256 private key in PKCS#8 PEM. Required: the profile issues only sender-constrained tokens (§5.3.2.1). |
 | `scope` | Optional SMART on openEHR `system` scopes, as in an `oauth2` section. |
 | `authorization_details` | Optional JSON text: an array of RFC 9396 §2 objects, each with a `type`. It is sent as written. |
@@ -291,6 +292,23 @@ sets how long each assertion lives. To make the two keys:
 ```text
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out fapi2-client.pem
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out cdr-e-dpop.pem
+```
+
+To rotate the client key, make a new P-256 key, set it as
+`client_key_file`, move the old one to `previous_client_key_file`, and
+reload or restart. The new key signs every assertion from then on, and the
+JWK Set publishes both keys, the new one first. An authorization server
+that still holds the JWK Set from before the rotation does not know the
+new key, so it refuses the new assertions until it fetches the set again;
+the set it fetches then still holds the old key, so an assertion the old
+key signed before the rotation verifies too. Once every authorization
+server that verifies the grant has fetched the new set, remove
+`previous_client_key_file`. A previous key that is no P-256 key, or that
+is the current key, refuses the configuration, naming the key.
+
+```toml
+client_key_file = "/run/secrets/fapi2-client-2026-10.pem"
+previous_client_key_file = "/run/secrets/fapi2-client.pem"
 ```
 
 What the gateway does not do on this track:
@@ -349,8 +367,9 @@ declares `jwks_uri` as `federation.auth.jwks_uri` in `OPTIONS {base}/`
 (§13.1, N30). Point `jwks_uri` at that route on the gateway's public
 address, or at wherever your deployment publishes the keys. Each key's `kid`
 is its RFC 7638 thumbprint, so the same key always has the same `kid`. The
-set also publishes the ES256 client key of every `fapi2` section, after the
-`[signing]` keys; a reload that changes a `fapi2` key publishes the new one.
+set also publishes the ES256 client key of every `fapi2` section, and its
+previous client key while it is rotated, after the `[signing]` keys; a
+reload that changes a `fapi2` key publishes the new one.
 
 To rotate, make a new key, set it as `key_file`, move the old one to
 `previous_key_file`, and restart. The new key signs from then on, with its
