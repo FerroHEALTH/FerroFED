@@ -604,6 +604,18 @@ jobs:
           path: target/conformance/node-profile/
           if-no-files-found: error
           retention-days: 30
+      # The differential run against the reference implementation (#94)
+      # writes one Markdown report and one TSV of differences per test, each
+      # difference with its verdict; a run that never reached the report
+      # leaves the directory empty, which the test failure already names.
+      - name: Upload the differential report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: differential-report
+          path: target/differential/
+          if-no-files-found: warn
+          retention-days: 30
 
   # The conformance report of section 16.4 (#92; no specification governs its
   # form: our own design): every section 16.3 track and section 17 point as
