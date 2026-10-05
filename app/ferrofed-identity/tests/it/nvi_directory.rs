@@ -68,6 +68,7 @@ fn config(base: &str, custodians: &[(&str, &str)]) -> Result<NviConfig, Box<dyn 
     Ok(NviConfig {
         base: SecretUrl::new(base),
         auth: Authentication::None,
+        authorizer: None,
         custodians: written,
         namespaces: BTreeSet::new(),
         tls: Tls::default(),

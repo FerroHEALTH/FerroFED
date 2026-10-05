@@ -23,6 +23,22 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- The NVI localizer authenticates with the Nuts grant (#539; Annex B §B.1,
+  §B.4; the IG's Localization page, GF-Authentication, GFI-004 and
+  GFI-005). `[nl_gf.nvi.credentials.nuts]` takes the table a node's onward
+  credentials take and runs the same grant: a Verifiable Presentation of the
+  gateway's credentials for a token bound to its `DPoP` key, cached until 30
+  seconds before it expires and dropped on the NVI's `401`. Every search
+  carries the token with a proof of the key over the search URL without its
+  query, and a nonce the NVI demands is answered once (RFC 9449 §7.1, §9).
+  The token goes to the NVI alone. A refused grant leaves the localization
+  unavailable, so the query fails closed (§14.1). An `oauth2` or `fapi2`
+  table under `[nl_gf.nvi.credentials]` is refused, naming its key, since the
+  IG defines no such grant for the Localization Service. The
+  `nl-generic-functions` NVI client takes an authorizer that makes each
+  request's headers and is handed the request URL without the query that
+  holds the pseudonym (0.0.12).
+
 - An end-to-end check that the `AVG` the gateway declares decomposable in
   `OPTIONS {base}/` is the mean weighted by each node's count (§11.6.3, N39,
   CP-10, CP-32), behind `FERROFED_E2E`. With two values at one FerroEHR node

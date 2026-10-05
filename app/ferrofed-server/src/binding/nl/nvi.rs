@@ -26,23 +26,51 @@
 //! the BSN it stands for (Annex B §B.7), so its URL is held to the
 //! protected-payload policy of [`transport`]. No specification governs the
 //! shape of the table: our own design.
+//!
+//! The gateway authenticates to the service as a data user: by mutual TLS, a
+//! bearer token or basic credentials, or on GF-Authentication with the Nuts
+//! grant, the same table and the same implementation a node's onward
+//! credentials take ([`super::nuts`]). The grant's `DPoP`-bound token is sent
+//! to the service alone, with a proof of each request (the IG's GFI-004 and
+//! GFI-005; Nuts RFC021):
+//!
+//! ```toml
+//! [nl_gf.nvi.credentials.nuts]
+//! authorization_server = "https://nuts.example.org/oauth2/nvi"
+//! scope = "nl-gf-localization"
+//! did = "did:web:gateway.example.org"
+//! kid = "did:web:gateway.example.org#key-1"
+//! key_file = "/run/secrets/nuts-holder.pem"
+//! dpop_key_file = "/run/secrets/nvi-dpop.pem"
+//!
+//! [[nl_gf.nvi.credentials.nuts.credential]]
+//! input_descriptor = "organization_credential"
+//! file = "/run/secrets/organization.jwt"
+//! ```
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
+use ferrofed_engine::onward::SystemClock;
+use ferrofed_engine::onward::nuts::NutsAuthorizer;
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::nvi::{NviConfig, NviLocalizer, is_bsn_system};
 use ferrofed_identity::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use nl_generic_functions::nvi::authorizer::Authorizer;
 use serde::Deserialize;
 
-use crate::binding::LocalizerSeam;
+use super::nuts::{self, NutsOnward};
+use crate::binding::{LocalizerSeam, OnwardGrant};
 use crate::config::error::Error;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::Scheme;
+use crate::config::transport::ProtectedSite;
 use crate::config::{Config, Credentials, transport};
 use crate::localization::LocalizationError;
 use crate::service;
@@ -59,7 +87,7 @@ pub struct Nvi {
     /// its userinfo.
     pub url: SecretUrl,
     /// How the gateway authenticates to the service, when the transport does
-    /// not: a bearer token or basic credentials.
+    /// not: a bearer token, basic credentials or the Nuts grant.
     pub credentials: Option<Credentials>,
     /// Each care provider, by its URA, mapped to the registry member that
     /// holds its data; optional when the directory publishes each member
@@ -79,12 +107,23 @@ pub struct Nvi {
     pub trust_roots_file: Option<PathBuf>,
 }
 
+/// How the gateway authenticates to the Localization Service, resolved.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum NviCredentials {
+    /// A bearer token or basic credentials, in a header of every request.
+    Header(Scheme),
+    /// The Nuts grant of GF-Authentication: a `DPoP`-bound token and a proof
+    /// of each request (the IG's GFI-004 and GFI-005).
+    Nuts(NutsOnward),
+}
+
 /// The NVI localizer, with every secret and file read.
 pub struct NviSettings {
     /// The service's FHIR base URL, already known to parse.
     pub url: SecretUrl,
     /// How the gateway authenticates to it.
-    pub credentials: Option<Scheme>,
+    pub credentials: Option<NviCredentials>,
     /// The custodian map, as written.
     pub custodians: BTreeMap<String, String>,
     /// The namespaces that stand for the pseudonymised BSN, as written.
@@ -99,7 +138,7 @@ impl fmt::Debug for NviSettings {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NviSettings")
             .field("url", &self.url)
-            .field("credentials", &self.credentials.is_some())
+            .field("credentials", &self.credentials)
             .field("custodians", &self.custodians)
             .field("namespaces", &self.namespaces)
             .field("client_identity", &self.client_identity.is_some())
@@ -110,6 +149,59 @@ impl fmt::Debug for NviSettings {
 
 /// The key of the NVI table, which names its URL and its credentials.
 pub const NVI_KEY: &str = "nl_gf.nvi";
+
+/// The key of the NVI's credentials section.
+const CREDENTIALS_KEY: &str = "nl_gf.nvi.credentials";
+
+impl NviSettings {
+    /// Returns the site the Nuts grant sends the gateway's credentials and
+    /// presentation to, its authorization server, when the service is
+    /// reached with one.
+    #[must_use]
+    pub fn grant_site(&self) -> Option<(String, ProtectedSite)> {
+        match &self.credentials {
+            Some(NviCredentials::Nuts(grant)) => Some(grant.site(CREDENTIALS_KEY)),
+            _ => None,
+        }
+    }
+}
+
+/// Resolves the credentials section `table` of the NVI: a bearer token,
+/// basic credentials or the Nuts grant, one of them.
+fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
+    // NOTE: the IG's Localization page (Authentication and Authorization) and GF-Authentication
+    // define the Nuts profile for the data user and no other grant, so oauth2 and fapi2 are refused.
+    let other_grant = [
+        ("oauth2", table.oauth2.is_some()),
+        ("fapi2", table.fapi2.is_some()),
+    ];
+    if let Some((grant, _)) = other_grant.into_iter().find(|(_, set)| *set) {
+        return Err(Error::NviGrant {
+            key: format!("{CREDENTIALS_KEY}.{grant}"),
+        });
+    }
+    if let Some(grant) = &table.nuts {
+        let header = table.bearer_token.is_some()
+            || table.bearer_token_file.is_some()
+            || table.user.is_some()
+            || table.password.is_some()
+            || table.password_file.is_some();
+        if header {
+            return Err(Error::Scheme {
+                section: CREDENTIALS_KEY.to_owned(),
+            });
+        }
+        return nuts::resolve(&format!("{CREDENTIALS_KEY}.{}", nuts::KEY), grant)
+            .map(NviCredentials::Nuts);
+    }
+    let scheme = resolve_credentials(CREDENTIALS_KEY, table)?;
+    if scheme.is_grant() {
+        return Err(Error::GrantNotHere {
+            section: CREDENTIALS_KEY.to_owned(),
+        });
+    }
+    Ok(NviCredentials::Header(scheme))
+}
 
 /// Resolves `[nl_gf.nvi]`.
 pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> {
@@ -147,21 +239,13 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
             namespace: bsn.clone(),
         });
     }
-    let section = format!("{NVI_KEY}.credentials");
-    let credentials = nvi
-        .credentials
-        .as_ref()
-        .map(|credentials| resolve_credentials(&section, credentials))
-        .transpose()?;
-    if credentials.as_ref().is_some_and(Scheme::is_grant) {
-        return Err(Error::GrantNotHere { section });
-    }
+    let credentials = nvi.credentials.as_ref().map(credentials).transpose()?;
     // NOTE: Annex B §B.7: the pseudonym is personal data like the BSN, so the
     // service URL is a protected-payload site; one admitted under development is reported by check.
     transport::protected_payload(
         config.profile,
         nvi.url.expose(),
-        transport::identity_site(NVI_KEY, credentials.is_some().then_some(section.as_str())),
+        transport::identity_site(NVI_KEY, credentials.is_some().then_some(CREDENTIALS_KEY)),
     )?;
     let client_identity = secret(
         "nl_gf.nvi.client_identity",
@@ -190,10 +274,11 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
 }
 
 /// The NVI localizer `nvi` describes over the members of `snapshot`
-/// (Annex B §B.1).
+/// (Annex B §B.1), a Nuts grant's token requests bounded by `timeout`.
 pub(super) fn localizer(
     nvi: &NviSettings,
     snapshot: &RegistrySnapshot,
+    timeout: Duration,
 ) -> Result<LocalizerSeam, LocalizationError> {
     let mut custodians = BTreeMap::new();
     for (ura, member) in &nvi.custodians {
@@ -210,8 +295,25 @@ pub(super) fn localizer(
         .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
         .collect::<Result<BTreeSet<_>, _>>()
         .map_err(LocalizationError::NviNamespace)?;
-    let auth = service::authentication("nl_gf.nvi.credentials", nvi.credentials.as_ref())
-        .map_err(LocalizationError::Grant)?;
+    let (auth, authorizer) = match &nvi.credentials {
+        None => (Authentication::None, None),
+        Some(NviCredentials::Header(scheme)) => (
+            service::authentication(CREDENTIALS_KEY, Some(scheme))
+                .map_err(LocalizationError::Grant)?,
+            None,
+        ),
+        Some(NviCredentials::Nuts(grant)) => {
+            let client = nuts::http_client().map_err(LocalizationError::NviNutsClient)?;
+            let authorizer: Arc<dyn Authorizer> = Arc::new(NutsAuthorizer::new(
+                NVI_KEY,
+                grant.grant().clone(),
+                client,
+                timeout,
+                Arc::new(SystemClock),
+            ));
+            (Authentication::None, Some(authorizer))
+        }
+    };
     let tls = service::tls(
         NVI_KEY,
         nvi.client_identity.as_ref(),
@@ -221,6 +323,7 @@ pub(super) fn localizer(
     let config = NviConfig {
         base: nvi.url.clone(),
         auth,
+        authorizer,
         custodians,
         namespaces,
         tls,
