@@ -371,8 +371,9 @@ documents is the latest release line. A member node in the test harness runs
 its product's documented database image, which is part of the product under
 test (§13): FerroEHR's, and for the node profile's second product EHRbase's,
 built on PostgreSQL 16.2 (#549). The stored-query store's end-to-end tests run
-on FerroEHR's image, built on `postgres:18.6`, one database per use (#268), so
-no other PostgreSQL image is pinned.
+on FerroEHR's image, built on `postgres:18.6`, one database per use (#268).
+The one other PostgreSQL image pinned is the database of the harness PIX
+Manager, SanteMPI, below (#622).
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -398,6 +399,8 @@ it.
 | FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 
@@ -417,6 +420,16 @@ file documents beside it, each resolved on 2026-10-05 from the registry by
 the digest of its image index. EHRbase is published under the Apache License
 2.0, and both images are public and need no credential to pull. No specification governs which products the
 harness runs: our own design.
+
+The identity binding also runs against a deployable PIX Manager, SanteMPI
+(#622), which answers PIXm ITI-83 and takes the PMIR ITI-93 feed. Its rows
+pin the newest stable image SanteSuite publishes, 2.5.12 of 2023-07-04,
+which is built for `linux/amd64` alone and is a single manifest rather than
+an image index, so the digest is the manifest's. SanteSuite's compose file
+names the official `postgres` image untagged; the row pins the newest patch
+of 15, the major release current when 2.5.12 was published. Both were
+resolved on 2026-10-05 from Docker Hub. SanteDB and SanteMPI are published
+under the Apache License 2.0, and both images are public.
 
 The differential run (#94) builds the Federation Tier reference
 implementation from the vendored source at its pinned commit, with the Maven

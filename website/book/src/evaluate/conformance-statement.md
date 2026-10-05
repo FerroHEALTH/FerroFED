@@ -64,7 +64,7 @@ statement of the text.
 | Operator points | 3, scored against the federation operator |
 | Test tracks | 10 of 11 scored by a test, 1 deferred, 0 planned |
 | Requirements | 46: 46 reached by a point, 0 by a track only, 0 by neither |
-| Marked tests | 934, carrying 1201 point and track markers |
+| Marked tests | 935, carrying 1203 point and track markers |
 
 ## The nodes
 
@@ -81,7 +81,7 @@ statement of the text.
 | [CP-1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-1) | Gateway | N1 | 1 | covered | [9 tests](conformance-tests.md#cp-1) |
 | [CP-2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-2) | Gateway | N2, N5 | 1, 2 | covered | [4 tests](conformance-tests.md#cp-2) |
 | [CP-38](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-38) | Gateway | N33 | 2, 10 | covered | [5 tests](conformance-tests.md#cp-38) |
-| [CP-3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-3) | Gateway | N3 | 2 | covered | [11 tests](conformance-tests.md#cp-3) |
+| [CP-3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-3) | Gateway | N3 | 2 | covered | [12 tests](conformance-tests.md#cp-3) |
 | [CP-4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-4) | Gateway | N7 | 2 | covered | [3 tests](conformance-tests.md#cp-4) |
 | [CP-5](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-5) | Gateway | N4, N10 | 3, 4 | covered | [49 tests](conformance-tests.md#cp-5) |
 | [CP-6](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/conformance.html#cp-6) | Gateway | N11 | 3 | covered | [20 tests](conformance-tests.md#cp-6) |
@@ -123,7 +123,7 @@ statement of the text.
 | Track | Title | Points | Status | Scored by |
 |---|---|---|---|---|
 | [1](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-1) | Transparency | CP-1, CP-2, CP-35 | covered | [3 tests](conformance-tests.md#track-1) |
-| [2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-2) | subject → ehrId resolution | CP-2, CP-38, CP-3, CP-4, CP-7, CP-36 | covered | [6 tests](conformance-tests.md#track-2) |
+| [2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-2) | subject → ehrId resolution | CP-2, CP-38, CP-3, CP-4, CP-7, CP-36 | covered | [7 tests](conformance-tests.md#track-2) |
 | [3](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-3) | Directed / endpoint pin | CP-5, CP-6, CP-28, CP-37 | covered | [5 tests](conformance-tests.md#track-3) |
 | [4](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-4) | Partial results | CP-5, CP-11, CP-12, CP-30, CP-31 | covered | [7 tests](conformance-tests.md#track-4) |
 | [5](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html#track-5) | Dedup + DISTINCT | CP-8, CP-9, CP-10, CP-29, CP-32 | covered | [4 tests](conformance-tests.md#track-5) |

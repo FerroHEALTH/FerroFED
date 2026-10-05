@@ -22,6 +22,10 @@
 //! The node profile also runs against a second CDR product, EHRbase, which
 //! [`ehrbase`] starts on its own pinned database image.
 //!
+//! The identity binding runs against a deployable PIX Manager, SanteMPI,
+//! which [`santempi`](mod@santempi) starts and provisions on its own pinned
+//! database image.
+//!
 //! No specification governs the harness, and none governs which CDR products
 //! it runs: our own design.
 
@@ -35,6 +39,7 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ContainerRequest, CopyTargetOptions, GenericImage, ImageExt};
 
 pub mod ehrbase;
+pub mod santempi;
 
 /// The environment variable that admits the container-backed tests.
 pub const E2E_GATE: &str = "FERROFED_E2E";
@@ -201,6 +206,24 @@ pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
     repository: "ehrbase/ehrbase-v2-postgres",
     tag: "16.2",
     digest: "sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7",
+};
+
+/// SanteMPI, SanteSuite's open-source master patient index, which answers
+/// PIXm ITI-83 and takes the PMIR ITI-93 feed: the deployable PIX Manager
+/// the identity binding is verified against.
+pub const SANTEMPI: PinnedImage = PinnedImage {
+    repository: "santesuite/santedb-mpi",
+    tag: "2.5.12",
+    digest: "sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207",
+};
+
+/// The PostgreSQL SanteMPI runs on: SanteSuite's compose file names the
+/// official image, and this is the release line current when [`SANTEMPI`]
+/// was published.
+pub const SANTEMPI_POSTGRES: PinnedImage = PinnedImage {
+    repository: "postgres",
+    tag: "15.19",
+    digest: "sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550",
 };
 
 /// The Maven image the Federation Tier reference implementation is built
