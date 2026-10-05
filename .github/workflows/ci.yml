@@ -26,6 +26,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # `labeled` and `unlabeled` too: the label escapes (`no-crate-bump`,
+    # `no-changelog`) are read from the event payload, so a label added
+    # after the run started takes effect without a new push.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   merge_group:
   workflow_dispatch:
 

@@ -42,7 +42,7 @@ self_test() {
   local script status
   # Global, so the EXIT trap still sees it after the function returns.
   work="$(mktemp -d)"
-  trap 'rm -rf "$work"' EXIT
+  trap 'chmod -R u+w "$work" && rm -r "$work"' EXIT
   script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   mkdir -p "$work/scripts/checks"
   cp "$script" "$work/scripts/checks/crate-version-guard.sh"
