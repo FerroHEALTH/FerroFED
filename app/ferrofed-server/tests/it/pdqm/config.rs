@@ -83,7 +83,7 @@ fn a_table_without_its_url_master_or_namespaces_is_refused() -> TestResult {
 }
 
 #[test]
-fn a_credential_in_the_url_or_a_grant_in_its_section_is_refused() -> TestResult {
+fn a_credential_in_the_url_or_an_unsigned_assertion_grant_is_refused() -> TestResult {
     let error = refusal(&format!(
         "profile = \"development\"\n{}",
         with("url", "\"https://user:Qz7secret@pdq.example.org/fhir/\"")
@@ -98,7 +98,10 @@ fn a_credential_in_the_url_or_a_grant_in_its_section_is_refused() -> TestResult 
         pdqm(BASE, "iti-78")
     ))?;
     assert!(
-        matches!(&error, error::Error::GrantNotHere { section } if section == "pdqm.credentials"),
+        matches!(
+            &error,
+            error::Error::GrantWithoutSigning { section } if section == "pdqm.credentials.oauth2"
+        ),
         "{error:?}"
     );
     Ok(())
@@ -118,7 +121,10 @@ fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
         pdqm(BASE, "iti-78")
     ))?;
     assert!(
-        matches!(&error, error::Error::GrantNotHere { section } if section == "pdqm.credentials"),
+        matches!(
+            &error,
+            error::Error::ServiceGrantNotHere { section } if section == "pdqm.credentials"
+        ),
         "{error:?}"
     );
     Ok(())

@@ -27,6 +27,8 @@ pub mod limits;
 mod load;
 pub(crate) mod resolve;
 pub(crate) mod secrets;
+#[cfg(feature = "binding-ihe")]
+pub mod service_grant;
 pub mod settings;
 pub mod stored_queries;
 pub mod tls;
@@ -577,11 +579,17 @@ impl Credentials {
     }
 }
 
-/// An OAuth 2.0 grant at one node's token endpoint.
+/// An OAuth 2.0 grant at the token endpoint of a node or of an identity
+/// service.
 ///
-/// The gateway authenticates with a JWT client assertion signed by the
-/// `[signing]` key (RFC 7523 §2.2), and every token is requested with
-/// `scope`. No field has a default.
+/// A node's grant authenticates with a JWT client assertion signed by the
+/// `[signing]` key (RFC 7523 §2.2) or its TLS client certificate (RFC 8705
+/// §2). An identity service's grant (`[pixm.manager.credentials.oauth2]`,
+/// `[pdqm.credentials.oauth2]`, `[pmir.credentials.oauth2]`,
+/// `[registry.mcsd.credentials.oauth2]`) is the client-credentials grant of
+/// IHE IUA ITI-71, authenticated by a client secret (RFC 6749 §2.3.1) or
+/// that assertion. Every token is requested with `scope`. No field has a
+/// default.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OAuth2 {
@@ -589,9 +597,11 @@ pub struct OAuth2 {
     /// (RFC 8693), a token per verified caller.
     pub grant: Option<GrantKind>,
     /// How the gateway authenticates at the token endpoint:
-    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2), or
+    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2),
     /// `tls_client_auth` or `self_signed_tls_client_auth`, the section's
-    /// TLS client certificate (RFC 8705 §2).
+    /// TLS client certificate (RFC 8705 §2), for a node, or
+    /// `client_secret_basic` or `client_secret_post`, the client secret (RFC
+    /// 6749 §2.3.1), for an identity service.
     pub client_auth: Option<ClientAuth>,
     /// The token endpoint, an `http` or `https` URL with no userinfo; by
     /// default also the `aud` of every client assertion (RFC 7523 §3).
@@ -602,12 +612,19 @@ pub struct OAuth2 {
     /// The authorization server's issuer identifier (RFC 8414 §2), set with
     /// `assertion_audience = "issuer"` and never without it.
     pub issuer: Option<String>,
-    /// The client the node's authorization server registered the gateway
-    /// as, the `iss` and `sub` of every client assertion (RFC 7523 §3).
+    /// The client the authorization server registered the gateway as, the
+    /// `iss` and `sub` of every client assertion (RFC 7523 §3).
     pub client_id: String,
+    /// The client secret the authorization server issued, with
+    /// `client_secret_basic` or `client_secret_post`; an identity service's
+    /// grant alone takes it (RFC 6749 §2.3.1).
+    pub client_secret: Option<Secret>,
+    /// A file holding `client_secret`, read at boot.
+    pub client_secret_file: Option<PathBuf>,
     /// The scope every token is requested with, space-delimited (RFC 6749
-    /// §3.3), each a SMART on openEHR resource scope of the `system`
-    /// compartment, such as `system/aql-*.s`.
+    /// §3.3): for a node each a SMART on openEHR resource scope of the
+    /// `system` compartment, such as `system/aql-*.s`; for an identity
+    /// service the scopes its authorization server defines.
     pub scope: String,
     /// The target service the token is for (RFC 8707 §2), when the
     /// authorization server takes one.
@@ -655,6 +672,14 @@ pub enum ClientAuth {
     /// authorization server registered for the client (RFC 8705 §2.2).
     #[serde(rename = "self_signed_tls_client_auth")]
     SelfSignedTls,
+    /// The client secret in the HTTP Basic scheme (RFC 6749 §2.3.1), as IHE
+    /// IUA ITI-71 prescribes (§3.71.4.1.2.1); an identity service's grant
+    /// alone takes it.
+    ClientSecretBasic,
+    /// The client secret as `client_id` and `client_secret` in the request
+    /// body (RFC 6749 §2.3.1), for an authorization server that takes no
+    /// Basic scheme; an identity service's grant alone takes it.
+    ClientSecretPost,
 }
 
 /// The gateway's signing keys and their publication (§13.1, N25).

@@ -267,15 +267,40 @@ pub enum Scheme {
     Fapi2(Box<Fapi2Grant>),
     /// A grant a binding adds, such as the Nuts grant of Annex B §B.4.
     Binding(Box<dyn OnwardGrant>),
+    /// The client-credentials grant of an identity service (IHE IUA
+    /// ITI-71), which no node takes.
+    #[cfg(feature = "binding-ihe")]
+    ServiceGrant(Box<crate::config::service_grant::ServiceGrant>),
 }
 
 impl Scheme {
-    /// Whether the scheme is a grant, which only a node's onward credentials
-    /// take; an identity, localization, consent or directory service takes a
-    /// bearer token or basic credentials.
+    /// Whether the scheme is a grant: a node's onward credentials take one,
+    /// and of the services only the IHE FHIR services, the client-credentials
+    /// grant of IUA ITI-71; every other service takes a bearer token or basic
+    /// credentials.
     #[must_use]
     pub fn is_grant(&self) -> bool {
-        matches!(self, Self::OAuth2(_) | Self::Fapi2(_) | Self::Binding(_))
+        !matches!(self, Self::Bearer(_) | Self::Basic { .. })
+    }
+
+    /// Whether `other` names the same credential, so a reload that reads it
+    /// again changes nothing; a node's grant is never compared, and reads as
+    /// changed.
+    #[must_use]
+    pub fn same_as(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Bearer(was), Self::Bearer(now)) => was == now,
+            (
+                Self::Basic { user, password },
+                Self::Basic {
+                    user: now_user,
+                    password: now_password,
+                },
+            ) => user == now_user && password == now_password,
+            #[cfg(feature = "binding-ihe")]
+            (Self::ServiceGrant(was), Self::ServiceGrant(now)) => was.same_as(now),
+            _ => false,
+        }
     }
 }
 

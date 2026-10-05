@@ -7,10 +7,12 @@
 //! takes its credential from [`authentication`] and its TLS material from
 //! [`tls`], both over `ferrofed_identity::fhir`, so the mapping from the
 //! configuration is written once (#507). A credential section names a bearer
-//! token or basic credentials; an OAuth 2.0, Nuts or FAPI 2.0 grant is
-//! refused here, never read as no credential. The NVI's Nuts grant is the
-//! one grant a service takes, and the Dutch binding wires it itself. No
-//! specification governs the mapping: our own design.
+//! token or basic credentials, and [`authentication`] refuses a grant, never
+//! reading it as no credential. Two kinds of service take a grant: the IHE
+//! FHIR services (PIXm, PDQm, PMIR, mCSD) the client-credentials grant of
+//! IUA ITI-71, whose provider `service_authentication` builds, and the NVI
+//! the Nuts grant, which the Dutch binding wires itself. No specification
+//! governs the mapping: our own design.
 
 use ferrofed_identity::fhir::{Authentication, Tls, TlsError};
 use ferrofed_registry::secret::Secret;
@@ -18,10 +20,10 @@ use ferrofed_registry::secret::Secret;
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 
-/// A credential section that names a grant, which only a node takes.
+/// A credential section that names a grant the service does not take.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "{section} names an oauth2, nuts or fapi2 grant, which only a node takes; give it a bearer token or basic credentials"
+    "{section} names an oauth2, nuts or fapi2 grant this service does not take; give it a bearer token or basic credentials"
 )]
 pub struct GrantRefused {
     /// The credentials section, such as `pixm.manager[0].credentials`.
@@ -44,7 +46,8 @@ pub struct TlsRefused {
 ///
 /// # Errors
 ///
-/// [`GrantRefused`] for an OAuth 2.0, Nuts or FAPI 2.0 grant.
+/// [`GrantRefused`] for any grant; an IHE FHIR service's grant is built by
+/// `service_authentication`.
 pub fn authentication(
     section: &str,
     scheme: Option<&Scheme>,
@@ -56,10 +59,64 @@ pub fn authentication(
             user: user.clone(),
             password: password.to_secret_string(),
         }),
-        Some(Scheme::OAuth2(_) | Scheme::Fapi2(_) | Scheme::Binding(_)) => Err(GrantRefused {
+        Some(_) => Err(GrantRefused {
             section: section.to_owned(),
         }),
     }
+}
+
+/// A credential of an IHE FHIR service that cannot be used.
+#[cfg(feature = "binding-ihe")]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ServiceAuthError {
+    /// The section names a grant the service does not take.
+    #[error(transparent)]
+    Refused(#[from] GrantRefused),
+    /// The HTTP client the grant's token requests are sent through could
+    /// not be built.
+    #[error("the HTTP client of the token endpoint of {section} could not be built")]
+    TokenTransport {
+        /// The credentials section.
+        section: String,
+        /// Why it could not be built; it names no secret.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
+
+/// The credential the section `section` of an IHE FHIR service resolved to.
+///
+/// It is none, a bearer token, basic credentials, or the provider of its
+/// client-credentials grant (IUA ITI-71), which sends its token requests
+/// with the service's `tls` material.
+///
+/// # Errors
+///
+/// [`ServiceAuthError::Refused`] for a Nuts or FAPI 2.0 grant, and
+/// [`ServiceAuthError::TokenTransport`] for a token-request client that
+/// cannot be built.
+#[cfg(feature = "binding-ihe")]
+pub fn service_authentication(
+    section: &str,
+    scheme: Option<&Scheme>,
+    tls: &Tls,
+) -> Result<Authentication, ServiceAuthError> {
+    let Some(Scheme::ServiceGrant(grant)) = scheme else {
+        return Ok(authentication(section, scheme)?);
+    };
+    let unbuilt =
+        |source: Box<dyn std::error::Error + Send + Sync>| ServiceAuthError::TokenTransport {
+            section: section.to_owned(),
+            source,
+        };
+    let builder = ferrofed_identity::fhir::http_client_builder(&Authentication::None, tls)
+        .map_err(|source| unbuilt(Box::new(source)))?;
+    let transport =
+        openehr_its::rest::client::ReqwestTransport::with_builder_timeout(builder, grant.timeout())
+            .map_err(|source| unbuilt(Box::new(source)))?;
+    let service = section.strip_suffix(".credentials").unwrap_or(section);
+    Ok(Authentication::Grant(grant.provider(service, transport)))
 }
 
 /// The TLS material the table at `key` names: the client `identity` and the
