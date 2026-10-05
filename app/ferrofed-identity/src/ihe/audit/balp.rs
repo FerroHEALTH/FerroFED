@@ -41,7 +41,7 @@ use tokio::task::JoinHandle;
 use url::Url;
 
 use crate::fhir::{self, Authentication, ClientError, Tls};
-use crate::ihe::xcpd::AUDIT_TARGET;
+use crate::ihe::audit::AUDIT_TARGET;
 use crate::role::behalf::OnBehalfOf;
 
 /// Returns `on_behalf` as `ihe_iti`'s audited clients take it: a verified

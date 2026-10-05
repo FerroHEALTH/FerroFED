@@ -12,9 +12,10 @@ switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
 A35). The split is fixed (#106, decision A34): the libraries a third party
 could use live under `crates/` and carry the name of the specification they
 implement, never `ferrofed-*` (`openehr-federation`, `ihe-iti`,
-`nl-generic-functions`; `.claude/memory/published-crate-naming.md`), one crate
-per specification with a feature per layer or profile; FerroFED's own glue and
-the server binary live under `app/`, and the tools under `tools/`.
+`nl-generic-functions`, `oauth-server-metadata`;
+`.claude/memory/published-crate-naming.md`), one crate per specification
+with a feature per layer or profile; FerroFED's own glue and the server binary
+live under `app/`, and the tools under `tools/`.
 
 ## The switch
 
@@ -49,8 +50,10 @@ an owner decision recorded per crate when the switch flips, never assumed.
 - **The crate line** is the `version` in each `crates/*/Cargo.toml`. It never
   adopts the product version or a specification version; it is the crates' own
   SemVer line. A name is held on crates.io by a 0.0.0 placeholder published
-  before the crate has content (the three published on 2026-10-01), and the
-  crate's line in the workspace starts at 0.0.1, above the placeholder.
+  before the crate has content (`openehr-federation`, `ihe-iti` and
+  `nl-generic-functions`, published on 2026-10-01), and the crate's line in
+  the workspace starts at 0.0.1, above the placeholder. `oauth-server-metadata`
+  (#551) has no placeholder on crates.io yet (read on 2026-10-05).
 
 ## The bump rule
 
@@ -83,7 +86,13 @@ an owner decision recorded per crate when the switch flips, never assumed.
 - `package` runs `cargo package` over every `crates/*` member, which builds
   and verifies the exact tarball an upload would send and works while the
   switch is off, then `cargo publish --dry-run` over the publishable set once
-  there is one.
+  there is one. A library that depends on another library
+  (`nl-generic-functions` feature `nuts-auth` on `oauth-server-metadata`)
+  resolves it through a `--config patch.crates-io.<name>.path=…` patch per
+  depended-on `crates/*` member, because Cargo resolves a sibling through
+  its local overlay only when a target registry is known, and while the
+  switch is off there is none. The dry run takes no patch, so it meets the
+  registry as an upload would.
 - `publish` uploads the publishable members one at a time in dependency order
   and counts "already exists" as done, so a partial run is finished by
   running it again; `verify` reads the registry back before success is
@@ -105,9 +114,11 @@ reaches the registry.
 
 ## Owner steps when the switch is flipped
 
-The three names already exist on crates.io (the 0.0.0 placeholders of
-2026-10-01), so every later version can go through Trusted Publishing; no
-crate needs a first upload with a personal token. Two steps, done once:
+Three of the four names exist on crates.io (the 0.0.0 placeholders of
+2026-10-01), so every later version of those can go through Trusted
+Publishing with no first upload by a personal token. `oauth-server-metadata`
+needs its placeholder claimed the same way before the switch flips. Two
+steps, done once:
 
 1. The `crates-io` GitHub environment, with the owner as required reviewer and
    a deployment policy that admits `main` and `v*` tags.

@@ -28,7 +28,7 @@ authorization_endpoint = "https://idp.example.org/realms/ferrofed/auth?kc_idp_hi
 token_endpoint = "http://127.0.0.1:9/token"
 jwks_uri = "http://127.0.0.1:9/jwks.json"
 client_id = "ferrofed-viewer"
-redirect_uri = "https://console.example.org/auth/callback"
+redirect_uri = "http://127.0.0.1:3000/auth/callback"
 scopes = ["openid", "profile"]
 "#;
 

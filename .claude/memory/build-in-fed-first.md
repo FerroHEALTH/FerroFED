@@ -23,10 +23,11 @@ cannot ship, and the identity bindings are on the gateway's critical path.
   seams of `docs/architecture.md` §6 (`Resolver`, `Localizer`, `Directory`,
   `ConsentPrefilter`, `OnwardAuth`): the development cross-reference (#36), the
   PIXm client usable against any PIX Manager, a FerroPIX instance later (#42),
-  and the XCPD ITI-55 adapter, scheduled with the localization seam in v0.0.8
+  and the XCPD ITI-55 adapter, shipped with the localization seam in v0.0.8
   (#85).
 - The protocols live in the published, spec-named crates `ihe-iti` (a
-  feature per profile) and `nl-generic-functions` (a feature per function),
+  feature per profile), `nl-generic-functions` (a feature per function)
+  and `oauth-server-metadata` (RFC 8414, which the onward grants read),
   which depend on nothing in FerroFED; the adapters onto the seams sit in
   `app/ferrofed-identity` (#106, [[published-crate-naming]]). FerroPIX can use
   `ihe-iti` directly, and a binding can move there with no change to the

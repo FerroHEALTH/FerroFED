@@ -171,6 +171,7 @@ for f in compose.yaml ferrofed.toml registry.toml; do
   curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
 done
 # edit ferrofed.toml and registry.toml; put credential files in secrets/
+# a P-384 key signs ES384; ec_paramgen_curve:P-256 gives an ES256 key instead
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
   -out secrets/signing-key.pem
 docker compose up --wait

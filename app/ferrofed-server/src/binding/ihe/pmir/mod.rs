@@ -29,7 +29,7 @@ use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_identity::ihe::pmir::{self, LifecycleConfigError};
+use ferrofed_identity::ihe::pmir::{self, PmirConfigError};
 use ferrofed_registry::secret::Secret;
 use http::HeaderMap;
 use http::header::AUTHORIZATION;
@@ -54,7 +54,7 @@ use subscription::{RegistryFault, Watch};
 pub enum IdentityFeedError {
     /// The Registry's subscriber cannot be built.
     #[error("the PMIR subscriber cannot be built")]
-    Subscriber(#[from] LifecycleConfigError),
+    Subscriber(#[from] PmirConfigError),
     /// The subscription cannot be described.
     #[error("the PMIR subscription cannot be described")]
     Request(#[source] InvalidInput),

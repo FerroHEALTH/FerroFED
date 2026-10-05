@@ -19,6 +19,6 @@ are outside the rule. FerroBRIDGE enforces it with
 one grew it further.
 
 **How to apply:** FerroFED carries the setup from FerroBRIDGE, so it starts
-with the rule and an empty allow-list: the guard joins the CI guard tier with
-the workspace, and no file is ever added to the allow-list here. A split
-moves code only; a defect found on the way is filed.
+with the rule and an empty allow-list: `scripts/checks/file-length.sh` runs
+in CI tier 1 (the `file-length` job), and no file is ever added to the
+allow-list here. A split moves code only; a defect found on the way is filed.

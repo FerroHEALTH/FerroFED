@@ -1,6 +1,6 @@
 ---
 name: two-ferroehr-nodes
-description: Owner rulings 2026-10-02 (decision A44, #155) and 2026-10-03 (decision A47, #322) - the CI e2e harness runs two FerroEHR nodes (plus a third for three-node cases) and the compose quickstart runs four, all on one PostgreSQL server with a database per node; EHRbase left the topology because it refuses a BASE-valid PARTY_REF.namespace (not reported upstream: FerroFED reports to specifications, never to node products, owner 2026-10-03)
+description: Owner rulings 2026-10-02 (decision A44, #155) and 2026-10-03 (decision A47, #322) - the CI e2e harness runs two FerroEHR nodes (plus a third for three-node cases) and the compose quickstart runs four, all on one PostgreSQL server with a database per node; EHRbase left the federation topology because it refuses a BASE-valid PARTY_REF.namespace (not reported upstream: FerroFED reports to specifications, never to node products, owner 2026-10-03), and returned only as the node profile's second CDR product (#549)
 metadata:
   type: project
 ---
@@ -51,7 +51,10 @@ out PostgreSQL start-up under parallel e2e tests (#320).
 - Every e2e case seeds `EHR_STATUS.subject` in the example arc on both nodes;
   never seed a node without a subject to suit it.
 - The node-profile points (CP-18, CP-19, CP-27, #93) are scored against
-  FerroEHR.
-- A second product returns only when one is found that admits the BASE
-  namespace, recorded as its own issue. Linked: [[e2e-gate]],
-  [[postgresql-18]], [[strict-over-reference]].
+  FerroEHR and, as a second CDR product, against EHRbase 2.36.0 pinned by
+  digest on its own documented database image (#549). EHRbase runs there
+  as the product under the node profile's checks, its findings evidence
+  about EHRbase, never as a federation node of the e2e topology.
+- A second product joins the federation topology only when one is found
+  that admits the BASE namespace, recorded as its own issue. Linked:
+  [[e2e-gate]], [[postgresql-18]], [[strict-over-reference]].

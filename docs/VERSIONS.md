@@ -1,4 +1,3 @@
-| DIF Claim Format Registry | `decentralized-identity/claim-format-registry` commit `4a15817a7717efdda29912a1eef6e59135d8d02a`, the claim format designation schemas Presentation Exchange 2.0.0 references | `scripts/vendor/dif-pe.sh`, `docs/specs/dif-pe/PROVENANCE.md` |
 <!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
@@ -130,6 +129,7 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | W3C Bitstring Status List 1.0 | `https://www.w3.org/TR/2025/REC-vc-bitstring-status-list-20250515/` sha256 `3cdf3358a09f3b02f2a97e5dac13cf2b63115c2db1260bf7b7c236d8702924ec`, W3C Recommendation 2025-05-15 | `scripts/vendor/w3c-did-vc.sh`, `docs/specs/w3c-did-vc/PROVENANCE.md` |
 | did:web Method Specification | `w3c-ccg/did-method-web` commit `ea423c114e6f2537498ee6f94e8d794c64f60c18`, the Credentials Community Group report and its licence | `scripts/vendor/w3c-did-vc.sh`, `docs/specs/w3c-did-vc/PROVENANCE.md` |
 | DIF Presentation Exchange 2.0.0 | `decentralized-identity/presentation-exchange` commit `7cbe949c95fe1e19413b24c9b49dc34f76f5d76a`, the v2.0.0 specification text and JSON Schemas | `scripts/vendor/dif-pe.sh`, `docs/specs/dif-pe/PROVENANCE.md` |
+| DIF Claim Format Registry | `decentralized-identity/claim-format-registry` commit `4a15817a7717efdda29912a1eef6e59135d8d02a`, the claim format designation schemas Presentation Exchange 2.0.0 references | `scripts/vendor/dif-pe.sh`, `docs/specs/dif-pe/PROVENANCE.md` |
 | OpenID FAPI 2.0 Security Profile | `https://openid.net/specs/fapi-security-profile-2_0-final.html` sha256 `26a49ad19b1f2b19ecc1cd9b825b4d5012f5e03a5dc8cb0dbd26462d39da465c`, Final; pinned and fetched to `.vendor-cache/openid/`, never committed (its licence is limited to developing and implementing the specification) | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
 | OpenID for Verifiable Credential Issuance 1.0 | `https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html` sha256 `f123c3178cacd27688b15b762098a045e9eb35eccfe2f5f18a357c3815e06ba7`, Final; pinned and fetched as the row above | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |
 | OpenID for Verifiable Presentations draft 18 | `https://openid.net/specs/openid-4-verifiable-presentations-1_0-18.html` sha256 `48d539e12e6b75235d7b673b0ee1b3a6589f6013c665bbf00f3f2933d0ec0dcd`, the draft Nuts RFC021 cites; pinned and fetched as the rows above | `scripts/vendor/openid.sh`, `docs/specs/openid/PROVENANCE.md` |

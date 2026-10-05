@@ -121,10 +121,7 @@ async fn a_sign_out_from_the_consoles_own_origin_is_taken_without_fetch_metadata
 -> Result<(), Box<dyn Error>> {
     let (state, service) = console(WITH_OIDC)?;
     let session = state.sessions().establish(signed_in())?;
-    let request = sign_out(
-        Some(&session),
-        Some(("origin", "https://console.example.org")),
-    )?;
+    let request = sign_out(Some(&session), Some(("origin", "http://127.0.0.1:3000")))?;
     let (response, _body) = send(&service, request).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     assert!(state.sessions().access_token(&session)?.is_none());

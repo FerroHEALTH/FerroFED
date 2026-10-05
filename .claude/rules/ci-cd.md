@@ -21,11 +21,13 @@ Thirteen workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
   (zizmor, actionlint, shellcheck, hadolint, kubeconform over the example
-  Kubernetes manifests, the comment-style guard, the versions guard, the
-  favicon guard, the copyright-holder guard, the site link guard over the assembled site, the
-  conformance-matrix guard, the obligations guard, the
-  e2e-placement guard, the tracker-helper self-tests, the changelog fragment
-  check `scripts/release/changelog.sh --check`), plus the manifest
+  Kubernetes manifests, the comment-style guard, the file-length guard, the
+  versions guard, the favicon guard, the copyright-holder guard, the site
+  link guard over the assembled site, the conformance-matrix guard with the
+  conformance report script's self-test, the obligations guard, the
+  e2e-placement guard, the tracker-helper self-tests, the crate-version
+  guard's self-test, the changelog fragment check
+  `scripts/release/changelog.sh --check`), plus the manifest
   guard, the one tier-1 job with a toolchain, which reads every Cargo
   manifest with `cargo metadata --no-deps` and compiles nothing; tier 2 is the
   Rust set, gated behind a `detect` job that needs the manifest guard and looks
@@ -133,31 +135,48 @@ file that can turn a code off tree-wide eventually does.
 ## Rust CI lanes (tier 2 of `ci.yml`)
 
 The lanes, with the local commands mirroring the CI
-flags verbatim: `cargo fmt --all --check`; `cargo clippy --workspace
---all-targets -- -D warnings` at default features; `cargo nextest run --workspace
---locked` plus `cargo test --doc --locked`; `cargo doc` with
-`RUSTDOCFLAGS=-D warnings`; `cargo deny check` (advisories, licences, bans,
-sources, which subsumes cargo-audit); MSRV via `cargo hack check
---rust-version`; every feature of each published crate alone via `cargo hack
-clippy --locked --each-feature --all-targets --package openehr-federation
---package ihe-iti --package nl-generic-functions -- -D warnings`, per package
-and never the workspace all-features union; the `viewer` job (`cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/viewer-site.sh --release`, the bundle budget, `scripts/checks/viewer-bundle.sh`, and the build-host path check, `scripts/checks/viewer-paths.sh`; `leptos-ui.md` §12); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
+flags verbatim: `cargo fmt --all --check`; `cargo clippy --locked --workspace
+--all-targets --all-features -- -D warnings`; `cargo nextest run --workspace
+--locked --all-features` plus `cargo test --doc --workspace --locked
+--all-features`; `cargo doc --locked --workspace --no-deps --all-features
+--document-private-items` with `RUSTDOCFLAGS=-D warnings`; `cargo deny check`
+(advisories, licences, bans, sources, which subsumes cargo-audit); MSRV via
+`cargo hack check --rust-version --workspace --locked --all-targets`; every
+feature alone via `cargo hack clippy --locked --each-feature --all-targets
+--package openehr-federation --package ihe-iti --package nl-generic-functions
+--package oauth-server-metadata --package ferrofed-identity --package
+ferrofed-engine --package ferrofed-server -- -D warnings`, which covers each
+published crate's layer and profile features and the regional binding
+features (`binding-ihe` and `binding-nl` of the server, `ihe` and `nl` of
+the identity crate, `nl` of the engine), per package and never the
+workspace all-features union; the `fuzz lockfile` job (`fuzz/Cargo.lock`
+matches the workspace); the `release compose` job (`ferrofed config check`,
+built as a static musl binary, over the release compose assets and the
+example Kubernetes ConfigMap); the `viewer` job (`cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/viewer-site.sh --release`, the bundle budget, `scripts/checks/viewer-bundle.sh`, and the build-host path check, `scripts/checks/viewer-paths.sh`; `leptos-ui.md` §12); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
 crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 the changelog guard on pull requests (`scripts/checks/changelog-guard.sh`: a
 new fragment under `changelog.d/`, or an edit of `CHANGELOG.md` from a pull
 request opened before the fragments, unless the `no-changelog` label is set);
 `dependency-review-action` on pull requests; the `e2e (containers)` job,
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the
-digest-pinned node images (`.claude/memory/e2e-gate.md`); the
-`journeys (browser)` job, which sets `FERROFED_JOURNEYS=1`, builds the console's
-site bundle and runs the testkit's browser journeys in headless Chrome at the
-pinned Chrome for Testing release (`leptos-ui.md` §11); the `comment-style.sh` guard
-at `--all`; and the golden pass list, `conformance/aql-golden/pass-list.txt`,
-held by the golden AQL test in the nextest run (a listed case that stops
-passing, or an unlisted pass, fails it) and by the tier-1 `conformance-matrix`
-guard with the §17 matrix and the badges rendered from both. A later
-conformance job that scores more of §17 records its results in that matrix
-and a committed pass list held the same way, never in a record of its own.
+digest-pinned node images (`.claude/memory/e2e-gate.md`), and uploads the
+gated JUnit report, the node profile findings and the differential report;
+the `journeys (browser)` job, which sets `FERROFED_JOURNEYS=1`, builds the
+console's site bundle and runs the testkit's browser journeys in headless
+Chrome at the pinned Chrome for Testing release (`leptos-ui.md` §11);
+the `conformance report` job, which joins the conformance markers with the
+JUnit reports of the offline and the gated run and the node profile
+findings (`scripts/conformance/report.sh`) into the per-run report of §16.4,
+every §16.3 track and §17 point as pass, fail, not-run, deferred or open,
+and fails when a covered point or track did not pass; and the golden pass
+list, `conformance/aql-golden/pass-list.txt`, held by the golden AQL test in
+the nextest run (a listed case that stops passing, or an unlisted pass,
+fails it) and by the tier-1 `conformance-matrix` guard with the §17 matrix
+and the badges rendered from both. The matrix (`conformance/matrix.tsv`)
+and the committed pass lists are the record. The per-run conformance report
+is an artifact derived from them and from the run, never a second record: a
+conformance job that scores more of §17 records its results in the matrix
+and a committed pass list held the same way.
 **Always `--locked`**, so CI fails on
 lockfile drift rather than on registry drift. Commit `Cargo.lock`.
 

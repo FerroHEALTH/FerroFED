@@ -52,6 +52,8 @@ const BASE: &str = "/fhir";
 /// The FHIR JSON media type.
 const FHIR_JSON: &str = "application/fhir+json";
 
+// NOTE: no specification governs this: our own design; the device spells the IG's naming
+// systems itself, so a wrong constant in `nl-generic-functions` fails the suites run against it.
 /// The naming system of a pseudonymised BSN (the IG's `pseudo-bsn`).
 pub const PSEUDO_BSN_SYSTEM: &str = "http://fhir.nl/fhir/NamingSystem/pseudo-bsn";
 

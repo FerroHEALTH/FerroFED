@@ -79,6 +79,8 @@
 #
 # Usage:
 #   scripts/checks/versions.sh
+#   scripts/checks/versions.sh --root <dir>
+#       Checks the checkout at <dir>, such as a git worktree, with this script.
 #   scripts/checks/versions.sh --self-test
 #       Drives the specification-constant, landing-release and book-pin checks
 #       against fixtures: an agreeing input passes and each drift fails.
@@ -91,6 +93,10 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ "${1:-}" == "--root" && $# -eq 2 ]]; then
+  root="$(cd "$2" && pwd)"
+  shift 2
+fi
 cd "$root"
 
 matrix=docs/VERSIONS.md

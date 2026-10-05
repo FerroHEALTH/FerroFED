@@ -246,9 +246,10 @@ without a version bump, because a published version is immutable
    reviewer and a deployment policy for `main` and `v*` tags.
 2. On crates.io, give each crate one Trusted Publisher entry: repository
    owner `FerroHEALTH`, repository `FerroFED`, workflow `publish-crates.yml`,
-   environment `crates-io`. The three names already exist (the 0.0.0
-   placeholders of 2026-10-01), so no first upload with a personal token is
-   needed.
+   environment `crates-io`. `openehr-federation`, `ihe-iti` and
+   `nl-generic-functions` already exist (the 0.0.0 placeholders of
+   2026-10-01), so they need no first upload with a personal token;
+   `oauth-server-metadata` has no placeholder yet and needs one first.
 3. Set `publish = true` in the root `[workspace.package]` in a pull request.
    The next `v*` tag publishes every library crate at its manifest version.
 

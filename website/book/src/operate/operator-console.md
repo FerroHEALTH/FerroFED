@@ -189,6 +189,12 @@ With `secure_cookie = true` the session and sign-in cookies carry the
 `__Host-` prefix, which binds each to the console's host (RFC 6265bis
 §4.1.3.2); with it off, for a loopback trial, they carry none.
 
+`secure_cookie = false` sends the cookies over plain HTTP, so the console
+refuses it at start unless `redirect_uri` is an `http` URL on a loopback
+host (`localhost`, `127.0.0.0/8` or `::1`). The refusal names
+`session.secure_cookie`. A console without `[oidc]` sets no cookie, so the
+key has nothing to govern there and is not checked.
+
 Without an `[oidc]` table the console offers no sign-in, and `GET /login`
 answers `503`. The provider's URLs must be `https` unless their host is
 loopback, and `scopes` must include `openid`. `end_session_endpoint` is

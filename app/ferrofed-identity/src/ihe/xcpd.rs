@@ -46,13 +46,11 @@ use tokio::task::JoinSet;
 use url::Url;
 
 use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::ihe::audit::AUDIT_TARGET;
 use crate::ihe::audit::balp::{audited_as, logged_as};
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
-
-/// The `tracing` target the [`LogAudit`] recorder writes to.
-pub const AUDIT_TARGET: &str = "ferrofed::audit";
 
 /// The audit recorder that writes each ITI-55 audit message as a structured
 /// `tracing` event at [`AUDIT_TARGET`], for a deployment that routes its log

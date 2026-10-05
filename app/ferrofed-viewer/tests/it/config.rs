@@ -238,3 +238,59 @@ fn a_listen_address_that_does_not_parse_is_refused() {
         "{error:?}"
     );
 }
+
+/// [`WITH_OIDC`], whose cookies are not `Secure`, with `redirect_uri` as the
+/// console's redirection endpoint.
+fn insecure_at(redirect_uri: &str) -> String {
+    WITH_OIDC.replace(
+        "redirect_uri = \"http://127.0.0.1:3000/auth/callback\"",
+        &format!("redirect_uri = \"{redirect_uri}\""),
+    )
+}
+
+// A cookie without `Secure` travels over plain HTTP, so it is admitted only on
+// a console that is itself plain HTTP on loopback.
+#[test]
+fn cookies_without_secure_are_refused_off_a_loopback_console() {
+    for redirect_uri in [
+        "https://console.example.org/auth/callback",
+        "http://console.example.org/auth/callback",
+        "https://localhost:3000/auth/callback",
+        "http://10.0.0.7:3000/auth/callback",
+    ] {
+        let error = refused(&insecure_at(redirect_uri));
+        assert!(
+            matches!(&error, error::Error::InsecureCookie { key } if key == "session.secure_cookie"),
+            "{redirect_uri}: {error:?}"
+        );
+        assert!(
+            error
+                .to_string()
+                .starts_with("session.secure_cookie = false"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn cookies_without_secure_are_admitted_on_a_loopback_console() -> Result<(), Box<dyn Error>> {
+    for redirect_uri in [
+        "http://127.0.0.1:3000/auth/callback",
+        "http://127.0.0.2/auth/callback",
+        "http://localhost:3000/auth/callback",
+        "http://[::1]:3000/auth/callback",
+    ] {
+        let settings = settings(&insecure_at(redirect_uri))?;
+        assert!(!settings.session.secure_cookie, "{redirect_uri}");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_cookies_are_secure_by_default_on_an_https_console() -> Result<(), Box<dyn Error>> {
+    let text = insecure_at("https://console.example.org/auth/callback")
+        .replace("secure_cookie = false\n", "");
+    let settings = settings(&text)?;
+    assert!(settings.session.secure_cookie);
+    Ok(())
+}

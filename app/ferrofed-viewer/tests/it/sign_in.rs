@@ -92,10 +92,7 @@ async fn sign_in_redirects_with_the_code_grant_and_an_s256_challenge() -> Result
     assert_eq!("example", pair("kc_idp_hint"));
     assert_eq!("code", pair("response_type"));
     assert_eq!("ferrofed-viewer", pair("client_id"));
-    assert_eq!(
-        "https://console.example.org/auth/callback",
-        pair("redirect_uri")
-    );
+    assert_eq!("http://127.0.0.1:3000/auth/callback", pair("redirect_uri"));
     assert_eq!("openid profile", pair("scope"));
     assert_eq!("S256", pair("code_challenge_method"));
     assert_eq!(43, pair("nonce").len());
@@ -224,7 +221,7 @@ authorization_endpoint = "https://idp.example.org/realms/ferrofed/auth"
 token_endpoint = "http://127.0.0.1:9/token"
 jwks_uri = "http://127.0.0.1:9/jwks.json"
 client_id = "ferrofed-viewer"
-redirect_uri = "https://console.example.org/auth/callback"
+redirect_uri = "http://127.0.0.1:3000/auth/callback"
 "#;
 
 #[tokio::test]
