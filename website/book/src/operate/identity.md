@@ -250,6 +250,7 @@ feed_token_file = "/run/secrets/pmir-feed-token"          # the token the Regist
 # identifier_system = "urn:oid:2.999.1"                  # only Patients with an identifier here
 # timeout_ms = 5000
 # check_interval_s = 60
+# on_drain = "keep"                                       # or "unsubscribe"; see Several replicas
 
 [pmir.credentials]                    # how the gateway authenticates to the Registry
 bearer_token_file = "/run/secrets/pmir-registry-token"
@@ -262,7 +263,10 @@ bearer_token_file = "/run/secrets/pmir-registry-token"
   carry an identifier from that authority. Before it creates one, the
   gateway searches the Registry for its own (`GET
   [base]/Subscription?url=<callback_url>`) and adopts the one it finds, so a
-  create the Registry answered late is never made twice. A Registry that
+  create the Registry answered late is never made twice. When the search
+  lists several, it adopts the usable one whose location sorts first and
+  deletes the others. A delete the Registry answers `404` or `410` found the
+  subscription already gone. A Registry that
   answers that search `400` or `404` does not support it, and the gateway
   creates. Every `check_interval_s` the gateway reads the subscription back.
   It deletes and recreates one the Registry reports `error` or `off`, and
@@ -272,8 +276,12 @@ bearer_token_file = "/run/secrets/pmir-registry-token"
   `Location`, or with one outside `url`, the gateway cannot manage that
   subscription. It creates no other until a restart and reports the fault as
   `unmanageable`; delete that subscription at the Registry. On a drain the
-  gateway stops checking, lets the check in flight end, and then deletes its
-  subscription, found by search when it never learned where it was.
+  gateway stops checking and lets the check in flight end. With `on_drain =
+  "keep"`, the default, it leaves the subscription at the Registry, for the
+  other replicas and for its next start, which adopts it. With `on_drain =
+  "unsubscribe"` it then deletes its subscription, found by search when it
+  never learned where it was. PMIR lets a subscriber delete a subscription
+  (§2:3.94.4.5) and does not say when.
 - **Authenticating the feed.** The subscription carries no credential for the
   feed (PMIR §2:3.94.5), so you agree the feed token with the Registry's
   operator and configure it on both sides. The Registry sends it as
@@ -311,3 +319,34 @@ merge and never of a split. The specification marks this lifecycle track
 provisional, and FerroFED claims no propagation of an identity change to a
 later resolution: the [conformance matrix](../evaluate/conformance.md) keeps
 track 8 deferred.
+
+### Several replicas
+
+A subscription is named by its `callback_url`, and the Registry sends each
+ITI-93 message once to that URL. How your replicas share the feed follows
+from the `callback_url` you give each of them:
+
+- **One `callback_url` for every replica**, your balancer's address. The
+  replicas share one subscription: the first to start creates it, and the
+  others adopt it. Two replicas that create one each at the same moment are
+  sent each change twice until the next replica start, which keeps one and
+  deletes the other. Keep `on_drain = "keep"`, so a rolling restart never
+  deletes the subscription the other replicas rely on. Each message reaches
+  the one replica the balancer picks, which drops the stale bindings. The
+  other replicas keep theirs until they expire: a binding lives
+  `federation.binding_ttl_ms` after its caller's last resolution
+  ([Resolution bindings](registry.md#resolution-bindings)), so on those
+  replicas a stale binding is routed on until its caller has made no
+  resolution for that long. Lower `binding_ttl_ms` to narrow the window.
+- **A `callback_url` of its own for each replica**, an address the Registry
+  reaches each replica at, such as a StatefulSet pod's stable name. Each
+  replica holds its own subscription, so the Registry sends every change to
+  every replica and each drops its stale bindings as it happens. Set
+  `on_drain = "unsubscribe"`, so a replica deletes its own subscription when
+  it stops; it never touches another replica's. A replica that stops
+  without draining leaves its subscription until it starts again under the
+  same `callback_url` and adopts it, or until you delete it at the Registry.
+
+To stop using the feed with a shared `callback_url`, set `on_drain =
+"unsubscribe"` on the last replica before it stops, or delete the
+subscription at the Registry.

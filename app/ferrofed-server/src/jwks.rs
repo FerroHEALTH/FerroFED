@@ -5,13 +5,13 @@
 //! a JWK Set (RFC 7517 §5), which a node's authorization server verifies
 //! the gateway's client assertions against (§13.1, N25).
 //!
-//! The set holds the current key and, during a rotation's overlap window,
-//! the previous one, then the ES256 client key of each FAPI 2.0 grant, which
-//! that grant's authorization server verifies its `private_key_jwt`
-//! assertions against (FAPI 2.0 Security Profile §5.4.2; Annex B §B.4a.2).
-//! It is public: a node fetches it without
-//! authenticating, and it holds no private key material. A gateway with no
-//! `[signing]` keys answers `404`.
+//! The set holds the current key, the previous one during a rotation's
+//! overlap window, and the next one ahead of a rotation, then the ES256
+//! client key of each FAPI 2.0 grant, which that grant's authorization
+//! server verifies its `private_key_jwt` assertions against (FAPI 2.0
+//! Security Profile §5.4.2; Annex B §B.4a.2). It is public: a node fetches
+//! it without authenticating, and it holds no private key material. A
+//! gateway with no `[signing]` keys answers `404`.
 
 use std::sync::Arc;
 

@@ -14,8 +14,10 @@
 //! SHA-256, so the same key always has the same `kid` and no operator names
 //! one. The previous key is published, and never signs, for one overlap
 //! window from the moment the ring is built ([`KeyRing::new`]), or until the
-//! ring is built again without it ([`KeyRing::until_removed`]). No
-//! specification governs the rotation: our own design.
+//! ring is built again without it ([`KeyRing::until_removed`]). The next
+//! key is published ahead of the rotation and never signs
+//! ([`KeyRing::with_next`]), so every node can hold it before any gateway
+//! signs with it. No specification governs the rotation: our own design.
 
 use std::fmt;
 use std::sync::Arc;
@@ -59,6 +61,13 @@ pub enum KeyError {
     #[error("the previous key is the current key (kid {kid})")]
     SameKey {
         /// The `kid` both keys have.
+        kid: String,
+    },
+    /// The next key is the current or the previous key, so it would be
+    /// published under two roles.
+    #[error("the next key is already the current or the previous key (kid {kid})")]
+    NextReused {
+        /// The `kid` the keys share.
         kid: String,
     },
 }
@@ -174,8 +183,8 @@ impl fmt::Debug for SigningKey {
     }
 }
 
-/// The current signing key, and the previous one while a rotation's overlap
-/// window lasts.
+/// The current signing key, the previous one while a rotation's overlap
+/// window lasts, and the next one ahead of a rotation.
 ///
 /// The current key signs every assertion, with its own algorithm. The
 /// previous key may be on the other curve, so a rotation can move the
@@ -183,11 +192,14 @@ impl fmt::Debug for SigningKey {
 /// is published until the window that started when the ring was built ends,
 /// or for the life of a ring built [`KeyRing::until_removed`], so an
 /// assertion it signed before the rotation still verifies while a node may
-/// hold it (RFC 7517 §5).
+/// hold it (RFC 7517 §5). The next key never signs either, and is published
+/// for the life of the ring, so a node that fetches the set before the
+/// rotation already holds the key the gateway signs with after it.
 #[derive(Debug)]
 pub struct KeyRing {
     current: SigningKey,
     previous: Option<(SigningKey, Option<Instant>)>,
+    next: Option<SigningKey>,
     clock: Arc<dyn Clock>,
 }
 
@@ -218,6 +230,7 @@ impl KeyRing {
         Ok(Self {
             current,
             previous,
+            next: None,
             clock,
         })
     }
@@ -242,8 +255,29 @@ impl KeyRing {
         Ok(Self {
             current,
             previous: Some((previous, None)),
+            next: None,
             clock,
         })
+    }
+
+    /// This ring, publishing `next` beside its keys for as long as it lives,
+    /// never signing with it: the key a later rotation makes current.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyError::NextReused`] when `next` is the current key or the
+    /// previous one.
+    pub fn with_next(mut self, next: SigningKey) -> Result<Self, KeyError> {
+        let reused = next.kid == self.current.kid
+            || self
+                .previous
+                .as_ref()
+                .is_some_and(|(previous, _)| previous.kid == next.kid);
+        if reused {
+            return Err(KeyError::NextReused { kid: next.kid });
+        }
+        self.next = Some(next);
+        Ok(self)
     }
 
     /// The key every assertion is signed with.
@@ -270,13 +304,22 @@ impl KeyRing {
         self.previous.as_ref().map(|(key, _)| key)
     }
 
+    /// The key published ahead of a rotation, which never signs.
+    #[must_use]
+    pub fn next(&self) -> Option<&SigningKey> {
+        self.next.as_ref()
+    }
+
     /// The JWK Set the gateway publishes now: the current key, then the
-    /// previous one while its window lasts (RFC 7517 §5).
+    /// previous one while its window lasts, then the next one (RFC 7517 §5).
     #[must_use]
     pub fn published(&self) -> JwkSet {
         let mut keys = vec![self.current.public.clone()];
         if let Some(previous) = self.previous() {
             keys.push(previous.public.clone());
+        }
+        if let Some(next) = &self.next {
+            keys.push(next.public.clone());
         }
         JwkSet { keys }
     }

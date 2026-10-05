@@ -634,7 +634,9 @@ pub enum ClientAuth {
 ///
 /// The current key signs every client assertion and every conveyance. The
 /// previous key, during a rotation, is published beside it for
-/// `rotation_overlap_s` from the start of the process and never signs. Each
+/// `rotation_overlap_s` from the start of the process and never signs. The
+/// next key, ahead of a rotation, is published beside them and never signs,
+/// so every node holds it before any replica signs with it. Each
 /// is a P-256 or a P-384 private key in PKCS#8 PEM, read from its file at
 /// boot, and signs ES256 or ES384 as its curve says (RFC 7518 §3.4). The
 /// JWK Set is served at
@@ -647,6 +649,12 @@ pub struct Signing {
     pub key_file: Option<PathBuf>,
     /// The file holding the previous key, during a rotation.
     pub previous_key_file: Option<PathBuf>,
+    /// The file holding the next key, published ahead of a rotation and
+    /// never signing.
+    pub next_key_file: Option<PathBuf>,
+    /// The algorithm the next key is meant to sign with, `ES256` or `ES384`;
+    /// unset, the current key's. A next key on another curve is refused.
+    pub next_key_algorithm: Option<SigningAlgorithm>,
     /// The absolute URL nodes fetch the JWK Set from: the gateway's own
     /// `{base}/.well-known/jwks.json` at its public address, or wherever the
     /// deployment publishes the keys (§13.1).
@@ -665,10 +673,36 @@ impl Default for Signing {
         Self {
             key_file: None,
             previous_key_file: None,
+            next_key_file: None,
+            next_key_algorithm: None,
             jwks_uri: None,
             assertion_lifetime_s: 300,
             node_jwks_cache_s: 3600,
             rotation_overlap_s: 3900,
+        }
+    }
+}
+
+/// The algorithm a signing key signs with, which its curve decides (RFC 7518
+/// §3.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[non_exhaustive]
+pub enum SigningAlgorithm {
+    /// ECDSA over P-256 with SHA-256.
+    #[serde(rename = "ES256")]
+    Es256,
+    /// ECDSA over P-384 with SHA-384.
+    #[serde(rename = "ES384")]
+    Es384,
+}
+
+impl SigningAlgorithm {
+    /// The algorithm as the JOSE library names it.
+    #[must_use]
+    pub const fn algorithm(self) -> jsonwebtoken::Algorithm {
+        match self {
+            Self::Es256 => jsonwebtoken::Algorithm::ES256,
+            Self::Es384 => jsonwebtoken::Algorithm::ES384,
         }
     }
 }

@@ -525,14 +525,64 @@ set also publishes the ES256 client key of every `fapi2` section, and its
 previous client key while it is rotated, after the `[signing]` keys; a
 reload that changes a `fapi2` key publishes the new one.
 
-To rotate, make a new key, set it as `key_file`, move the old one to
-`previous_key_file`, and restart. The new key signs from then on, with its
-own algorithm, so a rotation also moves the gateway from ES384 to ES256 or
-back. The JWK
-Set publishes both keys for `rotation_overlap_s` seconds from the start of
-the process, then the current key alone. The overlap must be at least the
-assertion lifetime plus the time the nodes cache the JWK Set, so a node
-still holding the old set, or an assertion the old key signed, finds its
-key. Once the window has passed, remove `previous_key_file`. A change to
-`[signing]` takes effect only on a restart; a reload reports it.
+### Rotating the signing key
+
+`[signing]` holds up to three keys, and the JWK Set publishes each with its
+own `kid`:
+
+| Key | Signs | Published |
+|---|---|---|
+| `key_file` | every token | always |
+| `previous_key_file` | never | for `rotation_overlap_s` from the start of the process |
+| `next_key_file` | never | always |
+
+A node verifies a token by its `kid` (RFC 7515 §4.1.4) against the JWK Set
+it fetched (RFC 7517 §5), and may hold that set for its cache time. A key
+must therefore be in the set a node holds before any gateway signs with it,
+and stay there until every token it signed has expired. The tokens the
+gateway signs live at most `assertion_lifetime_s` (the client assertion,
+300 s at most) or 60 s (the `openEHR-federation-client` token), whichever
+is longer.
+
+The procedure assumes that no node caches the JWK Set longer than
+`node_jwks_cache_s` (3600 s by default). Set it to the longest cache time of
+your nodes and their authorization servers; `config check` refuses a
+`rotation_overlap_s` shorter than `assertion_lifetime_s` plus
+`node_jwks_cache_s`. The three steps hold for one gateway and for any
+number of replicas behind one address:
+
+1. **Publish the new key.** Make the new key, copy it to every replica, set
+   it as `next_key_file`, and restart the replicas one by one. Each
+   restarted replica publishes the current key and the new one, and still
+   signs with the current key. When the last replica runs the new
+   configuration, wait `node_jwks_cache_s` more, so every node's cached set
+   came from a replica that publishes the new key.
+2. **Sign with it.** Set the new key as `key_file`, move the old one to
+   `previous_key_file`, remove `next_key_file`, and restart the replicas one
+   by one. A restarted replica signs with the new key. During the restart
+   every replica publishes both keys: a restarted one as current and
+   previous, one not yet restarted as current and next. A replica publishes
+   the previous key for `rotation_overlap_s` from its own start, so finish
+   this rolling restart within `rotation_overlap_s` minus the longest token
+   lifetime: 3600 s with the defaults. Raise `rotation_overlap_s` before
+   this step for a slower rollout.
+3. **Retire the old key.** Once `rotation_overlap_s` has passed since the
+   last replica restarted, no replica publishes the old key and no token it
+   signed is still valid. Remove `previous_key_file` at your next restart.
+
+The new key signs with its own algorithm, so a rotation can also move the
+gateway from ES384 to ES256 or back. A next key on another curve than the
+current key refuses the configuration, naming `signing.next_key_file`,
+unless `next_key_algorithm` names the algorithm you mean it for:
+
+```toml
+[signing]
+key_file = "/run/secrets/ferrofed-signing-key.pem"            # P-384, signs ES384
+next_key_file = "/run/secrets/ferrofed-signing-key-next.pem"  # P-256
+next_key_algorithm = "ES256"                                  # the move to ES256 is intended
+```
+
+A next key that is already the current or the previous key is refused as
+well. A change to `[signing]` takes effect only on a restart; a reload
+reports it.
 

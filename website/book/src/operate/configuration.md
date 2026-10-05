@@ -219,6 +219,8 @@ authorization_details = '''[{"type": "nl-gis-v1", "purpose_of_use": "http://term
 [signing]
 key_file = "/run/secrets/ferrofed-signing-key.pem"
 # previous_key_file = "/run/secrets/ferrofed-signing-key-previous.pem"
+# next_key_file = "/run/secrets/ferrofed-signing-key-next.pem"   # published ahead, never signs
+# next_key_algorithm = "ES256"   # unset, the current key's algorithm
 jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
 assertion_lifetime_s = 300    # at most 300
 node_jwks_cache_s = 3600      # how long the nodes cache the JWK Set

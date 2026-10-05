@@ -14,6 +14,7 @@ use ferrofed_engine::onward::mtls::Thumbprint;
 use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
 use ferrofed_registry::secret::Secret;
+use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use secrecy::SecretString;
@@ -24,7 +25,7 @@ use crate::config::error::{BasicFault, Error};
 use crate::config::grant;
 use crate::config::settings::{Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault, TlsSettings};
-use crate::config::{Credentials, GrantKind, OAuth2, Signing};
+use crate::config::{Credentials, GrantKind, OAuth2, Signing, SigningAlgorithm};
 
 /// Returns the scheme a service's `credentials` describe, once it is known
 /// to fit the `Authorization` header it is sent in.
@@ -369,9 +370,9 @@ fn resolve_grant(
 }
 
 /// Returns the signing keys and their publication `[signing]` describes:
-/// both keys read from their files, each a P-256 (ES256) or a P-384 (ES384)
-/// key, the assertion
-/// lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
+/// every key read from its file, each a P-256 (ES256) or a P-384 (ES384)
+/// key, the next key on the curve of the algorithm it is meant for, the
+/// assertion lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
 /// that lifetime plus the nodes' JWK Set cache time, and `jwks_uri` an
 /// absolute `http` or `https` URL (§13.1, N25).
 pub(crate) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Error> {
@@ -405,14 +406,33 @@ pub(crate) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Erro
         .as_deref()
         .map(|path| signing_key("signing.previous_key", path))
         .transpose()?;
+    let intended = signing
+        .next_key_algorithm
+        .map_or_else(|| current.algorithm(), SigningAlgorithm::algorithm);
+    let next = signing
+        .next_key_file
+        .as_deref()
+        .map(|path| next_key(path, intended))
+        .transpose()?;
+    if signing.next_key_algorithm.is_some() && next.is_none() {
+        return Err(Error::Missing {
+            key: String::from("signing.next_key_file"),
+        });
+    }
     let overlap = Duration::from_secs(signing.rotation_overlap_s);
-    let keys =
+    let mut keys =
         KeyRing::new(current, previous, overlap, Arc::new(SystemClock)).map_err(|source| {
             Error::SigningKey {
                 key: String::from("signing.previous_key_file"),
                 source,
             }
         })?;
+    if let Some(next) = next {
+        keys = keys.with_next(next).map_err(|source| Error::SigningKey {
+            key: String::from("signing.next_key_file"),
+            source,
+        })?;
+    }
     Ok(SigningSettings {
         keys: Arc::new(keys),
         jwks_uri,
@@ -433,6 +453,30 @@ fn jwks_uri(text: Option<&str>) -> Result<Uri, Error> {
         return Err(Error::HttpUrl { key: key() });
     }
     Uri::new(text).map_err(|_refused| Error::HttpUrl { key: key() })
+}
+
+/// Reads the next signing key from `path`, refused when its curve signs
+/// another algorithm than `intended` (RFC 7518 §3.4).
+fn next_key(path: &Path, intended: Algorithm) -> Result<SigningKey, Error> {
+    let next = signing_key("signing.next_key", path)?;
+    if next.algorithm() != intended {
+        return Err(Error::NextKeyAlgorithm {
+            key: String::from("signing.next_key_file"),
+            found: algorithm_name(next.algorithm()),
+            intended: algorithm_name(intended),
+        });
+    }
+    Ok(next)
+}
+
+/// The name RFC 7518 §3.1 gives `algorithm`, one of the two a signing key
+/// signs with.
+fn algorithm_name(algorithm: Algorithm) -> &'static str {
+    match algorithm {
+        Algorithm::ES256 => "ES256",
+        Algorithm::ES384 => "ES384",
+        _ => "an algorithm other than ES256 and ES384",
+    }
 }
 
 /// Reads the signing key the `_file` sibling of `key` names.

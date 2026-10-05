@@ -43,7 +43,7 @@ use ihe_iti::pmir::feed::Feed;
 use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
 use url::Url;
 
-use crate::binding::ihe::pmir::config::PmirSettings;
+use crate::binding::ihe::pmir::config::{OnDrain, PmirSettings};
 use crate::service::{self, GrantRefused, TlsRefused};
 use ferrofed_registry::health::Observed;
 use subscription::{RegistryFault, Watch};
@@ -82,6 +82,7 @@ pub struct IdentityFeed {
     path: String,
     timeout: Duration,
     check_interval: Duration,
+    on_drain: OnDrain,
     watch: Mutex<Watch>,
 }
 
@@ -92,6 +93,7 @@ impl fmt::Debug for IdentityFeed {
             .field("request", &self.request)
             .field("path", &self.path)
             .field("domains", &self.domains.len())
+            .field("on_drain", &self.on_drain)
             .finish_non_exhaustive()
     }
 }
@@ -141,6 +143,7 @@ impl IdentityFeed {
             path: settings.path.clone(),
             timeout: settings.timeout,
             check_interval: settings.check_interval,
+            on_drain: settings.on_drain,
             watch: Mutex::new(Watch::default()),
         })
     }

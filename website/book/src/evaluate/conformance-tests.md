@@ -193,12 +193,12 @@ with no marked test is not listed.
 
 ## CP-16
 
-23 tests.
+24 tests.
 
 - `app/ferrofed-engine/tests/it/conveyance.rs`: `a_conveyance_header_from_the_client_never_reaches_the_node`, `a_node_the_gateway_has_a_grant_at_knows_it_by_its_client_id`, `a_probe_conveys_the_caller_to_every_member`, `a_query_conveys_the_caller_in_a_token_the_published_key_verifies`, `a_routed_read_and_a_routed_write_convey_the_caller`, `a_stored_query_definition_conveys_the_caller`, `each_node_is_the_audience_of_its_own_token`, `the_admission_checks_ehr_create_and_read_convey_the_gateway`
 - `app/ferrofed-engine/tests/it/exchange.rs`: `the_node_receives_a_token_exchanged_for_the_verified_caller`
 - `app/ferrofed-engine/tests/it/mtls.rs`: `token_exchange_composes_with_mutual_tls`
-- `app/ferrofed-engine/tests/it/signing.rs`: `a_rotation_across_curves_publishes_both_and_signs_with_the_new`, `the_conveyance_is_signed_with_the_current_keys_algorithm`
+- `app/ferrofed-engine/tests/it/signing.rs`: `a_next_key_is_published_ahead_and_never_signs`, `a_rotation_across_curves_publishes_both_and_signs_with_the_new`, `the_conveyance_is_signed_with_the_current_keys_algorithm`
 - `app/ferrofed-server/tests/it/auth/patient.rs`: `a_member_other_than_the_token_s_own_is_told_its_own_ehr_id`, `each_node_is_told_its_own_ehr_id_and_the_covering_patient_scope`
 - `app/ferrofed-server/tests/it/conveyance.rs`: `a_p256_signing_key_conveys_the_caller_es256_beside_the_previous_es384_key`, `a_query_conveys_the_verified_caller_to_each_node_signed_for_it`, `a_query_that_reaches_dispatch_with_no_verified_caller_reaches_no_node`, `a_registry_from_either_source_without_a_signing_key_does_not_load`, `a_routed_read_a_routed_write_and_a_definition_request_convey_the_caller`, `an_edge_asserted_caller_is_conveyed_as_edge_asserted`, `the_ask_all_probe_conveys_the_caller_to_every_member`
 - `app/ferrofed-server/tests/it/e2e/track7.rs` (e2e): `each_node_is_reached_with_its_onward_token_and_told_the_caller`
@@ -206,7 +206,7 @@ with no marked test is not listed.
 
 ## CP-17
 
-150 tests.
+151 tests.
 
 - `app/ferrofed-engine/src/dispatch/dpop.rs`: `a_proof_that_fails_on_the_first_send_is_a_node_error_with_nothing_sent`, `a_proof_that_fails_on_the_nonce_resend_is_a_node_error_of_a_node_that_was_asked`
 - `app/ferrofed-engine/tests/it/audience.rs`: `the_issuer_audience_names_the_issuer`, `the_token_endpoint_is_the_default_audience`
@@ -234,6 +234,7 @@ with no marked test is not listed.
 - `app/ferrofed-server/tests/it/auth/token.rs`: `a_basic_credential_is_401`, `a_query_without_a_token_is_401_and_reaches_no_node`, `a_token_expired_within_the_clock_skew_is_admitted`, `a_token_for_another_audience_is_401`, `a_token_from_an_untrusted_issuer_is_401`, `a_token_naming_an_unpublished_key_is_401`, `a_token_not_typed_as_an_access_token_is_401`, `a_token_not_yet_valid_is_401`, `a_token_signed_by_another_key_under_a_trusted_name_is_401`, `a_token_without_its_client_id_is_401`, `an_admitted_token_reaches_no_node`, `an_expired_token_is_401`, `an_hmac_token_is_401`, `an_unsigned_token_is_401`, `options_root_is_behind_the_gate`, `two_authorization_fields_are_401`
 - `app/ferrofed-server/tests/it/conveyance.rs`: `a_query_conveys_the_verified_caller_to_each_node_signed_for_it`
 - `app/ferrofed-server/tests/it/e2e/track7.rs` (e2e): `a_caller_that_does_not_authenticate_reaches_no_node`, `each_node_is_reached_with_its_onward_token_and_told_the_caller`
+- `app/ferrofed-server/tests/it/next_key.rs`: `the_next_key_is_published_and_never_signs`
 - `app/ferrofed-server/tests/it/onward.rs`: `a_refusal_description_reaches_the_log_and_never_the_answer`, `a_rotation_publishes_the_current_and_the_previous_key`, `a_token_endpoint_down_fails_the_node_and_sends_it_nothing`, `options_declares_the_jwks_uri_and_validates_against_the_schema`, `the_node_receives_the_token_its_endpoint_issued_against_the_published_jwks`
 - `app/ferrofed-server/tests/it/onward_exchange.rs`: `a_dpop_bound_grant_proves_every_request_to_its_node`, `an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent`, `node_a_receives_a_token_exchanged_for_the_verified_caller`, `the_callers_token_reaches_no_log_span_metric_or_conveyed_claim`, `the_exchange_asks_for_the_covering_scope_in_canonical_form`
 - `app/ferrofed-server/tests/it/onward_fapi2.rs`: `a_refused_fapi2_grant_fails_node_a_and_names_no_credential`, `a_rotated_client_key_is_published_beside_the_previous_one_and_alone_signs`, `node_a_receives_the_dpop_bound_fapi2_token`

@@ -124,6 +124,19 @@ the same on every replica and a second `PUT` of it refused on every replica
 - Without `[stored_queries]` no replica offers the registry, and the
   replicas need no shared state at all.
 
+Two more settings take the replica count into account:
+
+- **The identity feed.** Replicas behind one `[pmir] callback_url` share one
+  PMIR subscription, and a drain keeps it for the others (`on_drain =
+  "keep"`, the default). Each identity change reaches one replica; the
+  others keep a stale binding until its lifetime ends. A replica with a
+  `callback_url` of its own holds its own subscription and hears every
+  change ([Several replicas](identity.md#several-replicas)).
+- **Signing-key rotation.** Every replica must publish a new key before any
+  replica signs with it, so a rotation takes three rolling restarts:
+  publish it as `next_key_file`, make it `key_file`, then retire the old
+  one ([Rotating the signing key](onward-credentials.md#rotating-the-signing-key)).
+
 ## Failure behaviour you should know before you run it
 
 - When a node that was asked does not answer, the default is to fail the
