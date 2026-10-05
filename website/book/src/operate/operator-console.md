@@ -117,7 +117,10 @@ behaviour to the gateway. It holds no clinical data.
 Every answer carries a Content-Security-Policy whose script source is a nonce
 minted for that answer, `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`, and no page is
-stored by a cache.
+stored by a cache. The site bundle under `/pkg/` is served brotli- or
+gzip-compressed, as the browser's `Accept-Encoding` chooses; pages and
+server function answers are never compressed, so no compression side
+channel reads what an operator entered.
 
 The query console renders its answer in the browser, so it needs the
 console's WebAssembly bundle: without it the form still posts, and the

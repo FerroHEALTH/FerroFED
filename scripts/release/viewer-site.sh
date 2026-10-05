@@ -36,6 +36,23 @@ if ! cargo metadata --locked --format-version 1 \
   exit 1
 fi
 
+# The bundle names no directory of the build host: the panic locations rustc
+# embeds name the registry, the toolchain and the checkout, and each is
+# remapped to a fixed prefix for the WebAssembly build alone (the rustc book,
+# --remap-path-prefix). Cargo splits the variable on spaces, so a directory
+# with one cannot be remapped and is refused.
+cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+sysroot="$(rustc --print sysroot)"
+for dir in "$cargo_home" "$sysroot" "$root"; do
+  case "$dir" in
+    *" "*)
+      echo "viewer-site: $dir holds a space; its path cannot be remapped" >&2
+      exit 1
+      ;;
+  esac
+done
+export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="--remap-path-prefix=$cargo_home=/cargo --remap-path-prefix=$sysroot=/rustc-sysroot --remap-path-prefix=$root=/ferrofed"
+
 # cargo-leptos reads its configuration from the crate's own manifest
 # directory, so the build runs from there.
 cd "$viewer"

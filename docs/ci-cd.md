@@ -183,7 +183,9 @@ WebAssembly, its JavaScript glue and the stylesheet are all written.
 `scripts/checks/viewer-bundle.sh` then writes the WebAssembly and JavaScript
 sizes, raw and compressed with gzip and brotli, to the job summary, and fails
 when the brotli-compressed WebAssembly is over the byte budget the console's
-rule file sets. The console chooses its two halves by compilation target,
+rule file sets, and `scripts/checks/viewer-paths.sh` fails when the bundle
+names a home, runner, registry or toolchain directory of the build host,
+which `viewer-site.sh` remaps away. The console chooses its two halves by compilation target,
 never by Cargo feature, so the workspace `--all-features` lanes build it like
 any other member and `features (cargo-hack)` has nothing to add for it.
 

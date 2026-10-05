@@ -26,6 +26,8 @@ use leptos::config::LeptosOptions;
 use leptos::nonce::Nonce;
 use leptos_axum::LeptosRoutes as _;
 use serde::Serialize;
+use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{And, Predicate as _, SizeAbove};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::config::settings::Settings;
@@ -138,7 +140,7 @@ pub fn router(state: ViewerState) -> axum::Router {
         .layer(axum::middleware::from_fn(require_session))
         .layer(axum::middleware::from_fn(same_origin_only))
         .layer(Extension(state));
-    with_security_headers(pages).with_state(options)
+    with_security_headers(pages.layer(bundle_compression())).with_state(options)
 }
 
 /// Sends a request for an operator view that carries no live signed-in
@@ -256,6 +258,47 @@ struct Health {
 /// Serves `GET /health`: `200` while the process serves.
 async fn health() -> Response {
     (StatusCode::OK, axum::Json(Health { status: "up" })).into_response()
+}
+
+/// The media types of the site bundle: the WebAssembly, its JavaScript glue
+/// and the stylesheet.
+const BUNDLE_TYPES: [&str; 4] = [
+    "application/wasm",
+    "text/javascript",
+    "application/javascript",
+    "text/css",
+];
+
+/// A test of a response, the shape the compression layer's predicate takes.
+type ResponsePredicate = fn(StatusCode, http::Version, &http::HeaderMap, &http::Extensions) -> bool;
+
+/// Whether a response carries a file of the site bundle, by its media type.
+fn is_bundle(
+    _status: StatusCode,
+    _version: http::Version,
+    headers: &http::HeaderMap,
+    _extensions: &http::Extensions,
+) -> bool {
+    headers
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|media| BUNDLE_TYPES.iter().any(|bundle| media.starts_with(bundle)))
+}
+
+/// Compresses the site bundle with brotli or gzip, as the request's
+/// `Accept-Encoding` chooses, and marks it `Vary: Accept-Encoding`.
+///
+/// Only the bundle is compressed. A document or a server function's answer
+/// carries what the operator entered beside data an attacker would want, so
+/// it is never compressed, which keeps a compression side channel shut
+/// (BREACH). The Leptos book (`deployment/binary_size`) has a site serve its
+/// WebAssembly compressed. No specification governs this: our own design.
+fn bundle_compression() -> CompressionLayer<And<SizeAbove, ResponsePredicate>> {
+    let bundle: ResponsePredicate = is_bundle;
+    CompressionLayer::new()
+        .br(true)
+        .gzip(true)
+        .compress_when(SizeAbove::new(256).and(bundle))
 }
 
 /// Wraps `router` in the browser security headers every response carries.

@@ -305,6 +305,41 @@ changes here and nowhere else.
 
 The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
 
+- **The query console (#277) measured 222085 bytes** brotli-compressed
+  (2026-10-05), inside the budget. Its first cut measured 256392: an
+  `<ActionForm>` parses the URL-encoded form in the browser (about 26 KB
+  compressed), and an answer rendered by components carries its tables'
+  code (about 19 KB). The form now dispatches its action from the browser's
+  own form data, and the answer is rendered on the server and shown as the
+  HTML it wrote. Prefer that shape for any read-only result a page shows.
+- **The bundle is served compressed.** The server compresses a response
+  whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
+  brotli or gzip, as `Accept-Encoding` chooses, and marks it
+  `Vary: Accept-Encoding`, through the `tower-http` compression layer
+  (`deployment/binary_size`). A document and a server function's answer are
+  never compressed: each carries what the operator entered beside data an
+  attacker would want, which a compression side channel (BREACH) could
+  read. `tests/it/server.rs` holds both.
+- **The bundle names no directory of the build host.** The panic locations
+  rustc embeds as data name the source file of every crate, so an
+  unremapped CI build ships `/home/runner/...` and the registry and
+  toolchain paths. `scripts/release/viewer-site.sh` remaps the cargo home,
+  the toolchain sysroot and the checkout to `/cargo`, `/rustc-sysroot` and
+  `/ferrofed` for the WebAssembly build alone
+  (`CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS` with
+  `--remap-path-prefix`; `trim-paths` is unstable), and the `viewer` job's
+  `scripts/checks/viewer-paths.sh` fails when a home, runner, registry or
+  toolchain path appears in the WebAssembly or its JavaScript glue. A
+  `RUSTFLAGS` set in the environment overrides the target variable, and the
+  check then fails.
+- **`panic = "unwind"`, inherited from `release`, does not apply to
+  `wasm32-unknown-unknown`.** The target's standard library is built to
+  abort on a panic, so a panic in the browser prints its message and
+  location through `console_error_panic_hook` and stops the module; the
+  `catch_unwind` that turns a server panic into a `500`
+  (`.claude/rules/reliability.md`) has no browser counterpart. Keep the
+  browser code free of panicking paths for that reason.
+
 ## 13. Icons
 
 - **Icons come from `leptos_icons` with the Lucide pack alone**:
