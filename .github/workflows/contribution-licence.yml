@@ -22,6 +22,10 @@ name: Contribution licence
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
+  # The merge queue asks every required check again for the queued commit.
+  # A merge group has no pull-request body; each pull request in it passed
+  # this guard on its own body before it could join the queue.
+  merge_group:
 
 permissions: {}
 
@@ -39,6 +43,11 @@ jobs:
           persist-credentials: false
 
       - name: The pull request body accepts the contribution licensing terms
+        if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: bash scripts/checks/contribution-licence.sh
+
+      - name: Every pull request in the merge group passed this guard
+        if: github.event_name == 'merge_group'
+        run: echo "checked on each pull request before it joined the queue"
