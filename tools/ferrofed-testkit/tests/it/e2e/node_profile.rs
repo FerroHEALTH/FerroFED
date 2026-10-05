@@ -1,0 +1,315 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The Federation-Node profile run against the harness CDR products, behind
+//! the `FERROFED_E2E` gate (§16.2; N26, N27, N34; CP-18, CP-19, CP-27).
+//!
+//! A gateway cannot prove a node's obligations, so these tests score nothing
+//! of the gateway's. Each runs one check of `node_profile` against FerroEHR,
+//! the CDR every harness node runs, and writes its finding to the findings
+//! directory, which the conformance report shows as the node class. A test
+//! fails when the check could not observe what the harness arranged for it,
+//! never on the node's verdict: FerroEHR is a node here, never the oracle,
+//! and its verdict is the report's to show.
+#![allow(
+    clippy::panic_in_result_fn,
+    reason = "test assertions in tests that return their setup errors"
+)]
+
+use std::collections::BTreeMap;
+use std::error::Error;
+use std::path::Path;
+
+use ferrofed_registry::id::EndpointId;
+use ferrofed_server::admission::report::Condition;
+use ferrofed_server::config::Config;
+use ferrofed_server::federation::Federation;
+use ferrofed_testkit::containers::{
+    self, FERROEHR, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode, RESTRICTED_ADMIN,
+    RESTRICTED_CLINICIAN,
+};
+use ferrofed_testkit::node_profile::{
+    self, Arrangement, Check, Credential, Finding, Interface, Profile, Verdict, checks,
+};
+use ferrofed_testkit::pix::PixManager;
+use ferrofed_testkit::seed::{
+    self, CompositionSeed, DemoComposition, EhrDomain, EhrSeed, PatientId, SeedPlan,
+};
+use ferrofed_testkit::{oauth, unreachable};
+use openehr_its::json::from_canonical_json;
+use openehr_rm::v1_2::ehr::ehr::Ehr;
+use uuid::Uuid;
+
+type TestResult = Result<(), Box<dyn Error>>;
+
+/// The EHR the invocation check reads.
+const EHR: Uuid = Uuid::from_u128(0x9393_9393_9393_4393_8393_0000_0000_0093);
+
+/// The synthetic patient that EHR is recorded for.
+const PATIENT: PatientId = PatientId::new(1, 93);
+
+/// The number of test EHRs the admission check creates.
+const COUNT: u8 = 3;
+
+/// The product every harness node runs, as the report names it.
+fn product() -> String {
+    format!("FerroEHR {}", FERROEHR.tag)
+}
+
+/// Records `finding` for FerroEHR in the findings file `name`.
+fn record(finding: Finding, name: &str) -> TestResult {
+    let mut profile = Profile::new(product());
+    profile.record(finding);
+    profile.write(&node_profile::findings_dir(), &format!("ferroehr-{name}"))?;
+    Ok(())
+}
+
+// conformance: CP-27
+#[tokio::test]
+async fn ferroehr_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let node = ProxiedNode::new(containers::ferroehr(NODE_A_SYSTEM_ID).await?).await?;
+    let plan = SeedPlan {
+        ehrs: vec![EhrSeed {
+            ehr_id: EHR,
+            subject: Some(PATIENT),
+        }],
+        template: true,
+        compositions: vec![CompositionSeed {
+            ehr_id: EHR,
+            composition: DemoComposition::FirstClinic,
+        }],
+    };
+    seed::seed(&node.api_root(), &plan).await?;
+    node.proxy.clear_journal();
+
+    let finding = checks::invocable_on_ehr_id(&Interface::new(&node.api_root())?, EHR).await?;
+    assert_eq!(4, finding.evidence().len(), "{finding:?}");
+
+    let journal = node.proxy.journal();
+    assert_eq!(4, journal.len(), "one request per observation");
+    for value in [PATIENT.value(), PATIENT.namespace()] {
+        assert!(
+            !node.proxy.journal_contains(value.as_bytes()),
+            "no request the check sent carries the patient's identifier"
+        );
+    }
+    for capture in &journal {
+        assert!(
+            capture.contains(EHR.to_string().as_bytes()),
+            "each request names the EHR by its ehr_id: {} {}",
+            capture.method,
+            capture.path
+        );
+    }
+    record(finding, "invocable-on-ehr-id")
+}
+
+// conformance: CP-27
+#[tokio::test]
+async fn ferroehr_is_checked_for_an_ehr_created_without_a_subject() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let node = containers::ferroehr(NODE_A_SYSTEM_ID).await?;
+
+    let finding = checks::subject_not_required(&Interface::new(&node.api_root())?).await?;
+    assert!(!finding.evidence().is_empty(), "{finding:?}");
+    record(finding, "subject-not-required")
+}
+
+// conformance: CP-18
+#[tokio::test]
+async fn ferroehr_is_checked_for_passing_its_errors_through() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let node = containers::ferroehr(NODE_A_SYSTEM_ID).await?;
+
+    let finding = checks::errors_passed_through(&Interface::new(&node.api_root())?).await?;
+    assert_eq!(3, finding.evidence().len(), "{finding:?}");
+    record(finding, "errors-passed-through")
+}
+
+/// Creates an EHR at the restricted node of `api_root` as its administrator
+/// and returns its `ehr_id`.
+async fn created_by_the_administrator(api_root: &str) -> Result<Uuid, Box<dyn Error>> {
+    let answer = reqwest::Client::new()
+        .post(format!("{api_root}/v1/ehr"))
+        .basic_auth(RESTRICTED_ADMIN.user, Some(RESTRICTED_ADMIN.password))
+        .header("Accept", "application/json")
+        .header("Prefer", "return=representation")
+        .send()
+        .await?
+        .error_for_status()?;
+    let ehr: Ehr = from_canonical_json(&answer.text().await?)?;
+    Ok(Uuid::try_parse(ehr.ehr_id.value())?)
+}
+
+// conformance: CP-18
+#[tokio::test]
+async fn ferroehr_is_checked_for_holding_its_own_access_decision() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let node = containers::ferroehr_restricted(NODE_A_SYSTEM_ID).await?;
+    let ehr_id = created_by_the_administrator(&node.api_root()).await?;
+    let arrangement = Arrangement::new(
+        ehr_id,
+        Credential::basic(RESTRICTED_ADMIN.user, RESTRICTED_ADMIN.password),
+        Credential::basic(RESTRICTED_CLINICIAN.user, RESTRICTED_CLINICIAN.password),
+    );
+
+    let finding =
+        checks::access_decided_at_node(&Interface::new(&node.api_root())?, &arrangement).await?;
+    assert_ne!(
+        Verdict::NotObservable,
+        finding.verdict(),
+        "the harness arranged a refusal the node shows: {finding:?}"
+    );
+    record(finding, "access-decided-at-node")
+}
+
+// conformance: CP-19
+#[tokio::test]
+async fn ferroehr_has_no_consent_refusal_arranged_in_the_harness() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let finding = Finding::not_arranged(
+        Check::ConsentBeforeRelease,
+        "the harness arranges no consent refusal at this product: ITS-REST defines no consent resource, and the harness records no consent decision at the node, so nothing at its interface shows a consent check",
+    );
+    assert_eq!(Verdict::NotObservable, finding.verdict());
+    record(finding, "consent-before-release")
+}
+
+/// The registry of member A, which the check never contacts, and the
+/// candidate node B at `candidate`.
+fn registry(candidate: &str) -> String {
+    let unreachable = unreachable::BASE;
+    format!(
+        r#"
+[[organisation]]
+id = "org-a"
+
+[[organisation]]
+id = "org-b"
+
+[[node]]
+id = "node-a"
+organisation = "org-a"
+system_id = "{NODE_A_SYSTEM_ID}"
+
+[[node]]
+id = "node-b"
+organisation = "org-b"
+system_id = "{NODE_B_SYSTEM_ID}"
+
+[[endpoint]]
+id = "node-a-pub"
+node = "node-a"
+url = "{unreachable}/node-a"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-a"
+
+[[endpoint]]
+id = "node-b-pub"
+node = "node-b"
+url = "{candidate}"
+connection_type = "openehr-rest-query"
+managing_organisation = "org-b"
+"#
+    )
+}
+
+/// The federation over `registry`, resolving through the harness PIX Manager
+/// at `pix`, written into `dir` with a synthetic signing key beside it.
+fn federation(dir: &Path, registry: &str, pix: &str) -> Result<Federation, Box<dyn Error>> {
+    let document = dir.join("registry.toml");
+    std::fs::write(&document, registry)?;
+    let key = dir.join("signing-key.pem");
+    std::fs::write(&key, oauth::es384_pem()?)?;
+    let quoted = |path: &Path| toml::Value::String(path.display().to_string());
+    let text = format!(
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{pix}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n",
+        EhrDomain::new(1).system(),
+        EhrDomain::new(2).system(),
+        quoted(&document),
+        quoted(&key)
+    );
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    Federation::load(&settings)?.ok_or_else(|| "a registry is configured".into())
+}
+
+/// The finding of the admission check's `condition`, recorded under the
+/// points it assists.
+fn integrity(
+    condition: Condition,
+    verdict: ferrofed_server::admission::report::Verdict,
+    evidence: &[String],
+) -> Finding {
+    let points: &'static [&'static str] = match condition {
+        Condition::EhrIdExchange => &["CP-27", "CP-33a"],
+        _ => &["CP-33a"],
+    };
+    let verdict = match verdict {
+        ferrofed_server::admission::report::Verdict::Pass => Verdict::Pass,
+        ferrofed_server::admission::report::Verdict::Fail => Verdict::Fail,
+        ferrofed_server::admission::report::Verdict::CannotCheck => Verdict::NotObservable,
+    };
+    Finding::new(
+        Check::IdentifierIntegrity {
+            condition: condition.name(),
+            points,
+        },
+        verdict,
+        evidence.to_vec(),
+    )
+}
+
+// conformance: CP-27 CP-33a
+#[tokio::test]
+async fn ferroehr_is_checked_against_the_identifier_integrity_conditions() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let candidate = containers::ferroehr(NODE_B_SYSTEM_ID).await?;
+    let pix = PixManager::start().await?;
+    let dir = tempfile::tempdir()?;
+    let federation = federation(
+        dir.path(),
+        &registry(&candidate.api_root()),
+        &pix.base_url(),
+    )?;
+
+    let report =
+        ferrofed_server::admission::check(&federation, &EndpointId::new("node-b-pub")?, COUNT)
+            .await?;
+    assert_eq!(
+        usize::from(COUNT),
+        report.created().len(),
+        "the check reached the node and created its test EHRs: {report}"
+    );
+    assert_eq!(
+        5,
+        report.findings().len(),
+        "one finding per §12b.2 condition"
+    );
+
+    let mut profile = Profile::new(product());
+    for finding in report.findings() {
+        profile.record(integrity(
+            finding.condition(),
+            finding.verdict(),
+            finding.evidence(),
+        ));
+    }
+    profile.write(
+        &node_profile::findings_dir(),
+        "ferroehr-identifier-integrity",
+    )?;
+    Ok(())
+}
