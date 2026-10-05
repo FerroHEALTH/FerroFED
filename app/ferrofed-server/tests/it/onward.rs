@@ -410,17 +410,17 @@ async fn a_refusal_description_reaches_the_log_and_never_the_answer() -> TestRes
 }
 
 /// `config check` refuses an OAuth 2.0 grant it cannot use, naming the key:
-/// a P-256 key, a missing `client_id`, a missing `[signing]`, a scope
-/// outside the `system` grammar, a lifetime past 300 s, an overlap shorter
-/// than the lifetime plus the nodes' cache time, a token endpoint with a
-/// query, and a `jwks_uri` that is no URL.
+/// a key on neither P-256 nor P-384 (a P-521 key), a missing `client_id`, a
+/// missing `[signing]`, a scope outside the `system` grammar, a lifetime
+/// past 300 s, an overlap shorter than the lifetime plus the nodes' cache
+/// time, a token endpoint with a query, and a `jwks_uri` that is no URL.
 #[test]
 fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
     let dir = tempfile::tempdir()?;
     let good_key = key_file(dir.path(), "good.pem")?;
-    let p256 = dir.path().join("p256.pem");
-    std::fs::write(&p256, oauth::p256_pem()?)?;
-    let p256 = toml::Value::String(p256.display().to_string());
+    let p521 = dir.path().join("p521.pem");
+    std::fs::write(&p521, oauth::p521_pem()?)?;
+    let p521 = toml::Value::String(p521.display().to_string());
     let grant = oauth2("https://idp.example.org/token");
     let signing_with = |extra: &str, key: &toml::Value| {
         format!("[signing]\nkey_file = {key}\njwks_uri = \"{JWKS_URI}\"\n{extra}\n")
@@ -432,7 +432,7 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
         }
     };
 
-    let error = resolve(&format!("{}{grant}", signing_with("", &p256)))?;
+    let error = resolve(&format!("{}{grant}", signing_with("", &p521)))?;
     assert!(
         matches!(&error, ConfigError::SigningKey { key, .. } if key == "signing.key_file"),
         "{error:?}"
@@ -480,7 +480,7 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
     Ok(())
 }
 
-/// The binary's `config check` refuses a key file that holds no ES384 key,
+/// The binary's `config check` refuses a key file that holds no signing key,
 /// naming the key and quoting no part of the file.
 #[test]
 fn config_check_refuses_a_bad_key_naming_its_key() -> TestResult {

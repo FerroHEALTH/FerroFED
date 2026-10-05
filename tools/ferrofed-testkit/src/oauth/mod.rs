@@ -44,8 +44,8 @@ use std::time::Duration;
 
 use aws_lc_rs::rand::SystemRandom;
 use aws_lc_rs::signature::{
-    ECDSA_P256_SHA256_FIXED_SIGNING, ECDSA_P384_SHA384_FIXED_SIGNING, EcdsaKeyPair,
-    EcdsaSigningAlgorithm,
+    ECDSA_P256_SHA256_FIXED_SIGNING, ECDSA_P384_SHA384_FIXED_SIGNING,
+    ECDSA_P521_SHA512_FIXED_SIGNING, EcdsaKeyPair, EcdsaSigningAlgorithm,
 };
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
@@ -98,6 +98,16 @@ pub fn es384_pem() -> Result<String, KeyGenError> {
 /// Returns [`KeyGenError`] when the crypto library cannot generate one.
 pub fn p256_pem() -> Result<String, KeyGenError> {
     generated(&ECDSA_P256_SHA256_FIXED_SIGNING)
+}
+
+/// A fresh P-521 private key in PKCS#8 PEM, a key neither ES256 nor ES384
+/// can sign with.
+///
+/// # Errors
+///
+/// Returns [`KeyGenError`] when the crypto library cannot generate one.
+pub fn p521_pem() -> Result<String, KeyGenError> {
+    generated(&ECDSA_P521_SHA512_FIXED_SIGNING)
 }
 
 fn generated(algorithm: &'static EcdsaSigningAlgorithm) -> Result<String, KeyGenError> {

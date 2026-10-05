@@ -260,8 +260,8 @@ pub enum Error {
         #[source]
         source: InvalidCredentials,
     },
-    /// A signing key cannot be used: it is no ES384 private key in PKCS#8
-    /// PEM, or the previous key is the current one.
+    /// A signing key cannot be used: it is no P-256 or P-384 private key in
+    /// PKCS#8 PEM, or the previous key is the current one.
     #[error("{key} is not a usable signing key")]
     SigningKey {
         /// The key the file was named by.

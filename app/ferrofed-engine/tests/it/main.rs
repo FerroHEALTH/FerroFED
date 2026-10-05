@@ -30,4 +30,5 @@ mod nuts;
 mod onward;
 mod pins;
 mod probe;
+mod signing;
 mod timing;

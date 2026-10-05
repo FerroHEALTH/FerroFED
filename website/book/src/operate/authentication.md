@@ -341,8 +341,8 @@ ask-all probe and the read of an EHR by subject. The value is a compact JWS
 the gateway signs for that one node with the current key of `[signing]`,
 the key whose public half it publishes at `{base}/.well-known/jwks.json` and
 declares as `federation.auth.jwks_uri` in `OPTIONS {base}/`. Its JOSE header
-names `alg` `ES384`, the key's `kid` and `typ`
-`openehr-federation-client+jwt`. Its claims:
+names `alg`, `ES256` for a P-256 key and `ES384` for a P-384 key, the
+key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 
 | Claim | Value |
 |---|---|
@@ -393,7 +393,9 @@ release, and audits who asked:
 2. Read exactly one `openEHR-federation-client` value; refuse a request with
    none or with more than one.
 3. Check the JOSE header: `typ` is `openehr-federation-client+jwt` and `alg`
-   is `ES384`. Refuse any other algorithm, `none` included (RFC 8725 §3.1).
+   is the `alg` the gateway's JWK Set publishes for the key the header names,
+   `ES256` or `ES384`. Refuse any other algorithm, `none` included (RFC 8725
+   §3.1).
 4. Verify the signature with the key of the gateway's JWK Set whose `kid`
    the header names. Fetch the set again when the `kid` is unknown: during a
    rotation the set publishes the current and the previous key.

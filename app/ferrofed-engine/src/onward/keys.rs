@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The gateway's signing keys: the ES384 key every onward client assertion
-//! is signed with, the previous key kept published through a rotation, and
-//! the JWK Set (RFC 7517 §5) that publishes them.
+//! The gateway's signing keys and the JWK Set (RFC 7517 §5) that publishes
+//! them.
 //!
-//! A key is read from PKCS#8 PEM and held to the P-384 curve ES384 signs
-//! with (RFC 7518 §3.4). A grant whose profile admits no ES384, the FAPI 2.0
-//! grant, signs with a P-256 key of its own instead
+//! The `[signing]` key signs every onward client assertion and every
+//! conveyance, and the previous key stays published through a rotation.
+//! A key is read from PKCS#8 PEM, and its curve decides its algorithm
+//! (RFC 7518 §3.4): a P-256 key signs ES256, a P-384 key ES384
+//! ([`SigningKey::from_ec_pem`]). A grant whose profile admits no ES384, the
+//! FAPI 2.0 grant, holds a P-256 key of its own
 //! ([`SigningKey::from_p256_pem`]). Its `kid` is its RFC 7638 JWK thumbprint over
 //! SHA-256, so the same key always has the same `kid` and no operator names
 //! one. The previous key is published, and never signs, for one overlap
@@ -23,10 +25,6 @@ use jsonwebtoken::{Algorithm, EncodingKey};
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::onward::Clock;
-
-/// The JWS algorithm every onward client assertion is signed with, ECDSA
-/// over P-384 with SHA-384 (RFC 7518 §3.4).
-pub const ALGORITHM: Algorithm = Algorithm::ES384;
 
 /// The media type of a JWK Set document (RFC 7517 §8.5.1).
 pub const JWK_SET_MEDIA_TYPE: &str = "application/jwk-set+json";
@@ -48,6 +46,10 @@ pub enum KeyError {
     /// §3.4).
     #[error("the key is not a P-256 key, the curve ES256 signs with (RFC 7518 §3.4)")]
     CurveP256(#[source] jsonwebtoken::errors::Error),
+    /// The key is on neither P-256 nor P-384, the curves ES256 and ES384
+    /// sign with (RFC 7518 §3.4).
+    #[error("the key is on neither P-256 (ES256) nor P-384 (ES384) (RFC 7518 §3.4)")]
+    CurveUnsupported(#[source] jsonwebtoken::errors::Error),
     /// The key's RFC 7638 thumbprint could not be computed.
     #[error("the RFC 7638 thumbprint of the key could not be computed")]
     Thumbprint(#[source] jsonwebtoken::errors::Error),
@@ -80,7 +82,26 @@ impl SigningKey {
     /// PKCS#8 PEM, [`KeyError::Curve`] for a key on a curve other than P-384,
     /// and [`KeyError::Thumbprint`] when its `kid` cannot be computed.
     pub fn from_pem(pem: &SecretString) -> Result<Self, KeyError> {
-        Self::read(pem, ALGORITHM, KeyError::Curve)
+        Self::read(pem, Algorithm::ES384, KeyError::Curve)
+    }
+
+    /// Reads the private key `pem` holds in PKCS#8 PEM, its algorithm
+    /// read from its curve: a P-256 key signs ES256, a P-384 key ES384
+    /// (RFC 7518 §3.4).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyError::Pem`] for text that is no EC private key in
+    /// PKCS#8 PEM, [`KeyError::CurveUnsupported`] for a key on neither
+    /// curve, and [`KeyError::Thumbprint`] when its `kid` cannot be
+    /// computed.
+    pub fn from_ec_pem(pem: &SecretString) -> Result<Self, KeyError> {
+        match Self::read(pem, Algorithm::ES256, KeyError::CurveP256) {
+            Err(KeyError::CurveP256(_not_p256)) => {
+                Self::read(pem, Algorithm::ES384, KeyError::CurveUnsupported)
+            }
+            read => read,
+        }
     }
 
     /// Reads the ES256 private key `pem` holds in PKCS#8 PEM.
@@ -117,9 +138,8 @@ impl SigningKey {
         })
     }
 
-    /// The algorithm the key signs with: `ES384` for a key read with
-    /// [`SigningKey::from_pem`], `ES256` for one read with
-    /// [`SigningKey::from_p256_pem`].
+    /// The algorithm the key signs with: `ES256` for a P-256 key, `ES384`
+    /// for a P-384 key.
     #[must_use]
     pub fn algorithm(&self) -> Algorithm {
         self.algorithm
@@ -156,7 +176,9 @@ impl fmt::Debug for SigningKey {
 /// The current signing key, and the previous one while a rotation's overlap
 /// window lasts.
 ///
-/// The current key signs every assertion. The previous key never signs, and
+/// The current key signs every assertion, with its own algorithm. The
+/// previous key may be on the other curve, so a rotation can move the
+/// gateway from ES384 to ES256 or back. The previous key never signs, and
 /// is published until the window that started when the ring was built ends,
 /// so an assertion it signed before the rotation still verifies while a node
 /// may hold it (RFC 7517 §5).
