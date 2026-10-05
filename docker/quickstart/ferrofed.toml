@@ -41,9 +41,10 @@ audience = "ferrofed-quickstart"
 issuer = "ferrofed-quickstart-issuer"
 jwks_file = "/etc/ferrofed/issuer/jwks.json"
 
-# The gateway's own ES384 signing key. Every request to a node carries the
-# caller's identity in an openEHR-federation-client token signed with it
-# (§13.1, N24), and the gateway publishes its public half at jwks_uri.
+# The gateway's own signing key, P-384 (ES384) here; a P-256 key signs
+# ES256. Every request to a node carries the caller's identity in an
+# openEHR-federation-client token signed with it (§13.1, N24), and the
+# gateway publishes its public half at jwks_uri.
 # scripts/quickstart/signing-key.sh writes it into docker/quickstart/signing/
 # before the first `docker compose up`, which compose.yaml mounts here: a
 # development key, NOT for anything real. The FerroEHR nodes of the

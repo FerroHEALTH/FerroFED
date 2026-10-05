@@ -627,10 +627,12 @@ pub enum ClientAuth {
 
 /// The gateway's signing keys and their publication (§13.1, N25).
 ///
-/// The current key signs every client assertion. The previous key, during a
-/// rotation, is published beside it for `rotation_overlap_s` from the start
-/// of the process and never signs. Both are ES384 (P-384) private keys in
-/// PKCS#8 PEM, read from files at boot. The JWK Set is served at
+/// The current key signs every client assertion and every conveyance. The
+/// previous key, during a rotation, is published beside it for
+/// `rotation_overlap_s` from the start of the process and never signs. Each
+/// is a P-256 or a P-384 private key in PKCS#8 PEM, read from its file at
+/// boot, and signs ES256 or ES384 as its curve says (RFC 7518 §3.4). The
+/// JWK Set is served at
 /// `{base}/.well-known/jwks.json`, and `jwks_uri` is the absolute URL the
 /// `OPTIONS {base}/` body declares for it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

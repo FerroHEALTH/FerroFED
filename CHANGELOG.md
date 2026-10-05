@@ -68,6 +68,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `differential-report` artifact. No difference is a FerroFED defect; three
   reference divergences and one specification question are new upstream
   reports (#212 T190 to T193).
+- `[signing]` holds a P-256 key as well as a P-384 key, and reads the
+  algorithm from the key: a P-256 key signs ES256 and a P-384 key ES384
+  (RFC 7518 §3.4) (#513). The current key signs the
+  `openEHR-federation-client` conveyance and every `oauth2` client assertion
+  with its own algorithm, and the JWK Set publishes each key with its `alg`,
+  through the same previous-key rotation window, which may cross curves. A
+  federation whose nodes hold to the FAPI 2.0 Security Profile, which admits
+  ES256 and not ES384 (§5.4.1), signs with a P-256 key. A key on any other
+  curve refuses the configuration, naming the key.
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at

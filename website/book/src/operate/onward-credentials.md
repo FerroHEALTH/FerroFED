@@ -11,7 +11,7 @@ page, which obtain a token at the node's authorization server before the
 request:
 
 - `oauth2`: the client-credentials grant or token exchange, authenticated
-  by an ES384 assertion signed with the `[signing]` key;
+  by an ES256 or ES384 assertion signed with the `[signing]` key;
 - `nuts`: the Nuts track of the Dutch Generic Functions (Annex B §B.4);
 - `fapi2`: an authorization server under the FAPI 2.0 Security Profile,
   such as the BgZ/eOverdracht track (Annex B §B.4a).
@@ -29,8 +29,9 @@ An `oauth2` section makes the gateway authenticate to that node as itself
 (§13.1, N25). Before a request, it asks the node's token endpoint for an
 access token with the client-credentials grant (RFC 6749 §4.4). It
 authenticates there with a JWT client assertion (RFC 7523 §2.2), signed
-ES384 with the `[signing]` key. The assertion names `client_id` as its
-`iss` and `sub` and the token endpoint as its `aud`, lives
+with the `[signing]` key, ES256 or ES384 as its curve says. The assertion
+names `client_id` as its `iss` and `sub` and the token endpoint as its
+`aud`, lives
 `assertion_lifetime_s` seconds, and carries a fresh `jti`. The token request
 carries `scope` and, when set, `resource` and `audience`. Every key of the
 section is required except those two and the assertion audience below:
@@ -354,7 +355,7 @@ other endpoint, and its `issuer` must be `https`.
 | `grant` | `client_credentials` or `token_exchange`. `authorization_code` refuses the configuration. |
 | `client_id` | The client the server registered the gateway as, the assertion's `iss` and `sub`. On the §B.4a track, the organisation's URA-based identifier. |
 | `client_auth` | `private_key_jwt`, when unset, or `tls_client_auth` or `self_signed_tls_client_auth`, the node section's certificate ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). |
-| `client_key_file` | The key every assertion is signed with: a P-256 private key in PKCS#8 PEM. The profile admits PS256, ES256 and EdDSA for a JWT (§5.4.1), so the ES384 `[signing]` key cannot sign here. Required with `private_key_jwt`, and with `token_exchange` for the actor token. |
+| `client_key_file` | The key every assertion is signed with: a P-256 private key in PKCS#8 PEM. The profile admits PS256, ES256 and EdDSA for a JWT (§5.4.1), so a P-384 key cannot sign here. Required with `private_key_jwt`, and with `token_exchange` for the actor token. |
 | `dpop_key_file` | A P-256 private key in PKCS#8 PEM. Required unless the tokens are bound to the certificate: the profile issues only sender-constrained tokens (§5.3.2.1). |
 | `tls_client_certificate_bound_access_tokens` | `true` binds the tokens to the node section's certificate in place of `DPoP` (§5.3.2.1; RFC 8705 §3). Never beside `dpop_key_file`. |
 | `scope` | Optional SMART on openEHR `system` scopes, as in an `oauth2` section. |
@@ -394,18 +395,30 @@ What the gateway does not do on this track:
 
 ## Signing keys and the JWK Set
 
-`[signing]` holds the gateway's ES384 keys: P-384 private keys in PKCS#8
-PEM, each read from a file. It is required whenever a registry is
-configured, by `registry.document` or by `[registry.mcsd]`: every request
-to a node carries the caller's identity in an `openEHR-federation-client`
-token signed with the current key
+`[signing]` holds the gateway's signing keys: P-256 or P-384 private keys
+in PKCS#8 PEM, each read from a file. The curve decides the algorithm: a
+P-256 key signs ES256 and a P-384 key ES384 (RFC 7518 §3.4), and the JWK
+Set publishes each key with its `alg`. It is required whenever a registry
+is configured, by `registry.document` or by `[registry.mcsd]`: every
+request to a node carries the caller's identity in an
+`openEHR-federation-client` token signed with the current key
 ([Client authentication](authentication.md#what-a-node-is-told-about-the-caller);
 §13.1, N24), and a federating gateway without the key refuses to start,
 naming it. The current key signs every client assertion of an `oauth2`
-grant too. To make a key:
+grant too. A key on another curve refuses the configuration, naming the
+key. To make a key:
 
 ```text
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out ferrofed-signing-key.pem
+```
+
+Choose P-256 when a node holds to the FAPI 2.0 Security Profile, which
+admits PS256, ES256 and EdDSA for a JWT and not ES384 (§5.4.1), so such a
+node may refuse an ES384 token. The one key then signs ES256 for every
+node:
+
+```text
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out ferrofed-signing-key.pem
 ```
 
 The gateway serves its public keys as a JWK Set (RFC 7517) at
@@ -418,7 +431,9 @@ set also publishes the ES256 client key of every `fapi2` section, after the
 `[signing]` keys; a reload that changes a `fapi2` key publishes the new one.
 
 To rotate, make a new key, set it as `key_file`, move the old one to
-`previous_key_file`, and restart. The new key signs from then on. The JWK
+`previous_key_file`, and restart. The new key signs from then on, with its
+own algorithm, so a rotation also moves the gateway from ES384 to ES256 or
+back. The JWK
 Set publishes both keys for `rotation_overlap_s` seconds from the start of
 the process, then the current key alone. The overlap must be at least the
 assertion lifetime plus the time the nodes cache the JWK Set, so a node

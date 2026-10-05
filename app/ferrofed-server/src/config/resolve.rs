@@ -61,7 +61,7 @@ impl Config {
     /// an unusable endpoint or resource ([`Error::Grant`]), a PIX Manager
     /// section ([`Error::GrantNotHere`]) and a missing `[signing]`
     /// ([`Error::GrantWithoutSigning`]); `[signing]` refuses a key that is no
-    /// ES384 key ([`Error::SigningKey`]), an assertion lifetime past five
+    /// P-256 or P-384 key ([`Error::SigningKey`]), an assertion lifetime past five
     /// minutes ([`Error::AssertionLifetime`]), an overlap window shorter than
     /// that lifetime plus the nodes' cache time ([`Error::RotationOverlap`]),
     /// and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
