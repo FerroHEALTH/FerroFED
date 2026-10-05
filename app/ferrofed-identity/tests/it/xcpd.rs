@@ -10,6 +10,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
@@ -36,14 +37,14 @@ pub(crate) fn node(id: &str) -> Result<NodeId, Box<dyn Error>> {
     Ok(id.parse()?)
 }
 
-fn patient() -> Result<PatientRef, Box<dyn Error>> {
+pub(crate) fn patient() -> Result<PatientRef, Box<dyn Error>> {
     Ok(PatientRef::new(
         IdentifierNamespace::new("urn:oid:2.999.1")?,
         PATIENT_VALUE.into(),
     )?)
 }
 
-fn members() -> Result<Vec<NodeId>, Box<dyn Error>> {
+pub(crate) fn members() -> Result<Vec<NodeId>, Box<dyn Error>> {
     Ok(vec![node("node-a")?, node("node-b")?])
 }
 
@@ -86,6 +87,7 @@ pub(crate) async fn localize(localizer: &XcpdLocalizer) -> Result<Localization, 
         .localize(
             &patient()?,
             &members()?,
+            &OnBehalfOf::Gateway,
             Instant::now() + Duration::from_secs(2),
         )
         .await)
@@ -182,6 +184,7 @@ async fn a_silent_gateway_runs_out_the_budget() -> TestResult {
         .localize(
             &patient()?,
             &members()?,
+            &OnBehalfOf::Gateway,
             Instant::now() + Duration::from_millis(300),
         )
         .await;
@@ -390,7 +393,12 @@ async fn a_discovery_whose_audit_is_not_stored_by_the_deadline_fails_closed_in_t
     let budget = Duration::from_millis(300);
     let asked = Instant::now();
     let answer = localizer
-        .localize(&patient()?, &members()?, asked + budget)
+        .localize(
+            &patient()?,
+            &members()?,
+            &OnBehalfOf::Gateway,
+            asked + budget,
+        )
         .await;
     let waited = asked.elapsed();
     if waited >= budget + Duration::from_secs(3) {
@@ -436,6 +444,7 @@ async fn an_audit_failure_outranks_another_gateway_s_timeout() -> TestResult {
         .localize(
             &patient()?,
             &members()?,
+            &OnBehalfOf::Gateway,
             Instant::now() + Duration::from_millis(500),
         )
         .await;

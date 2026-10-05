@@ -17,7 +17,7 @@ use std::error::Error;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mcsd::HarnessDirectory;
 
-use super::{SETTLE, audit_tables, spool_key, spooled, transactions};
+use super::{SETTLE, audit_tables, names_no_caller, spool_key, spooled, transactions};
 use crate::registry_mcsd::{Gateway, config, members};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -57,6 +57,24 @@ async fn the_first_read_and_each_refresh_are_recorded() -> TestResult {
     assert_eq!(4, all.len(), "one ITI-91 history per resource type");
     for record in all.iter().skip(2) {
         assert_eq!(vec!["ITI-91"], transactions(record)?);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_directory_reads_are_the_gateway_s_own_and_name_no_caller() -> TestResult {
+    let harness = HarnessDirectory::start().await;
+    harness.publish(&members(
+        "https://cdr-a.example.org/openehr",
+        "https://cdr-b.example.org/openehr",
+    ))?;
+    let repository = FeedRepository::start().await;
+    let gateway = Gateway::boot_from(&audited(&harness, &repository, ""))?;
+    let _outcome = gateway.directory.refresh(&gateway.reloader).await;
+    let all = repository.wait_for(4, SETTLE).await;
+    assert_eq!(4, all.len(), "the first read and a refresh");
+    for record in &all {
+        names_no_caller(record)?;
     }
     Ok(())
 }

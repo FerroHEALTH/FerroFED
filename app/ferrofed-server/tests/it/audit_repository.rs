@@ -271,6 +271,62 @@ async fn each_discovery_reaches_the_audit_repository_without_the_identifier_in_a
 }
 
 #[tokio::test]
+async fn each_discovery_names_the_verified_caller_as_its_human_requestor_toward_the_repository_only()
+-> TestResult {
+    let servers = members().await;
+    let [a, b, c] = urls(&servers);
+    let stub = holding().await;
+    let repository = AuditRepository::start().await?;
+    let dir = tempfile::tempdir()?;
+    let keys = reaching(dir.path(), &repository, "")?;
+    let (app, _state) = gateway(&config(
+        dir.path(),
+        "development",
+        [&a, &b, &c],
+        &stub.endpoint(),
+        &keys,
+    )?)?;
+    let logs = crate::support::Logs::default();
+    let capture = ferrofed_server::telemetry::subscriber(
+        ferrofed_server::telemetry::Rendering::Json,
+        "trace",
+        false,
+        logs.clone(),
+    )?;
+    let guard = tracing::subscriber::set_default(capture);
+    let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
+    let messages = repository.wait_for(1, SETTLE).await;
+    drop(guard);
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(1, messages.len(), "one ITI-20 message per exchange");
+    let claims = crate::support::claims();
+    // NOTE: ITI TF-2 §3.55.5.1.1 Human Requestor UserID is the human's identity, and IUA
+    // ITI TF-2 §3.72.5.1 writes the JWT's aud, sub and iss into UserName.
+    let requestor = format!(
+        "<ActiveParticipant UserID=\"{sub}\" UserName=\"{aud}&lt;{sub}@{iss}&gt;\" UserIsRequestor=\"true\">",
+        sub = claims.sub,
+        aud = claims.aud,
+        iss = claims.iss,
+    );
+    assert!(messages[0].contains(&requestor), "{}", messages[0]);
+    assert_eq!(
+        1,
+        messages[0].matches("UserIsRequestor=\"true\"").count(),
+        "the caller alone is the requestor (DICOM PS3.15 A.5.2)"
+    );
+    let log = logs.text();
+    let exposition = Metrics::default().render()?;
+    for value in [&claims.sub, &claims.client_id] {
+        assert!(!log.contains(value.as_str()), "no caller in the log: {log}");
+        assert!(
+            !exposition.contains(value.as_str()),
+            "no caller in a metric"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_repository_that_is_down_holds_the_messages_and_shows_it() -> TestResult {
     let servers = members().await;
     let [a, b, c] = urls(&servers);

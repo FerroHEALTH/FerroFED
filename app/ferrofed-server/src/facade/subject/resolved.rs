@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::patient::PatientRef;
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -69,9 +70,9 @@ impl<'a> Resolved<'a> {
     }
 }
 
-/// Resolves `patient` at every endpoint of `candidates` before `deadline`,
-/// except where the consent pre-filter `denied` the member and the deployment
-/// discloses consent exclusions.
+/// Resolves `patient` at every endpoint of `candidates` on behalf of
+/// `on_behalf` before `deadline`, except where the consent pre-filter
+/// `denied` the member and the deployment discloses consent exclusions.
 ///
 /// Without a cross-reference service, every candidate is unanswered: the
 /// gateway fails closed, as a federated query does. Where the deployment does
@@ -81,7 +82,7 @@ impl<'a> Resolved<'a> {
 pub(super) async fn resolve<'a>(
     federation: &Federation,
     candidates: Vec<&'a Endpoint>,
-    (patient, denied): (&PatientRef, &BTreeSet<NodeId>),
+    (patient, denied, on_behalf): (&PatientRef, &BTreeSet<NodeId>, &OnBehalfOf),
     deadline: Instant,
 ) -> Resolved<'a> {
     let disclosed = federation.discloses_consent();
@@ -94,7 +95,9 @@ pub(super) async fn resolve<'a>(
         .collect();
     let mut answers = match federation.resolver() {
         Some(resolver) if !members.is_empty() => {
-            resolver.resolve(patient, &members, deadline).await
+            resolver
+                .resolve(patient, &members, on_behalf, deadline)
+                .await
         }
         Some(_) | None => BTreeMap::new(),
     };

@@ -94,6 +94,7 @@ impl Localizer for StubLocalizer {
         &self,
         _patient: &PatientRef,
         _members: &[NodeId],
+        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> Localization {
         self.asked.fetch_add(1, Ordering::SeqCst);

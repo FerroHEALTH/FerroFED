@@ -45,6 +45,8 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
+use crate::balp::{audited_as, logged_as};
+use crate::behalf::OnBehalfOf;
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
@@ -57,8 +59,9 @@ pub const AUDIT_TARGET: &str = "ferrofed::audit";
 /// to its audit repository.
 ///
 /// The event carries every field of the message but the query parameters,
-/// which name the patient identifier: it says that they were recorded, and
-/// never what they hold. It accepts every event.
+/// which name the patient identifier, and the Human Requestor, a caller the
+/// gateway verified: it says that the one was recorded and whether the
+/// other was named, and never what they hold. It accepts every event.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LogAudit;
 
@@ -83,6 +86,7 @@ impl AuditRecorder for LogAudit {
             destination_access_point_type = access_point_type,
             destination_access_point = %access_point,
             home_community = event.home_community.as_ref().map(ToString::to_string),
+            on_behalf = logged_as(&event.on_behalf),
             participant_object_query = "recorded, not logged",
             "ITI-55 Cross Gateway Patient Discovery audit message"
         );
@@ -385,11 +389,13 @@ impl XcpdLocalizer {
         Oid::new(namespace.as_str()).ok()
     }
 
-    /// The discovery of `patient`, or why there is none.
+    /// The discovery of `patient` on behalf of `on_behalf`, or why there is
+    /// none.
     async fn discover(
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> Result<Localization, LocalizerError> {
         let backend = |error: XcpdLocalizeError| LocalizerError::Backend(Box::new(error));
@@ -421,7 +427,9 @@ impl XcpdLocalizer {
         if timeout.is_zero() {
             return Err(LocalizerError::DeadlineExceeded);
         }
-        let mut answers = self.broadcast(&query, assertion, timeout).await;
+        let mut answers = self
+            .broadcast((&query, assertion), &audited_as(on_behalf), timeout)
+            .await;
         // NOTE: ITI TF-2 §3.55.5.1, §14.1: an exchange whose audit was not recorded is
         // reported as that before any other failure, since no failure policy may widen it.
         let unaudited = answers
@@ -476,12 +484,13 @@ impl XcpdLocalizer {
         })
     }
 
-    /// Asks every gateway at once, within `timeout`; each answer in gateway
-    /// order, `None` for a task that did not finish.
+    /// Asks every gateway at once, on behalf of `on_behalf`, within
+    /// `timeout`; each answer in gateway order, `None` for a task that did
+    /// not finish.
     async fn broadcast(
         &self,
-        query: &DiscoveryQuery,
-        assertion: Option<XuaAssertion>,
+        (query, assertion): (&DiscoveryQuery, Option<XuaAssertion>),
+        on_behalf: &ihe_iti::user::OnBehalfOf,
         timeout: Duration,
     ) -> Vec<Option<Result<Discovery, XcpdError>>> {
         let mut tasks = JoinSet::new();
@@ -490,9 +499,10 @@ impl XcpdLocalizer {
             let gateway = gateway.clone();
             let query = query.clone();
             let assertion = assertion.clone();
+            let on_behalf = on_behalf.clone();
             tasks.spawn(async move {
                 let answer = client
-                    .discover(&gateway, &query, assertion.as_ref(), timeout)
+                    .discover(&gateway, &query, assertion.as_ref(), &on_behalf, timeout)
                     .await;
                 (index, answer)
             });
@@ -529,9 +539,10 @@ impl Localizer for XcpdLocalizer {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> Localization {
-        match self.discover(patient, members, deadline).await {
+        match self.discover(patient, members, on_behalf, deadline).await {
             Ok(localization) => localization,
             Err(error) => Localization::Unavailable(error),
         }

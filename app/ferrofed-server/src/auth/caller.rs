@@ -13,6 +13,7 @@
 
 use std::fmt;
 
+use ferrofed_identity::behalf::{self, OnBehalfOf};
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::consent::Requester;
 use ferrofed_identity::patient::IdentifierNamespace;
@@ -21,7 +22,10 @@ use openehr_sdt::smart_scopes::SmartScope;
 use secrecy::{ExposeSecret, SecretString};
 
 /// A caller the gateway verified.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Debug` shows how the caller was verified and what it was granted, and
+/// none of its issuer, subject, client or token.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Caller {
     /// The issuer that vouched for the caller (`iss`).
     issuer: String,
@@ -29,6 +33,9 @@ pub struct Caller {
     subject: String,
     /// The client the caller used (`client_id`).
     client_id: String,
+    /// The audience the caller's token was admitted under: the one this
+    /// gateway is known by, which every admitted token names in `aud`.
+    audience: Option<String>,
     /// The caller's organisation: the IHE IUA `subject_organization_id`,
     /// when the token carries one.
     organisation: Option<String>,
@@ -57,6 +64,23 @@ pub struct Caller {
     /// `[auth.issuer.requester]` names state it, when the token carries them
     /// all (§13.4).
     requester: Option<Requester>,
+}
+
+impl fmt::Debug for Caller {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const REDACTED: &str = "<redacted>";
+        f.debug_struct("Caller")
+            .field("issuer", &REDACTED)
+            .field("subject", &REDACTED)
+            .field("client_id", &REDACTED)
+            .field("granted", &self.granted)
+            .field("purposes", &self.purposes)
+            .field("verified_by", &self.verified_by)
+            .field("token", &self.token)
+            .field("covering", &self.covering)
+            .field("confined", &self.patient.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 /// The patient a caller's `patient/` grant is confined to: the token's
@@ -166,6 +190,7 @@ impl Caller {
             issuer: stated.issuer,
             subject: stated.subject,
             client_id: stated.client_id,
+            audience: None,
             organisation: stated.organisation,
             granted: stated.granted,
             scopes,
@@ -177,6 +202,45 @@ impl Caller {
             patient: None,
             requester: None,
         }
+    }
+
+    /// Returns this caller, admitted under `audience`, the audience their
+    /// token names this gateway by.
+    #[must_use]
+    pub fn with_audience(mut self, audience: Option<String>) -> Self {
+        self.audience = audience;
+        self
+    }
+
+    /// Returns the audience the caller's token names this gateway by, when
+    /// the gate checked one.
+    #[must_use]
+    pub fn audience(&self) -> Option<&str> {
+        self.audience.as_deref()
+    }
+
+    /// Returns whom an identity exchange made for this caller's request is
+    /// on behalf of: this caller, as an IHE audit record names its user from
+    /// the token (PIXm §2:3.83.5.2.1, BALP 1.1.4 §3:5.7.5.4).
+    #[must_use]
+    pub fn on_behalf(&self) -> OnBehalfOf {
+        OnBehalfOf::Caller(
+            behalf::Caller::new(
+                self.issuer.clone(),
+                self.subject.clone(),
+                self.client_id.clone(),
+            )
+            .with_audience(self.audience.clone())
+            .with_purposes(
+                self.purposes
+                    .iter()
+                    .map(|purpose| behalf::Purpose {
+                        system: purpose.system.clone(),
+                        code: purpose.code.clone(),
+                    })
+                    .collect(),
+            ),
+        )
     }
 
     /// Returns this caller, asking for the data as `requester` states.
@@ -409,5 +473,17 @@ mod tests {
             caller("ab", "c", "d").session(),
             caller("a", "bc", "d").session()
         );
+    }
+
+    #[test]
+    fn debug_shows_no_issuer_subject_or_client() {
+        let shown = format!(
+            "{:?}",
+            caller("https://issuer.example.test", "Qz7-sub-71", "Qz7-client-72")
+        );
+        for value in ["issuer.example.test", "Qz7-sub-71", "Qz7-client-72"] {
+            assert!(!shown.contains(value), "{value} in {shown}");
+        }
+        assert!(shown.contains("Signature"), "{shown}");
     }
 }

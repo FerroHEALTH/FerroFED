@@ -111,6 +111,7 @@ impl Resolver for KnownAt {
         &self,
         _patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         members

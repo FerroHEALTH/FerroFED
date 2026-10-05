@@ -72,10 +72,45 @@ async fn an_assertion_of_the_edge_admits_and_is_recorded() -> TestResult {
     assert!(
         text.lines()
             .any(|line| line.contains("edge-identity-asserted")
-                && line.contains("synthetic-clinician-at-the-edge")
-                && line.contains(EDGE)),
-        "the asserted identity is recorded: {text}"
+                && line.contains(EDGE)
+                && line.contains("\"subject_ref\":\"")
+                && line.contains("\"client_ref\":\"")),
+        "the asserted identity is recorded by its references: {text}"
     );
+    for value in [claims.sub.as_str(), claims.client_id.as_str()] {
+        assert!(!text.contains(value), "the log names no caller: {text}");
+    }
+    Ok(())
+}
+
+/// One caller's edge events carry one reference, and another caller's
+/// another, so the security log correlates them without naming either.
+#[tokio::test]
+async fn the_edge_event_references_are_stable_per_caller() -> TestResult {
+    let edge = Issuer::new(EDGE)?;
+    let gateway = Gateway::with(at_the_edge(&edge)).await?;
+    let mut first = Claims::new(EDGE, AUDIENCE);
+    first.sub = String::from("synthetic-clinician-one");
+    let mut second = Claims::new(EDGE, AUDIENCE);
+    second.sub = String::from("synthetic-clinician-two");
+    let logs = Logs::default();
+    let capture = subscriber(Rendering::Json, "info", false, logs.clone())?;
+    let guard = tracing::subscriber::set_default(capture);
+    for claims in [&first, &first, &second] {
+        assert_admitted(&gateway, asserted(&edge.mint(claims)?)?).await?;
+    }
+    drop(guard);
+    let text = logs.text();
+    let references: Vec<&str> = text
+        .lines()
+        .filter(|line| line.contains("edge-identity-asserted"))
+        .filter_map(|line| line.split("\"subject_ref\":\"").nth(1))
+        .filter_map(|rest| rest.split('"').next())
+        .collect();
+    assert_eq!(3, references.len(), "{text}");
+    assert_eq!(references[0], references[1], "one caller, one reference");
+    assert_ne!(references[0], references[2], "another caller, another");
+    assert!(!text.contains("synthetic-clinician"), "{text}");
     Ok(())
 }
 

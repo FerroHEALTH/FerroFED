@@ -12,6 +12,9 @@
 //!
 //! - [`patient`]: [`PatientRef`](patient::PatientRef), the patient
 //!   identifier as the gateway carries it, redacted everywhere (§5.4, N33);
+//! - [`behalf`]: [`OnBehalfOf`](behalf::OnBehalfOf), whom each role is asked
+//!   for, the verified caller or the gateway itself, which an audited
+//!   binding names in its audit record;
 //! - [`resolver`]: the [`Resolver`](resolver::Resolver) seam (N3, §5.2);
 //! - [`localizer`]: the [`Localizer`](localizer::Localizer) seam, which
 //!   members might hold a patient's data (N4, §14.1);
@@ -56,6 +59,7 @@
 pub mod atna;
 #[cfg(feature = "ihe")]
 pub mod balp;
+pub mod behalf;
 pub mod binding;
 pub mod consent;
 pub mod demographics;

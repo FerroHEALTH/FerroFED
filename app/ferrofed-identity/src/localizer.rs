@@ -18,6 +18,7 @@ use ferrofed_registry::id::NodeId;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::behalf::OnBehalfOf;
 use crate::patient::PatientRef;
 
 /// Why a localizer could not answer.
@@ -89,11 +90,13 @@ pub enum Localization {
 /// answer names members of `members` only; the core ignores any other.
 #[async_trait]
 pub trait Localizer: Send + Sync {
-    /// Localizes `patient` among `members` before `deadline`.
+    /// Localizes `patient` among `members` on behalf of `on_behalf` before
+    /// `deadline`.
     async fn localize(
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> Localization;
 }

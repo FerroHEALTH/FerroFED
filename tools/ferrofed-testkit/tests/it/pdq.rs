@@ -18,6 +18,7 @@ use ihe_iti::pdqm::error::PdqmError;
 use ihe_iti::pdqm::input::MatchInput;
 use ihe_iti::pdqm::matches::MatchGrade;
 use ihe_iti::pdqm::query::PatientQuery;
+use ihe_iti::user::OnBehalfOf;
 use secrecy::SecretString;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -50,7 +51,7 @@ async fn a_search_by_identifier_answers_the_patient_with_its_master_identifier_o
     supplier.add(&[(LOCAL, "L-1"), (MASTER, "M-1")], true)?;
     supplier.add(&[(LOCAL, "L-2"), (MASTER, "M-2")], true)?;
     let page = client(&supplier)?
-        .search(&by_identifier("L-1")?, PROMPT)
+        .search(&by_identifier("L-1")?, &OnBehalfOf::System, PROMPT)
         .await?;
     assert_eq!(1, page.total(), "§2:3.78.4.1.3, Case 1");
     let [matched] = page.patients() else {
@@ -81,7 +82,7 @@ async fn an_unknown_identifier_is_a_total_of_zero() -> TestResult {
     let supplier = PdqSupplier::start().await?;
     supplier.add(&[(LOCAL, "L-1"), (MASTER, "M-1")], true)?;
     let page = client(&supplier)?
-        .search(&by_identifier("L-9")?, PROMPT)
+        .search(&by_identifier("L-9")?, &OnBehalfOf::System, PROMPT)
         .await?;
     assert_eq!(0, page.total(), "§2:3.78.4.1.3, Case 3");
     Ok(())
@@ -92,7 +93,7 @@ async fn a_domain_no_patient_carries_is_not_recognized() -> TestResult {
     let supplier = PdqSupplier::start().await?;
     supplier.add(&[(LOCAL, "L-1")], true)?;
     let error = client(&supplier)?
-        .search(&by_identifier("L-1")?, PROMPT)
+        .search(&by_identifier("L-1")?, &OnBehalfOf::System, PROMPT)
         .await
         .expect_err("the master domain is unknown");
     assert!(
@@ -107,7 +108,9 @@ async fn a_match_answers_a_certain_match() -> TestResult {
     let supplier = PdqSupplier::start().await?;
     supplier.add(&[(LOCAL, "L-1"), (MASTER, "M-1")], true)?;
     let input = MatchInput::new(LOCAL, &SecretString::from("L-1"))?.only_certain_matches(true);
-    let found = client(&supplier)?.match_patient(&input, PROMPT).await?;
+    let found = client(&supplier)?
+        .match_patient(&input, &OnBehalfOf::System, PROMPT)
+        .await?;
     let [matched] = found.patients() else {
         panic!("one match");
     };
@@ -122,10 +125,14 @@ async fn several_matches_under_only_certain_matches_are_the_zero_result_set() ->
     supplier.add(&[(LOCAL, "L-1"), (MASTER, "M-1")], true)?;
     supplier.add(&[(LOCAL, "L-1"), (MASTER, "M-2")], true)?;
     let certain = MatchInput::new(LOCAL, &SecretString::from("L-1"))?.only_certain_matches(true);
-    let found = client(&supplier)?.match_patient(&certain, PROMPT).await?;
+    let found = client(&supplier)?
+        .match_patient(&certain, &OnBehalfOf::System, PROMPT)
+        .await?;
     assert!(found.patients().is_empty(), "§2:3.119.4.1.3, Case 5");
     let any = MatchInput::new(LOCAL, &SecretString::from("L-1"))?;
-    let found = client(&supplier)?.match_patient(&any, PROMPT).await?;
+    let found = client(&supplier)?
+        .match_patient(&any, &OnBehalfOf::System, PROMPT)
+        .await?;
     assert_eq!(2, found.patients().len(), "§2:3.119.4.1.3, Case 2");
     Ok(())
 }

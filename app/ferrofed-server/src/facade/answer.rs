@@ -19,6 +19,7 @@ use ferrofed_engine::fanout::{
 };
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::consent::Requester;
 use ferrofed_registry::id::EhrId;
@@ -26,6 +27,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::Analysis;
 use openehr_federation::aql::refusal::Refusal;
+use openehr_federation::aql::subject::Subject;
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::generated::query::ResultSet;
@@ -56,6 +58,7 @@ pub(crate) async fn answer(
         started,
         session,
         requester,
+        on_behalf,
     } = arrived;
     let completion = match completeness::of(headers, federation.best_effort()) {
         Ok(completion) => completion,
@@ -83,6 +86,7 @@ pub(crate) async fn answer(
         conveyance,
         session,
         requester,
+        on_behalf,
     };
     match federate(federation, query).await {
         Ok((status, mut result_set, provenance)) => {
@@ -246,6 +250,8 @@ struct Query<'a> {
     session: Option<&'a SessionKey>,
     /// Who asks for the data, as the verified caller's token states it.
     requester: Option<&'a Requester>,
+    /// The verified caller every identity exchange is made for.
+    on_behalf: &'a OnBehalfOf,
 }
 
 /// Drops the `session`'s bindings that name a member the consent pre-filter
@@ -315,6 +321,7 @@ async fn federate(
         conveyance,
         session,
         requester,
+        on_behalf,
     } = query;
     let logged = outbound.to_string();
     let request_id = logged.as_str();
@@ -323,7 +330,8 @@ async fn federate(
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
-    confine(federation, conveyance, &analysis, (deadline, request_id)).await?;
+    let caller = (conveyance, on_behalf);
+    confine(federation, caller, &analysis, (deadline, request_id)).await?;
     let scope = scoped::Scoped {
         headers,
         session,
@@ -334,18 +342,13 @@ async fn federate(
     };
     let routed = scoped::routed(federation, &analysis, named.as_ref(), scope).await?;
     let selection = plan::Selection::of(named.as_ref(), routed.map(|owner| owner.endpoint.id()));
-    let (targets, subject) = match &analysis {
-        Analysis::Patient(query) => (
-            plan::patient(federation, selection, (query, requester), deadline)
-                .await
-                .map_err(Failure::Plan)?,
-            Some(query.subject()),
-        ),
-        Analysis::Unscoped(query) => (
-            plan::unscoped(federation.snapshot(), selection, query).map_err(Failure::Plan)?,
-            None,
-        ),
-    };
+    let (targets, subject) = targeted(
+        federation,
+        (&analysis, selection),
+        (requester, on_behalf),
+        deadline,
+    )
+    .await?;
     if confined::is_confined(conveyance)
         && !within(federation.snapshot(), conveyance, &analysis, &targets)
     {
@@ -407,15 +410,49 @@ async fn federate(
     Ok((status, result_set, acting))
 }
 
+/// The targets of `analysis` within `selection`, with the subject a patient
+/// query names: a patient query is localized, consent-checked and resolved
+/// for `requester` on behalf of `on_behalf` before `deadline`
+/// ([`plan::patient`]), and any other query is planned as it stands.
+///
+/// # Errors
+///
+/// Returns [`Failure::Plan`] when the targets cannot be planned.
+async fn targeted<'q>(
+    federation: &Federation,
+    (analysis, selection): (&'q Analysis, plan::Selection<'_>),
+    (requester, on_behalf): (Option<&Requester>, &OnBehalfOf),
+    deadline: Instant,
+) -> Result<(plan::Targets, Option<&'q Subject>), Failure> {
+    Ok(match analysis {
+        Analysis::Patient(query) => (
+            plan::patient(
+                federation,
+                selection,
+                (query, requester, on_behalf),
+                deadline,
+            )
+            .await
+            .map_err(Failure::Plan)?,
+            Some(query.subject()),
+        ),
+        Analysis::Unscoped(query) => (
+            plan::unscoped(federation.snapshot(), selection, query).map_err(Failure::Plan)?,
+            None,
+        ),
+    })
+}
+
 /// Refuses, when the caller in `conveyance` is confined to one patient, a
 /// query whose node queries read beyond the one `EHR` each is scoped to, and
 /// a query that names another patient than the confined one.
 ///
 /// A query beyond the one `EHR` names neither a patient nor an `ehr_id`, or
 /// has a class beside that `EHR`, a second `EHR`, or an `EHR` under
-/// `NOT CONTAINS`. A named patient is resolved at the bound member alone
-/// before `deadline` ([`confined::names_own`]), so no localizer, consent
-/// pre-filter or other member learns of another patient.
+/// `NOT CONTAINS`. A named patient is resolved at the bound member alone,
+/// on behalf of `on_behalf`, before `deadline` ([`confined::names_own`]), so
+/// no localizer, consent pre-filter or other member learns of another
+/// patient.
 ///
 /// # Errors
 ///
@@ -424,7 +461,7 @@ async fn federate(
 /// cannot be checked at the bound member.
 async fn confine(
     federation: &Federation,
-    conveyance: &Conveyance,
+    (conveyance, on_behalf): (&Conveyance, &OnBehalfOf),
     analysis: &Analysis,
     (deadline, request_id): (Instant, &str),
 ) -> Result<(), Failure> {
@@ -439,7 +476,7 @@ async fn confine(
     }
     if let Analysis::Patient(query) = analysis {
         let patient = plan::patient_ref(query.subject()).map_err(Failure::Plan)?;
-        let own = confined::names_own(federation, confinement, &patient, deadline)
+        let own = confined::names_own(federation, confinement, &patient, on_behalf, deadline)
             .await
             .map_err(Failure::Unconfirmed)?;
         if !own {

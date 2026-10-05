@@ -22,6 +22,7 @@ use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::consent::Requester;
 use ferrofed_identity::localizer::OnFailure;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
@@ -178,10 +179,12 @@ struct Membership {
 /// which N37 requires of a member that was not in scope.
 ///
 /// The patient is then resolved at every remaining candidate before
-/// `deadline`. A member that knows the patient is asked its node query; one
-/// that does not is `not-resolved`, which fails nothing (N6); one the
-/// resolver could not answer for is `not-resolved` with the resolver's error,
-/// which fails the query (§11.3 covers only an answered lookup; no
+/// `deadline`. Every identity exchange is made on behalf of `on_behalf`, the
+/// verified caller, whom an audited exchange's record names as its user
+/// (PIXm §2:3.83.5.2.1). A member that knows the patient is asked its node
+/// query; one that does not is `not-resolved`, which fails nothing (N6); one
+/// the resolver could not answer for is `not-resolved` with the resolver's
+/// error, which fails the query (§11.3 covers only an answered lookup; no
 /// specification governs this: our own design). Without a resolver, every
 /// candidate is the last case: the gateway fails closed.
 ///
@@ -191,7 +194,7 @@ struct Membership {
 pub async fn patient(
     federation: &Federation,
     selection: Selection<'_>,
-    (query, requester): (&PatientQuery, Option<&Requester>),
+    (query, requester, on_behalf): (&PatientQuery, Option<&Requester>, &OnBehalfOf),
     deadline: Instant,
 ) -> Result<Targets, TargetsError> {
     let resolver = federation.resolver();
@@ -201,7 +204,7 @@ pub async fn patient(
     let undirected = matches!(selection, Selection::Undirected);
     let (patient, unidentified, withheld) = named(
         federation,
-        query,
+        (query, on_behalf),
         (members.is_empty(), undirected),
         deadline,
     )
@@ -210,7 +213,7 @@ pub async fn patient(
     let located = match (&unidentified, &patient) {
         (Some(Unidentified::ClosedOut(failure)), _) => Localized::closed(failure.clone()),
         (None, Some(patient)) if undirected => {
-            localize(federation, patient, &members, deadline).await
+            localize(federation, (patient, on_behalf), &members, deadline).await
         }
         _ => Localized::everyone(),
     };
@@ -233,7 +236,7 @@ pub async fn patient(
     let unknown = if disclosed { UNKNOWN } else { UNAVAILABLE };
     let resolutions = match (resolver, &patient, &unidentified) {
         (Some(resolver), Some(patient), None) if !candidates.is_empty() => {
-            resolve(resolver, patient, &candidates, deadline).await
+            resolve(resolver, (patient, on_behalf), &candidates, deadline).await
         }
         _ => BTreeMap::new(),
     };
@@ -315,18 +318,19 @@ fn unresolved(
     }
 }
 
-/// Asks `resolver` for `patient`'s `ehr_id` at each of `members` before
-/// `deadline`, inside the `resolve` span, which names how many members were
-/// asked and how many resolved, never the patient.
+/// Asks `resolver` for `patient`'s `ehr_id` at each of `members` on behalf
+/// of `on_behalf` before `deadline`, inside the `resolve` span, which names
+/// how many members were asked and how many resolved, never the patient and
+/// never the caller.
 async fn resolve(
     resolver: &dyn Resolver,
-    patient: &PatientRef,
+    (patient, on_behalf): (&PatientRef, &OnBehalfOf),
     members: &[NodeId],
     deadline: Instant,
 ) -> BTreeMap<NodeId, Resolution> {
     let span = tracing::info_span!("resolve", members = members.len(), resolved = Empty);
     let resolutions = resolver
-        .resolve(patient, members, deadline)
+        .resolve(patient, members, on_behalf, deadline)
         .instrument(span.clone())
         .await;
     let count = resolutions
@@ -377,7 +381,7 @@ impl Unidentified {
 /// reference.
 async fn named(
     federation: &Federation,
-    query: &PatientQuery,
+    (query, on_behalf): (&PatientQuery, &OnBehalfOf),
     (no_member, undirected): (bool, bool),
     deadline: Instant,
 ) -> Result<(Option<PatientRef>, Option<Unidentified>, Withheld), TargetsError> {
@@ -391,7 +395,8 @@ async fn named(
         return Ok((None, None, Withheld::new(withheld)));
     }
     let named = patient_ref(query.subject())?;
-    let (master, unidentified) = identified(federation, &named, undirected, deadline).await;
+    let (master, unidentified) =
+        identified(federation, (&named, on_behalf), undirected, deadline).await;
     withheld.extend(master.as_ref().map(PatientRef::withheld));
     Ok((
         Some(master.unwrap_or(named)),
@@ -413,11 +418,11 @@ async fn named(
 /// our own design).
 async fn identified(
     federation: &Federation,
-    named: &PatientRef,
+    (named, on_behalf): (&PatientRef, &OnBehalfOf),
     undirected: bool,
     deadline: Instant,
 ) -> (Option<PatientRef>, Option<Unidentified>) {
-    match demographics::identify(federation, named, deadline).await {
+    match demographics::identify(federation, (named, on_behalf), deadline).await {
         Identified::AsNamed => (None, None),
         Identified::Master(master) => (Some(master), None),
         Identified::NoMatch(error) => (None, Some(Unidentified::NoMatch(ErrorDetail::Text(error)))),

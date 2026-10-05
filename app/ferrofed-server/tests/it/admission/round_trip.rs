@@ -40,6 +40,40 @@ async fn the_round_trip_passes_when_the_cross_reference_knows_each_new_ehr() -> 
     Ok(())
 }
 
+#[cfg(feature = "binding-ihe")]
+#[tokio::test]
+async fn the_round_trip_s_audit_records_are_the_gateway_s_own_and_name_no_caller() -> TestResult {
+    use ferrofed_testkit::atna_feed::FeedRepository;
+
+    use crate::feed_audit::{SETTLE, audit_tables, names_no_caller, transactions};
+
+    let (a, issued) = node(&V4, SYSTEM_A).await;
+    let pix = manager(&issued, 0).await;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let federation = federation(
+        dir.path(),
+        &registry(&a.uri(), unreachable::BASE, ""),
+        "profile = \"development\"",
+        &format!("{}\n{}", pixm(&pix.uri()), audit_tables(&repository, "")),
+    )?;
+    let report = check_a(&federation).await?;
+    assert_eq!(
+        Verdict::Pass,
+        verdict(&report, Condition::EhrIdExchange)?,
+        "{report}"
+    );
+    let records = repository.wait_for(1, SETTLE).await;
+    assert!(!records.is_empty(), "the ITI-83 exchanges are recorded");
+    for record in &records {
+        assert_eq!(vec!["ITI-83"], transactions(record)?);
+        // NOTE: PIXm §2:3.83.5.2.1 names the user a token authorized; the admission check
+        // asks for no caller, so its records name none, as BALP's NoUser examples do.
+        names_no_caller(record)?;
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn the_round_trip_fails_when_the_cross_reference_names_another_ehr() -> TestResult {
     let (a, issued) = node(&V4, SYSTEM_A).await;
