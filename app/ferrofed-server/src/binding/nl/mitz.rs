@@ -31,20 +31,31 @@
 //! of [`transport`]. No specification governs the shape of the table: our
 //! own design.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::mitz::{is_pseudonym_system, is_purpose};
+use ferrofed_identity::consent::ConsentPrefilter;
+use ferrofed_identity::dev::Profile;
+use ferrofed_identity::mitz::{
+    HolderConfig, MitzConfig, MitzPrefilter, is_pseudonym_system, is_purpose,
+};
+use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 
+use crate::binding::nl::NlGfSettings;
 use crate::config::error::Error;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::secrets::{resolve_credentials, secret};
-use crate::config::settings::Scheme;
+use crate::config::settings::{Scheme, Settings};
 use crate::config::{Config, Credentials, transport};
+use crate::federation::error::FederationError;
+use crate::service;
 
 /// The key of the Mitz table.
 pub const MITZ_KEY: &str = "nl_gf.mitz";
@@ -192,10 +203,7 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(
-        credentials,
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
-    ) {
+    if credentials.as_ref().is_some_and(Scheme::is_grant) {
         return Err(Error::GrantNotHere { section });
     }
     // NOTE: Implementatiehandleiding §3.3: the question travels over TLS, and it carries
@@ -237,7 +245,7 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
 /// Holds the pre-filter's budget, with the demographics step's and the
 /// localizer's, below the overall budget, of which each is a part (§11.5).
 fn budget(config: &Config, mitz: &Mitz) -> Result<(), Error> {
-    let demographics_ms = config.pdqm.as_ref().map_or(0, |pdqm| pdqm.timeout_ms);
+    let demographics_ms = crate::binding::budgets(config).demographics_ms;
     let localization_ms = localization_budget_ms(config);
     let overall_ms = config.federation.overall_timeout_ms;
     if mitz
@@ -295,4 +303,85 @@ fn question(mitz: &Mitz) -> Result<(), Error> {
         });
     }
     Ok(())
+}
+
+/// The Mitz pre-filter `[nl_gf.mitz]` describes over the members of
+/// `snapshot`, with each holder's URA also read from `[nl_gf.nvi.custodians]`
+/// when that table is set; `None` when `[nl_gf.mitz]` is not.
+pub(super) fn prefilter(
+    settings: &Settings,
+    nl_gf: &NlGfSettings,
+    snapshot: &RegistrySnapshot,
+) -> Result<Option<Arc<dyn ConsentPrefilter>>, FederationError> {
+    let Some(mitz) = &nl_gf.mitz else {
+        return Ok(None);
+    };
+    let mut custodians = BTreeMap::new();
+    for (ura, member) in nl_gf
+        .nvi
+        .as_ref()
+        .map(|nvi| &nvi.custodians)
+        .into_iter()
+        .flatten()
+    {
+        custodians.insert(
+            ura.clone(),
+            node(&format!("nl_gf.nvi.custodians.{ura:?}"), member)?,
+        );
+    }
+    let config = MitzConfig {
+        endpoint: mitz.url.clone(),
+        development: settings.profile == Profile::Development,
+        auth: service::authentication(
+            &format!("{MITZ_KEY}.credentials"),
+            mitz.credentials.as_ref(),
+        )?,
+        tls: service::tls(
+            MITZ_KEY,
+            mitz.client_identity.as_ref(),
+            mitz.trust_roots.as_deref(),
+        )
+        .map_err(FederationError::Tls)?,
+        namespaces: namespaces(mitz)?,
+        categories: mitz.data_categories.clone(),
+        purpose: mitz.purpose.clone(),
+        holders: holders(mitz)?,
+        custodians,
+        timeout: mitz.timeout,
+    };
+    let prefilter = MitzPrefilter::from_config(config, snapshot).map_err(FederationError::Mitz)?;
+    Ok(Some(Arc::new(prefilter)))
+}
+
+/// The member `value` names, read at `key`.
+fn node(key: &str, value: &str) -> Result<NodeId, FederationError> {
+    NodeId::new(value).map_err(|source| FederationError::MitzMember {
+        key: key.to_owned(),
+        source,
+    })
+}
+
+/// The namespaces that stand for the BSN.
+fn namespaces(mitz: &MitzSettings) -> Result<BTreeSet<IdentifierNamespace>, FederationError> {
+    mitz.namespaces
+        .iter()
+        .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map_err(FederationError::MitzNamespace)
+}
+
+/// Each member's data holder, by member id.
+fn holders(mitz: &MitzSettings) -> Result<BTreeMap<NodeId, HolderConfig>, FederationError> {
+    let mut holders = BTreeMap::new();
+    for (member, holder) in &mitz.holders {
+        let key = format!("{MITZ_KEY}.holders.{member:?}");
+        holders.insert(
+            node(&key, member)?,
+            HolderConfig {
+                ura: holder.ura.clone(),
+                kind: holder.kind.clone(),
+            },
+        );
+    }
+    Ok(holders)
 }

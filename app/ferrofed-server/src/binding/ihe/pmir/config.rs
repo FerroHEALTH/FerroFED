@@ -20,7 +20,7 @@
 //! ```
 //!
 //! `client_identity_file` and `trust_roots_file` give the mutual TLS the
-//! Registry asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
+//! Registry asks for, as `[xcpd]` does ([`tls`](crate::binding::ihe::tls)).
 //!
 //! The Registry sends the feed with the bearer token `feed_token`, agreed
 //! with its operator out of band: the subscription carries no credential for
@@ -39,10 +39,10 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::ITS_REST_PREFIX;
+use crate::binding::ihe::tls::TlsSettings;
 use crate::config::error::Error;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::Scheme;
-use crate::config::tls::TlsSettings;
 use crate::config::transport::{self, Encryption, ProtectedSite};
 use crate::config::{Config, Credentials};
 
@@ -221,7 +221,7 @@ pub fn sites(
 /// [`Error::Authorization`] for a feed token that is no RFC 6750 `b64token`;
 /// [`Error::FeedPath`]; [`Error::GrantNotHere`] for OAuth 2.0 credentials;
 /// [`Error::Zero`]; and the errors of a secret that cannot be read.
-pub(super) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
+pub(crate) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
     let Some(pmir) = &config.pmir else {
         return Ok(None);
     };
@@ -275,10 +275,7 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(
-        credentials,
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
-    ) {
+    if credentials.as_ref().is_some_and(Scheme::is_grant) {
         return Err(Error::GrantNotHere { section });
     }
     if let Some(system) = &pmir.identifier_system {
@@ -287,7 +284,7 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
             source,
         })?;
     }
-    let tls = crate::config::tls::resolve(
+    let tls = crate::binding::ihe::tls::resolve(
         "pmir",
         pmir.client_identity.as_ref(),
         pmir.client_identity_file.as_deref(),

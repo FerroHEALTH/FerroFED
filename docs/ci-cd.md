@@ -146,13 +146,15 @@ synthetic file for each secret and a synthetic ES384 signing key, then
 without the `[signing]` table, which it must refuse. Locally, pass any
 `ferrofed` build for the host.
 
-`features (cargo-hack)` lints every feature of the three published crates on
-its own: `cargo hack clippy --each-feature --all-targets` over
-`openehr-federation`, `ihe-iti` and `nl-generic-functions`, at `-D warnings`.
-Each of those crates is one specification with a feature per layer or profile
-(`docs/architecture.md` §11), so a feature that only builds beside another one
-is a defect a caller would hit; the workspace `clippy` job sees the
-all-features union only. The job runs per package, never over the workspace.
+`features (cargo-hack)` lints every feature of the three published crates and
+of the server on its own: `cargo hack clippy --each-feature --all-targets` over
+`openehr-federation`, `ihe-iti`, `nl-generic-functions` and `ferrofed-server`,
+at `-D warnings`. Each of those crates is one specification with a feature per
+layer or profile, and the server has one feature per regional binding
+(`binding-ihe`, `binding-nl`; `docs/architecture.md` §6 and §11), so a feature
+that only builds beside another one is a defect a caller would hit; the
+workspace `clippy` job sees the all-features union only. The job runs per
+package, never over the workspace.
 
 `crate-version-guard` runs on pull requests only and fails a change that
 alters a `crates/*` member's packaged content without moving its version,

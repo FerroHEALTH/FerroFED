@@ -35,7 +35,8 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
 use serde::Serialize;
 
-use crate::config::settings::{DirectorySettings, Settings};
+use crate::binding::ihe::mcsd::DirectorySettings;
+use crate::config::settings::Settings;
 use crate::federation::{error::FederationError, registry::read_registry};
 use crate::health::dependencies::Observed;
 use crate::reload::{Applied, ReloadError, Reloader};
@@ -80,6 +81,18 @@ pub enum DirectoryFault {
     /// The directory answered `401` or `403`: it refused the credentials of
     /// `[registry.mcsd]`, or what they grant.
     RefusedCredentials,
+}
+
+impl DirectoryFault {
+    /// The fault as `directory_fault` names it.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RegistryInvalid => "registry-invalid",
+            Self::ConfigurationMismatch => "configuration-mismatch",
+            Self::RefusedCredentials => "refused-credentials",
+        }
+    }
 }
 
 /// What one refresh of the directory did.
@@ -331,7 +344,9 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
     // NOTE: mCSD §2:3.90.5.1 and §2:3.91.5.1: each search and history is audited,
     // and one whose record is refused fails like a directory that did not answer.
     Ok(
-        match crate::audit::recorder(&settings.audit).map_err(FederationError::Audit)? {
+        match crate::binding::ihe::audit::recorder(&settings.audit)
+            .map_err(FederationError::Audit)?
+        {
             Some(recorder) => source.audited(recorder),
             None => source,
         },

@@ -5,8 +5,10 @@
 //! federated query and the read of an EHR by subject (N27a, §13.2.1).
 //!
 //! The pre-filter is asked about the candidates that localization left, before
-//! resolution. A candidate it denies is never resolved and never sent a
-//! request; a candidate it does not deny is asked, and its node checks consent
+//! resolution. A candidate it denies is never sent a request, and is resolved
+//! only where the deployment does not disclose consent exclusions, so it is
+//! answered for as any member the cross-reference does not know the patient
+//! at; a candidate it does not deny is asked, and its node checks consent
 //! itself (N26, N27, §14.3). A pre-filter that cannot answer leaves every
 //! candidate to its node ([`ON_UNAVAILABLE`]), and the outage is made visible
 //! three ways: in the answer's `meta.federation.consent.error` where the route
@@ -30,8 +32,10 @@ use crate::health::dependencies::Observed;
 /// What the consent pre-filter decided about one request's candidates.
 #[derive(Debug, Default)]
 pub(crate) struct Prefiltered {
-    /// The candidates it denied: each is `consent-denied` with no
-    /// `latency_ms` (N27a, N40).
+    /// The candidates it denied, none of which is sent a request: each is
+    /// `consent-denied` with no `latency_ms` (N27a, N40), or reported as a
+    /// member without the patient where the deployment does not disclose
+    /// consent exclusions.
     pub(crate) denied: BTreeSet<NodeId>,
     /// Why it could not answer, when it could not.
     pub(crate) unavailable: Option<ErrorDetail>,

@@ -79,6 +79,51 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   its request line, media type and body. `ihe-iti` 0.0.22 adds
   `pixm::Invocation` and `PixmClient::invoked_by`, and the harness PIX
   Manager answers a posted query.
+- Each regional binding is one Cargo feature of `ferrofed-server`:
+  `binding-ihe` carries the IHE binding of Annex A (`[pixm]`, `[pdqm]`,
+  `[xcpd]`, `[registry.mcsd]`, `[pmir]` and `[audit]`) and `binding-nl` the
+  Dutch Generic Functions of Annex B (`[nl_gf]` and the Nuts grant of
+  `[credentials."<id>".nuts]`); `[dev]` is always built. Both features are on
+  by default, so the released binary and the container image behave as
+  before. A build without one refuses its sections as unknown keys (#489).
+- The book has a page on adding a country: a specification crate, a binding
+  module and a feature line (#489).
+
+### Changed
+
+- Two sections that fill a role exactly one may, two resolvers, two consent
+  pre-filters or two localizers of a binding's own, are refused with one
+  error that names every section, such as `[nl_gf.nvi] and [xcpd] are both
+  localizers; set one`, in place of one error per pair. A localizer section
+  under `node_selection = "ask-all"` is refused naming its section, as
+  before (#489).
+- The `configuration resolved` log line names the compiled bindings, and
+  each binding logs what it is configured to reach on a `binding configured`
+  line of its own; the registry directory, PIX Manager, PMIR and PDQm fields
+  move from the first line to the IHE binding's (#489).
+
+- `[federation.consent] disclose = false` keeps a consent exclusion out of
+  what a client sees, for Regulation (EU) 2025/327 Art 8, under which the
+  fact that a patient restricted access "shall not be visible to healthcare
+  providers". A member the consent pre-filter excludes is still never sent a
+  request, and a federated query reports it `not-resolved`, with the same
+  `error` as a member the cross-reference does not know the patient at, so
+  `meta.federation.complete` stays `false` and nothing fails. A read of an
+  EHR by subject that only an excluded member could serve answers
+  `404 subject-unavailable`, the same answer as for a subject no member
+  knows, a new code in the error vocabulary. `OPTIONS {base}/` declares the
+  choice as `federation.consent.disclose`, the pre-filter metrics still count
+  every exclusion for the operator, and the default stays the
+  specification's `consent-denied` (N27a) (#493). The setting covers a
+  node's own consent refusal too, a `403` with a code the registry lists in
+  `consent_refusal_codes`: a federated query reports the node `not-resolved`
+  with no `latency_ms`, and a read by subject, a routed request and an
+  ask-all probe answer `404 subject-unavailable`. On a request under
+  `{base}/v1/ehr/`, the creation of an EHR and a DEMOGRAPHIC request, a
+  node's own `404` gets that same answer in this mode, so it never stands
+  for a refusal alone; every `subject-unavailable` carries one fixed
+  message. The node request metrics now count such a refusal as
+  `consent-denied` on every path, whatever the setting.
 
 ## [0.0.8] - 2026-10-04
 

@@ -19,9 +19,10 @@ use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
 use openehr_its::rest::client::ReqwestTransport;
 
+use crate::binding::{self, Role};
 use crate::config::NodeSelection;
 use crate::config::auth::PatientBinding;
-use crate::config::settings::{Scheme, Settings};
+use crate::config::settings::{ConsentDisclosure, Scheme, Settings};
 use crate::facade::options;
 use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
@@ -29,9 +30,6 @@ use crate::metrics::nodes::NodeRequests;
 use crate::onward::NodeTransport;
 
 use super::error::FederationError;
-use super::mitz::mitz_prefilter;
-use super::pdqm::pdqm_step;
-use super::pixm::pixm_resolver;
 use super::registry::read_registry;
 use super::{DemographicsStep, Federation, Observed, Reconciled, widened};
 
@@ -125,14 +123,8 @@ impl Federation {
         observed: Option<Arc<Observed>>,
     ) -> Result<Option<Self>, FederationError> {
         let Some(document) = document else {
-            if settings.dev.is_some() {
-                return Err(FederationError::DevWithoutRegistry);
-            }
-            if settings.pixm.is_some() {
-                return Err(FederationError::PixmWithoutRegistry);
-            }
-            if settings.pdqm.is_some() {
-                return Err(FederationError::PdqmWithoutResolver);
+            for binding in binding::compiled() {
+                binding.unregistered(settings)?;
             }
             if settings.federation.demographic_endpoint.is_some() {
                 return Err(FederationError::DemographicWithoutRegistry);
@@ -156,32 +148,24 @@ impl Federation {
                 endpoint: endpoint.clone(),
             });
         }
-        let (mut development, mut consent, mut pixm) = (None, None, None);
-        let resolver = match (&settings.dev, &settings.pixm) {
-            (Some(_), Some(_)) => return Err(FederationError::TwoResolvers),
-            (None, None) => None,
-            (Some(section), None) => {
-                (development, consent) = crate::development::seams(settings, section, &snapshot)?;
-                development.clone().map(|it| -> Arc<dyn Resolver> { it })
-            }
-            (None, Some(section)) => {
-                pixm = Some(pixm_resolver(section, &settings.audit, &snapshot)?);
-                pixm.clone().map(|it| -> Arc<dyn Resolver> { it })
-            }
-        };
+        let offers = binding::offers(settings);
+        binding::single(&offers, Role::Resolver)?;
+        let resolving = binding::resolver(settings, &snapshot)?;
+        let resolver = resolving
+            .as_ref()
+            .map(|seam| -> Arc<dyn Resolver> { Arc::clone(&seam.resolver) });
         patient_bound(settings, &snapshot, resolver.is_some())?;
         let (observed, demographics) = carry(settings, observed, resolver.is_some())?;
-        let resolving = localization::Resolving { development, pixm };
-        let localization = localization::policy(settings, selection, resolving, &snapshot)
-            .map_err(FederationError::Localization)?;
-        if let Some(mitz) = mitz_prefilter(settings, &snapshot)? {
-            // NOTE: N27a: at most one consent pre-filter is active, so the
-            // development rows and Mitz are never combined.
-            if consent.is_some() {
-                return Err(FederationError::TwoConsentPrefilters);
-            }
-            consent = Some(mitz);
+        if selection == NodeSelection::Localized {
+            binding::single(&offers, Role::Localizer)?;
         }
+        let localization =
+            localization::policy(settings, selection, &offers, resolving.as_ref(), &snapshot)
+                .map_err(FederationError::Localization)?;
+        // NOTE: N27a: at most one consent pre-filter is active, so two
+        // bindings' pre-filters are never combined.
+        binding::single(&offers, Role::ConsentPrefilter)?;
+        let consent = binding::prefilter(settings, &snapshot)?;
         // NOTE: §11.5 deadlines live on each call; the client's own timeout
         // only backstops a connection the call deadline cannot reach.
         let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
@@ -210,6 +194,7 @@ impl Federation {
             demographics,
             localization,
             consent,
+            consent_disclosure: settings.federation.consent_disclosure,
             observed,
             context,
             budget: settings.federation.budget,
@@ -253,6 +238,9 @@ impl Federation {
             demographics: None,
             localization: LocalizationPolicy::none(),
             consent: None,
+            consent_disclosure: ConsentDisclosure::of(
+                crate::config::Federation::default().consent.disclose,
+            ),
             observed: Arc::new(Observed::new(
                 ResolutionBindings::new(std::time::Duration::from_millis(
                     crate::config::Federation::default().binding_ttl_ms,
@@ -307,9 +295,10 @@ fn default_index_capacity() -> NonZeroU32 {
 ///
 /// # Errors
 ///
-/// Returns [`FederationError::PdqmWithoutResolver`] for a demographics step
-/// with no cross-reference `resolving` the master identity it finds, and the
-/// error of a `[pdqm]` step that cannot be built.
+/// Returns the binding's error for a demographics step with no
+/// cross-reference `resolving` the master identity it finds, such as
+/// [`FederationError::PdqmWithoutResolver`], and for a step that cannot be
+/// built.
 fn carry(
     settings: &Settings,
     observed: Option<Arc<Observed>>,
@@ -323,14 +312,7 @@ fn carry(
             federation.ehr_index_capacity,
         ))
     });
-    let demographics = settings
-        .pdqm
-        .as_ref()
-        .map(|pdqm| pdqm_step(pdqm, &settings.audit))
-        .transpose()?;
-    if demographics.is_some() && !resolving {
-        return Err(FederationError::PdqmWithoutResolver);
-    }
+    let demographics = binding::demographics(settings, resolving)?;
     Ok((observed, demographics))
 }
 
@@ -363,21 +345,21 @@ fn patient_bound(
 
 /// The health record of the members of `snapshot`, of the resolver and the
 /// consent pre-filter when `(resolver, consent)` say they are configured, of
-/// the localizer and its audit repository, and of the FHIR Feed trail the
-/// PIXm, PDQm, mCSD and PMIR audit records of `settings` go to.
+/// the localizer and what it records through, and of what every binding of
+/// `settings` records through, such as an audit trail.
 fn dependencies(
     settings: &Settings,
     snapshot: &RegistrySnapshot,
     (resolver, consent): (bool, bool),
     localization: &LocalizationPolicy,
 ) -> Result<Dependencies, FederationError> {
-    let feed = crate::audit::feed(&settings.audit).map_err(FederationError::Audit)?;
+    let mut indicators = localization.indicators().to_vec();
+    indicators.extend(binding::indicators(settings)?);
     Ok(
         Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver)
             .with_consent(consent)
             .with_localizer(localization.localizer().is_some())
-            .with_audit_repository(localization.repository().cloned())
-            .with_audit_feed(feed),
+            .with_indicators(indicators),
     )
 }
 

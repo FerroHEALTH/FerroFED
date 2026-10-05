@@ -22,9 +22,9 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_server::binding::ihe::PIXM;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
-use ferrofed_server::localization::PIXM;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pix::PixManager;

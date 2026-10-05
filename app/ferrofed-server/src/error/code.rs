@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 51] = [
+    pub const GATEWAY: [Self; 52] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -63,6 +63,7 @@ impl Code {
         Self::PatientContextMissing,
         Self::PatientConfinement,
         Self::PatientContextUnavailable,
+        Self::SubjectUnavailable,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -130,6 +131,7 @@ impl Code {
             Self::PatientContextMissing => "patient-context-missing",
             Self::PatientConfinement => "patient-confinement",
             Self::PatientContextUnavailable => "patient-context-unavailable",
+            Self::SubjectUnavailable => "subject-unavailable",
         }
     }
 
@@ -161,9 +163,10 @@ impl Code {
             | Self::ParameterValueInvalid
             | Self::DefinitionEndpointTargeted
             | Self::StoredQueryFanOutUnsupported => StatusCode::BAD_REQUEST,
-            Self::NoDestination | Self::NotFound | Self::StoredQueryUnknown => {
-                StatusCode::NOT_FOUND
-            }
+            Self::NoDestination
+            | Self::NotFound
+            | Self::StoredQueryUnknown
+            | Self::SubjectUnavailable => StatusCode::NOT_FOUND,
             Self::EhrIdCollision
             | Self::ControllingSystemUnreachable
             | Self::StoredQueryHeld
@@ -314,6 +317,9 @@ impl Code {
             Self::PatientContextUnavailable => {
                 "the cross-reference could not resolve the patient of the access token's patient/ grant, so the grant cannot be confined and nothing was sent (§5.2, §11.2)"
             }
+            Self::SubjectUnavailable => {
+                "the requested resource is not available to this request (§11.2)"
+            }
         }
     }
 }
@@ -383,6 +389,7 @@ mod tests {
             Code::PatientContextMissing => Some(48),
             Code::PatientConfinement => Some(49),
             Code::PatientContextUnavailable => Some(50),
+            Code::SubjectUnavailable => Some(51),
         }
     }
 
@@ -487,6 +494,7 @@ mod tests {
                 Code::PatientContextUnavailable,
                 StatusCode::FAILED_DEPENDENCY,
             ),
+            (Code::SubjectUnavailable, StatusCode::NOT_FOUND),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

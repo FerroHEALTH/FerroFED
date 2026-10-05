@@ -12,7 +12,8 @@
 //! three decisions, `result` from the reload outcomes, and `endpoint`
 //! from the registry's endpoint ids. Nothing a request carries becomes a
 //! label, so no patient identifier and no client text can reach the
-//! surface (§5.4.1, N33). The audit spool instruments carry no label at all.
+//! surface (§5.4.1, N33). Each binding adds its own instruments under the
+//! same rule ([`crate::binding::process::Instruments`]).
 //! The instruments fill from what the gateway already
 //! observes: an incident's event, the per-endpoint report of each node
 //! request, and a registry reload's outcome. No specification governs
@@ -34,13 +35,12 @@ use axum::routing::get;
 use ferrofed_registry::incident::Kind;
 use http::{HeaderValue, StatusCode, header};
 use opentelemetry::KeyValue;
-use opentelemetry::metrics::{Counter, MeterProvider as _, ObservableCounter, ObservableGauge};
+use opentelemetry::metrics::{Counter, MeterProvider as _, ObservableCounter};
 use opentelemetry_otlp::WithExportConfig as _;
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider, Temporality};
 
 use crate::config::settings::MetricsSettings;
 use crate::metrics::nodes::Instruments;
-use ihe_iti::atna::forwarder::Status;
 
 /// The instrumentation scope every instrument is created under.
 pub const SCOPE: &str = "ferrofed";
@@ -79,35 +79,6 @@ pub const DEMOGRAPHICS_REQUESTS: &str = "ferrofed.demographics.requests";
 /// `ferrofed_registry_reloads_total`.
 pub const REGISTRY_RELOADS: &str = "ferrofed.registry.reloads";
 
-/// The ITI-93 messages the identity feed received, by `result` (`applied`,
-/// `refused` or `unauthenticated`); Prometheus
-/// `ferrofed_identity_feed_messages_total`.
-pub const IDENTITY_FEED_MESSAGES: &str = "ferrofed.identity_feed.messages";
-
-/// The ITI-20 audit messages waiting in the spool for the audit repository;
-/// Prometheus `ferrofed_audit_spool_events`.
-pub const AUDIT_SPOOL_EVENTS: &str = "ferrofed.audit.spool.events";
-
-/// The bytes of those messages; Prometheus `ferrofed_audit_spool_bytes`.
-pub const AUDIT_SPOOL_BYTES: &str = "ferrofed.audit.spool.bytes";
-
-/// The ITI-20 audit messages delivered to the audit repository; Prometheus
-/// `ferrofed_audit_delivered_total`.
-pub const AUDIT_DELIVERED: &str = "ferrofed.audit.delivered";
-
-/// The failed attempts to deliver to the audit repository, each followed by
-/// a backoff; Prometheus `ferrofed_audit_retries_total`.
-pub const AUDIT_RETRIES: &str = "ferrofed.audit.retries";
-
-/// The ITI-20 audit messages held in the spool's quarantine; Prometheus
-/// `ferrofed_audit_quarantined`.
-pub const AUDIT_QUARANTINED: &str = "ferrofed.audit.quarantined";
-
-/// The ITI-20 audit messages the spool refused for want of room, the
-/// messages queued for a write counted with those stored; Prometheus
-/// `ferrofed_audit_refused_total`.
-pub const AUDIT_REFUSED: &str = "ferrofed.audit.refused";
-
 /// The upper bounds of the node request duration buckets, in seconds: 5 ms
 /// to 30 s, past the default per-node timeout of 10 s.
 pub const NODE_DURATION_BUCKETS: [f64; 12] = [
@@ -142,43 +113,6 @@ impl ReloadResult {
     }
 }
 
-/// How an ITI-93 message ended, the `result` label of
-/// [`IDENTITY_FEED_MESSAGES`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FeedResult {
-    /// The message was applied to the resolution bindings.
-    Applied,
-    /// The message does not hold to the PMIR profiles, and nothing was
-    /// applied.
-    Refused,
-    /// The message did not carry the feed token, and nothing was applied.
-    Unauthenticated,
-    /// The message's audit record could not be stored, and nothing was
-    /// applied (PMIR §2:3.93.5.1).
-    AuditFailed,
-}
-
-impl FeedResult {
-    /// Every result, in declaration order.
-    pub const ALL: [Self; 4] = [
-        Self::Applied,
-        Self::Refused,
-        Self::Unauthenticated,
-        Self::AuditFailed,
-    ];
-
-    /// The label value.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Applied => "applied",
-            Self::Refused => "refused",
-            Self::Unauthenticated => "unauthenticated",
-            Self::AuditFailed => "audit-failed",
-        }
-    }
-}
-
 /// The metrics surface could not be built, rendered or flushed.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -207,23 +141,19 @@ pub struct Metrics {
     registry: prometheus::Registry,
     nodes: Instruments,
     reloads: Counter<u64>,
-    identity_feed: Counter<u64>,
     /// Kept for the life of the provider: its callback reads the incident
     /// counts at each collection.
     _incidents: ObservableCounter<u64>,
-    /// Kept for the life of the provider: their callbacks read the audit
-    /// spools at each collection.
-    _audit: AuditInstruments,
-}
-
-/// The audit spool instruments, kept for the life of the provider.
-struct AuditInstruments {
-    _events: ObservableGauge<u64>,
-    _bytes: ObservableGauge<u64>,
-    _quarantined: ObservableGauge<u64>,
-    _delivered: ObservableCounter<u64>,
-    _retries: ObservableCounter<u64>,
-    _refused: ObservableCounter<u64>,
+    /// The instruments each binding records through, kept for the life of
+    /// the provider.
+    #[cfg_attr(
+        not(feature = "binding-ihe"),
+        expect(
+            dead_code,
+            reason = "no compiled binding records through instruments of its own"
+        )
+    )]
+    bindings: crate::binding::process::Instruments,
 }
 
 impl Metrics {
@@ -292,23 +222,15 @@ impl Metrics {
         for result in ReloadResult::ALL {
             reloads.add(0, &[KeyValue::new("result", result.as_str())]);
         }
-        let identity_feed = meter
-            .u64_counter(IDENTITY_FEED_MESSAGES)
-            .with_description("ITI-93 messages the identity feed received, by result")
-            .build();
-        for result in FeedResult::ALL {
-            identity_feed.add(0, &[KeyValue::new("result", result.as_str())]);
-        }
         let nodes = Instruments::new(&meter);
-        let audit = audit_instruments(&meter);
+        let bindings = crate::binding::process::Instruments::new(&meter);
         Ok(Self {
             provider,
             registry,
             nodes,
             reloads,
-            identity_feed,
             _incidents: incidents,
-            _audit: audit,
+            bindings,
         })
     }
 
@@ -324,10 +246,10 @@ impl Metrics {
             .add(1, &[KeyValue::new("result", result.as_str())]);
     }
 
-    /// Counts an ITI-93 message that ended as `result`.
-    pub fn identity_feed(&self, result: FeedResult) {
-        self.identity_feed
-            .add(1, &[KeyValue::new("result", result.as_str())]);
+    /// Returns the instruments the bindings record through.
+    #[cfg(feature = "binding-ihe")]
+    pub(crate) fn bindings(&self) -> &crate::binding::process::Instruments {
+        &self.bindings
     }
 
     /// Returns the Prometheus text exposition of every instrument.
@@ -370,71 +292,6 @@ impl std::fmt::Debug for Metrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Metrics").finish_non_exhaustive()
     }
-}
-
-/// The audit spool instruments, which read every running audit trail at
-/// each collection, summed, with no label.
-fn audit_instruments(meter: &opentelemetry::metrics::Meter) -> AuditInstruments {
-    let gauge = |name: &'static str, description: &'static str, read: fn(&Status) -> u64| {
-        meter
-            .u64_observable_gauge(name)
-            .with_description(description)
-            .with_callback(move |observer| {
-                if let Some(total) = summed(read) {
-                    observer.observe(total, &[]);
-                }
-            })
-            .build()
-    };
-    let counter = |name: &'static str, description: &'static str, read: fn(&Status) -> u64| {
-        meter
-            .u64_observable_counter(name)
-            .with_description(description)
-            .with_callback(move |observer| {
-                if let Some(total) = summed(read) {
-                    observer.observe(total, &[]);
-                }
-            })
-            .build()
-    };
-    AuditInstruments {
-        _events: gauge(
-            AUDIT_SPOOL_EVENTS,
-            "ITI-20 audit messages waiting in the spool for the audit repository",
-            |status| u64::try_from(status.depth.waiting()).unwrap_or(u64::MAX),
-        ),
-        _bytes: gauge(
-            AUDIT_SPOOL_BYTES,
-            "Bytes of the ITI-20 audit messages the spool holds, quarantine included",
-            |status| status.depth.bytes,
-        ),
-        _quarantined: gauge(
-            AUDIT_QUARANTINED,
-            "ITI-20 audit messages held in the spool's quarantine",
-            |status| u64::try_from(status.depth.quarantined).unwrap_or(u64::MAX),
-        ),
-        _delivered: counter(
-            AUDIT_DELIVERED,
-            "ITI-20 audit messages delivered to the audit repository",
-            |status| status.delivered,
-        ),
-        _retries: counter(
-            AUDIT_RETRIES,
-            "Failed attempts to deliver to the audit repository, each followed by a backoff",
-            |status| status.retries,
-        ),
-        _refused: counter(
-            AUDIT_REFUSED,
-            "ITI-20 audit messages the spool refused for want of room, queued writes counted",
-            |status| status.refused,
-        ),
-    }
-}
-
-/// `read` summed over every running audit trail, or `None` with none.
-fn summed(read: fn(&Status) -> u64) -> Option<u64> {
-    let statuses = crate::audit::statuses();
-    (!statuses.is_empty()).then(|| statuses.iter().map(read).fold(0, u64::saturating_add))
 }
 
 /// Builds the admin listener's application: `GET /metrics` answers the

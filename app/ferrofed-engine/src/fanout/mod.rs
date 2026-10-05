@@ -57,7 +57,6 @@ use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::aggregate::Recombination;
 use openehr_federation::attribute::EndpointAttribute;
 use openehr_federation::dedup::DedupMode;
-use openehr_federation::envelope;
 use openehr_federation::error::WireError;
 use openehr_federation::merge::Unrepresentable;
 use openehr_federation::meta::{FederationMeta, TimeoutBudget};
@@ -65,9 +64,7 @@ use openehr_federation::order::ResultOrder;
 use openehr_federation::outcome::{EndpointOutcome, ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::Transport;
-use openehr_its::rest::generated::query::{
-    ResultSet, ResultSetColumn, ResultSetMetadata, ResultSetRow,
-};
+use openehr_its::rest::generated::query::ResultSetRow;
 use tokio::task::{JoinError, JoinSet};
 
 use crate::dispatch::{Contact, DispatchError, DispatchOptions, NodeClients, NodeQuery, NodeReply};
@@ -197,6 +194,7 @@ pub struct Plan {
     dedup: DedupMode,
     attributes: Vec<EndpointAttribute>,
     unavailable: BTreeMap<&'static str, ErrorDetail>,
+    concealed: Option<ErrorDetail>,
 }
 
 impl Plan {
@@ -280,6 +278,17 @@ impl Plan {
     #[must_use]
     pub fn consent_unavailable(mut self, error: ErrorDetail) -> Self {
         self.unavailable.insert(CONSENT_MEMBER, error);
+        self
+    }
+
+    /// This plan reporting a node's own consent refusal as `not-resolved`
+    /// carrying `error`, with no `latency_ms`, for a deployment that keeps a
+    /// consent exclusion out of the answer (Regulation (EU) 2025/327 Art 8):
+    /// both clear `complete` and fail nothing (§11.1).
+    /// [`FederatedAnswer::observed`] keeps the refusal for the operator.
+    #[must_use]
+    pub fn withholding_consent(mut self, error: ErrorDetail) -> Self {
+        self.concealed = Some(error);
         self
     }
 
@@ -441,100 +450,7 @@ pub struct FederatedAnswer {
     attributes: Vec<Vec<String>>,
     seen: Vec<(EndpointId, ObjectVersionId)>,
     contacts: BTreeMap<EndpointId, Contact>,
-}
-
-impl FederatedAnswer {
-    /// The decision under the plan's completion strategy.
-    #[must_use]
-    pub fn verdict(&self) -> Verdict {
-        self.verdict
-    }
-
-    /// The HTTP status of the answer.
-    #[must_use]
-    pub fn status(&self) -> StatusCode {
-        self.verdict.status()
-    }
-
-    /// The `meta.federation` record, present on a failing answer too
-    /// (§11.4).
-    #[must_use]
-    pub fn federation(&self) -> &FederationMeta {
-        &self.federation
-    }
-
-    /// The rows of the `active` endpoints in endpoint id order, empty when the
-    /// query failed: a failing query MUST NOT return the rows it did obtain,
-    /// and a best-effort answer returns exactly those (§11.4). Unresponsive
-    /// nodes never contribute rows (§11.1).
-    #[must_use]
-    pub fn rows(&self) -> &[ResultSetRow] {
-        &self.rows
-    }
-
-    /// The values of the plan's ENDPOINT attributes beside each row, in
-    /// [`FederatedAnswer::rows`] order, from the registry entry of the
-    /// endpoint the row came from (§9.3, N12; [`Plan::annotating`]). An entry
-    /// is empty when the plan adds no attribute, and for the one row of a
-    /// recombined aggregate, which comes from no single endpoint.
-    #[must_use]
-    pub fn attributes(&self) -> &[Vec<String>] {
-        &self.attributes
-    }
-
-    /// The versions the rows of each answering endpoint show it holding, one
-    /// per endpoint and `creating_system_id`, in endpoint id order: what the
-    /// follow-up routing table learns from (§12.2, N21).
-    ///
-    /// They are read from every endpoint that sent rows, a failing answer's
-    /// included.
-    pub fn seen(&self) -> impl Iterator<Item = (&EndpointId, &ObjectVersionId)> {
-        self.seen
-            .iter()
-            .map(|(endpoint, version)| (endpoint, version))
-    }
-
-    /// What the request to each endpoint the plan dispatched to showed of
-    /// the node, in endpoint id order: its own HTTP status where it answered,
-    /// which the §11.1 record in [`FederatedAnswer::federation`] carries only
-    /// as text. An endpoint settled with no request has none.
-    pub fn contacts(&self) -> impl Iterator<Item = (&EndpointId, Contact)> {
-        self.contacts
-            .iter()
-            .map(|(endpoint, contact)| (endpoint, *contact))
-    }
-
-    /// The federated ITS-REST `RESULT_SET` of this answer, with the façade's
-    /// own `q` and `columns[]` (N17, §9.2) and `meta.federation` under `meta`
-    /// (§9.1). A failing answer gets the same shape with no rows.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`WireError`] when the envelope cannot be encoded.
-    pub fn into_result_set(
-        self,
-        q: Option<String>,
-        columns: Option<Vec<ResultSetColumn>>,
-    ) -> Result<ResultSet, WireError> {
-        let mut meta = ResultSetMetadata {
-            _href: None,
-            _type: None,
-            _schema_version: None,
-            _created: None,
-            _generator: None,
-            _executed_aql: None,
-            additional_properties: BTreeMap::new(),
-        };
-        envelope::attach(&self.federation, &mut meta)?;
-        Ok(ResultSet {
-            meta: Some(meta),
-            name: None,
-            q,
-            columns,
-            rows: self.rows,
-            additional_properties: BTreeMap::new(),
-        })
-    }
+    observed: BTreeMap<EndpointId, Outcome>,
 }
 
 /// A fan-out that could not produce an answer.
@@ -664,6 +580,7 @@ where
         dedup,
         attributes,
         unavailable,
+        concealed,
     } = plan;
     if recombination.is_some() && completion == Completion::BestEffort {
         return Err(FanOutError::PartialAggregate);
@@ -698,7 +615,7 @@ where
         }
     }
     let abandoned_ms = whole_ms(dispatched.elapsed());
-    let mut contacts = BTreeMap::new();
+    let (mut contacts, mut observed) = (BTreeMap::new(), BTreeMap::new());
     let mut records: BTreeMap<EndpointId, (Outcome, Option<Vec<ResultSetRow>>)> = settled
         .into_iter()
         .map(|(endpoint, outcome)| (endpoint, (outcome, None)))
@@ -710,7 +627,15 @@ where
                 result_set,
                 latency_ms,
             }) => (Outcome::Active { latency_ms }, Some(result_set.rows)),
-            Some(NodeReply::Failed { outcome, .. }) => (outcome, None),
+            Some(NodeReply::Failed { outcome, .. }) => {
+                match answer::concealed(outcome, concealed.as_ref()) {
+                    (shown, Some(refusal)) => {
+                        observed.insert(endpoint.clone(), refusal);
+                        (shown, None)
+                    }
+                    (shown, None) => (shown, None),
+                }
+            }
             None => (abandoned(abandoned_ms, budget.overall()), None),
         };
         contacts.insert(endpoint.clone(), contact);
@@ -727,6 +652,7 @@ where
         answer::report_unavailable(&mut answer.federation, member, error)?;
     }
     answer.contacts = contacts;
+    answer.observed = observed;
     Ok(answer)
 }
 

@@ -755,10 +755,10 @@ jobs:
       - run: cargo hack check --rust-version --workspace --locked --all-targets
 
   # Each published crate is one specification with a feature per layer or
-  # profile (the Cargo reference, Features; no specification governs the
-  # layout: our own design), so every feature must build and lint on its own
-  # as well as together. Per package, never the workspace
-  # all-features union.
+  # profile, and the server has one feature per regional binding (the Cargo
+  # reference, Features; no specification governs the layout: our own
+  # design), so every feature must build and lint on its own as well as
+  # together. Per package, never the workspace all-features union.
   features:
     name: features (cargo-hack)
     needs: detect
@@ -778,6 +778,7 @@ jobs:
       - run: >-
           cargo hack clippy --locked --each-feature --all-targets
           --package openehr-federation --package ihe-iti --package nl-generic-functions
+          --package ferrofed-server
           -- -D warnings
 
   # The library crates stay publishable while the workspace `publish` switch is

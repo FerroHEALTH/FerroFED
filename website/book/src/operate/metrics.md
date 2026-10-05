@@ -133,7 +133,7 @@ answer by the same rules. Each outcome therefore covers these calls:
 | `node-error` | in a member record, any answer that is not a success, a `4xx` included (except a consent refusal the registry names), and a drift check whose copy differs from the registry's definition or is missing; for a routed request or a probe, a `5xx` answer; in every call, a node that refused the gateway's onward credentials |
 | `time-out` | a member that gave no answer before its per-node deadline, and a member still being waited on when the overall budget ran out |
 | `offline` | a member the gateway sent a request to and could not reach |
-| `consent-denied` | a federated query member whose node answered `403` with a consent refusal code the registry lists for it ([Consent](identity.md#consent)); a member a consent pre-filter dropped is sent no request and is not counted |
+| `consent-denied` | a request whose node answered `403` with a consent refusal code the registry lists for it ([Consent](identity.md#consent)): a federated query member, a routed or by-subject read, or an ask-all probe, counted so whether or not the client's answer withholds it ([Withholding consent exclusions](consent-exclusions.md)); a member a consent pre-filter dropped is sent no request and is not counted |
 
 ## Alerting
 

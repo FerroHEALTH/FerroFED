@@ -16,9 +16,6 @@
 
 mod build;
 pub mod error;
-mod mitz;
-mod pdqm;
-mod pixm;
 pub mod registry;
 
 use std::collections::BTreeSet;
@@ -44,7 +41,7 @@ use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::id::FederationId;
 
-use crate::config::settings::SigningSettings;
+use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
 use crate::localization::LocalizationPolicy;
 use crate::metrics::nodes::{Instruments, NodeRequests};
@@ -59,6 +56,7 @@ pub struct Federation {
     demographics: Option<DemographicsStep>,
     localization: LocalizationPolicy,
     consent: Option<Arc<dyn ConsentPrefilter>>,
+    consent_disclosure: ConsentDisclosure,
     observed: Arc<Observed>,
     context: Context,
     budget: Budget,
@@ -152,6 +150,28 @@ impl Federation {
         self.consent = Some(prefilter);
         self.dependencies = self.dependencies.with_consent(true);
         self
+    }
+
+    /// This federation, reporting a member the consent pre-filter excludes
+    /// under `disclosure` ([`Federation::discloses_consent`]).
+    #[must_use]
+    pub fn with_consent_disclosure(mut self, disclosure: ConsentDisclosure) -> Self {
+        self.consent_disclosure = disclosure;
+        self
+    }
+
+    /// Whether an answer names a member the consent pre-filter excludes.
+    ///
+    /// `true` reports it `consent-denied` (N27a, §11.1). `false` is for a
+    /// deployment under Regulation (EU) 2025/327 Art 8, where the fact of a
+    /// restriction "shall not be visible to healthcare providers": the
+    /// member is reported as one that does not know the patient, a read by
+    /// subject answers as for a subject with no EHR there, and
+    /// `OPTIONS {base}/` declares the choice as `consent.disclose` (§7a.2).
+    /// The pre-filter metrics and the log count every exclusion either way.
+    #[must_use]
+    pub fn discloses_consent(&self) -> bool {
+        self.consent_disclosure.is_disclosed()
     }
 
     /// The gateway's signing keys and where they are published, when
@@ -408,6 +428,7 @@ impl std::fmt::Debug for Federation {
                 "consent",
                 &self.consent.as_ref().map(|consent| consent.mode()),
             )
+            .field("consent_disclosure", &self.consent_disclosure)
             .field("budget", &self.budget)
             .field("best_effort", &self.best_effort)
             .field("demographic", &self.demographic)

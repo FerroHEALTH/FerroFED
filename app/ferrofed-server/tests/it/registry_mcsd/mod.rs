@@ -9,6 +9,7 @@
 //! registry and shows on `/health/dependencies`.
 
 mod config;
+#[cfg(feature = "binding-nl")]
 mod lrza;
 mod refresh;
 mod routing;
@@ -18,9 +19,9 @@ use std::error::Error;
 use std::sync::Arc;
 
 use axum::Router;
+use ferrofed_server::binding::ihe::mcsd::registry::DirectoryRegistry;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
-use ferrofed_server::directory::DirectoryRegistry;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Member};

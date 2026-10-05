@@ -15,7 +15,8 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_registry::incident::Kind;
-use ferrofed_server::metrics::{FeedResult, ReloadResult};
+use ferrofed_server::binding::ihe::metrics::FeedResult;
+use ferrofed_server::metrics::ReloadResult;
 use http::{Request, header};
 use openehr_federation::status::EndpointStatus;
 

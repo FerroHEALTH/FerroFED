@@ -23,6 +23,17 @@ name = "ferrofed"
 path = "src/main.rs"
 
 [features]
+# Every binding is on by default, so the shipped binary, the image and every
+# test carry them all; a build drops one with --no-default-features and the
+# features it keeps (#489).
+default = ["binding-ihe", "binding-nl"]
+# The IHE binding of Annex A: the PIXm resolver, the PDQm demographics step,
+# the XCPD localizer, the mCSD care services directory, the PMIR identity feed
+# and the ATNA and BALP audit trail they record through (src/binding/ihe).
+binding-ihe = ["dep:ihe-iti", "dep:aws-lc-rs"]
+# The Dutch binding of Annex B: the NVI localizer, the Mitz consent
+# pre-filter, the LRZa URAs they read, and the Nuts grant (src/binding/nl).
+binding-nl = ["nl-generic-functions/nuts-auth"]
 # The PostgreSQL backend of the stored-query registry, for several replicas
 # sharing one store (#268). Off by default, so a single gateway carries no
 # PostgreSQL client (no specification governs this: our own design).
@@ -36,8 +47,8 @@ postgres = [
 [dependencies]
 anyhow.workspace = true
 # The constant-time comparison of the PMIR feed token (#147), from the crypto
-# library the engine already uses.
-aws-lc-rs.workspace = true
+# library the engine already uses; part of the IHE binding.
+aws-lc-rs = { workspace = true, optional = true }
 axum.workspace = true
 clap.workspace = true
 # The federated query (#38): the registry, the resolver seam, the rewrite, and
@@ -48,11 +59,13 @@ ferrofed-registry.workspace = true
 # The ITI-20 audit repository of the XCPD localizer (#418): its syslog
 # header, spool, connection and forwarder, and the PMIR
 # ITI-94 subscriber and ITI-93 feed reader of the identity feed (#147), and
-# the ITI-83 invocation each [[pixm.manager]] names (#494).
-ihe-iti = { workspace = true, features = ["atna", "balp", "pixm", "pmir", "xcpd"] }
-# The Nuts grant of an endpoint's onward credentials, Annex B §B.4 (#88):
-# its grant, holder and client are built from the configuration.
-nl-generic-functions = { workspace = true, features = ["nuts-auth"] }
+# the ITI-83 invocation each [[pixm.manager]] names (#494); part of the IHE
+# binding.
+ihe-iti = { workspace = true, optional = true, features = ["atna", "balp", "pixm", "pmir", "xcpd"] }
+# The RFC 8414 issuer checks of an OAuth 2.0 or FAPI 2.0 grant's issuer
+# audience, and under binding-nl the Nuts grant of an endpoint's onward
+# credentials, Annex B §B.4 (#88), built from the configuration.
+nl-generic-functions = { workspace = true, features = ["oauth-metadata"] }
 # The version uid a follow-up read names, read for its creating_system_id
 # (§12.3, #64).
 openehr-base.workspace = true
