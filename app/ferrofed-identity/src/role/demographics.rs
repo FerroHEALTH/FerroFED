@@ -18,8 +18,8 @@ use std::time::Instant;
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::behalf::OnBehalfOf;
-use crate::patient::{IdentifierNamespace, PatientRef};
+use crate::role::behalf::OnBehalfOf;
+use crate::role::patient::{IdentifierNamespace, PatientRef};
 
 /// Why a demographics service could not answer.
 ///

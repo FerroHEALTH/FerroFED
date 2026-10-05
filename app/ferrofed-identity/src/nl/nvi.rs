@@ -35,8 +35,8 @@ use async_trait::async_trait;
 use ferrofed_registry::id::{NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, PseudoBsn, Ura};
-use nl_generic_functions::lrza::{self, LrzaError};
+use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, PseudoBsn, Ura, is_bsn_system};
+use nl_generic_functions::lrza::LrzaError;
 use nl_generic_functions::nvi::NviClient;
 use nl_generic_functions::nvi::authorizer::Authorizer;
 use nl_generic_functions::nvi::error::{InvalidInput, NviError};
@@ -44,27 +44,11 @@ use secrecy::SecretString;
 use thiserror::Error;
 use url::Url;
 
-use crate::behalf::OnBehalfOf;
 use crate::fhir::{self, Authentication, ClientError, Tls};
-use crate::localizer::{Localization, Localizer, LocalizerError};
-use crate::patient::{IdentifierNamespace, PatientRef};
-
-/// The naming systems of the BSN itself: the IG's `$bsn` system, and the OID
-/// it is registered under, as a URN and dotted.
-///
-/// None of them may stand for the pseudonymised BSN, which is the only
-/// identifier the NVI is keyed on (Annex B §B.1).
-pub const BSN_SYSTEMS: [&str; 3] = [
-    "http://fhir.nl/fhir/NamingSystem/bsn",
-    "urn:oid:2.16.840.1.113883.2.4.6.3",
-    "2.16.840.1.113883.2.4.6.3",
-];
-
-/// Returns whether `namespace` names the BSN itself, one of [`BSN_SYSTEMS`].
-#[must_use]
-pub fn is_bsn_system(namespace: &str) -> bool {
-    BSN_SYSTEMS.contains(&namespace)
-}
+use crate::nl::{DirectoryUraError, directory_custodians};
+use crate::role::behalf::OnBehalfOf;
+use crate::role::localizer::{Localization, Localizer, LocalizerError};
+use crate::role::patient::{IdentifierNamespace, PatientRef};
 
 /// The NVI localizer as the configuration names it.
 pub struct NviConfig {
@@ -225,7 +209,15 @@ impl NviLocalizer {
             }
             written.entry(ura).or_default().insert(member);
         }
-        let derived = derived(registry)?;
+        let derived = directory_custodians(registry).map_err(
+            |DirectoryUraError {
+                 organisation,
+                 source,
+             }| NviConfigError::Directory {
+                organisation,
+                source,
+            },
+        )?;
         let custodians = match (written.is_empty(), derived.is_empty()) {
             (_, true) => written,
             (true, false) => derived,
@@ -342,34 +334,6 @@ impl Localizer for NviLocalizer {
             Err(error) => Localization::Unavailable(error),
         }
     }
-}
-
-/// The custodian map the registry gives: each URA its member organisations
-/// carry, by the LRZa rules (Annex B §B.2), mapped to the members those
-/// organisations operate. It is empty for a registry no directory gave.
-pub(crate) fn derived(
-    registry: &RegistrySnapshot,
-) -> Result<BTreeMap<Ura, BTreeSet<NodeId>>, NviConfigError> {
-    let mut derived: BTreeMap<Ura, BTreeSet<NodeId>> = BTreeMap::new();
-    for node in registry.nodes() {
-        let Some(organisation) = registry.organisation(node.organisation()) else {
-            continue;
-        };
-        let identifiers = organisation
-            .identifiers()
-            .iter()
-            .map(|identifier| (Some(identifier.system()), Some(identifier.value())));
-        let ura = lrza::ura_in(identifiers).map_err(|source| NviConfigError::Directory {
-            organisation: organisation.id().clone(),
-            source,
-        })?;
-        // NOTE: Annex B §B.2: an organisation with no URA is not a top-level care
-        // provider, so it names no custodian and its members need one elsewhere.
-        if let Some(ura) = ura {
-            derived.entry(ura).or_default().insert(node.id().clone());
-        }
-    }
-    Ok(derived)
 }
 
 /// The first URA on which the configured map `written` and the derived map

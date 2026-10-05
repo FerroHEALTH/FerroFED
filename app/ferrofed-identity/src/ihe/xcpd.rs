@@ -45,11 +45,11 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::balp::{audited_as, logged_as};
-use crate::behalf::OnBehalfOf;
 use crate::fhir::{self, Authentication, ClientError, Tls};
-use crate::localizer::{Localization, Localizer, LocalizerError};
-use crate::patient::{IdentifierNamespace, PatientRef};
+use crate::ihe::audit::balp::{audited_as, logged_as};
+use crate::role::behalf::OnBehalfOf;
+use crate::role::localizer::{Localization, Localizer, LocalizerError};
+use crate::role::patient::{IdentifierNamespace, PatientRef};
 
 /// The `tracing` target the [`LogAudit`] recorder writes to.
 pub const AUDIT_TARGET: &str = "ferrofed::audit";

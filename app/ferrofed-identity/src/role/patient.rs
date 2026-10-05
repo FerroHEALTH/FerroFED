@@ -78,11 +78,11 @@ impl fmt::Display for IdentifierNamespace {
 /// `Display` are redacted, and the type is never `Serialize`:
 ///
 /// ```
-/// use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
+/// use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 ///
 /// let patient = PatientRef::new(IdentifierNamespace::new("2.999.1")?, "12345".into())?;
 /// assert!(!format!("{patient} {patient:?}").contains("12345"));
-/// # Ok::<(), ferrofed_identity::patient::PatientRefError>(())
+/// # Ok::<(), ferrofed_identity::role::patient::PatientRefError>(())
 /// ```
 pub struct PatientRef {
     namespace: IdentifierNamespace,

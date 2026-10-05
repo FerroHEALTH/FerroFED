@@ -7,7 +7,7 @@
 
 use std::error::Error;
 
-use ferrofed_identity::directory;
+use ferrofed_identity::ihe::mcsd;
 use ferrofed_registry::id::OrganisationId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde_json::json;
@@ -27,7 +27,7 @@ fn an_organisations_identifiers_are_kept_ordered_and_each_once() -> TestResult {
         {"value": "no-system"},
         {"system": "urn:oid:2.999.8"}
     ]);
-    let registry = directory::snapshot_from_json(bundle.to_string().as_bytes())?;
+    let registry = mcsd::snapshot_from_json(bundle.to_string().as_bytes())?;
     let organisation = registry
         .organisation(&OrganisationId::new("org-a")?)
         .ok_or("org-a is in the registry")?;

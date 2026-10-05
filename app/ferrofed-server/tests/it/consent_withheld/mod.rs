@@ -38,9 +38,9 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::consent::{ConsentDecision, ConsentPrefilter, Requester};
-use ferrofed_identity::patient::PatientRef;
-use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
+use ferrofed_identity::role::consent::{ConsentDecision, ConsentPrefilter, Requester};
+use ferrofed_identity::role::patient::PatientRef;
+use ferrofed_identity::role::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::config::settings::ConsentDisclosure;
@@ -117,7 +117,7 @@ impl Resolver for Crossref {
         &self,
         _patient: &PatientRef,
         members: &[NodeId],
-        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         members

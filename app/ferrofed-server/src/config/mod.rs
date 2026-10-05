@@ -10,7 +10,7 @@
 //! specification governs the configuration: our own design.
 
 use ferrofed_identity::dev::Profile;
-use ferrofed_identity::localizer::OnFailure;
+use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;

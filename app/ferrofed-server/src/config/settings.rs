@@ -15,7 +15,7 @@ use ferrofed_engine::onward::Grant;
 use ferrofed_engine::onward::fapi2::Fapi2Grant;
 use ferrofed_engine::onward::keys::KeyRing;
 use ferrofed_identity::dev::Profile;
-use ferrofed_identity::localizer::OnFailure;
+use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;

@@ -21,8 +21,10 @@ pub mod repository;
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
-use ferrofed_identity::atna::RepositoryAudit;
-use ferrofed_identity::balp::{FeedAudit, FeedConfigError, LogFeedAudit, feed_repository};
+use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
+use ferrofed_identity::ihe::audit::balp::{
+    FeedAudit, FeedConfigError, LogFeedAudit, feed_repository,
+};
 use ihe_iti::atna::forwarder::{Forwarder, Status};
 use ihe_iti::atna::repository::{Repository, RepositoryError, TlsSettings};
 use ihe_iti::atna::spool::{Content, Spool, SpoolError};

@@ -62,9 +62,9 @@ use ferrofed_engine::dispatch::{Contact, DispatchOptions, REQUEST_ID_HEADER, is_
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::binding::SessionKey;
-use ferrofed_identity::consent::Requester;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::consent::Requester;
+use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::Endpoint;
 use http::{HeaderMap, Method, StatusCode, Uri};

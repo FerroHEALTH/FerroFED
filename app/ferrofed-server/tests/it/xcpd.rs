@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::binding::ihe::XCPD;
 use ferrofed_server::config::Config;
@@ -514,7 +514,7 @@ async fn each_discovery_writes_an_audit_event_without_the_identifier() -> TestRe
     let text = logs.text();
     let audit: Vec<&str> = text
         .lines()
-        .filter(|line| line.contains(ferrofed_identity::xcpd::AUDIT_TARGET))
+        .filter(|line| line.contains(ferrofed_identity::ihe::xcpd::AUDIT_TARGET))
         .collect();
     assert_eq!(1, audit.len(), "one audit event per exchange: {text}");
     for expected in [
@@ -626,6 +626,6 @@ async fn a_confined_caller_naming_another_patient_makes_no_exchange_and_no_audit
 /// How many ITI-55 audit events `text` holds.
 fn audit_events(text: &str) -> usize {
     text.lines()
-        .filter(|line| line.contains(ferrofed_identity::xcpd::AUDIT_TARGET))
+        .filter(|line| line.contains(ferrofed_identity::ihe::xcpd::AUDIT_TARGET))
         .count()
 }

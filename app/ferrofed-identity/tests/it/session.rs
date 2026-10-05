@@ -13,7 +13,7 @@
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::binding::{Bound, IdentityChange, ResolutionBindings, SessionKey};
+use ferrofed_identity::session::{Bound, IdentityChange, ResolutionBindings, SessionKey};
 use ferrofed_registry::id::{EhrId, NodeId};
 
 const EHR_A: &str = "2222aaaa-2222-4222-8222-222222222222";

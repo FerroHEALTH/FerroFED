@@ -36,7 +36,7 @@ use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, Ura};
+use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, Ura, is_bsn_system};
 use nl_generic_functions::mitz::error::{ClientError, InvalidInput, MitzError};
 use nl_generic_functions::mitz::question::{
     Bsn, CareProviderType, ClosedQuestion, DataCategory, DataHolder, DataUser, MAX_CATEGORIES,
@@ -48,20 +48,13 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester};
 use crate::fhir::{self, Authentication, Tls};
-use crate::nvi::{NviConfigError, derived, is_bsn_system};
-use crate::patient::{IdentifierNamespace, PatientRef};
+use crate::nl::{DirectoryUraError, directory_custodians};
+use crate::role::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester};
+use crate::role::patient::{IdentifierNamespace, PatientRef};
 
 /// The name `OPTIONS {base}/` declares the Mitz pre-filter under.
 pub const MITZ_MODE: &str = "nl-gf-mitz";
-
-/// Returns whether `namespace` is the pseudonymised BSN's naming system,
-/// which cannot stand for the BSN Mitz is asked by (Annex B §B.1, §B.6).
-#[must_use]
-pub fn is_pseudonym_system(namespace: &str) -> bool {
-    namespace == PSEUDO_BSN_SYSTEM
-}
 
 /// Returns whether `code` is a purpose the closed authorization question
 /// takes, `TREAT` or `COC` (Implementatiehandleiding Open en gesloten
@@ -177,7 +170,7 @@ pub enum MitzConfigError {
     /// An organisation the registry read from a directory carries URA
     /// identifiers the LRZa rules refuse.
     #[error("the directory's URAs are refused")]
-    Directory(#[source] NviConfigError),
+    Directory(#[source] DirectoryUraError),
     /// A credential does not form an `Authorization` value (RFC 7617 §2,
     /// RFC 6750 §2.1).
     #[error("the HTTP client for Mitz could not be set up")]
@@ -453,7 +446,7 @@ fn holders(
     for (ura, member) in &config.custodians {
         named.entry(member.clone()).or_default().insert(ura.clone());
     }
-    for (ura, members) in derived(registry).map_err(MitzConfigError::Directory)? {
+    for (ura, members) in directory_custodians(registry).map_err(MitzConfigError::Directory)? {
         for member in members {
             named
                 .entry(member)

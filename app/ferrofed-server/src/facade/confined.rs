@@ -27,9 +27,9 @@ use std::time::Instant;
 
 use axum::response::Response;
 use ferrofed_engine::onward::conveyance::{Confinement, Conveyance};
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::patient::{PatientRef, PatientRefError};
-use ferrofed_identity::resolver::{Resolution, ResolverError};
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::patient::{PatientRef, PatientRefError};
+use ferrofed_identity::role::resolver::{Resolution, ResolverError};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use secrecy::SecretString;

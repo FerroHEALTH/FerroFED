@@ -18,7 +18,7 @@ use std::error::Error;
 use std::path::Path;
 
 use axum::Router;
-use ferrofed_identity::pixm::PixmConfigError;
+use ferrofed_identity::ihe::pixm::PixmConfigError;
 use ferrofed_server::binding::Role;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;

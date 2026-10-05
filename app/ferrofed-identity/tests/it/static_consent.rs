@@ -10,9 +10,9 @@ use std::error::Error;
 use std::fmt::Write as _;
 use std::time::Instant;
 
-use ferrofed_identity::consent::{ConsentDecision, ConsentPrefilter};
 use ferrofed_identity::dev::{DevCrossRefError, STATIC_CONSENT_MODE, StaticConsentPrefilter};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::role::consent::{ConsentDecision, ConsentPrefilter};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 
 use crate::support::{Config, PATIENT_VALUE, config, ready, registry};

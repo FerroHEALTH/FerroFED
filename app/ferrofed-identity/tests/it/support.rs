@@ -8,9 +8,9 @@
 use std::pin::pin;
 use std::task::{Context, Poll, Waker};
 
-#[cfg(feature = "ihe")]
-use ferrofed_identity::behalf::{Caller, OnBehalfOf, Purpose};
 use ferrofed_identity::dev::{DevTable, Profile};
+#[cfg(feature = "ihe")]
+use ferrofed_identity::role::behalf::{Caller, OnBehalfOf, Purpose};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 

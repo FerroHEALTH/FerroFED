@@ -57,11 +57,12 @@ use std::time::Duration;
 use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::nuts::NutsAuthorizer;
 use ferrofed_identity::fhir::Authentication;
-use ferrofed_identity::nvi::{NviConfig, NviLocalizer, is_bsn_system};
-use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_identity::nl::nvi::{NviConfig, NviLocalizer};
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use nl_generic_functions::identification::is_bsn_system;
 use nl_generic_functions::nvi::authorizer::Authorizer;
 use serde::Deserialize;
 

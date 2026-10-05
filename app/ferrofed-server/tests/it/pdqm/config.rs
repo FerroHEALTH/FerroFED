@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 
-use ferrofed_identity::pdqm::PdqmConfigError;
+use ferrofed_identity::ihe::pdqm::PdqmConfigError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
 use ferrofed_server::config::settings::Settings;

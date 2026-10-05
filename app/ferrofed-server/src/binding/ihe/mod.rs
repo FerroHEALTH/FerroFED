@@ -25,10 +25,10 @@ pub mod xcpd;
 
 use std::sync::Arc;
 
-use ferrofed_identity::directory::error::FhirFormError;
-use ferrofed_identity::directory::mcsd::DirectoryReadError;
-use ferrofed_identity::localizer::Localizer;
-use ferrofed_identity::resolver::Resolver;
+use ferrofed_identity::ihe::mcsd::error::FhirFormError;
+use ferrofed_identity::ihe::mcsd::source::DirectoryReadError;
+use ferrofed_identity::role::localizer::Localizer;
+use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;

@@ -34,10 +34,10 @@
 //! The node's `product`, `version` and identifiers have no place in this form.
 //!
 //! ```
-//! use ferrofed_identity::directory;
+//! use ferrofed_identity::ihe::mcsd;
 //! use ferrofed_registry::id::{NodeId, SystemId};
 //!
-//! let registry = directory::snapshot_from_json(br#"{
+//! let registry = mcsd::snapshot_from_json(br#"{
 //!   "resourceType": "Bundle",
 //!   "type": "collection",
 //!   "entry": [
@@ -80,7 +80,7 @@
 //! ```
 
 pub mod error;
-pub mod mcsd;
+pub mod source;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

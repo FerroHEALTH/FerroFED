@@ -13,8 +13,8 @@
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::binding::{Bound, IdentityChange, ResolutionBindings, SessionKey};
-use ferrofed_identity::lifecycle::change_of;
+use ferrofed_identity::ihe::pmir::change_of;
+use ferrofed_identity::session::{Bound, IdentityChange, ResolutionBindings, SessionKey};
 use ferrofed_registry::id::{EhrId, NodeId};
 use ihe_iti::pmir::feed::Feed;
 

@@ -22,7 +22,7 @@ use axum::response::Response;
 use ferrofed_engine::forward::{ForwardError, Forwarded};
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::probe::{self, Answer, Probe, ProbedEhrId};
-use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::incident::Detection;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};

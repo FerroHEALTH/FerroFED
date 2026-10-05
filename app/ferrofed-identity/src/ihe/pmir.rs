@@ -26,8 +26,8 @@ use secrecy::ExposeSecret;
 use thiserror::Error;
 use url::Url;
 
-use crate::binding::IdentityChange;
 use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::session::IdentityChange;
 
 /// What one change touches.
 enum Touched {

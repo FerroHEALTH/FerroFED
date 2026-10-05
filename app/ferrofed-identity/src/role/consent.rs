@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
 use thiserror::Error;
 
-use crate::patient::PatientRef;
+use crate::role::patient::PatientRef;
 
 /// Why a consent pre-filter could not answer.
 #[derive(Debug, Error)]

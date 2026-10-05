@@ -19,9 +19,9 @@ use ferrofed_engine::fanout::{
 };
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::binding::SessionKey;
-use ferrofed_identity::consent::Requester;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::consent::Requester;
+use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, HeaderValue, StatusCode};
@@ -558,7 +558,7 @@ mod tests {
     use super::{Failure, cells, completeness, dedup, plan, target};
     use crate::error::Code;
     use ferrofed_engine::fanout::FanOutError;
-    use ferrofed_identity::patient::PatientRefError;
+    use ferrofed_identity::role::patient::PatientRefError;
     use http::StatusCode;
     use openehr_federation::aql::refusal::Refusal;
     use openehr_its::rest::runtime::ApiError;

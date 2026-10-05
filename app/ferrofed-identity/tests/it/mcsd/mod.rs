@@ -10,10 +10,10 @@
 
 mod equivalence;
 mod identifiers;
-mod mcsd;
 mod refusal;
+mod source;
 
-use ferrofed_identity::directory::{
+use ferrofed_identity::ihe::mcsd::{
     CREATING_SYSTEM_ID_SYSTEM, ENDPOINT_ID_SYSTEM, NODE_ID_SYSTEM, ORGANISATION_ID_SYSTEM,
     SYSTEM_ID_SYSTEM,
 };

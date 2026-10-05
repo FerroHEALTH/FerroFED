@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_identity::binding::{ResolutionBindings, SessionKey};
+use ferrofed_identity::session::{ResolutionBindings, SessionKey};
 use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::incident::{Detection, TARGET};

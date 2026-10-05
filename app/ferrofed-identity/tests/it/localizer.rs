@@ -6,7 +6,7 @@
 
 use std::error::Error;
 
-use ferrofed_identity::localizer::OnFailure;
+use ferrofed_identity::role::localizer::OnFailure;
 use serde::Deserialize;
 
 type TestResult = Result<(), Box<dyn Error>>;

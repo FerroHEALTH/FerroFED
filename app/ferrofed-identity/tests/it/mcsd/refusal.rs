@@ -7,10 +7,10 @@
 //! not resolve (N20), an id that is missing, repeated or not unique (N19), and
 //! a node its endpoints disagree on.
 
-use ferrofed_identity::directory::error::{
+use ferrofed_identity::ihe::mcsd::error::{
     ConnectionTypeFault, FhirFormError, IdentifierFault, OperatorFault, ReferenceFault,
 };
-use ferrofed_identity::directory::{self, ENDPOINT_ID_SYSTEM, NODE_ID_SYSTEM, SYSTEM_ID_SYSTEM};
+use ferrofed_identity::ihe::mcsd::{self, ENDPOINT_ID_SYSTEM, NODE_ID_SYSTEM, SYSTEM_ID_SYSTEM};
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use ferrofed_registry::snapshot::ConnectionType;
@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 use super::{NODE_A_PUB, NODE_A_REGION, NODE_B_PUB, ORG_A, ORG_REGION, bytes, fhir, resource};
 
 fn load(bundle: &Value) -> Result<(), FhirFormError> {
-    directory::snapshot_from_json(&bytes(bundle)).map(|_| ())
+    mcsd::snapshot_from_json(&bytes(bundle)).map(|_| ())
 }
 
 fn endpoint(id: &str) -> EndpointId {
@@ -475,7 +475,7 @@ fn a_document_that_is_no_bundle_of_the_two_resources_is_refused() {
     bundle["entry"][ORG_A]["resource"] = json!({"resourceType": "Basic", "code": {"text": "x"}});
     assert!(matches!(load(&bundle), Err(FhirFormError::Directory(_))));
     assert!(matches!(
-        directory::snapshot_from_json(b"[[organisation]]"),
+        mcsd::snapshot_from_json(b"[[organisation]]"),
         Err(FhirFormError::Directory(_))
     ));
 }
@@ -503,7 +503,7 @@ fn a_document_with_no_endpoint_admits_no_node() {
 fn a_missing_file_is_refused_with_its_path() {
     let path = std::env::temp_dir().join("ferrofed-identity-directory-absent.json");
     assert!(matches!(
-        directory::read(&path),
+        mcsd::read(&path),
         Err(FhirFormError::Read { path: refused, .. }) if refused == path
     ));
 }

@@ -40,9 +40,9 @@ use ihe_iti::user::{PurposeOfUse, User};
 use tokio::task::JoinHandle;
 use url::Url;
 
-use crate::behalf::OnBehalfOf;
 use crate::fhir::{self, Authentication, ClientError, Tls};
-use crate::xcpd::AUDIT_TARGET;
+use crate::ihe::xcpd::AUDIT_TARGET;
+use crate::role::behalf::OnBehalfOf;
 
 /// Returns `on_behalf` as `ihe_iti`'s audited clients take it: a verified
 /// caller is the user of the exchange, and the gateway its own system.

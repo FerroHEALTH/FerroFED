@@ -48,11 +48,11 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-use crate::balp::audited_as;
-use crate::behalf::OnBehalfOf;
-use crate::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
 use crate::fhir::{Authentication, ClientError, Tls, http_client};
-use crate::patient::{IdentifierNamespace, PatientRef, PatientRefError};
+use crate::ihe::audit::balp::audited_as;
+use crate::role::behalf::OnBehalfOf;
+use crate::role::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
+use crate::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 
 /// The PDQm transaction the gateway asks the Supplier with.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]

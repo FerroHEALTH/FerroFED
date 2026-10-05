@@ -8,12 +8,12 @@
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_identity::directory::error::FhirFormError;
-use ferrofed_identity::directory::mcsd::{
+use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::ihe::mcsd::error::FhirFormError;
+use ferrofed_identity::ihe::mcsd::source::{
     DirectoryConfig, DirectoryReadError, DirectorySource, Refreshed,
 };
-use ferrofed_identity::directory::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM};
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::ihe::mcsd::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM};
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::secret::SecretUrl;

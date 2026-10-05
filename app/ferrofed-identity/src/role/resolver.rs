@@ -11,8 +11,8 @@ use async_trait::async_trait;
 use ferrofed_registry::id::{EhrId, NodeId};
 use thiserror::Error;
 
-use crate::behalf::OnBehalfOf;
-use crate::patient::PatientRef;
+use crate::role::behalf::OnBehalfOf;
+use crate::role::patient::PatientRef;
 
 /// Why a resolver could not answer for a member.
 ///

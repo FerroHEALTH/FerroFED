@@ -23,7 +23,7 @@ use std::path::Path;
 
 use axum::body::Body;
 use ferrofed_engine::onward::conveyance::HEADER;
-use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::auth::refusal::Refusal;

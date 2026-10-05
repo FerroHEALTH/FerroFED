@@ -18,8 +18,8 @@ use ferrofed_registry::id::NodeId;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::behalf::OnBehalfOf;
-use crate::patient::PatientRef;
+use crate::role::behalf::OnBehalfOf;
+use crate::role::patient::PatientRef;
 
 /// Why a localizer could not answer.
 ///

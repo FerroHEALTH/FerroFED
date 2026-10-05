@@ -22,11 +22,11 @@ use ferrofed_engine::dispatch::NodeQuery;
 use ferrofed_engine::fanout::{Plan, PlanError};
 use ferrofed_engine::hygiene::Withheld;
 
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::consent::Requester;
-use ferrofed_identity::localizer::OnFailure;
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
-use ferrofed_identity::resolver::{Resolution, Resolver};
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::consent::Requester;
+use ferrofed_identity::role::localizer::OnFailure;
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
+use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::{EndpointStatus, RegistrySnapshot};
 use openehr_federation::aql::subject::Subject;

@@ -6,21 +6,21 @@
 
 use std::error::Error;
 
-use ferrofed_identity::directory;
-use ferrofed_identity::directory::error::{FhirFormError, ReferenceFault};
+use ferrofed_identity::ihe::mcsd;
+use ferrofed_identity::ihe::mcsd::error::{FhirFormError, ReferenceFault};
 use ferrofed_registry::creating_system::CreatingSystemRoute;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use serde_json::json;
 
-use ferrofed_identity::directory::CONSENT_REFUSAL_CODE_EXTENSION;
+use ferrofed_identity::ihe::mcsd::CONSENT_REFUSAL_CODE_EXTENSION;
 
 use super::{NATIVE, NODE_A_PUB, NODE_B_PUB, ORG_A, bytes, fhir, resource};
 
 #[test]
 fn the_fhir_form_loads_the_snapshot_the_native_form_loads() -> Result<(), Box<dyn Error>> {
     let native = RegistrySnapshot::from_toml_str(NATIVE)?;
-    let fhir = directory::snapshot_from_json(&bytes(&fhir()))?;
+    let fhir = mcsd::snapshot_from_json(&bytes(&fhir()))?;
     assert_eq!(native, fhir);
     Ok(())
 }
@@ -28,7 +28,7 @@ fn the_fhir_form_loads_the_snapshot_the_native_form_loads() -> Result<(), Box<dy
 #[test]
 fn the_fhir_form_routes_as_the_native_form_routes() -> Result<(), Box<dyn Error>> {
     let native = RegistrySnapshot::from_toml_str(NATIVE)?;
-    let fhir = directory::snapshot_from_json(&bytes(&fhir()))?;
+    let fhir = mcsd::snapshot_from_json(&bytes(&fhir()))?;
     for registry in [&native, &fhir] {
         let member: SystemId = "cdr-a.example.org".parse()?;
         assert_eq!(
@@ -87,7 +87,7 @@ fn a_searchset_with_absolute_references_loads_the_same_snapshot() -> Result<(), 
     resource(&mut bundle, NODE_A_PUB)["managingOrganization"]["reference"] =
         json!(organisation_url);
     let native = RegistrySnapshot::from_toml_str(NATIVE)?;
-    assert_eq!(native, directory::snapshot_from_json(&bytes(&bundle))?);
+    assert_eq!(native, mcsd::snapshot_from_json(&bytes(&bundle))?);
     Ok(())
 }
 
@@ -96,7 +96,7 @@ fn a_relative_reference_from_a_urn_entry_resolves_nothing() {
     let mut bundle = fhir();
     bundle["entry"][ORG_A]["fullUrl"] = json!("urn:uuid:5f0c2a3e-8d71-4b6a-9e2f-1c3d4b5a6e70");
     assert!(matches!(
-        directory::snapshot_from_json(&bytes(&bundle)),
+        mcsd::snapshot_from_json(&bytes(&bundle)),
         Err(FhirFormError::OrganisationEndpoint {
             fault: ReferenceFault::Outside(reference),
             ..
@@ -111,7 +111,7 @@ fn a_document_is_read_from_a_file() -> Result<(), Box<dyn Error>> {
         std::process::id()
     ));
     std::fs::write(&path, bytes(&fhir()))?;
-    let loaded = directory::read(&path);
+    let loaded = mcsd::read(&path);
     std::fs::remove_file(&path)?;
     assert_eq!(RegistrySnapshot::from_toml_str(NATIVE)?, loaded?);
     Ok(())
@@ -129,7 +129,7 @@ fn consent_refusal_codes_load_as_the_native_form_loads_them() -> Result<(), Box<
         {"url": CONSENT_REFUSAL_CODE_EXTENSION, "valueCode": "consent-refused"},
         {"url": CONSENT_REFUSAL_CODE_EXTENSION, "valueCode": "opt-out"}
     ]);
-    let from_fhir = directory::snapshot_from_json(&bytes(&bundle))?;
+    let from_fhir = mcsd::snapshot_from_json(&bytes(&bundle))?;
     assert_eq!(native, from_fhir, "§11.1, N27: one key in both forms");
     let endpoint: EndpointId = "node-b-pub".parse()?;
     let codes: Vec<&str> = from_fhir
@@ -148,7 +148,7 @@ fn a_consent_refusal_code_extension_without_a_code_is_refused() {
     let mut bundle = fhir();
     resource(&mut bundle, NODE_B_PUB)["extension"] =
         json!([{"url": CONSENT_REFUSAL_CODE_EXTENSION, "valueString": "consent-refused"}]);
-    let refused = directory::snapshot_from_json(&bytes(&bundle)).err();
+    let refused = mcsd::snapshot_from_json(&bytes(&bundle)).err();
     assert!(
         matches!(
             refused,

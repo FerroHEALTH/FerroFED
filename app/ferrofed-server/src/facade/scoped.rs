@@ -24,7 +24,7 @@ use ferrofed_engine::fanout::Budget;
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::probe::{Probe, ProbedEhrId};
-use ferrofed_identity::binding::SessionKey;
+use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::Endpoint;
 use http::HeaderMap;
