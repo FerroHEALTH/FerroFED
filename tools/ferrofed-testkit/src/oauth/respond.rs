@@ -3,19 +3,22 @@
 
 //! How the harness token endpoint answers one request: the RFC 6749 §4.4.2
 //! client-credentials grant and RFC 8693 token exchange, each authenticated
-//! by an RFC 7523 §2.2 client assertion, and a `DPoP` proof where one is
+//! by an RFC 7523 §2.2 client assertion or, behind a mutual-TLS front, by
+//! the client's certificate (RFC 8705 §2), and a `DPoP` proof where one is
 //! required (RFC 9449 §5).
 
 use std::sync::Arc;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use wiremock::{Request, Respond, ResponseTemplate};
 
 use crate::dpop;
 use crate::oauth::{
-    ACCESS_TOKEN_TYPE, Exchanged, JWT_BEARER, JWT_TOKEN_TYPE, Shared, State, TOKEN_EXCHANGE,
-    Verdict, verify_signed, verify_subject,
+    ACCESS_TOKEN_TYPE, ClientAuth, Exchanged, JWT_BEARER, JWT_TOKEN_TYPE, Shared, State,
+    TOKEN_EXCHANGE, Verdict, verify_signed, verify_subject,
 };
 
 /// The responder the token endpoint's mock answers every request with.
@@ -93,7 +96,7 @@ impl Responder {
         });
         match outcome {
             Ok((subject, details)) => {
-                let token = uuid::Uuid::new_v4().simple().to_string();
+                let token = issued_token(state.certificate.as_deref());
                 state.accepted.insert(token.clone());
                 if let Some(subject) = &subject {
                     state.subjects.insert(token.clone(), subject.clone());
@@ -183,21 +186,33 @@ impl Responder {
             Some(TOKEN_EXCHANGE) if state.callers.is_some() => true,
             _ => return Err(("unsupported_grant_type", "grant_type".to_owned())),
         };
-        if field("client_assertion_type").as_deref() != Some(JWT_BEARER) {
-            return Err(("invalid_client", "client_assertion_type".to_owned()));
-        }
         if field("client_secret").is_some() {
             return Err(("invalid_request", "a client secret was sent".to_owned()));
+        }
+        if state.client_auth == ClientAuth::Tls {
+            if field("client_id").as_deref() != Some(self.0.client_id.as_str()) {
+                return Err(("invalid_client", "client_id".to_owned()));
+            }
+            if field("client_assertion").is_some() || field("client_assertion_type").is_some() {
+                return Err((
+                    "invalid_request",
+                    "an assertion was sent beside the certificate".to_owned(),
+                ));
+            }
+        } else if field("client_assertion_type").as_deref() != Some(JWT_BEARER) {
+            return Err(("invalid_client", "client_assertion_type".to_owned()));
         }
         if let Some(expected) = &state.scope
             && field("scope").as_deref() != Some(expected.as_str())
         {
             return Err(("invalid_scope", "scope".to_owned()));
         }
-        let assertion = field("client_assertion")
-            .ok_or(("invalid_client", "no client_assertion".to_owned()))?;
-        state.assertions.push(assertion.clone());
-        self.assertion(state, &assertion, "invalid_client")?;
+        if state.client_auth == ClientAuth::Assertion {
+            let assertion = field("client_assertion")
+                .ok_or(("invalid_client", "no client_assertion".to_owned()))?;
+            state.assertions.push(assertion.clone());
+            self.assertion(state, &assertion, "invalid_client")?;
+        }
         if !exchange {
             return Ok(None);
         }
@@ -283,6 +298,25 @@ impl Responder {
         }
         Ok(())
     }
+}
+
+/// A fresh access token: a random one, or, bound to the certificate of
+/// `thumbprint`, a JWT whose `cnf` claim names it (RFC 8705 §3.1). The
+/// harness signs nothing; the client reads the claim and the node matches
+/// the token whole.
+fn issued_token(thumbprint: Option<&str>) -> String {
+    let jti = uuid::Uuid::new_v4().simple().to_string();
+    let Some(thumbprint) = thumbprint else {
+        return jti;
+    };
+    // The jti is hex and a thumbprint base64url, so neither needs escaping.
+    let claims = format!(r#"{{"jti":"{jti}","cnf":{{"x5t#S256":"{thumbprint}"}}}}"#);
+    format!(
+        "{}.{}.{}",
+        URL_SAFE_NO_PAD.encode(r#"{"alg":"none","typ":"at+jwt"}"#),
+        URL_SAFE_NO_PAD.encode(claims),
+        URL_SAFE_NO_PAD.encode(&jti)
+    )
 }
 
 fn refused(status: u16, error: &str, description: &str) -> ResponseTemplate {

@@ -15,12 +15,12 @@ use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
 use crate::binding::ihe::audit::config::AuditSettings;
-use crate::binding::ihe::tls::TlsSettings;
 use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::resolve::{positive, positive_ms};
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::Scheme;
+use crate::config::tls::TlsSettings;
 use crate::config::transport;
 
 /// The key of the directory's URL.
@@ -195,7 +195,7 @@ pub(super) fn resolve(
             key: String::from("registry.mcsd.refresh_interval_s"),
         });
     }
-    let tls = crate::binding::ihe::tls::resolve(
+    let tls = crate::config::tls::resolve(
         "registry.mcsd",
         directory.client_identity.as_ref(),
         directory.client_identity_file.as_deref(),

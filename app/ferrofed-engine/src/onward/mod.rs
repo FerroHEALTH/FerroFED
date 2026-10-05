@@ -25,7 +25,10 @@
 //! A grant may bind its tokens to a key of the gateway's with `DPoP` (RFC
 //! 9449): its [`dpop::Prover`] proves every request to its token endpoint,
 //! and every request to its node through the node client's
-//! [`dpop::NodeProver`].
+//! [`dpop::NodeProver`]. A grant may instead authenticate the gateway by its
+//! TLS client certificate, and bind its tokens to that certificate (RFC
+//! 8705, [`mtls`]); one grant binds its tokens one way or the other, never
+//! both ([`SenderConstraint`]).
 //!
 //! An endpoint on the Dutch Generic Functions' Nuts track (Annex B §B.4)
 //! obtains its token with a Verifiable Presentation of the gateway's
@@ -47,6 +50,7 @@ use url::Url;
 
 use crate::onward::authorization_details::AuthorizationDetails;
 use crate::onward::dpop::Prover;
+use crate::onward::mtls::{Thumbprint, TlsClientAuth};
 
 pub mod authorization_details;
 pub mod conveyance;
@@ -54,6 +58,7 @@ pub mod dpop;
 pub mod exchange;
 pub mod fapi2;
 pub mod keys;
+pub mod mtls;
 pub mod nuts;
 pub mod provider;
 pub mod token;
@@ -165,7 +170,60 @@ pub struct Grant {
     audience: Option<String>,
     assertion_audience: AssertionAudience,
     authorization_details: Option<AuthorizationDetails>,
-    dpop: Option<Arc<Prover>>,
+    client_auth: ClientAuthentication,
+    sender: Option<SenderConstraint>,
+}
+
+/// How a [`Grant`] authenticates the gateway at its token endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ClientAuthentication {
+    /// A JWT client assertion signed with the gateway's key, `private_key_jwt`
+    /// (RFC 7523 §2.2).
+    PrivateKeyJwt,
+    /// The TLS client certificate the endpoint's transport presents, with
+    /// the `client_id` in the request (RFC 8705 §2).
+    Tls(TlsClientAuth),
+}
+
+impl ClientAuthentication {
+    /// The method as the "OAuth Token Endpoint Authentication Methods"
+    /// registry names it (RFC 8414 §2, RFC 8705 §2.1.1 and §2.2.1).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::PrivateKeyJwt => "private_key_jwt",
+            Self::Tls(method) => method.as_str(),
+        }
+    }
+}
+
+/// What a [`Grant`]'s tokens are bound to, so that only the gateway can use
+/// them.
+///
+/// One grant binds its tokens one way, so a grant holds a `DPoP` key or a
+/// certificate binding, never both.
+#[derive(Clone)]
+#[non_exhaustive]
+pub enum SenderConstraint {
+    /// A key of the gateway's, proven with `DPoP` on every request (RFC
+    /// 9449).
+    Dpop(Arc<Prover>),
+    /// The TLS client certificate of this thumbprint, which the endpoint's
+    /// transport presents to the token endpoint and the node alike (RFC
+    /// 8705 §3).
+    Certificate(Thumbprint),
+}
+
+impl fmt::Debug for SenderConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Dpop(prover) => f.debug_tuple("Dpop").field(prover).finish(),
+            Self::Certificate(thumbprint) => {
+                f.debug_tuple("Certificate").field(thumbprint).finish()
+            }
+        }
+    }
 }
 
 /// The `aud` of every client assertion a [`Grant`] signs (RFC 7523 §3).
@@ -273,7 +331,8 @@ impl Grant {
             audience: None,
             assertion_audience: AssertionAudience::TokenEndpoint,
             authorization_details: None,
-            dpop: None,
+            client_auth: ClientAuthentication::PrivateKeyJwt,
+            sender: None,
         })
     }
 
@@ -306,10 +365,38 @@ impl Grant {
     /// This grant, binding its tokens to `prover`'s key with `DPoP` (RFC
     /// 9449): the token endpoint must answer `token_type` `DPoP` (§5), and
     /// the requests to the token endpoint and to the node carry proofs of
-    /// that key ([`dpop::NodeProver`] for the node's).
+    /// that key ([`dpop::NodeProver`] for the node's). It replaces a
+    /// certificate binding: a token is bound one way.
     #[must_use]
     pub fn with_dpop(mut self, prover: Arc<Prover>) -> Self {
-        self.dpop = Some(prover);
+        self.sender = Some(SenderConstraint::Dpop(prover));
+        self
+    }
+
+    /// This grant, authenticating the gateway by the TLS client certificate
+    /// its endpoint's transport presents, by `method`, in place of a client
+    /// assertion (RFC 8705 §2).
+    ///
+    /// The token request carries the `client_id` and no assertion. A token
+    /// exchange still names the gateway as the actor with an assertion the
+    /// gateway signs (RFC 8693 §2.1).
+    #[must_use]
+    pub fn with_tls_client_auth(mut self, method: TlsClientAuth) -> Self {
+        self.client_auth = ClientAuthentication::Tls(method);
+        self
+    }
+
+    /// This grant, taking only tokens bound to the TLS client certificate of
+    /// `thumbprint`, which the endpoint's transport presents to its token
+    /// endpoint and its node (RFC 8705 §3).
+    ///
+    /// The token endpoint must answer `token_type` `Bearer` (RFC 6750). A
+    /// token whose `cnf` names another certificate, in the token response
+    /// or as a claim of a JWT access token, is refused (§3.1, §3.2). It
+    /// replaces a `DPoP` binding: a token is bound one way.
+    #[must_use]
+    pub fn with_certificate_binding(mut self, thumbprint: Thumbprint) -> Self {
+        self.sender = Some(SenderConstraint::Certificate(thumbprint));
         self
     }
 
@@ -333,7 +420,26 @@ impl Grant {
     /// they are.
     #[must_use]
     pub fn dpop(&self) -> Option<&Arc<Prover>> {
-        self.dpop.as_ref()
+        match &self.sender {
+            Some(SenderConstraint::Dpop(prover)) => Some(prover),
+            _ => None,
+        }
+    }
+
+    /// The thumbprint of the certificate the grant's tokens are bound to
+    /// (RFC 8705 §3), when they are.
+    #[must_use]
+    pub fn certificate(&self) -> Option<&Thumbprint> {
+        match &self.sender {
+            Some(SenderConstraint::Certificate(thumbprint)) => Some(thumbprint),
+            _ => None,
+        }
+    }
+
+    /// How the grant authenticates the gateway at its token endpoint.
+    #[must_use]
+    pub fn client_authentication(&self) -> ClientAuthentication {
+        self.client_auth
     }
 
     /// This grant, naming `resource` as the target service (RFC 8707 §2).
@@ -434,7 +540,8 @@ impl fmt::Debug for Grant {
             .field("audience", &self.audience)
             .field("assertion_audience", &self.assertion_audience)
             .field("authorization_details", &self.authorization_details)
-            .field("dpop", &self.dpop)
+            .field("client_auth", &self.client_auth)
+            .field("sender", &self.sender)
             .finish()
     }
 }

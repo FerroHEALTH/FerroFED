@@ -346,7 +346,9 @@ ferrofed: cannot start: the url of endpoint hospital-a in registry.document is n
 A node URL no credential is sent to may stay `http`, for example a node on a
 private network whose transport a sidecar protects with mutual TLS: the
 gateway sends a node its own `ehr_id`, never the patient identifier (§5.4,
-N33).
+N33). A node the gateway presents its own client certificate to
+([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705))
+is `https` under every profile.
 
 **A database password.** Outside the development profile, the stored-query
 store's PostgreSQL connection string must set `sslmode=require` when it

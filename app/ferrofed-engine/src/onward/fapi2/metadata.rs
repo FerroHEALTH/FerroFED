@@ -13,12 +13,20 @@
 //!
 //! - an `application/json` answer of at most [`RESPONSE_LIMIT`] bytes whose
 //!   objects repeat no name, its `issuer` identical to the grant's (RFC 8414
-//!   §3.2, §3.3), and a `token_endpoint` on the issuer's origin;
-//! - `token_endpoint_auth_methods_supported` naming `private_key_jwt`, the
-//!   client authentication the grant uses (FAPI 2.0 §5.3.2.1), with
-//!   `token_endpoint_auth_signing_alg_values_supported` present and naming
-//!   `ES256` (RFC 8414 §2: the list is required beside `private_key_jwt`,
-//!   and an omitted method list means `client_secret_basic` alone);
+//!   §3.2, §3.3), and a `token_endpoint` on the issuer's origin; a grant
+//!   that uses mutual TLS takes the `token_endpoint` of
+//!   `mtls_endpoint_aliases` in preference where one is named (RFC 8705
+//!   §5), held to the same origin;
+//! - `token_endpoint_auth_methods_supported` naming the client
+//!   authentication the grant uses (FAPI 2.0 §5.3.2.1): `private_key_jwt`,
+//!   with `token_endpoint_auth_signing_alg_values_supported` present and
+//!   naming `ES256` (RFC 8414 §2: the list is required beside
+//!   `private_key_jwt`, and an omitted method list means
+//!   `client_secret_basic` alone), or `tls_client_auth` or
+//!   `self_signed_tls_client_auth` (RFC 8705 §2.1.1, §2.2.1);
+//! - `tls_client_certificate_bound_access_tokens` true for a grant whose
+//!   tokens are bound to its certificate (RFC 8705 §3.3: omitted, it is
+//!   false);
 //! - `grant_types_supported` naming every grant the grant sends:
 //!   `client_credentials`, and token exchange for a grant that exchanges
 //!   (RFC 8414 §2: an omitted list means `authorization_code` and
@@ -42,9 +50,9 @@ use openehr_its::rest::client::{RequestTimeout, Transport, TransportError};
 use serde::Deserialize;
 use url::Url;
 
-use crate::onward::GrantKind;
 use crate::onward::fapi2::{ALGORITHM_NAME, Fapi2Grant};
 use crate::onward::token::{GRANT_TYPE, TOKEN_EXCHANGE};
+use crate::onward::{ClientAuthentication, GrantKind};
 
 /// The longest metadata document the gateway reads (no specification
 /// governs this: our own design).
@@ -105,10 +113,18 @@ pub enum DiscoveryError {
     /// credentials to.
     #[error("the metadata's token_endpoint is not one the gateway sends to")]
     Endpoint(#[source] EndpointError),
-    /// The token endpoint does not take `private_key_jwt` (RFC 8414 §2;
-    /// FAPI 2.0 Security Profile §5.3.2.1).
-    #[error("the token endpoint does not take private_key_jwt client authentication")]
+    /// The token endpoint does not take the client authentication the grant
+    /// uses: `private_key_jwt`, `tls_client_auth` or
+    /// `self_signed_tls_client_auth` (RFC 8414 §2, RFC 8705 §2; FAPI 2.0
+    /// Security Profile §5.3.2.1).
+    #[error("the token endpoint does not take the client authentication the grant uses")]
     ClientAuthentication,
+    /// The server does not state that it issues certificate-bound tokens,
+    /// which a grant bound to its certificate takes alone (RFC 8705 §3.3).
+    #[error(
+        "the authorization server does not state tls_client_certificate_bound_access_tokens (RFC 8705 §3.3)"
+    )]
+    CertificateBinding,
     /// The token endpoint does not list `ES256` for client assertions (RFC
     /// 8414 §2).
     #[error("the token endpoint does not list ES256 for client assertions (RFC 8414 §2)")]
@@ -143,6 +159,15 @@ struct Raw {
     token_endpoint_auth_signing_alg_values_supported: Option<Vec<String>>,
     dpop_signing_alg_values_supported: Option<Vec<String>>,
     authorization_details_types_supported: Option<Vec<String>>,
+    tls_client_certificate_bound_access_tokens: Option<bool>,
+    mtls_endpoint_aliases: Option<Aliases>,
+}
+
+/// The endpoint aliases a client that uses mutual TLS sends to (RFC 8705
+/// §5), the one the grant reads.
+#[derive(Deserialize)]
+struct Aliases {
+    token_endpoint: Option<String>,
 }
 
 /// Reads the metadata of `grant`'s issuer over `transport`, waiting at most
@@ -204,10 +229,17 @@ fn read(body: &[u8], grant: &Fapi2Grant) -> Result<Url, DiscoveryError> {
     {
         return Err(DiscoveryError::Issuer);
     }
+    // NOTE: RFC 8705 §5, a client that does mutual TLS MUST use the alias of an
+    // endpoint in mtls_endpoint_aliases, when present, over the top-level one.
+    let alias = raw
+        .mtls_endpoint_aliases
+        .as_ref()
+        .and_then(|aliases| aliases.token_endpoint.as_deref())
+        .filter(|_| grant.uses_mutual_tls());
     let token_endpoint = issuer
         .endpoint(
-            raw.token_endpoint
-                .as_deref()
+            alias
+                .or(raw.token_endpoint.as_deref())
                 .ok_or(DiscoveryError::TokenEndpoint)?,
         )
         .map_err(|refused| match refused {
@@ -217,18 +249,25 @@ fn read(body: &[u8], grant: &Fapi2Grant) -> Result<Url, DiscoveryError> {
     let lists = |list: Option<&Vec<String>>, value: &str| {
         list.is_some_and(|list| list.iter().any(|item| item == value))
     };
+    let method = grant.client_authentication();
     if !lists(
         raw.token_endpoint_auth_methods_supported.as_ref(),
-        PRIVATE_KEY_JWT,
+        method.as_str(),
     ) {
         return Err(DiscoveryError::ClientAuthentication);
     }
-    if !lists(
-        raw.token_endpoint_auth_signing_alg_values_supported
-            .as_ref(),
-        ALGORITHM_NAME,
-    ) {
+    if method == ClientAuthentication::PrivateKeyJwt
+        && !lists(
+            raw.token_endpoint_auth_signing_alg_values_supported
+                .as_ref(),
+            ALGORITHM_NAME,
+        )
+    {
         return Err(DiscoveryError::SigningAlgorithm);
+    }
+    if grant.certificate().is_some() && raw.tls_client_certificate_bound_access_tokens != Some(true)
+    {
+        return Err(DiscoveryError::CertificateBinding);
     }
     let exchanges = grant.kind() == GrantKind::TokenExchange;
     for grant_type in [Some(GRANT_TYPE), exchanges.then_some(TOKEN_EXCHANGE)]
@@ -239,10 +278,11 @@ fn read(body: &[u8], grant: &Fapi2Grant) -> Result<Url, DiscoveryError> {
             return Err(DiscoveryError::GrantType { grant_type });
         }
     }
-    if raw
-        .dpop_signing_alg_values_supported
-        .as_ref()
-        .is_some_and(|supported| !supported.iter().any(|alg| alg == ALGORITHM_NAME))
+    if grant.dpop().is_some()
+        && raw
+            .dpop_signing_alg_values_supported
+            .as_ref()
+            .is_some_and(|supported| !supported.iter().any(|alg| alg == ALGORITHM_NAME))
     {
         return Err(DiscoveryError::ProofAlgorithm);
     }

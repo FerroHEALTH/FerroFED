@@ -24,9 +24,14 @@
 //!
 //! A test that configures `authorization_details` requires them with
 //! [`crate::oauth::TokenEndpoint::require_authorization_details`] on
-//! [`AuthorizationServer::endpoint`]. No specification governs the device:
-//! our own design.
+//! [`AuthorizationServer::endpoint`]. [`AuthorizationServer::mutual_tls`]
+//! starts a server for the profile's other choice (§5.3.2.1): it
+//! authenticates the client by its TLS certificate and requires no `DPoP`
+//! proof (RFC 8705 §2), behind a [`crate::tls::MutualTls`] front the test
+//! starts over [`AuthorizationServer::issuer`], with the metadata the test
+//! publishes. No specification governs the device: our own design.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use jsonwebtoken::Algorithm;
@@ -67,6 +72,12 @@ pub struct Metadata {
     /// `authorization_details_types_supported`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authorization_details_types_supported: Option<Vec<String>>,
+    /// `tls_client_certificate_bound_access_tokens` (RFC 8705 §3.3).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_client_certificate_bound_access_tokens: Option<bool>,
+    /// `mtls_endpoint_aliases` (RFC 8705 §5), by endpoint name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mtls_endpoint_aliases: Option<BTreeMap<String, String>>,
 }
 
 /// The document the metadata URL answers, and its media type.
@@ -92,6 +103,22 @@ impl AuthorizationServer {
         let issuer = endpoint.server().uri();
         endpoint.expect_assertion(Algorithm::ES256, &issuer);
         endpoint.require_dpop();
+        Self::serving(endpoint).await
+    }
+
+    /// Starts a server that authenticates the client `client_id` by its TLS
+    /// certificate and requires no `DPoP` proof (RFC 8705 §2), issuing
+    /// tokens as [`AuthorizationServer::start`] does; a test binds them to
+    /// a certificate with
+    /// [`crate::oauth::TokenEndpoint::bind_to_certificate`].
+    pub async fn mutual_tls(client_id: &str, expires_in: Option<u64>) -> Self {
+        let endpoint = TokenEndpoint::start(client_id, expires_in).await;
+        endpoint.accept_tls_client_auth();
+        Self::serving(endpoint).await
+    }
+
+    /// The server around `endpoint`, publishing its default metadata.
+    async fn serving(endpoint: TokenEndpoint) -> Self {
         let published = Arc::new(Mutex::new(Published {
             body: String::new(),
             media: String::from("application/json"),
@@ -134,6 +161,8 @@ impl AuthorizationServer {
             token_endpoint_auth_signing_alg_values_supported: list(&["ES256", "PS256"]),
             dpop_signing_alg_values_supported: list(&["ES256"]),
             authorization_details_types_supported: list(&[DETAILS_TYPE]),
+            tls_client_certificate_bound_access_tokens: None,
+            mtls_endpoint_aliases: None,
         }
     }
 

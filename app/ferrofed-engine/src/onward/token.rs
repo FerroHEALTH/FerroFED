@@ -5,9 +5,12 @@
 //!
 //! The request is the client-credentials grant (RFC 6749 §4.4.2) or token
 //! exchange (RFC 8693 §2.1), authenticated by a signed JWT client assertion
-//! (RFC 7523 §2.2), with the grant's `authorization_details` where it has
-//! some (RFC 9396 §6), and the answer a token (RFC 6749 §5.1, RFC 8693
-//! §2.2.1, RFC 9396 §7) or a typed refusal (RFC 6749 §5.2).
+//! (RFC 7523 §2.2) or by the TLS client certificate of the connection, with
+//! the `client_id` in the request (RFC 8705 §2), with the grant's
+//! `authorization_details` where it has some (RFC 9396 §6), and the answer a
+//! token (RFC 6749 §5.1, RFC 8693 §2.2.1, RFC 9396 §7) or a typed refusal
+//! (RFC 6749 §5.2). A grant whose tokens are certificate-bound takes only a
+//! token whose stated binding names its certificate (RFC 8705 §3).
 //!
 //! The request is composed here and sent through the same HTTP engine as
 //! the node requests. The token endpoint is no ITS-REST resource, so no
@@ -29,10 +32,11 @@ use serde_json::value::RawValue;
 use url::form_urlencoded;
 
 use crate::dispatch::reported::MESSAGE_LIMIT;
-use crate::onward::Grant;
 use crate::onward::authorization_details::{self, AuthorizationDetailsError};
 use crate::onward::dpop::{self, Prover, Role};
 use crate::onward::keys::SigningKey;
+use crate::onward::mtls::{self, Binding, Confirmation};
+use crate::onward::{ClientAuthentication, Grant};
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
 pub const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -76,6 +80,10 @@ pub enum TokenError {
     /// The client assertion could not be signed.
     #[error("the client assertion could not be signed")]
     Sign(#[source] jsonwebtoken::errors::Error),
+    /// The request needs an assertion of the gateway, and the grant holds
+    /// no key to sign one; nothing was sent.
+    #[error("the token request needs an assertion of the gateway, and no key signs one")]
+    Unsigned,
     /// The token request could not be composed.
     #[error("the token request could not be composed")]
     Compose(#[source] http::Error),
@@ -152,6 +160,13 @@ pub enum TokenError {
     /// not have the shape of RFC 9396 §2.
     #[error("the authorization_details the token response granted are not of RFC 9396 §2 shape")]
     GrantedDetails(#[source] AuthorizationDetailsError),
+    /// The token is bound to another certificate than the one the grant's
+    /// connections present, or confirmed by another method, so it was
+    /// neither kept nor sent (RFC 8705 §3).
+    #[error(
+        "the issued token is not bound to the certificate the gateway presents (RFC 8705 §3), so it was not used"
+    )]
+    CertificateMismatch,
 }
 
 /// An `error` code RFC 6749 §5.2 registers for a token endpoint's refusal.
@@ -241,7 +256,8 @@ struct Claims<'a> {
 }
 
 /// An RFC 6749 §5.1 token response, the members the gateway reads, with the
-/// `issued_token_type` of RFC 8693 §2.2.1.
+/// `issued_token_type` of RFC 8693 §2.2.1 and a `cnf` in the shape RFC 8705
+/// §3.2 gives an introspection response.
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -249,6 +265,7 @@ struct TokenResponse {
     expires_in: Option<u64>,
     issued_token_type: Option<String>,
     authorization_details: Option<Box<RawValue>>,
+    cnf: Option<Confirmation>,
 }
 
 /// An RFC 6749 §5.2 error response, the members the gateway reads.
@@ -295,27 +312,31 @@ pub fn assertion(
 /// Requests a token for `grant` with the client-credentials grant (RFC
 /// 6749 §4.4.2).
 ///
-/// The request goes over `transport`, authenticated with an assertion
-/// signed with `key` and valid for `lifetime`, and waits at most `timeout`
-/// for the answer. Every send carries an assertion of its own, so the one more send that
-/// answers a demanded `DPoP` nonce never repeats a `jti` (RFC 7523 §3).
+/// The request goes over `transport`, authenticated as the grant's
+/// [`ClientAuthentication`] says: with an assertion signed with the key of
+/// `signer` and valid for its lifetime, or by the TLS client certificate
+/// `transport` presents, with the `client_id` (RFC 8705 §2). It waits at
+/// most `timeout` for the answer. Every send carries an assertion of its
+/// own, so the one more send that answers a demanded `DPoP` nonce never
+/// repeats a `jti` (RFC 7523 §3).
 ///
 /// # Errors
 ///
 /// Returns a [`TokenError`] for every request that produced no usable
-/// token: an assertion that could not be signed, a request that could not
-/// be composed or sent, an RFC 6749 §5.2 refusal, another status, a body
-/// that is no token response, and a token of another type than the grant
-/// asks for or that cannot be sent.
+/// token: an assertion that could not be signed or has no key to sign it, a
+/// request that could not be composed or sent, an RFC 6749 §5.2 refusal,
+/// another status, a body that is no token response, a token of another
+/// type than the grant asks for or that cannot be sent, and a token bound
+/// to another certificate than the grant's.
 pub async fn request<T: Transport>(
     grant: &Grant,
-    (key, lifetime): (&SigningKey, Duration),
+    signer: Option<(&SigningKey, Duration)>,
     transport: &T,
     timeout: Duration,
 ) -> Result<Issued, TokenError> {
     let compose = || -> Result<String, TokenError> {
-        let client = assertion(grant, key, lifetime)?;
-        Ok(client_credentials_form(grant, &client))
+        let client = client_assertion(grant, signer)?;
+        Ok(client_credentials_form(grant, client.as_deref()))
     };
     let token = send(grant, compose, transport, timeout).await?;
     issued(grant, token)
@@ -324,9 +345,10 @@ pub async fn request<T: Transport>(
 /// Exchanges `subject`'s token for a token of `grant`'s node (RFC 8693
 /// §2.1).
 ///
-/// The request goes over `transport`, authenticated with an assertion
-/// signed with `key` and valid for `lifetime`, names the gateway as the
-/// actor with a second one, and waits at most `timeout`. It always asks for `subject`'s scope and names the node with
+/// The request goes over `transport`, authenticated as [`request`] is,
+/// names the gateway as the actor with an assertion signed with `key` and
+/// valid for `lifetime`, and waits at most `timeout`. It always asks for
+/// `subject`'s scope and names the node with
 /// `resource` (RFC 8707 §2), and with `audience` where the grant has one.
 /// An exchange with no scope or no resource is never sent: without `scope`
 /// the authorization server may issue the caller's whole grant (RFC 8693
@@ -355,9 +377,9 @@ pub async fn exchange<T: Transport>(
         return Err(TokenError::Untargeted);
     }
     let compose = || -> Result<String, TokenError> {
-        let client = assertion(grant, key, lifetime)?;
+        let client = client_assertion(grant, Some((key, lifetime)))?;
         let actor = assertion(grant, key, lifetime)?;
-        Ok(exchange_form(grant, subject, (&client, &actor)))
+        Ok(exchange_form(grant, subject, (client.as_deref(), &actor)))
     };
     let token = send(grant, compose, transport, timeout).await?;
     if token.issued_token_type.as_deref() != Some(ACCESS_TOKEN_TYPE) {
@@ -368,12 +390,29 @@ pub async fn exchange<T: Transport>(
     issued(grant, token)
 }
 
+/// The client assertion `grant`'s client authentication sends, signed with
+/// the key of `signer`, or `None` for a grant authenticated by its TLS
+/// client certificate (RFC 8705 §2).
+fn client_assertion(
+    grant: &Grant,
+    signer: Option<(&SigningKey, Duration)>,
+) -> Result<Option<String>, TokenError> {
+    match grant.client_authentication() {
+        ClientAuthentication::Tls(_) => Ok(None),
+        ClientAuthentication::PrivateKeyJwt => {
+            let (key, lifetime) = signer.ok_or(TokenError::Unsigned)?;
+            assertion(grant, key, lifetime).map(Some)
+        }
+    }
+}
+
 /// The body of a client-credentials request for `grant`, authenticated by
-/// `assertion` (RFC 6749 §4.4.2, RFC 7523 §2.2).
-fn client_credentials_form(grant: &Grant, assertion: &str) -> String {
+/// `assertion`, or by the connection's certificate when there is none (RFC
+/// 6749 §4.4.2, RFC 7523 §2.2, RFC 8705 §2).
+fn client_credentials_form(grant: &Grant, assertion: Option<&str>) -> String {
     let mut form = form_urlencoded::Serializer::new(String::new());
     form.append_pair("grant_type", GRANT_TYPE);
-    authenticated(&mut form, assertion);
+    authenticated(&mut form, grant, assertion);
     if let Some(scope) = grant.scope() {
         form.append_pair("scope", scope.as_str());
     }
@@ -382,12 +421,16 @@ fn client_credentials_form(grant: &Grant, assertion: &str) -> String {
 }
 
 /// The body of a token exchange for `grant` of `subject`'s token,
-/// authenticated by `assertion` and naming the gateway with `actor` (RFC
-/// 8693 §2.1).
-fn exchange_form(grant: &Grant, subject: Subject<'_>, (assertion, actor): (&str, &str)) -> String {
+/// authenticated as [`client_credentials_form`] is and naming the gateway
+/// with `actor` (RFC 8693 §2.1).
+fn exchange_form(
+    grant: &Grant,
+    subject: Subject<'_>,
+    (assertion, actor): (Option<&str>, &str),
+) -> String {
     let mut form = form_urlencoded::Serializer::new(String::new());
     form.append_pair("grant_type", TOKEN_EXCHANGE);
-    authenticated(&mut form, assertion);
+    authenticated(&mut form, grant, assertion);
     form.append_pair("subject_token", subject.token.expose_secret())
         .append_pair("subject_token_type", ACCESS_TOKEN_TYPE)
         .append_pair("actor_token", actor)
@@ -398,10 +441,23 @@ fn exchange_form(grant: &Grant, subject: Subject<'_>, (assertion, actor): (&str,
     form.finish()
 }
 
-/// Adds the client authentication of RFC 7523 §2.2 to `form`.
-fn authenticated(form: &mut form_urlencoded::Serializer<'_, String>, assertion: &str) {
-    form.append_pair("client_assertion_type", CLIENT_ASSERTION_TYPE)
-        .append_pair("client_assertion", assertion);
+/// Adds the client authentication to `form`: the assertion of RFC 7523
+/// §2.2, or the `client_id` alone that RFC 8705 §2 requires of a client the
+/// TLS handshake authenticates.
+fn authenticated(
+    form: &mut form_urlencoded::Serializer<'_, String>,
+    grant: &Grant,
+    assertion: Option<&str>,
+) {
+    match assertion {
+        Some(assertion) => {
+            form.append_pair("client_assertion_type", CLIENT_ASSERTION_TYPE)
+                .append_pair("client_assertion", assertion);
+        }
+        None => {
+            form.append_pair("client_id", grant.client_id());
+        }
+    }
 }
 
 /// Adds the grant's `resource` (RFC 8707 §2), `audience`, and
@@ -554,6 +610,13 @@ fn issued(grant: &Grant, token: TokenResponse) -> Result<Issued, TokenError> {
             .as_deref()
             .ok_or(TokenError::AuthorizationDetails)?;
         authorization_details::types_of(granted.get()).map_err(TokenError::GrantedDetails)?;
+    }
+    // NOTE: RFC 8705 §3, a certificate-bound token travels only over a connection
+    // presenting that certificate, so one whose stated binding names another is refused.
+    if let Some(expected) = grant.certificate()
+        && mtls::binding(&token.access_token, token.cnf.as_ref(), expected) == Binding::Mismatch
+    {
+        return Err(TokenError::CertificateMismatch);
     }
     let access = SecretString::from(token.access_token);
     let credentials = if grant.dpop().is_some() {

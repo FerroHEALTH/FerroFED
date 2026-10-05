@@ -28,6 +28,7 @@ pub(crate) mod resolve;
 pub(crate) mod secrets;
 pub mod settings;
 pub mod stored_queries;
+pub mod tls;
 pub mod transport;
 
 /// The prefix of every environment override.
@@ -485,12 +486,15 @@ pub struct Metrics {
     pub otlp_endpoint: Option<SecretUrl>,
 }
 
-/// The credentials one endpoint expects: a bearer token, basic credentials,
-/// an OAuth 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
+/// The credentials one endpoint expects.
 ///
+/// A section names a bearer token, basic credentials, an OAuth 2.0 grant, a
+/// Nuts grant or a FAPI 2.0 grant, and for a node the TLS client
+/// certificate the gateway presents to it and to its authorization server.
 /// Every secret is reachable inline or through its `_file` sibling; setting
-/// both is a boot error, and so is naming two schemes. An inline secret is a
-/// [`Secret`], which no rendering shows.
+/// both is a boot error, and so is naming two schemes. A node's section may
+/// name its TLS material alone, when the transport authenticates the
+/// gateway. An inline secret is a [`Secret`], which no rendering shows.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Credentials {
@@ -517,6 +521,27 @@ pub struct Credentials {
     /// (`[credentials."<endpoint id>".fapi2]`), the BgZ/eOverdracht track of
     /// Annex B §B.4a.
     pub fapi2: Option<grant::Fapi2>,
+    /// The gateway's TLS client certificate chain and private key, PEM,
+    /// which it presents to the node and to its authorization server (RFC
+    /// 8705); a node's section alone takes it, and the node is then reached
+    /// over `https` alone.
+    pub client_identity: Option<Secret>,
+    /// A file holding `client_identity`, read at boot.
+    pub client_identity_file: Option<PathBuf>,
+    /// A PEM bundle of trust roots, beside the platform's, the node and its
+    /// authorization server are trusted by; a node's section alone takes it.
+    pub trust_roots_file: Option<PathBuf>,
+}
+
+impl Credentials {
+    /// Whether the section names TLS material, which only a node's section
+    /// takes.
+    #[must_use]
+    pub fn names_tls(&self) -> bool {
+        self.client_identity.is_some()
+            || self.client_identity_file.is_some()
+            || self.trust_roots_file.is_some()
+    }
 }
 
 /// An OAuth 2.0 grant at one node's token endpoint.
@@ -531,7 +556,9 @@ pub struct OAuth2 {
     /// (RFC 8693), a token per verified caller.
     pub grant: Option<GrantKind>,
     /// How the gateway authenticates at the token endpoint:
-    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2).
+    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2), or
+    /// `tls_client_auth` or `self_signed_tls_client_auth`, the section's
+    /// TLS client certificate (RFC 8705 §2).
     pub client_auth: Option<ClientAuth>,
     /// The token endpoint, an `http` or `https` URL with no userinfo; by
     /// default also the `aud` of every client assertion (RFC 7523 §3).
@@ -559,6 +586,11 @@ pub struct OAuth2 {
     /// (RFC 9449), a P-256 or P-384 key in PKCS#8 PEM, read at boot. Unset,
     /// the tokens are bearer tokens.
     pub dpop_key_file: Option<PathBuf>,
+    /// Whether the tokens are bound to the section's TLS client certificate
+    /// (RFC 8705 §3, named as the client metadata of §3.4 names it): a
+    /// token whose stated binding names another certificate is refused.
+    /// Never set with `dpop_key_file`.
+    pub tls_client_certificate_bound_access_tokens: bool,
 }
 
 /// The OAuth 2.0 grant the gateway uses at a node's token endpoint.
@@ -582,6 +614,14 @@ pub enum ClientAuth {
     /// A JWT client assertion signed with the gateway's key (RFC 7523 §2.2,
     /// RFC 7521 §4.2).
     PrivateKeyJwt,
+    /// The section's TLS client certificate, validated against the
+    /// authorization server's PKI (RFC 8705 §2.1).
+    #[serde(rename = "tls_client_auth")]
+    Tls,
+    /// The section's TLS client certificate, matched against the one the
+    /// authorization server registered for the client (RFC 8705 §2.2).
+    #[serde(rename = "self_signed_tls_client_auth")]
+    SelfSignedTls,
 }
 
 /// The gateway's signing keys and their publication (§13.1, N25).

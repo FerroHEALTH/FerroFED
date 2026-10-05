@@ -8,14 +8,15 @@
 # publishes: OAuth 2.0 (RFC 6749), JWT (RFC 7519), the assertion framework
 # and its JWT profile (RFC 7521, RFC 7523), token introspection (RFC 7662),
 # authorization server metadata (RFC 8414), Pushed Authorization Requests
-# (RFC 9126), Rich Authorization Requests (RFC 9396) and DPoP (RFC 9449).
+# (RFC 9126), Rich Authorization Requests (RFC 9396), DPoP (RFC 9449) and
+# mutual-TLS client authentication with certificate-bound tokens (RFC 8705).
 #
 # The GF-Authentication pages of the Netherlands Generic Functions IG cite
 # RFC 6749, 7523, 7662 and 9449; Nuts RFC021 builds on RFC 7521, 7519 and
 # 8414; the BgZ/eOverdracht track of Annex B §B.4a names RFC 9126 (through
 # FAPI 2.0) and RFC 9396. The access token request of
 # crates/nl-generic-functions feature `nuts-auth` (#88) reads RFC 8414 and
-# RFC 9449.
+# RFC 9449. The onward grants of app/ferrofed-engine read RFC 8705 (#492).
 #
 # An RFC never changes once published, so each "IETF RFC <n>" row of
 # docs/VERSIONS.md pins its URL and the sha256 of its bytes; the script fails
@@ -43,7 +44,7 @@ cd "$root"
 corpus_require curl shasum
 
 dest="docs/specs/ietf-oauth"
-numbers=(6749 7519 7521 7523 7662 8414 9126 9396 9449)
+numbers=(6749 7519 7521 7523 7662 8414 8705 9126 9396 9449)
 notice="This document is subject to BCP 78 and the IETF Trust's Legal"
 
 tmp="$(mktemp -d)"
@@ -106,15 +107,17 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Read by: #88 (the access token request of \`crates/nl-generic-functions\`
   feature \`nuts-auth\`: the authorization server metadata of RFC 8414 and
   the DPoP proof of RFC 9449; the research comparing the B.4 and B.4a
-  tracks)
+  tracks), #492 (the mutual-TLS client authentication and certificate-bound
+  tokens of RFC 8705 on the onward grants)
 
 ## What is taken
 
 The RFCs the GF-Authentication pages of the Netherlands Generic Functions IG
 cite (6749, 7523, 7662, 9449), the ones Nuts RFC021 builds its grant on
 (7519, 7521, 8414), and the two the BgZ/eOverdracht track of Annex B §B.4a
-adds (9126, 9396). The other RFCs the OAuth family references are cited, not
-taken.
+adds (9126, 9396), and RFC 8705, which the onward grants authenticate and
+bind their tokens with when a deployment uses mutual TLS. The other RFCs
+the OAuth family references are cited, not taken.
 
 | File | sha256 |
 |---|---|$rows

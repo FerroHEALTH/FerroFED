@@ -170,12 +170,16 @@ impl Federation {
         // only backstops a connection the call deadline cannot reach.
         let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
-        let onward = crate::onward::onward(settings, transport)?;
+        let onward = crate::onward::onward(settings, transport, &snapshot)?;
         let signer = Arc::new(crate::conveyed::signer(settings, &id)?);
-        let clients = NodeClients::from_snapshot(&snapshot, &onward.transport, &onward.credentials)
-            .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
-            .and_then(|clients| clients.with_dpop(&onward.dpop))
-            .map_err(FederationError::Clients)?;
+        let clients = NodeClients::from_snapshot_over(
+            &snapshot,
+            (&onward.transport, &onward.transports),
+            &onward.credentials,
+        )
+        .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
+        .and_then(|clients| clients.with_dpop(&onward.dpop))
+        .map_err(FederationError::Clients)?;
         let mut context = Context::new(targeting(selection))
             .with_offset_strategy(settings.federation.offset)
             .with_decomposable_aggregates(settings.federation.decomposable.iter().copied());
@@ -267,14 +271,13 @@ impl Federation {
 fn client_keys(settings: &Settings) -> Vec<Jwk> {
     let mut keys: Vec<Jwk> = Vec::new();
     for scheme in settings.credentials.values() {
-        if let Scheme::Fapi2(grant) = scheme {
-            let key = grant.client_key();
-            if !keys
+        if let Scheme::Fapi2(grant) = scheme
+            && let Some(key) = grant.client_key()
+            && !keys
                 .iter()
                 .any(|known| known.common.key_id.as_deref() == Some(key.kid()))
-            {
-                keys.push(key.public().clone());
-            }
+        {
+            keys.push(key.public().clone());
         }
     }
     keys

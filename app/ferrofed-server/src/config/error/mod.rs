@@ -497,6 +497,9 @@ pub enum Error {
     /// refused.
     #[error(transparent)]
     GrantFault(#[from] crate::config::grant::GrantFault),
+    /// TLS material, or a use of mutual TLS, is refused (RFC 8705).
+    #[error(transparent)]
+    TlsFault(#[from] crate::config::tls::TlsFault),
     /// A URL the gateway verifies its callers against is plain `http` to a
     /// host that is not loopback.
     #[error(transparent)]

@@ -54,6 +54,9 @@ jsonwebtoken.workspace = true
 # Accept and Content-Type composed from the operation's listed media types
 # (#261).
 mime.workspace = true
+# The certificate a mutual-TLS grant binds its tokens to, read from the PEM
+# chain the endpoint presents (RFC 8705 §3.1, #492).
+pem.workspace = true
 # The claims of an onward client assertion and the token endpoint answer (#81).
 serde.workspace = true
 # The result cells the versions a node holds are read from (§12.2, #64).

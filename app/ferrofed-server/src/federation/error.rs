@@ -241,6 +241,25 @@ pub enum FederationError {
     /// The HTTP client every node client shares could not be built.
     #[error("the HTTP client for the nodes could not be built")]
     Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// A node the gateway presents its TLS client certificate to is not
+    /// reached over `https` (RFC 8705).
+    #[error(
+        "endpoint {endpoint} is not an https URL, and credentials.{endpoint} presents a TLS client certificate to it, which needs TLS under every profile"
+    )]
+    ClientCertificateOverHttp {
+        /// The endpoint.
+        endpoint: EndpointId,
+    },
+    /// The HTTP client of a node reached with its own TLS material could
+    /// not be built.
+    #[error("the HTTP client of endpoint {endpoint} could not be built")]
+    NodeTransport {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// Why it could not be built; it carries no key.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
 }
 
 impl From<GrantRefused> for FederationError {

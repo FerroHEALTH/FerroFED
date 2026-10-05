@@ -9,6 +9,13 @@
 //! the track of Annex B §B.4a does, the provider a binding's grant builds,
 //! such as the Nuts grant of Annex B §B.4, and the `DPoP` key of a grant
 //! whose tokens are bound to one (RFC 9449).
+//!
+//! A node whose `[credentials]` section names TLS material is reached over a
+//! transport of its own, which presents the gateway's client certificate and
+//! trusts the section's roots, and its token endpoint over the same
+//! transport: a token bound to that certificate travels only over
+//! connections that present it (RFC 8705 §3). Such a node is reached over
+//! `https` alone.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -19,10 +26,13 @@ use ferrofed_engine::onward::exchange::{Exchange, SharedOnBehalf};
 use ferrofed_engine::onward::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
 use ferrofed_engine::onward::provider::ClientCredentials;
 use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
+use ferrofed_identity::fhir::{self, Authentication};
 use ferrofed_registry::id::EndpointId;
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 
 use crate::config::settings::{Scheme, Settings};
+use crate::config::tls::TlsSettings;
 use crate::federation::error::FederationError;
 
 /// The HTTP engine every request to a node and to its token endpoint is
@@ -32,8 +42,12 @@ pub(crate) type NodeTransport = ReqwestTransport;
 /// What the node clients of one federation send each node to authenticate.
 #[derive(Debug)]
 pub(crate) struct Onward {
-    /// The engine every node request and token request is sent through.
+    /// The engine every node request and token request is sent through,
+    /// unless its endpoint has one of its own.
     pub(crate) transport: NodeTransport,
+    /// The engine of each endpoint whose section names TLS material, which
+    /// its node requests and its token requests are sent through.
+    pub(crate) transports: BTreeMap<EndpointId, NodeTransport>,
     /// The credentials of each endpoint that sends the same to every
     /// caller: a configured secret or a client-credentials grant.
     pub(crate) credentials: BTreeMap<EndpointId, SharedCredentials>,
@@ -56,18 +70,29 @@ pub(crate) struct Onward {
 /// grant with a `DPoP` key proves every request to its token endpoint, and
 /// its node's client proves every request to the node with the same key.
 ///
+/// An endpoint with TLS material of its own is reached, at its node and its
+/// token endpoint, over an engine built with that material, its timeout the
+/// overall budget as `engine`'s is.
+///
 /// # Errors
 ///
 /// Returns [`FederationError::Grant`] for a grant with no `[signing]` key to
-/// sign its assertion.
+/// sign its assertion, [`FederationError::ClientCertificateOverHttp`] for a
+/// node `registry` declares at an `http` URL that would be presented a client
+/// certificate, and [`FederationError::Tls`] and
+/// [`FederationError::NodeTransport`] for TLS material no engine can be
+/// built with.
 pub(crate) fn onward(
     settings: &Settings,
     engine: ReqwestTransport,
+    registry: &RegistrySnapshot,
 ) -> Result<Onward, FederationError> {
     let mut credentials = BTreeMap::new();
     let mut on_behalf = BTreeMap::new();
     let mut dpop = BTreeMap::new();
+    let transports = transports(settings, registry)?;
     for (endpoint, scheme) in &settings.credentials {
+        let engine = transports.get(endpoint).unwrap_or(&engine);
         let grant = match scheme {
             Scheme::Bearer(token) => {
                 let shared: SharedCredentials =
@@ -85,8 +110,10 @@ pub(crate) fn onward(
             }
             Scheme::OAuth2(grant) => grant,
             Scheme::Fapi2(grant) => {
-                dpop.insert(endpoint.clone(), Arc::clone(grant.dpop()));
-                match fapi2(settings, endpoint, grant, &engine)? {
+                if let Some(prover) = grant.dpop() {
+                    dpop.insert(endpoint.clone(), Arc::clone(prover));
+                }
+                match fapi2(settings, endpoint, grant, engine)? {
                     Provided::Same(provider) => {
                         credentials.insert(endpoint.clone(), provider);
                     }
@@ -141,10 +168,55 @@ pub(crate) fn onward(
     }
     Ok(Onward {
         transport: engine,
+        transports,
         credentials,
         on_behalf,
         dpop,
     })
+}
+
+/// The engine of each endpoint whose section names TLS material, built with
+/// it, refusing one that would present a client certificate to a node
+/// `registry` declares at a URL other than `https`.
+fn transports(
+    settings: &Settings,
+    registry: &RegistrySnapshot,
+) -> Result<BTreeMap<EndpointId, NodeTransport>, FederationError> {
+    let mut transports = BTreeMap::new();
+    for (endpoint, tls) in &settings.onward_tls {
+        // NOTE: no specification governs this: our own design; an endpoint the
+        // registry lacks is legitimately absent here, and the client build refuses it.
+        if tls.client_identity.is_some()
+            && let Some(declared) = registry.endpoint(endpoint)
+            && !crate::config::transport::client_certificate(declared.url().as_str())
+        {
+            return Err(FederationError::ClientCertificateOverHttp {
+                endpoint: endpoint.clone(),
+            });
+        }
+        transports.insert(endpoint.clone(), transport(settings, endpoint, tls)?);
+    }
+    Ok(transports)
+}
+
+/// The engine of `endpoint`, presenting and trusting `tls`, with the
+/// overall budget as its timeout, as the shared engine has.
+fn transport(
+    settings: &Settings,
+    endpoint: &EndpointId,
+    tls: &TlsSettings,
+) -> Result<NodeTransport, FederationError> {
+    let material = crate::service::tls_of(&format!("credentials.{endpoint}"), tls)
+        .map_err(FederationError::Tls)?;
+    let failed =
+        |source: Box<dyn std::error::Error + Send + Sync>| FederationError::NodeTransport {
+            endpoint: endpoint.clone(),
+            source,
+        };
+    let builder = fhir::http_client_builder(&Authentication::None, &material)
+        .map_err(|source| failed(Box::new(source)))?;
+    ReqwestTransport::with_builder_timeout(builder, settings.federation.budget.overall())
+        .map_err(|source| failed(Box::new(source)))
 }
 
 /// What one endpoint's grant provides its node client.

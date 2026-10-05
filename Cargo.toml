@@ -186,6 +186,8 @@ serde-saphyr = { version = "1.3.0", default-features = false, features = ["deser
 # for the token-exchange cache and a DPoP proof's `ath` with its SHA-256
 # (#439). Verified against crates.io on 2026-10-04.
 aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-sys"] }
+# The PEM reader the testkit writes each synthetic key with, and the engine
+# reads the certificate of a mutual-TLS grant's client identity with (#492).
 pem = { version = "3.0.6", default-features = false, features = ["std"] }
 # Test-only for the ATNA audit repository (#418): the testkit's harness
 # repository generates its CA and server certificate at run time over the
