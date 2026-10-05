@@ -23,6 +23,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- A differential run against the Federation Tier reference implementation,
+  behind `FERROFED_E2E` (#94; §16.3 tracks 1 to 7 and 9). The testkit builds
+  `syntaric/openehr-federation-ref` at its pinned commit from the vendored
+  source and the manifest held to its recorded sha256, on digest-pinned Maven
+  and Java images, and runs it beside FerroFED over the same two FerroEHR
+  nodes, each gateway behind capturing proxies of its own. Some thirty
+  requests go to both, and the run compares the status, the federation
+  headers, the envelope against the vendored schema, `meta.federation`, the
+  rows and what reached each node, after normalising only what the
+  specification leaves free. Every difference is held in a register with its
+  verdict and where it is recorded: a new or vanished difference fails the
+  run. The `e2e (containers)` job uploads the Markdown and TSV report as the
+  `differential-report` artifact. No difference is a FerroFED defect; three
+  reference divergences and one specification question are new upstream
+  reports (#212 T190 to T193).
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at
@@ -52,6 +67,22 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   deferred, not applicable or open, with the issue and reason of each
   deferral. CI writes it from the offline and the container runs and uploads
   it as the `conformance-report` artifact (#92).
+- The Federation-Node profile of §16.2 as operator and harness tooling
+  (#93; N26, N27, N34, CP-18, CP-19, CP-27). The testkit's `node_profile`
+  checks what a member CDR's ITS-REST interface shows of each node
+  obligation. They check that an EHR, its `EHR_STATUS` and its compositions
+  answer to the `ehr_id` alone, that an EHR created with no subject is read
+  and queried by its `ehr_id`, and that an unknown `ehr_id` and an
+  unparsable query answer the ITS-REST error status. They also check that an
+  EHR the node's own policy withholds is refused on the read and on both
+  `ehr_id`-scoped query forms, and that a consent refusal an operator
+  arranges is held the same way. Each check records pass, fail or
+  not-observable with its evidence. The end-to-end run executes every check
+  against FerroEHR, including a FerroEHR started with Basic authentication
+  and restricted per-EHR access. It also runs the admission check of §12b.2
+  against a FerroEHR member. The conformance report shows the Node and
+  Operator points as their own class, scored from those findings and never
+  as a gateway pass, and lists every finding per product.
 - A PIX Manager can be asked by `POST` (#494). `[[pixm.manager]]` takes
   `method = "post"` beside `"get"`, the default: the gateway then posts the
   ITI-83 `sourceIdentifier` and `targetSystem` parameters in a `Parameters`
@@ -100,6 +131,29 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 - An error that needs a cross-reference resolver names the resolvers the
   build carries, `[dev] or [pixm]` by default and `[dev]` without
   `binding-ihe` (#551).
+
+- `[federation.consent] disclose = false` keeps a consent exclusion out of
+  what a client sees, for Regulation (EU) 2025/327 Art 8, under which the
+  fact that a patient restricted access "shall not be visible to healthcare
+  providers". A member the consent pre-filter excludes is still never sent a
+  request, and a federated query reports it `not-resolved`, with the same
+  `error` as a member the cross-reference does not know the patient at, so
+  `meta.federation.complete` stays `false` and nothing fails. A read of an
+  EHR by subject that only an excluded member could serve answers
+  `404 subject-unavailable`, the same answer as for a subject no member
+  knows, a new code in the error vocabulary. `OPTIONS {base}/` declares the
+  choice as `federation.consent.disclose`, the pre-filter metrics still count
+  every exclusion for the operator, and the default stays the
+  specification's `consent-denied` (N27a) (#493). The setting covers a
+  node's own consent refusal too, a `403` with a code the registry lists in
+  `consent_refusal_codes`: a federated query reports the node `not-resolved`
+  with no `latency_ms`, and a read by subject, a routed request and an
+  ask-all probe answer `404 subject-unavailable`. On a request under
+  `{base}/v1/ehr/`, the creation of an EHR and a DEMOGRAPHIC request, a
+  node's own `404` gets that same answer in this mode, so it never stands
+  for a refusal alone; every `subject-unavailable` carries one fixed
+  message. The node request metrics now count such a refusal as
+  `consent-denied` on every path, whatever the setting.
 
 ## [0.0.8] - 2026-10-04
 

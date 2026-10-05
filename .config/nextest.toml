@@ -10,6 +10,14 @@
 # The slowest offline test waits on a 10-second timeout of its own.
 slow-timeout = { period = "30s", terminate-after = 2 }
 
+# The differential run (#94) also builds the reference implementation from
+# its pinned source with Maven before it runs some thirty steps against two
+# gateways, so it gets twenty minutes. The first matching override applies,
+# so it sits above the e2e one.
+[[profile.default.overrides]]
+filter = 'test(/^e2e::differential::/)'
+slow-timeout = { period = "60s", terminate-after = 20 }
+
 # A container-backed test pulls images and starts PostgreSQL and two
 # FerroEHR nodes, so it gets ten minutes before it is killed. Every such test
 # sits in an e2e module (scripts/checks/e2e-placement.sh).

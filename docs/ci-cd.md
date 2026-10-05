@@ -107,6 +107,15 @@ filter selects it. Locally: `FERROFED_E2E=1 cargo nextest run --locked
 --workspace -E 'package(ferrofed-testkit) or test(/^e2e::/)'` with Docker
 running.
 
+The same job runs the differential run against the Federation Tier
+reference implementation (#94), which the testkit builds from the vendored
+source at its pinned commit on the digest-pinned Maven and Java images of
+`docs/VERSIONS.md`. Each of its two tests writes a Markdown report and a TSV
+of differences to `target/differential/`, and the job uploads the directory
+as the `differential-report` artifact whatever the tests concluded. A test
+fails when it finds a difference its register does not adjudicate, or no
+longer finds one the register holds.
+
 `conformance report` writes the report of the specification's section 16.4
 (#92). The `ci` nextest profile writes a JUnit report and runs past a
 failure, and the `test` and `e2e (containers)` jobs upload theirs as the
@@ -114,8 +123,12 @@ failure, and the `test` and `e2e (containers)` jobs upload theirs as the
 concluded, joins both with the `// conformance:` markers through
 `scripts/conformance/report.sh`, where a test under `e2e::` counts only from
 the gated run, and reports every section 16.3 track and section 17 point as
-pass, fail, not-run, deferred, not-applicable or open with the issue and
-reason of each row that is not scored. It adds the report to the job summary,
+pass, fail, not-run, deferred or open with the issue and reason of each row
+that is not scored. A Node or Operator point is a class of its own (section
+16.2): the `e2e (containers)` job also uploads the findings the node profile
+checks wrote for each harness CDR product as the `node-profile` artifact, and
+the report scores those points from them, never as a gateway pass and never
+in its exit status. It adds the report to the job summary,
 uploads `target/conformance/` as the `conformance-report` artifact, feeds
 `conclusion`, and fails when a covered track or point did not pass. The
 `conformance-matrix` job runs the script's `--self-test`. Locally: `bash

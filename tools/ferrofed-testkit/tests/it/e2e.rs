@@ -26,6 +26,7 @@ use testcontainers::core::{CmdWaitFor, ExecCommand};
 use uuid::Uuid;
 
 mod admission;
+mod node_profile;
 
 /// The fixed `ehr_id` the first patient has on node A.
 const FIRST_ON_A: Uuid = Uuid::from_u128(0x2222_2222_2222_4222_8222_2222_2222_2222);

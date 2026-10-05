@@ -653,6 +653,66 @@ settled before dispatch. Either form clears `complete` and fails the query
 under neither strategy (§11.1, §11.3, §11.4, N37). The key and the extension
 are FerroFED's own design; the missing signal is report T151 on #212.
 
+**Withholding consent exclusions** (#493, A53). Regulation (EU) 2025/327
+Art 8: "The fact that a natural person has restricted access ... shall not
+be visible to healthcare providers" (and Art 11(5)). `consent-denied` tells
+the requesting clinician that a restriction exists at that member, so
+`[federation.consent] disclose = false` keeps every consent exclusion out of
+what a client sees; the default, `true`, is N27a's `consent-denied`. With
+it off:
+
+- **The status is `not-resolved`.** A member the pre-filter excludes, and a
+  node that refuses with a listed consent code, are reported as a member the
+  cross-reference does not know the patient at: `not-resolved`, with the one
+  error text such a member carries in this mode, and no `latency_ms`.
+  `not-resolved` is in scope, clears `complete` and fails nothing, the
+  consequences §11.1 and §11.3 give `consent-denied`, so the answer is never
+  presented as whole (N16, N37). `not-localized` was rejected: N37 says such a
+  member "MUST NOT clear" `complete`, so `complete: false` beside it
+  contradicts the §11.4 derivation (the `FederationMeta` reader refuses it as
+  `CompleteMismatch`, and a client spotting the mismatch learns of the
+  exclusion), while `complete: true` presents a partial answer as whole. A
+  refusing node keeps no `latency_ms`, against N40's "every endpoint the
+  gateway actually dispatched a query to", because a `not-resolved` record
+  with one would show the refusal; the conflict with N40 is part of T182.
+- **The cross-reference is asked about an excluded member.** The query and
+  the read by subject resolve it with the other candidates and never send it
+  a request, so its record, a resolver outage included, is the one any member
+  carries. The cross-reference is the gateway's own service, the node learns
+  nothing, and without the lookup the exclusion would show through a
+  differing record; the data-minimisation purpose of §13.2.1 (no disclosure
+  to the node) holds.
+- **A read the gateway cannot serve is `404 subject-unavailable`.** A read by
+  subject that only an excluded or refusing member could serve, a routed read
+  or a request routed to a chosen node that the node refuses on consent, and
+  an ask-all probe the holder refuses all answer one gateway code, the same
+  answer as for a subject or an `ehr_id` no member holds in this mode. RFC
+  9110 §15.5.5 defines `404` for a resource the server did not find "or is
+  not willing to disclose that one exists" (and §15.5.4 lets a server hide a
+  forbidden resource behind it), so it claims no absence the gateway does not
+  know. `no-destination` was rejected: it asserts the request routes nowhere,
+  which is false when an excluded member holds the EHR. A routed answer still
+  names the endpoint the request was routed to (N31); a read by subject names
+  none, as for a subject no member holds. On a path where the gateway's `404`
+  would otherwise arise only from a refusal (a request under `{base}/v1/ehr/`,
+  the creation of an EHR, a DEMOGRAPHIC request), a node's own `404` gets the
+  same answer in this mode in place of §11.2's pass-through, and the node's
+  body, which may name the refusal, is never passed on; the definition area
+  holds no patient's data and is left as §11.2 has it. Every such answer
+  carries one fixed message. A read by subject a holder refuses still costs
+  one node request that a subject no member knows does not, a timing
+  difference the gateway cannot remove without asking a node it need not.
+- **The operator still sees every exclusion.** The pre-filter metrics count
+  each denial, the node request metrics count a node's refusal as
+  `consent-denied` on every path, a refusal on a routed path is logged, and an
+  outage of the consent service stays in `meta.federation.consent.error` and
+  on `/health/dependencies`, since it says nothing about a patient. `OPTIONS
+  {base}/` declares the choice as `federation.consent.disclose`.
+
+The specification's side, a declared non-disclosure mode in place of N27a's
+reporting duty, is report T182 on #212. No specification governs the setting
+itself: our own design.
+
 **The bindings.**
 
 | Role | Binding | Issue | Version |
@@ -673,7 +733,7 @@ that know nothing of FerroFED: `ihe-iti`, with a feature per profile (`pixm`,
 `pdqm`, `mcsd`, `pmir`, `xcpd`), and `nl-generic-functions`, with a feature per
 Annex B function (`nvi`, `mitz`, `lrza`, `nuts-auth`). The RFC 8414 checks the
 OAuth 2.0 issuer audience, the FAPI 2.0 grant and the Nuts grant share are a
-crate of their own, `oauth-server-metadata` (decision A53). The adapters that turn
+crate of their own, `oauth-server-metadata` (decision A54). The adapters that turn
 those clients into the seams, and the development cross-reference, which binds
 nothing, sit beside the traits in `app/ferrofed-identity` (section 11, #106).
 The gateway core depends only on the traits. When FerroPIX exists, it can use
@@ -2247,11 +2307,14 @@ node's `EHR_STATUS.subject` (section 6), so the subject is there for the
 hygiene tracks: a leaked subject predicate would match it, and the journals
 show that none reached a node.
 
-**The differential run** (#94). The reference implementation's image refused an
-anonymous pull on 2026-10-01, so the run builds from the vendored tree's
-`Dockerfile` outside CI, or waits for a public image (decision A42). Its answers
-are evidence in a comparison; where they and the specification disagree, the
-specification wins.
+**The differential run** (#94). The reference implementation's image needs
+credentials to pull, so the testkit builds it in CI, behind the `FERROFED_E2E`
+gate (decision A42): the vendored source at the pinned commit, with the Maven
+manifest fetched from that commit and held to the sha256 its `PROVENANCE.md`
+records, on digest-pinned Maven and Java images. It runs beside FerroFED over
+the same two FerroEHR nodes, each gateway behind capturing proxies of its own,
+and a register adjudicates every difference. Its answers are evidence in a
+comparison; where they and the specification disagree, the specification wins.
 
 ## 14. The milestone map
 
@@ -2324,7 +2387,8 @@ released the same day; v0.0.8 is the milestone in progress.
 Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
 and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48, A49, which amends
-A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, A52 on #489, and A53 on #551. The bracket names the report and its
+A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, A52 on #489,
+A53 on 2026-10-05 (#493), and A54 on #551. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -2371,7 +2435,7 @@ R4 is #23, #25 and #27).
 | A39 | The PIX Manager [R4 D5] | an in-testkit PIXm fake now; the PIXm client also runs against FerroPIX once it exists, as a differential | no lightweight image answers `$ihe-pix` and accepts ITI-104 | decided (owner, 2026-10-01) |
 | A40 | EHRbase's PostgreSQL 16.2 [R4 D6] | the PostgreSQL 18 rule governs FerroFED's own database; a member node runs its product's documented image, recorded in the memory | the node's database is part of the product under test | superseded by A44 (owner, 2026-10-02: EHRbase leaves the topology, so no member node runs PostgreSQL 16.2) |
 | A41 | The number of nodes [R4 D7] | two products, a second FerroEHR for three-node cases | no third open CDR image was evaluated | superseded by A44 (owner, 2026-10-02: "we should use two FerroEHR setups for the test because EHRbase will not work") |
-| A42 | The reference implementation's image [R4 D8] | build from the vendored `Dockerfile` outside CI, or wait for a public image | its image refused an anonymous pull on 2026-10-01 | decided (owner, 2026-10-01) |
+| A42 | The reference implementation's image [R4 D8] | build it in CI from the vendored source at the pinned commit, the manifest fetched from that commit and held to its recorded sha256, on digest-pinned Maven and Java images | its GHCR image needs credentials to pull (refused anonymously on 2026-10-01), and a digest-pinned build from the pinned commit is reproducible | decided (owner, 2026-10-01: build outside CI or wait for a public image); revised (orchestrator under the owner's standing delegation, 2026-10-05: build in CI, #94) |
 | A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |
 | A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject; a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
 | A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (upstream report on #212) | decided (owner, 2026-10-02) |
@@ -2382,7 +2446,8 @@ R4 is #23, #25 and #27).
 | A50 | The metrics surface and the incident webhook [#281] | one OpenTelemetry `MeterProvider` (`opentelemetry` 0.33 with the Prometheus pull reader and an optional OTLP gRPC push), the family FerroEHR runs; `GET /metrics` on an admin listener of its own, off by default and on loopback unless `allow_remote`; the incident counter by `kind`, the node request counter by `endpoint` and §11.1 `outcome` with a duration histogram by `endpoint`, the reload counter by `result`, every label from an enum or the registry; no webhook | an operator alerts on a counter, and a webhook adds an outbound channel with its own credentials, retries and failure handling for no gain over a scrape; one provider keeps the two surfaces equal; a listener the client face never reaches needs no gateway authentication; no specification governs metrics: our own design | decided on #281 (2026-10-03) |
 | A51 | FerroFED under Regulation (EU) 2025/327 [#519] | an EHR system under Art 2(2)(k), its intended purpose covering every priority category its member CDRs hold, all six of Art 14(1)(a) to (f); the harmonised software components of Art 25(1) delivered before 26 March 2029 for (a) to (c) and 26 March 2031 for (d) to (f); cross-border care through the national contact point | FerroFED intermediates priority-category data for healthcare providers providing patient care and selects none by category; Art 25(2) excludes only "general purpose software"; Art 105 applies Art 25 and 26 from 26 March 2029 to a system intended to process categories (a) to (c) and from 26 March 2031 for (d) to (f); Art 11(2) and Art 23 route cross-border access through MyHealth@EU; section 16 | decided on #519 (2026-10-04, by the orchestrator under the owner's standing delegation); legal review can only narrow it |
 | A52 | The regional bindings [#489] | one `Binding` trait in the server; one module under `app/ferrofed-server/src/binding/` and one Cargo feature per binding: development always built, `binding-ihe` for Annex A, `binding-nl` for Annex B, both default; one `RoleConflict` naming the sections in place of one error per pair; FAPI 2.0 stays in the core | every country otherwise touched about eight files of the server, and a third localizer added a third pair of exclusion checks; a binding is a trait implementation, never a branch in the core (§2.4, N27, N27a); the research on #488 maps the next countries; the trait sits in the server because every hook it fills (configuration, settings, errors, transport, reload, state, health, metrics) is a server type; no specification governs the layout: our own design | decided on #489 |
-| A53 | The RFC 8414 checks and the binding crates' features [#551] | the authorization server metadata checks move out of `nl-generic-functions` into `crates/oauth-server-metadata`, a crate named for RFC 8414 with no feature, used by the engine, the server and the Nuts grant; `ferrofed-identity` gains `ihe` and `nl` and `ferrofed-engine` `nl`, forwarded by `binding-ihe` and `binding-nl`; the registry document in FHIR form joins `binding-ihe` | the OAuth 2.0 issuer audience and the FAPI 2.0 grant are not Dutch, and the Nuts grant needs the same checks, which a binding crate can only take from a crate that depends on nothing in FerroFED, so a crate of its own carries one copy for all three; the FHIR form is read with `ihe-iti`'s mCSD reader; no specification governs the layout: our own design | decided on #551 |
+| A53 | Consent exclusions under Regulation (EU) 2025/327 Art 8 [#493] | `[federation.consent] disclose`, `true` by default (N27a's `consent-denied`); with `false`, a member the pre-filter excludes and a node's listed consent refusal are `not-resolved` with one neutral error text and no `latency_ms`, the excluded member resolved at the cross-reference with the others and never sent a request; a read by subject, a routed read and an ask-all probe the gateway cannot serve answer `404 subject-unavailable`, also for an EHR no member holds; `OPTIONS {base}/` declares `federation.consent.disclose`; the metrics keep counting every exclusion | Art 8 and Art 11(5) forbid showing a restriction to a healthcare provider; `not-resolved` clears `complete` and fails nothing as §11.1 and §11.3 give `consent-denied`, while N37 forbids a `not-localized` member from clearing `complete`; the cross-reference is the gateway's own service and a differing record would show the exclusion; RFC 9110 §15.5.5 admits a `404` for a resource the server will not disclose; the conflicts with N27a and N40 are report T182 on #212; no specification governs the setting: our own design | decided on #493 (2026-10-05, by the orchestrator under the owner's standing delegation) |
+| A54 | The RFC 8414 checks and the binding crates' features [#551] | the authorization server metadata checks move out of `nl-generic-functions` into `crates/oauth-server-metadata`, a crate named for RFC 8414 with no feature, used by the engine, the server and the Nuts grant; `ferrofed-identity` gains `ihe` and `nl` and `ferrofed-engine` `nl`, forwarded by `binding-ihe` and `binding-nl`; the registry document in FHIR form joins `binding-ihe` | the OAuth 2.0 issuer audience and the FAPI 2.0 grant are not Dutch, and the Nuts grant needs the same checks, which a binding crate can only take from a crate that depends on nothing in FerroFED, so a crate of its own carries one copy for all three; the FHIR form is read with `ihe-iti`'s mCSD reader; no specification governs the layout: our own design | decided on #551 |
 
 ## 16. Regulatory status
 

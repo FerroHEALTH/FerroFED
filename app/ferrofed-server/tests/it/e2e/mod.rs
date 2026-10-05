@@ -64,6 +64,7 @@ mod admission;
 mod attributes;
 mod commit;
 mod crossref;
+mod differential;
 mod pixm;
 mod scenario;
 #[cfg(feature = "postgres")]

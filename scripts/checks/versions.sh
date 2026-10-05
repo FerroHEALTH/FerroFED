@@ -32,7 +32,10 @@
 #   6. docs toolchain      the mdBook, mdbook-toc and mdbook-mermaid defaults of
 #                          .github/actions/docs-toolchain/action.yml.
 #   7. testkit images      the PinnedImage constants of the testkit container
-#                          harness against the docs/VERSIONS.md image rows.
+#                          harness against the docs/VERSIONS.md image rows,
+#                          and the reference commit and manifest digest the
+#                          differential run builds against the reference
+#                          implementation row and its provenance.
 #   8. vendored corpora    every docs/specs/*/PROVENANCE.md names the commit,
 #                          tag or pin-set digest its docs/VERSIONS.md corpus
 #                          row pins, and the federation specification's
@@ -823,7 +826,9 @@ if [[ -f "$harness" ]]; then
   expected=0
   for image in \
     "FerroEHR node image|FERROEHR" \
-    "FerroEHR node database image|FERROEHR_POSTGRES"; do
+    "FerroEHR node database image|FERROEHR_POSTGRES" \
+    "Reference implementation build image|MAVEN" \
+    "Reference implementation runtime image|TEMURIN_JRE"; do
     item="${image%%|*}"
     constant="${image##*|}"
     expected=$((expected + 1))
@@ -840,6 +845,32 @@ if [[ -f "$harness" ]]; then
     fi
   done
   [[ "$agreed" -eq "$expected" ]] && note "OK: all $expected container image pins agree"
+
+  # The reference implementation the differential run builds: its commit
+  # against the matrix row, and its manifest digest against the provenance.
+  reference=tools/ferrofed-testkit/src/reference.rs
+  provenance=docs/specs/federation-ref/PROVENANCE.md
+  # The value of the string constant NAME in FILE.
+  string_const_of() {
+    local name="$1" file="$2"
+    sed -n "s/^pub const $name: &str = \"\\([^\"]*\\)\";.*/\\1/p" "$file"
+  }
+  if [[ -f "$reference" ]]; then
+    want="$(pin_cell_of "Federation Tier reference implementation" "$matrix" | awk '{ print $NF }')"
+    found="$(string_const_of REFERENCE_COMMIT "$reference")"
+    if [[ -z "$found" || "$found" != "$want" ]]; then
+      bad "$reference builds commit '$found', $matrix pins '$want'"
+    else
+      note "OK: the differential run builds the pinned reference commit"
+    fi
+    want="$(awk -F'|' '$2 ~ /`pom.xml`/ { gsub(/[` ]/, "", $3); print $3 }' "$provenance")"
+    found="$(string_const_of POM_SHA256 "$reference")"
+    if [[ -z "$found" || "$found" != "$want" ]]; then
+      bad "$reference holds the manifest to '$found', $provenance records '$want'"
+    else
+      note "OK: the differential run holds the manifest to the recorded digest"
+    fi
+  fi
 else
   note "no $harness yet, skipped"
 fi

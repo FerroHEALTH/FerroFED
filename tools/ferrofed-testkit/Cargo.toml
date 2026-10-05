@@ -48,8 +48,9 @@ rcgen.workspace = true
 tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true
-# The canonical JSON writer the seed's EHR_STATUS is written with.
-openehr-its = { workspace = true, features = ["json"] }
+# The canonical JSON writer the seed's EHR_STATUS is written with, and the
+# ITS-REST query body and RESULT_SET the node profile checks read (#93).
+openehr-its = { workspace = true, features = ["json", "rest"] }
 # The EHR_STATUS a seeded EHR is created with.
 openehr-rm.workspace = true
 # The proxy's forwarding client and the seed builder's ITS-REST client.

@@ -182,9 +182,31 @@ acceptable in your setting.
 **What changes the answer:** a consent pre-filter
 ([Consent](identity.md#consent)) adds a check before dispatch, never in
 place of the node's own; `consent_refusal_codes` in the registry decides
-which node refusals are reported `consent-denied`. No configuration turns
-off the identifier gate, caller verification, or the rule that the caller's
-token stays at the gateway.
+which node refusals are reported `consent-denied`;
+`[federation.consent] disclose = false` keeps a member the pre-filter
+excludes out of what a client sees, for Regulation (EU) 2025/327 Art 8, and
+`OPTIONS {base}/` declares it
+([Withholding consent exclusions](consent-exclusions.md)).
+No configuration turns off the identifier gate, caller verification, or the
+rule that the caller's token stays at the gateway.
+
+### Consent exclusions in the answer
+
+The specification has a member a consent pre-filter excludes reported
+`consent-denied` (N27a), which tells the requesting clinician that the
+patient restricted access at that member. Regulation (EU) 2025/327 Art 8
+says that fact "shall not be visible to healthcare providers". The
+specification does not list this among the §13.4 questions, but a
+deployment under that regulation has to settle it and record the answer
+with the others.
+
+**FerroFED's default** is the specification's: `consent-denied`.
+**With `[federation.consent] disclose = false`**, an excluded member is
+reported as one the cross-reference does not know the patient at
+(`not-resolved`), `meta.federation.complete` stays `false`, a read by subject
+only an excluded member could serve answers `404 subject-unavailable`, and
+`OPTIONS {base}/` declares `federation.consent.disclose: false`. The
+pre-filter metrics still count every exclusion for the operator.
 
 ## The operator's template
 
@@ -221,4 +243,9 @@ your deployment's documentation.
    Audit and supervision while a member participates: …
    Logging, retention and liability: …
    Bearer-token replay: acceptable | mitigated by …
+
+Consent exclusions in the answer
+   Consent pre-filter: none | nl-gf-mitz, and its service: …
+   federation.consent.disclose: true | false, and the legal ground
+     (for example Regulation (EU) 2025/327 Art 8): …
 ```

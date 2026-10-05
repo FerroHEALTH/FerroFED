@@ -594,14 +594,38 @@ jobs:
           path: target/nextest/ci/junit.xml
           if-no-files-found: error
           retention-days: 30
+      # The findings the node profile checks wrote for each harness CDR
+      # product (section 16.2, #93), for the conformance report's node class.
+      - name: Upload the node profile findings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: node-profile
+          path: target/conformance/node-profile/
+          if-no-files-found: error
+          retention-days: 30
+      # The differential run against the reference implementation (#94)
+      # writes one Markdown report and one TSV of differences per test, each
+      # difference with its verdict; a run that never reached the report
+      # leaves the directory empty, which the test failure already names.
+      - name: Upload the differential report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: differential-report
+          path: target/differential/
+          if-no-files-found: warn
+          retention-days: 30
 
   # The conformance report of section 16.4 (#92; no specification governs its
   # form: our own design): every section 16.3 track and section 17 point as
-  # pass, fail, not-run, deferred, not-applicable or open, joined from the
-  # conformance markers and the JUnit reports of the offline and the gated
-  # run, where a test under e2e:: counts only from the gated one. It runs
-  # whatever those jobs concluded, fails when a covered point or track did
-  # not pass, and uploads target/conformance/report.md and report.tsv.
+  # pass, fail, not-run, deferred or open, joined from the conformance
+  # markers and the JUnit reports of the offline and the gated run, where a
+  # test under e2e:: counts only from the gated one. A Node or Operator point
+  # is a class of its own, scored from the node profile findings of the gated
+  # run (section 16.2) and never a gateway pass. It runs whatever those jobs
+  # concluded, fails when a covered point or track did not pass, and uploads
+  # target/conformance/ with report.md, report.tsv and node-profile.tsv.
   conformance-report:
     name: conformance report
     needs: [detect, test, e2e]
@@ -624,6 +648,11 @@ jobs:
         with:
           name: junit-gated
           path: junit/gated
+      - name: Download the node profile findings
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: node-profile
+          path: node-profile
       - name: Write the report
         run: |
           set -euo pipefail
@@ -631,6 +660,7 @@ jobs:
           bash scripts/conformance/report.sh \
             --offline junit/offline/junit.xml \
             --gated junit/gated/junit.xml \
+            --node-profile node-profile \
             --out target/conformance || status=$?
           cat target/conformance/report.md >> "$GITHUB_STEP_SUMMARY"
           exit "$status"

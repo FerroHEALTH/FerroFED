@@ -264,6 +264,28 @@ pub struct Federation {
     /// `OPTIONS {base}/` declares it as `definition.stored_query_fan_out`
     /// (§7a.2, N30).
     pub fan_out_stored_queries: bool,
+    /// How a member the Step-1 consent pre-filter excludes is reported
+    /// (`[federation.consent]`, N27a).
+    pub consent: ConsentReporting,
+}
+
+/// How a member the Step-1 consent pre-filter excludes is reported,
+/// `[federation.consent]` (N27a, §11.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ConsentReporting {
+    /// Whether the answer names the exclusion: `true`, the default, reports
+    /// the member `consent-denied` (N27a); `false` reports it as a member
+    /// that does not know the patient, for a deployment under Regulation
+    /// (EU) 2025/327 Art 8, and `OPTIONS {base}/` declares it as
+    /// `consent.disclose` (§7a.2).
+    pub disclose: bool,
+}
+
+impl Default for ConsentReporting {
+    fn default() -> Self {
+        Self { disclose: true }
+    }
 }
 
 /// An aggregate function the gateway recombines across a fan-out
@@ -376,6 +398,7 @@ impl Default for Federation {
             demographic_endpoint: None,
             fan_out_template_upload: false,
             fan_out_stored_queries: false,
+            consent: ConsentReporting::default(),
         }
     }
 }

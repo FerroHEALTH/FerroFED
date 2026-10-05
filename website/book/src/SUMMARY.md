@@ -32,6 +32,7 @@
 - [Configuration](operate/configuration.md)
   - [The registry](operate/registry.md)
   - [Identity resolution](operate/identity.md)
+    - [Withholding consent exclusions](operate/consent-exclusions.md)
   - [The audit trail](operate/audit.md)
   - [Client authentication](operate/authentication.md)
     - [The §13.4 deployment decisions](operate/deployment-decisions.md)

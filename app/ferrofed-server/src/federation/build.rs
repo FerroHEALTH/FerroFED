@@ -22,7 +22,7 @@ use openehr_its::rest::client::ReqwestTransport;
 use crate::binding::{self, Role};
 use crate::config::NodeSelection;
 use crate::config::auth::PatientBinding;
-use crate::config::settings::{Scheme, Settings};
+use crate::config::settings::{ConsentDisclosure, Scheme, Settings};
 use crate::facade::options;
 use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
@@ -194,6 +194,7 @@ impl Federation {
             demographics,
             localization,
             consent,
+            consent_disclosure: settings.federation.consent_disclosure,
             observed,
             context,
             budget: settings.federation.budget,
@@ -237,6 +238,9 @@ impl Federation {
             demographics: None,
             localization: LocalizationPolicy::none(),
             consent: None,
+            consent_disclosure: ConsentDisclosure::of(
+                crate::config::Federation::default().consent.disclose,
+            ),
             observed: Arc::new(Observed::new(
                 ResolutionBindings::new(std::time::Duration::from_millis(
                     crate::config::Federation::default().binding_ttl_ms,

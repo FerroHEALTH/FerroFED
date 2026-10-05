@@ -10,7 +10,8 @@
 //! request routed to one node and an ask-all probe have no per-endpoint
 //! report, so their outcome is read the same way from the node's answer: a
 //! server error or a refusal of the gateway's onward credentials is
-//! `node-error`. Every request counted is timed, and a request that never
+//! `node-error`, and a consent refusal in a code the registry lists is
+//! `consent-denied`, also where the client's answer withholds it. Every request counted is timed, and a request that never
 //! left the gateway is neither counted nor timed, whatever its §11.1 record
 //! says of it. The `endpoint` label is an endpoint id of the registry snapshot the
 //! request ran on, never anything a request carries.
@@ -129,17 +130,19 @@ impl NodeRequests {
     }
 
     /// Records a request forwarded to `endpoint` that took `elapsed`, when
-    /// the gateway sent it.
+    /// the gateway sent it; an answer the node `refused` on consent grounds
+    /// is `consent-denied`, whether or not the client is told (N27).
     pub fn forwarded(
         &self,
         endpoint: &EndpointId,
-        outcome: &Result<Forwarded, ForwardError>,
+        (outcome, refused): (&Result<Forwarded, ForwardError>, bool),
         elapsed: Duration,
     ) {
         if !Contact::of_forwarded(outcome).sent() {
             return;
         }
         let status = match outcome {
+            Ok(_) if refused => Some(EndpointStatus::ConsentDenied),
             Ok(answer) => Some(answered(answer.status())),
             Err(error) => failed(error),
         };
@@ -161,6 +164,7 @@ impl NodeRequests {
             Answer::Holds(forwarded) => Some(answered(forwarded.status())),
             Answer::Absent => Some(EndpointStatus::Active),
             Answer::Erred(status) => Some(answered(*status)),
+            Answer::ConsentRefused => Some(EndpointStatus::ConsentDenied),
             Answer::Failed(error) => failed(error),
             Answer::Abandoned => Some(EndpointStatus::TimeOut),
         };
