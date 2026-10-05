@@ -210,9 +210,9 @@ pub struct Federation {
     /// (§5.2 requires the namespace; no specification governs the default: our
     /// own design). Without it, a query that names no namespace is a `400`.
     pub default_namespace: Option<String>,
-    /// How long the resolution bindings of a client session live (§12.5.1
-    /// step 2): a correctness bound, past which a binding is
-    /// never routed on.
+    /// How long each resolution binding of a client session lives after the
+    /// last resolution that returned it (§12.5.1 step 2): a correctness
+    /// bound, past which the binding is never routed on.
     pub binding_ttl_ms: u64,
     /// How many `ehr_id` bindings the resolution bindings of every caller
     /// hold together (§12.5.1 step 2); zero is refused.

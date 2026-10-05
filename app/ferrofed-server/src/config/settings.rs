@@ -110,7 +110,8 @@ pub struct FederationSettings {
     pub budget: Budget,
     /// The issuing namespace an unqualified patient identifier resolves in.
     pub default_namespace: Option<String>,
-    /// How long the resolution bindings of a client session live.
+    /// How long each resolution binding lives after the last resolution that
+    /// returned it.
     pub binding_ttl: Duration,
     /// How many `ehr_id` bindings the resolution bindings hold together.
     pub binding_capacity: NonZeroU32,

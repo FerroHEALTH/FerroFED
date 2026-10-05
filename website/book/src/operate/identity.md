@@ -235,7 +235,9 @@ other member is `not-localized`
 
 A merge at the identity source can leave a caller's
 [resolution bindings](registry.md) naming the `ehr_id` of an identity that no
-longer exists. The bindings expire with their lifetime in any case. With
+longer exists. Each binding expires in any case `federation.binding_ttl_ms`
+after the last resolution that returned it, and a resolution after the merge
+no longer returns the stale one. With
 `[pmir]` set, the gateway also hears of each change as it happens: it
 subscribes at your IHE PMIR Patient Identity Registry with ITI-94, and the
 Registry sends every Patient Master Identity change to the gateway as an

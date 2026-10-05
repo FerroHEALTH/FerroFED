@@ -8,7 +8,8 @@
 //! The bindings belong to the client session (§12.5.1 step 2; their storage
 //! is our own design, since no specification governs it): held in memory,
 //! keyed by the session and by the `ehr_id`, never by the patient identifier,
-//! dropped when the session's time-to-live passes, and bounded in number.
+//! each dropped a time-to-live after the last resolution that returned it, and
+//! bounded in number.
 //! Nothing is written to disk and nothing derived from a patient identifier
 //! is kept.
 
@@ -61,12 +62,27 @@ pub enum IdentityChange {
     Unscoped,
 }
 
-/// One session's bindings and when they expire.
+/// One session's bindings, each with the instant it expires.
 struct Session {
+    /// When the session's last live binding expires, the order a full store
+    /// drops sessions in.
     expires: Instant,
     // NOTE: BASE master05 §"Composite Identifiers and Case": `EhrId` orders by the
     // openehr-base case-folded key, so an `ehr_id` in another case finds its binding.
-    by_ehr: BTreeMap<EhrId, BTreeSet<NodeId>>,
+    by_ehr: BTreeMap<EhrId, BTreeMap<NodeId, Instant>>,
+}
+
+impl Session {
+    /// Drops every `{node, ehr_id}` binding that expired by `now`, and every
+    /// `ehr_id` left with none, keeping every claimant of a collision.
+    fn prune(&mut self, now: Instant) {
+        self.by_ehr.retain(|_, nodes| {
+            if !collided(nodes) {
+                nodes.retain(|_, expires| *expires > now);
+            }
+            !nodes.is_empty()
+        });
+    }
 }
 
 /// How many `ehr_id` bindings, over every session, [`ResolutionBindings::new`]
@@ -86,9 +102,15 @@ pub struct ResolutionBindings {
 }
 
 impl ResolutionBindings {
-    /// Bindings that live `ttl` past the resolution that recorded them, a
-    /// correctness bound: a binding older than it is never routed on. At most
-    /// [`DEFAULT_CAPACITY`] `ehr_id` bindings are held.
+    /// Bindings that each live `ttl` past the last resolution that returned
+    /// them, a correctness bound.
+    ///
+    /// A `{node, ehr_id}` binding that no resolution of its session has
+    /// returned for `ttl` is never routed on, however many other resolutions
+    /// the session makes meanwhile. An `ehr_id` the session has seen at two
+    /// members or more stays a collision for the life of the session: a
+    /// lapsed claimant never leaves the other to be routed on (§12.5.2,
+    /// N42). At most [`DEFAULT_CAPACITY`] `ehr_id` bindings are held.
     #[must_use]
     pub fn new(ttl: Duration) -> Self {
         Self {
@@ -101,8 +123,9 @@ impl ResolutionBindings {
     /// These bindings, holding at most `capacity` `ehr_id` bindings over every
     /// session.
     ///
-    /// A recording that would pass it first drops the other sessions that
-    /// expire soonest, whole; a binding that still does not fit is not held,
+    /// A recording that would pass it first drops every binding that has
+    /// expired, then the other sessions whose last binding expires soonest,
+    /// whole; a binding that still does not fit is not held,
     /// which costs a later follow-up one step of §12.5.1, never a misroute.
     #[must_use]
     pub fn with_capacity(mut self, capacity: NonZeroUsize) -> Self {
@@ -111,8 +134,12 @@ impl ResolutionBindings {
     }
 
     /// Records the `{node, ehr_id}` pairs a resolution of `session` produced
-    /// at `now`, and renews the session's time-to-live, within the capacity
-    /// ([`ResolutionBindings::with_capacity`]).
+    /// at `now`, within the capacity ([`ResolutionBindings::with_capacity`]).
+    ///
+    /// Each pair is held, or renewed, until the time-to-live past `now`. A
+    /// binding of the session this resolution did not return keeps the
+    /// expiry its own last resolution gave it, and the session is held while
+    /// any of its bindings lives.
     pub fn record<'a>(
         &self,
         session: &SessionKey,
@@ -124,26 +151,29 @@ impl ResolutionBindings {
         };
         let mut sessions = self.lock();
         sessions.retain(|_, held| held.expires > now);
+        if let Some(held) = sessions.get_mut(session) {
+            held.prune(now);
+        }
         for (node, ehr_id) in pairs {
             let known = sessions
                 .get(session)
                 .is_some_and(|held| held.by_ehr.contains_key(ehr_id));
-            if !known && !make_room(&mut sessions, session, self.capacity) {
+            if !known && !make_room(&mut sessions, session, self.capacity, now) {
                 continue;
             }
-            sessions
-                .entry(session.clone())
-                .or_insert_with(|| Session {
-                    expires,
-                    by_ehr: BTreeMap::new(),
-                })
-                .by_ehr
+            let held = sessions.entry(session.clone()).or_insert_with(|| Session {
+                expires,
+                by_ehr: BTreeMap::new(),
+            });
+            // NOTE: §12.5.1 step 2 (N41) routes on a preceding resolution's set and sets no lifetime
+            // (no specification governs this: our own design); a pair lives `ttl` past its last return.
+            held.by_ehr
                 .entry(ehr_id.clone())
                 .or_default()
-                .insert(node.clone());
-        }
-        if let Some(held) = sessions.get_mut(session) {
-            held.expires = expires;
+                .entry(node.clone())
+                .and_modify(|held| *held = (*held).max(expires))
+                .or_insert(expires);
+            held.expires = held.expires.max(expires);
         }
     }
 
@@ -160,24 +190,28 @@ impl ResolutionBindings {
     }
 
     /// What the live bindings of `session` say about `ehr_id` at `now`.
+    ///
+    /// A lone binding counts only while it lives. An `ehr_id` the session has
+    /// seen at two members or more is [`Bound::Several`] with every claimant
+    /// while the session lives, whichever claimant's binding has lapsed.
     #[must_use]
     pub fn lookup(&self, session: &SessionKey, now: Instant, ehr_id: &EhrId) -> Bound {
         let sessions = self.lock();
-        let Some(held) = sessions.get(session).filter(|held| held.expires > now) else {
+        let Some(nodes) = sessions
+            .get(session)
+            .filter(|held| held.expires > now)
+            .and_then(|held| held.by_ehr.get(ehr_id))
+        else {
             return Bound::None;
         };
-        match held.by_ehr.get(ehr_id) {
-            None => Bound::None,
-            Some(nodes) => {
-                let mut nodes = nodes.iter().cloned();
-                match (nodes.next(), nodes.next()) {
-                    (None, _) => Bound::None,
-                    (Some(only), None) => Bound::One(only),
-                    (Some(first), Some(second)) => {
-                        Bound::Several([first, second].into_iter().chain(nodes).collect())
-                    }
-                }
-            }
+        // NOTE: §12.5.2 (N42) bars breaking a collision by where a patient resolved; a session's
+        // bindings span patients, so a lapsed claimant never narrows one to the other.
+        if collided(nodes) {
+            return Bound::Several(nodes.keys().cloned().collect());
+        }
+        match nodes.iter().next() {
+            Some((only, expires)) if *expires > now => Bound::One(only.clone()),
+            _ => Bound::None,
         }
     }
 
@@ -236,7 +270,7 @@ impl ResolutionBindings {
         let mut dropped = 0_usize;
         for held in sessions.values_mut() {
             let before = held.by_ehr.len();
-            held.by_ehr.retain(|_, nodes| nodes.is_disjoint(departed));
+            held.by_ehr.retain(|_, nodes| names_none(nodes, departed));
             dropped = dropped.saturating_add(before.saturating_sub(held.by_ehr.len()));
         }
         sessions.retain(|_, held| !held.by_ehr.is_empty());
@@ -260,7 +294,7 @@ impl ResolutionBindings {
             return 0;
         };
         let before = held.by_ehr.len();
-        held.by_ehr.retain(|_, nodes| nodes.is_disjoint(denied));
+        held.by_ehr.retain(|_, nodes| names_none(nodes, denied));
         let dropped = before.saturating_sub(held.by_ehr.len());
         if held.by_ehr.is_empty() {
             sessions.remove(session);
@@ -288,7 +322,7 @@ impl ResolutionBindings {
         let stale = held
             .by_ehr
             .get(ehr_id)
-            .is_some_and(|nodes| !nodes.iter().all(&present));
+            .is_some_and(|nodes| !nodes.keys().all(&present));
         if stale {
             held.by_ehr.remove(ehr_id);
             if held.by_ehr.is_empty() {
@@ -313,14 +347,32 @@ fn held(sessions: &BTreeMap<SessionKey, Session>) -> usize {
     sessions.values().map(|held| held.by_ehr.len()).sum()
 }
 
+/// Whether the claimants of one `ehr_id` are a collision: two members or
+/// more, which no lapse of a binding narrows.
+fn collided(nodes: &BTreeMap<NodeId, Instant>) -> bool {
+    nodes.len() > 1
+}
+
+/// Whether `nodes` names no member of `members`.
+fn names_none(nodes: &BTreeMap<NodeId, Instant>, members: &BTreeSet<NodeId>) -> bool {
+    nodes.keys().all(|node| !members.contains(node))
+}
+
 /// Makes room in `sessions` for one more binding of `session` within
-/// `capacity`, dropping the other sessions that expire soonest, whole, and
-/// returns whether there is room.
+/// `capacity`, dropping every binding expired at `now` and then the other
+/// sessions that expire soonest, whole, and returns whether there is room.
 fn make_room(
     sessions: &mut BTreeMap<SessionKey, Session>,
     session: &SessionKey,
     capacity: NonZeroUsize,
+    now: Instant,
 ) -> bool {
+    if held(sessions) >= capacity.get() {
+        sessions.retain(|_, held| {
+            held.prune(now);
+            !held.by_ehr.is_empty()
+        });
+    }
     while held(sessions) >= capacity.get() {
         let soonest = sessions
             .iter()

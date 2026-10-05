@@ -850,9 +850,10 @@ source can make a binding name the wrong patient's `ehr_id`. Track 8 asks that
 the change propagate so a later query resolves the surviving identity, and it
 is provisional: §16.3 marks it so and §18 lets full propagation be deferred.
 What FerroFED owes is that no binding outlives a change it could have learned
-of. Two parts give that: every binding expires at the configured TTL
-(`federation.binding_ttl_ms`), and `ResolutionBindings::identity_changed` is
-the hook the PMIR identity feed calls (#147). The hook drops the bindings
+of. Two parts give that: every binding expires the configured TTL
+(`federation.binding_ttl_ms`) after the last resolution that returned it, and
+`ResolutionBindings::identity_changed` is the hook the PMIR identity feed
+calls (#147). The hook drops the bindings
 that name the touched `ehr_id`s in every session, or every binding when the
 change cannot be scoped. A dropped binding costs one re-resolution, never a
 misrouted follow-up.
