@@ -295,7 +295,7 @@ pub(crate) const REGISTER: &[Entry] = &[
         aspects: FAILURE_BODY,
         verdict: Verdict::SpecificationAmbiguity,
         cause: "a fan-out failed under the all-or-nothing default is a `RESULT_SET` with no rows at FerroFED and an error body carrying `meta` at the reference implementation; §11.4 requires the failing response to carry the diagnostic envelope without saying which body carries it.",
-        recorded: "#212 T193",
+        recorded: "#212 T193 (issuecomment-5986335549)",
     },
     Entry {
         test: "standard",
@@ -311,7 +311,7 @@ pub(crate) const REGISTER: &[Entry] = &[
         aspects: &["meta.federation.timeout"],
         verdict: Verdict::ReferenceDivergence,
         cause: "under `Prefer: wait=2` the reference implementation reports its configured `overall_ms` (6000) and the effective budget in a member the schema does not define, where §11.5 requires the effective budget in `meta.federation.timeout`, which the schema describes as the budget in force for the request.",
-        recorded: "#212 T192",
+        recorded: "#212 T192 (issuecomment-5986335549)",
     },
     Entry {
         test: "standard",
@@ -319,7 +319,7 @@ pub(crate) const REGISTER: &[Entry] = &[
         aspects: &["columns"],
         verdict: Verdict::ReferenceDivergence,
         cause: "when the patient resolves nowhere the reference implementation answers an empty `columns[]`, where N17, §9.2 and CP-35 require the gateway's rendering of the client's AQL whatever the nodes answered.",
-        recorded: "#212 T191",
+        recorded: "#212 T191 (issuecomment-5986335549)",
     },
     Entry {
         test: "standard",
@@ -331,7 +331,7 @@ pub(crate) const REGISTER: &[Entry] = &[
         aspects: &["error.its-rest-shape"],
         verdict: Verdict::ReferenceDivergence,
         cause: "the reference implementation's error body has no `validationErrors`, which the ITS-REST `Error` schema requires beside `message` (N1).",
-        recorded: "#212 T190",
+        recorded: "#212 T190 (issuecomment-5986335549)",
     },
     Entry {
         test: "standard",

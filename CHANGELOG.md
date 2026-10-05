@@ -23,6 +23,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- A differential run against the Federation Tier reference implementation,
+  behind `FERROFED_E2E` (#94; §16.3 tracks 1 to 7 and 9). The testkit builds
+  `syntaric/openehr-federation-ref` at its pinned commit from the vendored
+  source and the manifest held to its recorded sha256, on digest-pinned Maven
+  and Java images, and runs it beside FerroFED over the same two FerroEHR
+  nodes, each gateway behind capturing proxies of its own. Some thirty
+  requests go to both, and the run compares the status, the federation
+  headers, the envelope against the vendored schema, `meta.federation`, the
+  rows and what reached each node, after normalising only what the
+  specification leaves free. Every difference is held in a register with its
+  verdict and where it is recorded: a new or vanished difference fails the
+  run. The `e2e (containers)` job uploads the Markdown and TSV report as the
+  `differential-report` artifact. No difference is a FerroFED defect; three
+  reference divergences and one specification question are new upstream
+  reports (#212 T190 to T193).
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at
