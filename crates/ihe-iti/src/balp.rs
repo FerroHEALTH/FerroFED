@@ -36,7 +36,8 @@ use std::net::IpAddr;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use fhir_types::r4::audit_event::{
-    AuditEvent, AuditEventAgent, AuditEventAgentNetwork, AuditEventEntity, AuditEventSource,
+    AuditEvent, AuditEventAgent, AuditEventAgentNetwork, AuditEventEntity, AuditEventEntityDetail,
+    AuditEventEntityDetailValue, AuditEventSource,
 };
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::coding::Coding;
@@ -146,6 +147,15 @@ pub const CREATE: Coded = Coded {
     display: "create",
 };
 
+/// The `restful-interaction` subtype `update`, of the implementation guide's
+/// `AllUpdateVS` (BALP 1.1.4 lists `IHE.BasicAudit.Update` beside the other
+/// `RESTful` patterns).
+pub const UPDATE: Coded = Coded {
+    system: "http://hl7.org/fhir/restful-interaction",
+    code: "update",
+    display: "update",
+};
+
 /// The `restful-interaction` subtype `delete` (`IHE.BasicAudit.Delete`,
 /// `subtype:anyDelete`).
 pub const DELETE: Coded = Coded {
@@ -167,6 +177,23 @@ pub const SYSTEM_OBJECT: Coded = Coded {
     system: "http://terminology.hl7.org/CodeSystem/audit-entity-type",
     code: "2",
     display: "System Object",
+};
+
+/// The entity type of anything else: `4` (`audit-entity-type`). No slice of
+/// a BALP pattern is discriminated by it, so an entity of this type adds to
+/// a record without filling a slice the pattern bounds.
+pub const OTHER: Coded = Coded {
+    system: "http://terminology.hl7.org/CodeSystem/audit-entity-type",
+    code: "4",
+    display: "Other",
+};
+
+/// The entity type of the request id, `XrequestId` (`BasicAuditEntityType`),
+/// as every `RESTful` pattern's `entity:transaction` slice fixes it.
+pub const REQUEST_ID: Coded = Coded {
+    system: "https://profiles.ihe.net/ITI/BALP/CodeSystem/BasicAuditEntityType",
+    code: "XrequestId",
+    display: "X-Request-Id",
 };
 
 /// The entity type of a person: `1` (`audit-entity-type`).
@@ -201,7 +228,9 @@ pub const PATIENT_ROLE: Coded = Coded {
 /// What a transaction's audit profile fixes of its records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EventKind {
-    /// The audit profile's canonical URL, written to `meta.profile`.
+    /// The audit profile's canonical URL, written to `meta.profile`; empty
+    /// for a record that claims no profile, such as a failed `delete`, which
+    /// the Delete pattern, fixing `outcome` to `0`, does not describe.
     pub profile: &'static str,
     /// `type`.
     pub event_type: Coded,
@@ -404,6 +433,105 @@ pub enum Entity {
         /// such as a subscription's criteria.
         query: Option<String>,
     },
+    /// An entity the recording system describes beyond its pattern's
+    /// slices, with its `detail` entries: see [`Described`].
+    Described(Described),
+}
+
+/// An entity named by a reference or an identifier, with free details
+/// (`entity.detail`): what a record carries beside the slices its pattern
+/// fixes.
+///
+/// A value may say more of a patient than an id should, so `Debug` shows the
+/// entity's type, role and detail names, never a value.
+#[derive(Clone)]
+pub struct Described {
+    /// `what`, when the entity has something to name it by.
+    pub what: Option<What>,
+    /// `type`.
+    pub kind: Coded,
+    /// `role`.
+    pub role: Option<Coded>,
+    /// `name`.
+    pub name: Option<String>,
+    /// `description`.
+    pub description: Option<String>,
+    /// `detail`, in order, each a `valueString`.
+    pub details: Vec<Detail>,
+}
+
+/// What a [`Described`] entity names.
+#[derive(Clone)]
+#[non_exhaustive]
+pub enum What {
+    /// `what.reference`, with `what.type` when the type is known.
+    Reference {
+        /// `what.reference`.
+        reference: String,
+        /// `what.type`.
+        resource_type: Option<String>,
+    },
+    /// `what.identifier`.
+    Identifier {
+        /// `what.identifier.system`.
+        system: Option<String>,
+        /// `what.identifier.value`.
+        value: String,
+    },
+}
+
+/// One `entity.detail`: its `type` and its `valueString`.
+#[derive(Clone)]
+pub struct Detail {
+    /// `type`, the name of the detail.
+    pub kind: String,
+    /// `valueString`.
+    pub value: String,
+}
+
+impl Detail {
+    /// The detail `kind` with the value `value`.
+    #[must_use]
+    pub fn new(kind: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            value: value.into(),
+        }
+    }
+}
+
+impl fmt::Debug for Described {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let details: Vec<&str> = self
+            .details
+            .iter()
+            .map(|detail| detail.kind.as_str())
+            .collect();
+        f.debug_struct("Described")
+            .field("what", &self.what)
+            .field("kind", &self.kind)
+            .field("role", &self.role)
+            .field("details", &details)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for What {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Reference { .. } => f.debug_tuple("Reference").field(&REDACTED).finish(),
+            Self::Identifier { .. } => f.debug_tuple("Identifier").field(&REDACTED).finish(),
+        }
+    }
+}
+
+impl fmt::Debug for Detail {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Detail")
+            .field("kind", &self.kind)
+            .field("value", &REDACTED)
+            .finish()
+    }
 }
 
 impl fmt::Debug for Entity {
@@ -434,6 +562,7 @@ impl fmt::Debug for Entity {
                 .field("name", name)
                 .field("query", query)
                 .finish(),
+            Self::Described(described) => described.fmt(f),
         }
     }
 }
@@ -446,7 +575,9 @@ impl fmt::Debug for Entity {
 /// pattern has (`0..1`) with the token's `iss`, `sub` and purposes of use,
 /// and an Application agent with its `client_id`. One the system makes on
 /// its own behalf names neither. The Delete pattern admits one `110150`
-/// agent, its own `agent:client`, so a Delete exchange is the system's.
+/// agent, its own `agent:client`, so an exchange whose client is of that type
+/// names the user's application there alone. A user's organisation, when
+/// named, is an agent of its own.
 #[derive(Clone)]
 pub struct Exchange {
     /// What the transaction's audit profile fixes.
@@ -552,10 +683,17 @@ impl Exchange {
             ],
         };
         if let Some(user) = self.on_behalf.user() {
-            agent.extend(user_agents(user));
+            let [person, application] = user_agents(user);
+            agent.push(person);
+            // NOTE: BALP 1.1.4 IHE.BasicAudit.Delete admits one 110150 agent, its client, which
+            // then names the user's application, so a second one is not added.
+            if self.kind.client != APPLICATION {
+                agent.push(application);
+            }
+            agent.extend(organisation_agent(user));
         }
         let event = AuditEvent {
-            meta: Some(Meta {
+            meta: (!self.kind.profile.is_empty()).then(|| Meta {
                 profile: vec![primitives::Canonical::from(self.kind.profile)],
                 ..Meta::default()
             }),
@@ -602,6 +740,7 @@ fn user_agents(user: &User) -> [AuditEventAgent; 2] {
     let person = AuditEventAgent {
         r#type: Some(concept(INFORMATION_RECIPIENT)),
         who: Some(identified(Some(user.issuer()), user.subject())),
+        alt_id: user.alt_id().map(primitives::String::from),
         requestor: primitives::Boolean::from(true),
         purpose_of_use: user.purposes().iter().map(purpose).collect(),
         ..AuditEventAgent::default()
@@ -613,6 +752,25 @@ fn user_agents(user: &User) -> [AuditEventAgent; 2] {
         ..AuditEventAgent::default()
     };
     [person, application]
+}
+
+/// The agent of the organisation `user` acts for, when one is named: `who`
+/// an `Organization` by its identifier, with no `type`, so it fills no slice
+/// a BALP pattern bounds, and not the `requestor`.
+fn organisation_agent(user: &User) -> Option<AuditEventAgent> {
+    let organisation = user.organisation()?;
+    Some(AuditEventAgent {
+        who: Some(Reference {
+            r#type: Some(primitives::Uri::from("Organization")),
+            identifier: Some(Box::new(Identifier {
+                value: Some(primitives::String::from(organisation)),
+                ..Identifier::default()
+            })),
+            ..Reference::default()
+        }),
+        requestor: primitives::Boolean::from(false),
+        ..AuditEventAgent::default()
+    })
 }
 
 /// A purpose of use as `agent.purposeOfUse` codes it.
@@ -702,6 +860,53 @@ fn entity(entity: &Entity) -> AuditEventEntity {
                 .map(|text| primitives::Base64Binary::from(STANDARD.encode(text))),
             ..AuditEventEntity::default()
         },
+        Entity::Described(described) => described_entity(described),
+    }
+}
+
+/// The `entity` a [`Described`] entity is written as.
+fn described_entity(described: &Described) -> AuditEventEntity {
+    let what = described.what.as_ref().map(|what| match what {
+        What::Reference {
+            reference,
+            resource_type,
+        } => Reference {
+            reference: Some(primitives::String::from(reference.as_str())),
+            r#type: resource_type.as_deref().map(primitives::Uri::from),
+            ..Reference::default()
+        },
+        What::Identifier { system, value } => Reference {
+            identifier: Some(Box::new(Identifier {
+                system: system.as_deref().map(primitives::Uri::from),
+                value: Some(primitives::String::from(value.as_str())),
+                ..Identifier::default()
+            })),
+            ..Reference::default()
+        },
+    });
+    AuditEventEntity {
+        what,
+        r#type: Some(described.kind.coding()),
+        role: described.role.map(Coded::coding),
+        name: described.name.as_deref().map(primitives::String::from),
+        description: described
+            .description
+            .as_deref()
+            .map(primitives::String::from),
+        detail: described
+            .details
+            .iter()
+            .map(|detail| AuditEventEntityDetail {
+                id: None,
+                extension: Vec::new(),
+                modifier_extension: Vec::new(),
+                r#type: primitives::String::from(detail.kind.as_str()),
+                value: AuditEventEntityDetailValue::String(primitives::String::from(
+                    detail.value.as_str(),
+                )),
+            })
+            .collect(),
+        ..AuditEventEntity::default()
     }
 }
 

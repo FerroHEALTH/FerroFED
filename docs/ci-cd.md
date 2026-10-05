@@ -165,7 +165,7 @@ without the `[signing]` table, which it must refuse. Locally, pass any
 `features (cargo-hack)` lints every feature of the published crates, the
 server, the identity crate and the engine on its own: `cargo hack clippy
 --each-feature --all-targets` over `openehr-federation`, `ihe-iti`,
-`nl-generic-functions`, `oauth-server-metadata`, `ferrofed-identity`,
+`nl-generic-functions`, `oauth-server-metadata`, `ehds-logging`, `ferrofed-identity`,
 `ferrofed-engine` and `ferrofed-server`, at `-D warnings`. Each published crate
 is one specification with a feature per layer or profile, and the server, the
 identity crate and the engine have one feature per regional binding
