@@ -471,7 +471,12 @@ mod tests {
 
     #[test]
     fn a_prefilter_that_did_not_ask_its_service_is_no_observation() {
-        for reason in [NotAsked::Namespace, NotAsked::CallerClaims] {
+        for reason in [
+            NotAsked::Namespace,
+            NotAsked::CallerClaims,
+            NotAsked::CallerClaimsInvalid,
+            NotAsked::PatientValue,
+        ] {
             assert_eq!(
                 None,
                 Observed::of_consent(&ConsentDecision::NotAsked(reason)),

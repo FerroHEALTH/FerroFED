@@ -21,7 +21,9 @@
 //! system or in a namespace the configuration lists as standing for it. A
 //! patient named by a pseudonymised BSN cannot be asked about: the pre-filter
 //! answers that it did not ask ([`NotAsked::Namespace`]), as it does for a
-//! caller whose token names no requester ([`NotAsked::CallerClaims`]). The
+//! caller whose token names no requester ([`NotAsked::CallerClaims`]), names
+//! one the question does not take ([`NotAsked::CallerClaimsInvalid`]), or a
+//! patient value that is no BSN ([`NotAsked::PatientValue`]). The
 //! BSN reaches Mitz only, inside the binding crate's redacting types; nothing
 //! here logs it, and no error carries it.
 
@@ -195,12 +197,6 @@ pub enum MitzPrefilterError {
     /// The closed authorization question cannot be asked.
     #[error("the closed authorization question cannot be asked")]
     Refused(#[source] InvalidInput),
-    /// The caller's token states a professional, a role, an organisation or
-    /// an organisation type the question does not take.
-    #[error(
-        "the caller's token states a requester the closed authorization question does not take"
-    )]
-    Requester(#[source] InvalidInput),
     /// A question's task stopped before it answered.
     #[error("a closed authorization question stopped before it answered")]
     Stopped,
@@ -311,21 +307,15 @@ impl ConsentPrefilter for MitzPrefilter {
         let Some(requester) = requester else {
             return ConsentDecision::NotAsked(NotAsked::CallerClaims);
         };
+        // NOTE: §3.2.4.2: a question with a refused requester or BSN is never put to
+        // Mitz, so Mitz showed nothing of itself and the call is not asked, never an outage.
         let user = match data_user(requester) {
             Ok(user) => user,
-            Err(refused) => {
-                return ConsentDecision::Unavailable(ConsentError::Backend(Box::new(
-                    MitzPrefilterError::Requester(refused),
-                )));
-            }
+            Err(_refused) => return ConsentDecision::NotAsked(NotAsked::CallerClaimsInvalid),
         };
-        let bsn = match Bsn::new(SecretString::from(patient.value())) {
+        let bsn = match bsn(patient.value()) {
             Ok(bsn) => bsn,
-            Err(refused) => {
-                return ConsentDecision::Unavailable(ConsentError::Backend(Box::new(
-                    MitzPrefilterError::Refused(refused),
-                )));
-            }
+            Err(reason) => return ConsentDecision::NotAsked(reason),
         };
         let timeout = deadline
             .saturating_duration_since(Instant::now())
@@ -403,6 +393,12 @@ fn consent_error(error: MitzError) -> ConsentError {
             None => ConsentError::Backend(Box::new(MitzPrefilterError::Question(error))),
         },
     }
+}
+
+/// The BSN `value` names, or [`NotAsked::PatientValue`] for a value the
+/// question does not take as a BSN.
+fn bsn(value: &str) -> Result<Bsn, NotAsked> {
+    Bsn::new(SecretString::from(value)).map_err(|_refused| NotAsked::PatientValue)
 }
 
 /// The data user the verified caller is: its organisation by URA and type,
@@ -503,4 +499,17 @@ fn client(config: &MitzConfig) -> Result<MitzClient, MitzConfigError> {
         MitzClient::new(endpoint, builder)
     };
     client.map_err(MitzConfigError::Client)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NotAsked, bsn};
+
+    // The patient reference refuses an empty value, so the public seam cannot
+    // reach this refusal; the mapping is held here instead.
+    #[test]
+    fn a_value_the_question_does_not_take_as_a_bsn_is_not_asked_about() {
+        assert_eq!(Some(NotAsked::PatientValue), bsn("").err());
+        assert!(bsn("synthetic-patient-0001").is_ok());
+    }
 }
