@@ -150,17 +150,31 @@ slow one.
    `deploy/kubernetes/deployment.yaml`. `scripts/checks/versions.sh` fails on
    any file left behind, and the `plan` job checks the first three and the
    release asset's tag against the tag.
-3. **The changelog names the release.** `[Unreleased]` becomes the version and
-   the date, with a fresh empty `[Unreleased]` above it and a new link
-   reference. What sits under the version heading is what the release notes
-   say, so read it as the release notes before you tag. The landing page's
-   release note and status panel (`website/landing/index.html`) name the same
-   version in the same pull request: `scripts/checks/versions.sh` fails while
-   they name an older one. The page is deployed from `main`, so the bump pull
+3. **The changelog names the release.** Every change since the last release
+   is a fragment under `changelog.d/` (`changelog.d/README.md`), and entries
+   written before the fragments may still sit under `[Unreleased]`. Run
+
+   ```sh
+   scripts/release/changelog.sh --assemble X.Y.Z YYYY-MM-DD
+   ```
+
+   in the version-bump branch. It writes a `## [X.Y.Z] - YYYY-MM-DD` section
+   under a fresh empty `[Unreleased]`, holding the `[Unreleased]` entries and
+   then the fragments, section by section in the Keep a Changelog order and by
+   file name within a section; it moves the `[Unreleased]` link reference on
+   and adds the version's; and it `git rm`s the fragments. It refuses, with
+   nothing written, a malformed fragment, a section heading Keep a Changelog
+   does not define, a version that already has a section, and a release with
+   no entry. Commit `CHANGELOG.md` and the removals together. What sits under
+   the version heading is what the release notes say, so read it as the
+   release notes before you tag, and edit the wording there if it needs it.
+   The landing page's release note and status panel
+   (`website/landing/index.html`) name the same version in the same pull
+   request: `scripts/checks/versions.sh` fails while they name an older one. The page is deployed from `main`, so the bump pull
    request is where it changes; the release lane never writes to `main`.
 4. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
-   style, file length, versions), the tier-2 Rust lanes and the
+   style, file length, versions, changelog), the tier-2 Rust lanes and the
    `contribution-licence-guard` are green on it (`docs/ci-cd.md`).
 
 ## The tag
@@ -183,9 +197,10 @@ the session reads the run (`gh run watch`) and fixes what fails.
 A change to `release.yml` itself is rehearsed with a pre-release tag before the
 next real cut. A tag with a suffix (`v0.0.1-rc.1`) publishes as a pre-release.
 
-1. The changelog needs a `## [0.0.1-rc.1]` section, and `CITATION.cff` and the
-   product row of `docs/VERSIONS.md` must say `0.0.1-rc.1`, because the `plan`
-   job checks the tag against them. The rehearsal therefore goes through its
+1. The changelog needs a `## [0.0.1-rc.1]` section, which
+   `scripts/release/changelog.sh --assemble 0.0.1-rc.1 <date>` writes, and
+   `CITATION.cff` and the product row of `docs/VERSIONS.md` must say
+   `0.0.1-rc.1`, because the `plan` job checks the tag against them. The rehearsal therefore goes through its
    own version-bump pull request, exactly like a cut.
 2. Push the signed `v0.0.1-rc.1` tag as above and read the run: the draft must
    carry the section as its notes, no assets, and then publish as a
