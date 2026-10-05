@@ -31,7 +31,7 @@ use crate::facade::{
     registry, settings_with_room, statuses,
 };
 use crate::stored::suite::SCENARIOS;
-use crate::support::{call, error_body};
+use crate::support::{call, chain, error_body};
 
 /// The qualified name the race stores under.
 const NAME: &str = "org.example::raced";
@@ -218,18 +218,6 @@ async fn inserted(url: &str, (name, version): (&str, &str), aql: &str) -> TestRe
     drop(client);
     driven.await??;
     Ok(())
-}
-
-/// Every message of `error` and its causes, one line.
-fn chain(error: &dyn Error) -> String {
-    let mut line = error.to_string();
-    let mut cause = error.source();
-    while let Some(source) = cause {
-        line.push_str(": ");
-        line.push_str(&source.to_string());
-        cause = source.source();
-    }
-    line
 }
 
 // conformance: CP-40

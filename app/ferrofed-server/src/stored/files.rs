@@ -247,7 +247,7 @@ fn definition(
     let file = file.to_path_buf();
     let admitted = admit(text, context).map_err(|refused| match refused {
         Inadmissible::Refused(source) => FilesError::Refused { file, source },
-        Inadmissible::SubjectLiteral => FilesError::SubjectLiteral { file },
+        Inadmissible::SubjectLiteral { .. } => FilesError::SubjectLiteral { file },
     })?;
     Ok(StoredDefinition::new(
         name.clone(),

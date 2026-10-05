@@ -43,7 +43,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, ResponseTemplate};
 
 use crate::facade::{body, crossref, patient_query, post, registry, settings_with_room};
-use crate::support::{Logs, bearer_as, call, send_as_is, signed};
+use crate::support::{Logs, bearer_as, call, chain, send_as_is, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -327,18 +327,6 @@ async fn did_document(app: &Router, path: &str) -> Result<(Value, String), Box<d
         return Err(format!("{path} answered {status}").into());
     }
     Ok((serde_json::from_slice(&bytes)?, media))
-}
-
-/// `error` and every cause behind it, as one line.
-fn chain(error: &(dyn Error + 'static)) -> String {
-    let mut line = error.to_string();
-    let mut cause = error.source();
-    while let Some(source) = cause {
-        line.push_str(": ");
-        line.push_str(&source.to_string());
-        cause = source.source();
-    }
-    line
 }
 
 /// The one verification method of `document`, with its public JWK.

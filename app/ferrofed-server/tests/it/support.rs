@@ -42,6 +42,18 @@ pub(crate) fn millis(duration: Duration) -> Result<u64, TryFromIntError> {
     u64::try_from(duration.as_millis())
 }
 
+/// Returns `error` and every cause behind it, as one line.
+pub(crate) fn chain(error: &(dyn StdError + 'static)) -> String {
+    let mut line = error.to_string();
+    let mut cause = error.source();
+    while let Some(source) = cause {
+        line.push_str(": ");
+        line.push_str(&source.to_string());
+        cause = source.source();
+    }
+    line
+}
+
 /// A `tracing` writer that keeps every line in memory.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Logs(Arc<Mutex<Vec<u8>>>);

@@ -33,7 +33,7 @@ use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, node_answering, registry, settings_with_room,
     statuses,
 };
-use crate::support::{call, error_body, exchange};
+use crate::support::{call, chain, error_body, exchange};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -115,18 +115,6 @@ fn bare(method: Method, path: &str) -> Result<Request<Body>, http::Error> {
 /// A malformed directory: the directory, the file in it (none for a stray
 /// file), the content, what the refusal says, and the entry it names.
 type Case<'a> = (&'a str, Option<&'a str>, &'a [u8], &'a str, &'a str);
-
-/// Every message of `error` and its causes, one line.
-fn chain(error: &dyn Error) -> String {
-    let mut line = error.to_string();
-    let mut cause = error.source();
-    while let Some(source) = cause {
-        line.push_str(": ");
-        line.push_str(&source.to_string());
-        cause = source.source();
-    }
-    line
-}
 
 // conformance: CP-40
 #[tokio::test]

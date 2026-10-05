@@ -19,6 +19,7 @@
 //! governs the storage: our own design.
 
 use std::fmt;
+use std::ops::Range;
 
 use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
@@ -46,7 +47,11 @@ pub enum Inadmissible {
     #[error(
         "the definition names its patient by a literal; a stored query names it through a $parameter"
     )]
-    SubjectLiteral,
+    SubjectLiteral {
+        /// Where the patient predicate was written, when the parser gave a
+        /// position; never the value (§5.4.3).
+        at: Option<Range<usize>>,
+    },
 }
 
 /// A definition a store holds that the registry refuses to serve or run,
@@ -74,8 +79,8 @@ pub struct HeldRefused {
 /// a literal.
 pub fn admit(aql: &str, context: &Context) -> Result<Definition, Inadmissible> {
     let admitted = Definition::admit(aql, context).map_err(Inadmissible::Refused)?;
-    if let Some(SubjectOrigin::Literal { .. }) = admitted.subject() {
-        return Err(Inadmissible::SubjectLiteral);
+    if let Some(SubjectOrigin::Literal { at }) = admitted.subject() {
+        return Err(Inadmissible::SubjectLiteral { at: at.clone() });
     }
     Ok(admitted)
 }
