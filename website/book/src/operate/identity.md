@@ -334,10 +334,10 @@ from the `callback_url` you give each of them:
   deletes the subscription the other replicas rely on. Each message reaches
   the one replica the balancer picks, which drops the stale bindings. The
   other replicas keep theirs until they expire: a binding lives
-  `federation.binding_ttl_ms` after its caller's last resolution
+  `federation.binding_ttl_ms` after the last resolution that returned it
   ([Resolution bindings](registry.md#resolution-bindings)), so on those
-  replicas a stale binding is routed on until its caller has made no
-  resolution for that long. Lower `binding_ttl_ms` to narrow the window.
+  replicas a stale binding is routed on for at most that long. Lower
+  `binding_ttl_ms` to narrow the window.
 - **A `callback_url` of its own for each replica**, an address the Registry
   reaches each replica at, such as a StatefulSet pod's stable name. Each
   replica holds its own subscription, so the Registry sends every change to
