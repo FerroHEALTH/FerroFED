@@ -26,6 +26,7 @@ mod forward;
 mod gate;
 mod masking;
 mod mtls;
+#[cfg(feature = "nl")]
 mod nuts;
 mod onward;
 mod pins;

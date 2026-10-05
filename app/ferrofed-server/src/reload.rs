@@ -32,7 +32,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ferrofed_engine::dispatch::SetupError;
-use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -536,10 +535,6 @@ fn federation_class(error: &FederationError) -> &'static str {
     match error {
         FederationError::Registry { source, .. } => match **source {
             LoadError::Read { .. } => "registry-unreadable",
-            _ => "registry-invalid",
-        },
-        FederationError::FhirRegistry { source, .. } => match **source {
-            FhirFormError::Read { .. } => "registry-unreadable",
             _ => "registry-invalid",
         },
         FederationError::Conflict(RoleConflict { role, .. }) => match role {

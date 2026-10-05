@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Authorization server metadata (RFC 8414), as both authentication tracks
-//! of Annex B read it (feature `oauth-metadata`).
+//! OAuth 2.0 Authorization Server Metadata (RFC 8414), as a client reads it.
 //!
-//! The Nuts profile of Annex B §B.4 and the BgZ/eOverdracht track of Annex B
-//! §B.4a both discover their authorization server from its issuer
-//! identifier, and both hold the metadata to it before sending it anything:
+//! A client that discovers its authorization server from the issuer
+//! identifier holds the metadata to it before sending it anything, as the
+//! OAuth 2.0 issuer audience, the FAPI 2.0 Security Profile and the Nuts
+//! profile of Annex B §B.4 all do:
 //!
 //! - an [`Issuer`] is an `http` or `https` URL without userinfo, query or
 //!   fragment (RFC 8414 §2), written in the canonical form the URL parser
@@ -20,11 +20,12 @@
 //! - an answer whose objects repeat a name at any depth is refused before it
 //!   is read, [`repeats_no_name`].
 //!
-//! Which members a track reads beyond these, and what it requires of them, is
-//! the track's own: this module reads no member but through the caller.
+//! Which members a profile reads beyond these, and what it requires of them,
+//! is the profile's own: the crate reads no member but through the caller.
+//! The crate depends on no application.
 //!
 //! ```
-//! use nl_generic_functions::oauth_metadata::{EndpointError, Issuer};
+//! use oauth_server_metadata::{EndpointError, Issuer};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let issuer = Issuer::parse("https://as.example.org/tenant")?;
@@ -36,6 +37,7 @@
 //! # Ok(())
 //! # }
 //! ```
+#![doc(test(attr(deny(warnings))))]
 
 use std::collections::BTreeSet;
 use std::fmt;

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use ferrofed_engine::dispatch::SetupError;
 use ferrofed_identity::dev::DevCrossRefError;
+#[cfg(feature = "binding-ihe")]
 use ferrofed_identity::directory::error::FhirFormError;
 #[cfg(feature = "binding-nl")]
 use ferrofed_identity::mitz::MitzConfigError;
@@ -44,6 +45,7 @@ pub enum FederationError {
     /// The registry document in FHIR form could not be read or refused to
     /// load (N19, N20, §15.2).
     #[error("the registry document {} could not be loaded", path.display())]
+    #[cfg(feature = "binding-ihe")]
     FhirRegistry {
         /// The document named by `registry.document`.
         path: PathBuf,
@@ -106,7 +108,8 @@ pub enum FederationError {
     /// An `[auth.issuer.patient]` binding is set but no resolver is, so the
     /// token's `ehrId` cannot be resolved to the members' `ehr_id`s (§5.2).
     #[error(
-        "{key} needs a cross-reference resolver, [dev] or [pixm], to resolve the token's ehrId at every member (§5.2)"
+        "{key} needs a cross-reference resolver, {}, to resolve the token's ehrId at every member (§5.2)",
+        crate::binding::resolver_list()
     )]
     PatientWithoutResolver {
         /// The binding's key.
@@ -185,7 +188,8 @@ pub enum FederationError {
     /// `[pdqm]` is set but no cross-reference resolver is, so the master
     /// identity it finds could never be resolved (Annex A §A.2, §5.2).
     #[error(
-        "the [pdqm] demographics step needs a cross-reference resolver, [dev] or [pixm], to resolve the master identity it finds (Annex A §A.2, §5.2)"
+        "the [pdqm] demographics step needs a cross-reference resolver, {}, to resolve the master identity it finds (Annex A §A.2, §5.2)",
+        crate::binding::resolver_list()
     )]
     #[cfg(feature = "binding-ihe")]
     PdqmWithoutResolver,

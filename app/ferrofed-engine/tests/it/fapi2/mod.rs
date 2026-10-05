@@ -36,7 +36,6 @@ use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, Verdict};
 use jsonwebtoken::Algorithm;
-use nl_generic_functions::oauth_metadata;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
@@ -117,7 +116,7 @@ fn grant(
     prover: &Arc<Prover>,
 ) -> Result<Fapi2Grant, Box<dyn Error>> {
     Ok(Fapi2Grant::new(
-        oauth_metadata::Issuer::parse(&server.issuer())?,
+        oauth_server_metadata::Issuer::parse(&server.issuer())?,
         CLIENT_ID,
         (key, Arc::clone(prover)),
         (

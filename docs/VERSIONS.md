@@ -342,6 +342,8 @@ that repeats it.
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM` |
 | FerroEHR node image | `ghcr.io/rubentalstra/ferroehr:4.3.1@sha256:b64f752aefe010629191f8c1d990d286c6ed28a62e457300a237a596f1116ac6` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | FerroEHR node database image | `ghcr.io/rubentalstra/ferroehr-postgres:4.3.1@sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 
 The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
 product version below as its tag default, and the guard holds the two equal.
@@ -351,6 +353,14 @@ harness, behind the `FERROFED_E2E` gate (`docs/ci-cd.md`): each is a
 `PinnedImage` constant in `tools/ferrofed-testkit/src/containers.rs`, and the
 guard holds every constant equal to its row here, so the quickstart and the
 test suite always run the same nodes.
+
+The differential run (#94) builds the Federation Tier reference
+implementation from the vendored source at its pinned commit, with the Maven
+manifest fetched from that commit and held to the sha256 its `PROVENANCE.md`
+records, in the build image and on the runtime image above. The testkit's
+`REFERENCE_COMMIT` and `POM_SHA256` constants
+(`tools/ferrofed-testkit/src/reference.rs`) repeat the reference
+implementation row and the provenance, and the guard holds them equal.
 
 ## Product and citation version
 

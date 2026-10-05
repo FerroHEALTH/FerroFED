@@ -163,6 +163,21 @@ pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
     digest: "sha256:17d5772dba1c6689fccb1095a8774f3ed636f4968256a37fc505207ca75a99b9",
 };
 
+/// The Maven image the Federation Tier reference implementation is built
+/// in, on the Java release its build declares (`java.version` 21).
+pub const MAVEN: PinnedImage = PinnedImage {
+    repository: "maven",
+    tag: "3.9.16-eclipse-temurin-21",
+    digest: "sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320",
+};
+
+/// The Java runtime image the reference implementation runs on.
+pub const TEMURIN_JRE: PinnedImage = PinnedImage {
+    repository: "eclipse-temurin",
+    tag: "21.0.12.1_1-jre-noble",
+    digest: "sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c",
+};
+
 /// A container could not be started, or did not become usable.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -380,6 +395,13 @@ impl Postgres {
     #[must_use]
     pub fn container(&self) -> &ContainerAsync<GenericImage> {
         &self.server.container
+    }
+
+    /// Returns the host port the server is published on, which a container
+    /// reaches through the Docker host gateway.
+    #[must_use]
+    pub fn port(&self) -> u16 {
+        self.port
     }
 }
 
@@ -616,7 +638,7 @@ fn postgres_health_check(role: &str, database: &str) -> Healthcheck {
 }
 
 /// Polls `url` until it answers `200`, or the budget runs out.
-async fn await_readiness(url: &str) -> Result<(), HarnessError> {
+pub(crate) async fn await_readiness(url: &str) -> Result<(), HarnessError> {
     let client = reqwest::Client::builder()
         .timeout(READINESS_INTERVAL.saturating_mul(8))
         .build()

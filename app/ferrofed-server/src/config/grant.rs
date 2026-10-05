@@ -44,7 +44,7 @@ use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstraint};
 use ferrofed_registry::secret::{Secret, SecretUrl};
-use nl_generic_functions::oauth_metadata::{InvalidIssuer, Issuer};
+use oauth_server_metadata::{InvalidIssuer, Issuer};
 use serde::Deserialize;
 
 use crate::config::error::Error;

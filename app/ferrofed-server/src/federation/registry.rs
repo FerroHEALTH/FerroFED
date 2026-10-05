@@ -6,7 +6,6 @@
 
 use std::path::Path;
 
-use ferrofed_identity::directory;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::RegistryFormat;
@@ -42,11 +41,12 @@ fn read_document(path: &Path, format: RegistryFormat) -> Result<RegistrySnapshot
                 source: Box::new(source),
             })
         }
-        RegistryFormat::Fhir => {
-            directory::read(path).map_err(|source| FederationError::FhirRegistry {
+        #[cfg(feature = "binding-ihe")]
+        RegistryFormat::Fhir => ferrofed_identity::directory::read(path).map_err(|source| {
+            FederationError::FhirRegistry {
                 path: path.to_path_buf(),
                 source: Box::new(source),
-            })
-        }
+            }
+        }),
     }
 }

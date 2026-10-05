@@ -21,7 +21,7 @@ use ferrofed_engine::onward::fapi2::{Fapi2Error, Fapi2Grant, Fapi2GrantError};
 use ferrofed_engine::onward::keys::SigningKey;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth;
-use nl_generic_functions::oauth_metadata::{EndpointError, Issuer};
+use oauth_server_metadata::{EndpointError, Issuer};
 use openehr_its::rest::client::{CredentialsError, CredentialsProvider as _};
 use secrecy::SecretString;
 

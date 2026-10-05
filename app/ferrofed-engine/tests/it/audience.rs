@@ -21,7 +21,7 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
 use jsonwebtoken::Algorithm;
-use nl_generic_functions::oauth_metadata::Issuer;
+use oauth_server_metadata::Issuer;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
 use secrecy::SecretString;
 

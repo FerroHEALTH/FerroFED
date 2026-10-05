@@ -29,7 +29,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth::{self, Verdict};
 use ferrofed_testkit::tls::MutualTls;
-use nl_generic_functions::oauth_metadata::Issuer;
+use oauth_server_metadata::Issuer;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
 use secrecy::SecretString;

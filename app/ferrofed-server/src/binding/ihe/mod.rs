@@ -25,6 +25,7 @@ pub mod xcpd;
 
 use std::sync::Arc;
 
+use ferrofed_identity::directory::error::FhirFormError;
 use ferrofed_identity::directory::mcsd::DirectoryReadError;
 use ferrofed_identity::localizer::Localizer;
 use ferrofed_identity::resolver::Resolver;
@@ -143,6 +144,10 @@ impl Binding for Ihe {
 
     fn localizers(&self) -> (&'static [&'static str], &'static [&'static str]) {
         (&["[xcpd]"], &["[pixm]"])
+    }
+
+    fn resolvers(&self) -> &'static [&'static str] {
+        &["[pixm]"]
     }
 
     fn unregistered(&self, settings: &Settings) -> Result<(), FederationError> {
@@ -344,6 +349,10 @@ impl Binding for Ihe {
             | FederationError::PdqmNamespace(_)
             | FederationError::Pdqm(_) => Some("pdqm"),
             FederationError::Audit(_) => Some("audit"),
+            FederationError::FhirRegistry { source, .. } => Some(match **source {
+                FhirFormError::Read { .. } => "registry-unreadable",
+                _ => "registry-invalid",
+            }),
             FederationError::Directory(failure) => Some(match &**failure {
                 DirectoryFailure::Read(DirectoryReadError::Exchange(error)) if error.exceeded() => {
                     "registry-budget"

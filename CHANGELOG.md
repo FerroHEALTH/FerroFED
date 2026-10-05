@@ -47,6 +47,27 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `credentials` section refuse the configuration. RFC 8705 is vendored
   under `docs/specs/ietf-oauth/`.
 
+- An end-to-end check that the `AVG` the gateway declares decomposable in
+  `OPTIONS {base}/` is the mean weighted by each node's count (§11.6.3, N39,
+  CP-10, CP-32), behind `FERROFED_E2E`. With two values at one FerroEHR node
+  and one at the other, each node is asked its `SUM` and `COUNT`, and the
+  answer equals the mean weighted by the counts each node returns for the
+  query it was sent, which differs from a mean of the node means.
+- A differential run against the Federation Tier reference implementation,
+  behind `FERROFED_E2E` (#94; §16.3 tracks 1 to 7 and 9). The testkit builds
+  `syntaric/openehr-federation-ref` at its pinned commit from the vendored
+  source and the manifest held to its recorded sha256, on digest-pinned Maven
+  and Java images, and runs it beside FerroFED over the same two FerroEHR
+  nodes, each gateway behind capturing proxies of its own. Some thirty
+  requests go to both, and the run compares the status, the federation
+  headers, the envelope against the vendored schema, `meta.federation`, the
+  rows and what reached each node, after normalising only what the
+  specification leaves free. Every difference is held in a register with its
+  verdict and where it is recorded: a new or vanished difference fails the
+  run. The `e2e (containers)` job uploads the Markdown and TSV report as the
+  `differential-report` artifact. No difference is a FerroFED defect; three
+  reference divergences and one specification question are new upstream
+  reports (#212 T190 to T193).
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at
@@ -125,6 +146,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   each binding logs what it is configured to reach on a `binding configured`
   line of its own; the registry directory, PIX Manager, PMIR and PDQm fields
   move from the first line to the IHE binding's (#489).
+- A build without a binding feature compiles none of that binding's crate:
+  `binding-ihe` and `binding-nl` turn on new `ihe` and `nl` features of
+  `ferrofed-identity` and an `nl` feature of `ferrofed-engine`, so
+  `cargo build -p ferrofed-server --no-default-features` builds neither
+  `ihe-iti` nor `nl-generic-functions`. The registry document in FHIR form
+  (`registry.format = "fhir"`), read with the mCSD reader, is part of
+  `binding-ihe` (#551).
+- The authorization server metadata checks of RFC 8414 move out of
+  `nl-generic-functions` into a crate of their own, `oauth-server-metadata`
+  0.0.1, which the OAuth 2.0 issuer audience, the FAPI 2.0 grant and the
+  Nuts grant share. `nl-generic-functions` 0.0.11 drops its
+  `oauth-metadata` feature (#551).
+- An error that needs a cross-reference resolver names the resolvers the
+  build carries, `[dev] or [pixm]` by default and `[dev]` without
+  `binding-ihe` (#551).
 
 - `[federation.consent] disclose = false` keeps a consent exclusion out of
   what a client sees, for Regulation (EU) 2025/327 Art 8, under which the

@@ -15,6 +15,15 @@ readme = "README.md"
 # (no specification governs this: our own design).
 publish = false
 
+[features]
+# The adapters of the IHE binding (Annex A): PIXm, PDQm, XCPD, the mCSD
+# directory and the registry document in FHIR form it reads, PMIR, and the
+# ATNA and BALP audit recorders. The server's binding-ihe turns it on.
+ihe = ["dep:ihe-iti"]
+# The adapters of the Dutch binding (Annex B): NVI and Mitz, with the LRZa
+# URAs they read. The server's binding-nl turns it on.
+nl = ["dep:nl-generic-functions"]
+
 [dependencies]
 async-trait.workspace = true
 ferrofed-registry.workspace = true
@@ -25,14 +34,14 @@ http.workspace = true
 # over ITI-20 (#418), and the identity lifecycle (#147) over its PMIR ITI-94
 # subscriber and ITI-93 feed reader, and the demographics step (#487) over its
 # PDQm ITI-78 and ITI-119 client.
-ihe-iti = { workspace = true, features = ["atna", "balp", "mcsd", "pdqm", "pixm", "pmir", "xcpd"] }
+ihe-iti = { workspace = true, optional = true, features = ["atna", "balp", "mcsd", "pdqm", "pixm", "pmir", "xcpd"] }
 # The instant an ITI-91 refresh asks from, read off the directory's `Date`
 # (#86), and the time an ITI-20 syslog message is written at (#418).
 jiff.workspace = true
 # The NVI localizer (#87) over the GF-Localization client of the Dutch binding
 # crate (Annex B §B.1), its custodians read by the LRZa rules from the
 # directory (Annex B §B.2).
-nl-generic-functions = { workspace = true, features = ["lrza", "mitz", "nvi"] }
+nl-generic-functions = { workspace = true, optional = true, features = ["lrza", "mitz", "nvi"] }
 # The Authorization value of the credentials for an IHE FHIR server,
 # composed as the node client composes it (RFC 7617 §2, RFC 6750 §2.1).
 openehr-its = { workspace = true, features = ["rest-client"] }

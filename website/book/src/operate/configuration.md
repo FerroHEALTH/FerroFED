@@ -125,6 +125,7 @@ The sections, and the page that covers each:
 | `[pdqm]` | the PDQm Supplier asked for the master identity of an identifier the cross-reference does not map | [Demographics first](identity.md#demographics-first-pdqm) |
 | `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](identity.md#xcpd-localization-xcpd), [The audit repository](identity.md#the-audit-repository) |
 | `[nl_gf.nvi]` | the NVI localizer of the Dutch Generic Functions | [Dutch localization](identity.md#dutch-localization-nl_gfnvi) |
+| `[nl_gf.mitz]` | the Mitz consent pre-filter of the Dutch Generic Functions | [Dutch consent](identity.md#dutch-consent-nl_gfmitz) |
 | `[pmir]` | the PMIR identity feed: the subscription and the route the Registry sends to | [The identity feed](identity.md#the-identity-feed-pmir) |
 | `[audit]` | where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go | [The audit trail](audit.md) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
@@ -138,7 +139,7 @@ each binding is one Cargo feature of the `ferrofed-server` crate:
 | Feature | Binding | Sections |
 |---|---|---|
 | always built | development | `[dev]` |
-| `binding-ihe` | IHE, Annex A | `[pixm]`, `[pdqm]`, `[xcpd]`, `[registry.mcsd]`, `[pmir]`, `[audit]` |
+| `binding-ihe` | IHE, Annex A | `[pixm]`, `[pdqm]`, `[xcpd]`, `[registry.mcsd]`, `[pmir]`, `[audit]`, and `registry.format = "fhir"`, which reads the document with the mCSD reader |
 | `binding-nl` | Dutch Generic Functions, Annex B | `[nl_gf]` (`[nl_gf.nvi]`, `[nl_gf.mitz]`), `[credentials."<id>".nuts]` |
 
 Both features are on by default, so the released binary and the container
