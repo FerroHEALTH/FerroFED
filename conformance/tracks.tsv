@@ -6,10 +6,11 @@
 # comments.
 #
 # Derived columns: track, title, requirements, cps (the points whose tracks
-# cell names the track). Hand-kept columns: status (covered, planned,
-# deferred), issue, reason, with the same rules and the same deferral authority
-# as conformance/matrix.tsv. Track 8 is deferred from the start: section 16.3
-# marks it provisional and section 18 lets its subject matter be deferred.
+# cell names the track). Hand-kept columns: status (covered or deferred;
+# planned is refused, as in the matrix), issue, reason, with the same rules
+# and the same deferral authority as conformance/matrix.tsv. Track 8 is
+# deferred from the start: section 16.3 marks it provisional and section 18
+# lets its subject matter be deferred.
 track	title	requirements	cps	status	issue	reason
 1	Transparency	N1,N2,N17,N18	CP-1,CP-2,CP-35	covered	#38,#72,#92	scenario over the two FerroEHR nodes of the harness: a plain patient AQL by POST and by GET answers one RESULT_SET validated against the vendored schema, with the client columns only, every row an ordered array, the additions nested under meta.federation, and columns[] the same whichever node answers first
 2	subject → ehrId resolution	N3,N5,N7,N33	CP-2,CP-38,CP-3,CP-4,CP-7,CP-36	covered	#42,#44,#45,#92	scenario over the two FerroEHR nodes with the harness PIX Manager as resolver: both carriers resolve to the same rows, each node is asked by its own ehr_id and its AQL carries no subject, a selected subject column is the re-injected input, and a member where the patient does not resolve is never asked

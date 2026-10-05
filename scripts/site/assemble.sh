@@ -55,6 +55,10 @@ book="$(mktemp -d)"
 block="$(mktemp)"
 trap 'rm -rf "$book"; rm -f "$block"' EXIT
 
+# The conformance pages are rendered from the matrix and the test markers, so
+# a page that disagrees with them fails the build before mdBook runs (#95).
+bash scripts/conformance/matrix.sh --check-pages
+
 mdbook build website/book --dest-dir "$book"
 
 rm -rf "${OUT:?}"

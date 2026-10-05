@@ -260,7 +260,9 @@ operator and query console
 ## Not claimed
 
 FerroFED claims a conformance point only when a test carries its marker and CI
-runs it. The [conformance matrix](conformance.md) records where each point
+runs it. The [conformance statement](conformance-statement.md) is that claim
+for the Federation-Gateway profile, with every deferral and its reason. The
+[conformance matrix](conformance.md) records where each point
 stands, and the [obligations checklist](obligations.md) does the same for
 every normative statement of the specification. The specification is a
 release candidate; when 1.0 is published, the vendored text is re-pinned and
