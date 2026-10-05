@@ -5,7 +5,7 @@
 //! authenticated by a signed JWT client assertion (§13.1, N25, CP-17).
 //!
 //! For an endpoint configured with a [`Grant`], the gateway obtains an
-//! access token at the node's token endpoint, authenticating with an ES384
+//! access token at the node's token endpoint, authenticating with an ES256 or ES384
 //! client assertion (RFC 7523 §2.2) signed by the current key of its
 //! [`keys::KeyRing`], whose public keys it publishes as a JWK Set (RFC 7517).
 //! A [`GrantKind::ClientCredentials`] grant (RFC 6749 §4.4) gives the

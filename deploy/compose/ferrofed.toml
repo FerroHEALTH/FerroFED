@@ -200,13 +200,16 @@ password_file = "/run/secrets/ferrofed/node-b-password"
 # client_id = "ferrofed-gateway"
 # scope = "system/aql-*.s"
 
-# The gateway's ES384 signing key, in PKCS#8 PEM, required: it signs the
-# caller's identity onto every request to a node, in the
-# openEHR-federation-client token (§13.1, N24), and every client assertion of
-# an OAuth 2.0 grant. The gateway publishes its public key at
-# /.well-known/jwks.json and declares jwks_uri in OPTIONS /. Make one with:
+# The gateway's signing key, a P-384 (ES384) or P-256 (ES256) key in PKCS#8
+# PEM, required: it signs the caller's identity onto every request to a
+# node, in the openEHR-federation-client token (§13.1, N24), and every
+# client assertion of an OAuth 2.0 grant. The gateway publishes its public
+# key at /.well-known/jwks.json and declares jwks_uri in OPTIONS /. Make one
+# with:
 #   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
 #     -out secrets/signing-key.pem
+# A node under the FAPI 2.0 Security Profile admits ES256 and not ES384
+# (§5.4.1): use ec_paramgen_curve:P-256 for such a federation.
 # https://ferrofed.eu/docs/operate/authentication.html#what-a-node-is-told-about-the-caller
 [signing]
 key_file = "/run/secrets/ferrofed/signing-key.pem"

@@ -9,8 +9,11 @@
 //! [`KeyRing`], the key whose public half the gateway publishes as its JWK
 //! Set and declares as `federation.auth.jwks_uri` (N30), so a node verifies
 //! it the way it verifies the gateway's client assertions. Its JOSE header
-//! names [`ALGORITHM`], the key's `kid` and the type [`TYPE`] (RFC 8725
-//! §3.11). Its claims:
+//! names the key's algorithm, ES256 for a P-256 key and ES384 for a P-384
+//! one, the key's `kid` and the type [`TYPE`] (RFC 8725 §3.11). A
+//! deployment whose nodes hold to the FAPI 2.0 Security Profile, which
+//! admits PS256, ES256 and `EdDSA` (§5.4.1), signs with a P-256 key. Its
+//! claims:
 //!
 //! | Claim | Value |
 //! |---|---|
@@ -43,7 +46,7 @@ use jsonwebtoken::Header;
 use serde::Serialize;
 
 use crate::onward::exchange::SubjectToken;
-use crate::onward::keys::{ALGORITHM, KeyRing};
+use crate::onward::keys::KeyRing;
 
 /// The header every request to a node carries the caller's identity in.
 pub const HEADER: &str = "openEHR-federation-client";
@@ -441,7 +444,7 @@ impl Conveyance {
             claims.ehr_id = ehr_id.map(EhrId::as_str);
         }
         let key = self.0.signer.keys.current();
-        let mut header = Header::new(ALGORITHM);
+        let mut header = Header::new(key.algorithm());
         header.typ = Some(TYPE.to_owned());
         header.kid = Some(key.kid().to_owned());
         jsonwebtoken::encode(&header, &claims, key.private()).map_err(ConveyanceError::Sign)

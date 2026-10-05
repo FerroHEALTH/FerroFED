@@ -56,7 +56,8 @@ secrecy.workspace = true
 http.workspace = true
 # The wall clock the claims of an onward client assertion are dated by (#81).
 jiff.workspace = true
-# The ES384 client assertion of the onward grant, and the published JWKS (#81).
+# The ES256 or ES384 client assertion of the onward grant and conveyance, and
+# the published JWKS (#81, #513).
 jsonwebtoken.workspace = true
 # Accept and Content-Type composed from the operation's listed media types
 # (#261).

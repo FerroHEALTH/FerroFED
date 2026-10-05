@@ -13,9 +13,9 @@ use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::conveyance::{
     Caller, Conveyance, Principal, Purpose, Signer, TYPE, Verification,
 };
-use ferrofed_engine::onward::keys::{ALGORITHM, KeyRing, SigningKey};
+use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_testkit::oauth;
-use jsonwebtoken::{DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use secrecy::SecretString;
 use serde::Deserialize;
 
@@ -111,22 +111,27 @@ pub(crate) struct Read {
     pub(crate) scope: Option<String>,
 }
 
-/// Verifies `token` as a node does: its `typ` and algorithm, its signature
-/// against `keys`'s published JWK Set by `kid`, its `iss`, its `aud`
-/// `audience` and its `exp`.
+/// Verifies `token` as a node does: its `typ`, its algorithm against the
+/// one its key is published with, its signature against `keys`'s published
+/// JWK Set by `kid`, its `iss`, its `aud` `audience` and its `exp`.
 pub(crate) fn verified(
     token: &str,
     keys: &KeyRing,
     (issuer, audience): (&str, &str),
 ) -> Result<Read, Box<dyn Error>> {
     let header = jsonwebtoken::decode_header(token)?;
-    if header.typ.as_deref() != Some(TYPE) || header.alg != ALGORITHM {
-        return Err(format!("typ {:?}, alg {:?}", header.typ, header.alg).into());
-    }
     let kid = header.kid.ok_or("the token names its key")?;
     let published = keys.published();
     let jwk = published.find(&kid).ok_or("the key is published")?;
-    let mut validation = Validation::new(ALGORITHM);
+    let algorithm = Algorithm::try_from(
+        jwk.common
+            .key_algorithm
+            .ok_or("the published key names its algorithm")?,
+    )?;
+    if header.typ.as_deref() != Some(TYPE) || header.alg != algorithm {
+        return Err(format!("typ {:?}, alg {:?}", header.typ, header.alg).into());
+    }
+    let mut validation = Validation::new(algorithm);
     validation.set_issuer(&[issuer]);
     validation.set_audience(&[audience]);
     validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);

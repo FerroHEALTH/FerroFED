@@ -46,7 +46,7 @@ flowchart TB
     as["Callers' authorization servers<br/>one signing key each"]
     subgraph gwbox["FerroFED gateway"]
         trust["Trust list<br/>of issuers"]
-        key["Gateway key pair, ES384<br/>private half: a _file secret"]
+        key["Gateway key pair, ES256 or ES384<br/>private half: a _file secret"]
         jwks["{base}/.well-known/jwks.json<br/>current and previous kid"]
     end
     subgraph nodebox["Member node A"]
@@ -65,8 +65,11 @@ flowchart TB
   tokens. The gateway keeps a trust list of issuers and reads each issuer's
   JWKS, so it holds many public key sets and no caller's private key.
 - **The gateway to each node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
-  §13.1, N25, N30): the gateway has one key pair of its own. The private half
-  is a secret file; the public half is published at
+  §13.1, N25, N30): the gateway has one key pair of its own, on P-256
+  (ES256) or P-384 (ES384). A deployment whose nodes hold to the FAPI 2.0
+  Security Profile uses P-256, since that profile admits ES256 and not
+  ES384 (§5.4.1). The private half is a secret file; the public half is
+  published at
   `{base}/.well-known/jwks.json` and declared as `federation.auth.jwks_uri`
   in `OPTIONS {base}/`, so a node finds it without an out-of-band arrangement
   (§13.1 `jwks-discovery`). A rotation keeps the current and the previous
@@ -146,8 +149,9 @@ and a node that demands a nonce is answered once more with it.
 **Telling the node who asks** ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
 N24, §12.4). Every request to a node carries `openEHR-federation-client`: a
 query, a routed read or write, a definition request, the ask-all probe and
-the read of an EHR by subject alike. It is a JWS signed ES384 with the
-gateway key, typed `openehr-federation-client+jwt`, that lives 60 seconds,
+the read of an EHR by subject alike. It is a JWS signed with the
+gateway key, ES256 or ES384 as the key's curve says, typed
+`openehr-federation-client+jwt`, that lives 60 seconds,
 addressed (`aud`) to that node's endpoint id. It names the verified caller
 (`sub`) and its issuer (`iss_upstream`), how the gateway verified it
 (`verified_by`, `edge` for an identity the edge asserted), the caller's

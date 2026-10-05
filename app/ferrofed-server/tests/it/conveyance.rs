@@ -17,13 +17,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::path::Path;
 use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
 use ferrofed_engine::onward::conveyance::{HEADER, LIFETIME, TYPE};
-use ferrofed_engine::onward::keys::ALGORITHM;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::{
     AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
@@ -32,19 +32,21 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{ACT_REASON, Claims, EVERY_SCOPE, Issuer};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::oauth;
 use http::{HeaderMap, HeaderName, Request, StatusCode, header};
-use jsonwebtoken::jwk::JwkSet;
-use jsonwebtoken::{DecodingKey, Validation};
+use jsonwebtoken::jwk::{JwkSet, KeyAlgorithm};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use openehr_federation::headers::ENDPOINT;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::auth::{Gateway, bearing, minted, query};
 use crate::facade::{
-    EHR_A, EHR_B, PATIENT, body, crossref, dev_gateway, patient_query, post, registry, wire,
+    EHR_A, EHR_B, PATIENT, body, crossref, dev_gateway, gateway, patient_query, post, registry,
+    wire,
 };
 use crate::support::{
-    AUDIENCE, CLIENT_TOKEN, Conveyed, ConveyedPurpose, ISSUER, call, error_body, send,
+    AUDIENCE, CLIENT_TOKEN, Conveyed, ConveyedPurpose, ISSUER, JWKS_URI, call, error_body, send,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -87,9 +89,9 @@ async fn tokens(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(tokens)
 }
 
-/// `token` verified as a node verifies it: its type and algorithm, its
-/// signature against `keys` by `kid`, `iss` the federation, `aud`
-/// `audience`, and `exp`.
+/// `token` verified as a node verifies it: its type, its algorithm as its
+/// key is published with it, its signature against `keys` by `kid`, `iss`
+/// the federation, `aud` `audience`, and `exp`.
 pub(crate) fn verified(
     token: &str,
     keys: &JwkSet,
@@ -107,12 +109,17 @@ pub(crate) fn verified_from(
     issuer: &str,
 ) -> Result<Conveyed, Box<dyn Error>> {
     let header = jsonwebtoken::decode_header(token)?;
-    if header.typ.as_deref() != Some(TYPE) || header.alg != ALGORITHM {
-        return Err(format!("typ {:?}, alg {:?}", header.typ, header.alg).into());
-    }
     let kid = header.kid.ok_or("the token names its key")?;
     let jwk = keys.find(&kid).ok_or("the key is published")?;
-    let mut validation = Validation::new(ALGORITHM);
+    let algorithm = Algorithm::try_from(
+        jwk.common
+            .key_algorithm
+            .ok_or("the published key names its algorithm")?,
+    )?;
+    if header.typ.as_deref() != Some(TYPE) || header.alg != algorithm {
+        return Err(format!("typ {:?}, alg {:?}", header.typ, header.alg).into());
+    }
+    let mut validation = Validation::new(algorithm);
     validation.set_issuer(&[issuer]);
     validation.set_audience(&[audience]);
     validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
@@ -432,5 +439,65 @@ async fn a_registry_from_either_source_without_a_signing_key_does_not_load() -> 
             "§13.1, N24: {source}: {refused:?}"
         );
     }
+    Ok(())
+}
+
+/// A `[signing]` key file in `dir` under `name`, holding `pem`.
+fn key_file(dir: &Path, name: &str, pem: &str) -> Result<toml::Value, Box<dyn Error>> {
+    let file = dir.join(name);
+    std::fs::write(&file, pem)?;
+    Ok(toml::Value::String(file.display().to_string()))
+}
+
+/// A P-256 `[signing]` key signs every conveyance ES256, the algorithm read
+/// from the key, and the JWK Set publishes it as ES256 beside the previous
+/// ES384 key of a rotation; a node verifies the token against that set
+/// (§13.1, N24, N25; the FAPI 2.0 Security Profile §5.4.1 admits ES256).
+// conformance: CP-16
+#[tokio::test]
+async fn a_p256_signing_key_conveys_the_caller_es256_beside_the_previous_es384_key() -> TestResult {
+    let a = routed_node().await;
+    let b = Server::start().await;
+    let dir = tempfile::tempdir()?;
+    let current = key_file(dir.path(), "current.pem", &oauth::p256_pem()?)?;
+    let previous = key_file(dir.path(), "previous.pem", &oauth::es384_pem()?)?;
+    let tables = format!(
+        "{}\n[signing]\nkey_file = {current}\nprevious_key_file = {previous}\njwks_uri = \"{JWKS_URI}\"\n",
+        crossref(&[("node-a", EHR_A)]),
+    );
+    let app = gateway(
+        dir.path(),
+        &registry(&a.uri(), &b.uri(), ""),
+        "profile = \"development\"",
+        &tables,
+    )?;
+    let keys = published(&app).await?;
+    let algorithms: Vec<_> = keys
+        .keys
+        .iter()
+        .map(|jwk| jwk.common.key_algorithm)
+        .collect();
+    assert_eq!(
+        vec![Some(KeyAlgorithm::ES256), Some(KeyAlgorithm::ES384)],
+        algorithms,
+        "the current key, then the previous one"
+    );
+    let read = Request::get(format!("/v1/ehr/{EHR_A}")).body(Body::empty())?;
+    assert_eq!(
+        StatusCode::OK,
+        send(app.clone(), to_a(read)?).await?.status()
+    );
+    let [token]: [String; 1] = tokens(&a)
+        .await?
+        .try_into()
+        .map_err(|_more| "one request at A")?;
+    let header = jsonwebtoken::decode_header(&token)?;
+    assert_eq!(Algorithm::ES256, header.alg);
+    assert_eq!(
+        keys.keys.first().and_then(|jwk| jwk.common.key_id.clone()),
+        header.kid,
+        "the current key signs"
+    );
+    names_the_default_caller(&verified(&token, &keys, "node-a-pub")?, "signature");
     Ok(())
 }

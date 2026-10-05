@@ -271,7 +271,8 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
 }
 
 /// Returns the signing keys and their publication `[signing]` describes:
-/// both keys read from their files and held to ES384, the assertion
+/// both keys read from their files, each a P-256 (ES256) or a P-384 (ES384)
+/// key, the assertion
 /// lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
 /// that lifetime plus the nodes' JWK Set cache time, and `jwks_uri` an
 /// absolute `http` or `https` URL (§13.1, N25).
@@ -341,7 +342,7 @@ fn signing_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
     let pem = secret::<Secret>(key, None, Some(path))?.ok_or_else(|| Error::Missing {
         key: format!("{key}_file"),
     })?;
-    SigningKey::from_pem(&pem.to_secret_string()).map_err(|source| Error::SigningKey {
+    SigningKey::from_ec_pem(&pem.to_secret_string()).map_err(|source| Error::SigningKey {
         key: format!("{key}_file"),
         source,
     })
