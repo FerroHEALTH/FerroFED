@@ -26,8 +26,7 @@ use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
 };
 
-use super::dpop::Sent;
-use super::{Contact, DispatchError, DispatchOptions, NodeClient, classify, reported};
+use super::{Contact, DispatchError, DispatchOptions, NodeClient, classify, dpop, reported};
 use crate::hygiene::{Composed, Outbound};
 use crate::trace_context;
 
@@ -136,7 +135,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             accept: None,
         };
         let started = Instant::now();
-        let (client, sent) = self.client_for(options);
+        let client = self.client_for(options);
         let answer = DefinitionClient::new(&client)
             .with_options(self.definition_call(options)?)
             .definition_query_version_store_yaml(&params, aql)
@@ -155,7 +154,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                 (latency_ms, StatusCode::CONFLICT),
                 reported::answered(StatusCode::CONFLICT, &body, options.withheld()),
             )),
-            Err(error) => self.definition_failure(error, &sent, latency_ms, options),
+            Err(error) => self.definition_failure(error, latency_ms, options),
         }
     }
 
@@ -197,7 +196,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             accept: None,
         };
         let started = Instant::now();
-        let (client, sent) = self.client_for(options);
+        let client = self.client_for(options);
         let answer = DefinitionClient::new(&client)
             .with_options(self.definition_call(options)?)
             .definition_query_version_get(&params)
@@ -212,7 +211,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                 Ok(NodeCopy::Missing { latency_ms })
             }
             Err(error) => self
-                .definition_failure(error, &sent, latency_ms, options)
+                .definition_failure(error, latency_ms, options)
                 .map(|Stored { outcome, contact }| NodeCopy::Failed { outcome, contact }),
         }
     }
@@ -233,13 +232,12 @@ impl<T: Transport + Clone> NodeClient<T> {
     fn definition_failure(
         &self,
         error: ClientError,
-        sent: &Sent,
         latency_ms: u64,
         options: &DispatchOptions,
     ) -> Result<Stored, DispatchError> {
         let withheld = options.withheld();
         // A deadline or a missing proof after a nonce challenge ends a call whose request left.
-        let unanswered = if sent.contradicts(&error) {
+        let unanswered = if dpop::sent_before(&error) {
             Contact::Silent
         } else {
             Contact::Unsent

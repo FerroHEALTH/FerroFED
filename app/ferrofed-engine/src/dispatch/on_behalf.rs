@@ -14,7 +14,6 @@ use openehr_its::rest::client::{Client, Transport};
 
 use crate::onward::exchange::SharedOnBehalf;
 
-use super::dpop::{Sent, Witnessed};
 use super::{DispatchOptions, NodeClient, NodeClients, SetupError};
 
 impl<T: Transport + Clone> NodeClient<T> {
@@ -29,30 +28,23 @@ impl<T: Transport + Clone> NodeClient<T> {
         self
     }
 
-    /// The ITS-REST client a request under `options` is sent through, and
-    /// what the call's `DPoP` prover sees of its sends.
+    /// The ITS-REST client a request under `options` is sent through.
     ///
     /// The client is the endpoint's own, or one whose credentials are
     /// obtained on behalf of the principal `options` conveys; under `DPoP`
-    /// it proves its requests with a prover of this call alone
-    /// ([`Witnessed`]).
-    pub(crate) fn client_for(&self, options: &DispatchOptions) -> (Cow<'_, Client<T>>, Sent) {
-        let sent = Sent::default();
+    /// it proves its requests with the endpoint's
+    /// [`NodeProver`](crate::onward::dpop::NodeProver).
+    pub(crate) fn client_for(&self, options: &DispatchOptions) -> Cow<'_, Client<T>> {
         let client = match &self.on_behalf {
             None => Cow::Borrowed(&self.client),
             Some(source) => Cow::Owned(self.client.clone().with_credentials_provider(
                 source.provider(&options.conveyance, &options.withheld),
             )),
         };
-        let client = match &self.dpop {
+        match &self.dpop {
             None => client,
-            Some(prover) => Cow::Owned(
-                client
-                    .into_owned()
-                    .with_dpop_prover(Witnessed::new(prover.clone(), sent.clone())),
-            ),
-        };
-        (client, sent)
+            Some(prover) => Cow::Owned(client.into_owned().with_dpop_prover(prover.clone())),
+        }
     }
 }
 

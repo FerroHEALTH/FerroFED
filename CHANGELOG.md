@@ -278,6 +278,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The `openehr-*` family moves from 0.0.83 to 0.0.84 (FerroEHR #3565,
+  #574). A re-send answering a node's `DPoP` nonce challenge that no proof
+  could be made for is the node's `node-error`, with the node counted as
+  asked, read from the client's `DpopProof { sent }`. The node clients no
+  longer keep a record of each call's sends. `openehr-federation` 0.0.40
+  takes the new family.
 - The `openehr-*` family moves from 0.0.82 to 0.0.83 (FerroEHR #3560,
   #566). A deadline that passes before the re-send answering a node's
   `DPoP` nonce challenge is the node's `time-out`, with the node counted as

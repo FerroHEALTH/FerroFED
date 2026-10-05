@@ -22,8 +22,7 @@ use openehr_its::rest::generated::ehr::{EhrCreateParams, EhrGetByIdParams};
 use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
-use crate::dispatch::dpop::Sent;
-use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError};
+use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{Composed, Outbound, Part};
 use crate::onward::conveyance::ConveyanceError;
 use crate::trace_context;
@@ -117,8 +116,8 @@ pub enum EhrCallError {
     Failed {
         /// The endpoint.
         endpoint: EndpointId,
-        /// Whether a request evidently left though the client's error reads
-        /// as one never sent: the node answered it with a `DPoP` nonce
+        /// Whether a request of the call left before the failure, as the
+        /// client's error says: the node answered it with a `DPoP` nonce
         /// challenge, and no proof could be made to send it again.
         sent: bool,
         /// What the client runtime reported, the node's status included.
@@ -177,12 +176,12 @@ impl<T: Transport + Clone> NodeClient<T> {
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
-        let (client, sent) = self.client_for(options);
+        let client = self.client_for(options);
         let answer = EhrClient::new(&client)
             .with_options(call)
             .ehr_create(&params, Some(status))
             .await
-            .map_err(|source| self.ehr_failure(source, &sent))?;
+            .map_err(|source| self.ehr_failure(source))?;
         let (status, etag, location) = match answer {
             EhrCreateOutcome::Created { headers, .. } => {
                 (StatusCode::CREATED, headers.etag, headers.location)
@@ -251,12 +250,12 @@ impl<T: Transport + Clone> NodeClient<T> {
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
-        let (client, sent) = self.client_for(options);
+        let client = self.client_for(options);
         let answer = EhrClient::new(&client)
             .with_options(call)
             .ehr_get_by_id(&params)
             .await
-            .map_err(|source| self.ehr_failure(source, &sent))?;
+            .map_err(|source| self.ehr_failure(source))?;
         match answer {
             EhrGetByIdOutcome::Ok { body, .. } => Ok(body),
             EhrGetByIdOutcome::NotFound { body } => Err(self.rejected(StatusCode::NOT_FOUND, body)),
@@ -321,7 +320,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint: self.endpoint().clone(),
                 source,
             },
-            OptionsError::Client(source) => self.ehr_failure(source, &Sent::default()),
+            OptionsError::Client(source) => self.ehr_failure(source),
         }
     }
 
@@ -330,10 +329,11 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// The client makes one attempt, so `DeadlineElapsed` comes before the
     /// request reaches the transport, a request never sent, or before the
     /// one more send that answers a node's `DPoP` nonce challenge, which
-    /// `sent` shows and which is the node's time-out (RFC 9449 §9).
-    fn ehr_failure(&self, error: ClientError, sent: &Sent) -> EhrCallError {
+    /// the error's `sent` shows and which is the node's time-out (RFC 9449
+    /// §9).
+    fn ehr_failure(&self, error: ClientError) -> EhrCallError {
         let endpoint = self.endpoint().clone();
-        let contacted = sent.contradicts(&error);
+        let contacted = dpop::sent_before(&error);
         match error {
             ClientError::DeadlineElapsed { .. } if contacted => EhrCallError::TimeOut {
                 endpoint,

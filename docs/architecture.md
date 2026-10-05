@@ -69,10 +69,10 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
 | openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
 | openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
-| `openehr-query` | 0.0.83 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |
-| `openehr-its` | 0.0.83 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543); 0.0.82 adds the DPoP credential (FerroEHR #3558); 0.0.83 says whether a send went out before a deadline passed (FerroEHR #3560) |
+| `openehr-query` | 0.0.84 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529) |
+| `openehr-its` | 0.0.84 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543); 0.0.82 adds the DPoP credential (FerroEHR #3558); 0.0.83 says whether a send went out before a deadline passed (FerroEHR #3560); 0.0.84 says the same of a DPoP proof that could not be made (FerroEHR #3565) |
 | `openehr-base`, `openehr-rm` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison and, from 0.0.79, the attribute model with the BASE primitives, the `Ordered` marker and the `OBJECT_REF` targets (FerroEHR #3537) |
-| `openehr-sdt` | 0.0.83, the same lockstep line, joined with onward OAuth 2.0 (#81) | the SMART on openEHR scope grammar; 0.0.82 adds the `Display` that prints a scope in its canonical form (FerroEHR #3557) |
+| `openehr-sdt` | 0.0.84, the same lockstep line, joined with onward OAuth 2.0 (#81) | the SMART on openEHR scope grammar; 0.0.82 adds the `Display` that prints a scope in its canonical form (FerroEHR #3557) |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
 | `fhir-types` | 0.1.107 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled only in the IHE adapter crate (decision A16) |
@@ -80,7 +80,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `jsonschema` | 0.58.3 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
-The `openehr-*` rows are the lockstep 0.0.83, published on 2026-10-05. The
+The `openehr-*` rows are the lockstep 0.0.84, published on 2026-10-05. The
 gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`, 0.0.77 closes
 FerroEHR #3529, the function classification the rewrite reads, 0.0.78
@@ -92,7 +92,8 @@ media types, 0.0.81 closes FerroEHR #3548, #3551 and #3552, the typed
 `201_EHR` body, the public body media-type picker and the agreeing media
 tables, 0.0.82 closes FerroEHR #3557 and #3558, the printer of a SMART
 on openEHR scope and the DPoP credential with its prover on the client,
-and 0.0.83 closes FerroEHR #3560, the `sent` of a client deadline.
+0.0.83 closes FerroEHR #3560, the `sent` of a client deadline, and 0.0.84
+closes FerroEHR #3565, the `sent` of a DPoP proof that could not be made.
 
 ## 2. The openEHR surface: the published crates
 
@@ -1115,11 +1116,10 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   origin (§9), and a token endpoint that answers a bearer token to such a
   grant fails the node. A deadline that passes before the nonce re-send is
   the node's `time-out` with the node counted as asked (`Contact::Silent`),
-  read from the client's `DeadlineElapsed { sent }` (`openehr-its` 0.0.83,
-  #566); each node call has a prover of its own that records whether a
-  request of the call left, so a re-send no proof could be made for is the
-  node's `node-error`, counted as asked the same way, never as a request
-  never sent (#470);
+  and a re-send no proof could be made for is the node's `node-error`,
+  counted as asked the same way, never as a request never sent (#470): both
+  are read from the `sent` of the client's `DeadlineElapsed` and
+  `DpopProof` (`openehr-its` 0.0.83 and 0.0.84, #566, #574);
 - **mutual TLS** (built with #492, RFC 8705): a node's `[credentials]`
   section takes `client_identity_file` and `trust_roots_file`, the keys
   and the `ferrofed_identity::fhir::Tls` type every outbound client takes
