@@ -44,7 +44,7 @@ use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstraint};
 use ferrofed_registry::secret::{Secret, SecretUrl};
-use oauth_server_metadata::{InvalidIssuer, Issuer};
+use oauth_server_metadata::{AliasHost, InvalidAliasHost, InvalidIssuer, Issuer};
 use serde::Deserialize;
 
 use crate::config::error::Error;
@@ -213,6 +213,56 @@ pub enum GrantFault {
         /// The grant's section.
         section: String,
     },
+    /// An entry of `mtls_alias_hosts` is no host.
+    #[error(
+        "{key} names a value that is not a host name, or a host name and a port, in canonical form; write it as mtls.example.com or mtls.example.com:8443, without a scheme or a path"
+    )]
+    AliasHost {
+        /// The key that holds it.
+        key: String,
+        /// Why it is refused.
+        #[source]
+        source: InvalidAliasHost,
+    },
+    /// `mtls_alias_hosts` is set for a section whose grant never reads
+    /// `mtls_endpoint_aliases`.
+    #[error(
+        "{key} applies only to a fapi2 grant that uses mutual TLS (RFC 8705 §5); remove it, or set client_auth = \"tls_client_auth\" or tls_client_certificate_bound_access_tokens"
+    )]
+    AliasHostsUnused {
+        /// The key.
+        key: String,
+    },
+}
+
+/// Returns `grant` taking a mutual-TLS alias on each host `hosts` names
+/// (RFC 8705 §5), the `mtls_alias_hosts` of the endpoint `section`.
+///
+/// # Errors
+///
+/// Returns [`GrantFault::AliasHost`] for an entry that is no host, and
+/// [`GrantFault::AliasHostsUnused`] for a grant that does not use mutual
+/// TLS.
+pub(super) fn with_mtls_alias_hosts(
+    section: &str,
+    hosts: &[String],
+    grant: Fapi2Grant,
+) -> Result<Fapi2Grant, Error> {
+    if hosts.is_empty() {
+        return Ok(grant);
+    }
+    let key = format!("{section}.mtls_alias_hosts");
+    let hosts = hosts
+        .iter()
+        .map(|host| AliasHost::parse(host))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| GrantFault::AliasHost {
+            key: key.clone(),
+            source,
+        })?;
+    grant
+        .with_mtls_alias_hosts(hosts)
+        .map_err(|_unused| GrantFault::AliasHostsUnused { key }.into())
 }
 
 /// The client authentication `client_auth` names, with the thumbprint of

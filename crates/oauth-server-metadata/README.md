@@ -16,6 +16,9 @@ anything.
   issuer the client asked (RFC 8414 §3.3).
 - `Issuer::endpoint`: an endpoint the client sends to is on the issuer's
   origin, without userinfo or a fragment.
+- `Issuer::mtls_alias` and `AliasHost`: a mutual-TLS endpoint alias (RFC
+  8705 §5) is on the issuer's origin or on an `https` host the client named
+  beforehand, without userinfo or a fragment.
 - `repeats_no_name`: an answer whose objects repeat a name at any depth is
   refused before it is read.
 

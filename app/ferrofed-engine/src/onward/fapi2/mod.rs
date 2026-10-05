@@ -55,7 +55,7 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::JwkSet;
-use oauth_server_metadata::Issuer;
+use oauth_server_metadata::{AliasHost, Issuer};
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use url::Url;
 
@@ -99,6 +99,7 @@ pub struct Fapi2Grant {
     client_key: Option<Arc<KeyRing>>,
     client_auth: ClientAuthentication,
     sender: SenderConstraint,
+    alias_hosts: Vec<AliasHost>,
 }
 
 /// How a FAPI 2.0 grant authenticates the gateway and binds its tokens: the
@@ -168,6 +169,12 @@ pub enum Fapi2GrantError {
     /// grant refuses it.
     #[error("the grant's resource or audience is not usable")]
     Target(#[source] GrantError),
+    /// Alias hosts are named for a grant that does not use mutual TLS, so
+    /// it never reads `mtls_endpoint_aliases` (RFC 8705 §5).
+    #[error(
+        "alias hosts are named and the grant does not use mutual TLS, so it reads no mtls_endpoint_aliases (RFC 8705 §5)"
+    )]
+    AliasHostsUnused,
 }
 
 impl Fapi2Grant {
@@ -257,7 +264,29 @@ impl Fapi2Grant {
             client_key,
             client_auth: security.client_auth,
             sender: security.sender,
+            alias_hosts: Vec::new(),
         })
+    }
+
+    /// This grant, taking a `token_endpoint` of `mtls_endpoint_aliases` on
+    /// one of `hosts` as well as on the issuer's origin (RFC 8705 §5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Fapi2GrantError::AliasHostsUnused`] for a grant that does
+    /// not use mutual TLS, which never reads an alias.
+    pub fn with_mtls_alias_hosts(mut self, hosts: Vec<AliasHost>) -> Result<Self, Fapi2GrantError> {
+        if !self.uses_mutual_tls() {
+            return Err(Fapi2GrantError::AliasHostsUnused);
+        }
+        self.alias_hosts = hosts;
+        Ok(self)
+    }
+
+    /// The hosts beside the issuer's origin a mutual-TLS alias may be on.
+    #[must_use]
+    pub fn mtls_alias_hosts(&self) -> &[AliasHost] {
+        &self.alias_hosts
     }
 
     /// This grant, publishing `previous` beside its client key while it is

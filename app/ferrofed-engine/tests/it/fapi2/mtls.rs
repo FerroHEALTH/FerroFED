@@ -29,7 +29,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth::{self, Verdict};
 use ferrofed_testkit::tls::MutualTls;
-use oauth_server_metadata::Issuer;
+use oauth_server_metadata::{AliasHost, EndpointError, Issuer};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
 use secrecy::SecretString;
@@ -40,10 +40,12 @@ use super::{CLIENT_ID, EMPTY_RESULT_SET, SCOPE, TestResult, client_key, field, p
 use crate::conveyed::conveyance;
 
 /// A FAPI 2.0 server that authenticates by certificate, with a node beside
-/// it, both behind one mutual-TLS front.
+/// it, both behind one mutual-TLS front, and a second front on another
+/// origin, `door`, that a mutual-TLS alias may name.
 struct Harness {
     server: AuthorizationServer,
     front: MutualTls,
+    door: MutualTls,
 }
 
 impl Harness {
@@ -68,8 +70,12 @@ impl Harness {
             .with_priority(2)
             .mount(server.endpoint().server())
             .await;
-        let front = MutualTls::front(&server.issuer())?;
-        let harness = Self { server, front };
+        let (front, door) = MutualTls::pair(&server.issuer())?;
+        let harness = Self {
+            server,
+            front,
+            door,
+        };
         harness.publish(|_| {});
         harness
             .server
@@ -259,6 +265,107 @@ async fn a_server_without_tls_client_auth_is_refused() -> TestResult {
         matches!(met, Some(DiscoveryError::ClientAuthentication)),
         "{met:?}"
     );
+    Ok(())
+}
+
+/// Publishes the token endpoint alias on the second front's origin, as RFC
+/// 8705 §5's example puts it on another host, and returns that origin's
+/// host and port.
+fn alias_on_the_door(harness: &Harness) -> Result<String, Box<dyn Error>> {
+    let door = harness.door.origin();
+    let alias = format!("{door}{}", oauth::TOKEN_PATH);
+    harness.publish(|metadata| {
+        metadata.mtls_endpoint_aliases =
+            Some(BTreeMap::from([(String::from("token_endpoint"), alias)]));
+    });
+    Ok(door
+        .strip_prefix("https://")
+        .ok_or("the door is an https origin")?
+        .to_owned())
+}
+
+/// A `token_endpoint` alias on a host the grant names is taken: the token
+/// request goes there, by the same certificate, and the token reaches the
+/// node (RFC 8705 §5).
+// conformance: CP-17
+#[tokio::test]
+async fn an_alias_on_a_host_the_grant_names_is_taken() -> TestResult {
+    let harness = Harness::start().await?;
+    let host = alias_on_the_door(&harness)?;
+    let grant = harness
+        .grant()?
+        .with_mtls_alias_hosts(vec![AliasHost::parse(&host)?])?;
+    let client = harness.client(harness.provider(grant)?)?;
+
+    let reply = query(&client, conveyance()).await?;
+    assert_eq!(
+        EndpointStatus::Active,
+        reply.status(),
+        "{:?}",
+        reply.outcome()
+    );
+    assert_eq!(vec![Verdict::Issued], harness.server.endpoint().verdicts());
+    assert_eq!(
+        vec![harness.door.client_thumbprint().to_owned()],
+        harness.door.presented(),
+        "the token request went to the alias, by the certificate"
+    );
+    Ok(())
+}
+
+/// A `token_endpoint` alias on a host the grant does not name is refused,
+/// and nothing is sent to it, whether the grant names no host or another
+/// one.
+#[tokio::test]
+async fn an_alias_on_a_host_the_grant_does_not_name_is_refused() -> TestResult {
+    for named in [vec![], vec![AliasHost::parse("mtls.cdr-a.example.org")?]] {
+        let harness = Harness::start().await?;
+        alias_on_the_door(&harness)?;
+        let grant = if named.is_empty() {
+            harness.grant()?
+        } else {
+            harness.grant()?.with_mtls_alias_hosts(named.clone())?
+        };
+        let error = harness
+            .provider(grant)?
+            .credentials()
+            .await
+            .err()
+            .ok_or("the alias is refused")?;
+        let met = Error::source(&error).and_then(|source| source.downcast_ref::<Fapi2Error>());
+        assert!(
+            matches!(
+                met,
+                Some(Fapi2Error::Discovery(DiscoveryError::Endpoint(
+                    EndpointError::OtherOrigin
+                )))
+            ),
+            "{named:?}: {met:?}"
+        );
+        assert!(harness.server.endpoint().forms().is_empty(), "{named:?}");
+        assert_eq!(
+            0,
+            harness.door.handshakes(),
+            "{named:?}: nothing reaches it"
+        );
+    }
+    Ok(())
+}
+
+/// A grant that does not use mutual TLS reads no alias, so it takes no
+/// alias host.
+#[test]
+fn a_grant_without_mutual_tls_takes_no_alias_host() -> TestResult {
+    let grant = Fapi2Grant::new(
+        Issuer::parse("https://as.cdr-a.example.org")?,
+        CLIENT_ID,
+        (client_key()?, prover()?),
+        (Some(Scope::parse(SCOPE)?), None),
+    )?;
+    assert!(matches!(
+        grant.with_mtls_alias_hosts(vec![AliasHost::parse("mtls.cdr-a.example.org")?]),
+        Err(Fapi2GrantError::AliasHostsUnused)
+    ));
     Ok(())
 }
 
