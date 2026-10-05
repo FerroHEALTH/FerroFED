@@ -8,11 +8,12 @@
 # the manifests. Between the two sits a set of pins nothing watches: the
 # actionlint, hadolint and kubeconform container images named inside a `run:`
 # block, the analyzer versions handed to taiki-e/install-action as an input,
-# the commits the vendored specification corpora are fetched at, and the
-# Chrome for Testing release the browser journeys install. This
-# workflow
-# reads the newest upstream release or commit of each and opens ONE issue when
-# a pin is behind.
+# the commits the vendored specification corpora are fetched at, the Chrome
+# for Testing release the browser journeys install, and the container images
+# the testkit harness starts, which are Rust constants. This workflow reads
+# the newest upstream release, commit or registry tag of each and opens ONE
+# issue when a pin is behind. Its second job watches the EU corpus for the
+# acts Regulation (EU) 2025/327 still waits on.
 #
 # It opens an issue rather than failing: a weekly red job trains a maintainer
 # to ignore red jobs, and a newer lint release is not a broken build.
@@ -61,7 +62,7 @@ jobs:
         if: steps.check.outputs.stale == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TITLE: A pinned CI tool or corpus is behind its newest upstream release
+          TITLE: A pinned CI tool, corpus or test image is behind its newest upstream release
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -92,3 +93,105 @@ jobs:
           # picks it up sets the three.
           bash scripts/gh/fields.sh new task low low \
             --title "$TITLE" --body-file body.md --label ci
+
+  # The adopted-acts half of the EU corpus: Regulation (EU) 2025/327 leaves
+  # the harmonised components' content to acts not yet adopted, and
+  # docs/specs/eu-ehds/ vendors each one once it is. This reads EUR-Lex for
+  # every act based on the Regulation and the Commission's Have your say
+  # register for its initiatives, and opens one issue per newly adopted act
+  # and one when a watched initiative moves.
+  ehds-acts:
+    name: EHDS acts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare the acts and initiatives with the recorded ones
+        id: check
+        run: |
+          set -uo pipefail
+          status=0
+          bash scripts/checks/ehds-acts.sh > ehds-acts.txt || status=$?
+          cat ehds-acts.txt
+          # 0 nothing new, 1 something new or moved, 2 a source could not be
+          # read, which fails the job: a source that did not answer is not one
+          # known to have nothing new.
+          if [ "$status" -eq 2 ]; then
+            echo "a source could not be read; the comparison is incomplete" >&2
+            exit 1
+          fi
+          echo "changed=$([ "$status" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Open an issue per adopted act and one for the register
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REGISTER_TITLE: An EHDS initiative moved in the Commission's Have your say register
+        run: |
+          set -euo pipefail
+          # One issue per CELEX number, never a second for the same act: the
+          # search covers closed issues too, so an act already handled is not
+          # filed again before the vendor script pins it.
+          awk '$1 == "NEW-ACT" { print $2 }' ehds-acts.txt | while read -r celex; do
+            if ! [[ "$celex" =~ ^[0-9]{5}[A-Z][0-9A-Z()]+$ ]]; then
+              echo "not a CELEX number: $celex" >&2
+              exit 1
+            fi
+            title="EHDS act adopted: CELEX $celex"
+            found="$(gh issue list --state all --limit 100 --search "\"$celex\" in:title" --json title \
+              --jq "[.[] | select(.title == \"$title\")] | length")"
+            if [ "$found" -ne 0 ]; then
+              echo "an issue already carries $celex; not opening a second"
+              continue
+            fi
+            {
+              echo "\`scripts/checks/ehds-acts.sh\` found an act adopted under Regulation (EU) 2025/327 that this repository has not recorded."
+              echo
+              echo '```text'
+              grep -F "NEW-ACT    $celex " ehds-acts.txt
+              echo '```'
+              echo
+              echo "EUR-Lex: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:$celex"
+              echo
+              echo "Read it, then pin it in \`scripts/vendor/eu.sh\` (its Cellar manifestation and sha256) or record"
+              echo "in \`NOT_VENDORED\` of \`scripts/checks/ehds-acts.sh\` why it does not reach an EHR system, and"
+              echo "name it where the act it implements is waited for."
+              echo
+              echo "Reported by [this run]($RUN_URL)."
+            } > act.md
+            # fields.sh files the issue as a Task at High priority and Low
+            # effort; this job's default token may not read the organisation's
+            # issue types, and then the issue lands with its label alone.
+            bash scripts/gh/fields.sh new task high low \
+              --title "$title" --body-file act.md --label chore
+          done
+
+          if grep -qE '^(MOVED|NEW-INITIATIVE) ' ehds-acts.txt; then
+            open="$(gh issue list --state open --limit 500 --json number,title \
+              --jq "[.[] | select(.title == \"$REGISTER_TITLE\")] | length")"
+            if [ "$open" -ne 0 ]; then
+              echo "an open issue already carries the register report; not opening a second"
+              exit 0
+            fi
+            {
+              echo "\`scripts/checks/ehds-acts.sh\` found an initiative on Regulation (EU) 2025/327 the repository has not recorded, or a watched one at a new stage."
+              echo
+              echo '```text'
+              grep -E '^(MOVED|NEW-INITIATIVE) ' ehds-acts.txt
+              echo '```'
+              echo
+              echo "Read the initiative at https://ec.europa.eu/info/law/better-regulation/have-your-say/initiatives_en,"
+              echo "then record its id in \`KNOWN_INITIATIVES\` and its stage in \`WATCHED_INITIATIVES\`."
+              echo
+              echo "Reported by [this run]($RUN_URL)."
+            } > register.md
+            bash scripts/gh/fields.sh new task medium low \
+              --title "$REGISTER_TITLE" --body-file register.md --label chore
+          fi

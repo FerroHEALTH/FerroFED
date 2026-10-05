@@ -93,9 +93,11 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
   - `docs/specs/ihe-pixm-ch/`, `docs/specs/ihe-pdqm-ch/`,
     `docs/specs/ihe-iua-ch/`: IHE PIXm 3.0.4, PDQm 3.1.0 and IUA 2.3, the
     revisions Swiss Annex 5 pins (CC-BY-4.0).
-  - `docs/specs/eu-ehds/`: Regulation (EU) 2025/327 (an official EU act),
-    the eHealth Network guidelines and the Commission legal notice (CC BY
-    4.0); the eHDSI wiki needs manual retrieval.
+  - `docs/specs/eu-ehds/`: Regulation (EU) 2025/327, Implementing
+    Regulations (EU) 2026/2083 and 2026/2099 and Recommendation (EU)
+    2019/243 (official EU acts, reused under Commission Decision
+    2011/833/EU), the eHealth Network guidelines and the Commission legal
+    notice (CC BY 4.0); the eHDSI wiki needs manual retrieval.
   - `docs/specs/ehdsi/`: the NCPeH API package and page (CC0-1.0); the
     guide index and OpenNCP (evidence only) are cache only.
   - `docs/specs/ihe-iti-tf/`: ITI TF Volume 1 chapters 13, 18 and 27
