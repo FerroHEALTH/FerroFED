@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: zizmor@1.30.1
       - name: Audit .github
@@ -126,7 +126,7 @@ jobs:
       # The upstream release binary, pinned by version, rather than the
       # runner's distro package, which moves at every runner-image refresh.
       # Fetched by the same SHA-pinned installer, which verifies the checksum.
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: shellcheck@0.11.0
       - name: Every tracked shell program is clean at severity=style
@@ -573,7 +573,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-nextest
       # Every feature: a library feature no workspace member enables yet (the
@@ -615,7 +615,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-nextest
       # The testkit's whole suite, and every other crate's container tests
@@ -779,7 +779,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-deny
       # Reads the same RustSec advisory database as cargo-audit and adds
@@ -799,7 +799,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-hack
       # The Cargo book's named tool for verifying the declared rust-version,
@@ -825,7 +825,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-hack
       - run: >-
@@ -860,11 +860,11 @@ jobs:
           target: wasm32-unknown-unknown
       - run: cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings
       - name: Install cargo-leptos
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-leptos@0.3.11
       - name: Install the wasm-bindgen CLI
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: wasm-bindgen@0.2.129
       - run: bash scripts/release/viewer-site.sh --release
