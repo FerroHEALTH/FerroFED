@@ -285,7 +285,7 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | `uses:` references in `.github/workflows/**` and `.github/actions/**`, pinned by full commit SHA | Dependabot, `github-actions` ecosystem |
 | the workspace dependency table in the root `Cargo.toml`, with the `openehr-*` family as one lockstep group | Dependabot, `cargo` ecosystem |
 | a digest-pinned `FROM` in a first-party Dockerfile | Dependabot, `docker` ecosystem at `/` and `/docker` |
-| the zizmor, actionlint, shellcheck, hadolint and kubeconform versions in `ci.yml` | `pin-freshness.yml`, weekly |
+| the zizmor, actionlint, shellcheck, hadolint, kubeconform, lychee and promtool versions in `ci.yml` | `pin-freshness.yml`, weekly, and `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows |
 | the Kubernetes release and the `yannh/kubernetes-json-schema` commit kubeconform validates against | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows; a bump is a deliberate change to both |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
 | the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows, and `pin-freshness.yml`, weekly, against the newest stable tag in each image's registry; a bump is a deliberate change to both |

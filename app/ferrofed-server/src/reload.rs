@@ -436,108 +436,105 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
     shape(boot) != shape(fresh)
 }
 
+/// A key a reload does not apply, with whether its value differs between the
+/// settings the process started with and the fresh ones.
+type RestartKey = (&'static str, fn(&Settings, &Settings) -> bool);
+
+/// The core's keys a reload does not apply, in the order a refusal names
+/// them.
+const RESTART_KEYS: &[RestartKey] = &[
+    ("signing", signing_changed),
+    ("server.listen", |boot, fresh| {
+        boot.server.listen != fresh.server.listen
+    }),
+    ("server.base_path", |boot, fresh| {
+        boot.server.base_path != fresh.server.base_path
+    }),
+    ("server.request_timeout_ms", |boot, fresh| {
+        boot.server.request_timeout != fresh.server.request_timeout
+    }),
+    ("server.drain_delay_ms", |boot, fresh| {
+        boot.server.drain_delay != fresh.server.drain_delay
+    }),
+    ("server.shutdown_timeout_ms", |boot, fresh| {
+        boot.server.shutdown_timeout != fresh.server.shutdown_timeout
+    }),
+    ("server.body_limit_bytes", |boot, fresh| {
+        boot.server.body_limit != fresh.server.body_limit
+    }),
+    ("server.overload", |boot, fresh| {
+        boot.server.overload != fresh.server.overload
+    }),
+    ("telemetry.format", |boot, fresh| {
+        boot.telemetry.format != fresh.telemetry.format
+    }),
+    ("telemetry.filter", |boot, fresh| {
+        boot.telemetry.filter != fresh.telemetry.filter
+    }),
+    ("telemetry.otlp_endpoint", |boot, fresh| {
+        boot.telemetry.otlp_endpoint != fresh.telemetry.otlp_endpoint
+    }),
+    ("telemetry.trace_sample_ratio", |boot, fresh| {
+        boot.telemetry.trace_sample_ratio != fresh.telemetry.trace_sample_ratio
+    }),
+    ("federation.id", |boot, fresh| {
+        boot.federation.id != fresh.federation.id
+    }),
+    ("federation.timeouts", |boot, fresh| {
+        boot.federation.budget != fresh.federation.budget
+    }),
+    ("federation.default_namespace", |boot, fresh| {
+        boot.federation.default_namespace != fresh.federation.default_namespace
+    }),
+    ("federation.binding_ttl_ms", |boot, fresh| {
+        boot.federation.binding_ttl != fresh.federation.binding_ttl
+    }),
+    ("federation.binding_capacity", |boot, fresh| {
+        boot.federation.binding_capacity != fresh.federation.binding_capacity
+    }),
+    ("federation.ehr_index_capacity", |boot, fresh| {
+        boot.federation.ehr_index_capacity != fresh.federation.ehr_index_capacity
+    }),
+    ("federation.node_selection", |boot, fresh| {
+        boot.federation.node_selection != fresh.federation.node_selection
+    }),
+    ("federation.best_effort", |boot, fresh| {
+        boot.federation.best_effort != fresh.federation.best_effort
+    }),
+    ("federation.max_in_flight_per_node", |boot, fresh| {
+        boot.federation.max_in_flight_per_node != fresh.federation.max_in_flight_per_node
+    }),
+    ("federation.fan_out_template_upload", |boot, fresh| {
+        boot.federation.fan_out_template_upload != fresh.federation.fan_out_template_upload
+    }),
+    ("federation.fan_out_stored_queries", |boot, fresh| {
+        boot.federation.fan_out_stored_queries != fresh.federation.fan_out_stored_queries
+    }),
+    ("federation.offset", |boot, fresh| {
+        boot.federation.offset != fresh.federation.offset
+    }),
+    ("federation.decomposable_aggregates", |boot, fresh| {
+        boot.federation.decomposable != fresh.federation.decomposable
+    }),
+    ("federation.demographic_endpoint", |boot, fresh| {
+        boot.federation.demographic_endpoint != fresh.federation.demographic_endpoint
+    }),
+    ("stored_queries", stored_queries_changed),
+    ("metrics.listen", |boot, fresh| {
+        boot.metrics.listen != fresh.metrics.listen
+    }),
+    ("metrics.otlp_endpoint", |boot, fresh| {
+        boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint
+    }),
+];
+
 /// The keys a reload does not apply whose value in `fresh` differs from the
-/// one the process started with: the core's, then each binding's.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one entry per key a reload does not apply: the table of restart keys"
-)]
+/// one the process started with: the core's ([`RESTART_KEYS`]), then each
+/// binding's.
 fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
-    let (was, now) = (&boot.federation, &fresh.federation);
-    let (booted, reread) = (&boot.telemetry, &fresh.telemetry);
-    let core = [
-        ("signing", signing_changed(boot, fresh)),
-        ("server.listen", boot.server.listen != fresh.server.listen),
-        (
-            "server.base_path",
-            boot.server.base_path != fresh.server.base_path,
-        ),
-        (
-            "server.request_timeout_ms",
-            boot.server.request_timeout != fresh.server.request_timeout,
-        ),
-        (
-            "server.drain_delay_ms",
-            boot.server.drain_delay != fresh.server.drain_delay,
-        ),
-        (
-            "server.shutdown_timeout_ms",
-            boot.server.shutdown_timeout != fresh.server.shutdown_timeout,
-        ),
-        (
-            "server.body_limit_bytes",
-            boot.server.body_limit != fresh.server.body_limit,
-        ),
-        (
-            "server.overload",
-            boot.server.overload != fresh.server.overload,
-        ),
-        ("telemetry.format", booted.format != reread.format),
-        ("telemetry.filter", booted.filter != reread.filter),
-        (
-            "telemetry.otlp_endpoint",
-            booted.otlp_endpoint != reread.otlp_endpoint,
-        ),
-        (
-            "telemetry.trace_sample_ratio",
-            booted.trace_sample_ratio != reread.trace_sample_ratio,
-        ),
-        ("federation.id", was.id != now.id),
-        ("federation.timeouts", was.budget != now.budget),
-        (
-            "federation.default_namespace",
-            was.default_namespace != now.default_namespace,
-        ),
-        (
-            "federation.binding_ttl_ms",
-            was.binding_ttl != now.binding_ttl,
-        ),
-        (
-            "federation.binding_capacity",
-            was.binding_capacity != now.binding_capacity,
-        ),
-        (
-            "federation.ehr_index_capacity",
-            was.ehr_index_capacity != now.ehr_index_capacity,
-        ),
-        (
-            "federation.node_selection",
-            was.node_selection != now.node_selection,
-        ),
-        ("federation.best_effort", was.best_effort != now.best_effort),
-        (
-            "federation.max_in_flight_per_node",
-            was.max_in_flight_per_node != now.max_in_flight_per_node,
-        ),
-        (
-            "federation.fan_out_template_upload",
-            was.fan_out_template_upload != now.fan_out_template_upload,
-        ),
-        (
-            "federation.fan_out_stored_queries",
-            was.fan_out_stored_queries != now.fan_out_stored_queries,
-        ),
-        ("federation.offset", was.offset != now.offset),
-        (
-            "federation.decomposable_aggregates",
-            was.decomposable != now.decomposable,
-        ),
-        (
-            "federation.demographic_endpoint",
-            was.demographic_endpoint != now.demographic_endpoint,
-        ),
-        ("stored_queries", stored_queries_changed(boot, fresh)),
-        (
-            "metrics.listen",
-            boot.metrics.listen != fresh.metrics.listen,
-        ),
-        (
-            "metrics.otlp_endpoint",
-            boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint,
-        ),
-    ];
-    core.into_iter()
-        .filter_map(|(key, changed)| changed.then_some(key))
+    RESTART_KEYS
+        .iter()
+        .filter_map(|(key, changed)| changed(boot, fresh).then_some(*key))
         .chain(
             binding::compiled()
                 .iter()

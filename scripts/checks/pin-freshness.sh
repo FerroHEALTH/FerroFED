@@ -274,7 +274,8 @@ actionlint	rhysd/actionlint
 shellcheck	koalaman/shellcheck
 hadolint	hadolint/hadolint
 kubeconform	yannh/kubeconform
-lychee	lycheeverse/lychee"
+lychee	lycheeverse/lychee
+promtool	prometheus/prometheus"
 
 # matrix_pin LABEL: the second cell of the matrix row whose first cell is
 # LABEL, with the backticks stripped and only the first token kept, the same
