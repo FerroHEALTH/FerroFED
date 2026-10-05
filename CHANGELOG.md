@@ -24,6 +24,8 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-10-05
+
 ### Added
 
 - The operator views of the operator console (#276). After sign-in, which
@@ -321,6 +323,47 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   before. A build without one refuses its sections as unknown keys (#489).
 - The book has a page on adding a country: a specification crate, a binding
   module and a feature line (#489).
+- The query console of the operator console (#277), at `/query`. An AQL
+  query, or a stored query by name and optional version, runs through the
+  gateway's `POST {base}/v1/query/aql` or `/v1/query/{name}` as the
+  signed-in operator, with the targeting, dedup and best-effort headers the
+  gateway's self-description offers. The answer shows the rows, every
+  endpoint's status, latency and error from `meta.federation`, and says in
+  words when `complete` is false; a `504` or `424` all-or-nothing failure
+  shows its diagnostic envelope, and a refusal its status and stable code.
+  A patient is named through a parameter in the request body, and nothing
+  entered in the console reaches a URL, the browser history or a log. A
+  query runs once the page has loaded; its answer is rendered on the server
+  with every value a node sent escaped, and is never cached or compressed.
+- Operator sign-out in the operator console (#584). The navigation bar's
+  "Sign out" posts to `POST /logout`, which ends the server-side session,
+  removes the session cookie and, where the new `[oidc]` key
+  `end_session_endpoint` names the provider's end-session endpoint, sends
+  the browser there with the ID Token hint, the client id and the optional
+  `post_logout_redirect_uri` (OpenID Connect RP-Initiated Logout 1.0). The
+  sign-out and every server function the views and the query console call
+  are taken only from the console's own pages (`Sec-Fetch-Site`, `Origin`
+  or `Referer`); any other request is a `403` before the session is read.
+- Browser journeys for the operator console (#608): headless Chrome, driven
+  over WebDriver from Rust with `thirtyfour`, signs in at a test OpenID
+  Provider, opens each operator view and follows its pagers, runs a query
+  that shows every node's status and whether the answer is complete, sends a
+  query the gateway refuses, and signs out, against a running gateway over
+  stub nodes and the console serving its release site bundle. Each journey
+  fails on any error the browser logs. They run behind
+  `FERROFED_JOURNEYS=1` in the new `journeys (browser)` CI job, at the Chrome
+  for Testing release `docs/VERSIONS.md` pins.
+- The conformance statement (#95, #89): a book page under Evaluate that claims
+  the Federation-Gateway profile of the Federation Tier with AQL 0.9.0 at
+  commit `7162d0c`, with every §17 point and §16.3 track and how each is
+  scored, every deferral with its actor and reason, and the FerroEHR and
+  EHRbase images the tests ran against. Its generated part and the new page of
+  marked tests come from `scripts/conformance/matrix.sh --statement-write`,
+  and the docs build and the conformance-matrix guard fail when either
+  disagrees with the matrix. The guard now refuses a `planned` point or
+  track, so a re-pin scores or defers every point it adds. Six rows of the
+  obligations checklist that still read `planned` after their work shipped now
+  read `tested` and name their tests.
 
 ### Changed
 
@@ -402,6 +445,45 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   for a refusal alone; every `subject-unavailable` carries one fixed
   message. The node request metrics now count such a refusal as
   `consent-denied` on every path, whatever the setting.
+- `nl-generic-functions` 0.0.16 adds `BSN_SYSTEMS` and `is_bsn_system` to
+  `identification`, beside `PSEUDO_BSN_SYSTEM` and `URA_SYSTEM`: the naming
+  systems of the BSN itself, the IG's `$bsn` system and its OID as a URN and
+  dotted (#587).
+- The changelog is written as fragments (#598). A pull request with a
+  user-visible effect adds one file under `changelog.d/`, named
+  `<issue>-<kebab-slug>.<section>.md` and holding its entry, instead of editing
+  `CHANGELOG.md`, so two pull requests no longer conflict on one file. The
+  release cut runs `scripts/release/changelog.sh --assemble <version> <date>`,
+  which writes the fragments and the entries already under `[Unreleased]` into
+  the new version's section and removes the fragments. The new `changelog`
+  job of CI runs `changelog.sh --check` over every fragment, and the
+  `changelog-guard` job fails a pull request that adds no fragment and leaves
+  `CHANGELOG.md` untouched, unless it carries the `no-changelog` label.
+- The operator console serves its site bundle brotli- or gzip-compressed, as
+  the browser's `Accept-Encoding` chooses, with `Vary: Accept-Encoding`, so a
+  browser downloads about 220 KB of WebAssembly where it downloaded 770 KB;
+  pages and server function answers stay uncompressed (#600). The release
+  bundle names no directory of the host that built it: the build remaps the
+  cargo home, the toolchain and the checkout, and CI fails a bundle that
+  names a home, runner, registry or toolchain path.
+- `ferrofed-identity` names the PMIR subscriber's error `ihe::pmir::PmirConfigError`,
+  after its module, where it was `LifecycleConfigError`, and the log target both
+  audit log recorders write to is `ihe::audit::AUDIT_TARGET`, where it was
+  `ihe::xcpd::AUDIT_TARGET`; its value, `ferrofed::audit`, is unchanged. In
+  `nl-generic-functions` 0.0.18, `mitz::BSN_ROOT` takes its value from the BSN
+  OID of `identification::BSN_SYSTEMS`, which is unchanged (#606).
+- The operator console refuses to start with `[session] secure_cookie = false`
+  unless its `[oidc] redirect_uri` is an `http` URL on a loopback host
+  (`localhost`, `127.0.0.0/8` or `::1`), so a deployed console never sends its
+  session cookie over plain HTTP; the refusal names `session.secure_cookie`
+  (#615).
+- A commercial licence, and any other business or licensing question, goes to
+  Cadasto B.V., the Licensor, at info@cadasto.com or
+  <https://www.cadasto.com/contact/> (#616). Every `LICENSE` copy names that
+  contact where it named the maintainer, so `openehr-federation` 0.0.42,
+  `ihe-iti` 0.0.25, `nl-generic-functions` 0.0.17 and `oauth-server-metadata`
+  0.0.4 carry it. The maintainer stays the contact for technical questions.
+  The licence terms do not change.
 
 ### Fixed
 
@@ -422,6 +504,19 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   an invocation that reaches such a row answers `500`. The security log
   records a `held-definition-refused` event naming the definition's name and
   version, never its text.
+- The operator console's sign-out reaches the provider's end-session
+  endpoint in the browser: the Content-Security-Policy's `form-action` now
+  names that endpoint's origin beside the console, where before the browser
+  blocked the redirect the sign-out form is answered with (#608). The console
+  also serves the brand favicon at `/favicon.ico`, which every browser asks
+  for on its first page and which answered `404` before.
+- Every operator console page the gateway fills is whole in the HTML the
+  server sends, so it reads with no script: the pages render once every
+  answer is in, where before a page could arrive with its loading notice and
+  the content in a template that only a script moved into place (#608). A
+  query or a view the gateway refuses, and a query form the console cannot
+  send, are shown with the gateway's status and code or the field at fault
+  as before, and the browser no longer logs them as a failed request.
 
 ## [0.0.8] - 2026-10-04
 
@@ -3098,7 +3193,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.3...v0.0.6

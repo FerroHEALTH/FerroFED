@@ -435,7 +435,7 @@ each cut moves this row and every file that repeats it in one pull request.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Product version | 0.0.8 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
+| Product version | 0.0.9 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
 
 `CITATION.cff` tracks this row exactly, and the guard compares the two, and
 the root `Cargo.toml` `[workspace.package]` `version` with both.
