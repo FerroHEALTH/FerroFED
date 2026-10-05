@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use ferrofed_testkit::xcpd::{Answer, Community, RespondingGateway};
+use ihe_iti::user::OnBehalfOf;
 use ihe_iti::xcpd::XcpdClient;
 use ihe_iti::xcpd::discovery::Discovery;
 use ihe_iti::xcpd::error::XcpdError;
@@ -31,7 +32,13 @@ async fn ask(
     let query = DiscoveryQuery::new(Oid::new("2.999.40.1")?, identifier);
     let client = XcpdClient::new(reqwest::Client::builder().build()?);
     Ok(client
-        .discover(&gateway, &query, None, Duration::from_millis(500))
+        .discover(
+            &gateway,
+            &query,
+            None,
+            &OnBehalfOf::System,
+            Duration::from_millis(500),
+        )
         .await)
 }
 

@@ -19,6 +19,7 @@
 
 use std::time::Instant;
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::demographics::{DemographicsError, Identification};
 use ferrofed_identity::patient::PatientRef;
 use tracing::Instrument as _;
@@ -51,15 +52,15 @@ pub(crate) enum Identified {
     },
 }
 
-/// Takes `patient` to the federation's demographics step before `deadline`,
-/// within the step's own budget, and records what the service showed of
-/// itself.
+/// Takes `patient` to the federation's demographics step on behalf of
+/// `on_behalf` before `deadline`, within the step's own budget, and records
+/// what the service showed of itself.
 ///
 /// The step is given a deadline [`inside`] its budget, so an exchange it
 /// could not audit is reported as that before the budget ends.
 pub(crate) async fn identify(
     federation: &Federation,
-    patient: &PatientRef,
+    (patient, on_behalf): (&PatientRef, &OnBehalfOf),
     deadline: Instant,
 ) -> Identified {
     let Some(step) = federation.demographics() else {
@@ -73,7 +74,7 @@ pub(crate) async fn identify(
         .map_or(deadline, |at| at.min(deadline));
     let answer = tokio::time::timeout_at(
         tokio::time::Instant::from_std(until),
-        step.step().identify(patient, inside(until)),
+        step.step().identify(patient, on_behalf, inside(until)),
     )
     .instrument(tracing::info_span!("identify"))
     .await

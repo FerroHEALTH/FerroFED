@@ -18,6 +18,7 @@ use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
 use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
@@ -141,7 +142,7 @@ async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager(
     let supplier = supplier().await?;
     let master = identified(
         step(&supplier.base_url(), Transaction::Search)
-            .identify(&client_patient(), soon())
+            .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await,
     )?;
     assert_eq!(MASTER, master.namespace().as_str());
@@ -174,7 +175,9 @@ async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager(
         &registry(),
     )?;
     let members = [NodeId::new("node-a")?, NodeId::new("node-b")?];
-    let resolutions = resolver.resolve(&master, &members, soon()).await;
+    let resolutions = resolver
+        .resolve(&master, &members, &OnBehalfOf::Gateway, soon())
+        .await;
     assert!(matches!(
         resolutions.get(&members[0]),
         Some(Resolution::Resolved(ehr_id)) if ehr_id.as_str() == EHR_A
@@ -202,7 +205,7 @@ async fn an_iti_119_certain_match_names_the_master_identity() -> TestResult {
     let supplier = supplier().await?;
     let master = identified(
         step(&supplier.base_url(), Transaction::Match)
-            .identify(&client_patient(), soon())
+            .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await,
     )?;
     assert_eq!(MASTER, master.namespace().as_str());
@@ -224,7 +227,7 @@ async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
     )?;
     for transaction in [Transaction::Search, Transaction::Match] {
         let answer = step(&supplier.base_url(), transaction)
-            .identify(&client_patient(), soon())
+            .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await;
         assert!(
             matches!(answer, Identification::NoMatch),
@@ -243,7 +246,7 @@ async fn a_match_without_a_master_identifier_is_no_match() -> TestResult {
     )?;
     supplier.add(&[(MASTER, "SENTINEL-UNRELATED")], true)?;
     let answer = step(&supplier.base_url(), Transaction::Search)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(matches!(answer, Identification::NoMatch), "{answer:?}");
     Ok(())
@@ -257,7 +260,7 @@ async fn several_matched_patients_are_refused_and_none_is_picked() -> TestResult
         true,
     )?;
     let answer = step(&supplier.base_url(), Transaction::Search)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(
         matches!(
@@ -275,7 +278,7 @@ async fn several_matched_patients_are_refused_and_none_is_picked() -> TestResult
     )
     .await;
     let answer = step(&format!("{}/fhir/", stub.uri()), Transaction::Match)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(
         matches!(
@@ -295,7 +298,7 @@ async fn a_deprecated_record_beside_the_active_one_is_no_second_match() -> TestR
         false,
     )?;
     let answer = step(&supplier.base_url(), Transaction::Search)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     let master = identified(answer)?;
     assert_eq!(MASTER, master.namespace().as_str());
@@ -314,7 +317,7 @@ async fn a_patient_with_two_master_identifiers_is_refused() -> TestResult {
         true,
     )?;
     let answer = step(&supplier.base_url(), Transaction::Search)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(
         matches!(
@@ -330,7 +333,7 @@ async fn a_patient_with_two_master_identifiers_is_refused() -> TestResult {
 async fn an_iti_119_match_that_is_not_certain_is_refused() -> TestResult {
     let stub = matcher(200, match_answer(&[(&[MASTER_ID], "probable")])).await;
     let answer = step(&format!("{}/fhir/", stub.uri()), Transaction::Match)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(
         matches!(answer, Identification::Ambiguous(Ambiguity::Uncertain)),
@@ -345,7 +348,7 @@ async fn an_outage_is_unavailable_never_no_match() -> TestResult {
         &format!("{}/fhir/", ferrofed_testkit::unreachable::BASE),
         Transaction::Search,
     )
-    .identify(&client_patient(), soon())
+    .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
     .await;
     assert!(
         matches!(
@@ -356,14 +359,14 @@ async fn an_outage_is_unavailable_never_no_match() -> TestResult {
     );
     let failing = matcher(503, String::from(r#"{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"transient"}]}"#)).await;
     let answer = step(&format!("{}/fhir/", failing.uri()), Transaction::Match)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     let Identification::Unavailable(error) = answer else {
         panic!("a failure, got {answer:?}");
     };
     assert_eq!(Some(http::StatusCode::SERVICE_UNAVAILABLE), error.status());
     let late = step(&format!("{}/fhir/", failing.uri()), Transaction::Match)
-        .identify(&client_patient(), Instant::now())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, Instant::now())
         .await;
     assert!(
         matches!(
@@ -414,7 +417,7 @@ async fn each_exchange_is_audited_and_one_whose_record_is_refused_fails() -> Tes
         let recorder: Arc<dyn AuditRecorder> = kept.clone();
         let answer = step(&supplier.base_url(), transaction)
             .audited(&recorder)
-            .identify(&client_patient(), soon())
+            .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
             .await;
         identified(answer)?;
         let exchanges = kept.kept.lock().expect("the kept exchanges");
@@ -429,7 +432,7 @@ async fn each_exchange_is_audited_and_one_whose_record_is_refused_fails() -> Tes
     });
     let answer = step(&supplier.base_url(), Transaction::Search)
         .audited(&refusing)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     assert!(
         matches!(
@@ -492,14 +495,16 @@ async fn no_rendering_names_the_client_or_the_master_identifier() -> TestResult 
     )?;
     let searching = step(&supplier.base_url(), Transaction::Search);
     let mut text = format!("{searching:?}");
-    let answer = searching.identify(&client_patient(), soon()).await;
+    let answer = searching
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
+        .await;
     write!(text, "{answer:?}")?;
     if let Identification::Ambiguous(ambiguity) = &answer {
         text.push_str(&ambiguity.to_string());
     }
     let failing = matcher(503, format!(r#"{{"resourceType":"OperationOutcome","issue":[{{"severity":"error","code":"transient","diagnostics":"{CLIENT_ID} {MASTER_ID}"}}]}}"#)).await;
     let failed = step(&format!("{}/fhir/", failing.uri()), Transaction::Match)
-        .identify(&client_patient(), soon())
+        .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
     if let Identification::Unavailable(error) = &failed {
         text.push_str(&chain(error));

@@ -641,6 +641,7 @@ async fn execute(
         started,
         session: arrived.session,
         requester: arrived.requester,
+        on_behalf: &arrived.on_behalf,
     };
     let submitted = Submitted::Stored {
         request,

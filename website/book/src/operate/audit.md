@@ -33,7 +33,35 @@ Audit Event. Two configurations decide where the records go:
 Every record names the gateway as `source.observer` and as its own agent,
 by `source_id` (the hostname by default), at the network address
 `hostname` gives, and names the other party by its FHIR base URL without
-its userinfo or query. No record names a user agent, which every BALP pattern leaves optional.
+its userinfo or query.
+
+## The caller each record names
+
+A transaction the gateway makes for a client's request is made on behalf
+of the caller it verified ([Client authentication](authentication.md)).
+PIXm asks that its audit record be augmented with the agent details of the
+caller's OAuth token, following BALP (PIXm §2:3.83.5.2.1), so each such
+record names the caller as BALP maps the token (BALP §3:5.7.5.4):
+
+| Record | Where the caller is named |
+|---|---|
+| ITI-83, ITI-78 and ITI-119 (`AuditEvent`) | the `agent:user` of the BALP pattern: type `IRCP`, `who.identifier.system` the token's `iss`, `who.identifier.value` its `sub`, `requestor` true, `purposeOfUse` every purpose of use the token declares; and an Application agent (DICOM `110150`) with the token's `client_id` as `who.identifier.value` |
+| ITI-55 (DICOM audit message) | the Human Requestor `ActiveParticipant` (ITI TF-2 §3.55.5.1.1): `UserID` the token's `sub`, `UserName` written `aud<sub@iss>` (IUA ITI TF-2 §3.72.5.1), `UserIsRequestor` true, and the gateway's own participant `UserIsRequestor` false. The DICOM schema has no element for the client or the purpose of use, so the message names neither |
+
+A transaction the gateway makes on its own behalf names no caller: the
+admission check's ITI-83 queries, every ITI-90 search and ITI-91 history
+of a registry read or refresh, every ITI-94 subscription exchange and the
+search before it, and every ITI-93 message the Registry sends. Their
+`AuditEvent` has no `agent:user` and no Application agent, as BALP's
+examples of an event no user caused have none, and an ITI-55 message of
+its own names the gateway as the requestor.
+
+The caller's identity goes to the Audit Record Repository alone. Both log
+destinations, `[audit] destination = "log"` and `[xcpd] audit = "log"`,
+record `on_behalf` as `caller` or `gateway`, and never the caller's `sub`,
+`client_id` or issuer; no metric label carries them. Each
+node is told of the caller by the signed conveyance alone
+([Onward credentials](onward-credentials.md)), never by an audit record.
 
 ## `[audit]`
 

@@ -266,9 +266,12 @@ whatever means it has, then signs an assertion of who it authenticated, an
 RFC 9068 access token whose `aud` is this gateway, and sends it in the header
 `auth.edge.header`. The gateway verifies the assertion against the edge's key
 set exactly as it verifies a token, reads the caller from it, and logs the
-identity the edge asserted, its issuer, subject and client, as the security
-event `edge-identity-asserted`. A bearer token in `Authorization` admits no
-one in this mode.
+security event `edge-identity-asserted` with the edge's issuer and two
+references, `subject_ref` and `client_ref`. Each reference is an
+HMAC-SHA256 of the subject or the client under a key the gateway draws at
+start: one caller's events carry the same references for the life of the
+process, and the log names no caller. A bearer token in `Authorization`
+admits no one in this mode.
 
 ```toml
 [auth]

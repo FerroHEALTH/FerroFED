@@ -40,6 +40,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::behalf::OnBehalfOf;
 use crate::consent::{ConsentDecision, ConsentPrefilter, Requester};
 use crate::localizer::{Localization, Localizer};
 use crate::patient::{IdentifierNamespace, PatientRef};
@@ -232,6 +233,7 @@ impl Resolver for StaticResolver {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &OnBehalfOf,
         _deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         members
@@ -253,6 +255,7 @@ impl Localizer for StaticResolver {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &OnBehalfOf,
         _deadline: Instant,
     ) -> Localization {
         let candidates: BTreeSet<NodeId> = members

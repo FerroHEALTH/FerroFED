@@ -11,6 +11,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_identity::nvi::{NviConfig, NviConfigError, NviLocalizer};
@@ -69,7 +70,12 @@ async fn localize(
 ) -> Result<Localization, Box<dyn Error>> {
     let localizer = NviLocalizer::from_config(config(&service.base())?, &registry())?;
     Ok(localizer
-        .localize(patient, &members()?, Instant::now() + budget)
+        .localize(
+            patient,
+            &members()?,
+            &OnBehalfOf::Gateway,
+            Instant::now() + budget,
+        )
         .await)
 }
 

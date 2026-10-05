@@ -22,6 +22,7 @@ use http::StatusCode;
 use ihe_iti::pixm::error::PixmError;
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
 use ihe_iti::pixm::{Invocation, PixmClient};
+use ihe_iti::user::OnBehalfOf;
 use secrecy::{ExposeSecret, SecretString};
 use uuid::Uuid;
 
@@ -91,7 +92,7 @@ async fn a_fed_patient_resolves_through_the_pixm_client_in_every_domain() -> Tes
         seed::feed(&pix.base_url(), &known()).await?
     );
     let answer = client(&pix)?
-        .cross_reference(&source(known().patient)?, &[], BUDGET)
+        .cross_reference(&source(known().patient)?, &[], &OnBehalfOf::System, BUDGET)
         .await?;
     assert_eq!(
         vec![
@@ -113,6 +114,7 @@ async fn a_target_system_narrows_the_answer_to_that_domain() -> TestResult {
         .cross_reference(
             &source(known().patient)?,
             &[target(EhrDomain::new(2))?],
+            &OnBehalfOf::System,
             BUDGET,
         )
         .await?;
@@ -134,7 +136,7 @@ async fn a_refeed_replaces_the_patient_instead_of_adding_one() -> TestResult {
     assert_eq!(StatusCode::OK, seed::feed(&pix.base_url(), &moved).await?);
     assert_eq!((2, 1), (pix.feeds(), pix.patients()));
     let answer = client(&pix)?
-        .cross_reference(&source(known().patient)?, &[], BUDGET)
+        .cross_reference(&source(known().patient)?, &[], &OnBehalfOf::System, BUDGET)
         .await?;
     assert_eq!(
         vec![(EhrDomain::new(1).system(), EHR_A.to_string())],
@@ -149,7 +151,12 @@ async fn an_unknown_patient_in_a_known_domain_is_not_found() -> TestResult {
     let pix = PixManager::start().await?;
     seed::feed(&pix.base_url(), &known()).await?;
     let answer = client(&pix)?
-        .cross_reference(&source(PatientId::new(1, 48))?, &[], BUDGET)
+        .cross_reference(
+            &source(PatientId::new(1, 48))?,
+            &[],
+            &OnBehalfOf::System,
+            BUDGET,
+        )
         .await?;
     assert!(
         matches!(answer, CrossReference::SourceNotFound),
@@ -163,7 +170,12 @@ async fn an_unknown_source_domain_is_refused_as_case_3() -> TestResult {
     let pix = PixManager::start().await?;
     seed::feed(&pix.base_url(), &known()).await?;
     let refused = client(&pix)?
-        .cross_reference(&source(PatientId::new(9, 47))?, &[], BUDGET)
+        .cross_reference(
+            &source(PatientId::new(9, 47))?,
+            &[],
+            &OnBehalfOf::System,
+            BUDGET,
+        )
         .await;
     assert!(
         matches!(refused, Err(PixmError::SourceDomainNotRecognized)),
@@ -184,7 +196,7 @@ async fn the_proxy_in_front_journals_the_request_and_injects_a_fault() -> TestRe
     let patient = known().patient;
 
     let answer = through
-        .cross_reference(&source(patient)?, &[], BUDGET)
+        .cross_reference(&source(patient)?, &[], &OnBehalfOf::System, BUDGET)
         .await?;
     assert_eq!(2, identifiers(&answer)?.len(), "forwarded unmodified");
     let journal = proxy.journal();
@@ -198,7 +210,7 @@ async fn the_proxy_in_front_journals_the_request_and_injects_a_fault() -> TestRe
 
     proxy.set_fault(Fault::Status(StatusCode::SERVICE_UNAVAILABLE));
     let failed = through
-        .cross_reference(&source(patient)?, &[], BUDGET)
+        .cross_reference(&source(patient)?, &[], &OnBehalfOf::System, BUDGET)
         .await;
     assert!(
         matches!(
@@ -223,16 +235,21 @@ async fn a_posted_query_resolves_as_the_get_does_and_names_the_patient_in_no_url
     .invoked_by(Invocation::Post);
     let patient = known().patient;
     let all = posting
-        .cross_reference(&source(patient)?, &[], BUDGET)
+        .cross_reference(&source(patient)?, &[], &OnBehalfOf::System, BUDGET)
         .await?;
     let narrowed = posting
-        .cross_reference(&source(patient)?, &[target(EhrDomain::new(2))?], BUDGET)
+        .cross_reference(
+            &source(patient)?,
+            &[target(EhrDomain::new(2))?],
+            &OnBehalfOf::System,
+            BUDGET,
+        )
         .await?;
     assert_eq!(
         (
             identifiers(
                 &client(&pix)?
-                    .cross_reference(&source(patient)?, &[], BUDGET)
+                    .cross_reference(&source(patient)?, &[], &OnBehalfOf::System, BUDGET)
                     .await?
             )?,
             vec![(EhrDomain::new(2).system(), EHR_B.to_string())],
@@ -241,7 +258,12 @@ async fn a_posted_query_resolves_as_the_get_does_and_names_the_patient_in_no_url
         "the device answers a POST as it answers the GET"
     );
     let unknown = posting
-        .cross_reference(&source(PatientId::new(1, 48))?, &[], BUDGET)
+        .cross_reference(
+            &source(PatientId::new(1, 48))?,
+            &[],
+            &OnBehalfOf::System,
+            BUDGET,
+        )
         .await?;
     assert!(
         matches!(unknown, CrossReference::SourceNotFound),
@@ -311,6 +333,7 @@ async fn an_unknown_target_domain_is_refused_as_case_4() -> TestResult {
         .cross_reference(
             &source(known().patient)?,
             &[target(EhrDomain::new(9))?],
+            &OnBehalfOf::System,
             BUDGET,
         )
         .await;
@@ -444,7 +467,9 @@ async fn identifiers_fed_together_cross_reference_each_other() -> TestResult {
         "urn:oid:1.3.6.1.4.1.21367.13.20.3000",
         SecretString::from("IHEBLUE-994".to_owned()),
     )?;
-    let answer = client(&pix)?.cross_reference(&blue, &[], BUDGET).await?;
+    let answer = client(&pix)?
+        .cross_reference(&blue, &[], &OnBehalfOf::System, BUDGET)
+        .await?;
     assert_eq!(
         vec![
             (
@@ -474,7 +499,7 @@ async fn a_deprecated_patient_answers_the_empty_bundle_of_a_merge() -> TestResul
         SecretString::from("IHERED-m94".to_owned()),
     )?;
     let answer = client(&pix)?
-        .cross_reference(&deprecated, &[], BUDGET)
+        .cross_reference(&deprecated, &[], &OnBehalfOf::System, BUDGET)
         .await?;
     assert!(
         matches!(answer, CrossReference::SourceNotFound),

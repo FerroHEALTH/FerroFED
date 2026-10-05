@@ -62,6 +62,7 @@ use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::forward::{ClientRequest, HeldRequest};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::conveyance::Conveyance;
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::localizer::OnFailure;
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
@@ -127,14 +128,15 @@ pub(crate) async fn serve(
     };
     let named = (&subject.patient, directed, budget.overall());
     let ids = (request_id, logged.as_str());
-    let master = match admitted(federation, &arrived.conveyance, named, ids).await {
+    let on_behalf = &arrived.on_behalf;
+    let master = match admitted(federation, (&arrived.conveyance, on_behalf), named, ids).await {
         Ok(master) => master,
         Err(refused) => return *refused,
     };
     let patient = master.as_ref().unwrap_or(&subject.patient);
     let located = localized(
         federation,
-        (patient, budget.overall()),
+        (patient, on_behalf, budget.overall()),
         candidates,
         directed,
     )
@@ -149,7 +151,7 @@ pub(crate) async fn serve(
         budget.overall(),
     )
     .await;
-    let unbound = (patient, &consented.denied);
+    let unbound = (patient, &consented.denied, on_behalf);
     let resolved = resolve(federation, candidates, unbound, budget.overall()).await;
     let holders = resolved.holders.clone();
     let settled = resolved
@@ -209,12 +211,12 @@ pub(crate) async fn serve(
     }
 }
 
-/// The `candidates` the localizer names for `patient` before `deadline`, with
-/// their members, or every candidate for a `directed` read; `None` when the
-/// localizer failed closed.
+/// The `candidates` the localizer names for `patient`, asked on behalf of
+/// `on_behalf` before `deadline`, with their members, or every candidate for
+/// a `directed` read; `None` when the localizer failed closed.
 async fn localized<'a>(
     federation: &Federation,
-    (patient, deadline): (&PatientRef, Instant),
+    (patient, on_behalf, deadline): (&PatientRef, &OnBehalfOf, Instant),
     candidates: Vec<&'a Endpoint>,
     directed: bool,
 ) -> Option<(Vec<&'a Endpoint>, Vec<NodeId>)> {
@@ -227,7 +229,7 @@ async fn localized<'a>(
             .iter()
             .map(|endpoint| endpoint.node().clone())
             .collect();
-        localize(federation, patient, &members, deadline).await
+        localize(federation, (patient, on_behalf), &members, deadline).await
     };
     if located.failed_closed() {
         return None;
@@ -246,25 +248,26 @@ async fn localized<'a>(
 /// The master identity of the subject `patient` before `deadline`, or `None`
 /// for the subject as named, once a confined caller is held to its own
 /// patient: the refusal otherwise, answered under `request_id` and logged
-/// under `logged`.
+/// under `logged`. Every exchange is made on behalf of `on_behalf`.
 async fn admitted(
     federation: &Federation,
-    conveyance: &Conveyance,
+    (conveyance, on_behalf): (&Conveyance, &OnBehalfOf),
     (patient, directed, deadline): (&PatientRef, bool, Instant),
     (request_id, logged): (&str, &str),
 ) -> Result<Option<PatientRef>, Box<Response>> {
     let named = (patient, deadline);
-    if let Some(refused) = other_patient(federation, conveyance, named, (request_id, logged)).await
-    {
+    let who = (conveyance, on_behalf);
+    if let Some(refused) = other_patient(federation, who, named, (request_id, logged)).await {
         return Err(Box::new(refused));
     }
-    identified(federation, patient, directed, deadline)
+    identified(federation, (patient, on_behalf), directed, deadline)
         .await
         .map_err(|unserved| Box::new(unserved.respond(request_id, logged)))
 }
 
-/// The master identity the demographics step finds for `patient` before
-/// `deadline`, or `None` when no step applies (Annex A §A.2).
+/// The master identity the demographics step finds for `patient`, asked on
+/// behalf of `on_behalf` before `deadline`, or `None` when no step applies
+/// (Annex A §A.2).
 ///
 /// # Errors
 ///
@@ -275,11 +278,11 @@ async fn admitted(
 /// localizer's is (§14.1, N4); a `directed` read is never localized.
 async fn identified(
     federation: &Federation,
-    patient: &PatientRef,
+    (patient, on_behalf): (&PatientRef, &OnBehalfOf),
     directed: bool,
     deadline: Instant,
 ) -> Result<Option<PatientRef>, Unserved> {
-    match demographics::identify(federation, patient, deadline).await {
+    match demographics::identify(federation, (patient, on_behalf), deadline).await {
         Identified::AsNamed => Ok(None),
         Identified::Master(master) => Ok(Some(master)),
         Identified::NoMatch(_) => {
@@ -305,16 +308,16 @@ async fn identified(
 
 /// The refusal of a read by subject whose caller is confined to one patient
 /// and names another, or `None` to go on: the subject is resolved at the
-/// bound member alone before `deadline`, ahead of any localizer, consent
-/// pre-filter or other member (§5.2).
+/// bound member alone, on behalf of `on_behalf`, before `deadline`, ahead of
+/// any localizer, consent pre-filter or other member (§5.2).
 async fn other_patient(
     federation: &Federation,
-    conveyance: &Conveyance,
+    (conveyance, on_behalf): (&Conveyance, &OnBehalfOf),
     (patient, deadline): (&PatientRef, Instant),
     (request_id, logged): (&str, &str),
 ) -> Option<Response> {
     let confinement = conveyance.confinement()?;
-    match confined::names_own(federation, confinement, patient, deadline).await {
+    match confined::names_own(federation, confinement, patient, on_behalf, deadline).await {
         Ok(true) => None,
         Ok(false) => Some(confined::refused("subject", request_id, logged)),
         Err(unconfined) => Some(unconfined.respond(request_id, logged)),

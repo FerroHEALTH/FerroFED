@@ -449,6 +449,7 @@ impl ferrofed_identity::resolver::Resolver for BothKnown {
         &self,
         _patient: &ferrofed_identity::patient::PatientRef,
         members: &[ferrofed_registry::id::NodeId],
+        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
         _deadline: std::time::Instant,
     ) -> std::collections::BTreeMap<
         ferrofed_registry::id::NodeId,

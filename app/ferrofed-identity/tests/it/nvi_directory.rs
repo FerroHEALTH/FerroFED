@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::directory;
 use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::localizer::{Localization, Localizer};
@@ -92,6 +93,7 @@ async fn the_directory_maps_each_custodian_to_its_members() -> TestResult {
         .localize(
             &patient,
             &[node("node-a")?, node("node-b")?],
+            &OnBehalfOf::Gateway,
             Instant::now() + Duration::from_secs(2),
         )
         .await;

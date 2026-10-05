@@ -191,6 +191,9 @@ async fn federated(
         Ok(conveyance) => conveyance,
         Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
     };
+    let Some(on_behalf) = caller.map(Caller::on_behalf) else {
+        return conveyed::Unconveyed::NoCaller.respond(request_id, &outbound.to_string());
+    };
     let conveyance = match confined_by(&federation, caller, started, conveyance).await {
         Ok(conveyance) => conveyance,
         Err(unconfined) => return unconfined.respond(request_id, &outbound.to_string()),
@@ -217,6 +220,7 @@ async fn federated(
         started,
         session,
         requester: caller.and_then(Caller::requester),
+        on_behalf: &on_behalf,
     };
     answer::answer(&federation, arrived, submitted).await
 }

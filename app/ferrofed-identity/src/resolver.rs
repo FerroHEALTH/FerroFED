@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use ferrofed_registry::id::{EhrId, NodeId};
 use thiserror::Error;
 
+use crate::behalf::OnBehalfOf;
 use crate::patient::PatientRef;
 
 /// Why a resolver could not answer for a member.
@@ -51,11 +52,13 @@ pub enum Resolution {
 /// and none for a member not asked.
 #[async_trait]
 pub trait Resolver: Send + Sync {
-    /// Resolves `patient` at each of `members` before `deadline`.
+    /// Resolves `patient` at each of `members` on behalf of `on_behalf`
+    /// before `deadline`.
     async fn resolve(
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution>;
 }
