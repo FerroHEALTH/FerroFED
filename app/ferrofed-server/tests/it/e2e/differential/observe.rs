@@ -48,6 +48,10 @@ pub(crate) const NORMALISATIONS: &[(&str, &str)] = &[
         "each gateway reaches the node through its own proxy, so only the path is compared",
     ),
     (
+        "the members of meta.federation.timeout other than per_node_ms and overall_ms",
+        "the schema defines those two and an open object (`/$defs/federationMeta/properties/timeout`), so any further member, `policy` included, is shown, not compared",
+    ),
+    (
         "the identifiers of a created object",
         "each gateway's create or commit makes its own object at the node, so its `ETag` and `Location` are compared as present or absent and shown",
     ),
@@ -58,6 +62,10 @@ pub(crate) const NORMALISATIONS: &[(&str, &str)] = &[
     (
         "the text of a dispatched AQL query",
         "§7.1 fixes what a node query scopes and carries, not its spelling, so the report shows it and the comparison reads its ehr_id scope and identifier hygiene",
+    ),
+    (
+        "what a refusing node received",
+        "a node whose proxy refuses connections journals a request only when the gateway reused a pooled connection, which no specification governs, so its journal is shown, not compared",
     ),
     (
         "the request id and the gateway's own trace and conveyance headers",
@@ -349,11 +357,30 @@ fn meta(observed: &mut Observed, body: &Value) {
         .cloned()
         .collect();
     observed.set("meta.federation unknown members", list(&unknown));
-    for member in ["complete", "timeout"] {
-        match federation.get(member) {
-            Some(value) => observed.set(format!("meta.federation.{member}"), value.to_string()),
-            None => observed.set(format!("meta.federation.{member}"), "absent"),
+    observed.set(
+        "meta.federation.complete",
+        federation
+            .get("complete")
+            .map_or_else(|| "absent".to_owned(), Value::to_string),
+    );
+    match federation.get("timeout") {
+        Some(timeout) => {
+            let member = |name: &str| {
+                timeout
+                    .get(name)
+                    .map_or_else(|| "absent".to_owned(), Value::to_string)
+            };
+            observed.set(
+                "meta.federation.timeout",
+                format!(
+                    "per_node_ms={} overall_ms={}",
+                    member("per_node_ms"),
+                    member("overall_ms")
+                ),
+            );
+            observed.note("meta.federation.timeout", timeout.to_string());
         }
+        None => observed.set("meta.federation.timeout", "absent"),
     }
     observed.set(
         "meta.federation.dedup",
@@ -378,10 +405,12 @@ fn meta(observed: &mut Observed, body: &Value) {
     in_scope.sort();
     out_of_scope.sort();
     observed.set("meta.federation.endpoints in scope", list(&in_scope));
-    observed.set_optional(
-        "meta.federation.endpoints not in scope",
-        list(&out_of_scope),
-    );
+    if !out_of_scope.is_empty() {
+        observed.set_optional(
+            "meta.federation.endpoints not in scope",
+            list(&out_of_scope),
+        );
+    }
     observed.note(
         "meta.federation.endpoints",
         records

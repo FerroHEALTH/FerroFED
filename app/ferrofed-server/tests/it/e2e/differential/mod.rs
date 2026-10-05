@@ -387,11 +387,17 @@ fn side(
 ) -> Side {
     let creates = step.call.method == Method::POST && step.shape == Shape::Passthrough;
     let mut observed = observe::answer(&reply, step.shape, creates);
-    for (name, journal, own, other) in [
-        ("node-a", node_a, EHR_A, EHR_B),
-        ("node-b", node_b, EHR_B, EHR_A),
+    for (node, name, journal, own, other) in [
+        (Faulted::A, "node-a", node_a, EHR_A, EHR_B),
+        (Faulted::B, "node-b", node_b, EHR_B, EHR_A),
     ] {
-        observe::node(&mut observed, name, journal, (own, other), authorization);
+        if step.fault == Some((node, Fault::Refuse)) {
+            let mut refused = Observed::default();
+            observe::node(&mut refused, name, journal, (own, other), authorization);
+            observed.info.extend(refused.aspects);
+        } else {
+            observe::node(&mut observed, name, journal, (own, other), authorization);
+        }
     }
     Side { reply, observed }
 }
