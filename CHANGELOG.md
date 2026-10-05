@@ -85,6 +85,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   each binding logs what it is configured to reach on a `binding configured`
   line of its own; the registry directory, PIX Manager, PMIR and PDQm fields
   move from the first line to the IHE binding's (#489).
+- A build without a binding feature compiles none of that binding's crate:
+  `binding-ihe` and `binding-nl` turn on new `ihe` and `nl` features of
+  `ferrofed-identity` and an `nl` feature of `ferrofed-engine`, so
+  `cargo build -p ferrofed-server --no-default-features` builds neither
+  `ihe-iti` nor `nl-generic-functions`. The registry document in FHIR form
+  (`registry.format = "fhir"`), read with the mCSD reader, is part of
+  `binding-ihe` (#551).
+- The authorization server metadata checks of RFC 8414 move out of
+  `nl-generic-functions` into a crate of their own, `oauth-server-metadata`
+  0.0.1, which the OAuth 2.0 issuer audience, the FAPI 2.0 grant and the
+  Nuts grant share. `nl-generic-functions` 0.0.11 drops its
+  `oauth-metadata` feature (#551).
+- An error that needs a cross-reference resolver names the resolvers the
+  build carries, `[dev] or [pixm]` by default and `[dev]` without
+  `binding-ihe` (#551).
 
 ## [0.0.8] - 2026-10-04
 
