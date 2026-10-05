@@ -16,8 +16,10 @@ the day you read it in git history.
 
 **The bus factor of this project is one.** There is exactly one person with
 write access to the repository, one person who can publish a release, and one
-person who can accept a pull request. No organisation stands behind the project
-and no legal entity is a party to it.
+person who can accept a pull request. Cadasto B.V. is the Licensor and the
+copyright holder, and it handles the business side of the project, the
+commercial licence included. The maintainer handles the technical side: the
+code, review, releases, issues and security reports.
 
 ## If the maintainer is unavailable
 
@@ -36,5 +38,8 @@ build, and budget for maintaining it.
 
 ## Commercial licensing
 
-Cadasto B.V. is the Licensor named in [LICENSE](LICENSE). The
-maintainer above is its contact for a commercial licence.
+Cadasto B.V. is the Licensor named in [LICENSE](LICENSE). A commercial
+licence is arranged with Cadasto B.V., which handles the business side of
+FerroFED: write to [info@cadasto.com](mailto:info@cadasto.com) or use
+<https://www.cadasto.com/contact/>. Technical questions go to the maintainer
+above.

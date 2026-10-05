@@ -37,6 +37,7 @@
 - [AI statement](https://github.com/FerroHEALTH/FerroFED/blob/main/AI_STATEMENT.md): how AI tools are used to develop FerroFED, and the fact that the product ships no AI.
 - [Governance](https://github.com/FerroHEALTH/FerroFED/blob/main/GOVERNANCE.md): how decisions get made, and by whom.
 - [Maintainers](https://github.com/FerroHEALTH/FerroFED/blob/main/MAINTAINERS.md): the roster and the access-continuity answer.
+- [Licensing](https://ferrofed.eu/docs/evaluate/licensing.html): what the licence allows. A commercial licence is arranged with Cadasto B.V., the Licensor, which handles the business side: info@cadasto.com or https://www.cadasto.com/contact/. Technical questions go to the maintainer.
 - [Contributing](https://github.com/FerroHEALTH/FerroFED/blob/main/CONTRIBUTING.md): setup, gates, and the hard rules.
 - [Support](https://github.com/FerroHEALTH/FerroFED/blob/main/SUPPORT.md): where to get help.
 - [Security policy](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md): report a vulnerability privately.
