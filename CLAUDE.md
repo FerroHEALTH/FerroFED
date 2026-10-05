@@ -180,6 +180,15 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   answers `501`. The admin listener (`[metrics] listen`) carries the
   OpenTelemetry metrics, exported as Prometheus and over OTLP, and the
   stored-query drift repair.
+- `app/ferrofed-viewer`: the operator console, the `ferrofed-viewer` binary
+  and its own image (#275, decision A55); never published. A Leptos app
+  rendered on the server and hydrated in the browser, built by cargo-leptos,
+  its two halves chosen by compilation target, never by Cargo feature. A pure
+  HTTP client of the gateway (`gateway`, on `openehr-its` `rest-client`) that
+  links no part of it; the operator's OpenID Connect session is held on its
+  server (`session`, `oidc`). Built so far: the health route, the landing
+  page, the sign-in redirect and the typed gateway client; the screens are
+  #276 and #277. Its discipline is `.claude/rules/leptos-ui.md`.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
   reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
   and the harness of `docs/architecture.md` §13 (#39): FerroEHR nodes pinned
@@ -256,7 +265,8 @@ project; never pass them to `Agent` or `Workflow`, even for a mechanical pass.
 - **Reviews:** an independent read before committing a subsystem, especially
   spec and wire conformance. Spec questions go to `spec-researcher`; bounded
   implementation to `implementer`. Both are handed the governing spec
-  sections in the prompt.
+  sections in the prompt. Operator console work goes to `ui-implementer`, and
+  `leptos-reviewer` reads a console subsystem before it is committed.
 
 Discipline is unchanged for subagents: they obey the hard rules below.
 
@@ -354,10 +364,14 @@ apply always. Read the relevant one before working in that area.
 - `.claude/rules/ci-cd.md`, `ai-code-review.md`, `crates-publishing.md`: the
   workflow-security discipline, the advisory-analyzer policy (SonarQube Cloud,
   CodeQL), and the crates.io rules behind the `publish` switch.
+- `.claude/rules/leptos-ui.md`: the operator console's Leptos discipline,
+  carried from FerroEHR's and FerroTERM's viewers.
 - `.claude/rules/issue-workflow.md`, `issue-relationships.md`,
   `project-board.md`: the tracker work style.
-- Skills: `/spec-lookup`, `/next-task`, `/phase-done`, `/phase-status`.
-- Agents: `spec-researcher`, `implementer` (both on Opus).
+- Skills: `/spec-lookup`, `/leptos-lookup`, `/ui-gates`, `/next-task`,
+  `/phase-done`, `/phase-status`.
+- Agents: `spec-researcher`, `implementer`, and for the console
+  `ui-implementer` and `leptos-reviewer` (all on Opus).
 - Memory: `.claude/memory/`, indexed by `MEMORY.md`, tracked and shared
   (`.claude/memory/memory-lives-in-repo.md`).
 
