@@ -246,9 +246,11 @@ document is. Its credentials go in `[pixm.manager.credentials]`, which takes
 a bearer token or a user and a password, never an `oauth2`, `nuts` or `fapi2`
 grant. Each grant a node's section can name is described in
 [Onward credentials](onward-credentials.md). The same holds for the
-credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]`, `[nl_gf.nvi]` and
-`[nl_gf.mitz]`: a grant in any of them is refused at load, and never read as
-no credential.
+credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]` and `[nl_gf.mitz]`: a
+grant in any of them is refused at load, and never read as no credential.
+`[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
+`oauth2` and `fapi2`
+([Dutch localization](identity.md#dutch-localization-nl_gfnvi)).
 
 ### A PIX Manager asked by `GET` or `POST`
 
@@ -347,7 +349,9 @@ ferrofed: cannot start: the url of endpoint hospital-a in registry.document is n
 A node URL no credential is sent to may stay `http`, for example a node on a
 private network whose transport a sidecar protects with mutual TLS: the
 gateway sends a node its own `ehr_id`, never the patient identifier (§5.4,
-N33).
+N33). A node the gateway presents its own client certificate to
+([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705))
+is `https` under every profile.
 
 **A database password.** Outside the development profile, the stored-query
 store's PostgreSQL connection string must set `sslmode=require` when it

@@ -41,6 +41,7 @@ use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::id::FederationId;
 
+use crate::binding::PublicDocument;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
 use crate::localization::LocalizationPolicy;
@@ -69,6 +70,7 @@ pub struct Federation {
     signing: Option<SigningSettings>,
     signer: Option<Arc<Signer>>,
     client_keys: Vec<Jwk>,
+    documents: Vec<PublicDocument>,
 }
 
 /// The demographics step a patient identifier the cross-reference does not
@@ -188,6 +190,13 @@ impl Federation {
     #[must_use]
     pub fn client_keys(&self) -> &[Jwk] {
         &self.client_keys
+    }
+
+    /// The public document a binding has the gateway serve at the request
+    /// path `path`, such as a Nuts holder's DID document.
+    #[must_use]
+    pub fn document(&self, path: &str) -> Option<&PublicDocument> {
+        self.documents.iter().find(|document| document.path == path)
     }
 
     /// The signer of what every request to a node conveys about its caller

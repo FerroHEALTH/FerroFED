@@ -56,6 +56,10 @@ pub struct Settings {
     pub federation: FederationSettings,
     /// The outbound credentials, by endpoint id.
     pub credentials: BTreeMap<EndpointId, Scheme>,
+    /// The TLS material each node and its authorization server are reached
+    /// with, by endpoint id: the client certificate the gateway presents
+    /// (RFC 8705) and the roots it trusts them by.
+    pub onward_tls: BTreeMap<EndpointId, crate::config::tls::TlsSettings>,
     /// The static development cross-reference, as written.
     pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
@@ -278,6 +282,12 @@ impl Settings {
     /// without stating any of it; each binding then logs what it reaches.
     pub fn log_summary(&self) {
         let endpoints: Vec<&str> = self.credentials.keys().map(EndpointId::as_str).collect();
+        let mutual: Vec<&str> = self
+            .onward_tls
+            .iter()
+            .filter(|(_, tls)| tls.client_identity.is_some())
+            .map(|(endpoint, _)| endpoint.as_str())
+            .collect();
         let decomposable: Vec<&str> = self
             .federation
             .decomposable
@@ -317,6 +327,7 @@ impl Settings {
             traces_otlp_export = self.telemetry.otlp_endpoint.is_some(),
             trace_sample_ratio = self.telemetry.trace_sample_ratio.get(),
             credentials = endpoints.join(","),
+            client_certificates = mutual.join(","),
             auth_issuers = self.server.auth.issuers.len(),
             auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
             purpose_of_use_required = self.server.auth.purpose_required,

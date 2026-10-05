@@ -10,8 +10,9 @@ use std::time::Duration;
 
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
+use ferrofed_engine::onward::mtls::Thumbprint;
 use ferrofed_engine::onward::provider::MAX_ASSERTION_LIFETIME;
-use ferrofed_engine::onward::{Grant, Scope, SystemClock};
+use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
 use ferrofed_registry::secret::Secret;
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
@@ -22,13 +23,76 @@ use crate::binding::Binding;
 use crate::config::error::{BasicFault, Error};
 use crate::config::grant;
 use crate::config::settings::{Scheme, SigningSettings};
-use crate::config::{ClientAuth, Credentials, GrantKind, OAuth2, Signing};
+use crate::config::tls::{self, TlsFault, TlsSettings};
+use crate::config::{Credentials, GrantKind, OAuth2, Signing};
 
-/// Returns the scheme `credentials` describes, once it is known to fit the
-/// `Authorization` header it is sent in.
+/// Returns the scheme a service's `credentials` describe, once it is known
+/// to fit the `Authorization` header it is sent in.
+///
+/// TLS material is refused here: a service's own table names it.
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub(crate) fn resolve_credentials(
     section: &str,
     credentials: &Credentials,
+) -> Result<Scheme, Error> {
+    if credentials.names_tls() {
+        return Err(TlsFault::OnService {
+            section: section.to_owned(),
+        }
+        .into());
+    }
+    scheme(section, credentials, None)
+}
+
+/// Returns what a node's `credentials` describe: the scheme, when the
+/// section names one, and the TLS material the node and its authorization
+/// server are reached with, when it names any.
+///
+/// A section may name TLS material alone, when the transport authenticates
+/// the gateway. A grant that uses mutual TLS reads the thumbprint of the
+/// client certificate (RFC 8705 §3.1).
+pub(crate) fn resolve_node_credentials(
+    section: &str,
+    credentials: &Credentials,
+) -> Result<(Option<Scheme>, Option<TlsSettings>), Error> {
+    if !credentials.names_tls() {
+        return scheme(section, credentials, None).map(|scheme| (Some(scheme), None));
+    }
+    let material = tls::resolve(
+        section,
+        credentials.client_identity.as_ref(),
+        credentials.client_identity_file.as_deref(),
+        credentials.trust_roots_file.as_ref(),
+    )?;
+    let thumbprint = material
+        .client_identity
+        .as_ref()
+        .map(|identity| {
+            Thumbprint::of_identity(&identity.to_secret_string()).map_err(|source| {
+                TlsFault::Identity {
+                    key: source_key(
+                        section,
+                        "client_identity",
+                        credentials.client_identity_file.is_some(),
+                    ),
+                    source,
+                }
+            })
+        })
+        .transpose()?;
+    match scheme(section, credentials, thumbprint.as_ref()) {
+        Ok(scheme) => Ok((Some(scheme), Some(material))),
+        Err(Error::NoScheme { .. }) => Ok((None, Some(material))),
+        Err(refused) => Err(refused),
+    }
+}
+
+/// Returns the scheme `credentials` describe, with `certificate` the
+/// thumbprint of the node's TLS client certificate when it has one.
+fn scheme(
+    section: &str,
+    credentials: &Credentials,
+    certificate: Option<&Thumbprint>,
 ) -> Result<Scheme, Error> {
     let token = secret(
         &format!("{section}.bearer_token"),
@@ -57,7 +121,7 @@ pub(crate) fn resolve_credentials(
         {
             return Err(refused());
         }
-        return grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2)
+        return grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2, certificate)
             .map(|grant| Scheme::Fapi2(Box::new(grant)));
     }
     if let [binding] = bound.as_slice() {
@@ -81,7 +145,7 @@ pub(crate) fn resolve_credentials(
                 section: section.to_owned(),
             });
         }
-        return resolve_grant(&format!("{section}.oauth2"), oauth2)
+        return resolve_grant(&format!("{section}.oauth2"), oauth2, certificate)
             .map(|grant| Scheme::OAuth2(Box::new(grant)));
     }
     match (token, credentials.user.as_deref(), password) {
@@ -207,8 +271,14 @@ pub(crate) fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error>
 /// Returns the grant the `oauth2` table at `section` describes, every key
 /// set and each value held to its rule: the scope to the SMART on openEHR
 /// grammar, the token endpoint to an `http` or `https` URL with no userinfo,
-/// the `resource` to an absolute URI (RFC 8707 §2).
-fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
+/// the `resource` to an absolute URI (RFC 8707 §2). A grant that authenticates
+/// by, or binds its tokens to, the TLS client certificate of `certificate`
+/// reaches an `https` token endpoint alone (RFC 8705).
+fn resolve_grant(
+    section: &str,
+    oauth2: &OAuth2,
+    certificate: Option<&Thumbprint>,
+) -> Result<Grant, Error> {
     let missing = |name: &str| Error::Missing {
         key: format!("{section}.{name}"),
     };
@@ -217,10 +287,19 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
         Some(GrantKind::TokenExchange) => true,
         None => return Err(missing("grant")),
     };
-    match oauth2.client_auth {
-        Some(ClientAuth::PrivateKeyJwt) => {}
-        None => return Err(missing("client_auth")),
-    }
+    let client_auth = grant::client_authentication(
+        section,
+        oauth2.client_auth.ok_or_else(|| missing("client_auth"))?,
+        certificate,
+    )?;
+    let bound = grant::certificate_binding(
+        section,
+        (
+            oauth2.tls_client_certificate_bound_access_tokens,
+            oauth2.dpop_key_file.is_some(),
+        ),
+        certificate,
+    )?;
     let token_endpoint = oauth2
         .token_endpoint
         .as_ref()
@@ -239,7 +318,19 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
         section: section.to_owned(),
         source,
     };
+    if matches!(client_auth, ClientAuthentication::Tls(_)) || bound.is_some() {
+        grant::mutual_tls_url(
+            &format!("{section}.token_endpoint"),
+            token_endpoint.expose(),
+        )?;
+    }
     let mut grant = Grant::new(token_endpoint, oauth2.client_id.clone(), scope).map_err(refused)?;
+    if let ClientAuthentication::Tls(method) = client_auth {
+        grant = grant.with_tls_client_auth(method);
+    }
+    if let Some(thumbprint) = bound {
+        grant = grant.with_certificate_binding(thumbprint);
+    }
     grant = grant::with_assertion_audience(section, oauth2, grant)?;
     if let Some(resource) = &oauth2.resource {
         grant = grant.with_resource(resource).map_err(refused)?;

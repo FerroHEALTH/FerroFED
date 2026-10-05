@@ -245,6 +245,62 @@ pub enum FederationError {
     /// The HTTP client every node client shares could not be built.
     #[error("the HTTP client for the nodes could not be built")]
     Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// A node the gateway presents its TLS client certificate to is not
+    /// reached over `https` (RFC 8705).
+    #[error(
+        "endpoint {endpoint} is not an https URL, and credentials.{endpoint} presents a TLS client certificate to it, which needs TLS under every profile"
+    )]
+    ClientCertificateOverHttp {
+        /// The endpoint.
+        endpoint: EndpointId,
+    },
+    /// The HTTP client of a node reached with its own TLS material could
+    /// not be built.
+    #[error("the HTTP client of endpoint {endpoint} could not be built")]
+    NodeTransport {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// Why it could not be built; it carries no key.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    /// A public document a binding serves would sit inside the ITS-REST
+    /// surface, `{base}/v1/`, where the client authentication gate reads
+    /// every request.
+    #[error("the public document at {path} would sit inside the ITS-REST surface {surface}")]
+    DocumentInSurface {
+        /// The document's path.
+        path: String,
+        /// The surface's path prefix.
+        surface: String,
+    },
+    /// Two public documents would be served at one path.
+    #[error("two public documents would be served at {path}")]
+    DocumentTwice {
+        /// The path both claim.
+        path: String,
+    },
+    /// The DID document of a Nuts grant's holder cannot be built from the
+    /// holder keys of the grants that present as it (Nuts RFC021 §4.2).
+    #[error("the DID document of {did} cannot be built from its Nuts grants' keys")]
+    #[cfg(feature = "binding-nl")]
+    DidDocument {
+        /// The holder's DID, public.
+        did: String,
+        /// Why it cannot be built; it carries no key material.
+        #[source]
+        source: nl_generic_functions::nuts_auth::did_document::DocumentError,
+    },
+    /// The DID document of a Nuts grant's holder cannot be written as JSON.
+    #[error("the DID document of {did} cannot be written")]
+    #[cfg(feature = "binding-nl")]
+    DidDocumentJson {
+        /// The holder's DID, public.
+        did: String,
+        /// What the writer reported.
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 impl From<GrantRefused> for FederationError {

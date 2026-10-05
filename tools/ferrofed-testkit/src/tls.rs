@@ -16,13 +16,20 @@
 //! [`MutualTls::trust_roots`] is the CA the gateway trusts the front by, and
 //! [`MutualTls::client_identity`] is the certificate chain and key the
 //! gateway presents. A connection without a client certificate the CA
-//! signed fails its handshake and never reaches the origin. No specification
-//! governs the harness: our own design.
+//! signed fails its handshake and never reaches the origin. The front
+//! records the RFC 8705 §3.1 thumbprint of the certificate each connection
+//! presented ([`MutualTls::presented`]), so a test can show that a
+//! certificate-bound token travelled over a connection presenting the
+//! certificate it is bound to. No specification governs the harness: our
+//! own design.
 
 use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
+use aws_lc_rs::digest::{SHA256, digest};
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rcgen::{
     BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
 };
@@ -59,8 +66,10 @@ pub struct MutualTls {
     address: SocketAddr,
     trust_roots: String,
     client_identity: String,
+    client_thumbprint: String,
     handshakes: Arc<AtomicUsize>,
     refused: Arc<AtomicUsize>,
+    presented: Arc<Mutex<Vec<String>>>,
     stop: Option<oneshot::Sender<()>>,
 }
 
@@ -97,7 +106,12 @@ impl MutualTls {
         let address = listener.local_addr()?;
         let handshakes = Arc::new(AtomicUsize::new(0));
         let refused = Arc::new(AtomicUsize::new(0));
-        let counters = (Arc::clone(&handshakes), Arc::clone(&refused));
+        let presented = Arc::new(Mutex::new(Vec::new()));
+        let counters = Counters {
+            handshakes: Arc::clone(&handshakes),
+            refused: Arc::clone(&refused),
+            presented: Arc::clone(&presented),
+        };
         // The front runs on a runtime of its own, as wiremock's servers do, so a
         // caller that blocks its own runtime still reaches the origin.
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -121,8 +135,10 @@ impl MutualTls {
             address,
             trust_roots: material.trust_roots,
             client_identity: material.client_identity,
+            client_thumbprint: material.client_thumbprint,
             handshakes,
             refused,
+            presented,
             stop: Some(stop),
         })
     }
@@ -160,6 +176,36 @@ impl MutualTls {
     pub fn refused(&self) -> usize {
         self.refused.load(Ordering::SeqCst)
     }
+
+    /// Returns the RFC 8705 §3.1 thumbprint of the client certificate the
+    /// front admits: the unpadded base64url SHA-256 of its DER encoding.
+    #[must_use]
+    pub fn client_thumbprint(&self) -> &str {
+        &self.client_thumbprint
+    }
+
+    /// Returns the thumbprint of the certificate each connection that
+    /// completed its handshake presented, in arrival order.
+    #[must_use]
+    pub fn presented(&self) -> Vec<String> {
+        self.presented
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+}
+
+/// The counters a front keeps of its connections.
+#[derive(Clone)]
+struct Counters {
+    handshakes: Arc<AtomicUsize>,
+    refused: Arc<AtomicUsize>,
+    presented: Arc<Mutex<Vec<String>>>,
+}
+
+/// The RFC 8705 §3.1 thumbprint of the certificate whose DER is `der`.
+fn thumbprint(der: &[u8]) -> String {
+    URL_SAFE_NO_PAD.encode(digest(&SHA256, der))
 }
 
 impl Drop for MutualTls {
@@ -176,6 +222,7 @@ impl Drop for MutualTls {
 struct Material {
     trust_roots: String,
     client_identity: String,
+    client_thumbprint: String,
     config: ServerConfig,
 }
 
@@ -240,28 +287,36 @@ fn material() -> Result<Material, TlsHarnessError> {
     Ok(Material {
         trust_roots: ca_certificate.pem(),
         client_identity: format!("{}{}", client_certificate.pem(), client_key.serialize_pem()),
+        client_thumbprint: thumbprint(client_certificate.der()),
         config,
     })
 }
 
 /// Accepts connections until the front is stopped, passing each one a
 /// client certificate opened through to `target`.
-async fn serve(
-    listener: TcpListener,
-    acceptor: TlsAcceptor,
-    target: String,
-    (handshakes, refused): (Arc<AtomicUsize>, Arc<AtomicUsize>),
-) {
+async fn serve(listener: TcpListener, acceptor: TlsAcceptor, target: String, counters: Counters) {
     while let Ok((stream, _peer)) = listener.accept().await {
         let acceptor = acceptor.clone();
         let target = target.clone();
-        let (handshakes, refused) = (Arc::clone(&handshakes), Arc::clone(&refused));
+        let counters = counters.clone();
         tokio::spawn(async move {
             let Ok(mut tls) = acceptor.accept(stream).await else {
-                refused.fetch_add(1, Ordering::SeqCst);
+                counters.refused.fetch_add(1, Ordering::SeqCst);
                 return;
             };
-            handshakes.fetch_add(1, Ordering::SeqCst);
+            counters.handshakes.fetch_add(1, Ordering::SeqCst);
+            if let Some(certificate) = tls
+                .get_ref()
+                .1
+                .peer_certificates()
+                .and_then(<[CertificateDer<'_>]>::first)
+            {
+                counters
+                    .presented
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push(thumbprint(certificate));
+            }
             let Ok(mut origin) = TcpStream::connect(target.as_str()).await else {
                 return;
             };

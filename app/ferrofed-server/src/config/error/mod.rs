@@ -458,6 +458,18 @@ pub enum Error {
         /// The namespace as written, a naming system and never a value.
         namespace: String,
     },
+    /// `nl_gf.nvi.credentials` names an OAuth 2.0 or FAPI 2.0 grant, which
+    /// the Generic Functions IG defines for no data user of the Localization
+    /// Service.
+    #[error(
+        "{key} is not a credential the NVI takes: nl_gf.nvi.credentials takes a bearer token, basic credentials or the nuts grant of GF-Authentication"
+    )]
+    #[cfg(feature = "binding-nl")]
+    NviGrant {
+        /// The key of the refused table, such as
+        /// `nl_gf.nvi.credentials.oauth2`.
+        key: String,
+    },
     /// A `[nl_gf.mitz]` value the closed authorization question does not
     /// take: the key and why, never a patient value.
     #[error("{key} {fault}")]
@@ -497,6 +509,9 @@ pub enum Error {
     /// refused.
     #[error(transparent)]
     GrantFault(#[from] crate::config::grant::GrantFault),
+    /// TLS material, or a use of mutual TLS, is refused (RFC 8705).
+    #[error(transparent)]
+    TlsFault(#[from] crate::config::tls::TlsFault),
     /// A URL the gateway verifies its callers against is plain `http` to a
     /// host that is not loopback.
     #[error(transparent)]

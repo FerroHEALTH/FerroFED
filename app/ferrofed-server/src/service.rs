@@ -7,16 +7,16 @@
 //! takes its credential from [`authentication`] and its TLS material from
 //! [`tls`], both over `ferrofed_identity::fhir`, so the mapping from the
 //! configuration is written once (#507). A credential section names a bearer
-//! token or basic credentials; an OAuth 2.0, Nuts or FAPI 2.0 grant belongs
-//! to a node's onward credentials alone, and here it is refused, never read
-//! as no credential. No specification governs the mapping: our own design.
+//! token or basic credentials; an OAuth 2.0, Nuts or FAPI 2.0 grant is
+//! refused here, never read as no credential. The NVI's Nuts grant is the
+//! one grant a service takes, and the Dutch binding wires it itself. No
+//! specification governs the mapping: our own design.
 
 use ferrofed_identity::fhir::{Authentication, Tls, TlsError};
 use ferrofed_registry::secret::Secret;
 
-#[cfg(feature = "binding-ihe")]
-use crate::binding::ihe::tls::TlsSettings;
 use crate::config::settings::Scheme;
+use crate::config::tls::TlsSettings;
 
 /// A credential section that names a grant, which only a node takes.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -81,7 +81,6 @@ pub fn tls(key: &str, identity: Option<&Secret>, roots: Option<&str>) -> Result<
 /// # Errors
 ///
 /// [`TlsRefused`] for material that does not read as PEM.
-#[cfg(feature = "binding-ihe")]
 pub fn tls_of(key: &str, settings: &TlsSettings) -> Result<Tls, TlsRefused> {
     tls(
         key,

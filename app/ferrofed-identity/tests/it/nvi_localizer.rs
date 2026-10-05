@@ -8,6 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_identity::fhir::{Authentication, Tls};
@@ -17,6 +18,10 @@ use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::nvi::{LocalizationService, PSEUDO_BSN_SYSTEM};
+use http::{HeaderMap, Method, StatusCode};
+use nl_generic_functions::nvi::authorizer::{Authorized, Authorizer, AuthorizerError, Retry};
+use secrecy::SecretString;
+use url::Url;
 
 use crate::support::registry;
 
@@ -46,6 +51,7 @@ fn config(base: &str) -> Result<NviConfig, Box<dyn Error>> {
     Ok(NviConfig {
         base: SecretUrl::new(base),
         auth: Authentication::None,
+        authorizer: None,
         custodians: BTreeMap::from([
             ("ura-test-0001".to_owned(), node("node-a")?),
             ("ura-test-0002".to_owned(), node("node-b")?),
@@ -136,7 +142,7 @@ async fn a_refusing_service_fails_the_localization_closed_with_its_status() -> T
     .await?;
     match localization {
         Localization::Unavailable(error) => {
-            assert_eq!(error.status(), Some(http::StatusCode::SERVICE_UNAVAILABLE));
+            assert_eq!(error.status(), Some(StatusCode::SERVICE_UNAVAILABLE));
         }
         other => panic!("unavailable, not {other:?}"),
     }
@@ -234,4 +240,30 @@ fn a_bsn_system_never_stands_for_the_pseudonym() -> TestResult {
         }
     }
     Ok(())
+}
+
+/// An authorizer that makes no headers; the configuration check refuses it
+/// before any request.
+#[derive(Debug)]
+struct Unused;
+
+impl Authorizer for Unused {
+    fn authorize<'a>(&'a self, _method: &'a Method, _url: &'a Url) -> Authorized<'a> {
+        Box::pin(async { Err(AuthorizerError::new(std::fmt::Error)) })
+    }
+
+    fn answered(&self, _url: &Url, _status: StatusCode, _headers: &HeaderMap) -> Retry {
+        Retry::Done
+    }
+}
+
+#[test]
+fn a_fixed_credential_beside_an_authorizer_is_refused() -> TestResult {
+    let mut written = config("https://nvi.example.org/fhir")?;
+    written.auth = Authentication::Bearer(SecretString::from("synthetic-token"));
+    written.authorizer = Some(Arc::new(Unused));
+    match NviLocalizer::from_config(written, &registry()) {
+        Err(NviConfigError::TwoCredentials) => Ok(()),
+        other => Err(format!("a request would carry two credentials: {other:?}").into()),
+    }
 }

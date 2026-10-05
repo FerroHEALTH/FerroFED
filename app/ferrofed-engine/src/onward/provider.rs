@@ -47,7 +47,7 @@ struct Cached {
 pub struct ClientCredentials<T> {
     endpoint: EndpointId,
     grant: Grant,
-    keys: Arc<KeyRing>,
+    keys: Option<Arc<KeyRing>>,
     lifetime: Duration,
     transport: T,
     timeout: Duration,
@@ -74,8 +74,36 @@ impl<T: Transport> ClientCredentials<T> {
         Self {
             endpoint,
             grant,
-            keys,
+            keys: Some(keys),
             lifetime: lifetime.min(MAX_ASSERTION_LIFETIME),
+            transport,
+            timeout,
+            clock,
+            cached: Mutex::new(None),
+            fetch: tokio::sync::Mutex::new(()),
+        }
+    }
+
+    /// The provider of `endpoint`'s `grant` with no key of the gateway's,
+    /// for a grant authenticated by the TLS client certificate `transport`
+    /// presents (RFC 8705 §2), waiting at most `timeout` for each token
+    /// request.
+    ///
+    /// A grant that authenticates with a client assertion gets no token
+    /// from it ([`TokenError::Unsigned`]).
+    #[must_use]
+    pub fn by_certificate(
+        endpoint: EndpointId,
+        grant: Grant,
+        timeout: Duration,
+        transport: T,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        Self {
+            endpoint,
+            grant,
+            keys: None,
+            lifetime: MAX_ASSERTION_LIFETIME,
             transport,
             timeout,
             clock,
@@ -108,7 +136,9 @@ impl<T: Transport> ClientCredentials<T> {
         let started = self.clock.now();
         let issued = token::request(
             &self.grant,
-            (self.keys.current(), self.lifetime),
+            self.keys
+                .as_deref()
+                .map(|keys| (keys.current(), self.lifetime)),
             &self.transport,
             self.timeout,
         )

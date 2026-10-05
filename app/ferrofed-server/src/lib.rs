@@ -61,6 +61,7 @@ pub mod cli;
 pub mod command;
 pub mod config;
 pub mod conveyed;
+pub mod documents;
 pub mod error;
 pub mod facade;
 pub mod federation;
@@ -146,7 +147,9 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// answers `200` with the last observed state of each member endpoint and of
 /// the resolver ([`health::dependencies`]). `GET {base}/.well-known/jwks.json`
 /// answers the gateway's public signing keys with no client authentication
-/// ([`jwks`]), and `404` when none are configured.
+/// ([`jwks`]), and `404` when none are configured. A binding's public
+/// document, such as a Nuts holder's DID document, is answered at the path
+/// its binding names, with no client authentication ([`documents`]).
 /// `POST {base}/v1/query/aql` answers the federated query when a registry is
 /// configured ([`facade::query_aql`]), and so does `GET {base}/v1/query/aql`
 /// from its query string ([`facade::query_aql_get`]). Every other path under
@@ -187,8 +190,14 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         Arc::clone(&state),
     ));
     let guarded = routes
-        .with_state(state)
-        .layer(axum::middleware::from_fn_with_state(guard, auth::guard));
+        .with_state(Arc::clone(&state))
+        .layer(axum::middleware::from_fn_with_state(guard, auth::guard))
+        // NOTE: RFC 7517 §5, DID 1.0 §7.1: published key material is public, so a
+        // binding's documents are answered outside the client authentication gate.
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            documents::serve,
+        ));
     with_middleware(guarded, server)
 }
 

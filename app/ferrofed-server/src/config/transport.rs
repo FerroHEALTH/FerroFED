@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The transport every outbound connection the configuration names must use,
-//! by what it carries. Three policies hold, and this module is the only place
+//! by what it carries. Four policies hold, and this module is the only place
 //! any of them is written:
 //!
 //! - **Protected payload** ([`protected_payload`]): a URL a credential or a
@@ -16,6 +16,11 @@
 //!   callers against, a key set or a token introspection endpoint, must be
 //!   `https`, or `http` to a loopback host, under every profile, since a
 //!   verifier reached in the clear lets a network attacker forge callers.
+//! - **Client certificate** ([`client_certificate`]): a URL the gateway
+//!   presents its TLS client certificate to, a node with a client identity
+//!   and the token endpoint or issuer of its grant that uses mutual TLS
+//!   (RFC 8705), must be `https` under every profile, since a client
+//!   certificate needs the TLS handshake it is presented in.
 //!
 //! The protected-payload sites of the core are a registry endpoint with a
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
@@ -178,6 +183,16 @@ fn admit(
         Profile::Development => Ok(Some(site)),
         Profile::Production => Err(CleartextError { site }),
     }
+}
+
+/// Whether `url` may be presented the gateway's TLS client certificate.
+///
+/// Only an `https` URL may, under every profile (RFC 8705 §2, §3). The
+/// caller names the site in its own refusal; the URL is read for its scheme
+/// and never rendered.
+#[must_use]
+pub fn client_certificate(url: &str) -> bool {
+    Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "https")
 }
 
 /// Holds the URL at `key` to the trust-anchor policy: `https`, or `http` to a

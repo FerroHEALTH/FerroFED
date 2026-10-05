@@ -8,10 +8,16 @@
 //! nothing sent to it and no log, span or answer carrying a credential, the
 //! presentation or a key; and the configuration refuses a grant it cannot
 //! use (§13.1, §13.3, N25, CP-17; Annex B §B.4; Nuts RFC021; RFC 9449).
-//! Every identifier, key and credential is synthetic.
+//! The gateway serves its holder's `did:web` DID document, which verifies
+//! the presentation it made. Every identifier, key and credential is
+//! synthetic.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
+)]
+#![expect(
+    clippy::disallowed_types,
+    reason = "the test seam: the served DID document and the presentation are read as values"
 )]
 
 use std::collections::BTreeMap;
@@ -30,12 +36,14 @@ use ferrofed_testkit::nuts::{self, NutsNode};
 use ferrofed_testkit::oauth;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
-use jsonwebtoken::Algorithm;
+use jsonwebtoken::jwk::Jwk;
+use jsonwebtoken::{Algorithm, DecodingKey, Validation};
+use serde_json::Value;
 use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, ResponseTemplate};
 
 use crate::facade::{body, crossref, patient_query, post, registry, settings_with_room};
-use crate::support::{Logs, bearer_as, call, signed};
+use crate::support::{Logs, bearer_as, call, send_as_is, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -60,15 +68,22 @@ struct Material {
 /// A harness Nuts node trusting a fresh holder and issuer, and the
 /// `[credentials]` table of node A's grant at it, its files under `dir`.
 async fn material(dir: &Path) -> Result<(NutsNode, Material), Box<dyn Error>> {
+    material_as(dir, "node-a-pub", (HOLDER, HOLDER_KID)).await
+}
+
+/// A harness Nuts node trusting a fresh holder `did`, whose key `kid`
+/// names, and a fresh issuer, and the `[credentials]` table of `endpoint`'s
+/// grant at it, its files under `dir` named for `endpoint`.
+async fn material_as(
+    dir: &Path,
+    endpoint: &str,
+    (did, kid): (&str, &str),
+) -> Result<(NutsNode, Material), Box<dyn Error>> {
     let authority = NutsNode::start("hospital-a", SCOPE, Some(300)).await;
     authority.define(DEFINITION);
     let holder_pem = oauth::p256_pem()?;
     let issuer_pem = oauth::p256_pem()?;
-    authority.trust_holder(
-        HOLDER,
-        HOLDER_KID,
-        nuts::public_jwk(&holder_pem, Algorithm::ES256)?,
-    );
+    authority.trust_holder(did, kid, nuts::public_jwk(&holder_pem, Algorithm::ES256)?);
     authority.trust_issuer(
         ISSUER,
         ISSUER_KID,
@@ -77,7 +92,7 @@ async fn material(dir: &Path) -> Result<(NutsNode, Material), Box<dyn Error>> {
     let credential = nuts::credential(
         (&issuer_pem, ISSUER_KID),
         ISSUER,
-        HOLDER,
+        did,
         (
             "SyntheticOrganizationCredential",
             "Synthetic Care Organisation",
@@ -85,7 +100,7 @@ async fn material(dir: &Path) -> Result<(NutsNode, Material), Box<dyn Error>> {
         jiff::Timestamp::now().as_second() + 3600,
     )?;
     let file = |name: &str, contents: &str| -> Result<toml::Value, Box<dyn Error>> {
-        let file = dir.join(name);
+        let file = dir.join(format!("{endpoint}-{name}"));
         std::fs::write(&file, contents)?;
         Ok(toml::Value::String(file.display().to_string()))
     };
@@ -93,7 +108,7 @@ async fn material(dir: &Path) -> Result<(NutsNode, Material), Box<dyn Error>> {
     let dpop = file("dpop.pem", &oauth::p256_pem()?)?;
     let held = file("organization.jwt", &credential)?;
     let tables = format!(
-        "[credentials.\"node-a-pub\".nuts]\nauthorization_server = \"{}\"\nscope = \"{SCOPE}\"\ndid = \"{HOLDER}\"\nkid = \"{HOLDER_KID}\"\nkey_file = {key}\ndpop_key_file = {dpop}\n\n[[credentials.\"node-a-pub\".nuts.credential]]\ninput_descriptor = \"organization_credential\"\nfile = {held}\n",
+        "[credentials.\"{endpoint}\".nuts]\nauthorization_server = \"{}\"\nscope = \"{SCOPE}\"\ndid = \"{did}\"\nkid = \"{kid}\"\nkey_file = {key}\ndpop_key_file = {dpop}\n\n[[credentials.\"{endpoint}\".nuts.credential]]\ninput_descriptor = \"organization_credential\"\nfile = {held}\n",
         authority.issuer()
     );
     Ok((
@@ -292,5 +307,199 @@ async fn the_configuration_refuses_a_nuts_grant_it_cannot_use() -> TestResult {
             "the refusal quotes the credential"
         );
     }
+    Ok(())
+}
+
+/// The DID document `app` serves at `path`, fetched with no credential, and
+/// its media type.
+async fn did_document(app: &Router, path: &str) -> Result<(Value, String), Box<dyn Error>> {
+    let request = Request::get(path).body(axum::body::Body::empty())?;
+    let response = send_as_is(app.clone(), request).await?;
+    let status = response.status();
+    let media = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
+    if status != StatusCode::OK {
+        return Err(format!("{path} answered {status}").into());
+    }
+    Ok((serde_json::from_slice(&bytes)?, media))
+}
+
+/// `error` and every cause behind it, as one line.
+fn chain(error: &(dyn Error + 'static)) -> String {
+    let mut line = error.to_string();
+    let mut cause = error.source();
+    while let Some(source) = cause {
+        line.push_str(": ");
+        line.push_str(&source.to_string());
+        cause = source.source();
+    }
+    line
+}
+
+/// The one verification method of `document`, with its public JWK.
+fn only_method(document: &Value) -> Result<(String, Jwk), Box<dyn Error>> {
+    let methods = document["verificationMethod"]
+        .as_array()
+        .ok_or("verificationMethod")?;
+    let [method] = methods.as_slice() else {
+        return Err(format!("one verification method: {methods:?}").into());
+    };
+    let id = method["id"].as_str().ok_or("an id")?.to_owned();
+    Ok((id, serde_json::from_value(method["publicKeyJwk"].clone())?))
+}
+
+/// The gateway serves its `did:web` DID document at the location the DID
+/// names, with no client credential, built from the key it signs
+/// presentations with and nothing else; the authorization server, trusting
+/// the key the served document holds, verifies the presentation the gateway
+/// made, and node A receives the token (the did:web Method Specification,
+/// Read (Resolve); Nuts RFC021 §4.2 item 4; Annex B §B.4).
+// conformance: CP-17
+#[tokio::test]
+async fn the_served_did_document_verifies_the_gateways_presentation() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (authority, material) = material(dir.path()).await?;
+    let a = node(authority.dpop_bound()).await;
+    let (app, _state) = gateway(dir.path(), &a.uri(), &material.tables)?;
+
+    let (document, media) = did_document(&app, "/.well-known/did.json").await?;
+    assert_eq!("application/did+ld+json", media);
+    assert_eq!(HOLDER, document["id"]);
+    let (kid, jwk) = only_method(&document)?;
+    assert_eq!(HOLDER_KID, kid);
+    assert_eq!(
+        nuts::public_jwk(&material.holder_pem, Algorithm::ES256)?
+            .common
+            .key_algorithm,
+        jwk.common.key_algorithm
+    );
+    let served = serde_json::to_value(&jwk)?;
+    assert!(served.get("d").is_none(), "no private member is served");
+    let key_body: String = material
+        .holder_pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+    assert!(!document.to_string().contains(&key_body));
+
+    authority.trust_holder(HOLDER, HOLDER_KID, jwk.clone());
+    let (status, text) = call(app, patient_post()?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(1, authority.issued());
+    let forms = authority.forms();
+    let presentation = forms
+        .first()
+        .and_then(|form| form.iter().find(|(name, _)| name == "assertion"))
+        .map(|(_, value)| value.clone())
+        .ok_or("the presentation")?;
+    let header = jsonwebtoken::decode_header(&presentation)?;
+    assert_eq!(Some(HOLDER_KID), header.kid.as_deref());
+    let mut validation = Validation::new(header.alg);
+    validation.validate_aud = false;
+    jsonwebtoken::decode::<Value>(&presentation, &DecodingKey::from_jwk(&jwk)?, &validation)?;
+    Ok(())
+}
+
+/// A key change is served with no hand-edited file: the gateway started
+/// over a new holder key serves a document holding that key.
+#[tokio::test]
+async fn a_new_holder_key_is_served_in_the_did_document() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (_authority, material) = material(dir.path()).await?;
+    let (app, _state) = gateway(
+        dir.path(),
+        "https://cdr-a.example.org/openehr",
+        &material.tables,
+    )?;
+    let (before, _) = did_document(&app, "/.well-known/did.json").await?;
+    let new_pem = oauth::p256_pem()?;
+    std::fs::write(dir.path().join("node-a-pub-holder.pem"), &new_pem)?;
+    let (app, _state) = gateway(
+        dir.path(),
+        "https://cdr-a.example.org/openehr",
+        &material.tables,
+    )?;
+    let (after, _) = did_document(&app, "/.well-known/did.json").await?;
+    let (_, old_jwk) = only_method(&before)?;
+    let (_, new_jwk) = only_method(&after)?;
+    assert_ne!(old_jwk, new_jwk);
+    let mut expected = nuts::public_jwk(&new_pem, Algorithm::ES256)?;
+    expected.common.key_id = None;
+    assert_eq!(
+        serde_json::to_value(&expected)?,
+        serde_json::to_value(&new_jwk)?
+    );
+    Ok(())
+}
+
+/// The document's path is the one the DID names on its host, so a gateway
+/// mounted under a base other than `/` serves it there too, outside the
+/// base, and answers a path under the base the DID does not name `404`.
+#[tokio::test]
+async fn the_did_document_is_served_at_the_dids_own_path_under_any_base() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (_authority, material) = material(dir.path()).await?;
+    let (_app, state) = gateway(
+        dir.path(),
+        "https://cdr-a.example.org/openehr",
+        &material.tables,
+    )?;
+    let mut server = settings_with_room();
+    server.base_path = "/fed".parse()?;
+    let app = ferrofed_server::router(state, &server);
+    let (document, _) = did_document(&app, "/.well-known/did.json").await?;
+    assert_eq!(HOLDER, document["id"]);
+    let request = Request::get("/fed/.well-known/did.json").body(axum::body::Body::empty())?;
+    let response = send_as_is(app, request).await?;
+    assert_eq!(StatusCode::NOT_FOUND, response.status());
+    Ok(())
+}
+
+/// A DID whose document path lies under the ITS-REST surface, and two DIDs
+/// whose documents share one path, refuse to load: the document stays
+/// outside the client authentication gate, and one path serves one
+/// document.
+#[tokio::test]
+async fn a_did_document_inside_the_surface_or_at_a_taken_path_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let surface = "did:web:gateway.example.org:v1:holder";
+    let (_authority, inside) = material_as(
+        dir.path(),
+        "node-a-pub",
+        (surface, &format!("{surface}#key-1")),
+    )
+    .await?;
+    let refused = gateway(
+        dir.path(),
+        "https://cdr-a.example.org/openehr",
+        &inside.tables,
+    )
+    .err()
+    .ok_or("a document inside the surface loaded")?;
+    assert!(
+        chain(refused.as_ref()).contains("ITS-REST surface"),
+        "{refused}"
+    );
+
+    let (_authority, a) = material(dir.path()).await?;
+    let other = "did:web:other.example.org";
+    let (_authority, b) =
+        material_as(dir.path(), "node-b-pub", (other, &format!("{other}#key-1"))).await?;
+    let refused = gateway(
+        dir.path(),
+        "https://cdr-a.example.org/openehr",
+        &format!("{}\n{}", a.tables, b.tables),
+    )
+    .err()
+    .ok_or("two documents at one path loaded")?;
+    assert!(
+        chain(refused.as_ref()).contains("/.well-known/did.json"),
+        "{refused}"
+    );
     Ok(())
 }

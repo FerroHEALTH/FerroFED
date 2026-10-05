@@ -194,6 +194,11 @@ pub enum LocalizationError {
     #[error("the [nl_gf.nvi] localizer cannot be enabled")]
     #[cfg(feature = "binding-nl")]
     Nvi(#[source] NviConfigError),
+    /// The HTTP client the Nuts grant of `[nl_gf.nvi.credentials]` sends its
+    /// token requests through could not be built.
+    #[error("the HTTP client of nl_gf.nvi.credentials.nuts could not be built")]
+    #[cfg(feature = "binding-nl")]
+    NviNutsClient(#[source] reqwest::Error),
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("{key} is not one SAML 2.0 Assertion element")]
     #[cfg(feature = "binding-ihe")]

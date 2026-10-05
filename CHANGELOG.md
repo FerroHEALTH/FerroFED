@@ -23,12 +23,63 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Mutual TLS toward a node and its authorization server, with RFC 8705
+  client authentication and certificate-bound tokens (#492; §13.1, §13.4,
+  N25, CP-17; FAPI 2.0 Security Profile §5.3.2.1). A node's
+  `[credentials."<id>"]` section takes `client_identity_file` and
+  `trust_roots_file`, the keys and the TLS type every identity service
+  takes, and the node and its token endpoint are reached over one transport
+  that presents that certificate, `https` under every profile; a section
+  may name that material alone. An `oauth2` grant, and a `fapi2` grant, may
+  authenticate with `client_auth = "tls_client_auth"` or
+  `"self_signed_tls_client_auth"`, sending `client_id` and no assertion
+  (RFC 8705 §2), and with `tls_client_certificate_bound_access_tokens =
+  true` take only tokens bound to the certificate (§3): a token whose `cnf`
+  names another certificate, in the token response or as a JWT claim, is
+  refused before the node is sent anything (§3.1, §3.2). It composes with
+  token exchange per caller, whose actor token the gateway still signs. A
+  `fapi2` grant over mutual TLS uses the `mtls_endpoint_aliases` token
+  endpoint (§5), needs the metadata to list `tls_client_auth` and state
+  `tls_client_certificate_bound_access_tokens` as the grant uses them, and
+  needs a client key only for a token exchange. A grant that sets both `dpop_key_file` and certificate binding,
+  either without a client identity, an identity with no certificate, an
+  `http` token endpoint or node, and TLS material in a service's own
+  `credentials` section refuse the configuration. RFC 8705 is vendored
+  under `docs/specs/ietf-oauth/`.
+- The NVI localizer authenticates with the Nuts grant (#539; Annex B §B.1,
+  §B.4; the IG's Localization page, GF-Authentication, GFI-004 and
+  GFI-005). `[nl_gf.nvi.credentials.nuts]` takes the table a node's onward
+  credentials take and runs the same grant: a Verifiable Presentation of the
+  gateway's credentials for a token bound to its `DPoP` key, cached until 30
+  seconds before it expires and dropped on the NVI's `401`. Every search
+  carries the token with a proof of the key over the search URL without its
+  query, and a nonce the NVI demands is answered once (RFC 9449 §7.1, §9).
+  The token goes to the NVI alone. A refused grant leaves the localization
+  unavailable, so the query fails closed (§14.1). An `oauth2` or `fapi2`
+  table under `[nl_gf.nvi.credentials]` is refused, naming its key, since the
+  IG defines no such grant for the Localization Service. The
+  `nl-generic-functions` NVI client takes an authorizer that makes each
+  request's headers and is handed the request URL without the query that
+  holds the pseudonym (0.0.12).
+
 - An end-to-end check that the `AVG` the gateway declares decomposable in
   `OPTIONS {base}/` is the mean weighted by each node's count (§11.6.3, N39,
   CP-10, CP-32), behind `FERROFED_E2E`. With two values at one FerroEHR node
   and one at the other, each node is asked its `SUM` and `COUNT`, and the
   answer equals the mean weighted by the counts each node returns for the
   query it was sent, which differs from a mean of the node means.
+- The gateway serves the `did:web` DID document of each Nuts grant's
+  holder (#503; Annex B §B.4, Nuts RFC021 §4.2). It is served at the path
+  the DID resolves to (the did:web Method Specification, Read (Resolve)),
+  such as `/.well-known/did.json`, under any base URL, as
+  `application/did+ld+json` and with no client authentication, like the JWK
+  Set. The document is built from the holder keys the `nuts` sections name
+  and nothing else, one `JsonWebKey2020` verification method per `kid`, so
+  a key change shows up on the next reload with no file to edit. A DID
+  whose document would sit under `{base}/v1/`, two DIDs that share one
+  document path, or two keys under one `kid` refuse the configuration.
+  `nl-generic-functions` 0.0.13 adds the `nuts_auth::did_document` module,
+  `HolderKey::public` and `Did::document_path`.
 - A differential run against the Federation Tier reference implementation,
   behind `FERROFED_E2E` (#94; §16.3 tracks 1 to 7 and 9). The testkit builds
   `syntaric/openehr-federation-ref` at its pinned commit from the vendored

@@ -68,6 +68,7 @@ mod gate;
 mod on_behalf;
 mod query;
 pub mod reported;
+mod transports;
 
 /// The API version segment ITS-REST 1.1.0 puts every path under
 /// (`{baseUrl}/v1/...`), appended to the endpoint's base URL.
@@ -625,23 +626,7 @@ impl<T: Transport + Clone> NodeClients<T> {
         transport: &T,
         credentials: &BTreeMap<EndpointId, SharedCredentials>,
     ) -> Result<Self, SetupError> {
-        if let Some(stray) = credentials
-            .keys()
-            .find(|endpoint| snapshot.endpoint(endpoint).is_none())
-        {
-            return Err(SetupError::UnknownEndpoint {
-                endpoint: stray.clone(),
-            });
-        }
-        let mut clients = BTreeMap::new();
-        for endpoint in snapshot.endpoints() {
-            let mut client = NodeClient::new(endpoint, transport.clone())?;
-            if let Some(provider) = credentials.get(endpoint.id()) {
-                client = client.with_credentials_provider(Arc::clone(provider));
-            }
-            clients.insert(endpoint.id().clone(), client);
-        }
-        Ok(Self { clients })
+        Self::from_snapshot_over(snapshot, (transport, &BTreeMap::new()), credentials)
     }
 
     /// The client of `endpoint`, when the snapshot holds it.
