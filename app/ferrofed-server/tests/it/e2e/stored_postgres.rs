@@ -4,8 +4,10 @@
 //! The PostgreSQL store of the stored-query registry against a real
 //! PostgreSQL 18, one database per use on one server (§12.7, N44, CP-40):
 //! the store suite every writable store passes, two gateway instances in
-//! one process racing the same new version with exactly one stored, and a
-//! version one instance stored read and run by name at the other.
+//! one process racing the same new version with exactly one stored, a
+//! version one instance stored read and run by name at the other, and a row
+//! naming its patient by a literal, written past the gateway, never served
+//! or run (§5.4.1, N33).
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -18,15 +20,15 @@ use ferrofed_registry::definition::store::{DefinitionStore, StoreError};
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
-use ferrofed_server::stored::postgres::PostgresStore;
+use ferrofed_server::stored::postgres::{PostgresStore, TABLE};
 use ferrofed_testkit::containers;
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::e2e::TestResult;
 use crate::facade::{
-    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, node_answering, registry,
-    settings_with_room, statuses,
+    Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, crossref, node_answering, received,
+    registry, settings_with_room, statuses,
 };
 use crate::stored::suite::SCENARIOS;
 use crate::support::{call, error_body};
@@ -195,5 +197,104 @@ async fn a_version_one_instance_stored_is_run_by_name_at_the_other() -> TestResu
         vec![("node-a-pub", "active"), ("node-b-pub", "active")],
         statuses(&answer)
     );
+    Ok(())
+}
+
+/// Writes the definition of `name` at `version` holding `aql` into the
+/// store's table at `url` directly, as a restore or a manual insert would,
+/// with no admission.
+async fn inserted(url: &str, (name, version): (&str, &str), aql: &str) -> TestResult {
+    let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
+    let driven = tokio::spawn(connection);
+    let statement =
+        format!("INSERT INTO {TABLE} (name, version, saved, aql) VALUES ($1, $2, $3, $4)");
+    let rows = client
+        .execute(
+            &statement,
+            &[&name, &version, &"2026-10-05T00:00:00Z", &aql],
+        )
+        .await?;
+    assert_eq!(1, rows, "the row is written");
+    drop(client);
+    driven.await??;
+    Ok(())
+}
+
+/// Every message of `error` and its causes, one line.
+fn chain(error: &dyn Error) -> String {
+    let mut line = error.to_string();
+    let mut cause = error.source();
+    while let Some(source) = cause {
+        line.push_str(": ");
+        line.push_str(&source.to_string());
+        cause = source.source();
+    }
+    line
+}
+
+// conformance: CP-40
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_row_naming_its_patient_by_a_literal_is_never_served_or_run() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let server = containers::postgres("stored_literal", &[]).await?;
+    let url = server.url("stored_literal");
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let dir = tempfile::tempdir()?;
+    let members = (a.uri(), b.uri());
+    let app = gateway(dir.path(), (&members.0, &members.1), &url)?;
+    let subject = "e/ehr_status/subject/external_ref";
+    let literal = format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE {subject}/id/value = '{PATIENT}' AND {subject}/namespace = '{NAMESPACE}'"
+    );
+    let admitted = "org.example::admitted";
+    let parameterised = literal.replace(&format!("'{PATIENT}'"), "$patient");
+    inserted(&url, (NAME, "3.0.0"), &literal).await?;
+    inserted(&url, (admitted, "1.0.0"), &parameterised).await?;
+
+    let refused = |status: StatusCode, text: &str| -> TestResult {
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, status, "N33: {text}");
+        assert_eq!("internal", error_body(text)?.code);
+        assert!(!text.contains(PATIENT_TAIL), "§5.4.3: never quoted: {text}");
+        Ok(())
+    };
+    let (status, text) = call(app.clone(), get(&format!("{NAME}/3.0.0"))?).await?;
+    refused(status, &text)?;
+    let (status, text) = call(app.clone(), get("org.example")?).await?;
+    refused(status, &text)?;
+    let request = Request::post(format!("/v1/query/{NAME}/3.0.0"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(r#"{"query_parameters":{}}"#))?;
+    let (status, text) = call(app.clone(), request).await?;
+    refused(status, &text)?;
+    assert!(
+        received(&a).await?.is_empty(),
+        "N33: nothing reached node A"
+    );
+    assert!(
+        received(&b).await?.is_empty(),
+        "N33: nothing reached node B"
+    );
+
+    let (status, text) = call(app, get(&format!("{admitted}/1.0.0"))?).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "another name is still served: {text}"
+    );
+
+    let refused = gateway(dir.path(), (&members.0, &members.1), &url)
+        .err()
+        .ok_or("N33: a database holding a literal refuses the start")?;
+    let line = chain(refused.as_ref());
+    assert!(
+        line.contains("names its patient by a literal"),
+        "says why: {line}"
+    );
+    assert!(line.contains(NAME), "names the definition: {line}");
+    assert!(!line.contains(PATIENT_TAIL), "§5.4.3: never quoted: {line}");
     Ok(())
 }
