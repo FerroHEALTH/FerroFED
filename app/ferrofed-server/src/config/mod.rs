@@ -579,17 +579,10 @@ impl Credentials {
     }
 }
 
-/// An OAuth 2.0 grant at the token endpoint of a node or of an identity
-/// service.
+/// An OAuth 2.0 grant at the token endpoint of a node or an IHE FHIR service.
 ///
-/// A node's grant authenticates with a JWT client assertion signed by the
-/// `[signing]` key (RFC 7523 §2.2) or its TLS client certificate (RFC 8705
-/// §2). An identity service's grant (`[pixm.manager.credentials.oauth2]`,
-/// `[pdqm.credentials.oauth2]`, `[pmir.credentials.oauth2]`,
-/// `[registry.mcsd.credentials.oauth2]`) is the client-credentials grant of
-/// IHE IUA ITI-71, authenticated by a client secret (RFC 6749 §2.3.1) or
-/// that assertion. Every token is requested with `scope`. No field has a
-/// default.
+/// A service's grant is the client-credentials grant of IHE IUA ITI-71.
+/// Every token is requested with `scope`. No field has a default.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OAuth2 {
@@ -615,9 +608,7 @@ pub struct OAuth2 {
     /// The client the authorization server registered the gateway as, the
     /// `iss` and `sub` of every client assertion (RFC 7523 §3).
     pub client_id: String,
-    /// The client secret the authorization server issued, with
-    /// `client_secret_basic` or `client_secret_post`; an identity service's
-    /// grant alone takes it (RFC 6749 §2.3.1).
+    /// The client secret of `client_secret_basic` or `client_secret_post`.
     pub client_secret: Option<Secret>,
     /// A file holding `client_secret`, read at boot.
     pub client_secret_file: Option<PathBuf>,
@@ -672,13 +663,9 @@ pub enum ClientAuth {
     /// authorization server registered for the client (RFC 8705 §2.2).
     #[serde(rename = "self_signed_tls_client_auth")]
     SelfSignedTls,
-    /// The client secret in the HTTP Basic scheme (RFC 6749 §2.3.1), as IHE
-    /// IUA ITI-71 prescribes (§3.71.4.1.2.1); an identity service's grant
-    /// alone takes it.
+    /// A service's client secret in the Basic scheme (RFC 6749 §2.3.1).
     ClientSecretBasic,
-    /// The client secret as `client_id` and `client_secret` in the request
-    /// body (RFC 6749 §2.3.1), for an authorization server that takes no
-    /// Basic scheme; an identity service's grant alone takes it.
+    /// A service's client secret in the request body (RFC 6749 §2.3.1).
     ClientSecretPost,
 }
 
