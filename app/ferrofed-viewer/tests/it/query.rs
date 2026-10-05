@@ -596,8 +596,8 @@ async fn a_query_from_the_consoles_own_origin_runs() -> Result<(), Box<dyn Error
     let (service, session) = console_with_origin(&gateway)?;
     for from in [
         vec![("sec-fetch-site", "same-origin")],
-        vec![("origin", "https://console.example.org")],
-        vec![("referer", "https://console.example.org/query")],
+        vec![("origin", "http://127.0.0.1:3000")],
+        vec![("referer", "http://127.0.0.1:3000/query")],
     ] {
         let (response, text) = send(&service, run_from(&session, &from)?).await?;
         assert_eq!(StatusCode::OK, response.status(), "{from:?}: {text}");
