@@ -46,7 +46,6 @@ use ferrofed_registry::definition::store::{Definitions, Insertion};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition, VersionPattern};
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 use jiff::Timestamp;
-use openehr_federation::aql::definition::{Definition, SubjectOrigin};
 use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionStoreYamlParams, StoredQuery,
 };
@@ -63,6 +62,7 @@ use crate::facade::{answer, security};
 use crate::federation::Federation;
 use crate::request_id;
 use crate::state::AppState;
+use crate::stored::{self, Inadmissible};
 
 mod distribution;
 
@@ -399,14 +399,16 @@ async fn store(
     let distributed = distribution::requested(federation, arrived.headers)?;
     let text =
         std::str::from_utf8(&arrived.body).map_err(|_text| Refused::fixed(Code::BodyInvalid))?;
-    let admitted = Definition::admit(text, federation.context()).map_err(|refusal| {
-        security::refused(&refusal, &logged);
-        Refused::with(Code::Refused((&refusal).into()), &refusal)
+    let admitted = stored::admit(text, federation.context()).map_err(|refused| match refused {
+        Inadmissible::Refused(refusal) => {
+            security::refused(&refusal, &logged);
+            Refused::with(Code::Refused((&refusal).into()), &refusal)
+        }
+        Inadmissible::SubjectLiteral { at } => {
+            security::definition_refused(at.as_ref(), &logged);
+            Refused::fixed(Code::SubjectLiteral)
+        }
     })?;
-    if let Some(SubjectOrigin::Literal { at }) = admitted.subject() {
-        security::definition_refused(at.as_ref(), &logged);
-        return Err(Refused::fixed(Code::SubjectLiteral));
-    }
     if distributed.is_some() {
         distribution::distributable(admitted.aql(), &logged)?;
     }

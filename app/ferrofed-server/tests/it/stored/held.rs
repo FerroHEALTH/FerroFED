@@ -17,6 +17,7 @@ use jiff::Timestamp;
 use openehr_federation::aql::{Context, Targeting};
 
 use crate::facade::{NAMESPACE, PATIENT, PATIENT_TAIL, node_answering, received};
+use crate::support::chain;
 
 use super::{NAME, TestResult, parameterised, store_file, two_members};
 
@@ -36,18 +37,6 @@ fn held(name: &str, aql: &str) -> Result<StoredDefinition, Box<dyn Error>> {
         aql.to_owned(),
         Timestamp::UNIX_EPOCH,
     ))
-}
-
-/// Every message of `error` and its causes, one line.
-fn chain(error: &dyn Error) -> String {
-    let mut line = error.to_string();
-    let mut cause = error.source();
-    while let Some(source) = cause {
-        line.push_str(": ");
-        line.push_str(&source.to_string());
-        cause = source.source();
-    }
-    line
 }
 
 /// A store another process writes to, its rows held where the test adds to
@@ -135,7 +124,7 @@ fn a_literal_a_shared_store_gains_after_the_start_is_never_served() -> TestResul
     let refused = refusal(definitions.refresh_named(&name))?;
     assert_eq!(name, refused.name);
     assert!(
-        matches!(refused.reason, Inadmissible::SubjectLiteral),
+        matches!(refused.reason, Inadmissible::SubjectLiteral { .. }),
         "N33: {refused:?}"
     );
     assert!(
