@@ -352,3 +352,180 @@ async fn a_refusing_token_endpoint_answers_bad_gateway() -> Result<(), Box<dyn E
     assert_eq!(0, sessions(&state)?);
     Ok(())
 }
+
+// OpenID Connect Core 1.0 §3.1.3.7 item 9: the current time is before
+// `exp`, so a token past it, beyond the clock leeway, is refused.
+#[tokio::test]
+async fn an_expired_id_token_is_refused() -> Result<(), Box<dyn Error>> {
+    let provider = Provider::start().await?;
+    let (state, service) = console(&provider.configuration(None))?;
+    let begun = begin(&service).await?;
+    let now = jiff::Timestamp::now().as_second();
+    let token = Provider::id_token(
+        &provider.issuer,
+        &[
+            ("nonce", format!("\"{}\"", begun.nonce)),
+            ("iat", (now - 7200).to_string()),
+            ("exp", (now - 3600).to_string()),
+        ],
+    )?;
+    provider.answers(&token).await;
+    let response = complete(&service, &begun).await?;
+    assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+    assert_eq!(0, sessions(&state)?);
+    Ok(())
+}
+
+// OpenID Connect Core 1.0 §3.1.3.7 item 3: the console refuses an `aud`
+// that names any audience besides its own `client_id`, even with an `azp`.
+#[tokio::test]
+async fn an_id_token_for_two_audiences_is_refused() -> Result<(), Box<dyn Error>> {
+    for azp in [None, Some(format!("\"{CLIENT_ID}\""))] {
+        let provider = Provider::start().await?;
+        let (state, service) = console(&provider.configuration(None))?;
+        let begun = begin(&service).await?;
+        let mut claims = vec![
+            ("nonce", format!("\"{}\"", begun.nonce)),
+            ("aud", format!("[\"{CLIENT_ID}\",\"another-client\"]")),
+        ];
+        if let Some(azp) = &azp {
+            claims.push(("azp", azp.clone()));
+        }
+        let token = Provider::id_token(&provider.issuer, &claims)?;
+        provider.answers(&token).await;
+        let response = complete(&service, &begun).await?;
+        assert_eq!(StatusCode::UNAUTHORIZED, response.status(), "{azp:?}");
+        assert_eq!(0, sessions(&state)?, "{azp:?}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_id_token_with_its_one_audience_in_an_array_is_accepted() -> Result<(), Box<dyn Error>> {
+    let provider = Provider::start().await?;
+    let (state, service) = console(&provider.configuration(None))?;
+    let begun = begin(&service).await?;
+    let token = Provider::id_token(
+        &provider.issuer,
+        &[
+            ("nonce", format!("\"{}\"", begun.nonce)),
+            ("aud", format!("[\"{CLIENT_ID}\"]")),
+        ],
+    )?;
+    provider.answers(&token).await;
+    let response = complete(&service, &begun).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
+    assert_eq!(1, sessions(&state)?);
+    Ok(())
+}
+
+/// The `name=value` pair of the session cookie `response` sets.
+fn session_cookie(response: &http::Response<()>) -> Result<String, Box<dyn Error>> {
+    Ok(response
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find(|cookie| cookie.starts_with("ferrofed_viewer_session="))
+        .and_then(|cookie| cookie.split(';').next())
+        .ok_or("a session cookie")?
+        .to_owned())
+}
+
+// No specification governs this: our own design; a new sign-in in a browser
+// that holds a session ends that session, so it is never live beside the new one.
+#[tokio::test]
+async fn a_new_sign_in_ends_the_session_it_replaces() -> Result<(), Box<dyn Error>> {
+    let provider = Provider::start().await?;
+    let (state, service) = console(&provider.configuration(None))?;
+    let first = begin(&service).await?;
+    let token = Provider::id_token(
+        &provider.issuer,
+        &[("nonce", format!("\"{}\"", first.nonce))],
+    )?;
+    provider.answers(&token).await;
+    let old = session_cookie(&complete(&service, &first).await?)?;
+    let old_id = old
+        .split_once('=')
+        .map(|(_, value)| ferrofed_viewer::session::SessionId::from_cookie(value))
+        .ok_or("a session id")?;
+    assert!(state.sessions().access_token(&old_id)?.is_some());
+
+    let second = begin(&service).await?;
+    provider.server.reset().await;
+    provider.issuer.publish(&provider.server).await?;
+    let token = Provider::id_token(
+        &provider.issuer,
+        &[("nonce", format!("\"{}\"", second.nonce))],
+    )?;
+    provider.answers(&token).await;
+    let request = Request::get(format!(
+        "/auth/callback?code=synthetic-code&state={}",
+        second.state
+    ))
+    .header("cookie", format!("{}; {old}", second.cookie))
+    .body(Body::empty())?;
+    let (response, _body) = send(&service, request).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
+    let new = session_cookie(&response)?;
+    assert_ne!(old, new);
+    assert!(state.sessions().access_token(&old_id)?.is_none());
+    assert_eq!(1, sessions(&state)?);
+    Ok(())
+}
+
+/// The claims of an ID Token signed with a shared secret.
+#[derive(serde::Serialize)]
+struct SharedSecretClaims {
+    iss: String,
+    aud: &'static str,
+    sub: &'static str,
+    iat: i64,
+    exp: i64,
+    nonce: String,
+}
+
+// The console verifies an ID Token with an asymmetric algorithm alone, so a
+// published `oct` key and an `HS256` signature are refused.
+#[tokio::test]
+async fn an_id_token_signed_with_a_published_shared_secret_is_refused() -> Result<(), Box<dyn Error>>
+{
+    let server = Server::start().await;
+    let issuer = Issuer::new(server.uri())?;
+    let secret = b"a-synthetic-shared-secret-of-thirty-two";
+    let k = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, secret);
+    Mock::given(method("GET"))
+        .and(path(JWKS_PATH))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(format!(
+                    r#"{{"keys":[{{"kty":"oct","kid":"k1","alg":"HS256","k":"{k}"}}]}}"#
+                )),
+        )
+        .mount(&server)
+        .await;
+    let provider = Provider { server, issuer };
+    let (state, service) = console(&provider.configuration(None))?;
+    let begun = begin(&service).await?;
+    let now = jiff::Timestamp::now().as_second();
+    let mut header = Header::new(Algorithm::HS256);
+    header.kid = Some(String::from("k1"));
+    let token = jsonwebtoken::encode(
+        &header,
+        &SharedSecretClaims {
+            iss: provider.issuer.name().to_owned(),
+            aud: CLIENT_ID,
+            sub: "synthetic-operator",
+            iat: now,
+            exp: now + 300,
+            nonce: begun.nonce.clone(),
+        },
+        &jsonwebtoken::EncodingKey::from_secret(secret),
+    )?;
+    provider.answers(&token).await;
+    let response = complete(&service, &begun).await?;
+    assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+    assert_eq!(0, sessions(&state)?);
+    Ok(())
+}

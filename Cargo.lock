@@ -1486,6 +1486,7 @@ dependencies = [
  "bytes",
  "ferrofed-registry",
  "ferrofed-server",
+ "ferrofed-viewer",
  "fhir-types",
  "http",
  "http-body-util",

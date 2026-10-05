@@ -20,12 +20,13 @@
 use std::fmt;
 
 use ferrofed_registry::health::DependencyReport;
-use ferrofed_registry::operator::{CreatingSystemReport, IncidentReport, StoredQueryReport};
+use ferrofed_registry::operator::{CreatingSystemEntry, IncidentReport, Page, PageRequest};
 use http::{Method, StatusCode};
 use openehr_federation::options::OptionsRoot;
 use openehr_its::rest::client::{
     Client, ClientError, Credentials, ErrorBody, Request, ReqwestTransport,
 };
+use openehr_its::rest::generated::definition::StoredQuery;
 use secrecy::SecretString;
 use url::Url;
 
@@ -104,6 +105,18 @@ impl GatewayError {
             Self::Transport { .. } | Self::Base { .. } | Self::Call { .. } => return None,
         };
         Some((status, code_of(body)))
+    }
+
+    /// The status of a gateway answer whose body the console cannot read,
+    /// such as a report of a shape this console does not know.
+    #[must_use]
+    pub fn unreadable(&self) -> Option<StatusCode> {
+        match self {
+            Self::Call {
+                source: ClientError::Body { status, .. },
+            } => Some(*status),
+            _ => None,
+        }
     }
 }
 
@@ -200,7 +213,7 @@ impl Gateway {
         self.read(Method::GET, "/operator/incidents", token).await
     }
 
-    /// Reads the `creating_system_id` routing table,
+    /// Reads one page of the `creating_system_id` routing table,
     /// `GET {base}/operator/creating-systems`.
     ///
     /// # Errors
@@ -208,22 +221,37 @@ impl Gateway {
     pub async fn creating_systems(
         &self,
         token: &AccessToken,
-    ) -> Result<CreatingSystemReport, GatewayError> {
-        self.read(Method::GET, "/operator/creating-systems", token)
+        page: PageRequest,
+    ) -> Result<Page<CreatingSystemEntry>, GatewayError> {
+        self.read_page("/operator/creating-systems", token, page)
             .await
     }
 
-    /// Reads every held stored-query version,
-    /// `GET {base}/operator/stored-queries`.
+    /// Reads one page of the held stored-query versions, as ITS-REST
+    /// `StoredQuery`s, `GET {base}/operator/stored-queries`.
     ///
     /// # Errors
     /// As [`Gateway::incidents`].
     pub async fn stored_queries(
         &self,
         token: &AccessToken,
-    ) -> Result<StoredQueryReport, GatewayError> {
-        self.read(Method::GET, "/operator/stored-queries", token)
+        page: PageRequest,
+    ) -> Result<Page<StoredQuery>, GatewayError> {
+        self.read_page("/operator/stored-queries", token, page)
             .await
+    }
+
+    /// Reads the page `page` of the listing at `path`.
+    async fn read_page<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        token: &AccessToken,
+        page: PageRequest,
+    ) -> Result<Page<T>, GatewayError> {
+        let mut request = Request::new(Method::GET, path.to_owned());
+        request.query("offset", page.offset);
+        request.query("limit", page.limit);
+        self.send(request, token).await
     }
 
     /// Sends `method` to `path` below `{base}` as the operator and decodes a
@@ -234,9 +262,20 @@ impl Gateway {
         path: &str,
         token: &AccessToken,
     ) -> Result<T, GatewayError> {
+        self.send(Request::new(method, path.to_owned()), token)
+            .await
+    }
+
+    /// Sends `request` below `{base}` as the operator and decodes a `200`
+    /// answer.
+    async fn send<T: serde::de::DeserializeOwned>(
+        &self,
+        request: Request,
+        token: &AccessToken,
+    ) -> Result<T, GatewayError> {
         let client = self.client(self.base.clone(), token)?;
         let answer = client
-            .execute(Request::new(method, path.to_owned()))
+            .execute(request)
             .await
             .map_err(|source| GatewayError::Call { source })?;
         if answer.status() != StatusCode::OK {

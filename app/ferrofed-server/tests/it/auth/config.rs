@@ -132,6 +132,34 @@ fn a_key_set_over_plain_http_to_another_host_is_refused() -> Result<(), Box<dyn 
     Ok(())
 }
 
+// RFC 6749 §3.3: the operator scope is one scope token, so a space, a quote,
+// a backslash or nothing is refused.
+#[test]
+fn an_operator_scope_that_is_not_one_scope_token_is_refused() -> Result<(), Box<dyn Error>> {
+    for scope in [
+        "",
+        "ferrofed operator",
+        "ferrofed\\\\operator",
+        "ferrofed\\\"operator",
+    ] {
+        let text = format!(
+            "{}operator_scope = \"{scope}\"\n",
+            issuer("", "https://issuer.example.test/jwks")
+        );
+        refused_for(
+            &text,
+            "auth.issuer[0].operator_scope",
+            AuthFault::OperatorScope,
+        )?;
+    }
+    let text = format!(
+        "{}operator_scope = \"ferrofed:operator\"\n",
+        issuer("", "https://issuer.example.test/jwks")
+    );
+    assert!(refusal(&text)?.is_none(), "one scope token resolves");
+    Ok(())
+}
+
 #[test]
 fn an_inline_key_set_that_is_no_jwk_set_is_refused() -> Result<(), Box<dyn Error>> {
     let text = "[auth]\naudience = \"urn:example:gateway\"\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\njwks = \"[1, 2]\"\n";

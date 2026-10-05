@@ -17,7 +17,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_registry::incident::Incident;
-use ferrofed_registry::operator::{CreatingSystemReport, IncidentReport, RouteSource};
+use ferrofed_registry::operator::{CreatingSystemEntry, IncidentReport, Page, RouteSource};
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
@@ -141,10 +141,10 @@ async fn an_operator_reads_the_creating_system_routing_table() -> TestResult {
     )
     .await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let report: CreatingSystemReport = serde_json::from_str(&text)?;
+    let report: Page<CreatingSystemEntry> = serde_json::from_str(&text)?;
     let row = |id: &str| {
         report
-            .entries
+            .items
             .iter()
             .find(|entry| entry.creating_system_id == id)
             .cloned()
@@ -200,8 +200,14 @@ async fn an_issuer_that_names_no_operator_scope_admits_no_operator() -> TestResu
 async fn a_gateway_without_a_registry_answers_an_empty_table_and_no_stored_queries() -> TestResult {
     let app = ferrofed_server::router(Arc::new(AppState::default()), &settings_with_room());
     for (path, empty) in [
-        ("/operator/creating-systems", r#"{"entries":[]}"#),
-        ("/operator/stored-queries", r#"{"definitions":[]}"#),
+        (
+            "/operator/creating-systems",
+            r#"{"items":[],"offset":0,"total":0}"#,
+        ),
+        (
+            "/operator/stored-queries",
+            r#"{"items":[],"offset":0,"total":0}"#,
+        ),
     ] {
         let mut request = Request::get(path).body(Body::empty())?;
         request
@@ -211,6 +217,69 @@ async fn a_gateway_without_a_registry_answers_an_empty_table_and_no_stored_queri
         assert_eq!(StatusCode::OK, response.status(), "{path}");
         let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
         assert_eq!(empty, String::from_utf8(bytes.to_vec())?, "{path}");
+    }
+    Ok(())
+}
+
+// RFC 6749 §3.3: a scope is a space-separated list of tokens, so only the
+// whole token is the operator scope.
+#[tokio::test]
+async fn a_scope_that_only_contains_or_starts_the_operator_scope_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path())?;
+    for near in [
+        "ferrofed:operator-x",
+        "xferrofed:operator",
+        "ferrofed:operat",
+        "FERROFED:OPERATOR",
+    ] {
+        let authorization = crate::support::bearer_adding_scope(near)?;
+        let (status, text) =
+            answer(app.clone(), get("/operator/incidents", &authorization)?).await?;
+        assert_eq!(StatusCode::FORBIDDEN, status, "{near}: {text}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_routing_table_answers_one_page_and_says_how_many_there_are() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path())?;
+    let (status, text) = answer(
+        app,
+        get(
+            "/operator/creating-systems?offset=1&limit=1",
+            &operator_bearer()?,
+        )?,
+    )
+    .await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let page: Page<CreatingSystemEntry> = serde_json::from_str(&text)?;
+    assert_eq!(1, page.items.len(), "{page:?}");
+    assert_eq!(1, page.offset);
+    assert_eq!(2, page.total);
+    assert_eq!(
+        Some("legacy-a.example.org"),
+        page.items
+            .first()
+            .map(|entry| entry.creating_system_id.as_str())
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_page_beyond_the_bound_or_of_nothing_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path())?;
+    let beyond = ferrofed_registry::operator::MAX_PAGE + 1;
+    for path in [
+        format!("/operator/creating-systems?limit={beyond}"),
+        String::from("/operator/creating-systems?limit=0"),
+        format!("/operator/stored-queries?limit={beyond}"),
+    ] {
+        let (status, text) = answer(app.clone(), get(&path, &operator_bearer()?)?).await?;
+        assert_eq!(StatusCode::BAD_REQUEST, status, "{path}: {text}");
+        assert_eq!("parameter-invalid", error_body(&text)?.code, "{path}");
     }
     Ok(())
 }

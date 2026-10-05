@@ -6,8 +6,9 @@
 //! scope.
 
 use axum::body::Body;
-use ferrofed_registry::operator::StoredQueryReport;
+use ferrofed_registry::operator::Page;
 use http::{Request, StatusCode, header};
+use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::facade::node_answering;
 use crate::support::{call, operator_bearer};
@@ -27,9 +28,9 @@ async fn an_operator_lists_every_held_version_with_its_text() -> TestResult {
         .body(Body::empty())?;
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let report: StoredQueryReport = serde_json::from_str(&text)?;
+    let report: Page<StoredQuery> = serde_json::from_str(&text)?;
     let versions: Vec<(&str, &str)> = report
-        .definitions
+        .items
         .iter()
         .map(|entry| (entry.name.as_str(), entry.version.as_str()))
         .collect();
@@ -37,10 +38,10 @@ async fn an_operator_lists_every_held_version_with_its_text() -> TestResult {
     // The gateway holds the definition as it prints it, the patient a
     // parameter and never a value (§12.7, §5.4.1).
     assert!(
-        report.definitions.iter().all(|entry| {
-            entry.aql.starts_with("SELECT c/uid/value FROM EHR e")
-                && entry.aql.contains("$patient")
-                && !entry.aql.contains(crate::facade::PATIENT)
+        report.items.iter().all(|entry| {
+            entry.q.starts_with("SELECT c/uid/value FROM EHR e")
+                && entry.q.contains("$patient")
+                && !entry.q.contains(crate::facade::PATIENT)
         }),
         "{report:?}"
     );

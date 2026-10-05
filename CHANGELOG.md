@@ -25,8 +25,8 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 - The operator views of the operator console (#276). After sign-in, which
   now exchanges the code at the provider's token endpoint with the PKCE
-  verifier and checks the ID Token's signature, issuer, audience and `nonce`
-  before a session begins (the new `[oidc]` keys `token_endpoint` and
+  verifier and checks the ID Token's signature, issuer, single audience,
+  expiry and `nonce` before a session begins (the new `[oidc]` keys `token_endpoint` and
   `jwks_uri`), the console shows the member endpoints with their membership
   standing and last observed health (`/members`), the integrity incidents
   and the `creating_system_id` routing table (`/integrity`), the stored
@@ -34,12 +34,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   self-description (`/federation`), each rendered on the server from the
   gateway's surface with the operator's own token. A view without a
   signed-in session sends the browser to sign-in, and a refusal shows the
-  gateway's status and stable error code.
+  gateway's status and stable error code, a `401` with a link back to
+  sign-in. The routing table and the stored queries are paged, 100 rows a
+  page. With `secure_cookie` on, the console's cookies carry the `__Host-`
+  prefix, and a new sign-in ends the session the browser held.
 - A read-only operator surface on the gateway: `GET {base}/operator/incidents`
-  (each incident kind's count and the last 100 incidents),
+  (each incident kind's count and the last 25 incidents of each kind),
   `/operator/creating-systems` (the routing table) and
-  `/operator/stored-queries` (every held version), admitted only for a token
-  carrying the `operator_scope` its `[[auth.issuer]]` entry names. It answers
+  `/operator/stored-queries` (every held version, as the ITS-REST
+  `StoredQuery`), admitted only for a token carrying the `operator_scope` its
+  `[[auth.issuer]]` entry names as one whole scope token. The last two answer
+  one page, `{"items", "offset", "total"}`, under the optional `offset` and
+  `limit` parameters, with `limit` at most 100. It answers
   routing ids, counts and stored definitions only, and an incident names an
   `ehr_id` only when it is a bare UUID (§5.4.1, N33).
 - A mutual-TLS token endpoint alias on a host you name (#560; RFC 8705 §5).

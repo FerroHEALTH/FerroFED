@@ -26,10 +26,12 @@ behaviour to the gateway. It holds no clinical data.
   provider's token endpoint with the PKCE verifier (RFC 6749 §4.1.3, RFC 7636
   §4.5), with the client secret as HTTP Basic for a confidential client. The
   ID Token that comes back must verify against the provider's JWK Set and
-  carry the configured issuer, the console's client id as its audience, and
-  the sign-in's `nonce` (OpenID Connect Core 1.0 §3.1.3.7). Only then does
-  a signed-in session begin, holding the operator's access token on the
-  server, and the browser goes back to `/`. An ID Token that fails a check is
+  carry the configured issuer, the console's client id as its one audience,
+  an `exp` still ahead, and the sign-in's `nonce` (OpenID Connect Core 1.0
+  §3.1.3.7). An ID Token for more than one audience, or signed with a shared
+  secret, is refused. Only then does a signed-in session begin, holding the
+  operator's access token on the server, and the browser goes back to `/`. A
+  session the browser already held ends when the new one begins. An ID Token that fails a check is
   `401`, and a provider that refuses or cannot be reached is `502`.
 - **Two separate pools of server-side state.** Pending sign-ins live for
   `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
@@ -51,14 +53,19 @@ behaviour to the gateway. It holds no clinical data.
   | View | What it shows | Read from |
   |---|---|---|
   | `/members` | every member endpoint, its organisation, membership standing, last observed health, node, `system_id`, product and median latency, and the state of every other dependency | `OPTIONS {base}/` and `GET {base}/health/dependencies` |
-  | `/integrity` | the integrity incidents of each kind since the gateway started, the most recent ones, and the `creating_system_id` routing table | `GET {base}/operator/incidents` and `/operator/creating-systems` |
-  | `/stored-queries` | every stored-query version the gateway holds, with its AQL | `GET {base}/operator/stored-queries` |
+  | `/integrity` | the integrity incidents of each kind since the gateway started, the most recent ones, and the `creating_system_id` routing table, 100 rows a page | `GET {base}/operator/incidents` and `/operator/creating-systems` |
+  | `/stored-queries` | every stored-query version the gateway holds, with its AQL, 100 versions a page | `GET {base}/operator/stored-queries` |
   | `/federation` | the gateway's self-description | `OPTIONS {base}/` |
 
-  A view without a signed-in session sends the browser to `/login` before
-  the gateway is asked anything. A view the gateway refuses shows the
-  gateway's status and its stable error code, and one it cannot answer says
-  so; no view is ever silently empty. The `/operator/` routes need a token
+  A paged view names the rows it shows and how many there are, and links
+  the page before and after it by `?offset=`. A view without a signed-in
+  session sends the browser to `/login` before the gateway is asked
+  anything, whatever the case of its path or a trailing slash, and each
+  server function a view loads through checks the session itself. A view
+  the gateway refuses shows the gateway's status and its stable error code;
+  a `401` links back to sign-in. A view whose answer the console cannot read
+  says so with the status, and one the gateway cannot answer says so too; no
+  view is ever silently empty. The `/operator/` routes need a token
   carrying the [operator scope](authentication.md#the-operator-surface) its
   issuer names. No view shows a patient identifier, a token or clinical
   data.
@@ -122,6 +129,10 @@ client_secret_file = "/run/secrets/viewer-client-secret"
 redirect_uri = "https://console.example.org/auth/callback"
 scopes = ["openid"]
 ```
+
+With `secure_cookie = true` the session and sign-in cookies carry the
+`__Host-` prefix, which binds each to the console's host (RFC 6265bis
+§4.1.3.2); with it off, for a loopback trial, they carry none.
 
 Without an `[oidc]` table the console offers no sign-in, and `GET /login`
 answers `503`. The provider's URLs must be `https` unless their host is

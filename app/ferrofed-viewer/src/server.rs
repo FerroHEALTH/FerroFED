@@ -146,11 +146,18 @@ async fn require_session(
     request: Request,
     next: Next,
 ) -> Response {
-    let path = request.uri().path();
-    if !crate::views::PATHS.contains(&path) {
+    // NOTE: no specification governs this: our own design; a trailing slash or
+    // another case names the same view, so the gate never misses one the router serves.
+    let path = request
+        .uri()
+        .path()
+        .trim_end_matches('/')
+        .to_ascii_lowercase();
+    if !crate::views::PATHS.contains(&path.as_str()) {
         return next.run(request).await;
     }
-    let signed_in = crate::oidc::cookie_named(request.headers(), crate::session::COOKIE)
+    let name = state.sessions().cookie_name(crate::session::COOKIE);
+    let signed_in = crate::oidc::cookie_named(request.headers(), &name)
         .map(|id| state.sessions().access_token(&id));
     match signed_in {
         Some(Ok(Some(_token))) => next.run(request).await,

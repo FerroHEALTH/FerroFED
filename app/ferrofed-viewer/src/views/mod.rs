@@ -24,8 +24,11 @@ pub mod model;
 
 use leptos::prelude::*;
 use leptos_meta::Title;
+use leptos_router::hooks::use_query_map;
 
-use crate::views::model::{FederationView, IntegrityView, MembersView, StoredView, ViewError};
+use crate::views::model::{
+    FederationView, IntegrityView, MembersView, PAGE_SIZE, StoredView, ViewError,
+};
 
 /// The path of the members view.
 pub const MEMBERS: &str = "/members";
@@ -45,6 +48,56 @@ pub const PATHS: [&str; 4] = [MEMBERS, INTEGRITY, STORED_QUERIES, FEDERATION];
 /// The page title of a view called `section`.
 fn titled(section: &str) -> String {
     format!("{section} · {}", crate::app::PRODUCT)
+}
+
+/// The offset of the page the URL names in its `offset` query parameter.
+fn offset_in_url() -> impl Fn() -> u64 + Send + Sync + Clone + 'static {
+    let query = use_query_map();
+    // NOTE: no specification governs this: our own design; an offset that is
+    // no number is the first page, as a link with none is.
+    move || {
+        query
+            .read()
+            .get("offset")
+            .and_then(|offset| offset.parse().ok())
+            .unwrap_or(0)
+    }
+}
+
+/// Where a page of `shown` rows from `offset` of `total` sits, with a link to
+/// the page before it and the page after it under `path`.
+fn pager(path: &'static str, offset: u64, shown: usize, total: u64) -> AnyView {
+    let shown = u64::try_from(shown).unwrap_or(u64::MAX);
+    let end = offset.saturating_add(shown);
+    let place = if shown == 0 {
+        format!("No row on this page, of {total} in all.")
+    } else {
+        format!("Rows {} to {end} of {total}.", offset.saturating_add(1))
+    };
+    let previous = (offset > 0).then(|| {
+        let to = offset.saturating_sub(PAGE_SIZE);
+        view! {
+            <a href=format!("{path}?offset={to}") rel="prev">
+                "Previous page"
+            </a>
+        }
+    });
+    let next = (end < total).then(|| {
+        view! {
+            <a href=format!("{path}?offset={end}") rel="next">
+                "Next page"
+            </a>
+        }
+    });
+    view! {
+        <nav aria-label="Pages">
+            <p>{place}</p>
+            {previous}
+            " "
+            {next}
+        </nav>
+    }
+    .into_any()
 }
 
 /// The members and their health.
@@ -141,16 +194,12 @@ fn members_section(view: MembersView) -> AnyView {
 
 /// The integrity incidents and the `creating_system_id` routing table.
 #[component]
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
-)]
 pub fn IntegrityPage() -> impl IntoView {
-    let loaded = Resource::new_blocking(|| (), |()| load::integrity());
+    let loaded = Resource::new_blocking(offset_in_url(), load::integrity);
     view! {
         <Title text=titled("Integrity") />
         <h1>"Integrity"</h1>
-        <Suspense fallback=|| {
+        <Transition fallback=|| {
             view! { <p>"Loading the incidents."</p> }
         }>
             {move || Suspend::new(async move {
@@ -159,7 +208,7 @@ pub fn IntegrityPage() -> impl IntoView {
                     Err(error) => refusal(&error),
                 }
             })}
-        </Suspense>
+        </Transition>
     }
 }
 
@@ -208,6 +257,12 @@ fn integrity_section(view: IntegrityView) -> AnyView {
         }
         .into_any()
     };
+    let routes_pager = pager(
+        INTEGRITY,
+        view.routes_offset,
+        view.routes.len(),
+        view.routes_total,
+    );
     let routes = view
         .routes
         .into_iter()
@@ -246,22 +301,19 @@ fn integrity_section(view: IntegrityView) -> AnyView {
             </thead>
             <tbody>{routes}</tbody>
         </table>
+        {routes_pager}
     }
     .into_any()
 }
 
 /// The stored queries the gateway holds.
 #[component]
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
-)]
 pub fn StoredQueriesPage() -> impl IntoView {
-    let loaded = Resource::new_blocking(|| (), |()| load::stored_queries());
+    let loaded = Resource::new_blocking(offset_in_url(), load::stored_queries);
     view! {
         <Title text=titled("Stored queries") />
         <h1>"Stored queries"</h1>
-        <Suspense fallback=|| {
+        <Transition fallback=|| {
             view! { <p>"Loading the stored queries."</p> }
         }>
             {move || Suspend::new(async move {
@@ -270,15 +322,21 @@ pub fn StoredQueriesPage() -> impl IntoView {
                     Err(error) => refusal(&error),
                 }
             })}
-        </Suspense>
+        </Transition>
     }
 }
 
 /// Every held version with its text.
 fn stored_section(view: StoredView) -> AnyView {
-    if view.definitions.is_empty() {
+    if view.total == 0 {
         return view! { <p>"The gateway holds no stored query."</p> }.into_any();
     }
+    let stored_pager = pager(
+        STORED_QUERIES,
+        view.offset,
+        view.definitions.len(),
+        view.total,
+    );
     let rows = view
         .definitions
         .into_iter()
@@ -308,6 +366,7 @@ fn stored_section(view: StoredView) -> AnyView {
             </thead>
             <tbody>{rows}</tbody>
         </table>
+        {stored_pager}
     }
     .into_any()
 }
@@ -364,6 +423,18 @@ fn refusal(error: &ViewError) -> AnyView {
             </p>
         }
         .into_any(),
+        ViewError::NotAuthenticated { code } => {
+            let code = code.clone().unwrap_or_else(|| String::from("no code"));
+            view! {
+                <p role="alert">
+                    {format!("The gateway did not accept your sign-in ({code}). ")}
+                    <a href=crate::app::SIGN_IN rel="external">
+                        "Sign in again"
+                    </a>
+                </p>
+            }
+            .into_any()
+        }
         ViewError::Refused { status, code } => {
             let code = code.clone().unwrap_or_else(|| String::from("no code"));
             let hint = if code == "scope-insufficient" {
@@ -374,7 +445,10 @@ fn refusal(error: &ViewError) -> AnyView {
             view! { <p role="alert">{format!("The gateway refused this view: {status} ({code}).{hint}")}</p> }
             .into_any()
         }
-        ViewError::Unreachable | ViewError::Unavailable | ViewError::Fetch { .. } => {
+        ViewError::Unreadable { .. }
+        | ViewError::Unreachable
+        | ViewError::Unavailable
+        | ViewError::Fetch { .. } => {
             let text = error.to_string();
             view! { <p role="alert">{text}</p> }.into_any()
         }

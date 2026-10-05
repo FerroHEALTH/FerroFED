@@ -13,6 +13,9 @@ use leptos::server_fn::codec::JsonEncoding;
 use leptos::server_fn::error::{FromServerFnError, ServerFnErrorErr};
 use serde::{Deserialize, Serialize};
 
+/// The most rows a paged view asks the gateway for at once.
+pub const PAGE_SIZE: u64 = 100;
+
 /// Why a view could not be rendered.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 pub enum ViewError {
@@ -28,7 +31,21 @@ pub enum ViewError {
         /// The stable error code of its body, when it carried one.
         code: Option<String>,
     },
-    /// The gateway gave no answer the console can use.
+    /// The gateway did not accept the operator's access token (`401`), so
+    /// the operator signs in again.
+    #[error("the gateway did not accept your sign-in")]
+    NotAuthenticated {
+        /// The stable error code of its body, when it carried one.
+        code: Option<String>,
+    },
+    /// The gateway answered with a body this console cannot read, such as a
+    /// report of a shape it does not know.
+    #[error("the gateway answered {status} with a body this console cannot read")]
+    Unreadable {
+        /// The status the gateway answered with.
+        status: u16,
+    },
+    /// The gateway gave no answer at all.
     #[error("the gateway could not be reached")]
     Unreachable,
     /// The console could not serve the view.
@@ -117,8 +134,12 @@ pub struct IntegrityView {
     pub counts: Vec<(String, u64)>,
     /// The most recent incidents, newest first.
     pub recent: Vec<IncidentRow>,
-    /// The `creating_system_id` routing table.
+    /// One page of the `creating_system_id` routing table.
     pub routes: Vec<RouteRow>,
+    /// Where that page starts in the table.
+    pub routes_offset: u64,
+    /// How many rows the whole table holds.
+    pub routes_total: u64,
 }
 
 /// One held stored-query version.
@@ -137,8 +158,12 @@ pub struct StoredRow {
 /// The stored-query view.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredView {
-    /// Every held version, by name and then by version.
+    /// One page of the held versions, by name and then by version.
     pub definitions: Vec<StoredRow>,
+    /// Where that page starts in the registry.
+    pub offset: u64,
+    /// How many versions the registry holds.
+    pub total: u64,
 }
 
 /// The self-description view, `OPTIONS {base}/`.
