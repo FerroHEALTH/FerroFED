@@ -193,6 +193,17 @@ impl LearnedMap {
         }
     }
 
+    /// Every learned mapping, ordered by `creating_system_id`: the endpoint
+    /// it routes through, or `None` for one an incident withdrew.
+    pub fn entries(&self) -> impl Iterator<Item = (&SystemId, Option<&EndpointId>)> {
+        self.entries
+            .iter()
+            .map(|(creating_system_id, learned)| match learned {
+                Learned::Holder(endpoint) => (creating_system_id, Some(endpoint)),
+                Learned::Withdrawn => (creating_system_id, None),
+            })
+    }
+
     /// Records that `version` was seen in an answer from `endpoint`.
     ///
     /// The first sighting of a `creating_system_id` the registry document

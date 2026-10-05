@@ -1,0 +1,382 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The operator views: the members and their health, the integrity
+//! incidents and the `creating_system_id` routing table, the stored
+//! queries, and the gateway's self-description.
+//!
+//! Each view reads the gateway's own public surface as the signed-in
+//! operator, through a server function of [`load`], and renders on the
+//! server before the page is sent, so it needs no script to be read. None
+//! renders a patient identifier or clinical data (§5.4.1, N33).
+
+// The browser half of each server function, which the server macro writes,
+// is a network call that awaits nothing, and the lint names the macro alone.
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(
+        clippy::unused_async_trait_impl,
+        reason = "written by the server_fn #[server] macro for the browser half, whose call awaits nothing here (https://docs.rs/server_fn/0.8/server_fn/attr.server.html)"
+    )
+)]
+pub mod load;
+pub mod model;
+
+use leptos::prelude::*;
+use leptos_meta::Title;
+
+use crate::views::model::{FederationView, IntegrityView, MembersView, StoredView, ViewError};
+
+/// The path of the members view.
+pub const MEMBERS: &str = "/members";
+
+/// The path of the integrity view.
+pub const INTEGRITY: &str = "/integrity";
+
+/// The path of the stored-query view.
+pub const STORED_QUERIES: &str = "/stored-queries";
+
+/// The path of the self-description view.
+pub const FEDERATION: &str = "/federation";
+
+/// Every view path, each of which needs a signed-in operator.
+pub const PATHS: [&str; 4] = [MEMBERS, INTEGRITY, STORED_QUERIES, FEDERATION];
+
+/// The page title of a view called `section`.
+fn titled(section: &str) -> String {
+    format!("{section} · {}", crate::app::PRODUCT)
+}
+
+/// The members and their health.
+#[component]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
+)]
+pub fn MembersPage() -> impl IntoView {
+    let loaded = Resource::new_blocking(|| (), |()| load::members());
+    view! {
+        <Title text=titled("Members") />
+        <h1>"Members"</h1>
+        <Suspense fallback=|| {
+            view! { <p>"Loading the members."</p> }
+        }>
+            {move || Suspend::new(async move {
+                match loaded.await {
+                    Ok(view) => members_section(view),
+                    Err(error) => refusal(&error),
+                }
+            })}
+        </Suspense>
+    }
+}
+
+/// The members table and the other services.
+fn members_section(view: MembersView) -> AnyView {
+    let rows = view
+        .members
+        .into_iter()
+        .map(|member| {
+            view! {
+                <tr>
+                    <th scope="row">{member.endpoint_id}</th>
+                    <td>{member.organisation}</td>
+                    <td>{member.status}</td>
+                    <td>{member.health}</td>
+                    <td>{member.node_id.unwrap_or_default()}</td>
+                    <td>{member.system_id.unwrap_or_default()}</td>
+                    <td>{member.product.unwrap_or_default()}</td>
+                    <td>
+                        {member
+                            .latency_ms_p50
+                            .map(|latency| format!("{latency} ms"))
+                            .unwrap_or_default()}
+                    </td>
+                </tr>
+            }
+        })
+        .collect_view();
+    let services = view
+        .services
+        .into_iter()
+        .map(|(key, state)| {
+            view! {
+                <tr>
+                    <th scope="row">{key}</th>
+                    <td>{state}</td>
+                </tr>
+            }
+        })
+        .collect_view();
+    view! {
+        <table>
+            <caption>"Member endpoints"</caption>
+            <thead>
+                <tr>
+                    <th scope="col">"Endpoint"</th>
+                    <th scope="col">"Organisation"</th>
+                    <th scope="col">"Membership"</th>
+                    <th scope="col">"Health"</th>
+                    <th scope="col">"Node"</th>
+                    <th scope="col">"system_id"</th>
+                    <th scope="col">"Product"</th>
+                    <th scope="col">"Median latency"</th>
+                </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <table>
+            <caption>"Other dependencies"</caption>
+            <thead>
+                <tr>
+                    <th scope="col">"Dependency"</th>
+                    <th scope="col">"State"</th>
+                </tr>
+            </thead>
+            <tbody>{services}</tbody>
+        </table>
+    }
+    .into_any()
+}
+
+/// The integrity incidents and the `creating_system_id` routing table.
+#[component]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
+)]
+pub fn IntegrityPage() -> impl IntoView {
+    let loaded = Resource::new_blocking(|| (), |()| load::integrity());
+    view! {
+        <Title text=titled("Integrity") />
+        <h1>"Integrity"</h1>
+        <Suspense fallback=|| {
+            view! { <p>"Loading the incidents."</p> }
+        }>
+            {move || Suspend::new(async move {
+                match loaded.await {
+                    Ok(view) => integrity_section(view),
+                    Err(error) => refusal(&error),
+                }
+            })}
+        </Suspense>
+    }
+}
+
+/// The incident counts, the recent incidents and the routing table.
+fn integrity_section(view: IntegrityView) -> AnyView {
+    let counts = view
+        .counts
+        .into_iter()
+        .map(|(kind, count)| {
+            view! {
+                <tr>
+                    <th scope="row">{kind}</th>
+                    <td>{count}</td>
+                </tr>
+            }
+        })
+        .collect_view();
+    let recent = if view.recent.is_empty() {
+        view! { <p>"No incident since the gateway started."</p> }.into_any()
+    } else {
+        let rows = view
+            .recent
+            .into_iter()
+            .map(|incident| {
+                view! {
+                    <tr>
+                        <td>{incident.at}</td>
+                        <th scope="row">{incident.kind}</th>
+                        <td>{incident.description}</td>
+                    </tr>
+                }
+            })
+            .collect_view();
+        view! {
+            <table>
+                <caption>"Recent incidents, newest first"</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">"At"</th>
+                        <th scope="col">"Kind"</th>
+                        <th scope="col">"Description"</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        }
+        .into_any()
+    };
+    let routes = view
+        .routes
+        .into_iter()
+        .map(|route| {
+            view! {
+                <tr>
+                    <th scope="row">{route.creating_system_id}</th>
+                    <td>{route.source}</td>
+                    <td>{route.node.unwrap_or_default()}</td>
+                    <td>{route.endpoint.unwrap_or_default()}</td>
+                </tr>
+            }
+        })
+        .collect_view();
+    view! {
+        <table>
+            <caption>"Incidents since the gateway started"</caption>
+            <thead>
+                <tr>
+                    <th scope="col">"Kind"</th>
+                    <th scope="col">"Count"</th>
+                </tr>
+            </thead>
+            <tbody>{counts}</tbody>
+        </table>
+        {recent}
+        <table>
+            <caption>"The creating_system_id routing table"</caption>
+            <thead>
+                <tr>
+                    <th scope="col">"creating_system_id"</th>
+                    <th scope="col">"Source"</th>
+                    <th scope="col">"Node"</th>
+                    <th scope="col">"Endpoint"</th>
+                </tr>
+            </thead>
+            <tbody>{routes}</tbody>
+        </table>
+    }
+    .into_any()
+}
+
+/// The stored queries the gateway holds.
+#[component]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
+)]
+pub fn StoredQueriesPage() -> impl IntoView {
+    let loaded = Resource::new_blocking(|| (), |()| load::stored_queries());
+    view! {
+        <Title text=titled("Stored queries") />
+        <h1>"Stored queries"</h1>
+        <Suspense fallback=|| {
+            view! { <p>"Loading the stored queries."</p> }
+        }>
+            {move || Suspend::new(async move {
+                match loaded.await {
+                    Ok(view) => stored_section(view),
+                    Err(error) => refusal(&error),
+                }
+            })}
+        </Suspense>
+    }
+}
+
+/// Every held version with its text.
+fn stored_section(view: StoredView) -> AnyView {
+    if view.definitions.is_empty() {
+        return view! { <p>"The gateway holds no stored query."</p> }.into_any();
+    }
+    let rows = view
+        .definitions
+        .into_iter()
+        .map(|definition| {
+            view! {
+                <tr>
+                    <th scope="row">{definition.name}</th>
+                    <td>{definition.version}</td>
+                    <td>{definition.saved}</td>
+                    <td>
+                        <pre>{definition.aql}</pre>
+                    </td>
+                </tr>
+            }
+        })
+        .collect_view();
+    view! {
+        <table>
+            <caption>"Held versions"</caption>
+            <thead>
+                <tr>
+                    <th scope="col">"Name"</th>
+                    <th scope="col">"Version"</th>
+                    <th scope="col">"Stored"</th>
+                    <th scope="col">"AQL"</th>
+                </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
+    }
+    .into_any()
+}
+
+/// The gateway's self-description, `OPTIONS {base}/`.
+#[component]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "the component macro writes the function it returns without the attributes on the one written here (https://docs.rs/leptos/0.8/leptos/attr.component.html)"
+)]
+pub fn FederationPage() -> impl IntoView {
+    let loaded = Resource::new_blocking(|| (), |()| load::federation());
+    view! {
+        <Title text=titled("Self-description") />
+        <h1>"Self-description"</h1>
+        <Suspense fallback=|| {
+            view! { <p>"Loading the self-description."</p> }
+        }>
+            {move || Suspend::new(async move {
+                match loaded.await {
+                    Ok(view) => federation_section(view),
+                    Err(error) => refusal(&error),
+                }
+            })}
+        </Suspense>
+    }
+}
+
+/// The headline facts and the whole `federation` object.
+fn federation_section(view: FederationView) -> AnyView {
+    view! {
+        <dl>
+            <dt>"Federation"</dt>
+            <dd>{view.id}</dd>
+            <dt>"Specification version"</dt>
+            <dd>{view.spec_version}</dd>
+            <dt>"Member endpoints"</dt>
+            <dd>{view.endpoints}</dd>
+        </dl>
+        <pre>{view.document}</pre>
+    }
+    .into_any()
+}
+
+/// The inline notice of a view that could not be rendered: the gateway's
+/// status and stable error code, never an empty view.
+fn refusal(error: &ViewError) -> AnyView {
+    match error {
+        ViewError::SignedOut => view! {
+            <p role="alert">
+                "Sign in to see this view. " <a href=crate::app::SIGN_IN rel="external">
+                    "Sign in"
+                </a>
+            </p>
+        }
+        .into_any(),
+        ViewError::Refused { status, code } => {
+            let code = code.clone().unwrap_or_else(|| String::from("no code"));
+            let hint = if code == "scope-insufficient" {
+                " Your access token may carry no operator scope."
+            } else {
+                ""
+            };
+            view! { <p role="alert">{format!("The gateway refused this view: {status} ({code}).{hint}")}</p> }
+            .into_any()
+        }
+        ViewError::Unreachable | ViewError::Unavailable | ViewError::Fetch { .. } => {
+            let text = error.to_string();
+            view! { <p role="alert">{text}</p> }.into_any()
+        }
+    }
+}

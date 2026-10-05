@@ -23,6 +23,8 @@
 //! [oidc]
 //! issuer = "https://idp.example.org/realms/ferrofed"
 //! authorization_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/auth"
+//! token_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/token"
+//! jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs"
 //! client_id = "ferrofed-viewer"
 //! client_secret_file = "/run/secrets/viewer-client-secret"
 //! redirect_uri = "https://console.example.org/auth/callback"
@@ -143,6 +145,12 @@ pub struct Oidc {
     pub issuer: String,
     /// The provider's authorization endpoint (RFC 6749 §3.1).
     pub authorization_endpoint: String,
+    /// The provider's token endpoint, where the authorization code is
+    /// exchanged (RFC 6749 §3.2).
+    pub token_endpoint: String,
+    /// The provider's JWK Set, which signs its ID Tokens (OpenID Connect
+    /// Core 1.0 §10.1).
+    pub jwks_uri: String,
     /// The console's client identifier at the provider (RFC 6749 §2.2).
     pub client_id: String,
     /// The console's client secret, inline.
@@ -161,6 +169,8 @@ impl Default for Oidc {
         Self {
             issuer: String::new(),
             authorization_endpoint: String::new(),
+            token_endpoint: String::new(),
+            jwks_uri: String::new(),
             client_id: String::new(),
             client_secret: None,
             client_secret_file: None,

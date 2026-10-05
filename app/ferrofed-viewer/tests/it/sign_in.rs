@@ -143,8 +143,9 @@ async fn the_callback_with_the_session_state_reaches_the_code_exchange()
     let redirect = sign_in(&service).await?;
     let query = format!("code=an-authorization-code&state={}", redirect.state());
     let (response, _body) = send(&service, callback(&query, Some(&redirect.cookie))?).await?;
-    // TODO(#276): a `303` to the console once the code exchange is built.
-    assert_eq!(StatusCode::NOT_IMPLEMENTED, response.status());
+    // The token endpoint of this configuration listens nowhere, so a sign-in
+    // that passed its checks reaches the exchange and fails there.
+    assert_eq!(StatusCode::BAD_GATEWAY, response.status());
     Ok(())
 }
 
@@ -178,7 +179,7 @@ async fn a_pending_sign_in_answers_one_callback_only() -> Result<(), Box<dyn Err
     let redirect = sign_in(&service).await?;
     let query = format!("code=c&state={}", redirect.state());
     let (first, _body) = send(&service, callback(&query, Some(&redirect.cookie))?).await?;
-    assert_eq!(StatusCode::NOT_IMPLEMENTED, first.status());
+    assert_eq!(StatusCode::BAD_GATEWAY, first.status());
     let (second, _body) = send(&service, callback(&query, Some(&redirect.cookie))?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, second.status());
     Ok(())
@@ -220,6 +221,8 @@ sign_in_timeout_s = 1
 [oidc]
 issuer = "https://idp.example.org/realms/ferrofed"
 authorization_endpoint = "https://idp.example.org/realms/ferrofed/auth"
+token_endpoint = "http://127.0.0.1:9/token"
+jwks_uri = "http://127.0.0.1:9/jwks.json"
 client_id = "ferrofed-viewer"
 redirect_uri = "https://console.example.org/auth/callback"
 "#;
@@ -228,7 +231,7 @@ redirect_uri = "https://console.example.org/auth/callback"
 async fn a_flood_of_sign_ins_stays_bounded_and_leaves_signed_in_sessions_alone()
 -> Result<(), Box<dyn Error>> {
     let (state, service) = console(SMALL_SIGN_IN_POOL)?;
-    let operator = state.sessions().establish()?;
+    let operator = state.sessions().establish(crate::support::signed_in())?;
     let first = sign_in(&service).await?;
     let mut last = sign_in(&service).await?;
     for _ in 0..200 {
@@ -237,14 +240,14 @@ async fn a_flood_of_sign_ins_stays_bounded_and_leaves_signed_in_sessions_alone()
         assert!(occupancy.sign_ins <= 4, "{occupancy:?}");
         assert_eq!(1, occupancy.sessions, "{occupancy:?}");
     }
-    assert!(state.sessions().touch(&operator)?);
+    assert!(state.sessions().access_token(&operator)?.is_some());
     // The oldest sign-in made room for the flood; the newest still completes.
     let dropped_query = format!("code=c&state={}", first.state());
     let (dropped, _body) = send(&service, callback(&dropped_query, Some(&first.cookie))?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, dropped.status());
     let kept_query = format!("code=c&state={}", last.state());
     let (kept, _body) = send(&service, callback(&kept_query, Some(&last.cookie))?).await?;
-    assert_eq!(StatusCode::NOT_IMPLEMENTED, kept.status());
+    assert_eq!(StatusCode::BAD_GATEWAY, kept.status());
     Ok(())
 }
 
@@ -264,6 +267,6 @@ async fn a_sign_in_past_its_timeout_is_refused_and_a_new_one_recovers() -> Resul
     assert!(state.sessions().occupancy()?.sign_ins <= 2);
     let query = format!("code=c&state={}", fresh.state());
     let (completed, _body) = send(&service, callback(&query, Some(&fresh.cookie))?).await?;
-    assert_eq!(StatusCode::NOT_IMPLEMENTED, completed.status());
+    assert_eq!(StatusCode::BAD_GATEWAY, completed.status());
     Ok(())
 }

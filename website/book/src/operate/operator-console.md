@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-# The operator console (planned screens)
+# The operator console
 
 The operator console is a web interface to a FerroFED federation, for the
 people who run it. It ships as its own binary, `ferrofed-viewer`, and its own
@@ -14,17 +14,23 @@ behaviour to the gateway. It holds no clinical data.
 
 ## What is built
 
-The console's skeleton is built; its screens are not.
-
-- **A landing page** that names the console and offers sign-in.
+- **A landing page** that names the console and offers sign-in, and a
+  navigation bar to the four operator views.
 - **Operator sign-in at an OpenID Provider:** `GET /login` redirects the
   browser to the provider's authorization endpoint with the authorization
   code grant, a `nonce` and a PKCE challenge (RFC 6749 §4.1, RFC 7636). The
   `state`, the `nonce` and the PKCE verifier stay on the console's server as
   a pending sign-in, which the browser knows only by an opaque `HttpOnly`
   cookie that expires with it. The provider's redirect back to
-  `/auth/callback` is checked against it once. The code exchange is planned
-  with the operator views (#276); until it lands, the callback answers `501`.
+  `/auth/callback` is checked against it once. The code then goes to the
+  provider's token endpoint with the PKCE verifier (RFC 6749 §4.1.3, RFC 7636
+  §4.5), with the client secret as HTTP Basic for a confidential client. The
+  ID Token that comes back must verify against the provider's JWK Set and
+  carry the configured issuer, the console's client id as its audience, and
+  the sign-in's `nonce` (OpenID Connect Core 1.0 §3.1.3.7). Only then does
+  a signed-in session begin, holding the operator's access token on the
+  server, and the browser goes back to `/`. An ID Token that fails a check is
+  `401`, and a provider that refuses or cannot be reached is `502`.
 - **Two separate pools of server-side state.** Pending sign-ins live for
   `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
   its oldest pending sign-in, so a flood of `GET /login` holds at most that
@@ -38,9 +44,24 @@ The console's skeleton is built; its screens are not.
   `/login` at the edge. Both pools live in the console's memory: a restart
   ends every session, and more than one replica needs a load balancer that
   keeps an operator on one replica.
-- **The gateway client** the screens will use: the gateway's self-description,
-  `OPTIONS {base}/`, read into its typed form, and the ITS-REST surface under
-  `{base}/v1`, each called with the signed-in operator's own access token.
+- **The operator views**, each rendered on the console's server from the
+  gateway's own surface, called with the signed-in operator's own access
+  token:
+
+  | View | What it shows | Read from |
+  |---|---|---|
+  | `/members` | every member endpoint, its organisation, membership standing, last observed health, node, `system_id`, product and median latency, and the state of every other dependency | `OPTIONS {base}/` and `GET {base}/health/dependencies` |
+  | `/integrity` | the integrity incidents of each kind since the gateway started, the most recent ones, and the `creating_system_id` routing table | `GET {base}/operator/incidents` and `/operator/creating-systems` |
+  | `/stored-queries` | every stored-query version the gateway holds, with its AQL | `GET {base}/operator/stored-queries` |
+  | `/federation` | the gateway's self-description | `OPTIONS {base}/` |
+
+  A view without a signed-in session sends the browser to `/login` before
+  the gateway is asked anything. A view the gateway refuses shows the
+  gateway's status and its stable error code, and one it cannot answer says
+  so; no view is ever silently empty. The `/operator/` routes need a token
+  carrying the [operator scope](authentication.md#the-operator-surface) its
+  issuer names. No view shows a patient identifier, a token or clinical
+  data.
 - **`GET /health`**, which answers `200` while the process serves, and the
   `healthcheck` command the image runs against it.
 
@@ -51,10 +72,6 @@ stored by a cache.
 
 ## What is planned
 
-- **The operator views (#276):** the registry members and their membership
-  standing, node health and latency, integrity incidents and the learned
-  `creating_system_id` map, the stored queries, and the gateway's
-  self-description. No view shows a patient identifier or clinical data.
 - **The query console (#277):** an AQL query, or a stored query by name, run
   through the gateway, with every node's status and latency and whether the
   answer is complete shown plainly, and a refusal's stable code. A patient is
@@ -98,6 +115,8 @@ max_sessions = 10000
 [oidc]
 issuer = "https://idp.example.org/realms/ferrofed"
 authorization_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/auth"
+token_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/token"
+jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs"
 client_id = "ferrofed-viewer"
 client_secret_file = "/run/secrets/viewer-client-secret"
 redirect_uri = "https://console.example.org/auth/callback"

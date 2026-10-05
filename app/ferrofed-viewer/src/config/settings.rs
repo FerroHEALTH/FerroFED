@@ -60,10 +60,15 @@ pub struct SessionSettings {
 /// The resolved `[oidc]`.
 #[derive(Debug, Clone)]
 pub struct OidcSettings {
-    /// The provider's issuer identifier.
-    pub issuer: Url,
+    /// The provider's issuer identifier, exactly as written: an ID Token's
+    /// `iss` must equal it (OpenID Connect Core 1.0 §3.1.3.7).
+    pub issuer: String,
     /// The provider's authorization endpoint.
     pub authorization_endpoint: Url,
+    /// The provider's token endpoint.
+    pub token_endpoint: Url,
+    /// The provider's JWK Set location.
+    pub jwks_uri: Url,
     /// The console's client identifier.
     pub client_id: String,
     /// The console's client secret, when it is a confidential client.
@@ -118,9 +123,12 @@ impl Config {
 
 /// Resolves `[oidc]`, reading its client secret.
 fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
-    let issuer = provider_url("oidc.issuer", &oidc.issuer)?;
+    provider_url("oidc.issuer", &oidc.issuer)?;
+    let issuer = oidc.issuer.clone();
     let authorization_endpoint =
         provider_url("oidc.authorization_endpoint", &oidc.authorization_endpoint)?;
+    let token_endpoint = provider_url("oidc.token_endpoint", &oidc.token_endpoint)?;
+    let jwks_uri = provider_url("oidc.jwks_uri", &oidc.jwks_uri)?;
     let redirect_uri = web_url("oidc.redirect_uri", &oidc.redirect_uri)?;
     // NOTE: RFC 6749 §3.1.2: the redirection endpoint URI MUST NOT include a
     // fragment component.
@@ -150,6 +158,8 @@ fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
     Ok(OidcSettings {
         issuer,
         authorization_endpoint,
+        token_endpoint,
+        jwks_uri,
         client_id: oidc.client_id.clone(),
         client_secret,
         redirect_uri,

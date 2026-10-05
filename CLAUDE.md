@@ -186,9 +186,13 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   its two halves chosen by compilation target, never by Cargo feature. A pure
   HTTP client of the gateway (`gateway`, on `openehr-its` `rest-client`) that
   links no part of it; the operator's OpenID Connect session is held on its
-  server (`session`, `oidc`). Built so far: the health route, the landing
-  page, the sign-in redirect and the typed gateway client; the screens are
-  #276 and #277. Its discipline is `.claude/rules/leptos-ui.md`.
+  server (`session`, `oidc`), the code exchanged and the ID Token checked
+  before a session begins. The operator views (`views`, #276) read the
+  members, their health, the integrity incidents, the routing table, the
+  stored queries and the self-description, the last four through the
+  gateway's read-only operator surface (`{base}/operator/`, behind the
+  issuer's `operator_scope`); the query console is #277. Its discipline is
+  `.claude/rules/leptos-ui.md`.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
   reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
   and the harness of `docs/architecture.md` §13 (#39): FerroEHR nodes pinned

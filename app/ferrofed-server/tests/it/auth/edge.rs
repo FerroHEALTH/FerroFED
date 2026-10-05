@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_server::auth::Refusal;
+use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::{
     AuthMode, AuthSettings, IssuerSettings, KeySource, Verification,
 };
@@ -40,6 +40,7 @@ fn at_the_edge(edge: &Issuer) -> AuthSettings {
             verification: Verification::KeySet(KeySource::Set(edge.jwks())),
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
+            operator_scope: None,
             patient: None,
             requester: None,
         }],

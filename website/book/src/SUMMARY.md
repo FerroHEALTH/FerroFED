@@ -43,7 +43,7 @@
 - [Health probes](operate/health.md)
 - [Metrics](operate/metrics.md)
 - [Tracing](operate/tracing.md)
-- [The operator console (planned screens)](operate/operator-console.md)
+- [The operator console](operate/operator-console.md)
 
 # Integrate
 

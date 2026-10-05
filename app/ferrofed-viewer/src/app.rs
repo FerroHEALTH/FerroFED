@@ -8,10 +8,15 @@
 use leptos::prelude::*;
 use leptos_meta::{Stylesheet, Title, provide_meta_context};
 use leptos_router::components::{Route, Router, Routes};
-use leptos_router::path;
+use leptos_router::{SsrMode, path};
+
+use crate::views;
 
 /// The product name as an operator reads it.
 pub const PRODUCT: &str = "FerroFED operator console";
+
+/// The path of the sign-in route the server serves.
+pub const SIGN_IN: &str = "/login";
 
 /// The whole HTML document the server renders around [`App`].
 #[cfg(not(target_arch = "wasm32"))]
@@ -46,9 +51,48 @@ pub fn App() -> impl IntoView {
         <Stylesheet id="leptos" href="/pkg/ferrofed-viewer.css" />
         <Title text=PRODUCT />
         <Router>
+            <nav aria-label="Views">
+                <ul>
+                    <li>
+                        <a href="/">"Console"</a>
+                    </li>
+                    <li>
+                        <a href=views::MEMBERS>"Members"</a>
+                    </li>
+                    <li>
+                        <a href=views::INTEGRITY>"Integrity"</a>
+                    </li>
+                    <li>
+                        <a href=views::STORED_QUERIES>"Stored queries"</a>
+                    </li>
+                    <li>
+                        <a href=views::FEDERATION>"Self-description"</a>
+                    </li>
+                </ul>
+            </nav>
             <main>
                 <Routes fallback=NotFound>
                     <Route path=path!("/") view=Landing />
+                    <Route
+                        path=path!("/members")
+                        view=views::MembersPage
+                        ssr=SsrMode::PartiallyBlocked
+                    />
+                    <Route
+                        path=path!("/integrity")
+                        view=views::IntegrityPage
+                        ssr=SsrMode::PartiallyBlocked
+                    />
+                    <Route
+                        path=path!("/stored-queries")
+                        view=views::StoredQueriesPage
+                        ssr=SsrMode::PartiallyBlocked
+                    />
+                    <Route
+                        path=path!("/federation")
+                        view=views::FederationPage
+                        ssr=SsrMode::PartiallyBlocked
+                    />
                 </Routes>
             </main>
         </Router>
@@ -64,11 +108,15 @@ fn Landing() -> impl IntoView {
             "The console shows an operator the state of a FerroFED federation through the "
             "gateway's own public surface. It holds no clinical data."
         </p>
-        <p>"The operator views and the query console are planned."</p>
+        <p>
+            "Sign in to see the members and their health, the integrity incidents and the "
+            "creating_system_id routing table, the stored queries, and the gateway's "
+            "self-description. The query console is planned."
+        </p>
         <p>
             // The sign-in route is the server's, so the client router must not
             // take the click once the page has hydrated.
-            <a href="/login" rel="external">
+            <a href=SIGN_IN rel="external">
                 "Sign in"
             </a>
         </p>

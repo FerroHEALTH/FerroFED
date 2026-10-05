@@ -79,6 +79,7 @@ demographic_clients = []
 | `auth.issuer[].introspection_endpoint` | none | Its RFC 7662 introspection endpoint, with `client_id` and `client_secret` or `client_secret_file`: `https`, or `http` to a loopback host, under every profile. |
 | `auth.issuer[].backend_clients` | `[]` | The `client_id`s whose `system/aql-*` grant is honoured. |
 | `auth.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
+| `auth.issuer[].operator_scope` | none | The scope value that admits a caller of this issuer to the read-only [operator surface](#the-operator-surface), one scope token. Without it, no caller of this issuer reaches the surface. |
 | `auth.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[auth.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](#patient-grants)). |
 | `auth.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
 | `auth.issuer[].requester.professional` | none | The name of the string claim in this issuer's tokens that carries the professional's UZI number, which the [Mitz consent pre-filter](identity.md#dutch-consent-nl_gfmitz) asks about. `[auth.issuer.requester]` names all four claims or none. |
@@ -128,6 +129,7 @@ addresses, only `*` or `**` covers it.
 | The EHR, its `EHR_STATUS`, `DIRECTORY` and `CONTRIBUTION`s, and `GET {base}/v1/ehr?subject_id=…` | `composition-*` with the operation's permission |
 | The DEMOGRAPHIC API under `{base}/v1/demographic/` | a client listed in `demographic_clients`, its token no [patient grant](#patient-grants) |
 | The ADMIN API under `{base}/v1/admin/` | refused to every caller (`operation-refused`) |
+| `GET {base}/operator/incidents`, `/operator/creating-systems` and `/operator/stored-queries` | a verified token carrying the `operator_scope` its issuer names, no purpose of use |
 | `OPTIONS {base}/` and `OPTIONS` on any path under `{base}/v1/` | a verified token, no scope, no purpose of use |
 | A path or method ITS-REST does not define under `{base}/v1/` | a verified token, then `501` |
 
@@ -242,6 +244,36 @@ EHR at that member. Bind an issuer only to the member whose platform issued
 its tokens, and only when your cross-reference service holds that member's
 `ehr_id`s as identifiers under `ehr_id_system`. Record the choice in your
 [§13.4 decisions](deployment-decisions.md#5-what-the-technique-does-not-cover).
+
+## The operator surface
+
+Three read-only routes on the client listener give the
+[operator console](operator-console.md) what no other surface carries:
+
+| Route | Answers |
+|---|---|
+| `GET {base}/operator/incidents` | how many integrity incidents of each kind the gateway emitted since it started, and the last 100 of them |
+| `GET {base}/operator/creating-systems` | the `creating_system_id` routing table: each member's own `system_id`, each `[[creating_system]]` mapping, and each learned or withdrawn mapping |
+| `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL |
+
+A caller reaches them only with a token whose `scope` holds the
+`operator_scope` its issuer's entry names, as one whole scope token:
+
+```toml
+[[auth.issuer]]
+issuer = "https://idp.example.org"
+jwks_uri = "https://idp.example.org/jwks"
+operator_scope = "ferrofed:operator"
+```
+
+A token without it is a `403` (`scope-insufficient`), and an issuer that
+names no `operator_scope` admits no operator at all. No purpose of use is
+asked, because the routes answer no clinical data: routing ids, counts and
+stored definitions only. An incident names an `ehr_id` only when it is a
+bare UUID, and a stored definition names no patient, because the gateway
+refuses one that does before it is held (§5.4.1, N33). The routes are not
+part of the ITS-REST surface. No specification governs them: they are
+FerroFED's own design.
 
 ## Purpose of use
 

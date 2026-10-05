@@ -15,9 +15,11 @@ merges what comes back with each node's provenance.
 The console is one more client of the gateway's public surface. It calls the
 gateway over HTTP with the signed-in operator's own access token, holds the
 sign-in session on its server, and holds no clinical data. Built so far: the
-health route, the landing page, the OpenID Connect sign-in redirect with PKCE
-and its server-side session, and the typed gateway client. The operator views
-(#276) and the query console (#277) are planned.
+health route, the landing page, OpenID Connect sign-in with PKCE, the code
+exchange and the ID Token check, the server-side session, the typed gateway
+client, and the operator views: the members and their health, the integrity
+incidents and the `creating_system_id` routing table, the stored queries, and
+the self-description. The query console (#277) is planned.
 
 Build it with cargo-leptos, from this directory:
 

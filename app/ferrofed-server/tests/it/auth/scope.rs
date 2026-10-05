@@ -11,7 +11,7 @@
 )]
 
 use axum::body::Body;
-use ferrofed_server::auth::Refusal;
+use ferrofed_server::auth::refusal::Refusal;
 use http::{Method, Request, StatusCode};
 
 use super::{

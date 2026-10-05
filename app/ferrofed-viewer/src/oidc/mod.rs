@@ -9,8 +9,9 @@
 //! the provider's authorization endpoint (RFC 6749 §4.1.1, RFC 7636 §4.3,
 //! OpenID Connect Core 1.0 §3.1.2.1). `GET /auth/callback` is where the
 //! provider sends the operator back: it takes the pending sign-in once and
-//! holds the returned `state` to it (RFC 6749 §10.12). No signed-in session
-//! exists before a sign-in completes. The browser never sees a token. No
+//! holds the returned `state` to it (RFC 6749 §10.12), then [`exchange`]
+//! trades the code for the operator's tokens and checks the ID Token, and
+//! only then is a signed-in session begun. The browser never sees a token. No
 //! specification of the federation governs sign-in to the console: our own
 //! design on RFC 6749 and RFC 7636.
 
@@ -26,8 +27,10 @@ use crate::config::settings::OidcSettings;
 use crate::server::ViewerState;
 use crate::session::{PendingSignIn, SIGN_IN_COOKIE, SessionError, SessionId, challenge};
 
+pub mod exchange;
+
 /// The path of the sign-in route.
-pub const LOGIN: &str = "/login";
+pub const LOGIN: &str = crate::app::SIGN_IN;
 
 /// The path of the redirection endpoint the provider sends the operator back
 /// to.
@@ -113,7 +116,7 @@ pub async fn callback(
         return plain(StatusCode::BAD_REQUEST, "no sign-in is pending");
     };
     let mut response = match state.sessions().take_pending(&id) {
-        Ok(Some(pending)) => redirected(&pending, &query),
+        Ok(Some(pending)) => redirected(&state, &pending, &query).await,
         Ok(None) => plain(StatusCode::BAD_REQUEST, "no sign-in is pending"),
         Err(error) => return refused(&error),
     };
@@ -122,13 +125,18 @@ pub async fn callback(
     if let Ok(removal) =
         HeaderValue::from_str(&state.sessions().sign_in_cookie_removal().to_string())
     {
-        response.headers_mut().insert(SET_COOKIE, removal);
+        response.headers_mut().append(SET_COOKIE, removal);
     }
     response
 }
 
-/// The answer to a redirect back for the pending sign-in `pending`.
-fn redirected(pending: &PendingSignIn, query: &CallbackQuery) -> Response {
+/// The answer to a redirect back for the pending sign-in `pending`: the
+/// code exchanged, the ID Token checked, and a signed-in session begun.
+async fn redirected(
+    state: &ViewerState,
+    pending: &PendingSignIn,
+    query: &CallbackQuery,
+) -> Response {
     // NOTE: RFC 6749 §10.12: a redirect whose `state` is not the one the
     // request carried is refused before anything else it says is read.
     if !query
@@ -147,16 +155,50 @@ fn redirected(pending: &PendingSignIn, query: &CallbackQuery) -> Response {
             "the OpenID Provider did not sign the operator in",
         );
     }
-    if query.code.is_none() {
+    let Some(code) = query.code.as_deref() else {
         return plain(StatusCode::BAD_REQUEST, "the redirect carries no code");
-    }
-    // TODO(#276): exchange the code at the token endpoint with the PKCE
-    // verifier (RFC 6749 §4.1.3, RFC 7636 §4.5), check the ID Token's nonce,
-    // and only then create the session with `Sessions::establish`.
-    plain(
-        StatusCode::NOT_IMPLEMENTED,
-        "the sign-in code exchange is not built yet",
-    )
+    };
+    let Some(oidc) = state.settings().oidc.as_ref() else {
+        return plain(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "sign-in is not configured on this console",
+        );
+    };
+    let signed_in = match exchange::exchange(state.provider(), oidc, pending, code).await {
+        Ok(signed_in) => signed_in,
+        Err(error) if error.refuses_the_operator() => {
+            tracing::warn!(error = %error, "a sign-in's ID Token was refused");
+            return plain(
+                StatusCode::UNAUTHORIZED,
+                "the OpenID Provider's ID Token did not verify",
+            );
+        }
+        Err(error) => {
+            tracing::error!(error = %error, "a sign-in could not be completed at the provider");
+            return plain(
+                StatusCode::BAD_GATEWAY,
+                "the sign-in could not be completed at the OpenID Provider",
+            );
+        }
+    };
+    let id = match state.sessions().establish(signed_in) {
+        Ok(id) => id,
+        Err(error) => return refused(&error),
+    };
+    let Ok(cookie) = HeaderValue::from_str(&state.sessions().session_cookie(&id).to_string())
+    else {
+        tracing::error!("the session cookie could not be written as a header");
+        return plain(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the session could not be begun",
+        );
+    };
+    let mut response = StatusCode::SEE_OTHER.into_response();
+    let headers = response.headers_mut();
+    headers.insert(LOCATION, HeaderValue::from_static("/"));
+    headers.insert(SET_COOKIE, cookie);
+    headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 /// The id the request's `Cookie` header carries under `name`, if any.

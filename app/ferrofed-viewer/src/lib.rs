@@ -21,6 +21,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod app;
+pub mod views;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
