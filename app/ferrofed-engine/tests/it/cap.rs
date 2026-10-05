@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::cap::CAPPED;
 use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClients, NodeQuery};
+use ferrofed_engine::fanout::{Budget, Plan, fan_out};
+use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mock::Server;
@@ -59,6 +61,15 @@ fn capped(
     endpoints: &[(&str, &str)],
     cap: u32,
 ) -> Result<NodeClients<ReqwestTransport>, Box<dyn Error>> {
+    Ok(capped_federation(endpoints, cap)?.1)
+}
+
+/// The registry of one node with `endpoints` as its `(endpoint_id, url)`
+/// pairs, and its clients, each capped at `cap` requests in flight.
+fn capped_federation(
+    endpoints: &[(&str, &str)],
+    cap: u32,
+) -> Result<(RegistrySnapshot, NodeClients<ReqwestTransport>), Box<dyn Error>> {
     let mut document = String::from(
         "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr-a.example.org\"\n",
     );
@@ -71,10 +82,9 @@ fn capped(
     let snapshot = RegistrySnapshot::from_toml_str(&document)?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
     let cap = NonZeroU32::new(cap).ok_or("a cap is positive")?;
-    Ok(
-        NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?
-            .with_in_flight_cap(cap),
-    )
+    let clients =
+        NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?.with_in_flight_cap(cap);
+    Ok((snapshot, clients))
 }
 
 /// Options with a deadline `budget` from now.
@@ -215,5 +225,66 @@ async fn under_the_cap_every_request_is_sent_at_once() -> TestResult {
     assert_eq!(EndpointStatus::Active, one?.status());
     assert_eq!(EndpointStatus::Active, two?.status());
     assert_eq!(2, slow.received_requests().await.unwrap_or_default().len());
+    Ok(())
+}
+
+// NOTE: §11.1, §11.5, N38: a fan-out query that never got a slot of the cap was never sent, so it
+// is `time-out` with nothing sent, never a node abandoned without an answer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_fan_out_query_that_never_got_a_slot_is_capped_and_never_sent() -> TestResult {
+    let slow = node_after(HOLD).await;
+    let (snapshot, clients) = capped_federation(&[("node-a-pub", &slow.uri())], 1)?;
+    let endpoint = EndpointId::new("node-a-pub")?;
+    let held = clients
+        .get(&endpoint)
+        .ok_or("the endpoint has a client")?
+        .clone();
+    let options = within(Duration::from_secs(5))?;
+    let first = tokio::spawn(async move {
+        held.query(&NodeQuery::new(NODE_AQL), &options)
+            .await
+            .map_err(|error| error.to_string())
+    });
+    until_received(&slow, 1).await?;
+
+    // The per-node timeout and the overall budget end together, so the
+    // budget runs out while the query still waits for a slot.
+    let budget = Budget::new(Duration::from_millis(300), Duration::from_millis(300))?;
+    let plan = Plan::new().dispatch(endpoint.clone(), NodeQuery::new(NODE_AQL))?;
+    let answer = fan_out(
+        &clients,
+        &snapshot,
+        plan,
+        budget,
+        (&crate::conveyed::conveyance(), Some(OutboundId::mint())),
+    )
+    .await?;
+    let contacts: Vec<(EndpointId, Contact)> = answer
+        .contacts()
+        .map(|(id, contact)| (id.clone(), contact))
+        .collect();
+    assert_eq!(
+        vec![(endpoint.clone(), Contact::Capped)],
+        contacts,
+        "§11.5: the capped query was never sent"
+    );
+    let record = answer
+        .federation()
+        .endpoints()
+        .iter()
+        .find(|record| record.id().as_str() == endpoint.as_str())
+        .ok_or("the endpoint is reported")?;
+    assert_eq!(EndpointStatus::TimeOut, record.status());
+    assert_eq!(
+        Some(&ErrorDetail::Text(CAPPED.to_owned())),
+        record.outcome().error()
+    );
+    assert!(!answer.federation().complete());
+    assert_eq!(
+        1,
+        slow.received_requests().await.unwrap_or_default().len(),
+        "the capped query never reached the node"
+    );
+    first.await??;
     Ok(())
 }

@@ -546,8 +546,9 @@ where
 /// the gateway answers within its declared overall budget. The per-node
 /// deadline runs from the dispatch and never past the overall deadline, and a
 /// node's latency is measured from the dispatch (§9.5, N40). A node whose
-/// deadline passed before its request could be sent is `time-out` with no
-/// request sent. Everything else is as [`fan_out`].
+/// deadline passed before its request could be sent, or while it waited for
+/// a slot of its endpoint's in-flight cap, is `time-out` with no request
+/// sent, never abandoned (§11.1, §11.5, N38). Everything else is as [`fan_out`].
 ///
 /// # Errors
 ///
@@ -600,17 +601,15 @@ where
         if let Some(id) = request_id {
             options = options.with_request_id(id);
         }
-        // NOTE: tokio::time::timeout_at (docs.rs) polls the query before the budget, so a request
-        // the budget overtook before it left ends unsent, never abandoned.
         tasks.spawn(tracing::Instrument::in_current_span(async move {
-            let reply = tokio::time::timeout_at(until, client.query(&query, &options)).await;
+            let reply = client.query_until(&query, &options, until).await;
             (index, reply)
         }));
     }
     let mut replies: Vec<Option<NodeReply>> = vec![None; order.len()];
     while let Some(joined) = tasks.join_next().await {
         let (index, reply) = joined?;
-        if let (Ok(reply), Some(slot)) = (reply, replies.get_mut(index)) {
+        if let (Some(reply), Some(slot)) = (reply, replies.get_mut(index)) {
             *slot = Some(reply?);
         }
     }
