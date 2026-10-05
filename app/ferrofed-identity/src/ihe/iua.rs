@@ -6,11 +6,12 @@
 //!
 //! An [`Authentication::Grant`] holds a provider that obtains the token with
 //! the client-credentials grant (IUA ITI-71 §3.71.4.1.2.1) and refreshes it
-//! before it expires. [`client`] builds the HTTP client of a PIXm, PDQm,
-//! PMIR or mCSD client with no default `Authorization` header and returns
-//! the [`TokenAuthorizer`] the `ihe_iti` client asks for the header of each
-//! request. A `401` drops the provider's token, and the request is sent once
-//! more with a fresh one, never with the refused token (§3.72.4.3).
+//! before it expires. The crate's IHE adapters build the HTTP client of a
+//! PIXm, PDQm, PMIR or mCSD client with no default `Authorization` header,
+//! beside the [`TokenAuthorizer`] the `ihe_iti` client asks for the header
+//! of each request. A `401` drops the provider's token, and the request is
+//! sent once more with a fresh one, never with the refused token
+//! (§3.72.4.3).
 
 use std::sync::Arc;
 
