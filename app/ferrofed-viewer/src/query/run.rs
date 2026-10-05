@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The server functions of the query console: what the gateway offers a
@@ -12,7 +12,7 @@
 
 use leptos::prelude::*;
 
-use crate::query::model::{QueryAnswer, QueryForm, QueryOptionsView};
+use crate::query::model::{QueryForm, QueryOptionsView, RenderedAnswer};
 use crate::views::model::ViewError;
 
 /// Loads what the gateway's self-description offers a query, `OPTIONS
@@ -43,7 +43,7 @@ pub async fn query_options() -> Result<QueryOptionsView, ViewError> {
 pub async fn run_query(
     /// The query console's form.
     form: QueryForm,
-) -> Result<QueryAnswer, ViewError> {
+) -> Result<RenderedAnswer, ViewError> {
     let (state, token) = crate::views::load::server::signed_in()?;
     let call = server::call(&form)?;
     let answer = state
@@ -51,7 +51,12 @@ pub async fn run_query(
         .query(&token, &call)
         .await
         .map_err(|error| crate::views::load::server::refused(&error))?;
-    Ok(server::answer(&answer))
+    let answer = server::answer(&answer);
+    Ok(RenderedAnswer {
+        status: answer.status,
+        complete: answer.complete,
+        html: crate::query::answer::html(&answer),
+    })
 }
 
 /// The server half of the query console: the form read into a gateway call,

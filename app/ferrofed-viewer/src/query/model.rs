@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
 //! What the query console posts, and what it renders of the gateway's answer.
@@ -70,6 +70,19 @@ pub struct QueryOptionsView {
     pub endpoints: Vec<String>,
     /// Every managing organisation, once each, for targeting (§8.4).
     pub organisations: Vec<String>,
+}
+
+/// A federated answer as the server rendered it for the page: the status
+/// and completeness the answer carries, and its HTML.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedAnswer {
+    /// The status the gateway answered with.
+    pub status: u16,
+    /// `meta.federation.complete` (§11.4, N37).
+    pub complete: bool,
+    /// The answer rendered as HTML: its status and completeness in words,
+    /// every endpoint, and the rows.
+    pub html: String,
 }
 
 /// One column of the answer, as `columns[]` names it (§9.4).

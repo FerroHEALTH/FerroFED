@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
 //! Operator sign-out at `POST /logout`.
@@ -7,17 +7,14 @@
 //! the operator to the provider's end-session endpoint when one is
 //! configured (OpenID Connect RP-Initiated Logout 1.0 §2).
 //!
-//! A sign-out is a `POST` the console admits only from its own pages: a
-//! request the browser marks `Sec-Fetch-Site: same-origin`, or, from a
-//! browser that sends no fetch metadata, one whose `Origin` is the
-//! console's own (the Fetch Metadata Request Headers, the Fetch standard's
-//! `Origin`). The session cookie is `SameSite=Lax` as well, so a cross-site
-//! `POST` carries no session in the first place. No specification of the
-//! federation governs sign-out: our own design on RP-Initiated Logout 1.0.
+//! A sign-out is a `POST`, which the server takes only from the console's own
+//! pages, as it takes every request that is not a safe method
+//! ([`crate::server::same_origin`]). No specification of the federation
+//! governs sign-out: our own design on RP-Initiated Logout 1.0.
 
 use axum::Extension;
 use axum::response::{IntoResponse, Response};
-use http::header::{CACHE_CONTROL, LOCATION, ORIGIN, SET_COOKIE};
+use http::header::{CACHE_CONTROL, LOCATION, SET_COOKIE};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;
@@ -27,24 +24,6 @@ use crate::server::ViewerState;
 
 /// The path of the sign-out route.
 pub const LOGOUT: &str = crate::app::SIGN_OUT;
-
-/// The fetch metadata header that names where a request comes from.
-const SEC_FETCH_SITE: &str = "sec-fetch-site";
-
-/// Whether `headers` show a request sent from a page of `origin` itself.
-///
-/// `Sec-Fetch-Site` decides when the browser sends it; otherwise `Origin`
-/// must be `origin`. A request with neither is refused, so a sign-out is
-/// never taken on trust.
-#[must_use]
-pub fn same_origin(headers: &HeaderMap, origin: &str) -> bool {
-    if let Some(site) = headers.get(SEC_FETCH_SITE) {
-        return site.as_bytes() == b"same-origin";
-    }
-    headers
-        .get(ORIGIN)
-        .is_some_and(|sent| sent.as_bytes() == origin.as_bytes())
-}
 
 /// The provider's end-session request for `oidc`.
 ///
@@ -79,13 +58,6 @@ pub async fn logout(Extension(state): Extension<ViewerState>, headers: HeaderMap
             "sign-in is not configured on this console",
         );
     };
-    if !same_origin(&headers, &oidc.origin()) {
-        tracing::warn!("a sign-out that did not come from the console's own pages was refused");
-        return plain(
-            StatusCode::FORBIDDEN,
-            "a sign-out is taken only from the console's own pages",
-        );
-    }
     let sessions = state.sessions();
     let held = super::cookie_named(&headers, &sessions.cookie_name(crate::session::COOKIE));
     let id_token = match held.map(|id| sessions.end(&id)).transpose() {

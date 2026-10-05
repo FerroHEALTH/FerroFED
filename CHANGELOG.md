@@ -26,23 +26,6 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
-- The query console of the operator console (#277), at `/query`. An AQL
-  query, or a stored query by name and optional version, runs through the
-  gateway's `POST {base}/v1/query/aql` or `/v1/query/{name}` as the
-  signed-in operator, with the targeting, dedup and best-effort headers the
-  gateway's self-description offers. The answer shows the rows, every
-  endpoint's status, latency and error from `meta.federation`, and says in
-  words when `complete` is false; a `504` or `424` all-or-nothing failure
-  shows its diagnostic envelope, and a refusal its status and stable code.
-  A patient is named through a parameter in the request body, and nothing
-  entered in the console reaches a URL, the browser history or a log.
-- Operator sign-out in the operator console (#584). The navigation bar's
-  "Sign out" posts to `POST /logout`, which ends the server-side session,
-  removes the session cookie and, where the new `[oidc]` key
-  `end_session_endpoint` names the provider's end-session endpoint, sends
-  the browser there with the ID Token hint, the client id and the optional
-  `post_logout_redirect_uri` (OpenID Connect RP-Initiated Logout 1.0). A
-  sign-out that does not come from the console's own pages is a `403`.
 - The operator views of the operator console (#276). After sign-in, which
   now exchanges the code at the provider's token endpoint with the PKCE
   verifier and checks the ID Token's signature, issuer, single audience,

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The query console.
@@ -25,11 +25,11 @@ pub mod model;
 )]
 pub mod run;
 
-use leptos::form::ActionForm;
 use leptos::prelude::*;
+use leptos::server_fn::ServerFn as _;
 use leptos_meta::Title;
 
-use crate::query::model::{QueryAnswer, QueryOptionsView};
+use crate::query::model::{QueryForm, QueryOptionsView};
 use crate::query::run::RunQuery;
 use crate::views::{refusal, titled};
 
@@ -64,15 +64,57 @@ pub fn QueryPage() -> impl IntoView {
 }
 
 /// The query form, with the choices the gateway offers.
+///
+/// It is a plain `POST` form to the server function, so it posts before the
+/// bundle loads. Once hydrated, a submission dispatches the action with the
+/// form's fields instead, and the answer renders on the page; the fields are
+/// read from the form's own data, which keeps the parsing of the
+/// URL-encoded form out of the bundle.
 fn form_section(action: ServerAction<RunQuery>, offered: &QueryOptionsView) -> AnyView {
     let what = what_section();
     let federation = federation_section(offered);
+    let form = NodeRef::<leptos::html::Form>::new();
+    let submit = move |event: leptos::ev::SubmitEvent| {
+        let data = form
+            .get_untracked()
+            .and_then(|form| leptos::web_sys::FormData::new_with_form(&form).ok());
+        // NOTE: no specification governs this: our own design; form data the
+        // browser cannot give leaves the plain post to run the query instead.
+        if let Some(data) = data {
+            event.prevent_default();
+            action.dispatch(RunQuery {
+                form: submitted(&data),
+            });
+        }
+    };
     view! {
-        <ActionForm action=action>
-            {what} {federation} <button type="submit">"Run the query"</button>
-        </ActionForm>
+        <form method="post" action=RunQuery::url() node_ref=form on:submit=submit>
+            {what}
+            {federation}
+            <button type="submit">"Run the query"</button>
+        </form>
     }
     .into_any()
+}
+
+/// The query form `data` holds, by the field names the form posts.
+fn submitted(data: &leptos::web_sys::FormData) -> QueryForm {
+    // NOTE: XHR standard, `FormData.get`: a field the form does not send, a
+    // clear checkbox among them, is null, which is the empty field it means.
+    let field = |name: &str| data.get(name).as_string().unwrap_or_default();
+    QueryForm {
+        kind: field("form[kind]"),
+        aql: field("form[aql]"),
+        name: field("form[name]"),
+        version: field("form[version]"),
+        parameters: field("form[parameters]"),
+        offset: field("form[offset]"),
+        fetch: field("form[fetch]"),
+        partial: field("form[partial]"),
+        dedup: field("form[dedup]"),
+        endpoints: field("form[endpoints]"),
+        organisation: field("form[organisation]"),
+    }
 }
 
 /// The query itself: AQL text or a stored query, and its parameters.
@@ -216,14 +258,15 @@ fn answer_section(action: ServerAction<RunQuery>) -> AnyView {
     view! {
         <section aria-labelledby="query-answer" aria-busy=move || pending.get().to_string()>
             <h2 id="query-answer">"Answer"</h2>
-            <Show when=move || pending.get()>
-                <p role="status">"Running the query."</p>
-            </Show>
+            <p role="status">{move || if pending.get() { "Running the query." } else { "" }}</p>
             {move || {
                 value
                     .with(|answer| match answer {
                         None => view! { <p>"No query has run yet."</p> }.into_any(),
-                        Some(Ok(answer)) => answered(answer),
+                        Some(Ok(rendered)) => {
+                            let html = rendered.html.clone();
+                            view! { <div inner_html=html></div> }.into_any()
+                        }
                         Some(Err(error)) => refusal(error),
                     })
             }}
@@ -232,68 +275,87 @@ fn answer_section(action: ServerAction<RunQuery>) -> AnyView {
     .into_any()
 }
 
-/// A federated answer: its status, its completeness, every endpoint and the
-/// rows.
-fn answered(answer: &QueryAnswer) -> AnyView {
-    let outcome = outcome_section(answer);
-    let endpoints = endpoints_section(answer);
-    let rows = rows_section(answer);
-    view! {
-        {outcome}
-        {endpoints}
-        {rows}
-    }
-    .into_any()
-}
+/// The server's rendering of a federated answer, which the page shows as
+/// it stands.
+///
+/// The answer renders on the server: its tables need no code in the browser,
+/// which shows the HTML the server wrote. Leptos escapes every text and
+/// attribute value it renders, and the Content-Security-Policy admits no
+/// inline script besides.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod answer {
+    use leptos::prelude::*;
 
-/// What the status and `meta.federation.complete` say, in words (§11.4).
-fn outcome_section(answer: &QueryAnswer) -> AnyView {
-    let status = answer.status;
-    let failed = (!answer.succeeded).then(|| {
+    use crate::query::model::QueryAnswer;
+
+    /// The HTML of `answer`.
+    #[must_use]
+    pub fn html(answer: &QueryAnswer) -> String {
+        answered(answer).to_html()
+    }
+
+    /// A federated answer: its status, its completeness, every endpoint and the
+    /// rows.
+    fn answered(answer: &QueryAnswer) -> AnyView {
+        let outcome = outcome_section(answer);
+        let endpoints = endpoints_section(answer);
+        let rows = rows_section(answer);
         view! {
-            <p role="alert">
-                <strong>{format!("The gateway failed the query: {status}.")}</strong>
-                " A node in scope did not answer, so the gateway returned no rows. "
-                "The endpoints below say which node and why."
-            </p>
-        }
-    });
-    let completeness = if answer.complete {
-        view! {
-            <p role="status" class="complete">
-                <strong>"Complete."</strong>
-                " Every node in scope answered."
-            </p>
+            {outcome}
+            {endpoints}
+            {rows}
         }
         .into_any()
-    } else {
+    }
+
+    /// What the status and `meta.federation.complete` say, in words (§11.4).
+    fn outcome_section(answer: &QueryAnswer) -> AnyView {
+        let status = answer.status;
+        let failed = (!answer.succeeded).then(|| {
+            view! {
+                <p role="alert">
+                    <strong>{format!("The gateway failed the query: {status}.")}</strong>
+                    " A node in scope did not answer, so the gateway returned no rows. "
+                    "The endpoints below say which node and why."
+                </p>
+            }
+        });
+        let completeness = if answer.complete {
+            view! {
+                <p role="status" class="complete">
+                    <strong>"Complete."</strong>
+                    " Every node in scope answered."
+                </p>
+            }
+            .into_any()
+        } else {
+            view! {
+                <p role="alert" class="incomplete">
+                    <strong>"Incomplete answer."</strong>
+                    " Not every node in scope answered (meta.federation.complete is false), "
+                    "so these rows are not the whole answer."
+                </p>
+            }
+            .into_any()
+        };
+        let dedup = answer.dedup.clone().map(|mode| {
+            let suppressed = answer
+                .suppressed_rows
+                .map(|rows| format!(", {rows} rows suppressed"))
+                .unwrap_or_default();
+            view! { <p>{format!("Deduplication: {mode}{suppressed}.")}</p> }
+        });
         view! {
-            <p role="alert" class="incomplete">
-                <strong>"Incomplete answer."</strong>
-                " Not every node in scope answered (meta.federation.complete is false), "
-                "so these rows are not the whole answer."
-            </p>
+            {failed}
+            {completeness}
+            {dedup}
         }
         .into_any()
-    };
-    let dedup = answer.dedup.clone().map(|mode| {
-        let suppressed = answer
-            .suppressed_rows
-            .map(|rows| format!(", {rows} rows suppressed"))
-            .unwrap_or_default();
-        view! { <p>{format!("Deduplication: {mode}{suppressed}.")}</p> }
-    });
-    view! {
-        {failed}
-        {completeness}
-        {dedup}
     }
-    .into_any()
-}
 
-/// Every endpoint's status, latency, rows and error (§9.5, §11.1).
-fn endpoints_section(answer: &QueryAnswer) -> AnyView {
-    let rows = answer
+    /// Every endpoint's status, latency, rows and error (§9.5, §11.1).
+    fn endpoints_section(answer: &QueryAnswer) -> AnyView {
+        let rows = answer
         .endpoints
         .iter()
         .map(|endpoint| {
@@ -314,132 +376,133 @@ fn endpoints_section(answer: &QueryAnswer) -> AnyView {
             }
         })
         .collect_view();
-    view! {
-        <table>
-            <caption>"Every endpoint the gateway reports"</caption>
-            <thead>
-                <tr>
-                    <th scope="col">"Endpoint"</th>
-                    <th scope="col">"Status"</th>
-                    <th scope="col">"Latency"</th>
-                    <th scope="col">"Rows"</th>
-                    <th scope="col">"Organisation"</th>
-                    <th scope="col">"Error"</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
+        view! {
+            <table>
+                <caption>"Every endpoint the gateway reports"</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">"Endpoint"</th>
+                        <th scope="col">"Status"</th>
+                        <th scope="col">"Latency"</th>
+                        <th scope="col">"Rows"</th>
+                        <th scope="col">"Organisation"</th>
+                        <th scope="col">"Error"</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        }
+        .into_any()
     }
-    .into_any()
-}
 
-/// The rows, under the columns as the gateway renders them (§9.4).
-fn rows_section(answer: &QueryAnswer) -> AnyView {
-    if answer.rows.is_empty() {
-        return view! { <p>"No rows."</p> }.into_any();
+    /// The rows, under the columns as the gateway renders them (§9.4).
+    fn rows_section(answer: &QueryAnswer) -> AnyView {
+        if answer.rows.is_empty() {
+            return view! { <p>"No rows."</p> }.into_any();
+        }
+        let header = answer
+            .columns
+            .iter()
+            .map(|column| {
+                let title = column.path.clone().unwrap_or_default();
+                view! {
+                    <th scope="col" title=title>
+                        {column.name.clone()}
+                    </th>
+                }
+            })
+            .collect_view();
+        let rows = answer
+            .rows
+            .iter()
+            .map(|row| {
+                let cells = row
+                    .iter()
+                    .map(|cell| view! { <td>{cell.clone()}</td> })
+                    .collect_view();
+                view! { <tr>{cells}</tr> }
+            })
+            .collect_view();
+        view! {
+            <table>
+                <caption>{format!("{} rows", answer.rows.len())}</caption>
+                <thead>
+                    <tr>{header}</tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        }
+        .into_any()
     }
-    let header = answer
-        .columns
-        .iter()
-        .map(|column| {
-            let title = column.path.clone().unwrap_or_default();
-            view! {
-                <th scope="col" title=title>
-                    {column.name.clone()}
-                </th>
+
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    mod tests {
+        use super::answered;
+        use crate::query::model::{ColumnLine, EndpointLine, QueryAnswer};
+        use leptos::prelude::RenderHtml as _;
+
+        fn endpoint(id: &str, status: &str, error: Option<&str>) -> EndpointLine {
+            EndpointLine {
+                id: id.to_owned(),
+                status: status.to_owned(),
+                latency_ms: Some(118),
+                row_count: None,
+                organisation: Some(String::from("Org A")),
+                error: error.map(str::to_owned),
             }
-        })
-        .collect_view();
-    let rows = answer
-        .rows
-        .iter()
-        .map(|row| {
-            let cells = row
-                .iter()
-                .map(|cell| view! { <td>{cell.clone()}</td> })
-                .collect_view();
-            view! { <tr>{cells}</tr> }
-        })
-        .collect_view();
-    view! {
-        <table>
-            <caption>{format!("{} rows", answer.rows.len())}</caption>
-            <thead>
-                <tr>{header}</tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
-    }
-    .into_any()
-}
-
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod tests {
-    use super::answered;
-    use crate::query::model::{ColumnLine, EndpointLine, QueryAnswer};
-    use leptos::prelude::RenderHtml as _;
-
-    fn endpoint(id: &str, status: &str, error: Option<&str>) -> EndpointLine {
-        EndpointLine {
-            id: id.to_owned(),
-            status: status.to_owned(),
-            latency_ms: Some(118),
-            row_count: None,
-            organisation: Some(String::from("Org A")),
-            error: error.map(str::to_owned),
         }
-    }
 
-    fn answer(status: u16, complete: bool) -> QueryAnswer {
-        QueryAnswer {
-            status,
-            succeeded: status == 200,
-            complete,
-            endpoints: vec![
-                endpoint("node_1", "active", None),
-                endpoint("node_2", "time-out", Some("no answer in time")),
-            ],
-            dedup: Some(String::from("none")),
-            suppressed_rows: None,
-            columns: vec![ColumnLine {
-                name: String::from("composition_id"),
-                path: Some(String::from("c/uid/value")),
-            }],
-            rows: vec![vec![String::from("8849182a::cdr1.rso.nl::1")]],
+        fn answer(status: u16, complete: bool) -> QueryAnswer {
+            QueryAnswer {
+                status,
+                succeeded: status == 200,
+                complete,
+                endpoints: vec![
+                    endpoint("node_1", "active", None),
+                    endpoint("node_2", "time-out", Some("no answer in time")),
+                ],
+                dedup: Some(String::from("none")),
+                suppressed_rows: None,
+                columns: vec![ColumnLine {
+                    name: String::from("composition_id"),
+                    path: Some(String::from("c/uid/value")),
+                }],
+                rows: vec![vec![String::from("8849182a::cdr1.rso.nl::1")]],
+            }
         }
-    }
 
-    #[test]
-    fn an_incomplete_answer_says_so_in_words_before_its_rows() {
-        let html = answered(&answer(200, false)).to_html();
-        let flag = html.find("Incomplete answer.").expect("the flag");
-        let rows = html.find("8849182a::cdr1.rso.nl::1").expect("the rows");
-        assert!(flag < rows, "{html}");
-        assert!(html.contains(r#"role="alert""#), "{html}");
-        assert!(html.contains("<td>time-out</td>"), "{html}");
-        assert!(html.contains("<td>no answer in time</td>"), "{html}");
-        assert!(html.contains("<tbody>"), "{html}");
-        assert!(html.contains(r#"<th scope="col""#), "{html}");
-    }
+        #[test]
+        fn an_incomplete_answer_says_so_in_words_before_its_rows() {
+            let html = answered(&answer(200, false)).to_html();
+            let flag = html.find("Incomplete answer.").expect("the flag");
+            let rows = html.find("8849182a::cdr1.rso.nl::1").expect("the rows");
+            assert!(flag < rows, "{html}");
+            assert!(html.contains(r#"role="alert""#), "{html}");
+            assert!(html.contains("<td>time-out</td>"), "{html}");
+            assert!(html.contains("<td>no answer in time</td>"), "{html}");
+            assert!(html.contains("<tbody>"), "{html}");
+            assert!(html.contains(r#"<th scope="col""#), "{html}");
+        }
 
-    #[test]
-    fn a_complete_answer_says_every_node_answered() {
-        let html = answered(&answer(200, true)).to_html();
-        assert!(html.contains("Every node in scope answered."), "{html}");
-        assert!(!html.contains("Incomplete answer."), "{html}");
-        assert!(!html.contains("failed the query"), "{html}");
-    }
+        #[test]
+        fn a_complete_answer_says_every_node_answered() {
+            let html = answered(&answer(200, true)).to_html();
+            assert!(html.contains("Every node in scope answered."), "{html}");
+            assert!(!html.contains("Incomplete answer."), "{html}");
+            assert!(!html.contains("failed the query"), "{html}");
+        }
 
-    #[test]
-    fn a_failed_all_or_nothing_answer_shows_its_status() {
-        let mut failed = answer(504, false);
-        failed.rows.clear();
-        let html = answered(&failed).to_html();
-        assert!(
-            html.contains("The gateway failed the query: 504."),
-            "{html}"
-        );
-        assert!(html.contains("Incomplete answer."), "{html}");
-        assert!(html.contains("No rows."), "{html}");
+        #[test]
+        fn a_failed_all_or_nothing_answer_shows_its_status() {
+            let mut failed = answer(504, false);
+            failed.rows.clear();
+            let html = answered(&failed).to_html();
+            assert!(
+                html.contains("The gateway failed the query: 504."),
+                "{html}"
+            );
+            assert!(html.contains("Incomplete answer."), "{html}");
+            assert!(html.contains("No rows."), "{html}");
+        }
     }
 }

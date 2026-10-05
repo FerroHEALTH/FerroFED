@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The query console against a stub gateway: a query over two nodes shows
@@ -11,7 +11,7 @@ use std::io::Write;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::body::Body;
-use ferrofed_viewer::query::model::QueryAnswer;
+use ferrofed_viewer::query::model::RenderedAnswer;
 use ferrofed_viewer::session::{COOKIE, SessionId};
 use http::{Request, StatusCode};
 use wiremock::matchers::{method, path};
@@ -144,7 +144,8 @@ fn form(fields: &[(&str, &str)]) -> String {
 fn run(body: String, session: Option<&SessionId>) -> Result<Request<Body>, Box<dyn Error>> {
     let mut request = Request::post("/api/query")
         .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "application/json");
+        .header("accept", "application/json")
+        .header("sec-fetch-site", "same-origin");
     if let Some(session) = session {
         request = request.header("cookie", format!("{COOKIE}={}", session.as_str()));
     }
@@ -168,10 +169,15 @@ async fn answered(
     service: &axum::Router,
     session: &SessionId,
     body: String,
-) -> Result<QueryAnswer, Box<dyn Error>> {
+) -> Result<RenderedAnswer, Box<dyn Error>> {
     let (response, text) = send(service, run(body, Some(session))?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{text}");
     Ok(serde_json::from_str(&text)?)
+}
+
+/// Whether `html` holds the endpoint row of `id` with `status`.
+fn reports(html: &str, id: &str, status: &str) -> bool {
+    html.contains(&format!(r#"<th scope="row">{id}</th><td>{status}</td>"#))
 }
 
 #[tokio::test]
@@ -181,32 +187,24 @@ async fn a_query_over_two_nodes_shows_the_rows_every_endpoint_and_complete()
     let (service, session) = signed_in_console(&gateway)?;
     let answer = answered(&service, &session, patient_query()).await?;
     assert_eq!(200, answer.status);
-    assert!(answer.succeeded);
     assert!(answer.complete);
-    let columns: Vec<&str> = answer.columns.iter().map(|c| c.name.as_str()).collect();
-    assert_eq!(vec!["endpoint_id", "system_id", "composition_id"], columns);
-    assert_eq!(2, answer.rows.len());
-    assert_eq!(
-        Some("8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1"),
-        answer
-            .rows
-            .first()
-            .and_then(|row| row.get(2))
-            .map(String::as_str)
+    let html = &answer.html;
+    assert!(html.contains("Every node in scope answered."), "{html}");
+    for column in ["endpoint_id", "system_id", "composition_id"] {
+        assert!(
+            html.contains(&format!(">{column}</th>")),
+            "{column}: {html}"
+        );
+    }
+    assert!(html.contains("2 rows"), "{html}");
+    assert!(
+        html.contains("<td>8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1</td>"),
+        "{html}"
     );
-    let statuses: Vec<(&str, &str, Option<u64>)> = answer
-        .endpoints
-        .iter()
-        .map(|e| (e.id.as_str(), e.status.as_str(), e.latency_ms))
-        .collect();
-    assert_eq!(
-        vec![
-            ("node_1", "active", Some(118)),
-            ("node_2", "active", Some(306)),
-            ("node_3", "excluded", None)
-        ],
-        statuses
-    );
+    assert!(reports(html, "node_1", "active"), "{html}");
+    assert!(reports(html, "node_2", "active"), "{html}");
+    assert!(reports(html, "node_3", "excluded"), "{html}");
+    assert!(html.contains("118 ms") && html.contains("306 ms"), "{html}");
     Ok(())
 }
 
@@ -216,18 +214,15 @@ async fn a_best_effort_answer_a_node_did_not_complete_is_flagged_incomplete()
     let gateway = gateway(200, incomplete_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     let answer = answered(&service, &session, patient_query()).await?;
-    assert!(answer.succeeded);
+    assert_eq!(200, answer.status);
     assert!(!answer.complete, "{answer:?}");
-    assert_eq!(1, answer.rows.len());
-    let node_2 = answer
-        .endpoints
-        .iter()
-        .find(|e| e.id == "node_2")
-        .ok_or("node_2 is reported")?;
-    assert_eq!("time-out", node_2.status);
-    assert_eq!(
-        Some("no answer within the per-node budget"),
-        node_2.error.as_deref()
+    let html = &answer.html;
+    assert!(html.contains("Incomplete answer."), "{html}");
+    assert!(html.contains("1 rows"), "{html}");
+    assert!(reports(html, "node_2", "time-out"), "{html}");
+    assert!(
+        html.contains("no answer within the per-node budget"),
+        "{html}"
     );
     Ok(())
 }
@@ -239,10 +234,21 @@ async fn an_all_or_nothing_failure_shows_its_status_and_every_endpoint()
     let (service, session) = signed_in_console(&gateway)?;
     let answer = answered(&service, &session, patient_query()).await?;
     assert_eq!(504, answer.status);
-    assert!(!answer.succeeded);
     assert!(!answer.complete);
-    assert!(answer.rows.is_empty());
-    assert_eq!(3, answer.endpoints.len());
+    let html = &answer.html;
+    assert!(
+        html.contains("The gateway failed the query: 504."),
+        "{html}"
+    );
+    assert!(html.contains("Incomplete answer."), "{html}");
+    assert!(html.contains("No rows."), "{html}");
+    for (id, status) in [
+        ("node_1", "active"),
+        ("node_2", "time-out"),
+        ("node_3", "excluded"),
+    ] {
+        assert!(reports(html, id, status), "{id}: {html}");
+    }
     Ok(())
 }
 
@@ -285,7 +291,9 @@ async fn the_query_functions_refuse_a_caller_without_a_live_session() -> Result<
     for forged in [None, Some(SessionId::from_cookie("forged"))] {
         let (_response, text) = send(&service, run(patient_query(), forged.as_ref())?).await?;
         assert!(text.contains("SignedOut"), "{text}");
-        let mut request = Request::post("/api/query-options").header("accept", "application/json");
+        let mut request = Request::post("/api/query-options")
+            .header("accept", "application/json")
+            .header("sec-fetch-site", "same-origin");
         if let Some(forged) = &forged {
             request = request.header("cookie", format!("{COOKIE}={}", forged.as_str()));
         }
@@ -523,6 +531,95 @@ async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn
     assert!(page.contains(r#"<label for="query-parameters">"#), "{page}");
     assert!(page.contains("No query has run yet."), "{page}");
     assert!(!page.contains(OPERATOR_TOKEN), "{page}");
+    Ok(())
+}
+
+/// A console over `gateway` that knows its own origin from `[oidc]`, with
+/// one signed-in operator.
+fn console_with_origin(gateway: &MockServer) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
+    let (state, service) = console(&format!(
+        "[gateway]\nbase_url = \"{}\"\n{}",
+        gateway.uri(),
+        crate::support::WITH_OIDC
+    ))?;
+    let session = state.sessions().establish(signed_in())?;
+    Ok((service, session))
+}
+
+/// A `POST` of the query function carrying `session`'s cookie and only the
+/// headers `from` names, as a page of some origin would send it.
+fn run_from(session: &SessionId, from: &[(&str, &str)]) -> Result<Request<Body>, Box<dyn Error>> {
+    let mut request = Request::post("/api/query")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("accept", "application/json")
+        .header("cookie", format!("{COOKIE}={}", session.as_str()));
+    for (name, value) in from {
+        request = request.header(*name, *value);
+    }
+    Ok(request.body(Body::from(patient_query()))?)
+}
+
+// A cross-site page could otherwise spend the operator's gateway credential
+// on a query of its choosing, so the run is taken from the console alone.
+#[tokio::test]
+async fn a_query_from_another_origin_or_from_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, complete_example()?).await?;
+    let (service, session) = console_with_origin(&gateway)?;
+    for from in [
+        vec![("sec-fetch-site", "cross-site")],
+        vec![("sec-fetch-site", "same-site")],
+        vec![("origin", "https://attacker.example.net")],
+        vec![("origin", "null")],
+        vec![("referer", "https://attacker.example.net/page")],
+        vec![("referer", "not a url")],
+        Vec::new(),
+    ] {
+        let (response, text) = send(&service, run_from(&session, &from)?).await?;
+        assert_eq!(StatusCode::FORBIDDEN, response.status(), "{from:?}: {text}");
+    }
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(asked.is_empty(), "the gateway was asked {}", asked.len());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_query_from_the_consoles_own_origin_runs() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, complete_example()?).await?;
+    let (service, session) = console_with_origin(&gateway)?;
+    for from in [
+        vec![("sec-fetch-site", "same-origin")],
+        vec![("origin", "https://console.example.org")],
+        vec![("referer", "https://console.example.org/query")],
+    ] {
+        let (response, text) = send(&service, run_from(&session, &from)?).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{from:?}: {text}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_get_never_runs_a_query() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway(200, complete_example()?).await?;
+    let (service, session) = console_with_origin(&gateway)?;
+    let request = Request::get("/api/query?form%5Bkind%5D=aql&form%5Baql%5D=SELECT%201")
+        .header("cookie", format!("{COOKIE}={}", session.as_str()))
+        .header("sec-fetch-site", "same-origin")
+        .body(Body::empty())?;
+    let (response, _text) = send(&service, request).await?;
+    assert_ne!(StatusCode::OK, response.status());
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(
+        asked
+            .iter()
+            .all(|request| request.method != http::Method::POST),
+        "the gateway ran a query"
+    );
     Ok(())
 }
 

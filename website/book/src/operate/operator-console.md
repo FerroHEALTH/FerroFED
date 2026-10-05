@@ -40,10 +40,16 @@ behaviour to the gateway. It holds no clinical data.
   the session's ID Token as `id_token_hint`, its `client_id`, and the
   `post_logout_redirect_uri` you registered with the provider (OpenID
   Connect RP-Initiated Logout 1.0 §2); without one the browser goes back to
-  `/`. The console takes a sign-out only from its own pages: a request the
-  browser marks `Sec-Fetch-Site: same-origin`, or, without fetch metadata,
-  one whose `Origin` is the origin of `redirect_uri`. Any other is `403`
-  and leaves the session as it was, and a `GET /logout` is `405`.
+  `/`. A `GET /logout` is `405`.
+- **Requests from the console's own pages only.** Every request that is not
+  a `GET`, `HEAD` or `OPTIONS`, the sign-out and every server function the
+  views and the query console call, must come from the console's own pages:
+  a request the browser marks `Sec-Fetch-Site: same-origin`, or, without
+  fetch metadata, one whose `Origin`, or else whose `Referer`, has the
+  origin of `redirect_uri`. Any other, one that names no origin among them,
+  is `403` before the session is read or the gateway asked, so no other
+  site can sign an operator out or spend their sign-in on a query. The
+  session cookie is `SameSite=Lax` as well.
 - **Two separate pools of server-side state.** Pending sign-ins live for
   `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
   its oldest pending sign-in, so a flood of `GET /login` holds at most that

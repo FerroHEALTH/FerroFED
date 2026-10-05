@@ -304,7 +304,8 @@ const SERVER_FUNCTIONS: [(&str, &str); 4] = [
 fn call(route: &str, form: &str, cookie: Option<&str>) -> Result<Request<Body>, Box<dyn Error>> {
     let mut request = Request::post(route)
         .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "application/json");
+        .header("accept", "application/json")
+        .header("sec-fetch-site", "same-origin");
     if let Some(cookie) = cookie {
         request = request.header(
             "cookie",

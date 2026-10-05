@@ -136,6 +136,7 @@ pub fn router(state: ViewerState) -> axum::Router {
             crate::app::shell,
         ))
         .layer(axum::middleware::from_fn(require_session))
+        .layer(axum::middleware::from_fn(same_origin_only))
         .layer(Extension(state));
     with_security_headers(pages).with_state(options)
 }
@@ -178,6 +179,71 @@ async fn require_session(
             response
         }
     }
+}
+
+/// The fetch metadata header that names where a request comes from.
+const SEC_FETCH_SITE: &str = "sec-fetch-site";
+
+/// Refuses every request that is not a safe method, a server function call
+/// and a sign-out among them, unless it comes from the console's own pages
+/// ([`same_origin`]), before anything reads the session or asks the gateway.
+///
+/// The session cookie is `SameSite=Lax` as well, so a cross-site `POST`
+/// carries no session in the first place; this check holds without it.
+async fn same_origin_only(
+    Extension(state): Extension<ViewerState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if request.method().is_safe() {
+        return next.run(request).await;
+    }
+    let origin = state
+        .settings()
+        .oidc
+        .as_ref()
+        .map(crate::config::settings::OidcSettings::origin);
+    if same_origin(request.headers(), origin.as_deref()) {
+        return next.run(request).await;
+    }
+    tracing::warn!(
+        method = %request.method(),
+        "a request that did not come from the console's own pages was refused"
+    );
+    (
+        StatusCode::FORBIDDEN,
+        [(CACHE_CONTROL, "no-store")],
+        "the console takes this request only from its own pages",
+    )
+        .into_response()
+}
+
+/// Whether `headers` show a request sent from a page of the console at
+/// `origin`, its own `scheme://host:port`.
+///
+/// `Sec-Fetch-Site` decides when the browser sends it, and only
+/// `same-origin` passes. Without it `Origin` must be `origin`, and without
+/// that the origin of `Referer` must be. A request that shows none of them,
+/// or a console with no known origin, is refused, so an unsafe request is
+/// never taken on trust (the Fetch Metadata Request Headers; RFC 6454 §7).
+#[must_use]
+pub fn same_origin(headers: &http::HeaderMap, origin: Option<&str>) -> bool {
+    if let Some(site) = headers.get(SEC_FETCH_SITE) {
+        return site.as_bytes() == b"same-origin";
+    }
+    let Some(origin) = origin else {
+        return false;
+    };
+    if let Some(sent) = headers.get(http::header::ORIGIN) {
+        return sent.as_bytes() == origin.as_bytes();
+    }
+    // NOTE: RFC 9110 §10.1.3: a `Referer` that is no URL names no origin, which
+    // refuses the request as a missing one does.
+    headers
+        .get(http::header::REFERER)
+        .and_then(|referer| referer.to_str().ok())
+        .and_then(|referer| url::Url::parse(referer).ok())
+        .is_some_and(|referer| referer.origin().ascii_serialization() == origin)
 }
 
 /// The body of the liveness route.
