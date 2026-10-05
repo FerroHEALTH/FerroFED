@@ -8,14 +8,14 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `7c2e0fa5d9ca2bdceadc96250f90cb72a1be2b0f3663e87cc24fd67d0d6ffdc1`
+  the pins): `4af818fc47ead2a2a5120225d68a338ba068bed71c46b4e65b064491ceddf148`
 - Fetched: 2026-10-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 7 committed, 0 cache only, 1 needing
   manual retrieval
 - Files in this directory: 7 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `3f5394412ac55241582bd27aa0ba7012576b05deb6ac82f305f4f547b0940712`
+  `PROVENANCE.md` excluded): `9089cd3f65450a29e784426d00632f4f29395d38c6ce6be1e1fa3db26e0c6ccf`
 - Read by: #488 (the country research into identity resolution,
   localization, consent, addressing and authentication to nodes) and
   #519 (EHDS readiness)
@@ -27,11 +27,13 @@ Implementing Regulation (EU) 2026/2083 on MyHealth@EU and (EU) 2026/2099 on
 cross-border identification and authentication), Commission Recommendation
 (EU) 2019/243 on a European Electronic Health Record exchange format, the
 eHealth Network guidelines on the Patient Summary and on ePrescription and
-eDispensation, and the Commission legal notice that licenses them. The
-Regulation, the implementing acts and the Recommendation are official EU
-legal acts published in the Official Journal; their reuse is governed by
-Commission Decision 2011/833/EU of 12 December 2011 on the reuse of
-Commission documents, which the legal notice names. The eHDSI
+eDispensation, and Commission Decision 2011/833/EU of 12 December 2011 on
+the reuse of Commission documents, which governs the reuse of all of them.
+The Regulation, the implementing acts, the Recommendation and the Decision
+are official EU legal acts published in the Official Journal. The
+Commission legal notice (https://commission.europa.eu/legal-notice_en)
+licenses the guidelines under CC BY 4.0; it is cited and not pinned, because
+the page's bytes change with every render. The eHDSI
 interoperability specifications are on a wiki behind EU Login and are
 recorded for manual retrieval.
 
@@ -74,22 +76,23 @@ recorded for manual retrieval.
 - Source: <https://health.ec.europa.eu/document/download/e020f311-c35b-45ae-ba3d-03212b57fa65_en?filename=ehn_guidelines_patientsummary_en.pdf>
 - Version: Release 3.4, November 2024
 - sha256: `9daaab30ef8e8cb5f8ab2be1480d80869b17702d118ab3d13268324184267f5d`
-- Licence: CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
+- Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
 
 ### `ehn-guidelines-eprescription.pdf` (committed)
 
 - Source: <https://health.ec.europa.eu/document/download/b744f30b-a05e-4b9c-9630-ad96ebd0b2f0_en?filename=ehn_guidelines_eprescriptions_en.pdf>
-- Version: as downloaded on 2026-10-04
+- Version: Release 3.1, November 2024
 - sha256: `e0dcb7671e3f5a92707e3bc9f67c38304addb20952da60fea0733c35ae80bbca`
-- Licence: CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
+- Licence: A Commission document, reusable under Commission Decision 2011/833/EU (dec-eu-2011-833-en.xhtml, here) and CC BY 4.0 under the European Commission legal notice (https://commission.europa.eu/legal-notice_en): "Unless otherwise indicated (e.g. in individual copyright notices), content owned by the EU on this website is licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence". The PDF states no licence of its own
+- Note: The eHealth Network guideline on ePrescription and eDispensation, Release 3.1, adopted in Budapest in November 2024, as its title page states.
 
-### `ec-legal-notice.html` (committed)
+### `dec-eu-2011-833-en.xhtml` (committed)
 
-- Source: <https://commission.europa.eu/legal-notice_en>
-- Version: as served on 2026-10-05
-- sha256: `fd6687f313b4b016675c5d74595e3bc343f45a34b430a7ff13a35e2b5cf03a75`
-- Licence: CC BY 4.0: the page is itself content of a Commission website under the licence it states
-- Note: A live page kept as the licence evidence for the two guidelines; its bytes change with every edit, so a re-run fails until the pin is renewed.
+- Source: <https://publications.europa.eu/resource/cellar/cb76d4a0-c886-40bd-99d7-8db018a723d0.0010.03/DOC_1>
+- Version: OJ L 330, 14.12.2011, p. 39 (CELEX 32011D0833), English
+- sha256: `2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents, the reuse terms of the acts and the guidelines here (its Articles 3 and 6), kept as their licence evidence. It replaces the Commission legal notice page, whose bytes changed with every render. Pinned at the Cellar manifestation the CELEX resource resolves to.
 
 ### `ehdsi-interoperability-specifications` (needs manual retrieval)
 

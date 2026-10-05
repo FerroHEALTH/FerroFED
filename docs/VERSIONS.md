@@ -103,12 +103,18 @@ its pin from this table, and `scripts/checks/versions.sh` reads each vendored
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` commit `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` | `scripts/vendor/federation-ref.sh`, `docs/specs/federation-ref/PROVENANCE.md` |
 | openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules, the Query validation document and the SMART on openEHR source (`docs/smart_app_launch/`, DEVELOPMENT status in this release) | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
 | openEHR AQL specification source | `openEHR/specifications-QUERY` tag `Release-1.1.0`, the AQL and AQL examples documents and the grammar | `scripts/vendor/aql.sh`, `docs/specs/aql/PROVENANCE.md` |
+| openEHR Reference Model specification source | `openEHR/specifications-RM` tag `Release-1.1.0`, the AsciiDoc sources of the RM 1.1.0 specifications and the class definitions they include | `scripts/vendor/openehr-rm.sh`, `docs/specs/openehr-rm/PROVENANCE.md` |
 | IHE PIXm FHIR package | `ihe.iti.pixm` version `3.1.0` from `packages.fhir.org`, tarball sha256 `19e2e8eaf3030ac7b4d809c5e1eeb8face02c8635318aeb6d35bc2bb889de0d0`, the ITI-83 artefacts | `scripts/vendor/ihe-pixm.sh`, `docs/specs/ihe-pixm/PROVENANCE.md` |
 | IHE PDQm FHIR package | `ihe.iti.pdqm` version `3.2.0` from `packages.fhir.org`, tarball sha256 `61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2`, the ITI-78 and ITI-119 artefacts | `scripts/vendor/ihe-pdqm.sh`, `docs/specs/ihe-pdqm/PROVENANCE.md` |
 | IHE mCSD FHIR package | `ihe.iti.mcsd` version `4.0.0` from `packages.fhir.org`, tarball sha256 `933a143d7bb14c66731a32f52a084c6cb92476aca1b917db77a4640f8a5290ad`, the ITI-90 and ITI-91 artefacts | `scripts/vendor/ihe-mcsd.sh`, `docs/specs/ihe-mcsd/PROVENANCE.md` |
 | IHE PMIR FHIR package | `ihe.iti.pmir` version `1.6.0` from `packages.fhir.org`, tarball sha256 `ec9d25fc64ac2f3087f921c14c0da56afc7e794caa80298db3f130bc0a40fe70`, the ITI-93 and ITI-94 artefacts | `scripts/vendor/ihe-pmir.sh`, `docs/specs/ihe-pmir/PROVENANCE.md` |
 | IHE IUA supplement | `IHE/ITI.IUA` tag `2.5`, the Revision 2.5 Trial Implementation supplement text (ITI-71, ITI-72, ITI-102, ITI-103) and its figures | `scripts/vendor/ihe-iua.sh`, `docs/specs/ihe-iua/PROVENANCE.md` |
-| IHE BALP FHIR package | `ihe.iti.balp` version `1.1.4` from `packages.fhir.org`, tarball sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90`, the RESTful Query, Read, Create and Delete patterns | `scripts/vendor/ihe-balp.sh`, `docs/specs/ihe-balp/PROVENANCE.md` |
+| IHE BALP FHIR package | `ihe.iti.balp` version `1.1.4` from `packages.fhir.org`, tarball sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90`, the whole package but its manifest | `scripts/vendor/ihe-balp.sh`, `docs/specs/ihe-balp/PROVENANCE.md` |
+| IHE PIXm narrative pages | the IG of package `ihe.iti.pixm` 3.1.0 at `profiles.ihe.net/ITI/PIXm/3.1.0/`, pin-set digest `b3cfa964a0c8813c068d0193bc35f5e606cead23e845a0de0925f041fe9ad2a1`, the Volume 1 (1:41), ITI-83 and ITI-104 pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-pixm-pages/PROVENANCE.md` |
+| IHE PDQm narrative pages | the IG of package `ihe.iti.pdqm` 3.2.0 at `profiles.ihe.net/ITI/PDQm/3.2.0/`, pin-set digest `a3271aa6b45fad9ceb2da373c6d4cab0eb7649e06fcb278431f967bde976e0b6`, the Volume 1 (1:38), ITI-78 and ITI-119 pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-pdqm-pages/PROVENANCE.md` |
+| IHE PMIR narrative pages | the IG of package `ihe.iti.pmir` 1.6.0 at `profiles.ihe.net/ITI/PMIR/1.6.0/`, pin-set digest `ba4747caf6acc383df4ffb041b253272ad58ead796345fb78dc38740f58c4b09`, the Volume 1 (1:49), ITI-93 and ITI-94 pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-pmir-pages/PROVENANCE.md` |
+| IHE mCSD narrative pages | the IG of package `ihe.iti.mcsd` 4.0.0 at `profiles.ihe.net/ITI/mCSD/4.0.0/`, pin-set digest `982bda79f08b954960230d43f546ba15321a393236da2bcf4a5cbecfddfadacf`, the Volume 1 (1:46), ITI-90 and ITI-91 pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-mcsd-pages/PROVENANCE.md` |
+| IHE BALP narrative pages | the IG of package `ihe.iti.balp` 1.1.4 at `profiles.ihe.net/ITI/BALP/1.1.4/`, pin-set digest `f682913c6c5d5d2599c1dcb3c41a22373240b126a2051dab6b58ca8d56d1524d`, the Volume 1 (1:52) and Volume 3 (3:5.7) pages | `scripts/vendor/ihe-iti-pages.sh`, `docs/specs/ihe-balp-pages/PROVENANCE.md` |
 | IHE ITI-20 Record Audit Event | `profiles.ihe.net/ITI/TF/Volume2/ITI-20.html`, Revision 20.2, page sha256 `881c7d6423fdf5ecaf4f9f50f8d25be61c3ed8ef97c87eff9591bd7fdf51570d` and its figure `media/Figure_3.20.4-1.png` sha256 `7aba1a2437e3492202460e150a6dda85b8a1886035bd2aa8daa4c892a579b734` | `scripts/vendor/ihe-atna.sh`, `docs/specs/ihe-atna/PROVENANCE.md` |
 | IHE RESTful ATNA supplement | `IHE_ITI_Suppl_RESTful-ATNA.pdf` from `www.ihe.net`, Rev. 3.6, sha256 `d8451a4a0d951662b6a04b745084c33afff6196db5647f2cf79d9149dfa7265a` | `scripts/vendor/ihe-atna.sh`, `docs/specs/ihe-atna/PROVENANCE.md` |
 | Netherlands Generic Functions IG source | `nuts-foundation/nl-generic-functions-ig` tag `v0.3.0`, commit `5367430787042c218996f11570f904bd3cd37a83`, the source of package `fhir.nl.gf` version `0.3.0`: the localization, consent, care services, identification and authentication pages (with the six GFI transactions) and the FSH profiles, capability statements and examples | `scripts/vendor/nl-gf.sh`, `docs/specs/nl-gf/PROVENANCE.md` |
@@ -147,9 +153,11 @@ its pins and this digest disagree, and when an upstream hash moves.
 `PINNED_DIGESTS_ONLY=1 scripts/vendor/<country>.sh` prints the digests for a
 re-pin. An artefact whose licence does not allow redistribution, or is
 unclear, is fetched into the git-ignored `.vendor-cache/` and only its
-provenance is committed. Live pages (the NSPOP, Inera and NHN pages, the
-Commission legal notice) move with every edit, so their scripts fail until
-the pins are renewed.
+provenance is committed. Live pages (the NSPOP, Inera and NHN pages) move
+with every edit, so their scripts fail until the pins are renewed. The
+Commission's reuse terms are pinned as Decision 2011/833/EU at its Cellar
+manifestation, which does not move, and the legal notice page, whose bytes
+change with every render, is cited and not pinned.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -170,7 +178,7 @@ the pins are renewed.
 | IHE PIXm FHIR package, Swiss pin | package `ihe.iti.pixm` 3.0.4, pin-set digest `68b36cfa85cc04551e30b3628ce16218c1b980495c06bb835f34b0ccc706063a` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pixm-ch/PROVENANCE.md` |
 | IHE PDQm FHIR package, Swiss pin | package `ihe.iti.pdqm` 3.1.0, pin-set digest `ae4fb56c9eba92fcdf5637c86135618e37b60642c99013a8ca06ba747c9c4e73` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pdqm-ch/PROVENANCE.md` |
 | IHE IUA supplement, Swiss pin | `IHE/ITI.IUA` Revision 2.3, pin-set digest `2a5f13a87ccf307fecda8c48e77a61fd09c440089b2172be0edea912dea85439` | `scripts/vendor/ch.sh`, `docs/specs/ihe-iua-ch/PROVENANCE.md` |
-| EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, Implementing Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243, two eHealth Network guidelines and the Commission legal notice, pin-set digest `7c2e0fa5d9ca2bdceadc96250f90cb72a1be2b0f3663e87cc24fd67d0d6ffdc1` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
+| EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, Implementing Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243, two eHealth Network guidelines and Commission Decision 2011/833/EU on the reuse of Commission documents, pin-set digest `4af818fc47ead2a2a5120225d68a338ba068bed71c46b4e65b064491ceddf148` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
 | MyHealth@EU NCPeH API and OpenNCP | package `myhealth.eu.fhir.ncp-api` 9.1.0, two guide pages and OpenNCP v10.1.0, pin-set digest `491dc60ee8b1bf8510758e0d4a62a8578c728f27c8b519a56ba40548f72c0c56` | `scripts/vendor/eu.sh`, `docs/specs/ehdsi/PROVENANCE.md` |
 | IHE ITI Technical Framework Volume 1 pages | ITI TF Revision 20.2 chapters 13, 18 and 27, pin-set digest `838b2f672e0bc34841d7fe297fd561c6f49c42fdd12b5a15119eb10a7234aeb7` | `scripts/vendor/ihe-iti-tf.sh`, `docs/specs/ihe-iti-tf/PROVENANCE.md` |
 | Belgian eHealth platform documents | ten cookbooks, two Swagger documents and the re-use conditions, pin-set digest `62377196eaf498ce49beca04948308cc78d02a718b5ecd1471514c1567b2c025` | `scripts/vendor/be.sh`, `docs/specs/be-ehealth/PROVENANCE.md` |
@@ -181,6 +189,28 @@ the pins are renewed.
 | Norwegian NHN developer portal | ten Pasientens journaldokumenter, HelseID and document-sharing pages, pin-set digest `3eef682e5633ba560c8cbe2caee315501204cba9935a9432fdb2a4308e64364b` | `scripts/vendor/no.sh`, `docs/specs/no-nhn/PROVENANCE.md` |
 | Finnish Kanta documents and packages | three Kanta documents and two Kanta FHIR packages, pin-set digest `8709b4a22c5b8ce006490664a80c681dded2bd587811bde2afc77ddd1c6cb50e` | `scripts/vendor/fi.sh`, `docs/specs/fi-kanta/PROVENANCE.md` |
 | Finnish base profiles (HL7 Finland) | package `hl7.fhir.fi.base` 2.0.0, pin-set digest `b8a3c0782939e16f1dcfbf2b4be037abcccdb26be448fca4c818efb79f70eef9` | `scripts/vendor/fi.sh`, `docs/specs/fi-hl7/PROVENANCE.md` |
+
+### Exchange-format proxy packages (#683)
+
+The published proxies for the European electronic health record exchange
+format of Regulation (EU) 2025/327 Article 15(1), until its implementing act
+is adopted: the Xt-EHR EHDS Logical Information Models and the HL7 Europe
+FHIR guides, with the HL7 Europe Extensions and the International Patient
+Summary at the versions those guides depend on. Each is the registry tarball
+of `packages.fhir.org`, pinned in `scripts/vendor/eehrxf.sh` by URL and
+sha256 through `scripts/vendor/lib/pinned.sh` and committed whole, and each
+row carries the pin-set digest first and the tarball sha256 after it.
+`scripts/checks/pin-freshness.sh` reads each package's registry entry.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| Xt-EHR EHDS Logical Information Models | package `xtehr.eu.ehds.models` 1.0.0, pin-set digest `796cc0974133058ba0b34d9b678baf272eb89b1ceeddc6930e6d66936a38c953`, tarball sha256 `a4853e58a869468464847e2eafa50fb07349e6da1e99456a0d93aae27848e1f8` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-xtehr-models/PROVENANCE.md` |
+| HL7 Europe Base and Core | package `hl7.fhir.eu.base` 2.0.1, pin-set digest `b84f7ba0799903e6bf4d2bf0ecaeeaefd0f71510238c7e30d63244ff6c603c67`, tarball sha256 `3fb23b64d70656ea809e1ad66d84d5d008400e18424266debf176cb46fba0b4a` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-base/PROVENANCE.md` |
+| HL7 Europe Patient Summary | package `hl7.fhir.eu.eps` 1.0.0-ballot, pin-set digest `ba59282865c06a3819a25d92b4110f5d6c84b2df2b0f4e0ae34092a66659f038`, tarball sha256 `e0fff1fb20d3daf75609259faa6b860131ebf4fc8890bb68f0da882307afc33c` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-eps/PROVENANCE.md` |
+| HL7 Europe Medication Prescription and Dispense | package `hl7.fhir.eu.mpd` 1.0.0, pin-set digest `4c4ea5572812dbacfc87573af4165742284a0825b0a200fa606df07393ea9758`, tarball sha256 `f1bc1084efc93e16ae4b45c1bb71340385d314a72031949c4a7e0d97aea5fd6b` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-mpd/PROVENANCE.md` |
+| HL7 Europe Laboratory Report | package `hl7.fhir.eu.laboratory` 2.0.0, pin-set digest `716111c5e8d1a60490dd0ac34f5e98534fd83cce8055218e05f7d675778af682`, tarball sha256 `097aa45c6efcdbc3f25ead8b7d448fee5011b5e7ecf264aa400c5e2c69c5c488` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-laboratory/PROVENANCE.md` |
+| HL7 Europe Extensions | package `hl7.fhir.eu.extensions.r4` 1.3.1 and 1.3.0, pin-set digest `6a5701133f97d68913f2b007f01a9b654b339cff1f8340493b5f2b615b6be24d`, tarball sha256 `37f3ee7ae7a2312e71a4e855e6c36f45d2bc3b13f995bcf4a9fb499ca014cff6` (1.3.1, which `hl7.fhir.eu.base` 2.0.1 depends on) and `8510e930856961d550c04d43f243ef0bdcb27089431fe183ab11c7f805f0c2f1` (1.3.0, which `hl7.fhir.eu.eps` 1.0.0-ballot and `hl7.fhir.eu.laboratory` 2.0.0 depend on) | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-extensions/PROVENANCE.md` |
+| HL7 International Patient Summary | package `hl7.fhir.uv.ips` 2.0.0, pin-set digest `b26ce0cf1012b4a97f3678efa9ece6198b4b353f85ec0090a1de057643b31c5a`, tarball sha256 `b3964eba08ee699bc121b905c4290641e54dd34f2cf3b5cd3edeb08a40a66979`, the version `hl7.fhir.eu.eps` 1.0.0-ballot depends on | `scripts/vendor/eehrxf.sh`, `docs/specs/hl7-ips/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 

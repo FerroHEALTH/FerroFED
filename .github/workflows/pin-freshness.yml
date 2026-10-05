@@ -8,10 +8,11 @@
 # the manifests. Between the two sits a set of pins nothing watches: the
 # actionlint, hadolint and kubeconform container images named inside a `run:`
 # block, the analyzer versions handed to taiki-e/install-action as an input,
-# the commits the vendored specification corpora are fetched at, the Chrome
-# for Testing release the browser journeys install, and the container images
-# the testkit harness starts, which are Rust constants. This workflow reads
-# the newest upstream release, commit or registry tag of each and opens ONE
+# the commits, release tags and FHIR package versions the vendored
+# specification corpora are fetched at, the Chrome for Testing release the
+# browser journeys install, and the container images the testkit harness
+# starts, which are Rust constants. This workflow reads the newest upstream
+# release, commit, registry version or registry tag of each and opens ONE
 # issue when a pin is behind. Its second job watches the EU corpus for the
 # acts Regulation (EU) 2025/327 still waits on.
 #
