@@ -23,8 +23,7 @@ use crate::config::grant::GrantFault;
 use crate::config::secrets::{resolve_credentials, resolve_signing};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
-    ServerSettings, Settings,
-    SigningSettings, TelemetrySettings,
+    ServerSettings, Settings, SigningSettings, TelemetrySettings,
 };
 use crate::config::{
     COMBINING_MARGIN_MS, Config, Federation, Localization, Metrics, NodeSelection, OffsetPaging,
