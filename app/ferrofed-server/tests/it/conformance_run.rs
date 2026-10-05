@@ -8,8 +8,9 @@
 //! refused with the usage exit before any node is asked anything. A gateway
 //! or a node reached over plain http beyond the host, or over any http
 //! outside the development profile, is refused with the configuration exit;
-//! the gateway client follows no redirect; and the caller's token reaches no
-//! report file, no log line and no node.
+//! the gateway client follows no redirect; the caller's token reaches no
+//! report file, no log line and no node; and `--node-profile` reports
+//! CP-18, CP-19 and CP-27 against every member, through its node client.
 //!
 //! The run against real nodes is in `e2e::conformance_run`.
 #![allow(
@@ -396,6 +397,80 @@ async fn a_run_writes_the_callers_token_to_no_report_and_no_log() -> TestResult 
                 "with no cross-reference the run seeds nothing, and a node is only read: {} {}",
                 request.method,
                 request.url.path()
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_node_profile_reports_each_point_against_every_member() -> TestResult {
+    let (a, b) = (Server::start().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let config = deployment(dir.path(), &a, &b, "profile = \"development\"")?;
+    let text = std::fs::read_to_string(&config)?;
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    let summary = ferrofed_server::conformance::run::run(
+        &settings,
+        RunOptions {
+            gateway: None,
+            token: SecretString::from(crate::support::token()?),
+            patient: SyntheticPatient::new(
+                "urn:oid:2.999.1.1",
+                SecretString::from("ffd-test-0038".to_owned()),
+            )?,
+            seed_data: DEMO_DATA.into(),
+            out: dir.path().join("report"),
+            node_profile: true,
+        },
+    )
+    .await?;
+
+    let findings = summary.report.findings_tsv();
+    for node in ["node node-a", "node node-b"] {
+        for point in ["CP-18", "CP-19", "CP-27", "CP-33a"] {
+            assert!(
+                findings
+                    .lines()
+                    .any(|line| line.starts_with(&format!("{node}\t{point}\t"))),
+                "{point} is reported against {node}: {findings}"
+            );
+        }
+    }
+    for line in findings.lines().filter(|line| line.contains("\tCP-19\t")) {
+        assert!(
+            line.contains("\tnot-observable\t") && line.contains("arranges no consent refusal"),
+            "a run arranges no consent refusal, and says so: {line}"
+        );
+    }
+    for point in ["CP-18", "CP-19", "CP-27"] {
+        let row = summary
+            .report
+            .row("node", point)
+            .ok_or("the point is reported")?;
+        assert!(
+            row.result.starts_with("node-"),
+            "{point} reads from the findings, never as a gateway pass: {row:?}"
+        );
+    }
+    for node in [&a, &b] {
+        let requests = node.received_requests().await.ok_or("recording is on")?;
+        assert!(
+            requests
+                .iter()
+                .any(|request| request.url.path() == "/v1/query/aql"),
+            "the checks reached the member through its node client"
+        );
+        for request in &requests {
+            let seen = format!(
+                "{} {:?} {}",
+                request.url,
+                request.headers,
+                String::from_utf8_lossy(&request.body)
+            );
+            assert!(
+                !seen.contains("ffd-test-0038"),
+                "no check carries the run's patient (N33): {seen}"
             );
         }
     }

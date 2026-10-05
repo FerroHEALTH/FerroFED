@@ -13,15 +13,15 @@
 //! governs which products the harness runs: our own design.
 
 use ferrofed_registry::id::EndpointId;
+use ferrofed_server::conformance::node_profile::interface::Arrangement;
+use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdict, checks};
 use ferrofed_testkit::containers::ehrbase::{
     self, RESTRICTED_ADMIN, RESTRICTED_USER, withheld_path,
 };
 use ferrofed_testkit::containers::{
     self, EHRBASE, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode,
 };
-use ferrofed_testkit::node_profile::{
-    self, Arrangement, Check, Credential, Finding, Interface, Profile, Verdict, checks,
-};
+use ferrofed_testkit::node_profile;
 use ferrofed_testkit::pix::PixManager;
 use ferrofed_testkit::seed::{
     self, CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedError, SeedPlan,
@@ -30,7 +30,7 @@ use http::StatusCode;
 use openehr_its::json::to_canonical_json;
 use uuid::Uuid;
 
-use super::{COUNT, TestResult, federation, integrity, registry};
+use super::{COUNT, TestResult, federation, interface, principal, registry};
 
 /// The EHR the invocation check reads.
 const EHR: Uuid = Uuid::from_u128(0x9393_9393_9393_4393_8393_0000_0000_0549);
@@ -101,7 +101,7 @@ async fn ehrbase_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
     }
     node.proxy.clear_journal();
 
-    let observed = checks::invocable_on_ehr_id(&Interface::new(&node.api_root())?, EHR).await?;
+    let observed = checks::invocable_on_ehr_id(&interface(&node.api_root(), None)?, EHR).await?;
     assert_eq!(4, observed.evidence().len(), "{observed:?}");
 
     let journal = node.proxy.journal();
@@ -120,11 +120,7 @@ async fn ehrbase_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
             capture.path
         );
     }
-    arranged.extend_from_slice(observed.evidence());
-    record(
-        Finding::new(observed.check(), observed.verdict(), arranged),
-        "invocable-on-ehr-id",
-    )
+    record(observed.after(arranged), "invocable-on-ehr-id")
 }
 
 // conformance: CP-27
@@ -135,7 +131,7 @@ async fn ehrbase_is_checked_for_an_ehr_created_without_a_subject() -> TestResult
     }
     let node = ehrbase::ehrbase(NODE_A_SYSTEM_ID).await?;
 
-    let finding = checks::subject_not_required(&Interface::new(&node.api_root())?).await?;
+    let finding = checks::subject_not_required(&interface(&node.api_root(), None)?).await?;
     assert!(!finding.evidence().is_empty(), "{finding:?}");
     record(finding, "subject-not-required")
 }
@@ -148,7 +144,7 @@ async fn ehrbase_is_checked_for_passing_its_errors_through() -> TestResult {
     }
     let node = ehrbase::ehrbase(NODE_A_SYSTEM_ID).await?;
 
-    let finding = checks::errors_passed_through(&Interface::new(&node.api_root())?).await?;
+    let finding = checks::errors_passed_through(&interface(&node.api_root(), None)?).await?;
     assert_eq!(3, finding.evidence().len(), "{finding:?}");
     record(finding, "errors-passed-through")
 }
@@ -177,28 +173,23 @@ async fn ehrbase_is_checked_for_holding_its_own_access_decision() -> TestResult 
     }
     let node = ehrbase::ehrbase_restricted(NODE_A_SYSTEM_ID, WITHHELD).await?;
     created_by_the_administrator(&node.api_root(), WITHHELD).await?;
-    let arrangement = Arrangement::new(
-        WITHHELD,
-        Credential::basic(RESTRICTED_ADMIN.user, RESTRICTED_ADMIN.password),
-        Credential::basic(RESTRICTED_USER.user, RESTRICTED_USER.password),
-    );
+    let arrangement = Arrangement::new(WITHHELD, principal(RESTRICTED_USER));
 
-    let observed =
-        checks::access_decided_at_node(&Interface::new(&node.api_root())?, &arrangement).await?;
+    let observed = checks::access_decided_at_node(
+        &interface(&node.api_root(), Some(RESTRICTED_ADMIN))?,
+        &arrangement,
+    )
+    .await?;
     assert_ne!(
         Verdict::NotObservable,
         observed.verdict(),
         "the harness arranged a refusal the node shows: {observed:?}"
     );
-    let mut evidence = vec![format!(
+    let arranged = vec![format!(
         "arranged with EHRbase's security.additionalAuthorizations, its narrowest access control: the request path {} admits the ADMIN role alone, the EHR's content carries no policy",
         withheld_path(WITHHELD)
     )];
-    evidence.extend_from_slice(observed.evidence());
-    record(
-        Finding::new(observed.check(), observed.verdict(), evidence),
-        "access-decided-at-node",
-    )
+    record(observed.after(arranged), "access-decided-at-node")
 }
 
 // conformance: CP-19
@@ -250,11 +241,7 @@ async fn ehrbase_is_checked_against_the_identifier_integrity_conditions() -> Tes
 
     let mut profile = Profile::new(product());
     for finding in report.findings() {
-        profile.record(integrity(
-            finding.condition(),
-            finding.verdict(),
-            finding.evidence(),
-        ));
+        profile.record(Finding::of_admission(finding));
     }
     profile.write(
         &node_profile::findings_dir(),

@@ -96,6 +96,42 @@ fn every_row_matches_the_harness(rows: &BTreeMap<(String, String), (String, Stri
     }
 }
 
+/// Asserts that the node points read from the node profile and that every
+/// check of the profile is reported against each of the two members, in
+/// the report written to `out`.
+fn every_member_has_its_node_profile(
+    rows: &BTreeMap<(String, String), (String, String, String)>,
+    out: &Path,
+) -> TestResult {
+    for point in ["CP-18", "CP-19", "CP-27"] {
+        let node = rows
+            .get(&("node".to_owned(), point.to_owned()))
+            .ok_or("the node point is reported")?;
+        assert!(
+            node.1.starts_with("node-"),
+            "the node profile's findings decide {point}: {node:?}"
+        );
+    }
+    let findings = std::fs::read_to_string(out.join("node-profile.tsv"))?;
+    for check in [
+        "invocable on ehr_id alone",
+        "subject never required",
+        "node errors passed through",
+        "access decided at the node",
+        "consent before release",
+    ] {
+        assert_eq!(
+            2,
+            findings
+                .lines()
+                .filter(|line| line.contains(&format!("\t{check}\t")))
+                .count(),
+            "{check} is reported against each member: {findings}"
+        );
+    }
+    Ok(())
+}
+
 /// The configuration file of the deployment over `nodes`, written in `dir`.
 fn configuration(
     dir: &Path,
@@ -194,6 +230,7 @@ async fn a_run_against_the_harness_scores_what_the_harness_scores_and_nothing_mo
         operator.1.starts_with("operator-"),
         "the admission check's findings score CP-33a: {operator:?}"
     );
+    every_member_has_its_node_profile(&rows, &out)?;
 
     let written = std::fs::read_to_string(out.join("written.tsv"))?;
     for ehr_id in [EHR_A, EHR_B] {

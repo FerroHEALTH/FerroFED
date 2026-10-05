@@ -58,6 +58,7 @@ mod mutual_tls;
 #[cfg(feature = "binding-nl")]
 mod nl_gf;
 mod no_destination;
+mod node_profile;
 #[cfg(feature = "binding-nl")]
 mod nvi_nuts;
 mod onward;
@@ -95,6 +96,7 @@ mod route_log;
 mod routing;
 mod routing_log;
 mod run;
+mod seed_data;
 mod shutdown;
 mod stored;
 mod stored_fan_out;

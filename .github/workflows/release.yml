@@ -11,11 +11,11 @@
 # workflows release-build.yml, release-image.yml and release-viewer.yml, the
 # SLSA Build Level 3 lanes.
 #
-# The release is created as a DRAFT, the gateway compose files, the binaries,
-# SBOMs and attestation bundles are attached to it, the gateway and operator
-# console images are pushed to GHCR, and only
-# once the expected asset set is complete is it PUBLISHED. Publishing last
-# means a half-assembled release is never visible.
+# The release is created as a DRAFT, the gateway compose files, the
+# conformance seed data, the binaries, SBOMs and attestation bundles are
+# attached to it, the gateway and operator console images are pushed to
+# GHCR, and only once the expected asset set is complete is it PUBLISHED.
+# Publishing last means a half-assembled release is never visible.
 #
 # Every tag since v0.0.1 carries the workspace (#28), so `plan` fails a tag
 # whose tree has no root Cargo.toml, because the tag cannot then be checked
@@ -245,9 +245,9 @@ jobs:
     permissions:
       contents: write # create the GitHub release
     steps:
-      # The tag's tree, for the compose files attached below. Checked out
-      # first, because checkout cleans the workspace and would remove the
-      # notes downloaded after it.
+      # The tag's tree, for the compose files and the seed data attached
+      # below. Checked out first, because checkout cleans the workspace and
+      # would remove the notes downloaded after it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -315,6 +315,23 @@ jobs:
             deploy/compose/compose.yaml \
             deploy/compose/ferrofed.toml \
             deploy/compose/registry.toml \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      # The vendored demo data `ferrofed conformance run --seed-data` reads,
+      # in one file with the Apache-2.0 licence and notice it is distributed
+      # under, and that file's SHA-256 in sha256sum form, so an operator
+      # scores a deployment with no checkout. The run checks each file it
+      # holds against the digests it carries.
+      - name: Attach the conformance seed data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          scripts/release/seed-data.sh seed-data
+          gh release upload "$TAG" \
+            seed-data/ferrofed-conformance-seed-data.json \
+            seed-data/ferrofed-conformance-seed-data.json.sha256sum \
             --repo "$GITHUB_REPOSITORY" --clobber
 
   # ---- build-binaries: the SLSA Build L3 lane, once per target --------------
@@ -418,8 +435,11 @@ jobs:
             done
           done < <(printf '%s' "$TARGETS" | jq -r '.include[].target')
           # The release-wide assets github-release attaches: the gateway
-          # compose file and the two example files it mounts.
-          for asset in compose.yaml ferrofed.toml registry.toml; do
+          # compose file, the two example files it mounts, and the
+          # conformance seed data with its SHA-256.
+          for asset in compose.yaml ferrofed.toml registry.toml \
+            ferrofed-conformance-seed-data.json \
+            ferrofed-conformance-seed-data.json.sha256sum; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
           done
           if [ -n "$missing" ]; then

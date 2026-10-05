@@ -9,7 +9,9 @@
 //! synthetic patient at the members its real cross-reference names, through
 //! each node's own ITS-REST writes ([`fixture`]), runs every scenario of the
 //! [`catalogue`] ([`scenarios`]), and writes the report the harness run
-//! writes ([`report`]). [`safety`] holds what the run refuses before it
+//! writes ([`report`]). With `--node-profile` it also runs the
+//! Federation-Node profile checks against each active member
+//! ([`node_profile`]). [`safety`] holds what the run refuses before it
 //! writes anything, and [`run`] puts the parts together.
 //!
 //! The scenario checks are the ones the end-to-end suite runs against its
@@ -24,6 +26,7 @@ pub mod catalogue;
 pub mod client;
 pub mod execute;
 pub mod fixture;
+pub mod node_profile;
 pub mod report;
 pub mod run;
 pub mod safety;

@@ -10,20 +10,21 @@
 //! `OPTIONS {base}/`; this checks that the declaration holds on real nodes:
 //! each node is asked its `SUM` and `COUNT`, the answer is the mean weighted
 //! by those counts, and the counts are the ones each node returns for the
-//! query it was sent.
+//! query it was sent. The self-description is read with the conformance
+//! run's own check
+//! ([`ferrofed_server::conformance::scenarios::track9::options`]).
 
 use std::error::Error;
 
-use axum::body::Body;
+use ferrofed_server::conformance::scenarios::track9;
 use ferrofed_testkit::containers::{self, ProxiedNode};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{self, CompositionSeed, DemoComposition, EhrSeed, SeedPlan};
-use http::{Request, StatusCode};
-use openehr_federation::options::OptionsRoot;
+use http::StatusCode;
 use serde::Deserialize;
 
 use crate::e2e::scenario::{
-    Options, clear, exchange, gateway_with, patient_predicate, post_aql, queries,
+    Options, clear, exchange, gateway_with, in_process, patient_predicate, post_aql, queries,
 };
 use crate::e2e::{EHR_A, EHR_B, PATIENT, TestResult, plan};
 
@@ -98,9 +99,7 @@ async fn an_undirected_avg_is_the_mean_weighted_by_the_counts_each_node_returns(
     let dir = tempfile::tempdir()?;
     let app = gateway_with(dir.path(), &nodes, &Options::default())?;
 
-    let described = exchange(&app, Request::options("/").body(Body::empty())?).await?;
-    assert_eq!(StatusCode::OK, described.status, "{}", described.text);
-    let root: OptionsRoot = serde_json::from_str(&described.text)?;
+    let root = track9::options(&in_process(&app)).await?;
     assert!(
         root.federation
             .aggregates

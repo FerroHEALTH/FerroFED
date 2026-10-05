@@ -35,13 +35,27 @@ The run needs four things beside the configuration file.
   compositions, and to store and run stored queries. The run sends it on
   every request but the one that checks an unauthenticated caller is
   refused.
-- **The seed files.** The directory holding the reference implementation's
-  synthetic demo data that FerroFED vendors at
-  `docs/specs/federation-ref/docker/demo-data/`: the
-  `International Patient Summary` operational template and the two
+- **The seed files.** The reference implementation's synthetic demo data:
+  the `International Patient Summary` operational template and the two
   compositions `composition-12345-hospital.json` and
-  `composition-12345-clinic.json`, whose only party is `PARTY_SELF`. The run
-  checks each file's SHA-256 and refuses any other content.
+  `composition-12345-clinic.json`, whose only party is `PARTY_SELF`. Every
+  release attaches them as `ferrofed-conformance-seed-data.json`, one file
+  that also carries their Apache-2.0 licence and notice, with its SHA-256 in
+  `ferrofed-conformance-seed-data.json.sha256sum`:
+
+  ```sh
+  base=https://github.com/FerroHEALTH/FerroFED/releases/latest/download
+  for f in ferrofed-conformance-seed-data.json ferrofed-conformance-seed-data.json.sha256sum; do
+    curl -LO "$base/$f"
+  done
+  sha256sum -c ferrofed-conformance-seed-data.json.sha256sum
+  ```
+
+  `…/releases/download/vX.Y.Z/` downloads the file of one version. Pass the
+  file to `--seed-data`. In a checkout, you can pass the directory FerroFED
+  vendors them in, `docs/specs/federation-ref/docker/demo-data/`, instead.
+  Either way the run checks each file's SHA-256 and refuses any other
+  content.
 - **At least two members holding the patient** for the scenarios that compare
   answers across nodes. With one, those scenarios are `not-run` with the
   reason.
@@ -53,7 +67,7 @@ ferrofed conformance run --config /etc/ferrofed/ferrofed.toml \
   --allow-writes \
   --patient-namespace urn:oid:2.999.1.1 --patient-value ffd-test-0038 \
   --token-file /run/secrets/conformance-token \
-  --seed-data ./docs/specs/federation-ref/docker/demo-data \
+  --seed-data ./ferrofed-conformance-seed-data.json \
   --out ./conformance-report
 ```
 
@@ -91,9 +105,24 @@ it. The token is read from `--token-file` into a secret type, and no report
 file, log line or error message carries it. Each node receives the onward
 credentials the configuration names for it, never your token.
 
-`--node-profile` also runs the admission check against every active member
-([Admitting a node](admission.md)) and records its findings as the node
-profile.
+`--node-profile` also checks every active member against the node
+obligations of
+[§16.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/0.9/testing.html),
+through the member's node client with its onward credentials, as the
+gateway reaches it, and records the findings as the node profile:
+
+| Check | Point | What the run does |
+|---|---|---|
+| invocable on `ehr_id` alone | CP-27 | reads the patient's EHR it seeded at the member, its `EHR_STATUS` and its compositions by the `ehr_id` alone |
+| subject never required | CP-27 | creates an EHR with no `EHR_STATUS` and reads and queries it by its `ehr_id` |
+| node errors passed through | CP-18 | asks for an EHR the node does not hold and sends an unparsable query, and reads the status the node answers |
+| access decided at the node | CP-18 | records `not-observable`: the refusal under test is the node's own policy, which a run cannot arrange |
+| consent before release | CP-19 | records `not-observable`: ITS-REST defines no consent resource, so a run cannot arrange a consent refusal |
+| the identifier-integrity conditions of §12b.2 | CP-33a, and CP-27 for the `ehr_id` exchange | runs the admission check ([Admitting a node](admission.md)) |
+
+A status ITS-REST does not document for an operation is recorded as the
+node's answer, and a member the checks cannot reach is recorded
+`not-observable` with the cause, never a pass.
 
 The command exits `0` when no scenario failed, `1` when one did or the run
 could not reach its report, `2` when a safety rule refused it, and `78` for a
@@ -126,8 +155,9 @@ Through the gateway, the scenarios write:
 | the vendored composition with the synthetic patient's identifier added to its composer as a `DV_IDENTIFIER` | the patient's EHR at the first member |
 | two stored queries, under `org.example.conformance::` with a name unique to the run, the patient bound only as `$patient` | the gateway's stored-query registry, when it declares one |
 
-With `--node-profile`, the admission check also creates three test EHRs on
-every active member, each for a synthetic subject of its own.
+With `--node-profile`, the node profile also creates one EHR with no subject
+on every active member, and the admission check three test EHRs, each for a
+synthetic subject of its own.
 
 The run reads no EHR it did not create. When a node already holds an
 `ehr_id` the cross-reference names for the patient, the node answers the

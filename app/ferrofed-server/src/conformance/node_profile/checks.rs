@@ -3,8 +3,9 @@
 
 //! The checks, one per obligation of the Federation-Node profile (§16.2).
 //!
-//! Every request a check sends names the EHR by its `ehr_id` alone and
-//! carries no patient identifier and no `subject`. Each observation is one
+//! Every request a check sends goes through the endpoint's node client
+//! ([`Interface`]), names the EHR by its `ehr_id` alone and carries no
+//! patient identifier and no `subject`. Each observation is one
 //! evidence line with its own verdict, and the finding takes the worst of
 //! them ([`Finding::from_observations`]). Statuses are read as the node sent
 //! them, so a status ITS-REST does not document for an operation is evidence
@@ -17,7 +18,8 @@ use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use uuid::Uuid;
 
-use super::{Answer, Arrangement, Check, CheckError, Credential, Finding, Interface, Verdict};
+use super::interface::{Answer, Arrangement, CheckError, Interface};
+use super::{Check, Finding, Verdict};
 
 /// One observation: its verdict and the evidence line.
 type Observation = (Verdict, String);
@@ -56,7 +58,7 @@ fn rows(answer: &Answer) -> Option<usize> {
 
 /// Returns the body of `answer` decoded with the strict canonical JSON
 /// reader, or `None` when it is not one.
-// NOTE: no specification governs the checks: our own design; an decoded_or_reason body is evidence.
+// NOTE: no specification governs the checks: our own design; an undecodable body is evidence.
 fn decoded<T: serde::de::DeserializeOwned>(answer: &Answer) -> Option<T> {
     std::str::from_utf8(&answer.body)
         .ok()
@@ -188,11 +190,13 @@ fn rows_observed(
 /// `ehr_id`.
 ///
 /// A node that gives the EHR a subject of its own leaves the check not
-/// observable, since the EHR then has one.
+/// observable, since the EHR then has one. The finding names the EHR the
+/// check created ([`Finding::created`]), which it never removes, and a read
+/// of it that reaches no answer leaves the finding not observable.
 ///
 /// # Errors
 ///
-/// Returns [`CheckError`] when a request reaches no answer.
+/// Returns [`CheckError`] when the create reaches no answer.
 pub async fn subject_not_required(interface: &Interface) -> Result<Finding, CheckError> {
     let mut seen = Vec::new();
     let created = interface.create_ehr().await?;
@@ -227,7 +231,25 @@ pub async fn subject_not_required(interface: &Interface) -> Result<Finding, Chec
         Verdict::Pass,
         format!("POST /ehr with no EHR_STATUS answered 201 and created {ehr_id}"),
     ));
+    if let Err(error) = subjectless_read(interface, ehr_id, &mut seen).await {
+        seen.push((
+            Verdict::NotObservable,
+            format!(
+                "a read of the subjectless EHR reached no answer: {}",
+                crate::chain(&error)
+            ),
+        ));
+    }
+    Ok(Finding::from_observations(Check::SubjectNotRequired, seen).with_created(ehr_id))
+}
 
+/// The reads of the subjectless EHR `ehr_id`: its `EHR_STATUS` and the query
+/// scoped by its `ehr_id`, each one observation in `seen`.
+async fn subjectless_read(
+    interface: &Interface,
+    ehr_id: Uuid,
+    seen: &mut Vec<Observation>,
+) -> Result<(), CheckError> {
     let status = interface
         .get(&format!("ehr/{ehr_id}/ehr_status"), None)
         .await?;
@@ -260,7 +282,7 @@ pub async fn subject_not_required(interface: &Interface) -> Result<Finding, Chec
         |n| n == 1,
         "one row",
     ));
-    Ok(Finding::from_observations(Check::SubjectNotRequired, seen))
+    Ok(())
 }
 
 /// Checks that the node passes its own errors through (§16.2; assists CP-18).
@@ -361,36 +383,33 @@ async fn refusal(
     interface: &Interface,
     arrangement: &Arrangement,
 ) -> Result<Finding, CheckError> {
-    let ehr_id = arrangement.ehr_id;
-    let permitted = Some(&arrangement.permitted);
-    let refused = Some(&arrangement.refused);
+    let ehr_id = arrangement.ehr_id();
+    let refused = arrangement.refused();
     let mut seen = Vec::new();
 
-    let read = interface.get(&format!("ehr/{ehr_id}"), permitted).await?;
+    let read = interface.get(&format!("ehr/{ehr_id}"), None).await?;
     seen.push(if read.status == StatusCode::OK {
         (
             Verdict::Pass,
-            format!(
-                "GET /ehr/{ehr_id} as the permitted principal {} answered 200",
-                user(permitted)
-            ),
+            format!("GET /ehr/{ehr_id} with the endpoint's onward credentials answered 200"),
         )
     } else {
         (
             Verdict::NotObservable,
             format!(
-                "GET /ehr/{ehr_id} as the permitted principal {} answered {}, so a refusal of another shows nothing",
-                user(permitted),
+                "GET /ehr/{ehr_id} with the endpoint's onward credentials answered {}, so a refusal of another principal shows nothing",
                 read.status
             ),
         )
     });
-    let read = interface.get(&format!("ehr/{ehr_id}"), refused).await?;
+    let read = interface
+        .get(&format!("ehr/{ehr_id}"), Some(refused))
+        .await?;
     seen.push(withheld(
         &read,
         &format!(
             "GET /ehr/{ehr_id} as the refused principal {}",
-            user(refused)
+            refused.name()
         ),
         false,
     ));
@@ -403,32 +422,27 @@ async fn refusal(
         ),
     ];
     for (aql, form) in &forms {
-        let served = interface.query(aql, permitted).await?;
+        let served = interface.query(aql, None).await?;
         seen.push(match (served.status, rows(&served)) {
             (StatusCode::OK, Some(n)) if n > 0 => (
                 Verdict::Pass,
-                format!("{form} as the permitted principal answered {n} row(s)"),
+                format!("{form} with the endpoint's onward credentials answered {n} row(s)"),
             ),
             (status, _) => (
                 Verdict::NotObservable,
                 format!(
-                    "{form} as the permitted principal answered {status} with no row, so a refusal of another shows nothing"
+                    "{form} with the endpoint's onward credentials answered {status} with no row, so a refusal of another principal shows nothing"
                 ),
             ),
         });
-        let answer = interface.query(aql, refused).await?;
+        let answer = interface.query(aql, Some(refused)).await?;
         seen.push(withheld(
             &answer,
-            &format!("{form} as the refused principal"),
+            &format!("{form} as the refused principal {}", refused.name()),
             true,
         ));
     }
     Ok(Finding::from_observations(check, seen))
-}
-
-/// The user name of `credential`, for an evidence line.
-fn user(credential: Option<&Credential>) -> &str {
-    credential.map_or("(none)", Credential::user)
 }
 
 /// The observation of what a refused principal was answered: a refusal

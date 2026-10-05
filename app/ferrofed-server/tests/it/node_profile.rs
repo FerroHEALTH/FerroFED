@@ -1,29 +1,39 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The node profile checks offline, against stub nodes: each check passes a
-//! node that meets its obligation, fails one that breaks it, and leaves one
-//! it cannot decide not observable (§16.2). The checks run against the
-//! harness CDR products in `e2e::node_profile`.
+//! The node profile checks offline, against stub nodes reached through the
+//! endpoint's node client: each check passes a node that meets its
+//! obligation, fails one that breaks it, and leaves one it cannot decide not
+//! observable (§16.2). The harness runs the same checks against its CDR
+//! products, in the testkit's `e2e::node_profile`.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
 )]
 
+use std::collections::BTreeMap;
 use std::error::Error;
+use std::sync::Arc;
 
+use ferrofed_registry::id::EndpointId;
+use ferrofed_server::admission::report::Condition;
+use ferrofed_server::config::Config;
+use ferrofed_server::conformance::node_profile::interface::{Arrangement, Interface, Principal};
+use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdict, checks};
+use ferrofed_server::conformance::report::FINDINGS_HEADER;
+use ferrofed_server::federation::Federation;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::node_profile::checks;
-use ferrofed_testkit::node_profile::{
-    Arrangement, Check, Credential, FINDINGS_HEADER, Finding, Interface, Profile, Verdict,
-};
 use ferrofed_testkit::seed::{self, PatientId};
 use openehr_its::json::to_canonical_json;
+use openehr_its::rest::client::Credentials;
 use uuid::Uuid;
 use wiremock::matchers::{basic_auth, body_string_contains, method, path, path_regex};
 use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
+
+/// The endpoint every stub node is registered under.
+const ENDPOINT: &str = "node-a-pub";
 
 /// The EHR every stub node holds.
 const EHR: Uuid = Uuid::from_u128(0x9393_9393_9393_4393_8393_9393_9393_9393);
@@ -82,9 +92,33 @@ async fn queries(server: &Server, where_rows: usize, predicate_rows: usize) {
     }
 }
 
-/// The interface of `server`.
+/// The development federation over the one stub node at `base`, reached
+/// with the permitted principal's Basic credentials as its onward
+/// credentials.
+fn federation(base: &str) -> Result<Federation, Box<dyn Error>> {
+    let dir = tempfile::tempdir()?;
+    let document = dir.path().join("registry.toml");
+    std::fs::write(
+        &document,
+        format!(
+            "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr.example.org\"\n\n[[endpoint]]\nid = \"{ENDPOINT}\"\nnode = \"node-a\"\nurl = \"{base}\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n"
+        ),
+    )?;
+    let text = format!(
+        "profile = \"development\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 5000\noverall_timeout_ms = 6000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[credentials.\"{ENDPOINT}\"]\nuser = \"permitted\"\npassword = \"permitted-example\"\n",
+        toml::Value::String(document.display().to_string())
+    );
+    let settings =
+        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
+    Ok(Federation::load(&settings)?.ok_or("a registry is configured")?)
+}
+
+/// The interface of the endpoint at `server`.
 fn interface(server: &Server) -> Result<Interface, Box<dyn Error>> {
-    Ok(Interface::new(&server.uri())?)
+    Ok(Interface::of(
+        &federation(&server.uri())?,
+        &EndpointId::new(ENDPOINT)?,
+    )?)
 }
 
 #[tokio::test]
@@ -242,14 +276,13 @@ async fn a_node_answering_another_error_status_than_its_rest_fails() -> TestResu
     Ok(())
 }
 
-/// The principal a stub node serves [`EHR`] to.
-fn permitted() -> Credential {
-    Credential::basic("permitted", "permitted-example")
-}
-
-/// The principal a stub node refuses [`EHR`] to.
-fn refused() -> Credential {
-    Credential::basic("refused", "refused-example")
+/// The principal a stub node refuses [`EHR`] to; the endpoint's onward
+/// credentials present the one it serves it to.
+fn refused() -> Principal {
+    Principal::new(
+        "refused",
+        Arc::new(Credentials::basic("refused", "refused-example")),
+    )
 }
 
 /// Mounts a node serving [`EHR`] to the permitted principal, refusing the
@@ -286,7 +319,7 @@ async fn arranged(server: &Server, read: u16, query: u16, rows: usize) {
 async fn a_refusal_held_on_the_read_and_both_query_forms_is_the_nodes_decision() -> TestResult {
     let server = Server::start().await;
     arranged(&server, 403, 403, 0).await;
-    let arrangement = Arrangement::new(EHR, permitted(), refused());
+    let arrangement = Arrangement::new(EHR, refused());
 
     let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
     assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
@@ -298,7 +331,7 @@ async fn a_refusal_held_on_the_read_and_both_query_forms_is_the_nodes_decision()
 async fn a_scoped_query_answering_no_row_withholds_the_ehr() -> TestResult {
     let server = Server::start().await;
     arranged(&server, 403, 200, 0).await;
-    let arrangement = Arrangement::new(EHR, permitted(), refused());
+    let arrangement = Arrangement::new(EHR, refused());
 
     let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
     assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
@@ -309,7 +342,7 @@ async fn a_scoped_query_answering_no_row_withholds_the_ehr() -> TestResult {
 async fn a_scoped_query_releasing_what_the_read_refuses_fails_the_decision() -> TestResult {
     let server = Server::start().await;
     arranged(&server, 403, 200, 1).await;
-    let arrangement = Arrangement::new(EHR, permitted(), refused());
+    let arrangement = Arrangement::new(EHR, refused());
 
     let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
     assert_eq!(Verdict::Fail, finding.verdict(), "{finding:?}");
@@ -326,7 +359,7 @@ async fn a_scoped_query_releasing_what_the_read_refuses_fails_the_decision() -> 
 async fn a_read_released_to_the_refused_principal_fails_the_decision() -> TestResult {
     let server = Server::start().await;
     arranged(&server, 200, 403, 0).await;
-    let arrangement = Arrangement::new(EHR, permitted(), refused());
+    let arrangement = Arrangement::new(EHR, refused());
 
     let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
     assert_eq!(Verdict::Fail, finding.verdict(), "{finding:?}");
@@ -344,7 +377,7 @@ async fn a_refusal_the_permitted_principal_gets_too_shows_nothing() -> TestResul
         .respond_with(ResponseTemplate::new(403))
         .mount(&server)
         .await;
-    let arrangement = Arrangement::new(EHR, permitted(), refused());
+    let arrangement = Arrangement::new(EHR, refused());
 
     let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
     assert_eq!(Verdict::NotObservable, finding.verdict(), "{finding:?}");
@@ -379,7 +412,7 @@ async fn a_query_form_that_serves_no_row_to_the_permitted_principal_shows_nothin
         .respond_with(json(200, result_set(0)))
         .mount(&server)
         .await;
-    let arrangement = Arrangement::new(EHR, permitted(), refused());
+    let arrangement = Arrangement::new(EHR, refused());
 
     let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
     assert_eq!(
@@ -394,7 +427,7 @@ async fn a_query_form_that_serves_no_row_to_the_permitted_principal_shows_nothin
 async fn a_consent_refusal_is_observed_under_its_own_point() -> TestResult {
     let server = Server::start().await;
     arranged(&server, 403, 403, 0).await;
-    let arrangement = Arrangement::new(EHR, permitted(), refused());
+    let arrangement = Arrangement::new(EHR, refused());
 
     let finding = checks::consent_before_release(&interface(&server)?, &arrangement).await?;
     assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
@@ -432,10 +465,7 @@ fn a_failing_observation_fails_the_finding_whatever_else_passed() {
 fn a_profile_writes_one_row_per_point_with_clean_cells() -> TestResult {
     let mut profile = Profile::new("Example CDR 1.0");
     profile.record(Finding::new(
-        Check::IdentifierIntegrity {
-            condition: "ehr_id exchange",
-            points: &["CP-27", "CP-33a"],
-        },
+        Check::IdentifierIntegrity(Condition::EhrIdExchange),
         Verdict::NotObservable,
         vec!["a line\twith a tab".to_owned(), "and\na break".to_owned()],
     ));
@@ -457,8 +487,78 @@ fn a_profile_writes_one_row_per_point_with_clean_cells() -> TestResult {
 }
 
 #[test]
-fn a_credential_never_shows_its_password() {
-    let shown = format!("{:?}", Credential::basic("someone", "secret-example"));
+fn a_principal_never_shows_its_credentials() {
+    let principal = Principal::new(
+        "someone",
+        Arc::new(Credentials::basic("someone", "secret-example")),
+    );
+    let shown = format!("{principal:?}");
     assert!(shown.contains("someone"), "{shown}");
     assert!(!shown.contains("secret-example"), "{shown}");
+}
+
+#[tokio::test]
+async fn every_request_leaves_through_the_node_client_with_the_onward_credentials() -> TestResult {
+    let server = Server::start().await;
+    erring(&server, 404, 400).await;
+
+    checks::errors_passed_through(&interface(&server)?).await?;
+    let requests = server.received_requests().await.unwrap_or_default();
+    assert_eq!(3, requests.len(), "one request per observation");
+    for request in &requests {
+        assert_eq!(
+            Some("Basic cGVybWl0dGVkOnBlcm1pdHRlZC1leGFtcGxl"),
+            request
+                .headers
+                .get("authorization")
+                .and_then(|value| value.to_str().ok()),
+            "the endpoint's onward credentials: {request:?}"
+        );
+        for minted in ["x-request-id", "openehr-federation-client"] {
+            assert!(
+                request.headers.contains_key(minted),
+                "the node client sets {minted} on every request: {request:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_401_to_the_refused_principal_is_its_refusal_and_never_an_error() -> TestResult {
+    let server = Server::start().await;
+    arranged(&server, 401, 401, 0).await;
+    let arrangement = Arrangement::new(EHR, refused());
+
+    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
+    let refusals = finding
+        .evidence()
+        .iter()
+        .filter(|line| line.contains("as the refused principal refused answered 401"))
+        .count();
+    assert_eq!(3, refusals, "the read and both query forms: {finding:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_subjectless_check_names_the_ehr_it_created() -> TestResult {
+    let server = Server::start().await;
+    creating(&server, None).await;
+
+    let finding = checks::subject_not_required(&interface(&server)?).await?;
+    assert_eq!(&[EHR], finding.created(), "{finding:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_node_that_cannot_be_reached_is_an_error_and_never_a_finding() -> TestResult {
+    let interface = Interface::of(
+        &federation(ferrofed_testkit::unreachable::BASE)?,
+        &EndpointId::new(ENDPOINT)?,
+    )?;
+
+    let unreached = checks::errors_passed_through(&interface).await;
+    assert!(unreached.is_err(), "{unreached:?}");
+    Ok(())
 }

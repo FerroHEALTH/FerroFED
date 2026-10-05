@@ -5,16 +5,21 @@
 //! the development cross-reference: one `RESULT_SET`, each node asked by its
 //! own `ehr_id`, and both patient carriers answering the same rows (§5.4.3,
 //! §7, §9, §11; N7, N16, N33).
+//!
+//! The client-visible checks are the conformance run's own
+//! ([`ferrofed_server::conformance::scenarios::track1`] and
+//! [`track2`](ferrofed_server::conformance::scenarios::track2)); this suite
+//! adds what only the nodes' capturing proxies show.
 
-use std::error::Error;
-
+use ferrofed_server::conformance::scenarios::{track1, track2};
 use ferrofed_testkit::containers::{self, API_PATH};
 use ferrofed_testkit::seed::{self, DemoComposition};
 use http::StatusCode;
 
+use crate::e2e::scenario::{fixture, in_process};
 use crate::e2e::{
-    Answer, EHR_A, EHR_B, PATIENT, TestResult, assert_no_patient_identifier_on_the_wire,
-    body_holds, gateway, patient_query, plan, query,
+    Answer, EHR_A, EHR_B, TestResult, assert_no_patient_identifier_on_the_wire, body_holds,
+    gateway, plan, query,
 };
 use crate::support::call;
 
@@ -39,14 +44,8 @@ async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> Te
     nodes.b.proxy.clear_journal();
     let dir = tempfile::tempdir()?;
 
-    let (status, text) = call(
-        gateway(dir.path(), &nodes.a, &nodes.b)?,
-        query(&patient_query())?,
-    )
-    .await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    crate::facade::schema::validate(&text)?;
-    let answer: Answer = serde_json::from_str(&text)?;
+    let app = gateway(dir.path(), &nodes.a, &nodes.b)?;
+    let answer = track1::single_cdr_shaped(&in_process(&app), &fixture(Some(1), Some(1))?).await?;
     assert!(answer.meta.federation.complete, "both nodes answered");
     let reported: Vec<(&str, &str, Option<u64>)> = answer
         .meta
@@ -63,8 +62,9 @@ async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> Te
         reported,
         "one composition from each node (N16)"
     );
-    assert_eq!(2, answer.rows.len(), "rows from both nodes: {text}");
+    assert_eq!(2, answer.rows.len(), "rows from both nodes: {answer:?}");
 
+    let aql = format!("{API_PATH}/v1/query/aql");
     for (node, own, other) in [(&nodes.a, EHR_A, EHR_B), (&nodes.b, EHR_B, EHR_A)] {
         let journal = node.proxy.journal();
         let steps: Vec<(&str, &str)> = journal
@@ -72,21 +72,22 @@ async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> Te
             .map(|capture| (capture.method.as_str(), capture.path.as_str()))
             .collect();
         assert_eq!(
-            vec![("POST", format!("{API_PATH}/v1/query/aql").as_str())],
+            vec![("POST", aql.as_str()); 2],
             steps,
-            "{} received one ITS-REST query and nothing else",
+            "{} received one ITS-REST query per client query, by POST and by GET, and nothing else",
             node.node.system_id()
         );
-        let sent = journal.first().ok_or("one capture")?;
-        let body = String::from_utf8_lossy(&sent.body);
-        assert!(
-            body_holds(sent, &own.to_string()),
-            "the node query is keyed on the node's own ehr_id (N7): {body}"
-        );
-        assert!(
-            !body_holds(sent, &other.to_string()),
-            "a node never learns another node's ehr_id: {body}"
-        );
+        for sent in &journal {
+            let body = String::from_utf8_lossy(&sent.body);
+            assert!(
+                body_holds(sent, &own.to_string()),
+                "the node query is keyed on the node's own ehr_id (N7): {body}"
+            );
+            assert!(
+                !body_holds(sent, &other.to_string()),
+                "a node never learns another node's ehr_id: {body}"
+            );
+        }
     }
     assert_no_patient_identifier_on_the_wire(&nodes);
 
@@ -110,19 +111,6 @@ async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> Te
     Ok(())
 }
 
-/// The rows of `aql` through the gateway, sorted, after asserting a complete
-/// `200` whose envelope validates.
-async fn sorted_rows(router: axum::Router, aql: &str) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
-    let (status, text) = call(router, query(aql)?).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    crate::facade::schema::validate(&text)?;
-    let answer: Answer = serde_json::from_str(&text)?;
-    assert!(answer.meta.federation.complete, "both nodes answered");
-    let mut rows = answer.rows;
-    rows.sort();
-    Ok(rows)
-}
-
 // conformance: CP-38 track-2
 #[tokio::test]
 async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_nodes() -> TestResult {
@@ -144,30 +132,14 @@ async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_nodes() -> 
     nodes.b.proxy.clear_journal();
     let dir = tempfile::tempdir()?;
 
-    // §5.4.3, CP-38: the same patient query once per carrier.
-    let from = "FROM EHR e CONTAINS COMPOSITION c CONTAINS OBSERVATION o";
-    let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
-    let via_external_ref = format!(
-        "SELECT c/uid/value {from} \
-         WHERE e/ehr_status/subject/external_ref/id/value = '{value}' \
-         AND e/ehr_status/subject/external_ref/namespace = '{namespace}'"
-    );
-    let via_entry = format!(
-        "SELECT c/uid/value {from} \
-         WHERE o/subject/identifiers/id = '{value}' \
-         AND o/subject/identifiers/issuer = '{namespace}'"
-    );
-    let external_ref_rows =
-        sorted_rows(gateway(dir.path(), &nodes.a, &nodes.b)?, &via_external_ref).await?;
-    let entry_rows = sorted_rows(gateway(dir.path(), &nodes.a, &nodes.b)?, &via_entry).await?;
-    assert!(
-        !entry_rows.is_empty(),
-        "the demo compositions hold observations, so the comparison is not vacuous"
-    );
-    assert_eq!(
-        external_ref_rows, entry_rows,
-        "both carriers return the same rows (CP-38)"
-    );
+    // §5.4.3, CP-38: the same patient query once per carrier, the rows equal
+    // and not empty, every holding member active.
+    let app = gateway(dir.path(), &nodes.a, &nodes.b)?;
+    let answers = track2::both_carriers(&in_process(&app), &fixture(Some(1), Some(1))?).await?;
+    assert_eq!(2, answers.len(), "one answer per carrier");
+    for answer in &answers {
+        assert!(answer.meta.federation.complete, "both nodes answered");
+    }
 
     for node in [&nodes.a, &nodes.b] {
         let journal = node.proxy.journal();
