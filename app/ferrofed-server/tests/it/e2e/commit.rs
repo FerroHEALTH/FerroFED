@@ -7,14 +7,24 @@
 //! N31, track 10). An update of that composition reaches node A, which
 //! created it, and is refused `409` with no node written when it names node B
 //! (§10.3, §12.4, §12a.1, N23).
+//!
+//! The commit's client-visible checks are the conformance run's own
+//! ([`ferrofed_server::conformance::scenarios::track9::commit`]); this suite
+//! adds the `ETag`, the read back and what only the nodes' capturing proxies
+//! show.
+
+use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_engine::onward::conveyance;
+use ferrofed_server::conformance::client::Reply;
+use ferrofed_server::conformance::scenarios::track9;
 use ferrofed_testkit::containers::{self, API_PATH};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{self, EhrSeed, SeedPlan};
 use http::{Request, StatusCode, header};
 
+use crate::e2e::scenario::{fixture, in_process};
 use crate::e2e::{EHR_A, PATIENT, TestResult, composition_carrying, gateway};
 use crate::support::{CLIENT_TOKEN, searched_claims};
 
@@ -27,6 +37,27 @@ fn routed_to_a(verb: http::Method, uri: &str, body: Body) -> Result<Request<Body
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::AUTHORIZATION, format!("Bearer {}", *CLIENT_TOKEN))
         .body(body)
+}
+
+/// Commits `sent` to [`EHR_A`] through `app`, naming node A in the endpoint
+/// header with the client's credential, and holds it is created there, as
+/// the conformance run's own check does
+/// ([`ferrofed_server::conformance::scenarios::track9::commit`]).
+async fn commit_at_a(app: &axum::Router, sent: &str) -> Result<Reply, Box<dyn Error>> {
+    let fixture = fixture(Some(0), None)?;
+    let member = fixture.member("node-a-pub").ok_or("node A is a member")?;
+    let bearer = format!("Bearer {}", *CLIENT_TOKEN);
+    Ok(track9::commit(
+        &in_process(app),
+        member,
+        &EHR_A.to_string(),
+        sent,
+        &[
+            ("openEHR-federation-endpoint", "node-a-pub"),
+            (header::AUTHORIZATION.as_str(), bearer.as_str()),
+        ],
+    )
+    .await?)
 }
 
 /// The text of response header `name`.
@@ -120,37 +151,20 @@ async fn a_composition_committed_through_the_gateway_lands_byte_identical_at_one
     let app = gateway(dir.path(), &nodes.a, &nodes.b)?;
 
     let sent = composition_carrying(PATIENT)?;
-    let commit = routed_to_a(
-        http::Method::POST,
-        &format!("/v1/ehr/{EHR_A}/composition"),
-        Body::from(sent.clone()),
-    )?;
-    let response = crate::support::send(app.clone(), commit).await?;
-    let (status, headers) = (response.status(), response.headers().clone());
-    let body = axum::body::to_bytes(response.into_body(), 256 * 1024).await?;
-    assert_eq!(
-        StatusCode::CREATED,
-        status,
-        "{}",
-        String::from_utf8_lossy(&body)
-    );
-    assert_eq!(
-        Some("node-a-pub"),
-        field(&headers, "openEHR-federation-endpoint"),
-        "N31"
-    );
+    let reply = commit_at_a(&app, &sent).await?;
+    let headers = &reply.headers;
     assert_eq!(
         Some(containers::NODE_A_SYSTEM_ID),
-        field(&headers, "openEHR-federation-system-id"),
+        field(headers, "openEHR-federation-system-id"),
         "§9.6"
     );
-    let etag = field(&headers, "etag").ok_or("the node's ETag")?.to_owned();
+    let etag = field(headers, "etag").ok_or("the node's ETag")?.to_owned();
     let version_uid = etag.trim_start_matches("W/").trim_matches('"');
     assert!(
         version_uid.contains(&format!("::{}::", containers::NODE_A_SYSTEM_ID)),
         "the ETag is node A's OBJECT_VERSION_ID, never rewritten (N22): {etag}"
     );
-    let location = field(&headers, "location").ok_or("the node's Location")?;
+    let location = field(headers, "location").ok_or("the node's Location")?;
     assert!(
         location.starts_with(API_PATH) && location.ends_with(version_uid),
         "the Location is the node's own, unmodified (N31): {location}"
@@ -215,14 +229,8 @@ async fn a_versioned_write_reaches_its_controlling_node_and_never_another() -> T
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), &nodes.a, &nodes.b)?;
     let sent = composition_carrying(PATIENT)?;
-    let commit = routed_to_a(
-        http::Method::POST,
-        &format!("/v1/ehr/{EHR_A}/composition"),
-        Body::from(sent.clone()),
-    )?;
-    let response = crate::support::send(app.clone(), commit).await?;
-    assert_eq!(StatusCode::CREATED, response.status());
-    let etag = field(response.headers(), "etag").ok_or("the node's ETag")?;
+    let reply = commit_at_a(&app, &sent).await?;
+    let etag = field(&reply.headers, "etag").ok_or("the node's ETag")?;
     let first = etag.trim_start_matches("W/").trim_matches('"').to_owned();
     let object = first.split("::").next().ok_or("an object id")?.to_owned();
     nodes.a.proxy.clear_journal();

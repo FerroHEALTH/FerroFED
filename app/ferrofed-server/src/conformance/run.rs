@@ -15,21 +15,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ferrofed_registry::id::EndpointId;
 use secrecy::SecretString;
 use tokio::net::TcpListener;
 use url::Url;
 use uuid::Uuid;
 
-use crate::admission::{self, AdmissionError, DEFAULT_COUNT};
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, Encryption, ProtectedSite};
 use crate::conformance::catalogue::CATALOGUE;
 use crate::conformance::client::{GatewayError, HttpGateway};
 use crate::conformance::execute::{Context, execute};
 use crate::conformance::fixture::{SeedData, SeedDataError, SyntheticPatient};
-use crate::conformance::report::{Finding, Report};
-use crate::conformance::seed::{self, SeedError, Written};
+use crate::conformance::node_profile::{Profile, members};
+use crate::conformance::report::Report;
+use crate::conformance::seed::{self, SeedError};
 use crate::federation::Federation;
 use crate::federation::error::FederationError;
 use crate::state::{self, AppState, StateError};
@@ -47,8 +46,9 @@ pub struct RunOptions {
     pub seed_data: PathBuf,
     /// The directory the report is written to.
     pub out: PathBuf,
-    /// Whether to run the admission check against every active member and
-    /// record its findings as the node profile.
+    /// Whether to run the Federation-Node profile checks and the admission
+    /// check against every active member and record their findings as the
+    /// node profile.
     pub node_profile: bool,
 }
 
@@ -159,7 +159,11 @@ pub async fn run(settings: &Settings, options: RunOptions) -> Result<Summary, Ru
         outcomes.push((entry, outcome));
     }
     let findings = if options.node_profile {
-        node_profile(&federation, &mut written).await
+        members::every_member(&federation, &seeded.fixture, &mut written)
+            .await
+            .iter()
+            .flat_map(Profile::rows)
+            .collect()
     } else {
         Vec::new()
     };
@@ -268,74 +272,4 @@ async fn in_process(settings: &Settings) -> Result<(Arc<Federation>, Url, Served
         },
     ));
     Ok((federation, base, (stop, serving)))
-}
-
-/// The admission check of every active member, as node profile findings,
-/// with the test EHRs each check created recorded in `written` (§12b.1,
-/// §16.2; CP-27, CP-33a).
-async fn node_profile(federation: &Federation, written: &mut Vec<Written>) -> Vec<Finding> {
-    let snapshot = federation.snapshot();
-    let mut findings = Vec::new();
-    let active: Vec<EndpointId> = snapshot
-        .nodes()
-        .filter_map(|node| snapshot.asked_through(node.id()))
-        .map(|endpoint| endpoint.id().clone())
-        .collect();
-    for endpoint in active {
-        let product = snapshot
-            .endpoint(&endpoint)
-            .and_then(|declared| snapshot.node(declared.node()))
-            .map_or_else(
-                || endpoint.as_str().to_owned(),
-                |node| match (node.product(), node.version()) {
-                    (Some(product), Some(version)) => format!("{product} {version}"),
-                    (Some(product), None) => product.to_owned(),
-                    _ => format!("node {}", node.id()),
-                },
-            );
-        match admission::check(federation, &endpoint, DEFAULT_COUNT).await {
-            Ok(report) => {
-                for ehr_id in report.created() {
-                    written.push(Written {
-                        endpoint: endpoint.as_str().to_owned(),
-                        what: format!("EHR {ehr_id} (the admission check's synthetic subject)"),
-                    });
-                }
-                for finding in report.findings() {
-                    let condition = finding.condition();
-                    let points: &[&str] = match condition {
-                        admission::report::Condition::EhrIdExchange => &["CP-27", "CP-33a"],
-                        _ => &["CP-33a"],
-                    };
-                    let verdict = match finding.verdict() {
-                        admission::report::Verdict::Pass => "pass",
-                        admission::report::Verdict::Fail => "fail",
-                        admission::report::Verdict::CannotCheck => "not-observable",
-                    };
-                    for point in points {
-                        findings.push(Finding {
-                            product: product.clone(),
-                            point: (*point).to_owned(),
-                            check: condition.name().to_owned(),
-                            verdict: verdict.to_owned(),
-                            evidence: finding.evidence().join("; "),
-                        });
-                    }
-                }
-            }
-            Err(error) => findings.push(unchecked(&product, &error)),
-        }
-    }
-    findings
-}
-
-/// The finding of an admission check that could not start.
-fn unchecked(product: &str, error: &AdmissionError) -> Finding {
-    Finding {
-        product: product.to_owned(),
-        point: "CP-33a".to_owned(),
-        check: "the admission check".to_owned(),
-        verdict: "not-observable".to_owned(),
-        evidence: format!("the check could not start: {}", crate::chain(error)),
-    }
 }

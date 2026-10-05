@@ -111,14 +111,38 @@ pub async fn plain_client<G: Gateway>(
         "N31: the acting endpoint",
     )?;
 
+    commit(gateway, member, ehr_id, composition, &[]).await
+}
+
+/// Holds that a commit of `composition` to `ehr_id`, with the header
+/// fields `fields`, is created at `member`.
+///
+/// The answer is a `201` naming `member` as the acting endpoint, with the
+/// node's own `Location` under its base (§7a.3, N31; CP-24); returns it.
+///
+/// # Errors
+///
+/// Returns [`Failure`] naming the first expectation that did not hold.
+pub async fn commit<G: Gateway>(
+    gateway: &G,
+    member: &Member,
+    ehr_id: &str,
+    composition: &str,
+    fields: &[(&str, &str)],
+) -> Result<Reply, Failure> {
     let write = request(
         Method::POST,
         &format!("/v1/ehr/{ehr_id}/composition"),
-        &[],
+        fields,
         Some(("application/json", composition.as_bytes().to_vec())),
     )?;
     let written = ask(gateway, write).await?;
     written.expect(StatusCode::CREATED, "the write")?;
+    ensure_eq(
+        &Some(member.endpoint.as_str()),
+        &written.field(ENDPOINT),
+        "N31: the acting endpoint of the write",
+    )?;
     let location = written
         .field("location")
         .ok_or_else(|| Failure::Check("N31: the write carries the node's Location".to_owned()))?;

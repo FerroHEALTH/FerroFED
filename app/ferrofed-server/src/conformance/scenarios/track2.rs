@@ -14,7 +14,7 @@
 
 use secrecy::ExposeSecret;
 
-use crate::conformance::client::{Gateway, answered, post_aql};
+use crate::conformance::client::{Federated, Gateway, answered, post_aql};
 use crate::conformance::fixture::Fixture;
 use crate::conformance::scenarios::undirected;
 use crate::conformance::{Failure, ensure, ensure_eq};
@@ -42,13 +42,18 @@ pub fn via_entry(fixture: &Fixture) -> String {
 }
 
 /// Holds that the query through either carrier resolves at every member
-/// that holds the patient and that both return the same, non-empty rows.
+/// that holds the patient and that both return the same, non-empty rows;
+/// returns both answers, the `external_ref` carrier's first.
 ///
 /// # Errors
 ///
 /// Returns [`Failure`] naming the first expectation that did not hold.
-pub async fn both_carriers<G: Gateway>(gateway: &G, fixture: &Fixture) -> Result<(), Failure> {
+pub async fn both_carriers<G: Gateway>(
+    gateway: &G,
+    fixture: &Fixture,
+) -> Result<Vec<Federated>, Failure> {
     let mut rows = Vec::new();
+    let mut answers = Vec::new();
     for aql in [via_external_ref(fixture), via_entry(fixture)] {
         let (_, answer) =
             answered(gateway, post_aql(&aql, &[])?, "CP-38: a patient carrier").await?;
@@ -58,13 +63,15 @@ pub async fn both_carriers<G: Gateway>(gateway: &G, fixture: &Fixture) -> Result
             "CP-3: the subject resolved at every member holding it",
         )?;
         rows.push(answer.sorted_rows());
+        answers.push(answer);
     }
     ensure(rows.first().is_some_and(|first| !first.is_empty()), || {
         "the seeded compositions hold observations, so the comparison is not vacuous".to_owned()
     })?;
     ensure(rows.first() == rows.get(1), || {
         "CP-38: both carriers return the same rows".to_owned()
-    })
+    })?;
+    Ok(answers)
 }
 
 /// Holds that a selected subject column answers the client's own input in

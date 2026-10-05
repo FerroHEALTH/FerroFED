@@ -171,7 +171,7 @@ async fn live<G: Gateway>(
         }
         Scenario::BothCarriers => {
             holding(fixture, 2)?;
-            track2::both_carriers(gateway, fixture).await
+            track2::both_carriers(gateway, fixture).await.map(drop)
         }
         Scenario::SubjectColumn => {
             first(fixture)?;
@@ -180,6 +180,16 @@ async fn live<G: Gateway>(
         Scenario::DirectiveEndpoint => {
             let endpoint = &first(fixture)?.endpoint;
             track3::directive_endpoint(gateway, fixture, endpoint)
+                .await
+                .map(drop)
+        }
+        Scenario::EndpointAttributes => {
+            first(fixture)?;
+            let named: Vec<&str> = fixture
+                .holding()
+                .map(|(member, _)| member.endpoint.as_str())
+                .collect();
+            track3::endpoint_attributes(gateway, fixture, &named)
                 .await
                 .map(drop)
         }

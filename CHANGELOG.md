@@ -48,6 +48,24 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `limit` parameters, with `limit` at most 100. It answers
   routing ids, counts and stored definitions only, and an incident names an
   `ehr_id` only when it is a bare UUID (§5.4.1, N33).
+- `ferrofed conformance run --node-profile` reports CP-18, CP-19 and CP-27
+  against every active member (#573; §16.2; N26, N27, N34). The
+  Federation-Node profile checks are the gateway's own: each member is read
+  through its node client, with its onward credentials and the outbound
+  gate, for the patient's EHR by its `ehr_id` alone, an EHR created with no
+  subject, and its error statuses for an unknown EHR and an unparsable
+  query, and the admission check runs as before. The access and consent
+  checks need a refusal arranged with the node's own policy, so a run
+  records them not observable with that reason. The harness runs the same
+  checks against FerroEHR and EHRbase. The run also scores a new track 3
+  scenario: the `ENDPOINT` attributes a client selects are each row's
+  endpoint id and `system_id` (§9.4, N12, CP-37).
+- Every release attaches the conformance seed data,
+  `ferrofed-conformance-seed-data.json`, with its SHA-256 in
+  `ferrofed-conformance-seed-data.json.sha256sum` (#573). The file holds the
+  vendored template and compositions `conformance run` writes, with their
+  Apache-2.0 licence and notice, and `--seed-data` takes it in place of the
+  vendored directory, checking each file it holds by SHA-256.
 - A mutual-TLS token endpoint alias on a host you name (#560; RFC 8705 §5).
   A node's `[credentials."<id>"]` section takes `mtls_alias_hosts`, each a
   host name with an optional port, and a `fapi2` grant that uses mutual TLS

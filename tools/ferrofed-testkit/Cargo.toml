@@ -48,9 +48,8 @@ rcgen.workspace = true
 tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true
-# The canonical JSON writer the seed's EHR_STATUS is written with, and the
-# ITS-REST query body and RESULT_SET the node profile checks read (#93).
-openehr-its = { workspace = true, features = ["json", "rest"] }
+# The canonical JSON writer the seed's EHR_STATUS is written with.
+openehr-its = { workspace = true, features = ["json"] }
 # The EHR_STATUS a seeded EHR is created with.
 openehr-rm.workspace = true
 # The proxy's forwarding client and the seed builder's ITS-REST client.
@@ -70,7 +69,8 @@ wiremock.workspace = true
 [dev-dependencies]
 # The harness, as the federation operator of track 11, applies the admission
 # check of the gateway and reads the registry's refusal before it admits a
-# candidate node (#91).
+# candidate node (#91), and runs the gateway's node profile checks against
+# its CDR products over a node client (#93, #573).
 ferrofed-registry.workspace = true
 ferrofed-server.workspace = true
 # The operator console, driven against a running gateway over stub nodes, as

@@ -40,6 +40,8 @@ pub enum Scenario {
     SubjectColumn,
     /// Track 3: `FROM ENDPOINT` selects the node set.
     DirectiveEndpoint,
+    /// Track 3: selected ENDPOINT attributes are each row's provenance.
+    EndpointAttributes,
     /// Track 3: `FROM ORGANISATION` selects the node set.
     DirectiveOrganisation,
     /// Track 3: a named member where the patient does not resolve.
@@ -181,6 +183,11 @@ pub const CATALOGUE: &[Entry] = &[
         "track 3: FROM ENDPOINT selects the node set",
         &["CP-6", "CP-37", "track-3"],
         Scenario::DirectiveEndpoint,
+    ),
+    live(
+        "track 3: the ENDPOINT attributes a client selects are in every row",
+        &["CP-35", "CP-37", "track-3"],
+        Scenario::EndpointAttributes,
     ),
     live(
         "track 3: FROM ORGANISATION selects the node set",

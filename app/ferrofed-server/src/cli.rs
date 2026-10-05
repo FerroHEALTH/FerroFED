@@ -125,9 +125,10 @@ pub struct RunArgs {
     /// A file holding the bearer token the run presents as the caller.
     #[arg(long, value_name = "PATH")]
     pub token_file: PathBuf,
-    /// The directory holding the vendored template and compositions the run
-    /// writes, checked by their SHA-256.
-    #[arg(long, value_name = "DIR")]
+    /// The vendored template and compositions the run writes, checked by
+    /// their SHA-256: the directory holding them, or the seed data file a
+    /// release attaches (`ferrofed-conformance-seed-data.json`).
+    #[arg(long, value_name = "PATH")]
     pub seed_data: PathBuf,
     /// The base URL of a gateway already serving the configuration; without
     /// it, the run starts the gateway in-process.
@@ -136,8 +137,9 @@ pub struct RunArgs {
     /// The directory the report is written to.
     #[arg(long, value_name = "DIR", default_value = "conformance-report")]
     pub out: PathBuf,
-    /// Also runs the admission check against every active member and
-    /// reports its findings as the node profile.
+    /// Also runs the Federation-Node profile checks and the admission check
+    /// against every active member and reports their findings as the node
+    /// profile.
     #[arg(long)]
     pub node_profile: bool,
 }

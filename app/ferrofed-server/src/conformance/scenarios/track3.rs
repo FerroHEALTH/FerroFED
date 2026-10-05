@@ -4,10 +4,11 @@
 //! Track 3, the directed query and the endpoint pin (§16.3 track 3).
 //!
 //! `FROM ENDPOINT` and `FROM ORGANISATION` select the node set and report
-//! the rest excluded, a named member where the patient does not resolve is
+//! the rest excluded, ENDPOINT attributes selected are each row's
+//! provenance, a named member where the patient does not resolve is
 //! reported and not errored, the endpoint header selects what the directive selects, a
 //! conflict between them is refused, and `?endpoint=` targets nothing (§8,
-//! §16.3 track 3; N10, N11, N12, N35; CP-6, CP-28, CP-37).
+//! §9.4, §16.3 track 3; N10, N11, N12, N35; CP-6, CP-28, CP-35, CP-37).
 //!
 //! That a node not named is never asked, and that no directive or targeting
 //! header reaches a node, is judged on node-side capture, which the
@@ -19,7 +20,7 @@ use openehr_federation::headers::ENDPOINT;
 use crate::conformance::client::{Federated, Gateway, answered, ask, post_aql};
 use crate::conformance::fixture::Fixture;
 use crate::conformance::scenarios::{Expected, directed_at, held_by, statuses, undirected};
-use crate::conformance::{Failure, ensure_eq};
+use crate::conformance::{Failure, ensure, ensure_eq};
 
 /// The patient's compositions from the members `directive` selects.
 #[must_use]
@@ -75,6 +76,78 @@ pub async fn directive_endpoint<G: Gateway>(
         &vec!["uid"],
         &answer.names(),
         "CP-37: no ENDPOINT attribute selected, so the row shape is the client's",
+    )?;
+    Ok(answer)
+}
+
+/// Holds that selected ENDPOINT attributes are each row's provenance.
+///
+/// `p/id` and `p/system_id` of `FROM ENDPOINT p [named]` are added to every
+/// row, in the client's column order: one row per composition each named
+/// member holds, carrying that member's endpoint id and `system_id`, every
+/// other member reported excluded (§9.4, N12; CP-35, CP-37); returns the
+/// answer.
+///
+/// # Errors
+///
+/// Returns [`Failure`] naming the first expectation that did not hold.
+pub async fn endpoint_attributes<G: Gateway>(
+    gateway: &G,
+    fixture: &Fixture,
+    named: &[&str],
+) -> Result<Federated, Failure> {
+    let listed: Vec<String> = named.iter().map(|id| format!("\"{id}\"")).collect();
+    let aql = format!(
+        "SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition_id \
+         FROM ENDPOINT p [{}] CONTAINS EHR e CONTAINS COMPOSITION c WHERE {}",
+        listed.join(", "),
+        fixture.patient.predicate()
+    );
+    let (_, answer) = answered(
+        gateway,
+        post_aql(&aql, &[])?,
+        "CP-37: the ENDPOINT attributes selected",
+    )
+    .await?;
+    ensure_eq(
+        &vec!["endpoint_id", "system_id", "composition_id"],
+        &answer.names(),
+        "CP-37: the selected attributes added to the row, in the client's order",
+    )?;
+    directed_at(&answer, fixture, named, "CP-37: the directive's node set")?;
+    let mut expected = 0_usize;
+    for endpoint in named {
+        let member = fixture
+            .member(endpoint)
+            .ok_or_else(|| Failure::Check(format!("{endpoint} is a member")))?;
+        let held = held_by(fixture, endpoint)?;
+        expected = expected.saturating_add(held);
+        let carried: Vec<&Vec<String>> = answer
+            .rows
+            .iter()
+            .filter(|row| row.first().map(String::as_str) == Some(*endpoint))
+            .collect();
+        ensure_eq(
+            &held,
+            &carried.len(),
+            &format!("N12: one row per composition {endpoint} holds, each naming it"),
+        )?;
+        ensure(
+            carried
+                .iter()
+                .all(|row| row.get(1).map(String::as_str) == Some(member.system_id.as_str())),
+            || {
+                format!(
+                    "§9.4: each row of {endpoint} carries its system_id {}",
+                    member.system_id
+                )
+            },
+        )?;
+    }
+    ensure_eq(
+        &expected,
+        &answer.rows.len(),
+        "every row comes from a named member",
     )?;
     Ok(answer)
 }

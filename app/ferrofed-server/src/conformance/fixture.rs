@@ -14,6 +14,7 @@
 //! sends the gateway, in the `EHR_STATUS` body of the run's own creates, and
 //! to the cross-reference, and the report never prints it.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -24,6 +25,7 @@ use openehr_base::v1_3::base_types::identification::generic_id::GenericId;
 use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
 use openehr_base::v1_3::base_types::identification::party_ref::PartyRef;
 use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::conformance::Failure;
@@ -357,29 +359,105 @@ pub enum SeedDataError {
         /// The file.
         path: PathBuf,
     },
+    /// A file that is not a directory is not the seed data file a release
+    /// attaches.
+    #[error(
+        "{} is neither a directory of the seed files nor the seed data file a release attaches",
+        path.display()
+    )]
+    Bundle {
+        /// The file.
+        path: PathBuf,
+        /// What the JSON reader reported.
+        #[source]
+        source: serde_json::Error,
+    },
+    /// The seed data file names a format this build does not read.
+    #[error("{} is not seed data of the format {BUNDLE_FORMAT}", path.display())]
+    Format {
+        /// The file.
+        path: PathBuf,
+    },
+    /// The seed data file holds no file of that name.
+    #[error("{} holds no {member}", path.display())]
+    Missing {
+        /// The file.
+        path: PathBuf,
+        /// The vendored file it lacks.
+        member: &'static str,
+    },
+    /// A file the seed data file holds is not the vendored one.
+    #[error(
+        "{member} in {} is not the vendored synthetic file (its SHA-256 differs), and a run writes nothing else",
+        path.display()
+    )]
+    MemberDigest {
+        /// The seed data file.
+        path: PathBuf,
+        /// The vendored file it holds.
+        member: &'static str,
+    },
+}
+
+/// The name of the seed data file a release attaches, the vendored files of
+/// [`DIGESTS`] in one JSON file.
+pub const BUNDLE_FILE: &str = "ferrofed-conformance-seed-data.json";
+
+/// The format the seed data file names, the one this build reads.
+pub const BUNDLE_FORMAT: &str = "ferrofed-conformance-seed-data/1";
+
+/// The seed data file a release attaches: its format, and each vendored
+/// file's text under its own name. Its other members carry the licence and
+/// the source, which the run does not read.
+#[derive(Deserialize)]
+struct Bundle {
+    /// The format, [`BUNDLE_FORMAT`].
+    format: String,
+    /// Each vendored file's text, by its file name.
+    files: BTreeMap<String, String>,
+}
+
+/// Returns whether `bytes` are the vendored file `name`, by its SHA-256.
+fn vendored(name: &str, bytes: &[u8]) -> bool {
+    DIGESTS
+        .iter()
+        .find(|(file, _)| *file == name)
+        .is_some_and(|(_, digest)| *digest == sha256(bytes))
 }
 
 impl SeedData {
-    /// Reads the three files of [`DIGESTS`] from `dir` and checks each
+    /// Reads the three files of [`DIGESTS`] from `path` and checks each
     /// digest.
+    ///
+    /// `path` is the directory holding them, as a checkout vendors them, or
+    /// the seed data file a release attaches ([`BUNDLE_FILE`]), which holds
+    /// each of them as text under its own name.
     ///
     /// # Errors
     ///
     /// Returns [`SeedDataError::Read`] when a file cannot be read,
-    /// [`SeedDataError::Digest`] when one is not the vendored file, and
-    /// [`SeedDataError::Text`] when a composition is not text.
-    pub fn read(dir: &Path) -> Result<Self, SeedDataError> {
+    /// [`SeedDataError::Digest`] or [`SeedDataError::MemberDigest`] when one
+    /// is not the vendored file, [`SeedDataError::Text`] when a composition
+    /// is not text, and [`SeedDataError::Bundle`],
+    /// [`SeedDataError::Format`] or [`SeedDataError::Missing`] when a file
+    /// that is no directory is not a seed data file holding all three.
+    pub fn read(path: &Path) -> Result<Self, SeedDataError> {
+        if path.is_dir() {
+            Self::read_dir(path)
+        } else {
+            Self::read_bundle(path)
+        }
+    }
+
+    /// Reads the three files of [`DIGESTS`] from the directory `dir`.
+    fn read_dir(dir: &Path) -> Result<Self, SeedDataError> {
         let read = |name: &str| -> Result<(PathBuf, Vec<u8>), SeedDataError> {
             let path = dir.join(name);
             let bytes = std::fs::read(&path).map_err(|source| SeedDataError::Read {
                 path: path.clone(),
                 source,
             })?;
-            let expected = DIGESTS
-                .iter()
-                .find(|(file, _)| *file == name)
-                .map(|(_, digest)| *digest);
-            if expected != Some(sha256(&bytes).as_str()) {
+            if !vendored(name, &bytes) {
                 return Err(SeedDataError::Digest { path });
             }
             Ok((path, bytes))
@@ -391,6 +469,45 @@ impl SeedData {
             template: read(TEMPLATE_FILE)?.1,
             hospital: text(read(HOSPITAL_FILE)?)?,
             clinic: text(read(CLINIC_FILE)?)?,
+        })
+    }
+
+    /// Reads the three files of [`DIGESTS`] from the seed data file `path`.
+    fn read_bundle(path: &Path) -> Result<Self, SeedDataError> {
+        let bytes = std::fs::read(path).map_err(|source| SeedDataError::Read {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let mut bundle: Bundle =
+            serde_json::from_slice(&bytes).map_err(|source| SeedDataError::Bundle {
+                path: path.to_path_buf(),
+                source,
+            })?;
+        if bundle.format != BUNDLE_FORMAT {
+            return Err(SeedDataError::Format {
+                path: path.to_path_buf(),
+            });
+        }
+        let mut take = |member: &'static str| -> Result<String, SeedDataError> {
+            let text = bundle
+                .files
+                .remove(member)
+                .ok_or_else(|| SeedDataError::Missing {
+                    path: path.to_path_buf(),
+                    member,
+                })?;
+            if !vendored(member, text.as_bytes()) {
+                return Err(SeedDataError::MemberDigest {
+                    path: path.to_path_buf(),
+                    member,
+                });
+            }
+            Ok(text)
+        };
+        Ok(Self {
+            template: take(TEMPLATE_FILE)?.into_bytes(),
+            hospital: take(HOSPITAL_FILE)?,
+            clinic: take(CLINIC_FILE)?,
         })
     }
 

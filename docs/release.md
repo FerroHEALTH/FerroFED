@@ -33,8 +33,13 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
 - **github-release** creates the release as a draft carrying those notes, and
   attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
   under those names: the gateway alone at this release's image, with the two
-  example files it mounts. A draft is mutable and invisible to
-  anyone browsing releases, which is the window the asset uploads need.
+  example files it mounts. It also attaches the conformance seed data
+  `scripts/release/seed-data.sh` writes, `ferrofed-conformance-seed-data.json`
+  (the vendored demo data `ferrofed conformance run --seed-data` reads, with
+  its Apache-2.0 licence and notice) and its SHA-256 as
+  `ferrofed-conformance-seed-data.json.sha256sum`. A draft is mutable and
+  invisible to anyone browsing releases, which is the window the asset
+  uploads need.
 - **build-binaries** calls `release-build.yml` once per target (two Linux
   architectures, glibc and musl). See § The build legs.
 - **build-image** calls `release-image.yml`, which builds the container from
@@ -44,11 +49,11 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   it to `ghcr.io/ferrohealth/ferrofed-viewer`. The console ships as an image
   alone, so it attaches no asset to the draft.
 - **finalize-release** checks that the draft carries every asset this version
-  promises, eight per target and the three compose files, and publishes only
-  then, and only once both images are pushed. A draft missing any of
-  them fails the check and stays a draft, so a half-assembled release is never
-  visible. A pre-release is published with `--latest=false`, so it never
-  becomes the repository's latest release.
+  promises, eight per target, the three compose files and the two seed data
+  files, and publishes only then, and only once both images are pushed. A
+  draft missing any of them fails the check and stays a draft, so a
+  half-assembled release is never visible. A pre-release is published with
+  `--latest=false`, so it never becomes the repository's latest release.
 
 ## The build legs
 
