@@ -43,11 +43,17 @@ pub struct GatewaySettings {
 /// The resolved `[session]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionSettings {
-    /// Whether the session cookie carries `Secure`.
+    /// Whether the cookies carry `Secure`.
     pub secure_cookie: bool,
-    /// How long a session lives without a request.
+    /// How long a pending sign-in waits for the provider's redirect back.
+    pub sign_in_timeout: Duration,
+    /// How many pending sign-ins the console holds at once.
+    pub max_sign_ins: usize,
+    /// How long a signed-in session lives without a request.
     pub idle_timeout: Duration,
-    /// How many sessions the console holds at once.
+    /// How long a signed-in session lives at most.
+    pub absolute_timeout: Duration,
+    /// How many signed-in sessions the console holds at once.
     pub max_sessions: usize,
 }
 
@@ -89,23 +95,22 @@ impl Config {
         let base = web_url("gateway.base_url", &self.gateway.base_url)?;
         let timeout =
             positive("gateway.timeout_ms", self.gateway.timeout_ms).map(Duration::from_millis)?;
-        let idle_timeout = positive("session.idle_timeout_s", self.session.idle_timeout_s)
-            .map(Duration::from_secs)?;
-        if self.session.max_sessions == 0 {
-            return Err(Error::Zero {
-                key: String::from("session.max_sessions"),
-            });
-        }
+        let seconds = |key: &str, value: u64| positive(key, value).map(Duration::from_secs);
+        let session = &self.session;
+        let session = SessionSettings {
+            secure_cookie: session.secure_cookie,
+            sign_in_timeout: seconds("session.sign_in_timeout_s", session.sign_in_timeout_s)?,
+            max_sign_ins: bound("session.max_sign_ins", session.max_sign_ins)?,
+            idle_timeout: seconds("session.idle_timeout_s", session.idle_timeout_s)?,
+            absolute_timeout: seconds("session.absolute_timeout_s", session.absolute_timeout_s)?,
+            max_sessions: bound("session.max_sessions", session.max_sessions)?,
+        };
         let oidc = self.oidc.as_ref().map(resolve_oidc).transpose()?;
         Ok(Settings {
             listen,
             site_root: self.server.site_root.clone(),
             gateway: GatewaySettings { base, timeout },
-            session: SessionSettings {
-                secure_cookie: self.session.secure_cookie,
-                idle_timeout,
-                max_sessions: self.session.max_sessions,
-            },
+            session,
             oidc,
         })
     }
@@ -154,6 +159,17 @@ fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
 
 /// Returns `value`, refusing zero.
 fn positive(key: &str, value: u64) -> Result<u64, Error> {
+    if value == 0 {
+        Err(Error::Zero {
+            key: key.to_owned(),
+        })
+    } else {
+        Ok(value)
+    }
+}
+
+/// Returns the pool bound `value`, refusing zero.
+fn bound(key: &str, value: usize) -> Result<usize, Error> {
     if value == 0 {
         Err(Error::Zero {
             key: key.to_owned(),

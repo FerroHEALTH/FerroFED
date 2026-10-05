@@ -61,9 +61,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   image, `ghcr.io/ferrohealth/ferrofed-viewer`. It reaches the gateway over
   HTTP alone, as any client does, and holds no clinical data. Built so far: a
   landing page, `GET /health` and the `healthcheck` command, operator sign-in
-  at an OpenID Provider with the authorization code grant and PKCE, its
-  `state` and verifier held in a server-side session behind an opaque
-  `HttpOnly` cookie, and a typed client of the gateway's `OPTIONS {base}/`
+  at an OpenID Provider with the authorization code grant, a `nonce` and
+  PKCE, its `state`, `nonce` and verifier held on the server behind an
+  opaque `HttpOnly` cookie in a bounded, short-lived pool of pending
+  sign-ins that a flood of login starts cannot grow and that never touches
+  the separate, bounded pool of signed-in sessions with their idle and
+  absolute timeouts, configuration refusals that name a key and a line and
+  never a value, and a typed client of the gateway's `OPTIONS {base}/`
   and ITS-REST surface called with the operator's own token. Every answer
   carries a per-response script nonce in its Content-Security-Policy. The
   console reads a TOML file with `FERROFED_VIEWER__` overrides and a

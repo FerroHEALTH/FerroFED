@@ -19,14 +19,25 @@ The console's skeleton is built; its screens are not.
 - **A landing page** that names the console and offers sign-in.
 - **Operator sign-in at an OpenID Provider:** `GET /login` redirects the
   browser to the provider's authorization endpoint with the authorization
-  code grant and a PKCE challenge (RFC 6749 §4.1, RFC 7636). The sign-in
-  `state` and the PKCE verifier stay on the console's server, in a session
-  the browser knows only by an opaque `HttpOnly` cookie. The provider's
-  redirect back to `/auth/callback` is checked against that session. The
-  code exchange is planned with the operator views (#276); until it lands,
-  the callback answers `501`. Sessions live in the console's memory: a
-  restart ends every session, and more than one replica needs a load
-  balancer that keeps an operator on one replica.
+  code grant, a `nonce` and a PKCE challenge (RFC 6749 §4.1, RFC 7636). The
+  `state`, the `nonce` and the PKCE verifier stay on the console's server as
+  a pending sign-in, which the browser knows only by an opaque `HttpOnly`
+  cookie that expires with it. The provider's redirect back to
+  `/auth/callback` is checked against it once. The code exchange is planned
+  with the operator views (#276); until it lands, the callback answers `501`.
+- **Two separate pools of server-side state.** Pending sign-ins live for
+  `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
+  its oldest pending sign-in, so a flood of `GET /login` holds at most that
+  many and stops costing anything once it ends. A signed-in session is
+  created only once a sign-in completes, lives for `idle_timeout_s` without
+  a request and `absolute_timeout_s` at most, and is bounded by
+  `max_sessions`, which refuses a new session rather than evicting one. No
+  sign-in traffic ever removes a signed-in session. The console does not
+  limit sign-ins per client: behind a load balancer it cannot tell clients
+  apart without trusting a forwarded address, so put a rate limit for
+  `/login` at the edge. Both pools live in the console's memory: a restart
+  ends every session, and more than one replica needs a load balancer that
+  keeps an operator on one replica.
 - **The gateway client** the screens will use: the gateway's self-description,
   `OPTIONS {base}/`, read into its typed form, and the ITS-REST surface under
   `{base}/v1`, each called with the signed-in operator's own access token.
@@ -64,7 +75,8 @@ and its request log carries no body and no header value.
 The console reads a TOML file named by `--config` or `FERROFED_VIEWER_CONFIG`.
 Every key can be set from the environment as
 `FERROFED_VIEWER__<SECTION>__<KEY>`, and the client secret can be read from a
-file through `client_secret_file`.
+file through `client_secret_file`. A refused configuration names the key and
+the line, never a value, so no secret reaches a message or a log.
 
 ```toml
 [server]
@@ -77,7 +89,10 @@ timeout_ms = 30000
 
 [session]
 secure_cookie = true
+sign_in_timeout_s = 300
+max_sign_ins = 1000
 idle_timeout_s = 1800
+absolute_timeout_s = 43200
 max_sessions = 10000
 
 [oidc]

@@ -10,13 +10,14 @@ use std::io::Write as _;
 use std::time::Duration;
 
 use ferrofed_viewer::config::Config;
-use ferrofed_viewer::config::error::Error as ConfigError;
+use ferrofed_viewer::config::error;
+use ferrofed_viewer::config::error::Problem;
 use secrecy::ExposeSecret as _;
 
 use crate::support::{WITH_OIDC, settings};
 
 /// The refusal of the configuration `text` writes.
-fn refused(text: &str) -> ConfigError {
+fn refused(text: &str) -> error::Error {
     Config::from_sources(Some(text), &BTreeMap::new())
         .and_then(|config| config.resolve())
         .expect_err("the configuration should have been refused")
@@ -83,9 +84,22 @@ fn the_example_configuration_in_the_book_resolves() -> Result<(), Box<dyn Error>
 }
 
 #[test]
+fn a_parse_refusal_names_the_key_and_the_line_only() {
+    let error =
+        refused("[server]\nlisten = \"127.0.0.1:3000\"\n\n[gateway]\ntimeout_ms = \"soon\"\n");
+    let error::Error::Parse { fault } = &error else {
+        panic!("a parse refusal: {error:?}");
+    };
+    assert_eq!(Some("gateway.timeout_ms"), fault.key.as_deref());
+    assert_eq!(Problem::InvalidValue, fault.problem);
+    assert_eq!(Some(5), fault.position.map(|(line, _column)| line));
+    assert!(!error.to_string().contains("soon"), "{error}");
+}
+
+#[test]
 fn an_unknown_key_is_refused() {
     let error = refused("[server]\nlisten = \"127.0.0.1:3000\"\nport = 3000\n");
-    assert!(matches!(error, ConfigError::Parse { .. }), "{error:?}");
+    assert!(matches!(error, error::Error::Parse { .. }), "{error:?}");
 }
 
 #[test]
@@ -109,7 +123,7 @@ fn a_secret_set_inline_and_in_a_file_is_refused() {
         format!("{WITH_OIDC}client_secret = \"inline\"\nclient_secret_file = \"/run/secrets/x\"\n");
     let error = refused(&text);
     assert!(
-        matches!(&error, ConfigError::Conflict { key } if key == "oidc.client_secret"),
+        matches!(&error, error::Error::Conflict { key } if key == "oidc.client_secret"),
         "{error:?}"
     );
 }
@@ -123,13 +137,13 @@ fn an_empty_or_missing_secret_file_is_refused_by_its_key() -> Result<(), Box<dyn
     );
     let error = refused(&text);
     assert!(
-        matches!(&error, ConfigError::EmptySecret { key, .. } if key == "oidc.client_secret_file"),
+        matches!(&error, error::Error::EmptySecret { key, .. } if key == "oidc.client_secret_file"),
         "{error:?}"
     );
     let text = format!("{WITH_OIDC}client_secret_file = \"/nonexistent/ferrofed-viewer\"\n");
     let error = refused(&text);
     assert!(
-        matches!(&error, ConfigError::Secret { key, .. } if key == "oidc.client_secret_file"),
+        matches!(&error, error::Error::Secret { key, .. } if key == "oidc.client_secret_file"),
         "{error:?}"
     );
     Ok(())
@@ -153,7 +167,7 @@ fn a_provider_over_plain_http_is_refused_unless_it_is_on_loopback() -> Result<()
     );
     let error = refused(&remote);
     assert!(
-        matches!(&error, ConfigError::UrlShape { key, .. } if key == "oidc.authorization_endpoint"),
+        matches!(&error, error::Error::UrlShape { key, .. } if key == "oidc.authorization_endpoint"),
         "{error:?}"
     );
     let loopback = WITH_OIDC.replace("https://idp.example.org", "http://localhost:8099");
@@ -165,7 +179,7 @@ fn a_provider_over_plain_http_is_refused_unless_it_is_on_loopback() -> Result<()
 #[test]
 fn a_provider_without_the_openid_scope_is_refused() {
     let error = refused(&WITH_OIDC.replace("\"openid\", ", ""));
-    assert!(matches!(error, ConfigError::Missing { .. }), "{error:?}");
+    assert!(matches!(error, error::Error::Missing { .. }), "{error:?}");
 }
 
 // RFC 6749 §3.1.2: the redirection endpoint carries no fragment.
@@ -173,7 +187,7 @@ fn a_provider_without_the_openid_scope_is_refused() {
 fn a_redirect_uri_with_a_fragment_is_refused() {
     let error = refused(&WITH_OIDC.replace("/auth/callback", "/auth/callback#here"));
     assert!(
-        matches!(&error, ConfigError::UrlShape { key, .. } if key == "oidc.redirect_uri"),
+        matches!(&error, error::Error::UrlShape { key, .. } if key == "oidc.redirect_uri"),
         "{error:?}"
     );
 }
@@ -182,7 +196,7 @@ fn a_redirect_uri_with_a_fragment_is_refused() {
 fn a_provider_without_a_client_id_is_refused() {
     let error = refused(&WITH_OIDC.replace("client_id = \"ferrofed-viewer\"\n", ""));
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "oidc.client_id"),
+        matches!(&error, error::Error::Missing { key } if key == "oidc.client_id"),
         "{error:?}"
     );
 }
@@ -195,7 +209,7 @@ fn a_gateway_url_that_is_not_http_or_carries_userinfo_is_refused() {
     ] {
         let error = refused(&format!("[gateway]\nbase_url = \"{base}\"\n"));
         assert!(
-            matches!(&error, ConfigError::UrlShape { key, .. } if key == "gateway.base_url"),
+            matches!(&error, error::Error::UrlShape { key, .. } if key == "gateway.base_url"),
             "{base}: {error:?}"
         );
     }
@@ -210,7 +224,7 @@ fn a_zero_timeout_or_session_bound_is_refused() {
     ] {
         let error = refused(text);
         assert!(
-            matches!(&error, ConfigError::Zero { key: named } if named == key),
+            matches!(&error, error::Error::Zero { key: named } if named == key),
             "{text}: {error:?}"
         );
     }
@@ -220,7 +234,7 @@ fn a_zero_timeout_or_session_bound_is_refused() {
 fn a_listen_address_that_does_not_parse_is_refused() {
     let error = refused("[server]\nlisten = \"localhost\"\n");
     assert!(
-        matches!(&error, ConfigError::Address { key, .. } if key == "server.listen"),
+        matches!(&error, error::Error::Address { key, .. } if key == "server.listen"),
         "{error:?}"
     );
 }

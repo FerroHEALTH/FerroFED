@@ -99,16 +99,25 @@ impl Default for Gateway {
     }
 }
 
-/// `[session]`.
+/// `[session]`: the pending sign-ins and the signed-in sessions, each a pool
+/// of its own.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Session {
-    /// Whether the session cookie carries `Secure`, so a browser sends it
-    /// over HTTPS only; off only for a console on loopback.
+    /// Whether the cookies carry `Secure`, so a browser sends them over HTTPS
+    /// only; off only for a console on loopback.
     pub secure_cookie: bool,
-    /// How long a session lives without a request, in seconds.
+    /// How long a sign-in begun at `GET /login` waits for the provider's
+    /// redirect back, in seconds.
+    pub sign_in_timeout_s: u64,
+    /// How many pending sign-ins the console holds at once; a new one drops
+    /// the oldest.
+    pub max_sign_ins: usize,
+    /// How long a signed-in session lives without a request, in seconds.
     pub idle_timeout_s: u64,
-    /// How many sessions the console holds at once.
+    /// How long a signed-in session lives at most, in seconds.
+    pub absolute_timeout_s: u64,
+    /// How many signed-in sessions the console holds at once.
     pub max_sessions: usize,
 }
 
@@ -116,7 +125,10 @@ impl Default for Session {
     fn default() -> Self {
         Self {
             secure_cookie: true,
+            sign_in_timeout_s: 300,
+            max_sign_ins: 1000,
             idle_timeout_s: 1800,
+            absolute_timeout_s: 43_200,
             max_sessions: 10_000,
         }
     }

@@ -16,6 +16,8 @@ mod config;
 #[cfg(test)]
 mod gateway;
 #[cfg(test)]
+mod secrets;
+#[cfg(test)]
 mod server;
 #[cfg(test)]
 mod sign_in;

@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::config::error::Error;
+use crate::config::error::{Error, ParseFault, Stage};
 use crate::config::{CONFIG_PATH_ENV, Config, ENV_PREFIX};
 
 impl Config {
@@ -53,13 +53,27 @@ impl Config {
     ) -> Result<Self, Error> {
         let mut table = match text {
             None => toml::Table::new(),
-            Some(text) => toml::from_str(text).map_err(|source| Error::Parse { source })?,
+            Some(text) => toml::from_str(text).map_err(|error| Error::Parse {
+                fault: ParseFault::from_toml(&error, text, Stage::File),
+            })?,
         };
         for (name, raw) in environment {
             apply_override(&mut table, name, raw)?;
         }
         let merged = toml::to_string(&table).map_err(|source| Error::Assemble { source })?;
-        toml::from_str(&merged).map_err(|source| Error::Parse { source })
+        toml::from_str(&merged).map_err(|error| {
+            // NOTE: no specification governs this: our own design; a fault the
+            // file itself carries is reported at its line, which the merged tree has not.
+            let file = text.and_then(|text| {
+                toml::from_str::<Self>(text)
+                    .err()
+                    .map(|error| ParseFault::from_toml(&error, text, Stage::File))
+            });
+            Error::Parse {
+                fault: file
+                    .unwrap_or_else(|| ParseFault::from_toml(&error, &merged, Stage::Merged)),
+            }
+        })
     }
 }
 
