@@ -1,6 +1,6 @@
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
 | `[nl_gf]` | |
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # The registry

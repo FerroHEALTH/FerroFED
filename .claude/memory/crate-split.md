@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 Asked on 2026-10-01 whether FerroFED publishes its library crates on the

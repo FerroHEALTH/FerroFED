@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # shellcheck shell=bash
 # Shared helpers for the corpora pinned file by file, by URL and sha256.

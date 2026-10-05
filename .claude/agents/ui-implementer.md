@@ -13,7 +13,7 @@ model: opus
 color: cyan
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 You implement one bounded task in the `app/ferrofed-viewer` crate, exactly as

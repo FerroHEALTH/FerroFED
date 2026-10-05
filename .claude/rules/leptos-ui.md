@@ -2,7 +2,7 @@
 paths: ["app/ferrofed-viewer/**"]
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Leptos viewer rules (`app/ferrofed-viewer`, and any Leptos code)

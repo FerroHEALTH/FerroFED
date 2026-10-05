@@ -1,16 +1,16 @@
 ---
 name: license-busl
-description: "FerroFED's own code and text are under the Business Source License 1.1 with Vernum Projecten B.V. as Licensor (#1, #2, 2026-09-16) and the contribution-licence terms, checkbox and guard (#3, #4); Apache 2.0 is the Change License four years after each version"
+description: "FerroFED's own code and text are under the Business Source License 1.1 with Cadasto B.V. as Licensor (#1, #2, 2026-09-16; holder changed by #602, 2026-10-05) and the contribution-licence terms, checkbox and guard (#3, #4); Apache 2.0 is the Change License four years after each version"
 metadata:
   type: project
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 The repository opened under the Business Source License 1.1, the family's
-terms. On 2026-09-16 issue #1 (PR #2) made Vernum Projecten B.V. the Licensor
-and copyright holder, and issue #3 (PR #4) added the contribution-licence
+terms. On 2026-09-16 issue #1 (PR #2) named the Licensor and copyright
+holder, which the owner changed to Cadasto B.V. on 2026-10-05 (#602), and issue #3 (PR #4) added the contribution-licence
 terms in CONTRIBUTING.md, the pull-request checkbox, and the
 `contribution-licence-guard` workflow backed by
 `scripts/checks/contribution-licence.sh`.
@@ -27,8 +27,8 @@ The terms, as `LICENSE` and `NOTICE` state them:
 
 **How to apply:**
 
-- Every first-party file carries `SPDX-FileCopyrightText: Vernum Projecten
-  B.V.` and `SPDX-License-Identifier: BUSL-1.1` in its header.
+- Every first-party file carries `SPDX-FileCopyrightText: Cadasto
+  B.V.`, which `scripts/checks/copyright-holder.sh` enforces, and `SPDX-License-Identifier: BUSL-1.1` in its header.
 - `LICENSE` is the one file that names Apache 2.0 as a licence of its own,
   where it is the Change License.
 - Vendored material keeps its upstream terms (the specification is CC0 1.0,

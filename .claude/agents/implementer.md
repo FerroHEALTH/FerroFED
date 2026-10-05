@@ -14,7 +14,7 @@ model: opus
 color: green
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 You implement one bounded task in FerroFED, a pure-Rust openEHR federation

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 
 # CI in two tiers.
@@ -275,6 +275,20 @@ jobs:
         with:
           persist-credentials: false
       - run: bash scripts/checks/favicon-sync.sh
+
+  # Every first-party header names the one copyright holder, the Licensor of
+  # LICENSE; vendored trees keep their upstream terms.
+  copyright-holder:
+    name: copyright-holder
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/checks/copyright-holder.sh
 
   # The conformance-matrix guard (the §17 conformance points and the §16.3
   # tracks): the matrix's derived columns against the vendored specification,
@@ -976,6 +990,7 @@ jobs:
       - file-length
       - versions
       - favicon-sync
+      - copyright-holder
       - conformance-matrix
       - obligations
       - e2e-placement

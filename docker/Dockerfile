@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
 # The FerroFED image: one static binary on distroless static, per platform.

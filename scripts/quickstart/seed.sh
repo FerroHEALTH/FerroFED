@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # Seeds the compose quickstart's four FerroEHR nodes with synthetic patients,
 # over each node's ITS-REST API and nothing else (no specification governs the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # The manifest guard: every Cargo manifest of the workspace, and of the
 # out-of-workspace fuzz/ crate, parses (no specification governs this: our own

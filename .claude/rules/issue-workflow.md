@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Issue workflow (the tracker loop)
@@ -67,8 +67,8 @@ loop, the label taxonomy, and the cadence. Relationships between issues live in
 ## Type, priority and labels
 
 **The type, the priority and the effort of an issue are GitHub's own
-fields, never labels** (owner decision 2026-10-02, the model VernumBOEK has
-used since 2026-09-19). The `FerroHEALTH` organisation defines all three, and
+fields, never labels** (owner decision 2026-10-02, the model another of the
+owner's projects has used since 2026-09-19). The `FerroHEALTH` organisation defines all three, and
 `scripts/gh/fields.sh` sets each by issue number, resolving every node id and
 failing loud on a typo:
 

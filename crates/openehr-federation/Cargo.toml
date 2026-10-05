@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "openehr-federation"
 description = "The openEHR Federation Tier with AQL specification: the federation wire types held to the published schemas, the AQL rewrite with identifier hygiene (feature `aql`) and the federated result merge (feature `merge`)"
 # The crate line starts above the 0.0.0 name reservation on crates.io (no
 # specification governs this: our own design).
-version = "0.0.40"
+version = "0.0.41"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

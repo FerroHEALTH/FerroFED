@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Contributing to FerroFED
@@ -91,7 +91,7 @@ synthetic.
   the tracker issue it answers, one `Closes` keyword per issue.
 - No AI or assistant attribution anywhere in the commits or the pull request.
 - Every first-party file carries the SPDX header
-  (`SPDX-FileCopyrightText: Vernum Projecten B.V.`,
+  (`SPDX-FileCopyrightText: Cadasto B.V.`,
   `SPDX-License-Identifier: BUSL-1.1`).
 - Record any user-visible change as a changelog fragment,
   `changelog.d/<issue>-<kebab-slug>.<section>.md`, in the format

@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Memory index
@@ -23,7 +23,7 @@
   FerroHEALTH and the siblings, unlike FerroBRIDGE; owner 2026-10-01
 - [One setup PR](one-setup-pr.md): the opening setup lands as one large pull
   request, then one PR per issue resumes; owner 2026-10-01
-- [Licence: BUSL 1.1](license-busl.md): Vernum Projecten B.V. is the Licensor
+- [Licence: BUSL 1.1](license-busl.md): Cadasto B.V. is the Licensor
   (#1, #2) and the contribution terms, checkbox and guard landed (#3, #4)
 - [Domain ferrofed.eu](domain-ferrofed-eu.md): a Pages setting on the family
   model, never a `CNAME` file
