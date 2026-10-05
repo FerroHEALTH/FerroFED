@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use http::header::{ACCEPT, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
-use nl_generic_functions::oauth_metadata::{self, EndpointError};
+use oauth_server_metadata::EndpointError;
 use openehr_its::rest::client::{RequestTimeout, Transport, TransportError};
 use serde::Deserialize;
 use url::Url;
@@ -194,7 +194,7 @@ pub(crate) async fn discover<T: Transport>(
 
 /// Reads `body`, the metadata of `grant`'s issuer, as [`discover`] holds it.
 fn read(body: &[u8], grant: &Fapi2Grant) -> Result<Url, DiscoveryError> {
-    oauth_metadata::repeats_no_name(body).map_err(DiscoveryError::Body)?;
+    oauth_server_metadata::repeats_no_name(body).map_err(DiscoveryError::Body)?;
     let raw: Raw = serde_json::from_slice(body).map_err(DiscoveryError::Body)?;
     let issuer = grant.issuer();
     if !raw

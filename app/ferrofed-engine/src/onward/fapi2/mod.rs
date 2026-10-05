@@ -49,7 +49,7 @@ use std::time::Duration;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use jsonwebtoken::Algorithm;
-use nl_generic_functions::oauth_metadata::Issuer;
+use oauth_server_metadata::Issuer;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use url::Url;
 

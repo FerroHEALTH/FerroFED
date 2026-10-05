@@ -380,9 +380,10 @@ async fn exchange(
     deadline: Instant,
 ) -> Result<Finding, String> {
     let Some(resolver) = federation.resolver() else {
-        return Err(
-            "no cross-reference is configured ([dev] or [pixm]), so nothing turns a patient into this node's ehr_id (§5.5)".to_owned(),
-        );
+        return Err(format!(
+            "no cross-reference is configured ({}), so nothing turns a patient into this node's ehr_id (§5.5)",
+            crate::binding::resolver_list()
+        ));
     };
     if created.is_empty() {
         return Err("no EHR was created, so there is no ehr_id to resolve to".to_owned());

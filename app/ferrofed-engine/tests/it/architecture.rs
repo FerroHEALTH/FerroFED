@@ -8,7 +8,8 @@
 //! storage implementations live in `app/ferrofed-server`, so no published
 //! `crates/*` library and no other `app/*` crate (the engine included) may
 //! reach one, or the server, through its normal or build dependencies. The
-//! IHE and Dutch binding crates depend on nothing in FerroFED (#106), so a
+//! IHE and Dutch binding crates, and the RFC 8414 crate they share with the
+//! core, depend on nothing in FerroFED (#106), so a
 //! patient index or another gateway can use them as they are. The engine names
 //! no HTTP engine directly, so every request to a node is built by
 //! `openehr-its`'s client runtime (#34).
@@ -68,8 +69,9 @@ const HTTP_ENGINES: &[&str] = &[
 /// depend on it either.
 const APPLICATION: &str = "ferrofed-server";
 
-/// The binding crates that carry no FerroFED dependency at all.
-const STANDALONE: &[&str] = &["ihe-iti", "nl-generic-functions"];
+/// The binding crates, and the specification crates they share, that carry no
+/// FerroFED dependency at all; one may depend on another.
+const STANDALONE: &[&str] = &["ihe-iti", "nl-generic-functions", "oauth-server-metadata"];
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -199,7 +201,7 @@ fn the_binding_crates_depend_on_nothing_in_ferrofed() -> Result<(), Box<dyn Erro
             "cargo tree for {binding} did not list the crate itself, so its output was not read"
         );
         for name in &internal {
-            if name != binding && reached.contains(name.as_str()) {
+            if !STANDALONE.contains(&name.as_str()) && reached.contains(name.as_str()) {
                 breaches.push(format!("{binding} depends on {name}"));
             }
         }
