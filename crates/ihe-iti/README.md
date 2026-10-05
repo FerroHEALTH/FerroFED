@@ -14,6 +14,7 @@ framework, with a feature per profile.
 | `pmir` | Patient Master Identity Registry | ITI-93, ITI-94 |
 | `xcpd` | Cross-Community Patient Discovery | ITI-55 |
 | `atna` | Audit Trail and Node Authentication | ITI-20 |
+| `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of the FHIR profiles, sent over the ITI-20 FHIR Feed | ITI-20 |
 
 The crate depends on no application, so a federation gateway, a master patient
 index or any other caller can use it as it is. Only the `xcpd` feature may carry
@@ -202,9 +203,6 @@ and PMIR exchanges are always the system's own.
   the spool in order, retries a transport failure with a jittered backoff
   capped where the caller says, and reports the spool's depth, its
   quarantine, its deliveries and its retries.
-
-The RESTful ATNA FHIR feed is an option of ITI-20 this crate does not
-send.
 
 The other profile modules hold their place and land with their FerroFED issues
 (<https://github.com/FerroHEALTH/FerroFED>).

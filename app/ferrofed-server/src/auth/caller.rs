@@ -22,7 +22,10 @@ use openehr_sdt::smart_scopes::SmartScope;
 use secrecy::{ExposeSecret, SecretString};
 
 /// A caller the gateway verified.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Debug` shows how the caller was verified and what it was granted, and
+/// none of its issuer, subject, client or token.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Caller {
     /// The issuer that vouched for the caller (`iss`).
     issuer: String,
@@ -61,6 +64,23 @@ pub struct Caller {
     /// `[auth.issuer.requester]` names state it, when the token carries them
     /// all (§13.4).
     requester: Option<Requester>,
+}
+
+impl fmt::Debug for Caller {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const REDACTED: &str = "<redacted>";
+        f.debug_struct("Caller")
+            .field("issuer", &REDACTED)
+            .field("subject", &REDACTED)
+            .field("client_id", &REDACTED)
+            .field("granted", &self.granted)
+            .field("purposes", &self.purposes)
+            .field("verified_by", &self.verified_by)
+            .field("token", &self.token)
+            .field("covering", &self.covering)
+            .field("confined", &self.patient.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 /// The patient a caller's `patient/` grant is confined to: the token's
@@ -453,5 +473,17 @@ mod tests {
             caller("ab", "c", "d").session(),
             caller("a", "bc", "d").session()
         );
+    }
+
+    #[test]
+    fn debug_shows_no_issuer_subject_or_client() {
+        let shown = format!(
+            "{:?}",
+            caller("https://issuer.example.test", "Qz7-sub-71", "Qz7-client-72")
+        );
+        for value in ["issuer.example.test", "Qz7-sub-71", "Qz7-client-72"] {
+            assert!(!shown.contains(value), "{value} in {shown}");
+        }
+        assert!(shown.contains("Signature"), "{shown}");
     }
 }

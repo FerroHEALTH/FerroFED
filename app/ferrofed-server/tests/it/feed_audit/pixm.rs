@@ -332,6 +332,35 @@ async fn each_resolution_names_the_verified_caller_as_its_user_agent() -> TestRe
 }
 
 #[tokio::test]
+async fn a_header_naming_another_user_never_reaches_the_record() -> TestResult {
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let pix = manager().await;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let app = audited_gateway(
+        dir.path(),
+        [&a.uri(), &b.uri(), &pix.uri()],
+        &repository,
+        "",
+    )?;
+    let mut request = post(body(&patient_query())?)?;
+    for name in ["x-forwarded-user", "x-user-id", "x-remote-user", "from"] {
+        request
+            .headers_mut()
+            .insert(name, http::HeaderValue::from_static("Qz7-forged-user"));
+    }
+    let (status, text) = call(app, request).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let records = repository.wait_for(1, SETTLE).await;
+    assert_eq!(1, records.len(), "one record per ITI-83 exchange");
+    // NOTE: PIXm §2:3.83.5.2.1 takes the agent details from the OAuth token; a header the
+    // gate did not verify names no one.
+    assert!(!records[0].contains("Qz7-forged-user"), "{}", records[0]);
+    names_the_default_caller(&records[0])
+}
+
+#[tokio::test]
 async fn the_caller_reaches_the_repository_and_no_log_line_or_metric() -> TestResult {
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;

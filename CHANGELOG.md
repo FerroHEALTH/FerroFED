@@ -147,7 +147,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   gateway, and no metric carries it.
   `ihe-iti` 0.0.23 takes whom each PIXm, PDQm and XCPD exchange is made for
   (`ihe_iti::user::OnBehalfOf`), and the resolver, localizer and
-  demographics roles take it too.
+  demographics roles take it too. An ITI-83 answer a localization read is
+  reused only by the resolution of the same caller, so another caller's
+  access sends, and records, an ITI-83 of its own. The security event
+  `edge-identity-asserted` names the caller by `subject_ref` and
+  `client_ref`, keyed HMAC-SHA256 references stable for the process, in
+  place of the subject and the client, and a verified caller's `Debug`
+  shows neither them nor the issuer.
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at

@@ -37,6 +37,7 @@ mod claims;
 pub mod fetch;
 pub mod keys;
 pub mod permission;
+mod reference;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -251,6 +252,8 @@ pub struct Gate {
     issuers: Vec<Trusted>,
     /// The HTTP client of key set fetches and introspection.
     fetcher: Fetcher,
+    /// The key the security log's caller references are made under.
+    references: reference::References,
 }
 
 /// One issuer on the trust list, with its key set when it has one.
@@ -288,6 +291,7 @@ impl Gate {
             purpose_required: settings.purpose_required,
             issuers,
             fetcher: Fetcher::new(settings.fetch_timeout),
+            references: reference::References::fresh(),
         }
     }
 
@@ -720,15 +724,10 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
     {
         Ok(caller) => {
             if caller.verified_by() == VerifiedBy::Edge {
-                tracing::info!(
-                    target: TARGET,
-                    event = "edge-identity-asserted",
-                    issuer = caller.issuer(),
-                    subject = caller.subject(),
-                    client_id = caller.client_id(),
-                    request_id = outbound,
-                    "the edge asserted the caller's identity, and the gateway verified the assertion"
-                );
+                guard
+                    .gate
+                    .references
+                    .edge_asserted(&caller, outbound.as_deref());
             }
             request.extensions_mut().insert(caller);
             next.run(request).await

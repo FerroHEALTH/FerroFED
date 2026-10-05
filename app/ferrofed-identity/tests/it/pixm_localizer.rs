@@ -13,7 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::behalf::OnBehalfOf;
+use ferrofed_identity::behalf::{Caller, OnBehalfOf};
 use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
@@ -156,6 +156,139 @@ async fn the_resolution_of_the_same_query_reuses_the_localization_call() {
         2,
         calls(&server).await,
         "a kept answer serves one resolution"
+    );
+}
+
+/// A recorder that keeps every exchange it is given.
+#[derive(Default)]
+struct Kept(std::sync::Mutex<Vec<ihe_iti::balp::Exchange>>);
+
+impl Kept {
+    /// Whom each kept exchange was made for, in order: the user's `sub`,
+    /// or `None` for the system's own.
+    fn subjects(&self) -> Vec<Option<String>> {
+        self.0
+            .lock()
+            .expect("the kept exchanges")
+            .iter()
+            .map(|exchange| {
+                exchange
+                    .on_behalf
+                    .user()
+                    .map(|user| user.subject().to_owned())
+            })
+            .collect()
+    }
+}
+
+#[async_trait::async_trait]
+impl ihe_iti::balp::AuditRecorder for Kept {
+    async fn record(
+        &self,
+        exchange: ihe_iti::balp::Exchange,
+    ) -> Result<(), ihe_iti::balp::AuditError> {
+        self.0.lock().expect("the kept exchanges").push(exchange);
+        Ok(())
+    }
+}
+
+/// A verified caller `subject` of the suite's synthetic issuer and client.
+fn caller(subject: &str) -> OnBehalfOf {
+    OnBehalfOf::Caller(Caller::new(
+        "https://issuer.example.test".to_owned(),
+        subject.to_owned(),
+        "Qz7-app-42".to_owned(),
+    ))
+}
+
+/// The PIXm resolver over `server`, recording every exchange in `kept`.
+fn audited(server: &Server, kept: &std::sync::Arc<Kept>) -> PixmResolver {
+    let recorder: std::sync::Arc<dyn ihe_iti::balp::AuditRecorder> = kept.clone();
+    pixm(server).audited(&recorder)
+}
+
+#[tokio::test]
+async fn another_caller_never_reads_a_kept_answer_and_each_access_is_recorded_naming_its_caller() {
+    let server = manager(200, &at_a(), Duration::ZERO).await;
+    let kept = std::sync::Arc::new(Kept::default());
+    let pixm = audited(&server, &kept);
+    let _named = pixm
+        .localize(
+            &patient(SENTINEL),
+            &members(),
+            &caller("Qz7-caller-a"),
+            soon(),
+        )
+        .await;
+    let resolutions = pixm
+        .resolve(
+            &patient(SENTINEL),
+            &[node("node-a")],
+            &caller("Qz7-caller-b"),
+            soon(),
+        )
+        .await;
+    assert!(
+        matches!(resolutions.get(&node("node-a")), Some(Resolution::Resolved(ehr)) if ehr.as_str() == EHR_A)
+    );
+    // NOTE: PIXm §2:3.83.5.2.1: each record names the caller whose request sent the ITI-83,
+    // so caller B asks the Manager itself rather than reading caller A's answer.
+    assert_eq!(2, calls(&server).await, "caller B sends its own ITI-83");
+    assert_eq!(
+        vec![
+            Some("Qz7-caller-a".to_owned()),
+            Some("Qz7-caller-b".to_owned())
+        ],
+        kept.subjects(),
+        "one record per ITI-83 sent, each naming the caller of its request"
+    );
+}
+
+#[tokio::test]
+async fn the_same_caller_reuses_its_answer_and_no_record_claims_a_second_exchange() {
+    let server = manager(200, &at_a(), Duration::ZERO).await;
+    let kept = std::sync::Arc::new(Kept::default());
+    let pixm = audited(&server, &kept);
+    let _named = pixm
+        .localize(
+            &patient(SENTINEL),
+            &members(),
+            &caller("Qz7-caller-a"),
+            soon(),
+        )
+        .await;
+    let _resolutions = pixm
+        .resolve(
+            &patient(SENTINEL),
+            &[node("node-a")],
+            &caller("Qz7-caller-a"),
+            soon(),
+        )
+        .await;
+    assert_eq!(1, calls(&server).await, "one ITI-83 for the query");
+    assert_eq!(
+        vec![Some("Qz7-caller-a".to_owned())],
+        kept.subjects(),
+        "one record, for the one ITI-83 sent, naming the caller who caused it"
+    );
+}
+
+#[tokio::test]
+async fn a_resolution_the_gateway_makes_is_recorded_as_its_own() {
+    let server = manager(200, &at_a(), Duration::ZERO).await;
+    let kept = std::sync::Arc::new(Kept::default());
+    let _resolutions = audited(&server, &kept)
+        .resolve(
+            &patient(SENTINEL),
+            &[node("node-a")],
+            &OnBehalfOf::Gateway,
+            soon(),
+        )
+        .await;
+    assert_eq!(
+        vec![None],
+        kept.subjects(),
+        "the record is made, as the system's own, naming no user"
     );
 }
 

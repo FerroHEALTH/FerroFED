@@ -164,7 +164,9 @@ struct Manager {
 ///
 /// As a localizer it names the members whose domain holds an identifier for
 /// the patient, and the resolution of the same query reuses the answers it
-/// read, so a query asks each Manager once.
+/// read, so a query asks each Manager once. Only a resolution on behalf of
+/// the same caller reuses them: any other asks the Manager itself, so its
+/// own ITI-83 record names it.
 pub struct PixmResolver {
     managers: Vec<Arc<Manager>>,
     namespaces: BTreeMap<IdentifierNamespace, String>,
@@ -417,16 +419,25 @@ pub const SHARED_CAPACITY: usize = 1024;
 ///
 /// It is held in memory only, for [`SHARED_WINDOW`] at most, and consumed by
 /// the resolution that reads it; it is never logged or written anywhere.
+/// It belongs to the party the localization was made for, so only a
+/// resolution on that party's behalf reads it.
 struct Shared {
     namespace: IdentifierNamespace,
     value: SecretString,
+    on_behalf: OnBehalfOf,
     until: Instant,
     lookups: BTreeMap<NodeId, Lookup>,
 }
 
 impl Shared {
-    fn is_for(&self, patient: &PatientRef) -> bool {
-        self.namespace == *patient.namespace() && self.value.expose_secret() == patient.value()
+    /// Whether this answer is about `patient` and was asked on behalf of
+    /// `on_behalf`.
+    fn is_for(&self, patient: &PatientRef, on_behalf: &OnBehalfOf) -> bool {
+        // NOTE: PIXm §2:3.83.5.2.1 names the requestor of each ITI-83; an answer another party's
+        // exchange read would let this one access the cross-reference with no record naming it.
+        self.on_behalf == *on_behalf
+            && self.namespace == *patient.namespace()
+            && self.value.expose_secret() == patient.value()
     }
 }
 
@@ -486,29 +497,39 @@ impl PixmResolver {
     /// Keeps `lookups` for the resolution of the same query, unless
     /// [`SHARED_CAPACITY`] answers are already kept, and drops every kept
     /// answer whose window has passed.
-    fn keep(&self, patient: &PatientRef, lookups: BTreeMap<NodeId, Lookup>) {
+    fn keep(
+        &self,
+        (patient, on_behalf): (&PatientRef, &OnBehalfOf),
+        lookups: BTreeMap<NodeId, Lookup>,
+    ) {
         let now = Instant::now();
         let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
-        shared.retain(|kept| kept.until > now && !kept.is_for(patient));
+        shared.retain(|kept| kept.until > now && !kept.is_for(patient, on_behalf));
         if shared.len() >= SHARED_CAPACITY {
             return;
         }
         shared.push(Shared {
             namespace: patient.namespace().clone(),
             value: SecretString::from(patient.value()),
+            on_behalf: on_behalf.clone(),
             until: now.checked_add(SHARED_WINDOW).unwrap_or(now),
             lookups,
         });
     }
 
-    /// Takes the kept answers about `patient` for `members`, leaving none
-    /// behind; a member with no kept answer is absent.
-    fn take(&self, patient: &PatientRef, members: &[NodeId]) -> BTreeMap<NodeId, Lookup> {
+    /// Takes the kept answers about `patient` for `members` that a
+    /// localization on behalf of `on_behalf` read, leaving none behind; a
+    /// member with no kept answer is absent.
+    fn take(
+        &self,
+        (patient, on_behalf): (&PatientRef, &OnBehalfOf),
+        members: &[NodeId],
+    ) -> BTreeMap<NodeId, Lookup> {
         let now = Instant::now();
         let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
         let found = shared
             .iter()
-            .position(|kept| kept.until > now && kept.is_for(patient));
+            .position(|kept| kept.until > now && kept.is_for(patient, on_behalf));
         let mut taken = BTreeMap::new();
         if let Some(index) = found {
             let mut kept = shared.swap_remove(index);
@@ -532,7 +553,7 @@ impl Resolver for PixmResolver {
         on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
-        let mut lookups = self.take(patient, members);
+        let mut lookups = self.take((patient, on_behalf), members);
         let missing: Vec<NodeId> = members
             .iter()
             .filter(|member| !lookups.contains_key(*member))
@@ -595,7 +616,7 @@ impl Localizer for PixmResolver {
         if candidates.is_empty() {
             return Localization::NoRecords;
         }
-        self.keep(patient, lookups);
+        self.keep((patient, on_behalf), lookups);
         Localization::Candidates(candidates)
     }
 }
