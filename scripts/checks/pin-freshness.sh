@@ -14,8 +14,9 @@
 # Reads each pin from docs/VERSIONS.md and each newest release tag from the
 # upstream project's GitHub releases, which is the tag the container image and
 # the installer both carry. A corpus pinned by commit on a repository with no
-# releases is read against the newest commit of the branch it follows. Needs an
-# authenticated `gh` and awk.
+# releases is read against the newest commit of the branch it follows, and the
+# Chrome for Testing release against the newest stable one of its availability
+# feed. Needs an authenticated `gh`, awk, curl and jq.
 #
 # Exit 0 when every pin is current, 1 when at least one is behind (each such
 # line starts with STALE), 2 when a release could not be read, so a network
@@ -123,6 +124,27 @@ while IFS=$'\t' read -r label repo branch; do
     stale=1
   fi
 done <<< "$WATCHED_COMMITS"
+
+# The Chrome for Testing release the browser journeys run Chrome and
+# chromedriver at, read against the newest stable release of the Chrome for
+# Testing availability feed, which publishes no GitHub release.
+readonly CHROME_LABEL="Chrome for Testing (Chrome and chromedriver)"
+readonly CHROME_FEED=https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json
+pinned="$(matrix_pin "$CHROME_LABEL")"
+if [[ -z "$pinned" ]]; then
+  printf 'UNREADABLE %s: no pin row in %s\n' "$CHROME_LABEL" "$MATRIX"
+  unreadable=1
+elif ! latest="$(curl --fail --silent --show-error --user-agent ferrofed-pin-check "$CHROME_FEED" \
+  | jq --raw-output --exit-status '.channels.Stable.version' 2>&1)"; then
+  printf 'UNREADABLE %s: could not read the newest stable release from %s (%s)\n' "$CHROME_LABEL" "$CHROME_FEED" "$latest"
+  unreadable=1
+elif [[ "$pinned" = "$latest" ]]; then
+  printf 'current    %s %s (%s)\n' "$CHROME_LABEL" "$pinned" "$CHROME_FEED"
+else
+  printf 'STALE      %s: pinned %s, newest stable release %s (%s)\n' \
+    "$CHROME_LABEL" "$pinned" "$latest" "$CHROME_FEED"
+  stale=1
+fi
 
 [[ "$unreadable" -eq 0 ]] || exit 2
 exit "$stale"

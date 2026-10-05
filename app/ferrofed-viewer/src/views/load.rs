@@ -8,30 +8,34 @@
 //! itself before it asks the gateway anything, and asks the gateway as the
 //! operator, with the operator's own access token (`server/25_server_functions`,
 //! the Leptos book). The bodies run on the server alone.
+//!
+//! A refusal the gateway answers is an [`Outcome::Refused`], a successful
+//! answer of the function; only a fault of the console, its session or its
+//! reach to the gateway is a [`ViewError`].
 
 use leptos::prelude::*;
 
-use crate::views::model::{FederationView, IntegrityView, MembersView, StoredView, ViewError};
+use crate::views::model::{
+    FederationView, IntegrityView, MembersView, Outcome, StoredView, ViewError,
+};
 
 /// Loads the members view: `OPTIONS {base}/` and the health of every member
 /// and service.
 ///
 /// # Errors
 /// Returns [`ViewError::SignedOut`] without a live session, and the
-/// gateway's refusal or failure as its [`ViewError`].
+/// console's fault as its [`ViewError`]; the gateway's refusal is an
+/// [`Outcome::Refused`].
 #[server(endpoint = "members")]
-pub async fn members() -> Result<MembersView, ViewError> {
-    let (state, token) = server::signed_in()?;
-    let gateway = state.gateway();
-    let description = gateway
-        .self_description(&token)
-        .await
-        .map_err(|error| server::refused(&error))?;
-    let dependencies = gateway
-        .dependencies(&token)
-        .await
-        .map_err(|error| server::refused(&error))?;
-    Ok(server::members(&description, &dependencies))
+pub async fn members() -> Result<Outcome<MembersView>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let gateway = state.gateway();
+        let description = gateway.self_description(&token).await?;
+        let dependencies = gateway.dependencies(&token).await?;
+        Ok(server::members(&description, &dependencies))
+    })
+    .await
 }
 
 /// Loads the integrity view: the incidents and the page of the routing
@@ -43,18 +47,17 @@ pub async fn members() -> Result<MembersView, ViewError> {
 pub async fn integrity(
     /// Where the page of the routing table starts.
     offset: u64,
-) -> Result<IntegrityView, ViewError> {
-    let (state, token) = server::signed_in()?;
-    let gateway = state.gateway();
-    let incidents = gateway
-        .incidents(&token)
-        .await
-        .map_err(|error| server::refused(&error))?;
-    let routes = gateway
-        .creating_systems(&token, server::page(offset))
-        .await
-        .map_err(|error| server::refused(&error))?;
-    Ok(server::integrity(&incidents, &routes))
+) -> Result<Outcome<IntegrityView>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let gateway = state.gateway();
+        let incidents = gateway.incidents(&token).await?;
+        let routes = gateway
+            .creating_systems(&token, server::page(offset))
+            .await?;
+        Ok(server::integrity(&incidents, &routes))
+    })
+    .await
 }
 
 /// Loads the page of the stored-query view that starts at `offset`.
@@ -65,14 +68,16 @@ pub async fn integrity(
 pub async fn stored_queries(
     /// Where the page of held versions starts.
     offset: u64,
-) -> Result<StoredView, ViewError> {
-    let (state, token) = server::signed_in()?;
-    let report = state
-        .gateway()
-        .stored_queries(&token, server::page(offset))
-        .await
-        .map_err(|error| server::refused(&error))?;
-    Ok(server::stored(&report))
+) -> Result<Outcome<StoredView>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let report = state
+            .gateway()
+            .stored_queries(&token, server::page(offset))
+            .await?;
+        Ok(server::stored(&report))
+    })
+    .await
 }
 
 /// Loads the self-description view, `OPTIONS {base}/`.
@@ -80,18 +85,18 @@ pub async fn stored_queries(
 /// # Errors
 /// As [`members`].
 #[server(endpoint = "federation")]
-pub async fn federation() -> Result<FederationView, ViewError> {
-    let (state, token) = server::signed_in()?;
-    let description = state
-        .gateway()
-        .self_description(&token)
-        .await
-        .map_err(|error| server::refused(&error))?;
-    server::federation(&description)
+pub async fn federation() -> Result<Outcome<FederationView>, ViewError> {
+    server::settled(async {
+        let (state, token) = server::signed_in()?;
+        let description = state.gateway().self_description(&token).await?;
+        Ok(server::federation(&description)?)
+    })
+    .await
 }
 
-/// The server half of the views: the session check and the mapping of the
-/// gateway's bodies onto the view models.
+/// The server half of the views: the session check, the split of a failed
+/// gateway call into a refusal or a fault, and the mapping of the gateway's
+/// bodies onto the view models.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
     use ferrofed_registry::health::DependencyReport;
@@ -105,9 +110,52 @@ pub mod server {
     use crate::gateway::{AccessToken, GatewayError};
     use crate::server::ViewerState;
     use crate::views::model::{
-        FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, PAGE_SIZE, RouteRow,
-        StoredRow, StoredView, ViewError,
+        FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, Outcome, PAGE_SIZE,
+        Refusal, RouteRow, StoredRow, StoredView, ViewError,
     };
+
+    /// Why a server function stops short of its view: an expected refusal,
+    /// which it answers, or a fault of the console, which fails it.
+    #[derive(Debug)]
+    pub enum Stop {
+        /// The gateway refused, or the input cannot be sent.
+        Refused(Refusal),
+        /// The console, its session or its reach to the gateway failed.
+        Fault(ViewError),
+    }
+
+    impl From<Refusal> for Stop {
+        fn from(refusal: Refusal) -> Self {
+            Self::Refused(refusal)
+        }
+    }
+
+    impl From<ViewError> for Stop {
+        fn from(error: ViewError) -> Self {
+            Self::Fault(error)
+        }
+    }
+
+    impl From<GatewayError> for Stop {
+        fn from(error: GatewayError) -> Self {
+            refused(&error)
+        }
+    }
+
+    /// The answer of a server function whose work is `work`: its view, or
+    /// the refusal that stopped it, and a fault as the function's error.
+    ///
+    /// # Errors
+    /// Returns the [`ViewError`] of a fault.
+    pub async fn settled<T>(
+        work: impl Future<Output = Result<T, Stop>>,
+    ) -> Result<Outcome<T>, ViewError> {
+        match work.await {
+            Ok(view) => Ok(Outcome::Shown(view)),
+            Err(Stop::Refused(refusal)) => Ok(Outcome::Refused(refusal)),
+            Err(Stop::Fault(error)) => Err(error),
+        }
+    }
 
     /// The console's state and the operator's access token, for a request
     /// that carries a live signed-in session.
@@ -132,28 +180,29 @@ pub mod server {
         Ok((state, AccessToken::new(token)))
     }
 
-    /// The view error of a gateway call that failed, logged with no token
-    /// and no body.
+    /// What stopped a gateway call that failed, logged with no token and no
+    /// body: the gateway's refusal, or the console's fault of a body it
+    /// cannot read or a gateway it cannot reach.
     #[must_use]
-    pub fn refused(error: &GatewayError) -> ViewError {
+    pub fn refused(error: &GatewayError) -> Stop {
         if let Some(status) = error.unreadable() {
             tracing::error!(%status, "the gateway answered a view with a body this console cannot read");
-            return ViewError::Unreadable {
+            return Stop::Fault(ViewError::Unreadable {
                 status: status.as_u16(),
-            };
+            });
         }
         if let Some((status, code)) = error.refusal() {
             tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view");
             if status == http::StatusCode::UNAUTHORIZED {
-                return ViewError::NotAuthenticated { code };
+                return Stop::Refused(Refusal::NotAuthenticated { code });
             }
-            ViewError::Refused {
+            Stop::Refused(Refusal::Gateway {
                 status: status.as_u16(),
                 code,
-            }
+            })
         } else {
             tracing::error!(error = %error, "the gateway could not be reached for a view");
-            ViewError::Unreachable
+            Stop::Fault(ViewError::Unreachable)
         }
     }
 

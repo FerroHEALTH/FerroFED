@@ -16,16 +16,28 @@ use serde::{Deserialize, Serialize};
 /// The most rows a paged view asks the gateway for at once.
 pub const PAGE_SIZE: u64 = 100;
 
-/// Why a view could not be rendered.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
-pub enum ViewError {
-    /// The request carries no live signed-in session.
-    #[error("sign in to see this view")]
-    SignedOut,
+/// What a server function of the console answers when the console itself
+/// works: the view, or the expected refusal that kept it from showing.
+///
+/// A refusal is an answer, not an error: a server function that fails answers
+/// with a `5xx`, which the browser logs as an error, and a caller branches on
+/// the two, so they are distinct types.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Outcome<T> {
+    /// The view.
+    Shown(T),
+    /// The gateway refused the request, or the operator's input cannot be
+    /// sent.
+    Refused(Refusal),
+}
+
+/// An expected refusal: the gateway's, with its status and stable code, or
+/// the console's of input it cannot send.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Refusal {
     /// The gateway refused the request, with its status and its stable
     /// error code.
-    #[error("the gateway answered {status}")]
-    Refused {
+    Gateway {
         /// The status the gateway answered with.
         status: u16,
         /// The stable error code of its body, when it carried one.
@@ -33,11 +45,25 @@ pub enum ViewError {
     },
     /// The gateway did not accept the operator's access token (`401`), so
     /// the operator signs in again.
-    #[error("the gateway did not accept your sign-in")]
     NotAuthenticated {
         /// The stable error code of its body, when it carried one.
         code: Option<String>,
     },
+    /// The operator's input cannot be sent as it stands. The reason names
+    /// the field and never quotes what was entered (N33).
+    Invalid {
+        /// What is wrong, by field.
+        reason: String,
+    },
+}
+
+/// Why the console could not serve a view: a fault of its own, of its
+/// session, or of its reach to the gateway, never an expected refusal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
+pub enum ViewError {
+    /// The request carries no live signed-in session.
+    #[error("sign in to see this view")]
+    SignedOut,
     /// The gateway answered with a body this console cannot read, such as a
     /// report of a shape it does not know.
     #[error("the gateway answered {status} with a body this console cannot read")]
@@ -48,13 +74,12 @@ pub enum ViewError {
     /// The gateway gave no answer at all.
     #[error("the gateway could not be reached")]
     Unreachable,
-    /// The operator's input cannot be sent as it stands. The reason names
-    /// the field and never quotes what was entered (N33).
-    #[error("{reason}")]
-    Invalid {
-        /// What is wrong, by field.
-        reason: String,
-    },
+    /// A plain form post, which a page without its bundle sends, asked the
+    /// query server function for an answer no page would show.
+    #[error(
+        "the query console runs a query once its page has loaded; reload the page and run it again"
+    )]
+    PlainPost,
     /// The console could not serve the view.
     #[error("the console could not serve this view")]
     Unavailable,

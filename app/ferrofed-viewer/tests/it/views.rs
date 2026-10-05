@@ -7,6 +7,7 @@
 //! renders the operator's token (§5.4.1, N33).
 
 use std::error::Error;
+use std::time::Duration;
 
 use axum::body::Body;
 use ferrofed_viewer::server::ViewerState;
@@ -48,6 +49,17 @@ fn example_endpoints() -> Result<Vec<String>, Box<dyn Error>> {
 /// Answers `GET` or `OPTIONS` of `route` with the JSON `body`, only for the
 /// operator's own token.
 async fn answers(gateway: &MockServer, verb: &str, route: &str, body: String) {
+    answers_after(Duration::ZERO, gateway, verb, route, body).await;
+}
+
+/// Answers as [`answers`] does, each answer `delay` late.
+async fn answers_after(
+    delay: Duration,
+    gateway: &MockServer,
+    verb: &str,
+    route: &str,
+    body: String,
+) {
     Mock::given(method(verb))
         .and(path(route))
         .and(wiremock::matchers::header(
@@ -57,7 +69,8 @@ async fn answers(gateway: &MockServer, verb: &str, route: &str, body: String) {
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("content-type", "application/json")
-                .set_body_string(body),
+                .set_body_string(body)
+                .set_delay(delay),
         )
         .mount(gateway)
         .await;
@@ -65,21 +78,29 @@ async fn answers(gateway: &MockServer, verb: &str, route: &str, body: String) {
 
 /// A stub gateway answering every surface the views read.
 async fn gateway() -> Result<MockServer, Box<dyn Error>> {
+    gateway_after(Duration::ZERO).await
+}
+
+/// A stub gateway answering every surface the views read, each answer
+/// `delay` late.
+async fn gateway_after(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
     let gateway = MockServer::start().await;
-    answers(&gateway, "OPTIONS", "/", options_example()?).await;
+    answers_after(delay, &gateway, "OPTIONS", "/", options_example()?).await;
     let endpoints = example_endpoints()?
         .iter()
         .map(|id| format!("\"{id}\":\"up\""))
         .collect::<Vec<_>>()
         .join(",");
-    answers(
+    answers_after(
+        delay,
         &gateway,
         "GET",
         "/health/dependencies",
         format!(r#"{{"endpoints":{{{endpoints}}},"resolver":"failing"}}"#),
     )
     .await;
-    answers(
+    answers_after(
+        delay,
         &gateway,
         "GET",
         "/operator/incidents",
@@ -92,7 +113,8 @@ async fn gateway() -> Result<MockServer, Box<dyn Error>> {
         ),
     )
     .await;
-    answers(
+    answers_after(
+        delay,
         &gateway,
         "GET",
         "/operator/creating-systems",
@@ -103,7 +125,8 @@ async fn gateway() -> Result<MockServer, Box<dyn Error>> {
         ),
     )
     .await;
-    answers(
+    answers_after(
+        delay,
         &gateway,
         "GET",
         "/operator/stored-queries",
@@ -566,5 +589,45 @@ async fn a_view_whose_answer_the_console_cannot_read_says_so() -> Result<(), Box
         "{body}"
     );
     assert!(!body.contains("holds no stored query"), "{body}");
+    Ok(())
+}
+
+// A page whose content comes from the gateway is whole in the HTML the
+// server sends, every time, however long the gateway takes: nothing waits in
+// a `<template>` for an inline script to move it into place, so the page
+// reads with no script at all.
+#[tokio::test(flavor = "multi_thread")]
+async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<(), Box<dyn Error>> {
+    for delay in [Duration::ZERO, Duration::from_millis(50)] {
+        let gateway = gateway_after(delay).await?;
+        let (_state, service, session) = signed_in_console(&gateway)?;
+        for (page, content) in [
+            ("/members", "<caption>Member endpoints</caption>"),
+            (
+                "/integrity",
+                "<caption>The creating_system_id routing table</caption>",
+            ),
+            ("/stored-queries", "<caption>Held versions</caption>"),
+            ("/federation", "<dt>Federation</dt>"),
+            (
+                "/query",
+                r#"<button type="submit" disabled>Run the query</button>"#,
+            ),
+        ] {
+            for round in 1..=10 {
+                let (response, body) = send(&service, get_as(page, &session)?).await?;
+                assert_eq!(StatusCode::OK, response.status(), "{page} #{round}: {body}");
+                let document = body
+                    .split_once("</html>")
+                    .map_or(body.as_str(), |(document, _after)| document);
+                assert!(document.contains(content), "{page} #{round}: {body}");
+                assert!(!body.contains("<template id="), "{page} #{round}: {body}");
+                assert!(
+                    !body.contains("createTreeWalker"),
+                    "{page} #{round}: {body}"
+                );
+            }
+        }
+    }
     Ok(())
 }

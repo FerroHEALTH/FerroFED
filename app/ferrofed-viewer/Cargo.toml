@@ -105,6 +105,9 @@ output-name = "ferrofed-viewer"
 site-root = "target/site"
 site-pkg-dir = "pkg"
 style-file = "style/main.css"
+# Copied into the site root as it stands: the brand favicon, which a browser
+# asks for at /favicon.ico on every first page (#608).
+assets-dir = "public"
 site-addr = "127.0.0.1:3000"
 reload-port = 3001
 lib-profile-release = "wasm-release"

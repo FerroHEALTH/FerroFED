@@ -8,7 +8,8 @@
 # the manifests. Between the two sits a set of pins nothing watches: the
 # actionlint, hadolint and kubeconform container images named inside a `run:`
 # block, the analyzer versions handed to taiki-e/install-action as an input,
-# and the commits the vendored specification corpora are fetched at. This
+# the commits the vendored specification corpora are fetched at, and the
+# Chrome for Testing release the browser journeys install. This
 # workflow
 # reads the newest upstream release or commit of each and opens ONE issue when
 # a pin is behind.

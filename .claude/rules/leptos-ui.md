@@ -196,6 +196,17 @@ the orchestrator, never made in a slice.
 - Errors are typed: the gateway's `StatusCode` and error body are carried as
   data, never stringified into `ServerFnError::ServerError`, and a non-2xx
   answer is never an empty value.
+- **An expected outcome is a successful server-function answer.** A server
+  function returns `Result<Outcome<T>, ViewError>`: the view as
+  `Outcome::Shown`, and a gateway refusal or input it cannot send as
+  `Outcome::Refused(Refusal)`, with the gateway's status and code. Only the
+  console's own faults are a `ViewError`, and so a `5xx`: no live session, a
+  gateway it cannot reach, a body it cannot read, a broken session store.
+  Chrome logs every `4xx` and `5xx` a page fetches as a console error, which
+  the browser journeys fail on, and a caller branches on the two, so they
+  are distinct types (`.claude/rules/reliability.md`, errors are types at a
+  boundary that branches). The query console renders a refusal on the
+  server into its answer (`query::answer::refused`).
 - Shared state reaches a render through `leptos_routes_with_context` and
   `provide_context`, and the plain axum handlers through `Extension`
   (`server/26_extractors`).
@@ -204,6 +215,10 @@ the orchestrator, never made in a slice.
   `'unsafe-inline'` or `'unsafe-eval'` for scripts, `nosniff`, `DENY`
   framing, no referrer, and `no-store` on every document. A new inline
   script or style that needs the policy relaxed is the defect, not the policy.
+  `form-action` names the console and, when one is configured, the origin of
+  the provider's end-session endpoint and nothing else: a browser holds every
+  redirect a form submission follows to it, and the sign-out form is answered
+  with a redirect there (`server::form_action`).
 
 ## 8. SSR and hydration correctness (`ssr/22` to `ssr/24`)
 
@@ -219,6 +234,13 @@ the orchestrator, never made in a slice.
   HTML is a hydration error.
 - No non-determinism in the initial render (random ids, timestamps) that
   differs between the server pass and hydration.
+- **A route whose content comes from the gateway renders `SsrMode::Async`**
+  (`ssr/23_ssr_modes`): the server waits for every resource and sends the
+  whole page, so nothing arrives in a `<template>` for an inline script to
+  swap in, and the page reads with no script. `PartiallyBlocked` was
+  measured to stream a blocking resource out of order on a multi-threaded
+  runtime; `views::every_gateway_page_is_whole_in_the_html_the_server_sends`
+  and the testkit's `console` test hold the rule.
 - `leptos_meta` (`<Title>`, `<Stylesheet>`, `<Meta>`) is used from component
   bodies, never by editing the shell's `<head>` by hand (`metadata`). Every
   routed page sets a `<Title>`.
@@ -259,10 +281,16 @@ tokens of `assets/brand/tokens.css`; motion respects
   wasm32-unknown-unknown -- -D warnings`; `cargo nextest run -p
   ferrofed-viewer`; `scripts/release/viewer-site.sh --release` completing
   when the change touches the build surface.
-- Browser journeys are planned in #608: Rust only,
-  `thirtyfour` over WebDriver, failing on any browser console error, with
-  explicit waits and never a `sleep`. Playwright is JavaScript and the
-  no-JavaScript mandate covers the test suite.
+- **Browser journeys** drive the console in headless Chrome (#608): Rust only,
+  `thirtyfour` over WebDriver through chromedriver, in the testkit's
+  `tests/it/journeys/` behind `FERROFED_JOURNEYS=1`, against a running
+  gateway over stub nodes, a test OpenID Provider and the console serving its
+  release site bundle. Each journey fails on any error the browser logs, waits
+  on elements explicitly and never on a `sleep`, and reads a form's state
+  before hydration with scripts turned off. A new screen, or a new step of a
+  screen, gets its journey in the same change, and the `journeys (browser)`
+  CI job runs them. Playwright is JavaScript and the no-JavaScript mandate
+  covers the test suite.
 - **Never weaken a gate to make a change pass.** A failing wasm32 clippy pass
   usually means a dependency cannot compile for the browser, which is the gate
   working.
@@ -279,15 +307,17 @@ changes here and nowhere else.
 
 | Measure | Budget |
 |---|---|
-| WebAssembly, brotli-compressed | 225280 bytes |
+| WebAssembly, brotli-compressed | 245760 bytes |
 
 - **The gating number is the brotli-compressed WebAssembly.** The book's
   `deployment/binary_size` chapter has a site serve its WebAssembly
   compressed, every current browser accepts brotli, and the compressed size
   is the download. The raw and gzip sizes are reported beside it, ungated.
-- **The budget is 220 KiB, 25% over the measured 180057 bytes** (2026-10-05,
-  the operator views of #276, cargo-leptos 0.3.7, wasm-bindgen 0.2.129, Rust
-  1.98.1). The headroom takes ordinary growth and toolchain drift. A slice
+- **The budget is 240 KiB**, raised once from 220 KiB (25% over the
+  measured 180057 bytes of the operator views of #276, 2026-10-05,
+  cargo-leptos 0.3.7, wasm-bindgen 0.2.129, Rust 1.98.1) by the refusal
+  contract of §7 (#608). The headroom takes ordinary growth and toolchain
+  drift. A slice
   that needs more raises the budget in this table in its own pull request,
   with the measured size and the reason, after checking that what it adds
   belongs in the browser at all (§1).
@@ -330,6 +360,12 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   `tests/it/query_safety.rs`). A form that shows its answer this way runs
   only once hydrated: its submit is disabled until an `Effect` marks the
   page loaded, and its server function refuses a plain form post.
+- **The refusal contract (#608) measured 226314 bytes** brotli-compressed
+  (2026-10-05, cargo-leptos 0.3.7, wasm-bindgen 0.2.129), 1407 more than the
+  query console and 1034 over the 220 KiB budget, which it raised to 240 KiB.
+  The bytes are the browser's decoding of `Outcome<T>` and `Refusal` for each
+  of the five server functions it calls, the typed outcome §7 requires, and
+  the split of the inline notices into a refusal and a fault.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it

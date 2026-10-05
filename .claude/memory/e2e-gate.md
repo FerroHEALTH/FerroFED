@@ -62,6 +62,13 @@ gated test outside `tests/it/e2e.rs` or `tests/it/e2e/` never runs anywhere,
 which is how #272 found one; `scripts/checks/e2e-placement.sh` (tier 1) now
 refuses it.
 
+The operator console's browser journeys (#608) follow the same model behind
+their own gate, `FERROFED_JOURNEYS=1`: they live in the testkit's
+`tests/it/journeys/`, need a chromedriver at `FERROFED_WEBDRIVER` (default
+`http://127.0.0.1:9515`) and the site bundle `scripts/release/viewer-site.sh
+--release` writes, and the `journeys (browser)` job runs them with
+`test(/^journeys::/)`; the placement guard refuses a journey anywhere else.
+
 **How to apply:** a new container-backed test uses the harness and the gate,
 never its own `docker` calls, and sits under `tests/it/e2e/`; a new image is a
 `PinnedImage` constant plus a `docs/VERSIONS.md` row, which
