@@ -385,6 +385,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `not-asked`, `GET /health/dependencies` keeps the pre-filter's state, and
   the client's answer carries no `meta.federation.consent.error`. No claim
   value reaches a label, a log line or an error.
+- A stored-query definition that a PostgreSQL or `redb` store holds is now
+  checked on every read, as the files backend checks each file (#586). A
+  row written past the gateway, by a restore, a manual insert or an older
+  version, that names its patient by a literal or does not admit as a
+  definition is never served or run: the gateway refuses to start over a
+  store holding one, and over a shared PostgreSQL store a read, a listing or
+  an invocation that reaches such a row answers `500`. The security log
+  records a `held-definition-refused` event naming the definition's name and
+  version, never its text.
 
 ## [0.0.8] - 2026-10-04
 

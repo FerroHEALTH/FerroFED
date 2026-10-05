@@ -7,7 +7,8 @@
 //! refused at storage, and a definition invoked by name as an ordinary
 //! fan-out whose answer names the gateway's definition. The store suite every
 //! writable backend passes is [`suite`], the `[stored_queries]` backends are
-//! configured in [`backends`], and the read-only backend is [`files`].
+//! configured in [`backends`], the read-only backend is [`files`], and a held
+//! definition no `PUT` admitted is refused on every read in [`held`].
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -16,6 +17,7 @@
 mod backends;
 mod declaration;
 mod files;
+mod held;
 mod invocation;
 mod operator;
 mod storage;

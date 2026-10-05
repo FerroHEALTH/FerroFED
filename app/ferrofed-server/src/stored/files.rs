@@ -27,8 +27,9 @@ use ferrofed_registry::definition::{
 };
 use jiff::Timestamp;
 use openehr_federation::aql::Context;
-use openehr_federation::aql::definition::{Definition, SubjectOrigin};
 use openehr_federation::aql::refusal::Refusal;
+
+use crate::stored::{Inadmissible, admit};
 
 /// The extension of a definition file.
 pub const EXTENSION: &str = "aql";
@@ -243,15 +244,11 @@ fn definition(
         file: file.to_path_buf(),
         source,
     })?;
-    let admitted = Definition::admit(text, context).map_err(|source| FilesError::Refused {
-        file: file.to_path_buf(),
-        source,
+    let file = file.to_path_buf();
+    let admitted = admit(text, context).map_err(|refused| match refused {
+        Inadmissible::Refused(source) => FilesError::Refused { file, source },
+        Inadmissible::SubjectLiteral => FilesError::SubjectLiteral { file },
     })?;
-    if let Some(SubjectOrigin::Literal { .. }) = admitted.subject() {
-        return Err(FilesError::SubjectLiteral {
-            file: file.to_path_buf(),
-        });
-    }
     Ok(StoredDefinition::new(
         name.clone(),
         version,
