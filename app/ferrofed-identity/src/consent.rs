@@ -90,15 +90,24 @@ pub enum NotAsked {
     /// The verified caller's token does not state the claims the service is
     /// asked on behalf of.
     CallerClaims,
+    /// The verified caller's token states the claims in a form the service's
+    /// question does not take.
+    CallerClaimsInvalid,
+    /// The patient's value, in a namespace that stands for the identifier
+    /// the service is asked by, is not one that identifier takes.
+    PatientValue,
 }
 
 impl NotAsked {
-    /// Returns the reason's name: `namespace` or `caller-claims`.
+    /// Returns the reason's name: `namespace`, `caller-claims`,
+    /// `caller-claims-invalid` or `patient-value`.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Namespace => "namespace",
             Self::CallerClaims => "caller-claims",
+            Self::CallerClaimsInvalid => "caller-claims-invalid",
+            Self::PatientValue => "patient-value",
         }
     }
 }

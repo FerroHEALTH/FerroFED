@@ -79,7 +79,12 @@ fn names(headers: &[String]) -> Vec<&str> {
 #[tokio::test]
 async fn a_withheld_deployment_answers_a_prefilter_that_did_not_ask_as_one_that_found_nothing()
 -> TestResult {
-    for reason in [NotAsked::Namespace, NotAsked::CallerClaims] {
+    for reason in [
+        NotAsked::Namespace,
+        NotAsked::CallerClaims,
+        NotAsked::CallerClaimsInvalid,
+        NotAsked::PatientValue,
+    ] {
         let a = node_answering("uid-at-a").await;
         let b = node_answering("uid-at-b").await;
         let skipped = (Crossref::Knows(BOTH), Skips(Some(reason)));

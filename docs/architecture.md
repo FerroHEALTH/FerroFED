@@ -475,7 +475,7 @@ whether); the core never assumes it does.
 | `Directory` | `Arc<RegistrySnapshot>` | the addressing registry (N21, §15), refreshed off the clinical path; a query never awaits a directory call |
 | `Demographics` (optional) | `Identified(PatientRef)`, `NoMatch`, `Ambiguous(Ambiguity)`, `Unavailable(error)` | which master identity a patient identifier in a namespace the cross-reference does not map names, asked of a demographics service ahead of localization (Annex A §A.2 and §A.7, #487) |
 | `Localizer` | `NotConfigured`, `Candidates(set)`, `NoRecords`, `Unavailable(error)` | where (N4, §14) |
-| `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `NotAsked(reason)` (the patient's namespace or missing caller claims; the service saw nothing), `Unavailable(error)`, `Partial { denied, failure }` | which candidates may not be asked about the patient on behalf of the verified caller's `Requester`, when its token names one (N27a, §13.4); absence from `Denied` asserts nothing |
+| `ConsentPrefilter` (optional) | `Denied(set)`, `NoSignal`, `NotAsked(reason)` (the patient's namespace or value, or missing or refused caller claims; the service saw nothing), `Unavailable(error)`, `Partial { denied, failure }` | which candidates may not be asked about the patient on behalf of the verified caller's `Requester`, when its token names one (N27a, §13.4); absence from `Denied` asserts nothing |
 | `Resolver` | per member: `Resolved(EhrId)`, `Unknown`, `Unavailable(error)` | under which local id (N3, §5.2) |
 | `OnwardAuth` | per endpoint: a `CredentialsProvider`, the conveyance header, an optional transport layer | how the gateway authenticates to each node (section 7) |
 

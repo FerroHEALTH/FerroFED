@@ -282,6 +282,17 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   message. The node request metrics now count such a refusal as
   `consent-denied` on every path, whatever the setting.
 
+### Fixed
+
+- A caller whose token states the requester claims in a form the Mitz
+  question does not take, or a patient value Mitz does not take as a BSN,
+  is no longer reported as a Mitz outage, although Mitz was never asked
+  (#568). The pre-filter answers that it did not ask, with the reason
+  `caller-claims-invalid` or `patient-value`, so the call is counted as
+  `not-asked`, `GET /health/dependencies` keeps the pre-filter's state, and
+  the client's answer carries no `meta.federation.consent.error`. No claim
+  value reaches a label, a log line or an error.
+
 ## [0.0.8] - 2026-10-04
 
 ### Security
