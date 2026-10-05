@@ -5,7 +5,7 @@
 //! answer it gives (§11.2, §5.4.3).
 
 use axum::response::Response;
-use ferrofed_identity::patient::PatientRefError;
+use ferrofed_identity::role::patient::PatientRefError;
 use ferrofed_registry::id::EndpointId;
 use openehr_its::rest::runtime::ApiError;
 
@@ -160,7 +160,7 @@ impl Unserved {
 #[cfg(test)]
 mod tests {
     use super::{Code, Unserved};
-    use ferrofed_identity::patient::PatientRefError;
+    use ferrofed_identity::role::patient::PatientRefError;
     use ferrofed_registry::id::EndpointId;
     use http::StatusCode;
     use openehr_its::rest::runtime::ApiError;

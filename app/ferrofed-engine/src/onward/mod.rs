@@ -10,9 +10,9 @@
 //! [`keys::KeyRing`], whose public keys it publishes as a JWK Set (RFC 7517).
 //! A [`GrantKind::ClientCredentials`] grant (RFC 6749 §4.4) gives the
 //! endpoint one token for every caller, through the
-//! [`provider::ClientCredentials`] provider. A [`GrantKind::TokenExchange`]
+//! [`grant::client_credentials::ClientCredentials`] provider. A [`GrantKind::TokenExchange`]
 //! grant (RFC 8693) gives each verified caller a token of its own, through
-//! [`exchange::Exchange`]: the caller's verified token is the subject, a
+//! [`grant::exchange::Exchange`]: the caller's verified token is the subject, a
 //! second assertion of the gateway the actor, and the scope the caller's
 //! scope narrowed to the operation. Either provider caches what it obtained
 //! and drops it when the node answers `401`. An onward token that cannot be
@@ -20,7 +20,7 @@
 //! The caller's own token reaches no node: under token exchange it reaches
 //! that node's authorization server alone. What a node is told about the
 //! caller is a token of the gateway's own, signed with the same keys
-//! ([`conveyance`]; N24).
+//! ([`conveyance`](crate::conveyance); N24).
 //!
 //! A grant may bind its tokens to a key of the gateway's with `DPoP` (RFC
 //! 9449): its [`dpop::Prover`] proves every request to its token endpoint,
@@ -33,11 +33,17 @@
 //! An endpoint on the Dutch Generic Functions' Nuts track (Annex B §B.4)
 //! obtains its token with a Verifiable Presentation of the gateway's
 //! credentials instead, bound with `DPoP` to its own [`dpop::Prover`]
-//! ([`nuts`]). An endpoint whose authorization server follows the FAPI 2.0
+//! (`grant::nl::nuts`). An endpoint whose authorization server follows the FAPI 2.0
 //! Security Profile, as the BgZ/eOverdracht track of Annex B §B.4a does,
 //! discovers that server from its issuer and obtains a `DPoP`-bound token
 //! with an ES256 assertion naming the issuer, and RFC 9396
-//! `authorization_details` where configured ([`fapi2`]).
+//! `authorization_details` where configured ([`grant::fapi2`]).
+//!
+//! The grant kinds sit in [`grant`], a regional binding's in a folder of
+//! their own behind its feature. Beside them are the plumbing every grant
+//! shares, the token request ([`token`]), the signing keys ([`keys`]) and
+//! the RFC 9396 details ([`authorization_details`]), and the two sender
+//! constraints, [`dpop`] and [`mtls`].
 
 use std::fmt;
 use std::sync::Arc;
@@ -53,15 +59,10 @@ use crate::onward::dpop::Prover;
 use crate::onward::mtls::{Thumbprint, TlsClientAuth};
 
 pub mod authorization_details;
-pub mod conveyance;
 pub mod dpop;
-pub mod exchange;
-pub mod fapi2;
+pub mod grant;
 pub mod keys;
 pub mod mtls;
-#[cfg(feature = "nl")]
-pub mod nuts;
-pub mod provider;
 pub mod token;
 
 /// The monotonic clock the token cache and the key rotation read.

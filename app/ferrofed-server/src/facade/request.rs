@@ -15,13 +15,13 @@ use std::num::NonZeroUsize;
 use std::time::Instant;
 
 use axum::response::Response;
+use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::declared;
 use ferrofed_engine::fanout::Completion;
-use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::binding::SessionKey;
-use ferrofed_identity::consent::Requester;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::consent::Requester;
+use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::EndpointId;
 use http::HeaderMap;
 use openehr_federation::aql::directive::FacadeQuery;

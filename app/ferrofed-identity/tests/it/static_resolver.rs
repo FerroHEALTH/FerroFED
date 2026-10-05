@@ -10,11 +10,11 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::dev::{DevCrossRefError, Profile, StaticResolver};
-use ferrofed_identity::localizer::{Localization, Localizer};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::resolver::{Resolution, Resolver};
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::localizer::{Localization, Localizer};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, NodeId};
 
 use crate::support::{Config, PATIENT_VALUE, config, ready, registry};

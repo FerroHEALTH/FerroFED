@@ -5,7 +5,7 @@
 
 use std::error::Error;
 
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef, PatientRefError};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 
 use crate::support::PATIENT_VALUE;
 

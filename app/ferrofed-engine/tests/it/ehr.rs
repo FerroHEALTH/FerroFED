@@ -16,7 +16,7 @@ use std::error::Error;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClient};
-use ferrofed_engine::ehr::EhrCallError;
+use ferrofed_engine::single_node::ehr::EhrCallError;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mock::Server;
 use openehr_its::json::from_canonical_json;

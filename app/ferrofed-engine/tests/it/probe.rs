@@ -15,9 +15,9 @@ use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::{Contact, NodeClients};
-use ferrofed_engine::forward::ForwardError;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_engine::probe::{self, Answer, Probe, ProbedEhrId};
+use ferrofed_engine::single_node::forward::ForwardError;
+use ferrofed_engine::single_node::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mock::Server;

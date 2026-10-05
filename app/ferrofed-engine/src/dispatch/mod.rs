@@ -11,7 +11,7 @@
 //! composed by that runtime and nowhere in FerroFED (no specification governs
 //! this: our own design). This
 //! module adds the per-endpoint client, the call's deadline, the caller's
-//! identity signed for the node ([`crate::onward::conveyance`]) and the gateway's
+//! identity signed for the node ([`crate::conveyance`]) and the gateway's
 //! [`OutboundId`], and the classification of the answer. Every header a node
 //! request carries is listed in [`crate::outbound_id`]:
 //!
@@ -41,13 +41,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::ehr::EhrCallError;
-use crate::forward::{ForwardError, Forwarded};
+use crate::conveyance::{self, Conveyance, ConveyanceError};
 use crate::hygiene::{Part, Withheld};
-use crate::onward::conveyance::{self, Conveyance, ConveyanceError};
 use crate::onward::dpop::NodeProver;
-use crate::onward::exchange::SharedOnBehalf;
+use crate::onward::grant::exchange::SharedOnBehalf;
 use crate::outbound_id::OutboundId;
+use crate::single_node::ehr::EhrCallError;
+use crate::single_node::forward::{ForwardError, Forwarded};
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};

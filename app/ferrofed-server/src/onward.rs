@@ -22,9 +22,9 @@ use std::sync::Arc;
 
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
-use ferrofed_engine::onward::exchange::{Exchange, SharedOnBehalf};
-use ferrofed_engine::onward::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
-use ferrofed_engine::onward::provider::ClientCredentials;
+use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
+use ferrofed_engine::onward::grant::exchange::{Exchange, SharedOnBehalf};
+use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
 use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
 use ferrofed_identity::fhir::{self, Authentication};
 use ferrofed_registry::id::EndpointId;

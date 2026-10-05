@@ -74,7 +74,7 @@ use crate::facade::route::fan_out::{
 use crate::facade::route::{Arrived, Deadlines};
 use crate::facade::security;
 use crate::federation::Federation;
-use ferrofed_engine::onward::conveyance::Conveyance;
+use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 
 /// The `code` of a member whose copy differs from the registry's.

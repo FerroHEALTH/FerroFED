@@ -20,11 +20,11 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use ferrofed_engine::dispatch::Contact;
-use ferrofed_engine::forward::{ForwardError, Forwarded};
-use ferrofed_engine::probe::{Answer, Probed};
-use ferrofed_identity::consent::ConsentDecision;
-use ferrofed_identity::demographics::{DemographicsError, Identification};
-use ferrofed_identity::localizer::{Localization, LocalizerError};
+use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
+use ferrofed_engine::single_node::probe::{Answer, Probed};
+use ferrofed_identity::role::consent::ConsentDecision;
+use ferrofed_identity::role::demographics::{DemographicsError, Identification};
+use ferrofed_identity::role::localizer::{Localization, LocalizerError};
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 use openehr_federation::outcome::Outcome;

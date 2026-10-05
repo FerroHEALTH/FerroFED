@@ -22,7 +22,7 @@ pub mod nvi;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::consent::ConsentPrefilter;
+use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 

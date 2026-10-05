@@ -58,7 +58,7 @@ use openehr_query::printer::escape_string;
 use secrecy::{ExposeSecret, SecretString};
 use url::Url;
 
-use crate::onward::conveyance;
+use crate::conveyance;
 
 mod beside;
 pub(crate) mod decode;
@@ -275,7 +275,7 @@ pub struct Outbound<'a> {
     /// caller's credential ([`Conveyance::carried`]), each read as it is
     /// before the token encodes it.
     ///
-    /// [`Conveyance::carried`]: crate::onward::conveyance::Conveyance::carried
+    /// [`Conveyance::carried`]: crate::conveyance::Conveyance::carried
     pub conveyed: &'a [&'a str],
 }
 

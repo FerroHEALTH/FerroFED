@@ -11,7 +11,7 @@ use std::time::Duration;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::mtls::Thumbprint;
-use ferrofed_engine::onward::provider::MAX_ASSERTION_LIFETIME;
+use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
 use ferrofed_registry::secret::Secret;
 use openehr_federation::object::Uri;

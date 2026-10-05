@@ -26,7 +26,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use ferrofed_identity::consent::{ConsentPrefilter, ON_UNAVAILABLE};
+use ferrofed_identity::role::consent::{ConsentPrefilter, ON_UNAVAILABLE};
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use openehr_federation::aql::{OffsetStrategy, Targeting};

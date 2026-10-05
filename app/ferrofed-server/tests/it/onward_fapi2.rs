@@ -24,7 +24,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::onward::AssertionAudience;
-use ferrofed_engine::onward::fapi2::Fapi2GrantError;
+use ferrofed_engine::onward::grant::fapi2::Fapi2GrantError;
 use ferrofed_engine::onward::keys::SigningKey;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;

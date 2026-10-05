@@ -22,13 +22,13 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::localizer::{Localizer, OnFailure};
-#[cfg(feature = "binding-nl")]
-use ferrofed_identity::nvi::NviConfigError;
-#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
-use ferrofed_identity::patient::PatientRefError;
 #[cfg(feature = "binding-ihe")]
-use ferrofed_identity::xcpd::XcpdConfigError;
+use ferrofed_identity::ihe::xcpd::XcpdConfigError;
+#[cfg(feature = "binding-nl")]
+use ferrofed_identity::nl::nvi::NviConfigError;
+use ferrofed_identity::role::localizer::{Localizer, OnFailure};
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
+use ferrofed_identity::role::patient::PatientRefError;
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::snapshot::RegistrySnapshot;

@@ -20,8 +20,8 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use ferrofed_identity::consent::{ConsentDecision, ConsentError, ON_UNAVAILABLE, Requester};
-use ferrofed_identity::patient::PatientRef;
+use ferrofed_identity::role::consent::{ConsentDecision, ConsentError, ON_UNAVAILABLE, Requester};
+use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use openehr_federation::outcome::ErrorDetail;
 use tracing::Instrument as _;

@@ -15,11 +15,11 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::fhir::{Authentication, Tls};
-use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_identity::pixm::{ManagerConfig, PixmConfigError, PixmResolver};
-use ferrofed_identity::resolver::{Resolution, Resolver, ResolverError};
+use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmConfigError, PixmResolver};
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
+use ferrofed_identity::role::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;

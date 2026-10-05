@@ -37,15 +37,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::consent::ConsentPrefilter;
 use ferrofed_identity::dev::Profile;
-use ferrofed_identity::mitz::{
-    HolderConfig, MitzConfig, MitzPrefilter, is_pseudonym_system, is_purpose,
-};
-use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_identity::nl::mitz::{HolderConfig, MitzConfig, MitzPrefilter, is_purpose};
+use ferrofed_identity::role::consent::ConsentPrefilter;
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use nl_generic_functions::identification::PSEUDO_BSN_SYSTEM;
 use serde::Deserialize;
 
 use crate::binding::nl::NlGfSettings;
@@ -290,7 +289,7 @@ fn question(mitz: &Mitz) -> Result<(), Error> {
     if mitz
         .namespaces
         .iter()
-        .any(|namespace| is_pseudonym_system(namespace))
+        .any(|namespace| namespace.as_str() == PSEUDO_BSN_SYSTEM)
     {
         return Err(Error::Mitz {
             key: format!("{MITZ_KEY}.namespaces"),

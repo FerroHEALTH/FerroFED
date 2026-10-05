@@ -17,7 +17,7 @@ publish = false
 
 [features]
 # The onward credential kinds of the Dutch binding: the Nuts grant of Annex B
-# §B.4 (onward::nuts). The server's binding-nl turns it on; no specification
+# §B.4 (onward::grant::nl::nuts). The server's binding-nl turns it on; no specification
 # governs the split: our own design.
 nl = ["dep:nl-generic-functions"]
 

@@ -7,7 +7,7 @@
 //! §5.4.2; RFC 7517 §5). No specification governs the rotation: our own
 //! design.
 
-use ferrofed_engine::onward::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
+use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
 use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::TlsClientAuth;
 use ferrofed_engine::onward::{ClientAuthentication, Scope, SenderConstraint};

@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_engine::onward::conveyance;
+use ferrofed_engine::conveyance;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;

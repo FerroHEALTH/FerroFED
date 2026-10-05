@@ -13,10 +13,10 @@
 
 use std::fmt;
 
-use ferrofed_identity::behalf::{self, OnBehalfOf};
-use ferrofed_identity::binding::SessionKey;
-use ferrofed_identity::consent::Requester;
-use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_identity::role::behalf::{self, OnBehalfOf};
+use ferrofed_identity::role::consent::Requester;
+use ferrofed_identity::role::patient::IdentifierNamespace;
+use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use openehr_sdt::smart_scopes::SmartScope;
 use secrecy::{ExposeSecret, SecretString};

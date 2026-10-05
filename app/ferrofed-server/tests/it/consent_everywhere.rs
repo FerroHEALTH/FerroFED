@@ -26,9 +26,9 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked};
-use ferrofed_identity::patient::PatientRef;
-use ferrofed_identity::resolver::{Resolution, Resolver};
+use ferrofed_identity::role::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked};
+use ferrofed_identity::role::patient::PatientRef;
+use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::federation::Federation;
@@ -72,7 +72,7 @@ impl ConsentPrefilter for Script {
     async fn prefilter(
         &self,
         _patient: &PatientRef,
-        _requester: Option<&ferrofed_identity::consent::Requester>,
+        _requester: Option<&ferrofed_identity::role::consent::Requester>,
         candidates: &[NodeId],
         _deadline: Instant,
     ) -> ConsentDecision {
@@ -111,7 +111,7 @@ impl Resolver for KnownAt {
         &self,
         _patient: &PatientRef,
         members: &[NodeId],
-        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
+        _on_behalf: &ferrofed_identity::role::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         members

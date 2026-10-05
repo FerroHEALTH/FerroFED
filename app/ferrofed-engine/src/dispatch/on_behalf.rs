@@ -12,7 +12,7 @@ use std::sync::Arc;
 use ferrofed_registry::id::EndpointId;
 use openehr_its::rest::client::{Client, Transport};
 
-use crate::onward::exchange::SharedOnBehalf;
+use crate::onward::grant::exchange::SharedOnBehalf;
 
 use super::{DispatchOptions, NodeClient, NodeClients, SetupError};
 

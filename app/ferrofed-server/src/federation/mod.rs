@@ -23,13 +23,13 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use ferrofed_engine::conveyance::Signer;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
-use ferrofed_engine::onward::conveyance::Signer;
-use ferrofed_identity::binding::{IdentityChange, ResolutionBindings};
-use ferrofed_identity::consent::ConsentPrefilter;
-use ferrofed_identity::demographics::Demographics;
-use ferrofed_identity::resolver::Resolver;
+use ferrofed_identity::role::consent::ConsentPrefilter;
+use ferrofed_identity::role::demographics::Demographics;
+use ferrofed_identity::role::resolver::Resolver;
+use ferrofed_identity::session::{IdentityChange, ResolutionBindings};
 use ferrofed_registry::creating_system::LearnedMap;
 use ferrofed_registry::ehr_index::EhrIndex;
 use ferrofed_registry::id::EndpointId;

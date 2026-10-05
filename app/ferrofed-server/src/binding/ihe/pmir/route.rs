@@ -10,7 +10,7 @@ use std::sync::Arc;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use ferrofed_identity::lifecycle;
+use ferrofed_identity::ihe::pmir;
 use http::header::{CONTENT_TYPE, WWW_AUTHENTICATE};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use ihe_iti::balp::AuditError;
@@ -68,7 +68,7 @@ pub async fn feed(State(state): State<Arc<AppState>>, headers: HeaderMap, body: 
     let Some(federation) = state.federation() else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
-    let change = lifecycle::change_of(&message, identity_feed.domains());
+    let change = pmir::change_of(&message, identity_feed.domains());
     let dropped = change
         .as_ref()
         .map_or(0, |change| federation.identity_changed(change));

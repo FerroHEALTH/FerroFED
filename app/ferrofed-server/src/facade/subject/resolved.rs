@@ -7,9 +7,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::patient::PatientRef;
-use ferrofed_identity::resolver::Resolution;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::patient::PatientRef;
+use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::Endpoint;
 

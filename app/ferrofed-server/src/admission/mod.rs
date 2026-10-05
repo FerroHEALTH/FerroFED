@@ -32,11 +32,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ferrofed_engine::dispatch::DispatchOptions;
-use ferrofed_engine::ehr::EhrCallError;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::outbound_id::OutboundId;
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::resolver::Resolution;
+use ferrofed_engine::single_node::ehr::EhrCallError;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId, SystemId};
 use ferrofed_registry::snapshot::{Node, RegistrySnapshot};
 use openehr_rm::v1_2::ehr::ehr::Ehr;

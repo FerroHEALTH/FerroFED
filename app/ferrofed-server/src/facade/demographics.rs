@@ -19,9 +19,9 @@
 
 use std::time::Instant;
 
-use ferrofed_identity::behalf::OnBehalfOf;
-use ferrofed_identity::demographics::{DemographicsError, Identification};
-use ferrofed_identity::patient::PatientRef;
+use ferrofed_identity::role::behalf::OnBehalfOf;
+use ferrofed_identity::role::demographics::{DemographicsError, Identification};
+use ferrofed_identity::role::patient::PatientRef;
 use tracing::Instrument as _;
 
 use crate::facade::localize::inside;
