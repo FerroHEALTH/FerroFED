@@ -691,9 +691,9 @@ mod tests {
             assert_eq!(
                 1,
                 client.client().retry().max_attempts,
-                "a retry lets DeadlineElapsed follow a sent attempt, and Contact::of_client_error, \
-                 Contact::of_forward_error, Contact::of_ehr_call_error, the query reply's and the \
-                 stored definition's contact would all read that request as never sent"
+                "one attempt leaves the DPoP nonce re-send the only send that can follow another, \
+                 and every call reports a deadline or a missing proof whose `sent` is true as \
+                 that re-send"
             );
         }
         assert_eq!(1, built, "the snapshot's one endpoint has a client");
