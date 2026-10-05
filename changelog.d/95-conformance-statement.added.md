@@ -6,4 +6,6 @@
   marked tests come from `scripts/conformance/matrix.sh --statement-write`,
   and the docs build and the conformance-matrix guard fail when either
   disagrees with the matrix. The guard now refuses a `planned` point or
-  track, so a re-pin scores or defers every point it adds.
+  track, so a re-pin scores or defers every point it adds. Six rows of the
+  obligations checklist that still read `planned` after their work shipped now
+  read `tested` and name their tests.

@@ -83,11 +83,9 @@ Released on 2026-10-03.
   §12b.2 (N42a), the registry reload on `SIGHUP`, the stored-query registry
   on `redb`, PostgreSQL or read-only files, health probes, and metrics.
 
-### v0.0.8, on `main`, in the next release
+### v0.0.8: security and the bindings
 
-The v0.0.8 milestone, security and the bindings (§13 to §15, Annex A,
-Annex B), is in progress. `main` carries these parts of it, and v0.0.8 is
-cut from `main` once the milestone closes.
+Released on 2026-10-04. It carries §13 to §15, Annex A and Annex B.
 
 - Client authentication at the gateway: RFC 9068 access tokens checked by
   key set or by introspection, SMART on openEHR scopes per route, the purpose
@@ -227,6 +225,48 @@ cut from `main` once the milestone closes.
   documents state no licence, so they are pinned by digest and fetched into
   a local cache, never committed
   ([#501](https://github.com/FerroHEALTH/FerroFED/issues/501)).
+- One client build and one TLS type for every outbound identity client, one
+  credential mapping per credentials section, and mutual TLS toward the PIX
+  Manager, the PDQm Supplier, the PMIR Registry and the mCSD directory
+  ([#507](https://github.com/FerroHEALTH/FerroFED/issues/507)).
+- An audit record still queued behind another spool write when its
+  exchange's time runs out is written once that write ends, and delivered in
+  the order it was queued
+  ([#532](https://github.com/FerroHEALTH/FerroFED/issues/532)).
+
+### v0.0.9, on `main`, in the next release
+
+The v0.0.9 milestone, conformance (§16, §17), is being built. `main`
+carries these parts of it, and v0.0.9 is cut from `main` once the milestone
+closes.
+
+- Every conformance point of §17 scored by a marked test, or deferred by a
+  recorded decision with its actor and reason, and the
+  [conformance statement](conformance-statement.md) that claims the
+  Federation-Gateway profile from that matrix
+  ([#89](https://github.com/FerroHEALTH/FerroFED/issues/89),
+  [#95](https://github.com/FerroHEALTH/FerroFED/issues/95)).
+- The Connectathon tracks 1 to 7 and 9 to 11 of §16.3 as runnable scenarios
+  against two FerroEHR nodes, with node-side wire capture for track 10 and a
+  per-track and per-point report (§16.4;
+  [#90](https://github.com/FerroHEALTH/FerroFED/issues/90),
+  [#91](https://github.com/FerroHEALTH/FerroFED/issues/91),
+  [#92](https://github.com/FerroHEALTH/FerroFED/issues/92)).
+- The Federation-Node profile of §16.2 checked against FerroEHR and EHRbase
+  ([#93](https://github.com/FerroHEALTH/FerroFED/issues/93),
+  [#549](https://github.com/FerroHEALTH/FerroFED/issues/549)).
+- A differential run against the reference implementation, each difference
+  judged against the specification text
+  ([#94](https://github.com/FerroHEALTH/FerroFED/issues/94)).
+- `ferrofed conformance run`, which scores your own deployment
+  ([#546](https://github.com/FerroHEALTH/FerroFED/issues/546),
+  [#573](https://github.com/FerroHEALTH/FerroFED/issues/573),
+  [Scoring a deployment](../operate/conformance-run.md)).
+- The operator console's skeleton and its operator views, over a read-only
+  operator surface on the gateway
+  ([#275](https://github.com/FerroHEALTH/FerroFED/issues/275),
+  [#276](https://github.com/FerroHEALTH/FerroFED/issues/276),
+  [The operator console](../operate/operator-console.md)).
 
 ## Planned
 
@@ -234,28 +274,21 @@ Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-The rest of v0.0.8: one TLS type and one credential mapping for every
-outbound client, with mutual TLS toward the PIX Manager, the PMIR Registry
-and the mCSD directory
-([#507](https://github.com/FerroHEALTH/FerroFED/issues/507)), and an audit
-record still queued behind another spool write when its exchange's time
-runs out, which is dropped silently today
-([#532](https://github.com/FerroHEALTH/FerroFED/issues/532)).
+The rest of v0.0.9: the operator console's query console, signing out, and
+its browser journeys in CI
+([#274](https://github.com/FerroHEALTH/FerroFED/issues/274),
+[#277](https://github.com/FerroHEALTH/FerroFED/issues/277),
+[#584](https://github.com/FerroHEALTH/FerroFED/issues/584),
+[#608](https://github.com/FerroHEALTH/FerroFED/issues/608)).
+
+v0.0.10: the re-pin to the specification's 1.0 release, with FerroFED's
+choices revisited where the upstream reports bear on them
+([#17](https://github.com/FerroHEALTH/FerroFED/issues/17),
+[#354](https://github.com/FerroHEALTH/FerroFED/issues/354)), and EHDS
+readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)).
 
 A `CONTRIBUTION` in canonical XML waits on the openEHR XSD and `openehr-its`
 ([#308](https://github.com/FerroHEALTH/FerroFED/issues/308)).
-
-v0.0.9, conformance (§16, §17): every conformance point scored
-([#89](https://github.com/FerroHEALTH/FerroFED/issues/89)), the Connectathon
-tracks as runnable suites
-([#91](https://github.com/FerroHEALTH/FerroFED/issues/91),
-[#92](https://github.com/FerroHEALTH/FerroFED/issues/92)), the node profile
-([#93](https://github.com/FerroHEALTH/FerroFED/issues/93)), a differential run
-against the reference implementation
-([#94](https://github.com/FerroHEALTH/FerroFED/issues/94)), the conformance
-statement ([#95](https://github.com/FerroHEALTH/FerroFED/issues/95)), and an
-operator and query console
-([#274](https://github.com/FerroHEALTH/FerroFED/issues/274)).
 
 ## Not claimed
 

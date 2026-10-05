@@ -37,6 +37,14 @@ statement of the text.
   FerroFED assists those actors with the node profile checks and the
   admission check, and the last section of the generated part records what
   each found.
+- **CP-20 and CP-39 are tested without a marker.** A marker on a Node or
+  Operator point belongs to a harness check under `tools/`, which writes the
+  finding the report reads. The gateway's part of each is tested in its own
+  crate: the registry load refuses an endpoint with a FHIR connection type
+  (CP-20,
+  `app/ferrofed-registry/tests/it/refusal.rs::a_fhir_rest_connection_type_is_refused`),
+  and the book answers each §13.4 deployment decision in a section of its
+  own (CP-39, `app/ferrofed-server/tests/it/deployment_decisions.rs`).
 - **A deferral is the owner's decision**, recorded on the issue its row
   names, with the reason the specification gives for it.
 
