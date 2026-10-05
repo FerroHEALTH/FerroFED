@@ -32,7 +32,7 @@ use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use serde::Serialize;
 
-use crate::binding::{Indication, Indicator};
+use crate::binding::seam::{Indication, Indicator};
 
 /// The last state observed of one dependency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

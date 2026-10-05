@@ -18,8 +18,8 @@
 //! A binding also declares the configuration sections it reads and what a
 //! reload does with each ([`Binding::sections`]), the sites its
 //! services are reached at for the transport policy ([`Binding::sites`]), the
-//! health indicators of what it runs ([`Indicator`]), and the onward
-//! credential kinds it adds ([`OnwardGrant`]). Its self-description is the
+//! health indicators of what it runs ([`seam::Indicator`]), and the onward
+//! credential kinds it adds ([`seam::OnwardGrant`]). Its self-description is the
 //! mode each role it builds carries, which `OPTIONS {base}/` declares from
 //! the running roles. No specification governs the module layout: our own
 //! design.
@@ -30,27 +30,21 @@ pub mod ihe;
 #[cfg(feature = "binding-nl")]
 pub mod nl;
 pub mod process;
+pub mod seam;
 
-use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
-use ferrofed_engine::dispatch::SharedCredentials;
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_identity::consent::ConsentPrefilter;
-use ferrofed_identity::localizer::Localizer;
-use ferrofed_identity::resolver::Resolver;
-use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use serde::Serialize;
 
+use crate::binding::seam::{Indicator, LocalizerSeam, OnwardGrant, PublicDocument, ResolverSeam};
 use crate::config::error::Error;
 use crate::config::settings::Settings;
 use crate::config::transport::{CleartextError, ProtectedSite};
 use crate::config::{Config, Credentials};
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
-use crate::health::dependencies::Observed;
 use crate::localization::LocalizationError;
 
 /// Every binding this build compiles, in the order the gateway wires them.
@@ -173,127 +167,6 @@ fn listed(sections: &[&'static str]) -> String {
         Some((last, _)) => (*last).to_owned(),
         None => String::new(),
     }
-}
-
-/// The resolver a binding builds, with the localizer it doubles as.
-#[derive(Clone)]
-pub struct ResolverSeam {
-    /// The resolver.
-    pub resolver: Arc<dyn Resolver>,
-    /// The resolver as a localizer, with the `localization.mode` it is
-    /// declared as, when it names the members that hold the patient.
-    pub localizer: Option<(Arc<dyn Localizer>, &'static str)>,
-}
-
-impl fmt::Debug for ResolverSeam {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ResolverSeam")
-            .field("localizer", &self.localizer.as_ref().map(|(_, mode)| mode))
-            .finish_non_exhaustive()
-    }
-}
-
-/// The localizer a binding builds as its own role (§14, N4).
-#[derive(Clone)]
-pub struct LocalizerSeam {
-    /// The localizer.
-    pub localizer: Arc<dyn Localizer>,
-    /// The `localization.mode` `OPTIONS {base}/` declares it as.
-    pub mode: &'static str,
-    /// Where its audit messages go, as `localization.audit` declares it.
-    pub audit: Option<&'static str>,
-    /// The health indicators of what it records through.
-    pub indicators: Vec<Arc<dyn Indicator>>,
-}
-
-impl fmt::Debug for LocalizerSeam {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LocalizerSeam")
-            .field("mode", &self.mode)
-            .field("audit", &self.audit)
-            .field("indicators", &self.indicators)
-            .finish_non_exhaustive()
-    }
-}
-
-/// What one indication of `GET /health/dependencies` says: a state, or the
-/// class of a fault.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
-pub enum Indication {
-    /// The last state observed.
-    State(Observed),
-    /// Why the dependency is not up, by class.
-    Fault(&'static str),
-}
-
-/// A source of indications a binding adds to `GET /health/dependencies`.
-pub trait Indicator: fmt::Debug + Send + Sync {
-    /// Returns its indications, each under the key the report names it by.
-    fn indicate(&self) -> Vec<(&'static str, Indication)>;
-}
-
-/// An onward credential kind a binding adds beside the core's bearer token,
-/// basic credentials, OAuth 2.0 and FAPI 2.0 grants (§13.1, §13.3).
-///
-/// A grant is [`Any`], so the binding that added it can read its own grants
-/// back from the settings ([`Binding::documents`]).
-pub trait OnwardGrant: Any + fmt::Debug + Send + Sync {
-    /// Returns the table under `[credentials."<endpoint id>"]` it is
-    /// configured by, such as `nuts`.
-    fn key(&self) -> &'static str;
-
-    /// Returns the URL the grant sends the gateway's credentials to, with its
-    /// site under the transport policy, for the credentials `section`.
-    fn site(&self, section: &str) -> (String, ProtectedSite);
-
-    /// Returns the credentials the client of `endpoint` sends, under the
-    /// budgets of `settings`.
-    ///
-    /// # Errors
-    ///
-    /// The [`FederationError`] of a provider that cannot be built.
-    fn provide(
-        &self,
-        endpoint: &EndpointId,
-        settings: &Settings,
-    ) -> Result<Provided, FederationError>;
-}
-
-/// A public document a binding has the gateway serve.
-///
-/// One example is the DID document its onward grants' keys are resolved by.
-/// It is public material, served with no client authentication outside the
-/// ITS-REST surface.
-///
-/// `Debug` shows the path and the media type, never the body.
-#[derive(Clone, PartialEq, Eq)]
-pub struct PublicDocument {
-    /// The absolute request path the document is served at.
-    pub path: String,
-    /// The `Content-Type` it is served as.
-    pub media_type: &'static str,
-    /// The document's bytes.
-    pub body: Vec<u8>,
-}
-
-impl fmt::Debug for PublicDocument {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PublicDocument")
-            .field("path", &self.path)
-            .field("media_type", &self.media_type)
-            .finish_non_exhaustive()
-    }
-}
-
-/// What one endpoint's binding grant provides its node client.
-#[derive(Debug)]
-pub struct Provided {
-    /// The credentials every request to the node carries.
-    pub credentials: SharedCredentials,
-    /// The key the node requests are proven with, when the grant binds its
-    /// tokens with `DPoP` (RFC 9449).
-    pub dpop: Option<Arc<Prover>>,
 }
 
 /// One regional or national binding.

@@ -16,9 +16,9 @@ use axum::Router;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use opentelemetry::metrics::Meter;
 
-use crate::binding::Indication;
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe;
+use crate::binding::seam::Indication;
 use crate::config::settings::Settings;
 use crate::federation::error::FederationError;
 use crate::reload::Reloader;

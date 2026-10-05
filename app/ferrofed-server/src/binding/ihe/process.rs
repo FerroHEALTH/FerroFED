@@ -14,10 +14,10 @@ use std::sync::Arc;
 use axum::Router;
 use axum::routing::post;
 
-use crate::binding::Indication;
 use crate::binding::ihe::mcsd::registry::DirectoryRegistry;
 use crate::binding::ihe::pmir::IdentityFeed;
 use crate::binding::ihe::pmir::subscription;
+use crate::binding::seam::Indication;
 use crate::config::settings::Settings;
 use crate::reload::Reloader;
 use crate::state::{AppState, StateError};

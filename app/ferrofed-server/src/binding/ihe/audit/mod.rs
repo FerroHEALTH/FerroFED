@@ -31,7 +31,7 @@ use ihe_iti::balp::AuditRecorder;
 use crate::binding::ihe::audit::config::{AuditSettings, FeedRepositorySettings};
 use crate::binding::ihe::audit::repository::AuditRepositorySettings;
 use crate::binding::ihe::xcpd::AuditDestination;
-use crate::binding::{Indication, Indicator};
+use crate::binding::seam::{Indication, Indicator};
 use crate::health::dependencies::Observed;
 use crate::service::{self, TlsRefused};
 

@@ -32,9 +32,8 @@ use ferrofed_identity::resolver::Resolver;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
-use crate::binding::{
-    Binding, Indicator, LocalizerSeam, Offer, Reload, ResolverSeam, Role, Section, StepBudgets,
-};
+use crate::binding::seam::{Indicator, LocalizerSeam, ResolverSeam};
+use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::settings::Settings;

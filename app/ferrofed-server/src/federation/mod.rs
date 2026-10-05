@@ -41,7 +41,7 @@ use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::id::FederationId;
 
-use crate::binding::PublicDocument;
+use crate::binding::seam::PublicDocument;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
 use crate::localization::LocalizationPolicy;
