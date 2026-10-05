@@ -59,10 +59,11 @@ pub enum ViewError {
     #[error("the console could not serve this view")]
     Unavailable,
     /// The view could not be fetched from the console's server.
-    #[error("the view could not be fetched: {reason}")]
+    #[error("the view could not be fetched: {source}")]
     Fetch {
         /// What the server function transport reported.
-        reason: String,
+        #[source]
+        source: ServerFnErrorErr,
     },
 }
 
@@ -70,9 +71,7 @@ impl FromServerFnError for ViewError {
     type Encoder = JsonEncoding;
 
     fn from_server_fn_error(value: ServerFnErrorErr) -> Self {
-        Self::Fetch {
-            reason: value.to_string(),
-        }
+        Self::Fetch { source: value }
     }
 }
 

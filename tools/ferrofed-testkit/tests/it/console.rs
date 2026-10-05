@@ -121,6 +121,7 @@ impl Running {
         let session = state.sessions().establish(SignedIn {
             access_token: SecretString::from(issuer.mint(&claims)?),
             expires_in: None,
+            id_token: None,
         })?;
         let console = TcpListener::bind("127.0.0.1:0").await?;
         let console_address = console.local_addr()?;

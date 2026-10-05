@@ -10,7 +10,11 @@ specification governs the console: it is FerroFED's own design.
 
 The console is one more client of the gateway. It reaches the gateway over
 HTTP, on the same public surface any other client uses, and it adds no
-behaviour to the gateway. It holds no clinical data.
+behaviour to the gateway. It stores no clinical data: the query console
+shows the signed-in operator the rows a query answered, and neither the
+console nor the browser keeps them. Every page and every answer is
+`Cache-Control: no-store`, and the page puts nothing in browser storage, a
+service worker or a URL.
 
 ## What is built
 
@@ -49,7 +53,12 @@ behaviour to the gateway. It holds no clinical data.
   origin of `redirect_uri`. Any other, one that names no origin among them,
   is `403` before the session is read or the gateway asked, so no other
   site can sign an operator out or spend their sign-in on a query. The
-  session cookie is `SameSite=Lax` as well.
+  session cookie is `SameSite=Lax` as well, and every server function is a
+  `POST`: a `GET` of one runs nothing. Because the console sends
+  `Referrer-Policy: no-referrer`, a browser posts the console's own forms
+  with `Origin: null` and no `Referer`, so those forms pass by
+  `Sec-Fetch-Site` alone; a browser that sends no fetch metadata cannot sign
+  out or run a query, which fails closed.
 - **Two separate pools of server-side state.** Pending sign-ins live for
   `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
   its oldest pending sign-in, so a flood of `GET /login` holds at most that
@@ -122,9 +131,12 @@ gzip-compressed, as the browser's `Accept-Encoding` chooses; pages and
 server function answers are never compressed, so no compression side
 channel reads what an operator entered.
 
-The query console renders its answer in the browser, so it needs the
-console's WebAssembly bundle: without it the form still posts, and the
-browser shows the answer as the console's JSON.
+The query console shows its answer on the page that asked, so it runs a
+query only once the console's WebAssembly bundle has loaded: until then the
+"Run the query" button is disabled, and a plain form post that reaches the
+console anyway is refused before the gateway is asked. The answer is
+rendered on the console's server, with every value a node sent escaped, and
+the page shows that HTML.
 
 ## Why a console of its own
 

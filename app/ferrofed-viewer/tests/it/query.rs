@@ -26,11 +26,11 @@ const RESULT_SET: &str = concat!(
 );
 
 /// A synthetic patient identifier, as an operator would type it.
-const PATIENT: &str = "synthetic-patient-48151623";
+pub(crate) const PATIENT: &str = "synthetic-patient-48151623";
 
 /// The one `[source,json]` example of the §9.4 page: a complete answer over
 /// two nodes, with a third reported as excluded.
-fn complete_example() -> Result<String, Box<dyn Error>> {
+pub(crate) fn complete_example() -> Result<String, Box<dyn Error>> {
     example(RESULT_SET)
 }
 
@@ -93,7 +93,7 @@ fn example(page: &str) -> Result<String, Box<dyn Error>> {
 /// A stub gateway answering `POST {base}/v1/query/aql` with `status` and
 /// `body`, and `OPTIONS {base}/` with the §7a.2 example, only for the
 /// operator's own token.
-async fn gateway(status: u16, body: String) -> Result<MockServer, Box<dyn Error>> {
+pub(crate) async fn gateway(status: u16, body: String) -> Result<MockServer, Box<dyn Error>> {
     let gateway = MockServer::start().await;
     Mock::given(method("OPTIONS"))
         .and(path("/"))
@@ -121,7 +121,9 @@ async fn gateway(status: u16, body: String) -> Result<MockServer, Box<dyn Error>
 }
 
 /// A console over `gateway` with one signed-in operator.
-fn signed_in_console(gateway: &MockServer) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
+pub(crate) fn signed_in_console(
+    gateway: &MockServer,
+) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{}\"\n\n[session]\nsecure_cookie = false\n",
         gateway.uri()
@@ -131,7 +133,7 @@ fn signed_in_console(gateway: &MockServer) -> Result<(axum::Router, SessionId), 
 }
 
 /// The form body of a query console submission with `fields`.
-fn form(fields: &[(&str, &str)]) -> String {
+pub(crate) fn form(fields: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (name, value) in fields {
         form.append_pair(&format!("form[{name}]"), value);
@@ -141,7 +143,10 @@ fn form(fields: &[(&str, &str)]) -> String {
 
 /// A `POST` of the query server function with `body`, as the console's own
 /// page sends it, carrying `session`'s cookie when given.
-fn run(body: String, session: Option<&SessionId>) -> Result<Request<Body>, Box<dyn Error>> {
+pub(crate) fn run(
+    body: String,
+    session: Option<&SessionId>,
+) -> Result<Request<Body>, Box<dyn Error>> {
     let mut request = Request::post("/api/query")
         .header("content-type", "application/x-www-form-urlencoded")
         .header("accept", "application/json")
@@ -153,7 +158,7 @@ fn run(body: String, session: Option<&SessionId>) -> Result<Request<Body>, Box<d
 }
 
 /// An AQL query naming the patient through the parameter `patient`.
-fn patient_query() -> String {
+pub(crate) fn patient_query() -> String {
     form(&[
         ("kind", "aql"),
         (
@@ -165,7 +170,7 @@ fn patient_query() -> String {
 }
 
 /// Runs `body` as the signed-in operator and reads the answer.
-async fn answered(
+pub(crate) async fn answered(
     service: &axum::Router,
     session: &SessionId,
     body: String,
@@ -218,7 +223,7 @@ async fn a_best_effort_answer_a_node_did_not_complete_is_flagged_incomplete()
     assert!(!answer.complete, "{answer:?}");
     let html = &answer.html;
     assert!(html.contains("Incomplete answer."), "{html}");
-    assert!(html.contains("1 rows"), "{html}");
+    assert!(html.contains("<caption>1 row</caption>"), "{html}");
     assert!(reports(html, "node_2", "time-out"), "{html}");
     assert!(
         html.contains("no answer within the per-node budget"),

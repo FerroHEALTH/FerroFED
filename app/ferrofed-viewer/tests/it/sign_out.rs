@@ -113,6 +113,9 @@ async fn a_sign_out_without_a_session_still_reaches_the_provider_without_a_hint(
     Ok(())
 }
 
+// The header set of a `fetch` from the console's page in a browser without
+// fetch metadata; under `no-referrer` the navigation bar's plain form posts
+// with `Origin: null` instead, which the cross-site test refuses.
 #[tokio::test]
 async fn a_sign_out_from_the_consoles_own_origin_is_taken_without_fetch_metadata()
 -> Result<(), Box<dyn Error>> {

@@ -13,9 +13,9 @@
 //! the page that sent it, and an incomplete one says so in words before its
 //! rows.
 
+pub mod model;
 // The browser half of each server function, which the server macro writes,
 // is a network call that awaits nothing, and the lint names the macro alone.
-pub mod model;
 #[cfg_attr(
     target_arch = "wasm32",
     expect(
@@ -65,15 +65,20 @@ pub fn QueryPage() -> impl IntoView {
 
 /// The query form, with the choices the gateway offers.
 ///
-/// It is a plain `POST` form to the server function, so it posts before the
-/// bundle loads. Once hydrated, a submission dispatches the action with the
-/// form's fields instead, and the answer renders on the page; the fields are
-/// read from the form's own data, which keeps the parsing of the
-/// URL-encoded form out of the bundle.
+/// The answer renders on the page that asked, so the form runs a query only
+/// once the bundle has hydrated it: its submit button stays disabled until
+/// then, and the server function refuses a plain form post before it asks
+/// the gateway anything ([`run::run_query`]). A submission dispatches the
+/// action with the fields read from the form's own data, which keeps the
+/// parsing of the URL-encoded form out of the bundle.
 fn form_section(action: ServerAction<RunQuery>, offered: &QueryOptionsView) -> AnyView {
     let what = what_section();
     let federation = federation_section(offered);
     let form = NodeRef::<leptos::html::Form>::new();
+    // NOTE: the Leptos book, `ssr/24_hydration_bugs`: an effect runs only in the
+    // browser, once hydrated, so the server and the hydration render alike.
+    let hydrated = RwSignal::new(false);
+    Effect::new(move |_| hydrated.set(true));
     let submit = move |event: leptos::ev::SubmitEvent| {
         let data = form
             .get_untracked()
@@ -91,7 +96,14 @@ fn form_section(action: ServerAction<RunQuery>, offered: &QueryOptionsView) -> A
         <form method="post" action=RunQuery::url() node_ref=form on:submit=submit>
             {what}
             {federation}
-            <button type="submit">"Run the query"</button>
+            <button type="submit" disabled=move || !hydrated.get()>
+                "Run the query"
+            </button>
+            <p role="status">
+                {move || {
+                    if hydrated.get() { "" } else { "The form is ready once the page has loaded." }
+                }}
+            </p>
         </form>
     }
     .into_any()
@@ -311,12 +323,21 @@ pub mod answer {
     /// What the status and `meta.federation.complete` say, in words (§11.4).
     fn outcome_section(answer: &QueryAnswer) -> AnyView {
         let status = answer.status;
+        // NOTE: §11.4: under all-or-nothing a node not answering is a 504 and a
+        // node error a 424; any other failing status gets no reading of its own.
+        let why = match status {
+            504 => {
+                " A node in scope was asked and did not answer, so the gateway returned no rows."
+            }
+            424 => " A node in scope answered with an error, so the gateway returned no rows.",
+            _ => " The gateway returned no rows.",
+        };
         let failed = (!answer.succeeded).then(|| {
             view! {
                 <p role="alert">
                     <strong>{format!("The gateway failed the query: {status}.")}</strong>
-                    " A node in scope did not answer, so the gateway returned no rows. "
-                    "The endpoints below say which node and why."
+                    {why}
+                    " The endpoints below say what each one did."
                 </p>
             }
         });
@@ -395,6 +416,15 @@ pub mod answer {
         .into_any()
     }
 
+    /// How many rows `count` is, in words.
+    fn counted(count: usize) -> String {
+        if count == 1 {
+            String::from("1 row")
+        } else {
+            format!("{count} rows")
+        }
+    }
+
     /// The rows, under the columns as the gateway renders them (§9.4).
     fn rows_section(answer: &QueryAnswer) -> AnyView {
         if answer.rows.is_empty() {
@@ -425,7 +455,7 @@ pub mod answer {
             .collect_view();
         view! {
             <table>
-                <caption>{format!("{} rows", answer.rows.len())}</caption>
+                <caption>{counted(answer.rows.len())}</caption>
                 <thead>
                     <tr>{header}</tr>
                 </thead>
@@ -484,6 +514,53 @@ pub mod answer {
             assert!(html.contains(r#"<th scope="col""#), "{html}");
         }
 
+        // The answer reaches the page through `inner_html`, so every value a
+        // node or the gateway controls must arrive escaped, as text or as a
+        // double-quoted attribute value, never as markup.
+        #[test]
+        fn hostile_values_in_an_answer_render_escaped() {
+            let mut hostile = answer(200, false);
+            hostile.columns = vec![ColumnLine {
+                name: String::from("</th><script>x</script>"),
+                path: Some(String::from(r#"" onmouseover="alert(1)"#)),
+            }];
+            hostile.rows = vec![
+                vec![String::from("<script>alert(1)</script>")],
+                vec![String::from("<img src=x onerror=alert(1)>")],
+            ];
+            hostile.endpoints = vec![EndpointLine {
+                id: String::from("node_1"),
+                status: String::from("time-out"),
+                latency_ms: Some(9),
+                row_count: None,
+                organisation: Some(String::from("<b>Org</b> & co")),
+                error: Some(String::from("<b>late</b> & gone")),
+            }];
+            hostile.dedup = Some(String::from("<i>mode</i>"));
+            let html = answered(&hostile).to_html();
+            for escaped in [
+                "&lt;script&gt;alert(1)&lt;/script&gt;",
+                "&lt;img src=x onerror=alert(1)&gt;",
+                "&lt;/th&gt;&lt;script&gt;x&lt;/script&gt;",
+                "&quot; onmouseover=&quot;alert(1)",
+                "&lt;b&gt;Org&lt;/b&gt; &amp; co",
+                "&lt;b&gt;late&lt;/b&gt; &amp; gone",
+                "&lt;i&gt;mode&lt;/i&gt;",
+            ] {
+                assert!(html.contains(escaped), "{escaped}: {html}");
+            }
+            for raw in [
+                "<script",
+                "<img",
+                "onmouseover=\"",
+                "<b>",
+                "<i>",
+                "</th><script",
+            ] {
+                assert!(!html.contains(raw), "{raw}: {html}");
+            }
+        }
+
         #[test]
         fn a_complete_answer_says_every_node_answered() {
             let html = answered(&answer(200, true)).to_html();
@@ -503,6 +580,29 @@ pub mod answer {
             );
             assert!(html.contains("Incomplete answer."), "{html}");
             assert!(html.contains("No rows."), "{html}");
+            assert!(html.contains("was asked and did not answer"), "{html}");
+        }
+
+        #[test]
+        fn each_failing_status_is_read_as_section_11_4_reads_it() {
+            let mut failed = answer(424, false);
+            failed.rows.clear();
+            let html = answered(&failed).to_html();
+            assert!(html.contains("answered with an error"), "{html}");
+            failed.status = 502;
+            let html = answered(&failed).to_html();
+            assert!(
+                html.contains("The gateway failed the query: 502."),
+                "{html}"
+            );
+            assert!(!html.contains("did not answer"), "{html}");
+            assert!(!html.contains("answered with an error"), "{html}");
+        }
+
+        #[test]
+        fn one_row_is_one_row() {
+            let html = answered(&answer(200, true)).to_html();
+            assert!(html.contains("<caption>1 row</caption>"), "{html}");
         }
     }
 }

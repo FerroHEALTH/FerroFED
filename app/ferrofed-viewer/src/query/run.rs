@@ -39,12 +39,16 @@ pub async fn query_options() -> Result<QueryOptionsView, ViewError> {
 /// [`ViewError::Invalid`] for a form that cannot be sent, and the gateway's
 /// refusal or failure as its [`ViewError`]. A failing all-or-nothing answer
 /// that carries the diagnostic envelope is an answer, not an error (§11.4).
+/// A plain form post, which a page without its bundle sends, is
+/// [`ViewError::Invalid`] before the gateway is asked, because no page would
+/// show its answer.
 #[server(endpoint = "query")]
 pub async fn run_query(
     /// The query console's form.
     form: QueryForm,
 ) -> Result<RenderedAnswer, ViewError> {
     let (state, token) = crate::views::load::server::signed_in()?;
+    server::from_the_hydrated_page()?;
     let call = server::call(&form)?;
     let answer = state
         .gateway()
@@ -96,6 +100,29 @@ pub mod server {
                 .collect(),
             organisations: organisations.into_iter().map(str::to_owned).collect(),
         }
+    }
+
+    /// Refuses a request that asks for a page, a plain form post a console
+    /// page without its bundle sends, so no query runs whose answer no page
+    /// would show.
+    ///
+    /// # Errors
+    /// Returns [`ViewError::Invalid`] for a request whose `Accept` names
+    /// `text/html`.
+    pub fn from_the_hydrated_page() -> Result<(), ViewError> {
+        let plain = leptos::context::use_context::<http::request::Parts>().is_some_and(|parts| {
+            parts
+                .headers
+                .get_all(http::header::ACCEPT)
+                .iter()
+                .any(|accept| accept.to_str().is_ok_and(|text| text.contains("text/html")))
+        });
+        if plain {
+            return Err(invalid(
+                "The query console runs a query once its page has loaded; reload the page and run it again.",
+            ));
+        }
+        Ok(())
     }
 
     /// A refusal of the form, naming the field and never its value.

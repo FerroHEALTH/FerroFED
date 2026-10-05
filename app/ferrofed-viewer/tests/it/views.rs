@@ -353,6 +353,85 @@ async fn every_server_function_answers_a_live_session() -> Result<(), Box<dyn Er
     Ok(())
 }
 
+// Each server function is a public endpoint a cross-site page could post
+// to, so each refuses a request that does not come from the console's own
+// pages before it reads the session or asks the gateway.
+#[tokio::test]
+async fn every_server_function_refuses_a_request_from_another_origin() -> Result<(), Box<dyn Error>>
+{
+    let gateway = gateway().await?;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    for (route, form) in SERVER_FUNCTIONS {
+        for from in [
+            vec![("sec-fetch-site", "cross-site")],
+            vec![("origin", "https://attacker.example.net")],
+            Vec::new(),
+        ] {
+            let mut request = Request::post(route)
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("accept", "application/json")
+                .header(
+                    "cookie",
+                    format!("{}={}", ferrofed_viewer::session::COOKIE, session.as_str()),
+                );
+            for (name, value) in &from {
+                request = request.header(*name, *value);
+            }
+            let (response, body) =
+                send(&service, request.body(Body::from(form.to_owned()))?).await?;
+            assert_eq!(
+                StatusCode::FORBIDDEN,
+                response.status(),
+                "{route} {from:?}: {body}"
+            );
+        }
+    }
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(
+        asked.is_empty(),
+        "the gateway was asked {} times",
+        asked.len()
+    );
+    Ok(())
+}
+
+// A server function is a POST alone: a GET would pass the origin check, and
+// the session cookie travels on a cross-site top-level GET.
+#[tokio::test]
+async fn no_server_function_answers_a_get() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let routes = SERVER_FUNCTIONS
+        .iter()
+        .map(|(route, form)| (*route, *form))
+        .chain([
+            ("/api/query", "form%5Bkind%5D=aql&form%5Baql%5D=SELECT%201"),
+            ("/api/query-options", ""),
+        ]);
+    for (route, form) in routes {
+        let (response, body) =
+            send(&service, get_as(&format!("{route}?{form}"), &session)?).await?;
+        assert!(
+            response.status().is_client_error(),
+            "{route}: {} {body}",
+            response.status()
+        );
+    }
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(
+        asked.is_empty(),
+        "the gateway was asked {} times",
+        asked.len()
+    );
+    Ok(())
+}
+
 // The gate names a view by its path in any case and with or without a
 // trailing slash, so neither form reaches a view without a session.
 #[tokio::test]

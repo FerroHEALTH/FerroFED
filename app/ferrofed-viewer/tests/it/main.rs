@@ -20,6 +20,8 @@ mod gateway;
 #[cfg(test)]
 mod query;
 #[cfg(test)]
+mod query_safety;
+#[cfg(test)]
 mod secrets;
 #[cfg(test)]
 mod server;

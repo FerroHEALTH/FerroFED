@@ -48,8 +48,13 @@ pub struct QueryForm {
 impl fmt::Debug for QueryForm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let filled = |text: &str| !text.trim().is_empty();
+        let kind = match self.kind.as_str() {
+            "aql" => "aql",
+            "stored" => "stored",
+            _ => "other",
+        };
         f.debug_struct("QueryForm")
-            .field("kind", &self.kind)
+            .field("kind", &kind)
             .field("aql", &filled(&self.aql))
             .field("name", &filled(&self.name))
             .field("parameters", &filled(&self.parameters))
@@ -74,7 +79,10 @@ pub struct QueryOptionsView {
 
 /// A federated answer as the server rendered it for the page: the status
 /// and completeness the answer carries, and its HTML.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Its `Debug` output names the status, the completeness and the size of the
+/// HTML alone: the HTML holds the rows, which can name a patient (N33).
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderedAnswer {
     /// The status the gateway answered with.
     pub status: u16,
@@ -86,7 +94,7 @@ pub struct RenderedAnswer {
 }
 
 /// One column of the answer, as `columns[]` names it (§9.4).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnLine {
     /// The column's name.
     pub name: String,
@@ -95,7 +103,10 @@ pub struct ColumnLine {
 }
 
 /// One endpoint's record in `meta.federation.endpoints[]` (§9.5, §11.1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Its `Debug` output leaves out the error text a node wrote, which is the
+/// node's and can quote what it was asked.
+#[derive(Clone, PartialEq, Eq)]
 pub struct EndpointLine {
     /// The `endpoint_id`.
     pub id: String,
@@ -113,7 +124,11 @@ pub struct EndpointLine {
 
 /// What the gateway answered a query: its status, whether the answer is
 /// complete, every endpoint's record, and the rows.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// It is rendered on the server and never crosses to the browser as data.
+/// Its `Debug` output names the status, the completeness and the counts
+/// alone: a row can carry a patient identifier the query selected (N33).
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct QueryAnswer {
     /// The status the gateway answered with: `200`, or the `504` or `424` of
     /// an all-or-nothing query a node in scope did not answer (§11.4).
@@ -134,4 +149,79 @@ pub struct QueryAnswer {
     /// The rows, each cell as text: a string as itself, any other value as
     /// its JSON.
     pub rows: Vec<Vec<String>>,
+}
+
+impl fmt::Debug for RenderedAnswer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RenderedAnswer")
+            .field("status", &self.status)
+            .field("complete", &self.complete)
+            .field("html_bytes", &self.html.len())
+            .finish()
+    }
+}
+
+impl fmt::Debug for EndpointLine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EndpointLine")
+            .field("id", &self.id)
+            .field("status", &self.status)
+            .field("latency_ms", &self.latency_ms)
+            .field("row_count", &self.row_count)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for QueryAnswer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueryAnswer")
+            .field("status", &self.status)
+            .field("complete", &self.complete)
+            .field("endpoints", &self.endpoints.len())
+            .field("columns", &self.columns.len())
+            .field("rows", &self.rows.len())
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EndpointLine, QueryAnswer, QueryForm, RenderedAnswer};
+
+    const PATIENT: &str = "synthetic-patient-48151623";
+
+    #[test]
+    fn no_debug_output_prints_a_row_an_error_or_what_was_entered() {
+        let endpoint = EndpointLine {
+            id: String::from("node_1"),
+            status: String::from("node-error"),
+            latency_ms: Some(1),
+            row_count: None,
+            organisation: None,
+            error: Some(format!("no EHR for {PATIENT}")),
+        };
+        let answer = QueryAnswer {
+            status: 200,
+            succeeded: true,
+            complete: true,
+            endpoints: vec![endpoint.clone()],
+            rows: vec![vec![PATIENT.to_owned()]],
+            ..QueryAnswer::default()
+        };
+        let rendered = RenderedAnswer {
+            status: 200,
+            complete: true,
+            html: format!("<td>{PATIENT}</td>"),
+        };
+        let form = QueryForm {
+            kind: PATIENT.to_owned(),
+            aql: PATIENT.to_owned(),
+            parameters: format!("patient={PATIENT}"),
+            ..QueryForm::default()
+        };
+        let shown = format!("{endpoint:?} {answer:?} {rendered:?} {form:?}");
+        assert!(!shown.contains(PATIENT), "{shown}");
+        assert!(shown.contains(r#"kind: "other""#), "{shown}");
+        assert!(shown.contains("rows: 1"), "{shown}");
+    }
 }

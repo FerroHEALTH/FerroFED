@@ -45,11 +45,15 @@ the orchestrator, never made in a slice.
   adds no gateway behaviour. A screen that needs what the gateway does not
   expose gets a read-only operator API on the gateway first, as its own
   issue, behind the gateway's authentication.
-- **The console holds no clinical data and no token in the browser.** The
-  operator's session is server-side (`crate::session`); the browser carries
-  one opaque `HttpOnly` cookie. An access token, a client secret, or a PKCE
-  verifier never reaches a signal, a prop, a serialized resource, the page
-  HTML, or a log.
+- **The console stores no clinical data, and holds no token in the
+  browser.** The query console shows the signed-in operator the rows a query
+  answered (#277), and nothing keeps them: no browser storage (local or
+  session storage, IndexedDB), no service worker, no cache (every page and
+  every server function answer is `Cache-Control: no-store`, held by a
+  test), and no URL. The operator's session is server-side
+  (`crate::session`); the browser carries one opaque `HttpOnly` cookie. An
+  access token, a client secret, or a PKCE verifier never reaches a signal,
+  a prop, a serialized resource, the page HTML, or a log.
 - **No patient identifier in a URL, the browser history, or a log**
   (`.claude/rules/identifier-hygiene.md`). A patient is named through a
   request body or a form the BFF reads, never a path segment or a query
@@ -58,7 +62,10 @@ the orchestrator, never made in a slice.
 - **Every `#[server]` function is a public HTTP endpoint**
   (`server/25_server_functions`, the security warning). It checks the session
   itself before it touches the gateway or session state, never assuming only
-  this UI calls it.
+  this UI calls it. **Every server function is a `POST`**: the server's
+  same-origin check passes safe methods, and the session cookie travels on a
+  cross-site top-level `GET`, so a `GetUrl` server function would run for
+  any site. `tests/it/views.rs` holds every registered function to it.
 
 ## 1. Crate and build discipline
 
@@ -305,13 +312,24 @@ changes here and nowhere else.
 
 The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
 
-- **The query console (#277) measured 222085 bytes** brotli-compressed
-  (2026-10-05), inside the budget. Its first cut measured 256392: an
+- **The query console (#277) measured 224907 bytes** brotli-compressed
+  (2026-10-05), 373 bytes inside the budget, so the next browser-side slice
+  raises the budget in its own pull request. Its first cut measured 256392: an
   `<ActionForm>` parses the URL-encoded form in the browser (about 26 KB
   compressed), and an answer rendered by components carries its tables'
   code (about 19 KB). The form now dispatches its action from the browser's
   own form data, and the answer is rendered on the server and shown as the
-  HTML it wrote. Prefer that shape for any read-only result a page shows.
+  HTML it wrote. Prefer that shape for any read-only result a page shows,
+  with its obligation: every `inner_html` sink of server-rendered HTML is
+  built from `view!` text and attribute values alone, which Leptos escapes;
+  never places data as a child of `textarea`, `script`, `style` or
+  `noscript`, whose children Leptos leaves unescaped; never splices a
+  `format!` string as markup; and carries a hostile-content test (markup in
+  every text, a quote breaking out of every attribute) asserting the escaped
+  forms are present and the raw tags absent (`query::answer` and
+  `tests/it/query_safety.rs`). A form that shows its answer this way runs
+  only once hydrated: its submit is disabled until an `Effect` marks the
+  page loaded, and its server function refuses a plain form post.
 - **The bundle is served compressed.** The server compresses a response
   whose media type is the bundle's (`application/wasm`, JavaScript, CSS) with
   brotli or gzip, as `Accept-Encoding` chooses, and marks it
@@ -319,7 +337,7 @@ The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
   (`deployment/binary_size`). A document and a server function's answer are
   never compressed: each carries what the operator entered beside data an
   attacker would want, which a compression side channel (BREACH) could
-  read. `tests/it/server.rs` holds both.
+  read. `tests/it/server.rs` and `tests/it/query_safety.rs` hold both.
 - **The bundle names no directory of the build host.** The panic locations
   rustc embeds as data name the source file of every crate, so an
   unremapped CI build ships `/home/runner/...` and the registry and

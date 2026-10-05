@@ -228,6 +228,14 @@ async fn same_origin_only(
 /// that the origin of `Referer` must be. A request that shows none of them,
 /// or a console with no known origin, is refused, so an unsafe request is
 /// never taken on trust (the Fetch Metadata Request Headers; RFC 6454 §7).
+///
+/// The console answers with `Referrer-Policy: no-referrer`, under which a
+/// browser sends a plain form post with `Origin: null` and no `Referer` (the
+/// Fetch standard, the request `Origin` header). The console's own forms,
+/// the sign-out among them, therefore pass by `Sec-Fetch-Site` alone; a
+/// browser without fetch metadata is refused, which fails closed. The
+/// `Origin` and `Referer` fallbacks serve a server function the page calls
+/// with `fetch`.
 #[must_use]
 pub fn same_origin(headers: &http::HeaderMap, origin: Option<&str>) -> bool {
     if let Some(site) = headers.get(SEC_FETCH_SITE) {
