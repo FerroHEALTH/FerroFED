@@ -56,7 +56,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             content_type: None,
         };
         let started = Instant::now();
-        let (client, sent) = self.client_for(options);
+        let client = self.client_for(options);
         let answer = QueryClient::new(&client)
             .with_options(call)
             .query_execute_adhoc_query_body(&params, &query.body())
@@ -68,7 +68,6 @@ impl<T: Transport + Clone> NodeClient<T> {
                 query.width,
             )),
             Err(error) => classify::failed(
-                &sent,
                 (&self.endpoint, &self.consent_refusal_codes),
                 error,
                 latency_ms,

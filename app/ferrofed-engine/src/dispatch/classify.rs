@@ -14,9 +14,8 @@ use openehr_federation::outcome::{ConsentRefusal, ErrorDetail, Outcome};
 use openehr_its::rest::client::{ClientError, ErrorBody, TransportError};
 use openehr_its::rest::generated::query::client::QueryExecuteAdhocQueryBodyOutcome;
 
-use super::dpop::Sent;
 use super::reported::{self, chain, excerpt_of};
-use super::{Contact, DispatchError, DispatchOptions, NodeReply};
+use super::{Contact, DispatchError, DispatchOptions, NodeReply, dpop};
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
 
@@ -88,10 +87,10 @@ pub(super) fn answered(
 ///
 /// A `403` whose body carries one of `refusal_codes`, the endpoint's
 /// consent refusal codes, is `consent-denied` ([`refused_on_consent`]). A
-/// deadline or a missing proof that `sent` shows came after a request of
-/// the call left is read as that request's, never as one never sent.
+/// deadline or a missing proof the client says came after a request of the
+/// call left ([`dpop::sent_before`]) is read as that request's, never as
+/// one never sent.
 pub(super) fn failed(
-    sent: &Sent,
     (endpoint, refusal_codes): (&EndpointId, &BTreeSet<String>),
     error: ClientError,
     latency_ms: u64,
@@ -99,7 +98,7 @@ pub(super) fn failed(
 ) -> Result<NodeReply, DispatchError> {
     let withheld = options.withheld();
     let failure = |outcome, contact| Ok(NodeReply::Failed { outcome, contact });
-    let contacted = sent.contradicts(&error);
+    let contacted = dpop::sent_before(&error);
     match error {
         ClientError::DeadlineElapsed { .. } if contacted => failure(
             Outcome::TimeOut {
@@ -255,7 +254,6 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::failed;
-    use crate::dispatch::dpop::Sent;
     use crate::dispatch::{DispatchError, DispatchOptions};
     use ferrofed_registry::id::EndpointId;
     use http::Method;
@@ -270,7 +268,6 @@ mod tests {
         let endpoint = EndpointId::new("node-a-pub")?;
         Ok(matches!(
             failed(
-                &Sent::default(),
                 (&endpoint, &BTreeSet::new()),
                 error,
                 0,
