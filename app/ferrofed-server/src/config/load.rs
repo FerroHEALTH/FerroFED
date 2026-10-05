@@ -157,9 +157,14 @@ mod tests {
         assert_eq!(Config::default(), config);
         assert_eq!("127.0.0.1:8080", config.server.listen);
         assert_eq!(1024 * 1024, config.server.body_limit_bytes);
-        assert_eq!(10_000, config.server.shutdown_timeout_ms);
+        assert_eq!(0, config.server.drain_delay_ms);
+        assert_eq!(None, config.server.shutdown_timeout_ms);
         assert!(config.credentials.is_empty());
-        config.resolve().expect("the defaults resolve");
+        let settings = config.resolve().expect("the defaults resolve");
+        assert_eq!(
+            settings.server.request_timeout, settings.server.shutdown_timeout,
+            "the drain defaults to the request timeout"
+        );
     }
 
     #[test]

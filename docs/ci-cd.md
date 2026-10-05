@@ -144,17 +144,20 @@ scripts/conformance/report.sh --run` with Docker running.
 `scripts/checks/release-compose.sh` with it: no compose file in the
 repository carries `build:`, because every one runs the published image and
 only `release-image.yml` builds it; Docker Compose renders the release file;
-and `ferrofed config check` accepts the two examples exactly as attached,
+the stop grace period outlasts the drain delay plus the drain of the example
+configuration; and `ferrofed config check` accepts the two examples exactly as attached,
 mounted where the compose file mounts them, in the pinned base image of
 `docker/Dockerfile` with synthetic credential files, and refuses them once a
 member is left out of the PIX Manager. It sits in this tier because the check
 needs the binary. Locally, with Docker running, pass a static Linux build of
 `ferrofed` for the host's architecture; without one the script runs the
-first two checks. The same job runs `scripts/checks/kubernetes-example.sh`
+first three checks. The same job runs `scripts/checks/kubernetes-example.sh`
 with that binary: it reads `ferrofed.toml` and `registry.toml` out of the
-example ConfigMap under `deploy/kubernetes/`, checks that the Deployment
+example ConfigMap under `deploy/kubernetes/`, checks that the StatefulSet
 mounts the ConfigMap and the `ferrofed-secrets` Secret where the
-configuration names them, and runs `ferrofed config check` over it with a
+configuration names them, that each replica keeps its audit spool on a volume
+claim of its own, and that the pod's grace period outlasts the drain delay
+plus the drain, and runs `ferrofed config check` over it with a
 synthetic file for each secret and a synthetic ES384 signing key, then
 without the `[signing]` table, which it must refuse. Locally, pass any
 `ferrofed` build for the host.

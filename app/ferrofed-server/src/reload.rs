@@ -452,6 +452,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             boot.server.request_timeout != fresh.server.request_timeout,
         ),
         (
+            "server.drain_delay_ms",
+            boot.server.drain_delay != fresh.server.drain_delay,
+        ),
+        (
             "server.shutdown_timeout_ms",
             boot.server.shutdown_timeout != fresh.server.shutdown_timeout,
         ),

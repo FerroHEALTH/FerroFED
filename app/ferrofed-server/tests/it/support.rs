@@ -237,6 +237,7 @@ pub(crate) fn settings() -> ServerSettings {
         listen: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
         base_path: ferrofed_server::base_path::BasePath::default(),
         request_timeout: Duration::from_secs(5),
+        drain_delay: Duration::ZERO,
         shutdown_timeout: Duration::from_secs(5),
         body_limit: 1024,
         auth: auth(),

@@ -198,7 +198,11 @@ pub struct ServerSettings {
     pub base_path: BasePath,
     /// How long one request may take before the server answers `408`.
     pub request_timeout: Duration,
-    /// How long the drain may take after the stop signal.
+    /// How long the listener keeps accepting after the stop signal, with
+    /// readiness already `503`.
+    pub drain_delay: Duration,
+    /// How long the drain may take once the listener has closed; never
+    /// shorter than `request_timeout`.
     pub shutdown_timeout: Duration,
     /// The largest request body the server reads before answering `413`.
     pub body_limit: usize,

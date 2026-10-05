@@ -114,9 +114,11 @@ services:
       nofile:
         soft: 8192
         hard: 16384
-    # Longer than the gateway's 10-second drain (server.shutdown_timeout_ms),
-    # so `docker compose down` never kills a drain in progress.
-    stop_grace_period: 20s
+    # Longer than the gateway's drain delay (server.drain_delay_ms, unset)
+    # plus its 30-second drain (server.shutdown_timeout_ms), with 10 seconds
+    # for the background tasks and the export flush, so `docker compose down`
+    # never kills a drain in progress. Raise it with either setting.
+    stop_grace_period: 40s
     # The image's own HEALTHCHECK, repeated so `docker compose up --wait`
     # visibly waits on it. Readiness gates on the gateway alone, so a CDR that
     # is down never marks the gateway unhealthy. An image of a release before

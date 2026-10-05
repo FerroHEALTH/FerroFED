@@ -1,9 +1,12 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# An example Deployment of the gateway, over the configuration in
+# An example StatefulSet of the gateway, over the configuration in
 # configmap.yaml and the ferrofed-secrets Secret it names, mounted read-only
-# at /run/secrets/ferrofed. The probes:
+# at /run/secrets/ferrofed. It is a StatefulSet for one reason: each replica
+# keeps its ITI-20 audit spool on a volume claim of its own, which outlives
+# the pod (see audit-spool below). The replicas share nothing else, so they
+# start and stop in parallel. The probes:
 #
 #   startup    GET /health/readiness until boot completes; the gateway opens
 #              its port only once the registry and its clients are built.
@@ -20,7 +23,7 @@
 # from your own load. The image tag is the product version, which
 # scripts/checks/versions.sh holds equal to docs/VERSIONS.md.
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: ferrofed
   labels:
@@ -28,10 +31,18 @@ metadata:
     app.kubernetes.io/component: gateway
 spec:
   replicas: 2
+  # No replica waits for another to start or stop.
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       app.kubernetes.io/name: ferrofed
       app.kubernetes.io/component: gateway
+  # A spool outlives its pod, and its claim outlives the StatefulSet and a
+  # scale-down: a claim deleted with records still in it loses them. Delete
+  # a claim by hand once its spool is empty.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   template:
     metadata:
       labels:
@@ -40,9 +51,11 @@ spec:
     spec:
       # The gateway calls no Kubernetes API.
       automountServiceAccountToken: false
-      # Longer than server.shutdown_timeout_ms (10 s in configmap.yaml), so a
-      # drain finishes before the kubelet sends SIGKILL.
-      terminationGracePeriodSeconds: 30
+      # Covers server.drain_delay_ms (5 s) plus server.shutdown_timeout_ms
+      # (30 s) of configmap.yaml, with 10 s for the background tasks and the
+      # export flush, so the kubelet never kills a drain in progress. The
+      # grace period counts from the moment the pod is deleted.
+      terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -50,6 +63,9 @@ spec:
         # The Secret's files belong to this group, so the gateway can read them,
         # and the audit spool's volume too, so it can write there.
         fsGroup: 65532
+        # Changes the volume's ownership only when its root does not match,
+        # so a large spool does not slow every start.
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -85,18 +101,17 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 1
-          # Ephemeral storage holds the container log and the audit-spool
-          # emptyDir, whose sizeLimit below is 512Mi, so the limit covers both.
-          # The kubelet evicts a pod past it; raise it with the sizeLimit.
+          # Ephemeral storage holds the container log alone: the audit spool
+          # is on its volume claim.
           resources:
             requests:
               cpu: 100m
               memory: 64Mi
-              ephemeral-storage: 128Mi
+              ephemeral-storage: 64Mi
             limits:
               cpu: "1"
               memory: 256Mi
-              ephemeral-storage: 1Gi
+              ephemeral-storage: 256Mi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -110,12 +125,12 @@ spec:
               mountPath: /run/secrets/ferrofed
               readOnly: true
             # The ITI-20 audit spool of [xcpd] audit = "repository", with
-            # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool":
+            # xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool",
+            # and of [audit] destination = "repository", with
+            # audit.repository.spool_dir = "/var/lib/ferrofed/audit-feed-spool":
             # the one directory the gateway writes. fsGroup above lets the
-            # gateway write the volume, and it creates the spool under it with
-            # mode 0700. The spool holds audit messages that name a patient
-            # until the repository takes them, so back it with an encrypted
-            # storage class.
+            # gateway write the volume, and it creates each spool under it
+            # with mode 0700.
             - name: audit-spool
               mountPath: /var/lib/ferrofed
       volumes:
@@ -128,12 +143,25 @@ spec:
           secret:
             secretName: ferrofed-secrets
             defaultMode: 0440
-        # Each replica needs a spool of its own: two gateways must never
-        # drain one directory. This emptyDir keeps it across a container
-        # restart only; a StatefulSet volumeClaimTemplate keeps it across a
-        # reschedule too. The size limit holds the default spool bounds
-        # (64 MiB in spool_max_bytes, 100000 messages of at least one 4 KiB
-        # block each) with headroom; raise it with either bound.
-        - name: audit-spool
-          emptyDir:
-            sizeLimit: 512Mi
+  # One claim per replica, audit-spool-ferrofed-0 and so on: two gateways
+  # must never drain one spool, and a replica that is rescheduled finds its
+  # own spool and delivers what it still holds. The spool holds audit records
+  # that name a patient until the repository takes them, so the claim's
+  # storage class encrypts at rest. The size holds the default spool bounds
+  # (64 MiB in spool_max_bytes, 100000 messages of at least one 4 KiB block
+  # each, for each of the two spools) with headroom; raise it with either
+  # bound.
+  volumeClaimTemplates:
+    - metadata:
+        name: audit-spool
+        labels:
+          app.kubernetes.io/name: ferrofed
+          app.kubernetes.io/component: gateway
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # EDIT: a storage class of your cluster that encrypts the volume at
+        # rest.
+        storageClassName: encrypted
+        resources:
+          requests:
+            storage: 1Gi

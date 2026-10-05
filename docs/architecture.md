@@ -1400,6 +1400,22 @@ each PIXm and PMIR record names the patient as its profile requires.
 | Audit records awaiting delivery (ITI-55 audit messages) | ITI-20 store-and-forward (ITI TF-2 §3.20.4.1.1), one per XCPD exchange | a bounded spool directory, one fsynced `0600` file per message in a `0700` directory the gateway refuses to start on when it is open to other users, drained in order and removed once delivered, a message that cannot be read moved to its `quarantine` subdirectory and counted under the same bounds; in memory under the development profile without `spool_dir` (#418) |
 | Audit records awaiting delivery (BALP `AuditEvent`s of ITI-83, ITI-90, ITI-91, ITI-93, ITI-94) | ITI-20 store-and-forward over the FHIR Feed, one per transaction | a spool of its own, as above, holding FHIR JSON; a record the repository refuses is quarantined too (#486) |
 
+**Routing state across replicas** (#641). The resolution bindings and the
+`ehr_id` index live in one process's memory, as decisions A20 and A25 place
+them, so several replicas hold several copies, each filled by the requests
+that replica served. A read routes the same on every replica, because a
+replica without the binding probes (§12.5.1 step 4). A write does not: §12.5.1
+never probes for a write's destination (N41), so the replica that resolved
+the patient routes a write that names no node, and any other replica refuses
+it `400` `target-required` before a node is asked. Nothing is misrouted, but
+the outcome depends on the replica count. Sharing the bindings and the index
+would take them out of process memory, which A20 and A25 rule out, so they
+stay per process. The client contract asks a client to send
+`openEHR-federation-endpoint` on every write, which routes on any replica,
+and names balancer affinity as the operator's fallback, which narrows the
+window and cannot close it. No specification governs the process model: our
+own design.
+
 **A secret is a type** (#364, the design FerroEHR's configuration uses). Every
 credential the configuration holds is a `Secret` (a bearer token, a basic
 password) or a `SecretUrl` (a URL or connection string that may carry one:

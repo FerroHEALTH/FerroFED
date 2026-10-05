@@ -147,7 +147,7 @@ slow one.
    `[workspace.package]` `version`. The gateway image tag moves with it in
    the `compose.yaml` default, in the `FERROFED_VERSION` default on the
    `image:` line of `deploy/compose/compose.yaml` (the release asset) and in
-   `deploy/kubernetes/deployment.yaml`. `scripts/checks/versions.sh` fails on
+   `deploy/kubernetes/statefulset.yaml`. `scripts/checks/versions.sh` fails on
    any file left behind, and the `plan` job checks the first three and the
    release asset's tag against the tag.
 3. **The changelog names the release.** Every change since the last release

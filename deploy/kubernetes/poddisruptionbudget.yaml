@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # Keeps one gateway pod serving through a voluntary disruption such as a node
-# drain, with the two replicas of deployment.yaml.
+# drain, with the two replicas of statefulset.yaml.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
