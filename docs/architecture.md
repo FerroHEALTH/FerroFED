@@ -2289,7 +2289,7 @@ the variable first and returns early, and CI runs an `e2e (containers)` job.
 | node C, for three-node cases | a third FerroEHR on the same pin, with its own `system_id` (decision A44) |
 | the nodes' database server | one `ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa` container per topology a test starts, holding a database per node, each owned by its own role (decision A47) |
 | the stored-query HA backend, when tested | `postgres:18.6`, pinned by digest in the change that adds it |
-| PIX Manager | the in-testkit PIXm fake, no image (decision A39) |
+| PIX Manager | the in-testkit PIXm fake, no image (decision A39); and SanteMPI, `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` on `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550`, the deployable Manager (#622) |
 | capture and fault proxy | in-testkit, one per node, no image |
 | localizer, consent pre-filter | in-testkit stubs |
 | gateway under test | in process on the library run path; the release image in one smoke test |
@@ -2344,6 +2344,19 @@ conditional `PUT Patient?identifier=`) in Rust on `fhir-types` R4, held to the
 PIXm IG's request and response shapes by tests, with its faults injected by the
 capturing proxy in front of it (`tools/ferrofed-testkit`, `pix`). A
 differential run against FerroPIX replaces it as evidence once FerroPIX exists.
+
+SanteMPI is the deployable PIX Manager the identity binding is held to
+(#622). SanteSuite's open-source MPI answers ITI-83 `$ihe-pix` and takes the
+PMIR ITI-93 feed, and the testkit starts it (`containers::santempi`) and
+provisions it the way SanteSuite's qualification tests do: an open domain
+for the patient namespace, a protected `ehr_id` domain per member with that
+member's feed application as its one Source (PIXm 3.1.0 §2:3.104.4.1.3), and
+an application for the gateway. Each member feeds its own `ehr_id` over
+ITI-93 and the gateway resolves over ITI-83 `GET`. It is a second product
+beside the fake, which stays for the faults a real Manager cannot be made to
+show; it is heavy (Mono, 2023, `linux/amd64` only) and ITI-104 and ITI-83 by
+`POST` were not verified against it. The book's identity page carries the
+feeds an operator runs and the products checked that do not fit.
 
 **Capture and faults.** Toxiproxy works at TCP and cannot record a request
 line or inject an HTTP status; mitmproxy brings a Python runtime into the
