@@ -85,6 +85,9 @@ toml.workspace = true
 # harness PDQm Supplier is held to (#487).
 ihe-iti = { workspace = true, features = ["mcsd", "pdqm", "pixm", "pmir", "xcpd"] }
 secrecy.workspace = true
+# The browser journeys of the operator console, behind the FERROFED_JOURNEYS
+# gate (#608).
+thirtyfour.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "sync"] }
 
 [lints]

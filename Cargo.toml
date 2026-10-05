@@ -178,6 +178,12 @@ hyper = { version = "1.11.1", default-features = false }
 hyper-util = { version = "0.1.21", default-features = false }
 http-body-util = "0.1.5"
 bytes = "1.12.1"
+# Test-only for the operator console's browser journeys (#608; no
+# specification governs them: our own design): a WebDriver client in Rust
+# that drives headless Chrome through a chromedriver already running, both
+# pinned in docs/VERSIONS.md, with no driver download and no WebSocket.
+# Verified against crates.io on 2026-10-05.
+thirtyfour = { version = "0.37.5", default-features = false, features = ["reqwest", "cdp"] }
 # Test-only for the wire types (#33): schema validation of every emitted body
 # (draft 2020-12, the remote resolvers off) and property tests.
 jsonschema = { version = "0.58.3", default-features = false }

@@ -67,7 +67,9 @@
 #                          versions ci.yml and release-viewer.yml install,
 #                          the wasm-bindgen CLI equal to the wasm-bindgen
 #                          crate the root Cargo.toml requires and Cargo.lock
-#                          locks.
+#                          locks, and the thirtyfour row against the root
+#                          Cargo.toml and the Chrome for Testing row against
+#                          the chrome-version ci.yml installs.
 #
 # The container images check (9) holds docker/viewer/Dockerfile to the same
 # base-image row as docker/Dockerfile.
@@ -999,6 +1001,32 @@ if [[ -f Cargo.lock ]] && [[ -n "$want" ]]; then
     bad "wasm-bindgen: Cargo.lock locks ${locked:-nothing}, $matrix pins $want"
   else
     note "OK: Cargo.lock locks wasm-bindgen $want"
+  fi
+fi
+# The browser journeys: the WebDriver client against the root Cargo.toml, and
+# the Chrome for Testing release the journeys job installs.
+want="$(pin_of "thirtyfour" "$matrix")"
+if [[ -z "$want" ]]; then
+  bad "$matrix has no thirtyfour row"
+elif [[ -f Cargo.toml ]]; then
+  req="$(manifest_req "thirtyfour")"
+  if [[ "$req" != "$want" ]]; then
+    bad "thirtyfour: root Cargo.toml requires ${req:-nothing}, $matrix pins $want"
+  else
+    note "OK: thirtyfour $want (root Cargo.toml agrees)"
+  fi
+fi
+want="$(pin_of "Chrome for Testing (Chrome and chromedriver)" "$matrix")"
+if [[ -f .github/workflows/ci.yml ]]; then
+  found="$(sed -nE 's|^[[:space:]]*chrome-version:[[:space:]]*([^[:space:]#]+).*|\1|p' .github/workflows/ci.yml | sort -u)"
+  if [[ -z "$want" ]]; then
+    bad "$matrix has no Chrome for Testing row"
+  elif [[ -z "$found" ]]; then
+    bad "ci.yml pins no chrome-version"
+  elif [[ "$found" != "$want" ]]; then
+    bad "Chrome for Testing: ci.yml pins $(printf '%s' "$found" | tr '\n' ' '), $matrix pins $want"
+  else
+    note "OK: Chrome for Testing $found"
   fi
 fi
 

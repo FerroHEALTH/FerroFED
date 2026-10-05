@@ -63,7 +63,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `copyright-holder` | `scripts/checks/copyright-holder.sh`, every first-party `SPDX-FileCopyrightText` header naming Cadasto B.V., the Licensor of `LICENSE`; the vendored trees are skipped |
 | `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, then `scripts/conformance/report.sh --self-test`: the conformance matrix against the vendored specification, the test markers against the matrix, the rendered book page against the matrix, and the README conformance badges under `conformance/badges/` against the matrix and the AQL golden pass list (`docs/architecture.md` section 12) |
 | `obligations` | `scripts/checks/obligations.sh --self-test`, then `scripts/checks/obligations.sh`: every row of `conformance/obligations.tsv` with a known status, an issue where its status needs one, an existing test where it is tested, and a point and requirements the matrix holds; the digest of each vendored source's keyword lines against `conformance/obligation-sources.tsv`, so a re-pin fails until the changed sources are reclassified; and the rendered book page against the checklist |
-| `e2e-placement` | `scripts/checks/e2e-placement.sh --self-test`, then `scripts/checks/e2e-placement.sh`: every Rust file that checks the `FERROFED_E2E` gate sits in an `e2e` module of its crate's test binary, and the `e2e (containers)` job still sets the gate and selects `test(/^e2e::/)` across the workspace |
+| `e2e-placement` | `scripts/checks/e2e-placement.sh --self-test`, then `scripts/checks/e2e-placement.sh`: every Rust file that checks the `FERROFED_E2E` gate sits in an `e2e` module of its crate's test binary, and the `e2e (containers)` job still sets the gate and selects `test(/^e2e::/)` across the workspace; every Rust file that checks the `FERROFED_JOURNEYS` gate sits in the testkit's `journeys` module, and the `journeys (browser)` job still sets that gate and selects `test(/^journeys::/)` in the testkit |
 | `site-links` | `scripts/checks/site-links.sh --self-test`, then `scripts/checks/site-links.sh`: the site assembled by `scripts/site/assemble.sh` with the roadmap block left empty, every internal link and anchor of every page checked by lychee with `--offline --include-fragments`, and `README.md` against the repository tree; lychee is the release binary pinned by version and SHA-256, and no request leaves the runner |
 | `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh`, `migrate-fields.sh` and `rel.sh`, each driven against a stub `gh` on `PATH` |
 | `crate-version-guard-self-test` | `scripts/checks/crate-version-guard.sh --self-test`, the guard over a stub repository whose `main` bumped a crate after the branch forked: an untouched crate passes, and packaged content changed without a bump fails |
@@ -179,7 +179,7 @@ lanes build, lint and test its server half on the host; this job runs
 `-D warnings`, so a dependency that cannot compile for the browser fails here,
 and then builds the release site bundle with `scripts/release/viewer-site.sh
 --release`, which freezes `Cargo.lock` around cargo-leptos and checks the
-WebAssembly, its JavaScript glue and the stylesheet are all written.
+WebAssembly, its JavaScript glue, the stylesheet and the favicon are all written.
 `scripts/checks/viewer-bundle.sh` then writes the WebAssembly and JavaScript
 sizes, raw and compressed with gzip and brotli, to the job summary, and fails
 when the brotli-compressed WebAssembly is over the byte budget the console's
@@ -188,6 +188,18 @@ names a home, runner, registry or toolchain directory of the build host,
 which `viewer-site.sh` remaps away. The console chooses its two halves by compilation target,
 never by Cargo feature, so the workspace `--all-features` lanes build it like
 any other member and `features (cargo-hack)` has nothing to add for it.
+
+`journeys (browser)` drives the console in a browser (#608). It builds the
+same release site bundle, installs Chrome and chromedriver at the Chrome for
+Testing release `docs/VERSIONS.md` pins through `browser-actions/setup-chrome`,
+starts chromedriver, and runs the testkit's `journeys` module with
+`FERROFED_JOURNEYS=1`: sign-in at a test OpenID Provider, each operator view
+with its pagers, a query run that shows every node's status and completeness,
+a refused query, and sign-out, each against a running gateway over stub nodes
+and failing on any error the browser logs. Without the gate a journey returns
+at once, so the `test` and `e2e (containers)` jobs need no browser, and the
+`e2e-placement` guard keeps every gated journey where this job's filter
+selects it.
 
 `crate-version-guard` runs on pull requests only and fails a change that
 alters a `crates/*` member's packaged content without moving its version,

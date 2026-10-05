@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# The book theme favicons are copies of the brand favicon, not files of their
-# own (no specification governs this: our own design). mdBook reads a theme
-# override from website/book/theme/favicon.svg and favicon.png, so the mark
-# exists twice and nothing but this check keeps the two in step: change the
-# brand mark, forget the copy, and the book serves the old favicon.
+# The book theme favicons and the operator console's favicon are copies of the
+# brand favicon, not files of their own (no specification governs this: our
+# own design). mdBook reads a theme override from
+# website/book/theme/favicon.svg and favicon.png, and cargo-leptos copies
+# app/ferrofed-viewer/public/favicon.ico into the console's site root, so the
+# mark exists more than once and nothing but this check keeps the copies in
+# step: change the brand mark, forget a copy, and it serves the old favicon.
 #
 #   scripts/checks/favicon-sync.sh
 #
@@ -19,7 +21,8 @@ cd "$(dirname "$0")/../.."
 # writes to both paths.
 readonly PAIRS="\
 website/book/theme/favicon.svg	assets/brand/favicon.svg
-website/book/theme/favicon.png	assets/brand/favicon-32.png"
+website/book/theme/favicon.png	assets/brand/favicon-32.png
+app/ferrofed-viewer/public/favicon.ico	assets/brand/favicon.ico"
 
 fail=0
 while IFS=$'\t' read -r copy source; do
@@ -38,7 +41,7 @@ while IFS=$'\t' read -r copy source; do
     echo "favicon-sync: $copy matches $source"
     continue
   fi
-  echo "::error file=$copy::$copy differs from $source. Re-run the regeneration block in assets/brand/README.md so the book theme serves the current mark." >&2
+  echo "::error file=$copy::$copy differs from $source. Re-run the regeneration block in assets/brand/README.md so every copy serves the current mark." >&2
   fail=1
 done <<< "$PAIRS"
 

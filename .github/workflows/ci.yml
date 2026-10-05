@@ -338,8 +338,10 @@ jobs:
 
   # The e2e placement guard: a test that checks the FERROFED_E2E gate lives in
   # an e2e module, the one place the e2e job's filter selects, and that job
-  # still runs that filter across the workspace. Its self-test proves each
-  # refused placement and each near miss.
+  # still runs that filter across the workspace; a journey that checks the
+  # FERROFED_JOURNEYS gate lives in the testkit's journeys module, which the
+  # journeys job selects. Its self-test proves each refused placement and
+  # each near miss.
   e2e-placement:
     name: e2e-placement
     runs-on: ubuntu-latest
@@ -878,6 +880,64 @@ jobs:
       - name: Check the bundle names no build-host path
         run: bash scripts/checks/viewer-paths.sh
 
+  # The operator console's browser journeys (#608; no specification governs
+  # them: our own design). Every journey checks FERROFED_JOURNEYS first and
+  # returns early without it, so the test and e2e jobs need no browser; this
+  # job sets the gate, builds the release site bundle the console serves, and
+  # drives headless Chrome through chromedriver, both at the Chrome for
+  # Testing release docs/VERSIONS.md pins. A journey fails on any error the
+  # browser logs. The e2e-placement guard keeps every gated journey in the
+  # testkit's journeys module, so this filter selects it.
+  journeys:
+    name: journeys (browser)
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      FERROFED_JOURNEYS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          target: wasm32-unknown-unknown
+      - name: Install cargo-leptos
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        with:
+          tool: cargo-leptos@0.3.11
+      - name: Install the wasm-bindgen CLI
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        with:
+          tool: wasm-bindgen@0.2.129
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-nextest
+      - name: Install Chrome and chromedriver
+        id: chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
+        with:
+          chrome-version: 154.0.8037.92
+          install-chromedriver: true
+      - run: bash scripts/release/viewer-site.sh --release
+      - name: Start chromedriver
+        env:
+          CHROMEDRIVER: ${{ steps.chrome.outputs.chromedriver-path }}
+        run: |
+          set -euo pipefail
+          "$CHROMEDRIVER" --port=9515 > "$RUNNER_TEMP/chromedriver.log" 2>&1 &
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:9515/status
+      - name: Run the journeys
+        env:
+          FERROFED_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: >-
+          cargo nextest run --profile ci --locked -p ferrofed-testkit
+          -E 'test(/^journeys::/)'
+
   # The library crates stay publishable while the workspace `publish` switch is
   # off (the Cargo reference, the `publish` field; no specification governs the
   # policy: our own design): `cargo package` builds
@@ -1020,6 +1080,7 @@ jobs:
       - msrv
       - features
       - viewer
+      - journeys
       - publish-dry-run
       - crate-version-guard
       - changelog-guard

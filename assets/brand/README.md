@@ -45,7 +45,8 @@ The lockups and the social card follow when the site needs them.
 ## Regenerating the favicon set
 
 The book theme carries copies of `favicon.svg` and `favicon-32.png` under
-`website/book/theme/`, and `scripts/checks/favicon-sync.sh` fails when a copy
+`website/book/theme/`, the operator console a copy of `favicon.ico` under
+`app/ferrofed-viewer/public/`, and `scripts/checks/favicon-sync.sh` fails when a copy
 drifts from its source. After changing the mark, run from the repository root:
 
 ```sh
@@ -55,4 +56,5 @@ rsvg-convert -w 16 -h 16 assets/brand/favicon.svg -o /tmp/favicon-16.png
 magick /tmp/favicon-16.png assets/brand/favicon-32.png assets/brand/favicon.ico
 cp assets/brand/favicon.svg website/book/theme/favicon.svg
 cp assets/brand/favicon-32.png website/book/theme/favicon.png
+cp assets/brand/favicon.ico app/ferrofed-viewer/public/favicon.ico
 ```

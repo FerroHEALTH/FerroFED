@@ -208,7 +208,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   services every binding is tested against: the PIX Manager, PDQm Supplier,
   XCPD responding gateway, mCSD directory, PMIR Registry, Audit Record
   Repositories, NVI, Mitz, Nuts node and the OAuth 2.0 and FAPI 2.0
-  authorization servers, with a mutual-TLS front.
+  authorization servers, with a mutual-TLS front. Its test binary also holds
+  the operator console's browser journeys behind the `FERROFED_JOURNEYS` gate
+  (#608): headless Chrome over WebDriver against a running gateway and console.
 - The root `Cargo.toml` carries the lint set, the release profile, the
   `openehr-*` family as one pin group and the `publish` switch; `deny.toml`,
   `clippy.toml`, `rustfmt.toml` and `rust-toolchain.toml` sit beside it.

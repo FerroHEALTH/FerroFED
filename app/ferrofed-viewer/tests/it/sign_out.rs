@@ -210,3 +210,46 @@ async fn the_console_offers_sign_out_as_a_post_form() -> Result<(), Box<dyn Erro
     );
     Ok(())
 }
+
+/// The `form-action` directive of the policy `response` carries.
+fn form_action(response: &http::Response<()>) -> String {
+    header(response, "content-security-policy")
+        .split(';')
+        .map(str::trim)
+        .find(|directive| directive.starts_with("form-action"))
+        .unwrap_or_default()
+        .to_owned()
+}
+
+// A browser holds every redirect a form submission follows to the policy's
+// `form-action`, so the sign-out form reaches the provider only when the
+// policy names the end-session endpoint's origin (CSP Level 3, form-action).
+#[tokio::test]
+async fn the_policy_lets_the_sign_out_form_reach_the_end_session_endpoint()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console(&with_end_session())?;
+    let (page, _body) = send(&service, crate::support::get("/")?).await?;
+    assert_eq!(
+        "form-action 'self' https://idp.example.org",
+        form_action(&page)
+    );
+    let session = state.sessions().establish(signed_in())?;
+    let (response, _body) = send(&service, sign_out(Some(&session), Some(SAME_ORIGIN))?).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
+    assert_eq!(
+        "form-action 'self' https://idp.example.org",
+        form_action(&response)
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn without_an_end_session_endpoint_forms_lead_only_to_the_console()
+-> Result<(), Box<dyn Error>> {
+    for text in ["", WITH_OIDC] {
+        let (_state, service) = console(text)?;
+        let (response, _body) = send(&service, crate::support::get("/")?).await?;
+        assert_eq!("form-action 'self'", form_action(&response), "{text}");
+    }
+    Ok(())
+}

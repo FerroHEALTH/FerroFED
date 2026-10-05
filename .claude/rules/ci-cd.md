@@ -148,7 +148,10 @@ new fragment under `changelog.d/`, or an edit of `CHANGELOG.md` from a pull
 request opened before the fragments, unless the `no-changelog` label is set);
 `dependency-review-action` on pull requests; the `e2e (containers)` job,
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the
-digest-pinned node images (`.claude/memory/e2e-gate.md`); the `comment-style.sh` guard
+digest-pinned node images (`.claude/memory/e2e-gate.md`); the
+`journeys (browser)` job, which sets `FERROFED_JOURNEYS=1`, builds the console's
+site bundle and runs the testkit's browser journeys in headless Chrome at the
+pinned Chrome for Testing release (`leptos-ui.md` §11); the `comment-style.sh` guard
 at `--all`; and the golden pass list, `conformance/aql-golden/pass-list.txt`,
 held by the golden AQL test in the nextest run (a listed case that stops
 passing, or an unlisted pass, fails it) and by the tier-1 `conformance-matrix`

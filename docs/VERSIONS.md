@@ -331,6 +331,20 @@ these versions. Every version was the latest on crates.io on 2026-10-05.
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-viewer.yml` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-viewer.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
 
+The browser journeys (#608) drive the console in headless Chrome over
+WebDriver, through chromedriver, with the `thirtyfour` client, a test-only
+dependency of the testkit. Chrome and chromedriver come as one Chrome for
+Testing release, which `browser-actions/setup-chrome` installs in the
+`journeys (browser)` job of `ci.yml`, so the browser and its driver always
+match. `thirtyfour` was the latest on crates.io on 2026-10-05, and the Chrome
+for Testing release was the newest stable one. `scripts/checks/versions.sh`
+holds both rows.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| `thirtyfour` | 0.37.5 | the root `Cargo.toml` `[workspace.dependencies]` |
+| Chrome for Testing (Chrome and chromedriver) | 154.0.8037.92 | the `chrome-version` of `.github/workflows/ci.yml` |
+
 ## Language and runtime
 
 `rust-toolchain.toml` carries the toolchain, and the root `Cargo.toml` carries

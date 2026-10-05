@@ -25,6 +25,13 @@ slow-timeout = { period = "60s", terminate-after = 20 }
 filter = 'test(/^e2e::/)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
+# A browser journey starts a gateway, a console and a headless Chrome, and
+# each of its waits may take twenty seconds, so it gets three minutes. Every
+# journey sits in the testkit's journeys module.
+[[profile.default.overrides]]
+filter = 'test(/^journeys::/)'
+slow-timeout = { period = "60s", terminate-after = 3 }
+
 # The CI lanes select this profile. It repeats the default limit, and the
 # override above still applies to it. It runs every test past a failure, so
 # the conformance report reads an outcome for every marked test.

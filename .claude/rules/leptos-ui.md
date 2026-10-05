@@ -204,6 +204,10 @@ the orchestrator, never made in a slice.
   `'unsafe-inline'` or `'unsafe-eval'` for scripts, `nosniff`, `DENY`
   framing, no referrer, and `no-store` on every document. A new inline
   script or style that needs the policy relaxed is the defect, not the policy.
+  `form-action` names the console and, when one is configured, the origin of
+  the provider's end-session endpoint and nothing else: a browser holds every
+  redirect a form submission follows to it, and the sign-out form is answered
+  with a redirect there (`server::form_action`).
 
 ## 8. SSR and hydration correctness (`ssr/22` to `ssr/24`)
 
@@ -259,10 +263,16 @@ tokens of `assets/brand/tokens.css`; motion respects
   wasm32-unknown-unknown -- -D warnings`; `cargo nextest run -p
   ferrofed-viewer`; `scripts/release/viewer-site.sh --release` completing
   when the change touches the build surface.
-- Browser journeys are planned with the screens (#276, #277): Rust only,
-  `thirtyfour` over WebDriver, failing on any browser console error, with
-  explicit waits and never a `sleep`. Playwright is JavaScript and the
-  no-JavaScript mandate covers the test suite.
+- **Browser journeys** drive the console in headless Chrome (#608): Rust only,
+  `thirtyfour` over WebDriver through chromedriver, in the testkit's
+  `tests/it/journeys/` behind `FERROFED_JOURNEYS=1`, against a running
+  gateway over stub nodes, a test OpenID Provider and the console serving its
+  release site bundle. Each journey fails on any error the browser logs, waits
+  on elements explicitly and never on a `sleep`, and reads a form's state
+  before hydration with scripts turned off. A new screen, or a new step of a
+  screen, gets its journey in the same change, and the `journeys (browser)`
+  CI job runs them. Playwright is JavaScript and the no-JavaScript mandate
+  covers the test suite.
 - **Never weaken a gate to make a change pass.** A failing wasm32 clippy pass
   usually means a dependency cannot compile for the browser, which is the gate
   working.

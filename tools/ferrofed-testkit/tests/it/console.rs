@@ -24,13 +24,13 @@ use secrecy::SecretString;
 use tokio::net::TcpListener;
 
 /// The issuer the gateway trusts and the operator's token comes from.
-const ISSUER: &str = "https://issuer.example.test";
+pub(crate) const ISSUER: &str = "https://issuer.example.test";
 
 /// The audience the gateway is known by at [`ISSUER`].
-const AUDIENCE: &str = "urn:example:ferrofed-under-test";
+pub(crate) const AUDIENCE: &str = "urn:example:ferrofed-under-test";
 
 /// The scope the gateway admits operators with.
-const OPERATOR_SCOPE: &str = "ferrofed:operator";
+pub(crate) const OPERATOR_SCOPE: &str = "ferrofed:operator";
 
 /// A synthetic `ehr_id` an incident names.
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";

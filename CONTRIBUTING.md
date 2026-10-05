@@ -66,6 +66,21 @@ A test that checks the gate lives in the `e2e` module of its crate's test
 binary (`tests/it/e2e.rs` or `tests/it/e2e/`), the one place that filter
 selects; `scripts/checks/e2e-placement.sh` refuses it anywhere else.
 
+The operator console's browser journeys need the release site bundle and a
+chromedriver whose major version matches your Chrome, listening on port 9515,
+and run behind their own gate, as the `journeys (browser)` job runs them:
+
+```
+scripts/release/viewer-site.sh --release
+chromedriver --port=9515 &
+FERROFED_JOURNEYS=1 cargo nextest run --locked -p ferrofed-testkit \
+  -E 'test(/^journeys::/)'
+```
+
+`FERROFED_WEBDRIVER` names another WebDriver endpoint, and `FERROFED_CHROME`
+a Chrome binary chromedriver would not find itself. A journey lives in the
+testkit's `tests/it/journeys/`, where the guard above keeps it.
+
 Every cargo invocation uses `--locked`, and `Cargo.lock` is committed.
 
 ## Specifications are the authority
