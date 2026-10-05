@@ -330,10 +330,7 @@ impl SanteMpi {
     async fn started(&self, token: &str) -> bool {
         let request = self
             .http
-            .get(format!(
-                "{}/ami/SecurityApplication?name=fiddler",
-                self.origin
-            ))
+            .get(format!("{}/ami/SecurityApplication", self.origin))
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .header(ACCEPT, "application/xml");
         send(request, "the startup probe").await.is_ok()
