@@ -316,7 +316,7 @@ endpoint in `openEHR-federation-endpoint` and its `system_id` in
   (`consent-denied`) naming the denied endpoints, never a `404`, because a
   denied member may hold the EHR. A pre-filter that cannot answer leaves
   every member to its own consent check
-  ([Consent](../operate/identity.md#consent)).
+  ([Consent](../operate/consent.md)).
 - `subject_id` and `subject_namespace` are each given once; anything else in
   the query string is a `400`, and nothing is resolved or sent.
 

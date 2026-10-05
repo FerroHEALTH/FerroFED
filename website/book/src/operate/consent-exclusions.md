@@ -3,7 +3,7 @@
 
 # Withholding consent exclusions
 
-A member the consent pre-filter excludes ([Consent](identity.md#consent)) is
+A member the consent pre-filter excludes ([Consent](consent.md)) is
 reported `consent-denied` by default, as the specification requires (N27a).
 `consent-denied` tells the requesting clinician, member by member, that the
 patient restricted access there. Regulation (EU) 2025/327 (the European
@@ -50,7 +50,7 @@ that lookup. Then:
 
 A node's own consent refusal, a `403` whose ITS-REST `Error` carries a code
 the registry lists in `consent_refusal_codes`
-([Consent](identity.md#consent)), is withheld the same way on every path:
+([Consent](consent.md)), is withheld the same way on every path:
 
 - **A federated query** reports the node `not-resolved`, with the same
   `error` text as a member that does not know the patient and no

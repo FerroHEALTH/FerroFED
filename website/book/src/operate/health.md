@@ -60,7 +60,7 @@ answered. A resolution updates `resolver`, which is absent when no resolver
 is configured. A call to the consent pre-filter updates `consent` by the same
 rule: a decision, or an answer below `500`, is `up`, a `5xx` is `failing`, and
 no answer is `down`. It is absent when no pre-filter is configured
-([Consent](identity.md#consent)). A call to the localizer updates `localizer`
+([Consent](consent.md)). A call to the localizer updates `localizer`
 by the same rule: a candidate set, or an answer that no member holds the
 patient, is `up`, a failure answered below `500` is `up`, a `5xx` is
 `failing`, an XCPD exchange whose audit message could not be recorded is
@@ -87,7 +87,7 @@ with `directory_fault = "refused-credentials"`: check the credentials of
 names a class only, never a member, an endpoint or a URL. Both are absent when the
 registry is a document
 ([The registry](registry.md#the-registry-read-from-an-mcsd-directory)). The
-[audit repository](identity.md#the-audit-repository) shows as
+[audit repository](localization.md#the-audit-repository) shows as
 `audit_repository`, read from its spool at each request: `up` when the last
 delivery succeeded and nothing waits, `degraded` while the gateway retries a
 failed delivery, while audit messages wait in the spool and while any sits in

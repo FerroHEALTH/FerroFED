@@ -235,7 +235,7 @@ member of the open `meta` object, `meta.federation`:
 - `consent`, only when the consent pre-filter could not answer:
   `consent.error` carries its error. Every candidate was then asked and each
   node applied its own consent check, so `complete` and the status are what
-  the nodes made them ([Consent](../operate/identity.md#consent)).
+  the nodes made them ([Consent](../operate/consent.md)).
 
 By default you get every row every node returned, duplicates included
 (§10.1, N15). Send `openEHR-federation-dedup: version-identity` to get one

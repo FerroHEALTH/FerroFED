@@ -9,7 +9,7 @@ Audit Event. Two configurations decide where the records go:
 
 - `[xcpd] audit` and `[xcpd.audit_repository]` for the XCPD localizer's
   ITI-55 exchanges, which XCPD audits as a DICOM audit message over syslog
-  ([The audit repository](identity.md#the-audit-repository));
+  ([The audit repository](localization.md#the-audit-repository));
 - `[audit]` for the PIXm, PDQm, mCSD and PMIR transactions, which each profile
   audits as a FHIR `AuditEvent` built on the IHE Basic Audit Log Patterns
   (BALP). BALP has the gateway send it over the ATX: FHIR Feed Option of
@@ -147,7 +147,7 @@ without limit, so the wait is bounded, on both spools:
 A record that `spool_write_timeout_ms` cuts off is an audit failure, as a
 full spool is, with the outcomes in the table above, and an ITI-55
 discovery fails closed under every `on_failure` policy
-([The audit repository](identity.md#the-audit-repository)). A record still
+([The audit repository](localization.md#the-audit-repository)). A record still
 being stored when its transaction's time runs out fails a transaction that
 succeeded the same way: an ITI-55 discovery or a `[pdqm]` exchange then
 fails closed under every `on_failure` policy, never widened to ask-all. The
