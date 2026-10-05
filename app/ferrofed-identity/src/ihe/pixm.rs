@@ -40,8 +40,9 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError, Tls};
 use crate::ihe::audit::balp::audited_as;
+use crate::ihe::iua;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
@@ -109,6 +110,10 @@ pub enum PixmConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for a PIX Manager could not be built")]
     Client(#[source] reqwest::Error),
+    /// The credential is a grant the client was built to send in a default
+    /// header, where its token cannot ride.
+    #[error("the grant of a PIX Manager cannot ride in a default header")]
+    Grant,
 }
 
 impl From<ClientError> for PixmConfigError {
@@ -116,6 +121,7 @@ impl From<ClientError> for PixmConfigError {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
             ClientError::Build(source) => Self::Client(source),
+            ClientError::Grant => Self::Grant,
         }
     }
 }
@@ -136,8 +142,8 @@ pub enum PixmResolveError {
     /// The member's domain holds an identifier that is not an `ehr_id`.
     #[error("the PIX Manager answered an identifier for member {0} that is not an ehr_id")]
     NotAnEhrId(NodeId),
-    /// The member's domain holds more than one identifier, so the gateway
-    /// cannot choose the `ehr_id` and does not guess.
+    /// The member's domain holds more than one distinct identifier, so the
+    /// gateway cannot choose the `ehr_id` and does not guess.
     #[error("the PIX Manager answered more than one identifier for member {0}")]
     Ambiguous(NodeId),
     /// The PIXm client read an answer this resolver does not know how to
@@ -155,7 +161,7 @@ struct Manager {
 /// The [`Resolver`] and the [`Localizer`] over ITI-83.
 ///
 /// As a resolver it answers [`Resolution::Resolved`] when a member's domain
-/// holds exactly one identifier that reads as an `ehr_id`,
+/// holds exactly one distinct identifier that reads as an `ehr_id`,
 /// [`Resolution::Unknown`] when the Manager does not know the patient or the
 /// member's domain holds nothing, and [`Resolution::Unavailable`] for every
 /// failure, a namespace it cannot map included, so the query fails closed
@@ -213,11 +219,14 @@ impl PixmResolver {
                 seen.push(member.clone());
                 members.push((member, target));
             }
-            let http = fhir::http_client(&manager.auth, &manager.tls)?;
+            let (http, authorizer) = iua::client(&manager.auth, &manager.tls)?;
             let base = Url::parse(manager.base.expose()).map_err(PixmConfigError::BaseUrl)?;
-            let client = PixmClient::new(base, http)
+            let mut client = PixmClient::new(base, http)
                 .map_err(PixmConfigError::Base)?
                 .invoked_by(manager.invocation);
+            if let Some(authorizer) = authorizer {
+                client = client.with_authorizer(authorizer);
+            }
             built.push(Arc::new(Manager { client, members }));
         }
         if let Some(uncovered) = registry
@@ -297,7 +306,7 @@ impl fmt::Debug for PixmResolver {
 /// for localization, whether the member's domain holds the patient.
 #[derive(Debug)]
 enum Lookup {
-    /// The domain holds exactly one identifier, which is an `ehr_id`.
+    /// The domain holds exactly one distinct identifier, which is an `ehr_id`.
     Resolved(EhrId),
     /// The Manager does not know the patient, or the domain holds nothing.
     Unknown,
@@ -338,19 +347,23 @@ fn read(
             .iter()
             .map(|(member, domain)| {
                 let mut in_domain = found.in_domain(domain.as_str());
-                let lookup = match (in_domain.next(), in_domain.next()) {
-                    (None, _) => Lookup::Unknown,
-                    (Some(identifier), None) => {
-                        match EhrId::new(identifier.value().expose_secret()) {
-                            Ok(ehr_id) => Lookup::Resolved(ehr_id),
-                            Err(_not_an_ehr_id) => {
-                                Lookup::Unusable(PixmResolveError::NotAnEhrId(member.clone()))
-                            }
-                        }
-                    }
-                    (Some(_), Some(_)) => {
+                let lookup = match in_domain.next() {
+                    None => Lookup::Unknown,
+                    // NOTE: PIXm 3.1.0 §2:3.83.4.2.2.1 gives one targetIdentifier per business
+                    // identifier and §5.2 resolves to a set, so a repeated (system, value) is one.
+                    Some(first)
+                        if in_domain.any(|other| {
+                            other.value().expose_secret() != first.value().expose_secret()
+                        }) =>
+                    {
                         Lookup::Unusable(PixmResolveError::Ambiguous(member.clone()))
                     }
+                    Some(identifier) => match EhrId::new(identifier.value().expose_secret()) {
+                        Ok(ehr_id) => Lookup::Resolved(ehr_id),
+                        Err(_not_an_ehr_id) => {
+                            Lookup::Unusable(PixmResolveError::NotAnEhrId(member.clone()))
+                        }
+                    },
                 };
                 (member.clone(), lookup)
             })

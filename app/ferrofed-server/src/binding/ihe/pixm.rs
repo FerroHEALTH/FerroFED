@@ -14,7 +14,6 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ferrofed_identity::dev::Profile;
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
@@ -26,7 +25,7 @@ use serde::Deserialize;
 use crate::binding::ihe::audit::config::AuditSettings;
 use crate::config::Credentials;
 use crate::config::error::Error;
-use crate::config::secrets::resolve_credentials;
+use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::transport;
@@ -114,7 +113,8 @@ pub struct PixManagerSettings {
 
 /// Resolves `[pixm]`: every Manager URL parses, carries no userinfo and is
 /// `https` outside the development `profile`, and every secret is read.
-pub(super) fn resolve(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Error> {
+pub(super) fn resolve(pixm: &Pixm, context: &ServiceContext<'_>) -> Result<PixmSettings, Error> {
+    let profile = context.profile;
     let mut managers = Vec::with_capacity(pixm.manager.len());
     for (index, manager) in pixm.manager.iter().enumerate() {
         let key = format!("pixm.manager[{index}]");
@@ -134,11 +134,8 @@ pub(super) fn resolve(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Err
         let credentials = manager
             .credentials
             .as_ref()
-            .map(|credentials| resolve_credentials(&section, credentials))
+            .map(|credentials| resolve_service(&section, credentials, context))
             .transpose()?;
-        if credentials.as_ref().is_some_and(Scheme::is_grant) {
-            return Err(Error::GrantNotHere { section });
-        }
         // NOTE: no specification governs this: our own design; the Manager is sent
         // patient identifiers, held to https at load as the XCPD and NVI tables are.
         let carried = credentials.is_some().then_some(section.as_str());
@@ -186,9 +183,12 @@ pub(super) fn resolver(
             members.insert(member, domain.clone());
         }
         let key = format!("pixm.manager[{index}]");
-        let auth =
-            service::authentication(&format!("{key}.credentials"), manager.credentials.as_ref())?;
         let tls = service::tls_of(&key, &manager.tls).map_err(FederationError::Tls)?;
+        let auth = service::service_authentication(
+            &format!("{key}.credentials"),
+            manager.credentials.as_ref(),
+            &tls,
+        )?;
         managers.push(ManagerConfig {
             base: manager.url.clone(),
             auth,

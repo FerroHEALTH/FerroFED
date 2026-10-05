@@ -71,9 +71,10 @@ bearer_token_file = "/run/secrets/pix-token"
   `pixm.manager[N].url` and never quoting it; the credentials go in
   `[pixm.manager.credentials]`, with the keys of an endpoint's
   [credentials](configuration.md#the-file): `bearer_token`, or `user` and
-  `password`, each with its `_file` sibling. Leave the section out when the
-  transport, such as mutual TLS or a private network, authenticates the
-  gateway.
+  `password`, each with its `_file` sibling, or an `oauth2` grant
+  ([A PIX Manager behind OAuth 2.0](#a-pix-manager-behind-oauth-20)). Leave
+  the section out when the transport, such as mutual TLS or a private
+  network, authenticates the gateway.
 - `[pixm.namespaces]` maps the namespace a client writes to the assigning
   authority the Manager knows it by. A namespace that is itself an absolute
   URI needs no entry.
@@ -91,7 +92,7 @@ to the Manager and nowhere else; no node, log line or error body carries it
 |---|---|---|
 | exactly one identifier in the domain, which reads as an `ehr_id` | sent its node query | goes on |
 | no identifier in the domain, or the patient is unknown | `not-resolved` | goes on; `complete` is false (N6) |
-| two identifiers, one that is no `ehr_id`, an error, no answer within the budget, or a namespace with no mapping | `not-resolved`, with the reason in `error` | fails `424` under all-or-nothing |
+| two different identifiers, one that is no `ehr_id`, an error, no answer within the budget, or a namespace with no mapping | `not-resolved`, with the reason in `error` | fails `424` under all-or-nothing |
 
 A member the Manager could not answer for may hold the patient, so the
 gateway fails the query by default rather than answer without it (§11.1;
@@ -99,6 +100,61 @@ gateway fails the query by default rather than answer without it (§11.1;
 `openEHR-federation-completeness: partial`, the members that did resolve
 answer. Resolution runs inside the request's overall budget
 ([Timeouts](queries-and-areas.md#timeouts)).
+
+Two identical identifiers in one domain, the same `system` and the same
+`value`, are one identifier: ITI-83 returns one `targetIdentifier` per
+business identifier of the patient (PIXm 3.1.0 §2:3.83.4.2.2.1), and
+resolution yields a set of `{node, local ehr_id}` (§5.2). A Manager that
+lists the same identifier from a master record and a local record resolves
+the member. Two different values in one domain are never guessed between.
+
+### A PIX Manager behind OAuth 2.0
+
+A Manager that issues expiring tokens, as an IHE IUA Authorization Server
+does, is asked with a token the gateway obtains itself by the OAuth 2.0
+client-credentials grant (RFC 6749 §4.4; IUA ITI-71 §3.71.4.1.2.1). The
+same `oauth2` table serves `[pdqm.credentials]`, `[pmir.credentials]` and
+`[registry.mcsd.credentials]`.
+
+```toml
+[pixm.manager.credentials.oauth2]
+grant = "client_credentials"
+token_endpoint = "https://mpi.example.org/auth/oauth2_token"
+client_id = "ferrofed-pix-consumer"
+client_auth = "client_secret_basic"     # or client_secret_post, or private_key_jwt
+client_secret_file = "/run/secrets/pix-consumer-secret"
+scope = "*"                             # the scopes the Manager's server defines
+# resource = "https://mpi.example.org/fhir/"   # RFC 8707, when the server takes one
+# audience = "https://mpi.example.org"
+```
+
+- `client_auth` says how the gateway authenticates at the token endpoint:
+  `client_secret_basic`, the client id and secret in the HTTP Basic scheme,
+  as ITI-71 prescribes; `client_secret_post`, the two in the request body,
+  for a server that reads them there (RFC 6749 §2.3.1); or
+  `private_key_jwt`, a client assertion the `[signing]` key signs (RFC 7523
+  §2.2), with no secret.
+- `client_secret` or `client_secret_file` holds the secret. It is required
+  with the two secret methods and refused beside `private_key_jwt`.
+- `scope` is required, each value an RFC 6749 §3.3 scope token.
+- `token_endpoint` is `https` outside the development profile: the client
+  secret or assertion travels to it.
+- `grant = "token_exchange"`, `dpop_key_file`,
+  `tls_client_certificate_bound_access_tokens` and the TLS methods of
+  `client_auth` belong to a node's grant
+  ([Onward credentials](onward-credentials.md)) and are refused here.
+  `config check` names every key it refuses, and never a secret.
+
+The gateway caches the token until 30 seconds before the `expires_in` the
+token response states, and incorporates it in each ITI-83 request as
+`Authorization: Bearer` (ITI-72 §3.72.4.2). A token with no stated lifetime
+serves the one request it was obtained for. When the Manager answers `401`,
+the gateway drops the token, obtains a new one, and sends the request once
+more; it never retries with the refused token (§3.72.4.3). A token endpoint
+that refuses or does not answer within the per-node timeout leaves the
+members of that Manager `not-resolved` with the reason in `error`, and the
+query fails `424` under all-or-nothing; nothing is sent to the Manager
+without a token.
 
 ### `[pixm]` as the localizer
 
@@ -265,12 +321,18 @@ every domain, address and secret is an example.
          SDB_DB_AUDIT: "server=db;port=5432; database=auditdb; user id=santedb; password=…; pooling=true;"
          SDB_DB_MAIN_PROVIDER: Npgsql
          SDB_DB_AUDIT_PROVIDER: Npgsql
+         SDB_OPENID_INSECURE_CLIENT_AUTH: "true"
    ```
 
    Its FHIR base is `{origin}/fhir/` and its token endpoint
    `{origin}/auth/oauth2_token`.
 2. Create one security application per member's feed, and one for the
-   gateway, through SanteMPI's administration interface.
+   gateway, through SanteMPI's administration interface, each granted the
+   client-credentials policies `1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1` and
+   `1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1.0`, and set
+   `SDB_OPENID_INSECURE_CLIENT_AUTH: "true"` so an application can obtain a
+   token with no device credential. SanteMPI denies the client-credentials
+   grant otherwise.
 3. Register the identity domains: the patient namespace, open to every
    source, and one per member, with `url` set to the member's domain URI
    and the member's feed application as its assigning application, so that
@@ -291,8 +353,13 @@ every domain, address and secret is an example.
    "hospital-a" = "urn:oid:2.999.10"
    "clinic-b" = "urn:oid:2.999.20"
 
-   [pixm.manager.credentials]
-   bearer_token_file = "/run/secrets/mpi-token"
+   [pixm.manager.credentials.oauth2]
+   grant = "client_credentials"
+   token_endpoint = "https://mpi.example.org/auth/oauth2_token"
+   client_id = "FFD_PIX_CONSUMER"
+   client_auth = "client_secret_post"   # SanteMPI reads the client from the body
+   client_secret_file = "/run/secrets/mpi-consumer-secret"
+   scope = "*"
    ```
 
 Before you rely on it, weigh these:
@@ -302,11 +369,11 @@ Before you rely on it, weigh these:
   Mono as root. The 3.0 line is still an alpha. Put it through your own
   security review.
 - **The token.** SanteMPI issues bearer tokens by the client-credentials
-  grant, and they expire. The gateway sends a fixed token from
-  `bearer_token_file` and does not run that grant itself. Write a fresh
-  token to the file before the old one expires, then send `SIGHUP`: a reload
-  reads `_file` secrets again and applies `[pixm]`
-  ([Reloading the registry](registry.md#reloading-the-registry)).
+  grant, and they expire. The gateway runs that grant itself and refreshes
+  the token before it expires
+  ([A PIX Manager behind OAuth 2.0](#a-pix-manager-behind-oauth-20)).
+  SanteMPI reads the client id and secret from the request body, so
+  `client_auth` is `client_secret_post`.
 - **What was verified.** Resolution by `GET`, which is `method`'s default,
   and the feed over ITI-93. ITI-83 by `POST` and the ITI-104 feed were not
   verified against SanteMPI.

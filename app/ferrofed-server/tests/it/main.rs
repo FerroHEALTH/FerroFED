@@ -45,6 +45,8 @@ mod follow_up;
 mod healthcheck;
 mod http;
 mod hygiene;
+#[cfg(feature = "binding-ihe")]
+mod identity_grant;
 mod its_rest_areas;
 mod lifecycle;
 mod localization;

@@ -18,6 +18,8 @@ use std::error::Error;
 use ferrofed_server::binding::ihe::pmir::config::OnDrain;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::grant::GrantFault;
+use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::settings::Settings;
 
 use super::{TOKEN, text};
@@ -144,13 +146,28 @@ fn a_url_with_credentials_is_refused() -> TestResult {
 }
 
 #[test]
-fn an_oauth2_grant_is_refused() -> TestResult {
-    let (_dir, text) = development(
-        "\n[pmir.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"http://127.0.0.1:9/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n",
-    )?;
+fn a_client_credentials_grant_is_taken_and_token_exchange_is_refused() -> TestResult {
+    let grant = "\n[pmir.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"http://127.0.0.1:9/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n";
+    let (_dir, text) = development(grant)?;
+    let settings = resolve(&text)??;
+    assert!(
+        matches!(
+            settings
+                .pmir
+                .as_ref()
+                .and_then(|pmir| pmir.credentials.as_ref()),
+            Some(Scheme::ServiceGrant(_))
+        ),
+        "the client-credentials grant of IUA ITI-71 is taken"
+    );
+    let (_dir, text) = development(&grant.replace("client_credentials", "token_exchange"))?;
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
-        matches!(&error, ConfigError::GrantNotHere { section } if section == "pmir.credentials"),
+        matches!(
+            &error,
+            ConfigError::GrantFault(GrantFault::NodeOnly { key })
+                if key == "pmir.credentials.oauth2.grant"
+        ),
         "{error}"
     );
     Ok(())

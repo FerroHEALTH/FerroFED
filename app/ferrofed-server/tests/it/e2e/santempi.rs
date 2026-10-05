@@ -8,7 +8,9 @@
 //! Each member's own feed registers the patient at the Manager with the
 //! member's `ehr_id` in the member's `ehr_id` domain, by one PMIR ITI-93
 //! message (PMIR 1.6.0 §2:3.93), the way the identity page of the book
-//! tells an operator to keep a Manager current.
+//! tells an operator to keep a Manager current. The gateway asks the Manager
+//! with a token it obtains itself by the client-credentials grant (RFC 6749
+//! §4.4; IHE IUA ITI-71 §3.71.4.1.2.1).
 
 use std::error::Error;
 
@@ -41,16 +43,24 @@ async fn seeded_nodes() -> Result<containers::TwoNodes, Box<dyn Error>> {
     Ok(nodes)
 }
 
-/// The resolver configuration over SanteMPI at `url`, asked with the bearer
-/// token `token`, under the development profile, the only one that admits
-/// the harness's plain `http`.
-fn santempi_resolver(url: &str, token: &str) -> String {
+/// The resolver configuration over `mpi`, asked with a token the gateway
+/// obtains as the PIX Consumer by the client-credentials grant (RFC 6749
+/// §4.4; IUA ITI-71), under the development profile, the only one that
+/// admits the harness's plain `http`.
+fn santempi_resolver(mpi: &santempi::SanteMpi) -> String {
+    let consumer = santempi::consumer();
+    let base = mpi.fhir_base();
+    let origin = base.strip_suffix(santempi::FHIR_PATH).unwrap_or(&base);
+    // NOTE: santedb/santedb-restsvc@1a9fdb3 OAuthTokenRequestContext reads the client
+    // id and secret from the request body alone, so SanteMPI is asked by client_secret_post.
     format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = {}\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials]\nbearer_token = {}\n",
-        toml::Value::String(url.to_owned()),
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = {}\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"client_credentials\"\ntoken_endpoint = {}\nclient_id = {}\nclient_auth = \"client_secret_post\"\nclient_secret = {}\nscope = \"*\"\n",
+        toml::Value::String(base.clone()),
         DOMAIN_A.system(),
         DOMAIN_B.system(),
-        toml::Value::String(token.to_owned()),
+        toml::Value::String(format!("{origin}{}", santempi::TOKEN_PATH)),
+        toml::Value::String(consumer.name),
+        toml::Value::String(consumer.secret),
     )
 }
 
@@ -91,8 +101,7 @@ async fn a_patient_each_member_fed_to_santempi_is_answered_by_both() -> TestResu
     let (nodes, mpi) = (nodes?, mpi?);
     mpi.feed(DOMAIN_A, PATIENT, EHR_A).await?;
     mpi.feed(DOMAIN_B, PATIENT, EHR_B).await?;
-    let token = mpi.token(&santempi::consumer()).await?;
-    let resolver = santempi_resolver(&mpi.fhir_base(), &token);
+    let resolver = santempi_resolver(&mpi);
     let dir = tempfile::tempdir()?;
 
     let app = gateway_resolving(dir.path(), &nodes.a, &nodes.b, &resolver)?;

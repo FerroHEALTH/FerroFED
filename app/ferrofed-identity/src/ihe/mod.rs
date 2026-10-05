@@ -7,6 +7,7 @@
 //! No specification governs the grouping: our own design.
 
 pub mod audit;
+pub mod iua;
 pub mod mcsd;
 pub mod pdqm;
 pub mod pixm;

@@ -295,6 +295,16 @@ fn resolve_grant(
         Some(GrantKind::TokenExchange) => true,
         None => return Err(missing("grant")),
     };
+    if oauth2.client_secret.is_some() || oauth2.client_secret_file.is_some() {
+        return Err(grant::GrantFault::SecretForNode {
+            key: source_key(
+                section,
+                "client_secret",
+                oauth2.client_secret_file.is_some(),
+            ),
+        }
+        .into());
+    }
     let client_auth = grant::client_authentication(
         section,
         oauth2.client_auth.ok_or_else(|| missing("client_auth"))?,

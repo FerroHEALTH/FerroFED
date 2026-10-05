@@ -109,6 +109,14 @@ pub(crate) fn onward(
                 continue;
             }
             Scheme::OAuth2(grant) => grant,
+            // NOTE: no specification governs this: our own design; a node's section
+            // never resolves to an identity service's grant, and one that did fails closed.
+            #[cfg(feature = "binding-ihe")]
+            Scheme::ServiceGrant(_) => {
+                return Err(FederationError::Grant {
+                    section: format!("credentials.{endpoint}"),
+                });
+            }
             Scheme::Fapi2(grant) => {
                 if let Some(prover) = grant.dpop() {
                     dpop.insert(endpoint.clone(), Arc::clone(prover));
