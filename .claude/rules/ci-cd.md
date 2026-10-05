@@ -32,7 +32,13 @@ Thirteen workflows:
   `conclusion` job is the single required status check on `main`. The design
   is `docs/ci-cd.md`.
 - `.github/workflows/contribution-licence.yml`: `contribution-licence-guard`,
-  the pull-request licence checkbox, the second required check.
+  the pull-request licence checkbox, the second required check. It passes a
+  merge group without reading a body, because each pull request in it was
+  checked on its own.
+- `main` merges through GitHub's merge queue, so a branch is never updated by
+  hand. Both required checks also run on `merge_group`, and the queue tests
+  each pull request on top of the ones ahead of it. Auto-merge on a pull
+  request adds it to the queue.
 - `.github/workflows/scorecard.yml`: OpenSSF Scorecard, an independent score of
   the repository's security posture, published to the OpenSSF API and to code
   scanning.
