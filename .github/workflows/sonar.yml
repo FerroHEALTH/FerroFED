@@ -25,6 +25,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# A new push to a pull request supersedes its running analysis, so that run is
+# cancelled. A run on main keeps going: each analyzes a distinct commit whose
+# result the dashboard and code scanning keep.
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions: {}
 
 jobs:

@@ -100,7 +100,7 @@ git -C "$repo_root" rev-parse --verify --quiet origin/main > /dev/null || exit 0
 
 findings="$(bash "$guard" --root "$repo_root" origin/main "$head" 2>&1)" || {
   printf 'BLOCKED: a crates/* member changed its packaged content without moving its version.\n\n%s\n\n' "$findings" >&2
-  printf 'Bump that member in its own Cargo.toml, move any internal requirement in the root Cargo.toml with it, run cargo update -w, and commit the lock. The published version is immutable, so this cannot be repaired later.\n' >&2
+  printf 'Bump that member in its own Cargo.toml, move any internal requirement in the root Cargo.toml with it, run cargo update -w, refresh fuzz/Cargo.lock with cargo metadata --manifest-path fuzz/Cargo.toml --format-version 1 > /dev/null (check it with --locked), and commit both locks. The published version is immutable, so this cannot be repaired later.\n' >&2
   exit 2
 }
 

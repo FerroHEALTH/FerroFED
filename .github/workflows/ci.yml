@@ -543,7 +543,11 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - name: fuzz/Cargo.lock matches the workspace
-        run: cargo metadata --manifest-path fuzz/Cargo.toml --locked --format-version 1 > /dev/null
+        run: |
+          if ! cargo metadata --manifest-path fuzz/Cargo.toml --locked --format-version 1 > /dev/null; then
+            echo "::error file=fuzz/Cargo.lock::fuzz/Cargo.lock is stale. Refresh it with: cargo metadata --manifest-path fuzz/Cargo.toml --format-version 1 > /dev/null"
+            exit 1
+          fi
 
   clippy:
     name: clippy

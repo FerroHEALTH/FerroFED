@@ -3009,7 +3009,7 @@ checksum = "60993920e071b0c9b66f14e2b32740a4e27ffc82854dcd72035887f336a09a28"
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.0.18"
+version = "0.0.19"
 dependencies = [
  "base64 0.23.1",
  "ferrofed-testkit",
@@ -3146,7 +3146,7 @@ dependencies = [
 
 [[package]]
 name = "oauth-server-metadata"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "serde",
  "serde_json",

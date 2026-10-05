@@ -3,9 +3,9 @@
 [package]
 name = "oauth-server-metadata"
 description = "OAuth 2.0 Authorization Server Metadata (RFC 8414): the issuer identifier, the well-known metadata URL, and the checks a client holds a metadata document to"
-# The crate line starts above the 0.0.0 name reservation on crates.io (no
-# specification governs this: our own design).
-version = "0.0.4"
+# The name is not reserved on crates.io yet, and it must be claimed before the
+# `publish` switch is turned on (no specification governs this: our own design).
+version = "0.0.5"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
