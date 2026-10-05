@@ -259,7 +259,7 @@ tokens of `assets/brand/tokens.css`; motion respects
   wasm32-unknown-unknown -- -D warnings`; `cargo nextest run -p
   ferrofed-viewer`; `scripts/release/viewer-site.sh --release` completing
   when the change touches the build surface.
-- Browser journeys are planned with the screens (#276, #277): Rust only,
+- Browser journeys are planned in #608: Rust only,
   `thirtyfour` over WebDriver, failing on any browser console error, with
   explicit waits and never a `sleep`. Playwright is JavaScript and the
   no-JavaScript mandate covers the test suite.

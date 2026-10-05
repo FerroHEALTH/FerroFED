@@ -267,6 +267,39 @@ closes.
   ([#275](https://github.com/FerroHEALTH/FerroFED/issues/275),
   [#276](https://github.com/FerroHEALTH/FerroFED/issues/276),
   [The operator console](../operate/operator-console.md)).
+- Each regional binding one module behind one feature, `binding-ihe` and
+  `binding-nl`, wired through one `Binding` trait, and RFC 8414 in a crate
+  of its own, `oauth-server-metadata`
+  ([#489](https://github.com/FerroHEALTH/FerroFED/issues/489),
+  [#551](https://github.com/FerroHEALTH/FerroFED/issues/551)).
+- Mutual TLS to a node with RFC 8705 client authentication and
+  certificate-bound tokens, with a token endpoint alias accepted on a host
+  the operator names
+  ([#492](https://github.com/FerroHEALTH/FerroFED/issues/492),
+  [#560](https://github.com/FerroHEALTH/FerroFED/issues/560),
+  [Mutual TLS to a node](../operate/onward-credentials.md#mutual-tls-to-a-node-rfc-8705)).
+- An ES256 `[signing]` key beside ES384, a FAPI 2.0 client key rotated with
+  an overlap, the Nuts grant toward the NVI, and the gateway's did:web DID
+  document
+  ([#513](https://github.com/FerroHEALTH/FerroFED/issues/513),
+  [#514](https://github.com/FerroHEALTH/FerroFED/issues/514),
+  [#539](https://github.com/FerroHEALTH/FerroFED/issues/539),
+  [#503](https://github.com/FerroHEALTH/FerroFED/issues/503)).
+- A deployment setting that keeps a consent exclusion out of the answer, and
+  a pre-filter that says it did not ask, with a closed reason (N27a;
+  [#493](https://github.com/FerroHEALTH/FerroFED/issues/493),
+  [#496](https://github.com/FerroHEALTH/FerroFED/issues/496),
+  [#568](https://github.com/FerroHEALTH/FerroFED/issues/568),
+  [Consent exclusions](../operate/consent-exclusions.md)).
+- PIXm ITI-83 sent as `POST`, so the patient identifier stays out of the
+  request URL, and the verified caller named as the user agent of each IHE
+  audit record
+  ([#494](https://github.com/FerroHEALTH/FerroFED/issues/494),
+  [#500](https://github.com/FerroHEALTH/FerroFED/issues/500)).
+- FerroFED's intended purpose and its classification as an EHR system under
+  the EHDS Regulation
+  ([#520](https://github.com/FerroHEALTH/FerroFED/issues/520),
+  [Regulatory status](regulatory-status.md)).
 
 ## Planned
 

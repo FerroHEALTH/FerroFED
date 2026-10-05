@@ -81,6 +81,9 @@
 #   scripts/checks/comment-style.sh --files <file>...     # named files (hook)
 #   scripts/checks/comment-style.sh --self-test           # prove checks 9-10
 #
+# A leading `--root <dir>` checks the checkout at <dir>, such as a git
+# worktree, with this script; without it, the checkout this script sits in.
+#
 # Exit 0 = clean, 1 = violations (listed as file:line: message), 2 = usage.
 
 set -euo pipefail
@@ -88,7 +91,12 @@ set -euo pipefail
 NOTE_MAX=3
 RUN_MAX=8
 
-cd "$(dirname "$0")/../.."
+root="$(dirname "$0")/../.."
+if [[ "${1:-}" == "--root" && $# -ge 2 ]]; then
+  root="$2"
+  shift 2
+fi
+cd "$root"
 
 # The bare names (without `.md`) of the rule and memory files, joined by `|`,
 # plus CLAUDE: the alternation check 9 matches a bare file name against.

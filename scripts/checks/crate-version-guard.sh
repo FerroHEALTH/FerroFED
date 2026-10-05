@@ -12,8 +12,11 @@
 # sits at the 0.0.0 placeholder until its first real version, as the pin
 # matrix, docs/VERSIONS.md, records.
 #
-#   crate-version-guard.sh <base-ref> [head-ref|WORKTREE]
+#   crate-version-guard.sh [--root <dir>] <base-ref> [head-ref|WORKTREE]
 #   crate-version-guard.sh --self-test
+#
+# `--root <dir>` judges the checkout at <dir>, such as a git worktree, with
+# this script; without it, the checkout this script sits in.
 #
 # The change is what the head added since it forked from the base: the paths
 # come from the diff against the merge base of the two, so a base that moved
@@ -130,10 +133,15 @@ if [[ "${1:-}" = "--self-test" && $# -eq 1 ]]; then
   exit 0
 fi
 
-cd "$(dirname "$0")/../.."
+root="$(dirname "$0")/../.."
+if [[ "${1:-}" == "--root" && $# -ge 2 ]]; then
+  root="$2"
+  shift 2
+fi
+cd "$root"
 
 if [[ $# -lt 1 || $# -gt 2 || -z "${1:-}" ]]; then
-  echo "usage: crate-version-guard.sh <base-ref> [head-ref|WORKTREE] | --self-test" >&2
+  echo "usage: crate-version-guard.sh [--root <dir>] <base-ref> [head-ref|WORKTREE] | --self-test" >&2
   exit 2
 fi
 base="$1"

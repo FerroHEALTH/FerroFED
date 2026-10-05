@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The transport every outbound connection the configuration names must use,
-//! by what it carries. Four policies hold, and this module is the only place
-//! any of them is written:
+//! by what it carries.
+//!
+//! Four policies hold, each written once here and applied by its callers
+//! (`crate::onward` holds a node's client identity to
+//! [`client_certificate`]); the mutual-TLS grant rules that are no transport
+//! policy, one binding per token and the alias hosts, sit in `config::grant`:
 //!
 //! - **Protected payload** ([`protected_payload`]): a URL a credential or a
 //!   patient identifier is sent to must be `https` outside

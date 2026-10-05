@@ -15,7 +15,29 @@
 
 set -uo pipefail
 
-root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+# The session's own checkout, from the payload's `cwd`, so a session in a git
+# worktree sees that worktree's status and log rather than the main
+# checkout's that CLAUDE_PROJECT_DIR names. It is accepted only when it is a
+# worktree of this same repository (the same common git directory); anything
+# else falls back to CLAUDE_PROJECT_DIR. Nothing in it is executed.
+trusted="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+common_dir() {
+  local dir
+  dir="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  realpath "$dir"
+}
+cwd=""
+if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then
+  cwd="$(jq -r '.cwd // empty' 2>/dev/null)" || true
+fi
+[[ -n "$cwd" ]] || cwd="$PWD"
+root="$trusted"
+if candidate="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" &&
+  trusted_common="$(common_dir "$trusted")" &&
+  tree_common="$(common_dir "$candidate")" &&
+  [[ "$tree_common" == "$trusted_common" ]]; then
+  root="$candidate"
+fi
 cd "$root" || exit 0
 
 if ! command -v gh >/dev/null 2>&1; then

@@ -32,11 +32,13 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: 10
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `811180233029c3429120c9b79136ea78bad340596f0af7e0ff38cd858360ec27`
-- Read by: #88 (the access token request of `crates/nl-generic-functions`
-  feature `nuts-auth`: the authorization server metadata of RFC 8414 and
-  the DPoP proof of RFC 9449; the research comparing the B.4 and B.4a
-  tracks), #492 (the mutual-TLS client authentication and certificate-bound
-  tokens of RFC 8705 on the onward grants)
+- Read by: #551 (the authorization server metadata of RFC 8414 in
+  `crates/oauth-server-metadata`, which the Nuts grant of #88 and the
+  FAPI 2.0 grant of #497 hold their metadata to), #88 (the access token
+  request of `crates/nl-generic-functions` feature `nuts-auth`: the DPoP
+  proof of RFC 9449; the research comparing the B.4 and B.4a tracks),
+  #492 (the mutual-TLS client authentication and certificate-bound tokens
+  of RFC 8705 on the onward grants)
 
 ## What is taken
 

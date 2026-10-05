@@ -18,16 +18,20 @@ step of a milestone; a hand-back is unfinished work.
 
 **How to apply:** when a milestone empties, the next unit is the release:
 
-1. A version-bump pull request that moves the version everywhere it is named
-   (`Cargo.toml` once it exists, `CITATION.cff`, `docs/VERSIONS.md`, the
-   README, the site, the `CHANGELOG.md` section, written by
+1. A version-bump pull request that moves the version everywhere
+   `docs/release.md` § Before the tag names (the root `Cargo.toml`
+   `[workspace.package]` `version`, `CITATION.cff`, the product row of
+   `docs/VERSIONS.md`, the image tag defaults of `compose.yaml`,
+   `deploy/compose/compose.yaml` and `deploy/kubernetes/deployment.yaml`, the
+   landing page, and the `CHANGELOG.md` section, written by
    `scripts/release/changelog.sh --assemble X.Y.Z <date>` from the fragments
    under `changelog.d/`), checked by `scripts/checks/versions.sh`.
 2. Its merge, then `git tag -s vX.Y.Z -m vX.Y.Z` and `git push origin vX.Y.Z`
    from the session, then reading the release run and fixing what fails.
 3. A new milestone for stragglers if needed, and the emptied milestone closed
    by hand (`gh api -X PATCH repos/FerroHEALTH/FerroFED/milestones/<n> -f
-   state=closed`).
+   state=closed`), then the pull request that names the released version in
+   `CLAUDE.md`'s status (`docs/release.md` § After the tag).
 
 A change to the release lane is rehearsed with a `-rc.N` tag first, also
 pushed from here. Docs and PR bodies never say "the owner runs" for a tag.
