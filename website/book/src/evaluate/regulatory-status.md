@@ -146,6 +146,27 @@ for the essential requirements (Art 36(1)) are both due "By 26 March 2027",
 and Art 105 applies them from the same 2029 and 2031 dates by category.
 [#526](https://github.com/FerroHEALTH/FerroFED/issues/526) tracks them.
 
+Two implementing acts are adopted. Both bind the national contact points
+and the cross-border authentication chain, and neither sets the content of
+the harmonised components:
+
+| Act | Adopted under | Applies from |
+|---|---|---|
+| Commission Implementing Regulation (EU) 2026/2083 of 18 September 2026 on MyHealth@EU (OJ L, 21.9.2026) | Art 23(4) and (8) | 26 March 2027 |
+| Commission Implementing Regulation (EU) 2026/2099 of 21 September 2026 on the cross-border identification and authentication mechanism (OJ L, 22.9.2026) | Art 16(2) | 26 March 2027, and its Art 3(3) and 5(2) from 26 March 2029 |
+
+Implementing Regulation 2026/2083 has the national contact points exchange
+data "in accordance with the requirements catalogue" and "the technical
+specifications" the MyHealth@EU steering group approves (its Art 4(1)).
+Implementing Regulation 2026/2099 has the entity a Member State lists
+authenticate a health professional at eIDAS assurance level "substantial",
+and at level "high" from 26 March 2032 (its Art 6(3)). Both are vendored
+beside the Regulation, with Commission Recommendation (EU) 2019/243 on a
+European Electronic Health Record exchange format, which recital 26 names as
+the format's foundation. A weekly check reads EUR-Lex and the Commission's
+"Have your say" register for the acts still pending, and files an issue when
+one is adopted.
+
 ## A deployment a health institution runs for itself
 
 Art 26(2) reads: "EHR systems that are manufactured and used within health

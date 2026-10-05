@@ -2306,7 +2306,12 @@ own `system_id` into every EHR and version it creates, and mints its own
 `ehr_id`s, and a patient is known at one node, both or neither. A second
 product returns when one is found that admits the BASE namespace. A new image
 is a `PinnedImage` constant plus a `docs/VERSIONS.md` row the versions guard
-checks, and pin freshness watches the tags.
+checks. The weekly `pin-freshness.yml` reads every `PinnedImage` constant
+under `tools/ferrofed-testkit/src` and compares its tag with the newest
+stable tag of the same shape in the registry that serves it, over the OCI
+distribution API, and opens an issue when one is behind (#678); Dependabot's
+docker ecosystem reads Dockerfiles and `compose.yaml`, never a Rust
+constant.
 
 **One database server, a database per node** (decision A47, amending A44).
 A topology a test starts gets one FerroEHR PostgreSQL container, never one
@@ -2577,6 +2582,27 @@ on the market to the later dates. The exchange format (Art 15(1)) and the common
 specifications (Art 36(1)) are implementing acts due by 26 March 2027. The
 components, the national contact point and the conformity documentation are
 planned in v0.0.10 (#521 to #526); none is built yet.
+
+**The adopted implementing acts.** Two acts under the Regulation are
+adopted and vendored beside it in `docs/specs/eu-ehds/` (#652).
+Commission Implementing Regulation (EU) 2026/2083 of 18 September 2026 on
+MyHealth@EU (OJ L, 21.9.2026, adopted under Art 23(4) and (8)) applies from
+26 March 2027 (its Art 19); its Art 4(1) has national contact points
+exchange "in accordance with the requirements catalogue" and "the technical
+specifications" the steering group approves, which sit behind EU Login.
+Commission Implementing Regulation (EU) 2026/2099 of 21 September 2026 on
+the cross-border identification and authentication mechanism (OJ L,
+22.9.2026, adopted under Art 16(2)) applies from 26 March 2027, and its Art
+3(3) and 5(2) from 26 March 2029 (its Art 9); its Art 6(3) sets assurance
+level "substantial" for the health professional's authentication, and
+"high" from 26 March 2032. Both bind the contact point and the cross-border
+authentication chain, not an EHR system's harmonised components. Commission
+Recommendation (EU) 2019/243 on a European Electronic Health Record
+exchange format, which recital 26 names as the format's foundation, is
+vendored with them. The acts the components hang on (Art 15(1), Art 36(1),
+Art 40(4)), the data quality requirements of Art 13(4), the EU database
+data list of Art 49(4) and the declaration template of Art 39(6) are not
+adopted; a weekly lane watches EUR-Lex for them (#653).
 
 **A deployment by a health institution.** Art 26(2) counts an EHR system
 "manufactured and used within health institutions", and one "offered as a

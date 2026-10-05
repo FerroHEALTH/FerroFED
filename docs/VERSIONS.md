@@ -170,7 +170,7 @@ the pins are renewed.
 | IHE PIXm FHIR package, Swiss pin | package `ihe.iti.pixm` 3.0.4, pin-set digest `68b36cfa85cc04551e30b3628ce16218c1b980495c06bb835f34b0ccc706063a` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pixm-ch/PROVENANCE.md` |
 | IHE PDQm FHIR package, Swiss pin | package `ihe.iti.pdqm` 3.1.0, pin-set digest `ae4fb56c9eba92fcdf5637c86135618e37b60642c99013a8ca06ba747c9c4e73` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pdqm-ch/PROVENANCE.md` |
 | IHE IUA supplement, Swiss pin | `IHE/ITI.IUA` Revision 2.3, pin-set digest `2a5f13a87ccf307fecda8c48e77a61fd09c440089b2172be0edea912dea85439` | `scripts/vendor/ch.sh`, `docs/specs/ihe-iua-ch/PROVENANCE.md` |
-| EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, two eHealth Network guidelines and the Commission legal notice, pin-set digest `35a38a6ca7a1f6026bca1c412af9c8fbabd05a8efadb2111ab75b93aba0a0fd8` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
+| EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, Implementing Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243, two eHealth Network guidelines and the Commission legal notice, pin-set digest `7c2e0fa5d9ca2bdceadc96250f90cb72a1be2b0f3663e87cc24fd67d0d6ffdc1` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
 | MyHealth@EU NCPeH API and OpenNCP | package `myhealth.eu.fhir.ncp-api` 9.1.0, two guide pages and OpenNCP v10.1.0, pin-set digest `491dc60ee8b1bf8510758e0d4a62a8578c728f27c8b519a56ba40548f72c0c56` | `scripts/vendor/eu.sh`, `docs/specs/ehdsi/PROVENANCE.md` |
 | IHE ITI Technical Framework Volume 1 pages | ITI TF Revision 20.2 chapters 13, 18 and 27, pin-set digest `838b2f672e0bc34841d7fe297fd561c6f49c42fdd12b5a15119eb10a7234aeb7` | `scripts/vendor/ihe-iti-tf.sh`, `docs/specs/ihe-iti-tf/PROVENANCE.md` |
 | Belgian eHealth platform documents | ten cookbooks, two Swagger documents and the re-use conditions, pin-set digest `62377196eaf498ce49beca04948308cc78d02a718b5ecd1471514c1567b2c025` | `scripts/vendor/be.sh`, `docs/specs/be-ehealth/PROVENANCE.md` |
@@ -408,7 +408,9 @@ The end-to-end lane starts the same two node images through the testkit
 harness, behind the `FERROFED_E2E` gate (`docs/ci-cd.md`): each is a
 `PinnedImage` constant in `tools/ferrofed-testkit/src/containers.rs`, and the
 guard holds every constant equal to its row here, so the quickstart and the
-test suite always run the same nodes.
+test suite always run the same nodes. The weekly
+`scripts/checks/pin-freshness.sh` reports a newer stable tag of any
+`PinnedImage` constant.
 
 The node profile also runs against a second CDR product, EHRbase (#549), so a
 finding can be told apart as the product's or the check's. Its rows pin the

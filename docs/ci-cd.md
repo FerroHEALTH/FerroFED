@@ -31,7 +31,7 @@ has run on every change since the workspace landed.
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
 | `docs.yml` | push to `main`, pull request, dispatch | builds the site (the landing page at `/`, the book under `/docs/`) on every event and deploys it to GitHub Pages from `main` only |
-| `pin-freshness.yml` | Mondays, dispatch | the pins nothing else watches, compared with upstream; one issue when one is behind |
+| `pin-freshness.yml` | Mondays, dispatch | the pins nothing else watches, the testkit images included, compared with upstream, one issue when one is behind; and the acts adopted under Regulation (EU) 2025/327 with the Commission initiatives on it, one issue per newly adopted act |
 | `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish, with a tag whose tree has no root `Cargo.toml` refused at `plan` (`docs/release.md`) |
 | `release-build.yml` | called by `release.yml`, once per target | the SLSA Build Level 3 binary lane: `cargo auditable` build, CycloneDX and syft SBOMs, provenance and SBOM attestations, every asset attached to the draft (`docs/release.md` § The build legs) |
 | `release-image.yml` | called by `release.yml` | the container from the attested musl binaries, pushed to `ghcr.io/ferrohealth/ferrofed` by digest with provenance and SBOM attestations as OCI referrers, verified as a consumer would |
@@ -287,7 +287,8 @@ A pin nothing watches goes stale silently, so each class names its mechanism.
 | the zizmor, actionlint, shellcheck, hadolint and kubeconform versions in `ci.yml` | `pin-freshness.yml`, weekly |
 | the Kubernetes release and the `yannh/kubernetes-json-schema` commit kubeconform validates against | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` rows; a bump is a deliberate change to both |
 | the Federation Tier specification and reference implementation commits | `pin-freshness.yml`, weekly, against each repository's `main` |
-| the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows; a bump is a deliberate change to both |
+| the e2e node images, by tag and digest in the testkit's `PinnedImage` constants | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` image rows, and `pin-freshness.yml`, weekly, against the newest stable tag in each image's registry; a bump is a deliberate change to both |
+| the EU corpus, `docs/specs/eu-ehds/`, against the acts adopted under Regulation (EU) 2025/327 | `pin-freshness.yml`, weekly: `scripts/checks/ehds-acts.sh` reads EUR-Lex and the Have your say register |
 | the release and fuzz tool versions (`cargo-auditable`, `cargo-cyclonedx`, `syft`, `cargo-fuzz`) | `scripts/checks/versions.sh` against the `docs/VERSIONS.md` tool rows |
 | the fuzz seeds generated from the vendored corpora (`fuzz/seeds/*/gen-*`) | `scripts/fuzz/seeds.sh --check`, the first job of `fuzz.yml` |
 | `fuzz/Cargo.lock` against the workspace crates the fuzz targets depend on | the `fuzz lockfile` job of `ci.yml`, on every pull request (`cargo metadata --locked`) |
@@ -299,11 +300,12 @@ attack the cooldown buys detection time against; security updates are exempt
 from cooldown by design and still arrive at once.
 
 **Dependabot does not read an analyzer version** inside a `run:` block or an
-installer input, nor a commit a vendor script fetches. `pin-freshness.sh`
-reads those pins from `docs/VERSIONS.md`, compares each with the newest
-upstream release or commit, and opens one issue carrying the report when one
-is behind, adding nothing when an open issue already carries it. The issue
-goes through `scripts/gh/fields.sh new` as a Task at Low priority and Low
+installer input, nor a commit a vendor script fetches, nor an image a
+testkit constant names. `pin-freshness.sh` reads those pins from
+`docs/VERSIONS.md` and the testkit's `PinnedImage` constants, compares each
+with the newest upstream release, commit or stable registry tag, and opens
+one issue carrying the report when one is behind, adding nothing when an
+open issue already carries it. The issue goes through `scripts/gh/fields.sh new` as a Task at Low priority and Low
 effort; the job's default token may not read the organisation's issue types,
 and then the issue lands with its `ci` label alone and whoever picks it up
 sets the type, the priority and the effort. A pin it
@@ -313,6 +315,26 @@ version trains a maintainer to ignore red jobs. For the specification the
 issue is the trigger for a re-pin, which is never automatic: a new commit can
 change a requirement, and a re-pin re-checks every cited N and CP
 (`.claude/rules/spec-adherence.md`).
+
+A testkit image is compared with the newest stable tag of its own shape: a
+dotted version with the pinned suffix verbatim, so a pre-release, a variant
+such as `-alpine` and a floating tag such as `4.3` never count. Each image is
+read from its registry's tag list over the OCI distribution API with an
+anonymous pull token. An image whose consumer needs its major line, such as
+the Java 21 runtime of the reference implementation, is compared within that
+line, and the newest tag of any line is printed beside it. Both
+`--self-test` modes run in the `versions` job of `ci.yml`, offline.
+
+The second job, `EHDS acts`, runs `scripts/checks/ehds-acts.sh`. It reads
+every act whose legal basis is Regulation (EU) 2025/327 from the
+Publications Office's Cellar, the repository EUR-Lex serves, with the
+article of the Regulation each one implements, and the Commission's Have
+your say initiatives on the Regulation with the stage of the three whose
+act the harmonised components wait for (Art 15(1), Art 36(1), Art 40(4)).
+An act neither `scripts/vendor/eu.sh` pins nor the script records as not
+applicable opens one issue for its CELEX number, and an initiative that is
+new or has moved opens one issue for the register. A source that does not
+answer fails the job.
 
 ## The analyzers are advisory
 

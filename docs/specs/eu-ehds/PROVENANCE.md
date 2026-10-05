@@ -1,29 +1,35 @@
 <!-- This file describes vendored third-party material; the bytes beside it
      keep their upstream licence, not the licence of this repository. -->
 
-# Provenance: the European Health Data Space Regulation and eHealth Network guidelines
+# Provenance: the European Health Data Space Regulation, its adopted implementing acts and eHealth Network guidelines
 
 Vendored by `scripts/vendor/eu.sh`, each artefact pinned by its
 URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `35a38a6ca7a1f6026bca1c412af9c8fbabd05a8efadb2111ab75b93aba0a0fd8`
-- Fetched: 2026-10-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 4 committed, 0 cache only, 1 needing
+  the pins): `7c2e0fa5d9ca2bdceadc96250f90cb72a1be2b0f3663e87cc24fd67d0d6ffdc1`
+- Fetched: 2026-10-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 7 committed, 0 cache only, 1 needing
   manual retrieval
-- Files in this directory: 4 besides this one, each verbatim as the
+- Files in this directory: 7 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `b4cb3f491f848c2e7361b0e627420904221c8e8f7805f035eece53fdfc0c684a`
+  `PROVENANCE.md` excluded): `3f5394412ac55241582bd27aa0ba7012576b05deb6ac82f305f4f547b0940712`
 - Read by: #488 (the country research into identity resolution,
-  localization, consent, addressing and authentication to nodes)
+  localization, consent, addressing and authentication to nodes) and
+  #519 (EHDS readiness)
 
 Regulation (EU) 2025/327 on the European Health Data Space (the research
-cites Articles 8 to 12, 14 to 16, 23 and 105), the eHealth Network
-guidelines on the Patient Summary and on ePrescription and eDispensation,
-and the Commission legal notice that licenses them. The Regulation is an
-official EU legal act; the reuse of Commission documents is governed by
+cites Articles 8 to 12, 14 to 16, 23 and 105), the two implementing acts
+adopted under it that reach the cross-border exchange (Commission
+Implementing Regulation (EU) 2026/2083 on MyHealth@EU and (EU) 2026/2099 on
+cross-border identification and authentication), Commission Recommendation
+(EU) 2019/243 on a European Electronic Health Record exchange format, the
+eHealth Network guidelines on the Patient Summary and on ePrescription and
+eDispensation, and the Commission legal notice that licenses them. The
+Regulation, the implementing acts and the Recommendation are official EU
+legal acts published in the Official Journal; their reuse is governed by
 Commission Decision 2011/833/EU of 12 December 2011 on the reuse of
 Commission documents, which the legal notice names. The eHDSI
 interoperability specifications are on a wiki behind EU Login and are
@@ -38,6 +44,30 @@ recorded for manual retrieval.
 - sha256: `bf331ac48264118fb0461f793123a2726da88195a11d4bccb2075fd6326909da`
 - Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
 - Note: Pinned at the Publications Office (Cellar) manifestation, the XHTML EUR-Lex serves at https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=OJ:L_202500327. The EUR-Lex copy adds a monitoring script tag with per-request ids, so its sha256 differs on every fetch.
+
+### `impl-reg-eu-2026-2083-en.xhtml` (committed)
+
+- Source: <https://publications.europa.eu/resource/cellar/5a79d49d-b554-11f1-81de-01aa75ed71a1.0006.03/DOC_1>
+- Version: OJ L, 2026/2083, 21.9.2026 (CELEX 32026R2083), English
+- sha256: `51340e65db3e85bc892d723a630663172ce89001f376dea0b870d74ab2231c58`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission Implementing Regulation (EU) 2026/2083 of 18 September 2026 on MyHealth@EU, adopted under Article 23(4) and (8) of Regulation (EU) 2025/327; applies from 26 March 2027 (its Article 19). Pinned at the Cellar manifestation the CELEX resource resolves to.
+
+### `impl-reg-eu-2026-2099-en.xhtml` (committed)
+
+- Source: <https://publications.europa.eu/resource/cellar/dff777d4-b61d-11f1-81de-01aa75ed71a1.0006.03/DOC_1>
+- Version: OJ L, 2026/2099, 22.9.2026 (CELEX 32026R2099), English
+- sha256: `6389d047750ed8fca879d53ebeda22af444d1f1619ed3bf6f13560097aa887d0`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission Implementing Regulation (EU) 2026/2099 of 21 September 2026 on the cross-border identification and authentication mechanism, adopted under Article 16(2) of Regulation (EU) 2025/327; applies from 26 March 2027, its Article 3(3) and Article 5(2) from 26 March 2029 (its Article 9). Pinned at the Cellar manifestation the CELEX resource resolves to.
+
+### `rec-eu-2019-243-en.xhtml` (committed)
+
+- Source: <https://publications.europa.eu/resource/cellar/cf529e8a-2dcb-11e9-8d04-01aa75ed71a1.0006.03/DOC_1>
+- Version: OJ L 39, 11.2.2019, p. 18 (CELEX 32019H0243), English
+- sha256: `d6c8d817271b376e836744d81c2ddfe5d40d8a9f5f0b24eb100c1bc507183480`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission Recommendation (EU) 2019/243 of 6 February 2019 on a European Electronic Health Record exchange format, which recital 26 of Regulation (EU) 2025/327 names as the foundation of the exchange format. Pinned at the Cellar manifestation the CELEX resource resolves to.
 
 ### `ehn-guidelines-patientsummary.pdf` (committed)
 
@@ -56,8 +86,8 @@ recorded for manual retrieval.
 ### `ec-legal-notice.html` (committed)
 
 - Source: <https://commission.europa.eu/legal-notice_en>
-- Version: as served on 2026-10-04
-- sha256: `9a6071ebac9918891f1daf8968ce86d6c13120db8a6d9e6a580789a1f96f8a48`
+- Version: as served on 2026-10-05
+- sha256: `fd6687f313b4b016675c5d74595e3bc343f45a34b430a7ff13a35e2b5cf03a75`
 - Licence: CC BY 4.0: the page is itself content of a Commission website under the licence it states
 - Note: A live page kept as the licence evidence for the two guidelines; its bytes change with every edit, so a re-run fails until the pin is renewed.
 

@@ -251,7 +251,9 @@ jobs:
 
   # The version-drift guard. It compares every present config file against
   # docs/VERSIONS.md and skips loudly for the files that have not landed yet,
-  # so it is useful now and grows teeth as files appear.
+  # so it is useful now and grows teeth as files appear. The self-tests of
+  # the two weekly reads of pin-freshness.yml run here too, offline, so a
+  # broken parser fails a pull request rather than reading as nothing new.
   versions:
     name: versions
     runs-on: ubuntu-latest
@@ -265,6 +267,8 @@ jobs:
       - run: |
           bash scripts/checks/versions.sh --self-test
           bash scripts/checks/versions.sh
+          bash scripts/checks/pin-freshness.sh --self-test
+          bash scripts/checks/ehds-acts.sh --self-test
 
   # The book theme favicons are copies of the brand mark, so the mark exists
   # twice and only this guard keeps the two byte-identical.
