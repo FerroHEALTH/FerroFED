@@ -140,7 +140,7 @@ sources, which subsumes cargo-audit); MSRV via `cargo hack check
 --rust-version`; every feature of each published crate alone via `cargo hack
 clippy --locked --each-feature --all-targets --package openehr-federation
 --package ihe-iti --package nl-generic-functions -- -D warnings`, per package
-and never the workspace all-features union; the `viewer` job (`cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/viewer-site.sh --release`; `leptos-ui.md`); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
+and never the workspace all-features union; the `viewer` job (`cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/viewer-site.sh --release` and the bundle budget, `scripts/checks/viewer-bundle.sh`; `leptos-ui.md` §12); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
 crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 `dependency-review-action` on pull requests; the `e2e (containers)` job,
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the

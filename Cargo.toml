@@ -216,6 +216,12 @@ leptos_meta = "0.8.7"
 leptos_router = "0.8.16"
 wasm-bindgen = "0.2.129"
 console_error_panic_hook = "0.1.7"
+# The console's icons: the Icon component and the Lucide pack alone, never the
+# icondata umbrella, which depends on every pack. A pack icon no view names is
+# never linked into the bundle. Verified against crates.io on 2026-10-05.
+leptos_icons = "0.7.1"
+icondata_lu = "0.1.0"
+icondata_core = "0.1.0"
 cookie = { version = "0.18.2", default-features = false }
 
 # The reliability bar (no specification governs it: our own design). Groups sit
@@ -331,9 +337,12 @@ debug = "line-tables-only"
 
 # The operator console's WebAssembly bundle (app/ferrofed-viewer), built by
 # cargo-leptos: optimized for size, since the browser downloads it (the Cargo
-# reference, profiles; no specification governs this: our own design).
+# reference, profiles; no specification governs this: our own design). It
+# keeps the inherited overflow checks and drops the line tables, which
+# wasm-bindgen strips from the bundle anyway, so they cost build time alone.
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"
 lto = true
 codegen-units = 1
+debug = false

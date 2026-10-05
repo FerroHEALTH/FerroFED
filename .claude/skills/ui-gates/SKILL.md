@@ -52,6 +52,11 @@ cargo nextest run --locked -p ferrofed-engine -E 'test(/architecture/)'
 #    (Cargo.toml, the [package.metadata.leptos] table, style/, the profile,
 #    the script); otherwise report it skipped with the reason.
 bash scripts/release/viewer-site.sh --release
+
+# 5. The bundle budget, over the bundle stage 4 wrote: the raw and compressed
+#    sizes, and a failure when the brotli-compressed WebAssembly is over the
+#    budget of .claude/rules/leptos-ui.md §12. Report the sizes it prints.
+bash scripts/checks/viewer-bundle.sh
 ```
 
 Stage 4 locally: the script freezes `Cargo.lock` and fails loud when it does
