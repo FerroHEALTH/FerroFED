@@ -65,8 +65,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   expresses; it records no consent decision, so the consent check (CP-19)
   reports not observable with that reason. The conformance report shows the
   findings of each product side by side under the node class, then each
-  product's evidence. No specification governs which products the harness
-  runs: our own design.
+  product's evidence. EHRbase passes the error pass-through and subjectless
+  EHR checks. It refuses an `EHR_STATUS` subject in a namespace such as
+  `urn:oid:2.999.1.1`, which the BASE `OBJECT_REF.namespace` pattern admits.
+  The admission check therefore creates no test EHR there, and its integrity
+  conditions fail on that cause. Its EHR read omits `ehr_access`, which the RM
+  `EHR` class makes mandatory. As at FerroEHR, both `ehr_id`-scoped query
+  forms release the EHR whose read the node refuses. The invocation finding
+  names why an EHR body does not decode. No specification governs which
+  products the harness runs: our own design.
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at
