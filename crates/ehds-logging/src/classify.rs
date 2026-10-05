@@ -7,12 +7,14 @@
 //!
 //! The data an access reaches are its root objects, each named by its
 //! template id and its archetype id: the template key wins, then the
-//! archetype key. Where the access carries no root object (a query of leaf
-//! values or of an aggregate, or one that matched no row), the ids the
-//! request constrains its data to stand in for it, its templates first. A
-//! category is a set, since one access reaches data of several. An access the
-//! map cannot classify is marked [`Classification::unclassified`] with its
-//! ids as evidence, and is never refused for it. No specification governs the
+//! archetype key. Where the access delivered a value that is no root object
+//! (a leaf value or an aggregate), or nothing at all, the ids the request
+//! constrains its data to classify it too, its templates first. A category
+//! is a set, since one access reaches data of several, and `none` never
+//! removes one. A key matches only exactly: an id that differs by case,
+//! space or a specialisation is unmapped. Whatever is uncertain marks the
+//! access [`Classification::unclassified`] with its ids as evidence, and the
+//! access is never refused for it. No specification governs the
 //! classification: our own design.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -78,8 +80,22 @@ pub struct Evidence {
     objects: Vec<RootObject>,
     queried_templates: BTreeSet<String>,
     queried_archetypes: BTreeSet<String>,
+    every_root_bound: bool,
+    unrooted: bool,
     no_category: bool,
     unreadable: Option<String>,
+}
+
+/// The ids a request constrains its data to, read from its syntax tree.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Queried {
+    /// The template ids.
+    pub templates: BTreeSet<String>,
+    /// The archetype ids.
+    pub archetypes: BTreeSet<String>,
+    /// Whether every class the request reads data from is bound to one of
+    /// them; a request the reader could not bind is never of no category.
+    pub every_root_bound: bool,
 }
 
 impl Evidence {
@@ -115,12 +131,21 @@ impl Evidence {
         }
     }
 
-    /// This evidence, the request constraining its data to `templates` and
-    /// `archetypes`.
+    /// This evidence, the request constraining its data as `queried` says.
     #[must_use]
-    pub fn queried(mut self, templates: BTreeSet<String>, archetypes: BTreeSet<String>) -> Self {
-        self.queried_templates = templates;
-        self.queried_archetypes = archetypes;
+    pub fn queried(mut self, queried: Queried) -> Self {
+        self.queried_templates = queried.templates;
+        self.queried_archetypes = queried.archetypes;
+        self.every_root_bound = queried.every_root_bound;
+        self
+    }
+
+    /// This evidence, the access having delivered a value that is no root
+    /// object, such as a leaf value or an aggregate, whose data the request's
+    /// constraints then classify beside the root objects.
+    #[must_use]
+    pub fn with_unrooted(mut self) -> Self {
+        self.unrooted = true;
         self
     }
 
@@ -138,6 +163,8 @@ impl fmt::Debug for Evidence {
             .field("objects", &self.objects.len())
             .field("queried_templates", &self.queried_templates.len())
             .field("queried_archetypes", &self.queried_archetypes.len())
+            .field("every_root_bound", &self.every_root_bound)
+            .field("unrooted", &self.unrooted)
             .field("no_category", &self.no_category)
             .field("unreadable", &self.unreadable.is_some())
             .finish()
@@ -152,6 +179,9 @@ pub enum Unclassified {
     Unmapped,
     /// The access carries no root object and the request names no id.
     NamedNothing,
+    /// The request reads a class bound to no id, so what it read is not
+    /// known.
+    Unbound,
     /// The data could not be read for their ids, for the reason given.
     Unreadable(String),
 }
@@ -163,6 +193,7 @@ impl Unclassified {
         match self {
             Self::Unmapped => "unmapped",
             Self::NamedNothing => "named-nothing",
+            Self::Unbound => "unbound",
             Self::Unreadable(why) => why,
         }
     }
@@ -266,6 +297,12 @@ impl Classification {
 
 impl CategoryMap {
     /// The categories of an access that showed `evidence`.
+    ///
+    /// The categories of every root object and every queried id are joined,
+    /// and `none` never removes one. The access is of no category only when
+    /// its resource kind holds none, or when the map declares `none` by an
+    /// exact key for everything it reached and nothing is uncertain; it is
+    /// unclassified otherwise.
     #[must_use]
     pub fn classify(&self, evidence: &Evidence) -> Classification {
         let mut classified = Classification {
@@ -277,34 +314,42 @@ impl CategoryMap {
             return classified;
         }
         if let Some(why) = &evidence.unreadable {
-            classified.unclassified = Some(Unclassified::Unreadable(why.clone()));
+            classified.unclassify(Unclassified::Unreadable(why.clone()));
         }
-        if let (Some(basis), false) = (evidence.reached, evidence.objects.is_empty()) {
+        if let Some(basis) = evidence.reached {
             for object in &evidence.objects {
                 self.object(object, basis, &mut classified);
             }
-            return classified;
         }
-        self.queried(evidence, &mut classified);
+        if evidence.objects.is_empty() || evidence.unrooted {
+            self.queried(evidence, &mut classified);
+        }
         classified
     }
 
-    /// Classifies one root object into `classified`: its template key,
-    /// else its archetype key, else it is unmapped.
+    /// Classifies one root object into `classified`: its template key, else
+    /// its archetype key, else it is unmapped. An archetype's `none` does not
+    /// stand for a template the map does not hold.
     fn object(&self, object: &RootObject, basis: Basis, classified: &mut Classification) {
         classified.templates.extend(object.template_id.clone());
         classified.archetypes.extend(object.archetype_id.clone());
         classified.versions.extend(object.version_uid.clone());
-        let mapping = object
+        let template = object
             .template_id
             .as_deref()
-            .and_then(|template| self.template(template))
-            .or_else(|| {
-                object
-                    .archetype_id
-                    .as_deref()
-                    .and_then(|archetype| self.archetype(archetype))
-            });
+            .map(|template| self.template(template));
+        let archetype = object
+            .archetype_id
+            .as_deref()
+            .and_then(|archetype| self.archetype(archetype));
+        let mapping = match (template, archetype) {
+            (Some(Some(mapping)), _) | (None | Some(None), Some(mapping))
+                if !matches!((template, mapping), (Some(None), Mapping::NoCategory)) =>
+            {
+                Some(mapping)
+            }
+            _ => None,
+        };
         if let Some(mapping) = mapping {
             classified.add(mapping, basis);
             return;
@@ -316,50 +361,52 @@ impl CategoryMap {
                 .chain(&object.archetype_id)
                 .cloned(),
         );
-        if classified.unclassified.is_none() {
-            classified.unclassified = Some(Unclassified::Unmapped);
-        }
+        classified.unclassify(Unclassified::Unmapped);
     }
 
     /// Classifies the ids the request constrains its data to: its template
-    /// keys, else its archetype keys; unclassified when none maps.
+    /// ids when it names any, else its archetype ids. Every one must map, and
+    /// every class the request reads must be bound, or the access is
+    /// unclassified beside what did map.
     fn queried(&self, evidence: &Evidence, classified: &mut Classification) {
-        classified.templates.clone_from(&evidence.queried_templates);
+        classified
+            .templates
+            .extend(evidence.queried_templates.iter().cloned());
         classified
             .archetypes
-            .clone_from(&evidence.queried_archetypes);
-        let mut mapped = false;
-        for (ids, table) in [
-            (&evidence.queried_templates, Table::Templates),
-            (&evidence.queried_archetypes, Table::Archetypes),
-        ] {
-            if mapped {
-                break;
-            }
-            for id in ids {
-                let found = match table {
-                    Table::Templates => self.template(id),
-                    Table::Archetypes => self.archetype(id),
-                };
-                match found {
-                    Some(mapping) => {
-                        classified.add(mapping, Basis::Queried);
-                        mapped = true;
-                    }
-                    None => {
-                        classified.unmapped.insert(id.clone());
-                    }
-                }
+            .extend(evidence.queried_archetypes.iter().cloned());
+        let (ids, table) = if evidence.queried_templates.is_empty() {
+            (&evidence.queried_archetypes, Table::Archetypes)
+        } else {
+            (&evidence.queried_templates, Table::Templates)
+        };
+        if ids.is_empty() {
+            classified.unclassify(Unclassified::NamedNothing);
+            return;
+        }
+        for id in ids {
+            let found = match table {
+                Table::Templates => self.template(id),
+                Table::Archetypes => self.archetype(id),
+            };
+            if let Some(mapping) = found {
+                classified.add(mapping, Basis::Queried);
+            } else {
+                classified.unmapped.insert(id.clone());
+                classified.unclassify(Unclassified::Unmapped);
             }
         }
-        if !mapped && classified.unclassified.is_none() {
-            let named =
-                !evidence.queried_templates.is_empty() || !evidence.queried_archetypes.is_empty();
-            classified.unclassified = Some(if named {
-                Unclassified::Unmapped
-            } else {
-                Unclassified::NamedNothing
-            });
+        if !evidence.every_root_bound {
+            classified.unclassify(Unclassified::Unbound);
+        }
+    }
+}
+
+impl Classification {
+    /// Marks the access unclassified for `why`, unless a reason is held.
+    fn unclassify(&mut self, why: Unclassified) {
+        if self.unclassified.is_none() {
+            self.unclassified = Some(why);
         }
     }
 }

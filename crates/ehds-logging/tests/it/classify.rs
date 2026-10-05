@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ehds_logging::category::Category;
-use ehds_logging::classify::{Basis, Evidence, RootObject, Unclassified};
+use ehds_logging::classify::{Basis, Evidence, Queried, RootObject, Unclassified};
 
 use super::support::{
     ADMIN, DISCHARGE, LAB_ARCHETYPE, LAB_REPORT, SUMMARY_ARCHETYPE, UNMAPPED, map,
@@ -128,20 +128,33 @@ fn an_access_spanning_categories_records_them_all() {
     );
 }
 
+fn queried(templates: &[&str], archetypes: &[&str]) -> Queried {
+    Queried {
+        templates: set(templates),
+        archetypes: set(archetypes),
+        every_root_bound: true,
+    }
+}
+
 #[test]
 fn a_query_with_no_row_is_classified_by_what_it_queried() {
-    let classified = map().classify(&Evidence::reached(Basis::Returned, Vec::new()).queried(
-        set(&[]),
-        set(&[LAB_ARCHETYPE, "openEHR-EHR-COMPOSITION.unknown.v1"]),
-    ));
+    let classified = map().classify(
+        &Evidence::reached(Basis::Returned, Vec::new()).queried(queried(&[], &[LAB_ARCHETYPE])),
+    );
     assert_eq!(
         classified.categories().get(&Category::MedicalTestResult),
         Some(&BTreeSet::from([Basis::Queried]))
     );
-    assert!(
-        classified.unclassified().is_none(),
-        "one mapped id classifies the query"
-    );
+    assert!(classified.unclassified().is_none());
+}
+
+#[test]
+fn a_query_naming_an_unmapped_id_beside_a_mapped_one_is_unclassified() {
+    let classified = map().classify(&Evidence::reached(Basis::Returned, Vec::new()).queried(
+        queried(&[], &[LAB_ARCHETYPE, "openEHR-EHR-COMPOSITION.unknown.v1"]),
+    ));
+    assert_eq!(categories(classified.categories()), ["medical-test-result"]);
+    assert_eq!(classified.unclassified(), Some(&Unclassified::Unmapped));
     assert_eq!(
         classified.unmapped(),
         &set(&["openEHR-EHR-COMPOSITION.unknown.v1"])
@@ -152,7 +165,7 @@ fn a_query_with_no_row_is_classified_by_what_it_queried() {
 fn a_queried_template_wins_over_a_queried_archetype() {
     let classified = map().classify(
         &Evidence::reached(Basis::Returned, Vec::new())
-            .queried(set(&[DISCHARGE]), set(&[LAB_ARCHETYPE])),
+            .queried(queried(&[DISCHARGE], &[LAB_ARCHETYPE])),
     );
     assert_eq!(categories(classified.categories()), ["discharge-report"]);
 }
@@ -160,13 +173,113 @@ fn a_queried_template_wins_over_a_queried_archetype() {
 #[test]
 fn a_query_naming_nothing_mapped_or_nothing_at_all_is_unclassified() {
     let unmapped = map().classify(
-        &Evidence::reached(Basis::Returned, Vec::new()).queried(set(&[UNMAPPED]), set(&[])),
+        &Evidence::reached(Basis::Returned, Vec::new()).queried(queried(&[UNMAPPED], &[])),
     );
     assert_eq!(unmapped.unclassified(), Some(&Unclassified::Unmapped));
     assert_eq!(unmapped.unmapped(), &set(&[UNMAPPED]));
     let nothing = map().classify(&Evidence::reached(Basis::Returned, Vec::new()));
     assert_eq!(nothing.unclassified(), Some(&Unclassified::NamedNothing));
     assert!(nothing.categories().is_empty());
+}
+
+#[test]
+fn rows_with_no_archetype_details_are_never_of_no_category() {
+    let leaves = map().classify(
+        &Evidence::reached(Basis::Returned, Vec::new())
+            .with_unrooted()
+            .queried(Queried::default()),
+    );
+    assert!(!leaves.is_no_category(), "{leaves:?}");
+    assert!(leaves.unclassified().is_some());
+    let bare = map().classify(&Evidence::reached(
+        Basis::Returned,
+        vec![RootObject::default()],
+    ));
+    assert!(!bare.is_no_category(), "{bare:?}");
+    assert_eq!(bare.unclassified(), Some(&Unclassified::Unmapped));
+}
+
+#[test]
+fn an_id_differing_by_case_space_or_specialisation_is_unmapped_never_none() {
+    for template in [
+        "example admin note.v1",
+        " Example Admin Note.v1",
+        "Example Admin Note.v1 ",
+        "Example Admin Note.v2",
+    ] {
+        let classified = map().classify(&Evidence::reached(
+            Basis::Returned,
+            vec![object(Some(template), None)],
+        ));
+        assert!(!classified.is_no_category(), "{template:?}");
+        assert_eq!(
+            classified.unclassified(),
+            Some(&Unclassified::Unmapped),
+            "{template:?}"
+        );
+    }
+    let specialised = map().classify(&Evidence::reached(
+        Basis::Returned,
+        vec![object(
+            None,
+            Some("openEHR-EHR-OBSERVATION.laboratory_test_result-special.v1"),
+        )],
+    ));
+    assert_eq!(specialised.unclassified(), Some(&Unclassified::Unmapped));
+}
+
+#[test]
+fn none_never_erases_a_category_in_a_mixed_result() {
+    let classified = map().classify(&Evidence::reached(
+        Basis::Returned,
+        vec![object(Some(ADMIN), None), object(Some(LAB_REPORT), None)],
+    ));
+    assert_eq!(categories(classified.categories()), ["medical-test-result"]);
+    assert!(!classified.is_no_category());
+}
+
+#[test]
+fn an_unmapped_template_does_not_take_its_archetypes_none() {
+    let none = BTreeMap::from([(
+        "openEHR-EHR-COMPOSITION.admin.v1".to_owned(),
+        ehds_logging::map::Declared::Word("none".to_owned()),
+    )]);
+    let map = ehds_logging::map::CategoryMap::declare(&[], &BTreeMap::new(), &none).expect("a map");
+    let classified = map.classify(&Evidence::reached(
+        Basis::Returned,
+        vec![object(
+            Some(UNMAPPED),
+            Some("openEHR-EHR-COMPOSITION.admin.v1"),
+        )],
+    ));
+    assert!(!classified.is_no_category());
+    assert_eq!(classified.unclassified(), Some(&Unclassified::Unmapped));
+}
+
+#[test]
+fn a_root_object_beside_a_leaf_of_an_unbound_class_is_unclassified() {
+    let classified = map().classify(
+        &Evidence::reached(Basis::Returned, vec![object(Some(ADMIN), None)])
+            .with_unrooted()
+            .queried(Queried {
+                every_root_bound: false,
+                ..queried(&[], &[])
+            }),
+    );
+    assert!(!classified.is_no_category(), "{classified:?}");
+    assert!(classified.unclassified().is_some());
+}
+
+#[test]
+fn a_query_whose_classes_are_not_all_bound_is_unclassified_with_what_mapped() {
+    let classified = map().classify(&Evidence::reached(Basis::Returned, Vec::new()).queried(
+        Queried {
+            every_root_bound: false,
+            ..queried(&[], &[LAB_ARCHETYPE])
+        },
+    ));
+    assert_eq!(categories(classified.categories()), ["medical-test-result"]);
+    assert_eq!(classified.unclassified(), Some(&Unclassified::Unbound));
 }
 
 #[test]

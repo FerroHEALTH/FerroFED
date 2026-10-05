@@ -105,6 +105,83 @@ fn a_bound_parameter_is_read_as_its_value() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn an_archetype_id_in_a_comment_names_nothing() {
+    let found = constrained(
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         -- COMPOSITION c[openEHR-EHR-COMPOSITION.admin.v1]\n",
+    );
+    assert!(found.is_empty(), "{found:?}");
+    assert!(
+        !found.every_root_bound(),
+        "the composition is bound by nothing"
+    );
+}
+
+#[test]
+fn an_archetype_id_in_a_string_compared_with_another_path_names_nothing() {
+    let found = constrained(
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         WHERE c/name/value = 'openEHR-EHR-COMPOSITION.admin.v1'",
+    );
+    assert!(found.is_empty(), "{found:?}");
+    assert!(!found.every_root_bound());
+}
+
+#[test]
+fn a_negated_predicate_neither_names_nor_binds() {
+    for aql in [
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         WHERE NOT c/archetype_node_id = 'openEHR-EHR-COMPOSITION.admin.v1'",
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         WHERE c/archetype_node_id != 'openEHR-EHR-COMPOSITION.admin.v1'",
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         NOT CONTAINS COMPOSITION d[openEHR-EHR-COMPOSITION.admin.v1]",
+    ] {
+        let found = constrained(aql);
+        assert!(found.is_empty(), "{aql}: {found:?}");
+        assert!(!found.every_root_bound(), "{aql}");
+    }
+}
+
+#[test]
+fn every_class_bound_by_its_predicate_its_condition_or_its_container_is_bound() {
+    for aql in [
+        "SELECT o/data FROM EHR e CONTAINS COMPOSITION c[openEHR-EHR-COMPOSITION.report.v1] \
+         CONTAINS OBSERVATION o",
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         WHERE c/archetype_details/template_id/value = 'Example Report.v1'",
+        "SELECT c FROM EHR e CONTAINS VERSION v CONTAINS \
+         COMPOSITION c[openEHR-EHR-COMPOSITION.report.v1]",
+    ] {
+        assert!(constrained(aql).every_root_bound(), "{aql}");
+    }
+}
+
+#[test]
+fn a_class_beside_or_under_an_unbound_one_leaves_the_query_unbound() {
+    for aql in [
+        "SELECT c, d FROM EHR e CONTAINS (COMPOSITION c[openEHR-EHR-COMPOSITION.report.v1] \
+         AND COMPOSITION d)",
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         CONTAINS OBSERVATION o[openEHR-EHR-OBSERVATION.lab_test.v1]",
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         WHERE c/archetype_node_id = 'openEHR-EHR-COMPOSITION.a.v1' \
+         OR c/archetype_node_id = 'openEHR-EHR-COMPOSITION.b.v1'",
+        "SELECT c FROM EHR e CONTAINS COMPOSITION c \
+         WHERE c/archetype_details/template_id/value LIKE 'Lab*'",
+    ] {
+        assert!(!constrained(aql).every_root_bound(), "{aql}");
+    }
+}
+
+#[test]
+fn a_query_of_the_ehr_alone_is_bound_and_names_nothing() {
+    let found = constrained("SELECT e/ehr_id/value FROM EHR e");
+    assert!(found.every_root_bound());
+    assert!(found.is_empty());
+}
+
+#[test]
 fn a_patient_query_keeps_its_constraints_after_the_rewrite() {
     let found = constrained(
         "SELECT c FROM EHR e CONTAINS COMPOSITION c[openEHR-EHR-COMPOSITION.report.v1] \
