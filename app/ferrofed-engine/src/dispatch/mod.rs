@@ -68,6 +68,7 @@ mod gate;
 mod on_behalf;
 mod query;
 pub mod reported;
+mod transports;
 
 /// The API version segment ITS-REST 1.1.0 puts every path under
 /// (`{baseUrl}/v1/...`), appended to the endpoint's base URL.
@@ -626,43 +627,6 @@ impl<T: Transport + Clone> NodeClients<T> {
         credentials: &BTreeMap<EndpointId, SharedCredentials>,
     ) -> Result<Self, SetupError> {
         Self::from_snapshot_over(snapshot, (transport, &BTreeMap::new()), credentials)
-    }
-
-    /// A client for every endpoint of `snapshot`, as
-    /// [`NodeClients::from_snapshot`] builds them, except that an endpoint
-    /// `own` names is reached over its own transport: one that presents the
-    /// endpoint's TLS client certificate to the node and its authorization
-    /// server (RFC 8705 §3).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SetupError::BaseUrl`] when an endpoint's base URL cannot carry
-    /// a path, and [`SetupError::UnknownEndpoint`] when `credentials` or `own`
-    /// names an endpoint the snapshot does not hold.
-    pub fn from_snapshot_over(
-        snapshot: &RegistrySnapshot,
-        (transport, own): (&T, &BTreeMap<EndpointId, T>),
-        credentials: &BTreeMap<EndpointId, SharedCredentials>,
-    ) -> Result<Self, SetupError> {
-        if let Some(stray) = credentials
-            .keys()
-            .chain(own.keys())
-            .find(|endpoint| snapshot.endpoint(endpoint).is_none())
-        {
-            return Err(SetupError::UnknownEndpoint {
-                endpoint: stray.clone(),
-            });
-        }
-        let mut clients = BTreeMap::new();
-        for endpoint in snapshot.endpoints() {
-            let engine = own.get(endpoint.id()).unwrap_or(transport);
-            let mut client = NodeClient::new(endpoint, engine.clone())?;
-            if let Some(provider) = credentials.get(endpoint.id()) {
-                client = client.with_credentials_provider(Arc::clone(provider));
-            }
-            clients.insert(endpoint.id().clone(), client);
-        }
-        Ok(Self { clients })
     }
 
     /// The client of `endpoint`, when the snapshot holds it.
