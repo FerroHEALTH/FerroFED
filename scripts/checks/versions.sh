@@ -1056,12 +1056,25 @@ corpora="docs/specs/federation-spec|Federation Tier with AQL specification
 docs/specs/federation-ref|Federation Tier reference implementation
 docs/specs/its-rest|openEHR ITS-REST OpenAPI
 docs/specs/aql|openEHR AQL specification source
+docs/specs/openehr-rm|openEHR Reference Model specification source
 docs/specs/ihe-pixm|IHE PIXm FHIR package
 docs/specs/ihe-pdqm|IHE PDQm FHIR package
 docs/specs/ihe-mcsd|IHE mCSD FHIR package
 docs/specs/ihe-pmir|IHE PMIR FHIR package
 docs/specs/ihe-iua|IHE IUA supplement
 docs/specs/ihe-balp|IHE BALP FHIR package
+docs/specs/ihe-pixm-pages|IHE PIXm narrative pages
+docs/specs/ihe-pdqm-pages|IHE PDQm narrative pages
+docs/specs/ihe-pmir-pages|IHE PMIR narrative pages
+docs/specs/ihe-mcsd-pages|IHE mCSD narrative pages
+docs/specs/ihe-balp-pages|IHE BALP narrative pages
+docs/specs/eu-xtehr-models|Xt-EHR EHDS Logical Information Models
+docs/specs/eu-hl7-base|HL7 Europe Base and Core
+docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
+docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense
+docs/specs/eu-hl7-laboratory|HL7 Europe Laboratory Report
+docs/specs/eu-hl7-extensions|HL7 Europe Extensions
+docs/specs/hl7-ips|HL7 International Patient Summary
 docs/specs/ihe-atna|IHE ITI-20 Record Audit Event
 docs/specs/ihe-atna|IHE RESTful ATNA supplement
 docs/specs/nl-gf|Netherlands Generic Functions IG source
