@@ -5,12 +5,14 @@
 //!
 //! Readiness answers `503` in every phase but [`Phase::Serving`], so an
 //! orchestrator sends no request before boot completes, and stops sending
-//! them from the moment the process is asked to stop, before the drain
-//! starts. No specification governs health probes: our own design.
+//! them from the moment the process is asked to stop, before the listener
+//! closes and the drain starts. No specification governs health probes: our
+//! own design.
 
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -87,19 +89,28 @@ impl Lifecycle {
     }
 }
 
-/// Completes when `signal` completes, after moving `lifecycle` to
-/// [`Phase::Draining`].
+/// Completes `delay` after `signal` completes, moving `lifecycle` to
+/// [`Phase::Draining`] the moment the signal arrives.
 ///
-/// [`crate::serve`] hands this the process's stop signal, so readiness
-/// answers `503` before the server stops accepting connections and starts
-/// its drain.
-pub async fn drain_on<F>(signal: F, lifecycle: Lifecycle)
+/// [`crate::serve`] hands this the process's stop signal and
+/// `server.drain_delay_ms`, so readiness answers `503` while the listener
+/// still accepts, and a load balancer that polls readiness, or removes a
+/// terminating endpoint, stops routing to the process before it closes. The
+/// Kubernetes documentation describes that removal as running alongside the
+/// stop signal, not ahead of it
+/// (<https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination>).
+pub async fn drain_on<F>(signal: F, lifecycle: Lifecycle, delay: Duration)
 where
     F: Future<Output = ()>,
 {
     signal.await;
     lifecycle.drain();
-    tracing::info!("readiness withdrawn");
+    tracing::info!(
+        drain_delay_ms = delay.as_millis(),
+        "readiness withdrawn; the listener accepts until the drain delay ends"
+    );
+    tokio::time::sleep(delay).await;
+    tracing::info!("the listener stops accepting; draining the requests in flight");
 }
 
 #[cfg(test)]

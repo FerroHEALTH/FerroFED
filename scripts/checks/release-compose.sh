@@ -9,7 +9,9 @@
 #   1. no compose file in the repository carries `build:`, because every one
 #      runs the published image and only release-image.yml builds it;
 #   2. Docker Compose renders the release compose file;
-#   3. given a static Linux ferrofed binary, `ferrofed config check` accepts
+#   3. the stop_grace_period of the release compose file outlasts the drain
+#      delay plus the drain of the example's [server] table;
+#   4. given a static Linux ferrofed binary, `ferrofed config check` accepts
 #      the example ferrofed.toml and registry.toml exactly as attached, mounted
 #      at the paths the rendered compose file mounts them, in the pinned base
 #      image of docker/Dockerfile, with a synthetic file for each credential
@@ -19,8 +21,8 @@
 #      would travel over plain http, naming its URL key.
 #
 # Usage:
-#   scripts/checks/release-compose.sh                  checks 1 and 2
-#   scripts/checks/release-compose.sh <ferrofed binary> all three; the binary
+#   scripts/checks/release-compose.sh                  checks 1 to 3
+#   scripts/checks/release-compose.sh <ferrofed binary> all four; the binary
 #                                                      is a static Linux
 #                                                      build for this host's
 #                                                      architecture
@@ -89,6 +91,33 @@ if rendered="$(docker compose --project-directory "$work" -f "$work/compose.yaml
 else
   bad "$RELEASE/compose.yaml does not render"
   rendered=""
+fi
+
+echo "== the stop grace period covers the drain delay and the drain"
+# server_ms KEY: KEY's value in the [server] table of the example, empty when
+# it is unset.
+server_ms() {
+  local key="$1"
+  awk -v key="$key" '
+    /^\[/ { inside = ($0 == "[server]"); next }
+    inside && $1 == key && $2 == "=" { print $3; exit }
+  ' "$RELEASE/ferrofed.toml"
+}
+# An unset key takes the gateway's default: a 30 s request timeout, no
+# delay, and a drain as long as the request timeout.
+request="$(server_ms request_timeout_ms)"
+request="${request:-30000}"
+delay="$(server_ms drain_delay_ms)"
+delay="${delay:-0}"
+shutdown="$(server_ms shutdown_timeout_ms)"
+shutdown="${shutdown:-$request}"
+grace="$(sed -nE 's/^[[:space:]]+stop_grace_period: ([0-9]+)s$/\1/p' "$RELEASE/compose.yaml")"
+if ! [[ "$request$delay$shutdown" =~ ^[0-9]+$ ]] || ! [[ "$grace" =~ ^[0-9]+$ ]]; then
+  bad "the [server] timeouts are not whole numbers, or stop_grace_period is not in whole seconds"
+elif (( grace * 1000 <= delay + shutdown )); then
+  bad "stop_grace_period ($grace s) does not outlast drain_delay_ms ($delay) plus shutdown_timeout_ms ($shutdown)"
+else
+  echo "OK: a stop grace period of $grace s outlasts the $delay ms delay and the $shutdown ms drain"
 fi
 
 if [[ -z "$binary" ]]; then

@@ -1,11 +1,15 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Graceful shutdown: a request in flight finishes, and the drain is bounded.
+//! Graceful shutdown: readiness turns `503` while the listener still accepts
+//! through the drain delay, a request in flight finishes, and the drain is
+//! bounded. No specification governs the process model: our own design.
 
 use crate::support;
 use axum::Router;
 use axum::routing::get;
+use ferrofed_server::health::lifecycle::drain_on;
+use ferrofed_server::state::AppState;
 use ferrofed_server::{serve_until, with_middleware};
 use std::error::Error as StdError;
 use std::sync::Arc;
@@ -126,5 +130,118 @@ async fn the_drain_is_bounded_so_a_stuck_request_cannot_hold_the_process()
         started.elapsed()
     );
     stuck.abort();
+    Ok(())
+}
+
+/// How long the listener keeps accepting after the stop signal in the
+/// drain-delay case.
+const DELAY: Duration = Duration::from_secs(2);
+
+/// Asks `url` on a connection of its own and returns the status.
+async fn status_of(client: &reqwest::Client, url: &str) -> reqwest::Result<reqwest::StatusCode> {
+    Ok(client.get(url).send().await?.status())
+}
+
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+async fn readiness_turns_503_while_the_listener_accepts_until_the_drain_delay_ends()
+-> Result<(), Box<dyn StdError>> {
+    let state = Arc::new(AppState::default());
+    state.lifecycle().booted();
+    let entered = Arc::new(Notify::new());
+    let reached = Arc::clone(&entered);
+    let router = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room())
+        .merge(Router::new().route(
+            "/slow",
+            get(move || async move {
+                reached.notify_one();
+                tokio::time::sleep(DELAY * 2).await;
+                "finished"
+            }),
+        ));
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let signal = async move {
+        if stopped.await.is_err() {
+            tracing::debug!("the stop channel closed");
+        }
+    };
+    let server = tokio::spawn(serve_until(
+        listener,
+        router,
+        Duration::from_secs(10),
+        drain_on(signal, state.lifecycle().clone(), DELAY),
+    ));
+    // A fresh connection for every request, so each one tests the listener.
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .build()?;
+    let readiness = format!("http://{address}/health/readiness");
+    assert_eq!(
+        reqwest::StatusCode::OK,
+        status_of(&client, &readiness).await?
+    );
+
+    let in_flight = tokio::spawn({
+        let client = client.clone();
+        async move {
+            let response = client.get(format!("http://{address}/slow")).send().await?;
+            let status = response.status();
+            Ok::<_, reqwest::Error>((status, response.text().await?))
+        }
+    });
+    tokio::time::timeout(REACH, entered.notified()).await?;
+    let signalled = Instant::now();
+    stop.send(()).map_err(|()| "the server is gone")?;
+
+    let withdrawn = tokio::time::timeout(DELAY, async {
+        loop {
+            let status = status_of(&client, &readiness).await?;
+            if status != reqwest::StatusCode::OK {
+                return Ok::<_, reqwest::Error>(status);
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await??;
+    assert_eq!(reqwest::StatusCode::SERVICE_UNAVAILABLE, withdrawn);
+    let liveness = status_of(&client, &format!("http://{address}/health")).await?;
+    assert_eq!(
+        reqwest::StatusCode::OK,
+        liveness,
+        "a request sent after readiness turned 503 is served"
+    );
+    assert!(
+        signalled.elapsed() < DELAY,
+        "both answers came inside the drain delay: {:?}",
+        signalled.elapsed()
+    );
+
+    let closed = tokio::time::timeout(DELAY * 2, async {
+        loop {
+            if tokio::net::TcpStream::connect(address).await.is_err() {
+                return signalled.elapsed();
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await?;
+    assert!(
+        closed >= DELAY,
+        "the listener closed {closed:?} after the signal, before the drain delay ended"
+    );
+
+    let (status, text) = in_flight.await??;
+    assert_eq!(
+        reqwest::StatusCode::OK,
+        status,
+        "the request in flight finishes"
+    );
+    assert_eq!("finished", text);
+    server.await??;
     Ok(())
 }

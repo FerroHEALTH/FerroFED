@@ -431,6 +431,18 @@ pub enum Error {
         /// The request timeout.
         request_ms: u64,
     },
+    /// The drain is shorter than the request timeout, so a stop could cut a
+    /// request the server accepted before its listener closed (no
+    /// specification governs this: our own design).
+    #[error(
+        "server.shutdown_timeout_ms ({shutdown_ms}) must be at least server.request_timeout_ms ({request_ms}), so the drain outlasts every request accepted before the listener closed; leave it unset to take the request timeout"
+    )]
+    Drain {
+        /// The drain.
+        shutdown_ms: u64,
+        /// The request timeout.
+        request_ms: u64,
+    },
     /// Audit messages are turned off outside a configuration marked for
     /// development.
     #[error(

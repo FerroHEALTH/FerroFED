@@ -338,6 +338,36 @@ the [fan-out template upload](templates-and-demographics.md#fan-out-template-upl
 A node's body that is no error, an accepted upload's body or a member's copy
 of a stored query, is never copied.
 
+## Writes through a gateway with several replicas
+
+A deployment may run several gateway replicas behind one address. Each
+replica holds its own resolution bindings and `ehr_id` index in memory, and
+shares neither with the others
+([Running several replicas](../operate/deployment-shape.md#running-several-replicas)).
+A write under a path `ehr_id` that names no node is routed by those two
+alone (§12.5.1, N41), so it depends on which replica the balancer sends it
+to: the replica that answered your query routes it, and another replica
+answers `400` with the code `target-required`. Nothing reaches a node in
+that case, so repeating the write is safe. A read of a UUID `ehr_id` does
+not fail this way: a replica without the binding probes for the owner
+instead ([Routing a path `ehr_id`](follow-ups.md#routing-a-path-ehr_id)).
+
+Two remedies hold for any number of replicas:
+
+- **Name the node on every write.** Send `openEHR-federation-endpoint` with
+  the `endpoint_id` your result row carried (§8.4). The header routes on
+  every replica, the first step of §12.5.1 decides, and no state is
+  consulted. This is the recommended form, and the only one that holds
+  across a restart of the replica you were talking to.
+- **Ask the operator for affinity.** A balancer that keeps your requests on
+  one replica keeps your bindings within reach, such as a Kubernetes Service
+  with `sessionAffinity: ClientIP`
+  ([Session affinity](https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity)).
+  Affinity narrows the window and does not close it: a replica that
+  restarts, a scale-down, the affinity timing out, or a change of your
+  client's address each move you to a replica without your bindings, and a
+  write that names no node is then `400` again.
+
 ## Self-description
 
 `OPTIONS {base}/` returns what the gateway does and which members stand

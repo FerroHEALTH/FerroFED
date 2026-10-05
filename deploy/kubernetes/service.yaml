@@ -4,6 +4,13 @@
 # The cluster-internal Service in front of the gateway pods. A pod whose
 # readiness answers 503 (booting, or draining after SIGTERM) leaves its
 # endpoints, so the Service sends it no new request.
+#
+# Each replica holds its own resolution bindings, so a follow-up write that
+# names no node in openEHR-federation-endpoint is routed only by the replica
+# that resolved the patient. Clients that cannot send the header can be kept
+# on one replica with `sessionAffinity: ClientIP` under spec; it narrows the
+# window and does not close it, since a restart or a scale-down still moves
+# a client.
 apiVersion: v1
 kind: Service
 metadata:

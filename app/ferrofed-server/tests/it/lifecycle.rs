@@ -161,7 +161,11 @@ async fn readiness_is_503_from_the_moment_the_stop_signal_arrives() -> TestResul
             tracing::debug!("the stop channel closed");
         }
     };
-    let draining = tokio::spawn(drain_on(signal, state.lifecycle().clone()));
+    let draining = tokio::spawn(drain_on(
+        signal,
+        state.lifecycle().clone(),
+        std::time::Duration::ZERO,
+    ));
     let (status, _) = readiness(&state).await?;
     assert_eq!(StatusCode::OK, status, "no signal yet");
 

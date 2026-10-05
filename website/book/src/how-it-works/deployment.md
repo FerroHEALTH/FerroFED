@@ -149,9 +149,14 @@ flowchart TB
 
 ## Several replicas
 
-Replicas share nothing in memory: each holds its own `ehr_id` index and
-learned routes, and a miss costs a probe or an explicit target, never a
-wrong route. The stored-query registry is the one state they must share,
+Replicas share nothing in memory: each holds its own resolution bindings,
+`ehr_id` index and learned routes, and a miss costs a probe or an explicit
+target, never a wrong route. A follow-up write is never probed for, so a
+write that names no node is routed only by the replica that resolved the
+patient and refused `400` `target-required` by the others: clients name the
+node on every write, or the balancer keeps each client on one replica
+([Running several replicas](../operate/deployment-shape.md#running-several-replicas)).
+The stored-query registry is the one state they must share,
 because a stored version must be the same on every replica and a second
 `PUT` refused on every replica (§12.7, N44).
 

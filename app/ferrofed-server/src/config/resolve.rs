@@ -87,10 +87,7 @@ impl Config {
             })?;
         let request_timeout =
             positive_ms("server.request_timeout_ms", self.server.request_timeout_ms)?;
-        let shutdown_timeout = positive_ms(
-            "server.shutdown_timeout_ms",
-            self.server.shutdown_timeout_ms,
-        )?;
+        let shutdown_timeout = self.resolve_drain(request_timeout)?;
         if self.server.body_limit_bytes == 0 {
             return Err(Error::Zero {
                 key: String::from("server.body_limit_bytes"),
@@ -135,6 +132,7 @@ impl Config {
                 listen,
                 base_path,
                 request_timeout,
+                drain_delay: Duration::from_millis(self.server.drain_delay_ms),
                 shutdown_timeout,
                 body_limit: self.server.body_limit_bytes,
                 auth: self.auth.resolve()?,
@@ -168,6 +166,25 @@ impl Config {
             binding.resolve(self, &mut settings)?;
         }
         Ok(settings)
+    }
+
+    /// Resolves `server.shutdown_timeout_ms`: `request_timeout` when unset,
+    /// and refused when it is shorter, so the drain never cuts a request the
+    /// server accepted before its listener closed.
+    fn resolve_drain(&self, request_timeout: Duration) -> Result<Duration, Error> {
+        let Some(shutdown_ms) = self.server.shutdown_timeout_ms else {
+            return Ok(request_timeout);
+        };
+        let shutdown_timeout = positive_ms("server.shutdown_timeout_ms", shutdown_ms)?;
+        // NOTE: no specification governs this: our own design; a request accepted
+        // just before the listener closes may run its whole request timeout.
+        if shutdown_timeout < request_timeout {
+            return Err(Error::Drain {
+                shutdown_ms,
+                request_ms: self.server.request_timeout_ms,
+            });
+        }
+        Ok(shutdown_timeout)
     }
 
     /// Resolves `[federation]`: both budgets positive (§11.5), and the overall

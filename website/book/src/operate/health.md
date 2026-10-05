@@ -19,9 +19,10 @@ No specification governs health probes: our own design.
 Readiness reports the gateway's own subsystems by name: the configuration,
 the registry and the outbound clients when a registry is configured, and the
 stored-query store when one is. Its body names the phase of the process,
-`booting`, `serving` or `draining`. On `SIGTERM` readiness turns `503` before
-the drain starts, so a load balancer stops sending requests while the
-requests in flight finish.
+`booting`, `serving` or `draining`. On `SIGTERM` readiness turns `503` at
+once, while the listener still accepts, so a load balancer stops sending
+requests before the gateway stops taking them
+([Stopping without dropping a request](#stopping-without-dropping-a-request)).
 
 No member node and no identity source gates readiness. A node outage is
 reported per query in `meta.federation` (§11), and a gateway that went unready
@@ -105,6 +106,53 @@ without `[pmir]`
 ([The identity feed](identity.md#the-identity-feed-pmir)). The
 body names endpoint ids and states only, never a URL, a credential or a
 body.
+
+## Stopping without dropping a request
+
+On `SIGTERM` or `SIGINT` the gateway stops in three steps. No specification
+governs this: our own design.
+
+1. Readiness answers `503` at once, with the phase `draining`, and the
+   listener keeps accepting for `server.drain_delay_ms`. A request that
+   arrives in this window is served like any other.
+2. The listener closes. Each connection finishes the request it is serving
+   and is closed, and no new connection is accepted.
+3. The requests in flight get `server.shutdown_timeout_ms` to finish. A
+   connection still open after that is dropped.
+
+The delay exists because a load balancer does not stop routing the moment a
+process is asked to stop. A balancer that polls readiness needs up to one
+polling period, plus its failure threshold, to see the `503`. In Kubernetes,
+removing a terminating pod from a Service's endpoints runs alongside the
+`SIGTERM`, not before it
+([Pod termination](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination)).
+Set the delay to the longest of those times. It is `0` by default, which
+closes the listener at once: right for a single process with nothing in
+front, and the reason a gateway behind a balancer sets it.
+
+`server.shutdown_timeout_ms` defaults to `server.request_timeout_ms`, and
+`config check`, `serve` and a reload refuse a value shorter than that,
+naming both keys. A request accepted just before the listener closes may
+run for the whole request timeout, so a shorter drain would cut it, and a
+federated query that runs to its overall budget would be lost on every
+rolling restart.
+
+The runtime's grace period must outlast both steps. Docker sends `SIGKILL`
+after `stop_grace_period`, and the kubelet after
+`terminationGracePeriodSeconds`, counted from the moment the pod is deleted.
+Keep each above `drain_delay_ms` plus `shutdown_timeout_ms`, with room for
+the background tasks to stop and for the last metrics and spans to be
+pushed. The shipped examples keep 10 seconds of room:
+
+| Example | `drain_delay_ms` | `shutdown_timeout_ms` | Grace period |
+|---|---|---|---|
+| `deploy/kubernetes/` | 5000 | 30000 | `terminationGracePeriodSeconds: 45` |
+| `deploy/compose/` | unset, `0` | 30000 | `stop_grace_period: 40s` |
+| the quickstart `compose.yaml` | unset, `0` | unset, the 30-second request timeout | `stop_grace_period: 40s` |
+
+`scripts/checks/kubernetes-example.sh` and
+`scripts/checks/release-compose.sh` fail when an example's grace period
+does not outlast its delay plus its drain.
 
 ## `ferrofed healthcheck`
 

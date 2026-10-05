@@ -152,7 +152,8 @@ refuses that binding's sections as unknown keys.
 listen = "127.0.0.1:8080"     # the socket address to bind
 base_path = "/"               # the path of the base URL every route sits under; see The base path
 request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
-shutdown_timeout_ms = 10000   # the drain after SIGTERM is bounded by this
+drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
+shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
 body_limit_bytes = 1048576    # a body past this answers 413
 
 [telemetry]

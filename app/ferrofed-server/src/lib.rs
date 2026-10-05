@@ -284,9 +284,10 @@ async fn dependencies(
 /// Serves `app` on an already-bound listener until the process receives
 /// `SIGTERM` or `SIGINT`, then drains.
 ///
-/// The signal moves `lifecycle` to draining before the drain starts, so
-/// readiness answers `503` from the moment the signal arrives
-/// ([`drain_on`]).
+/// The signal moves `lifecycle` to draining at once, so readiness answers
+/// `503` from the moment the signal arrives. The listener keeps accepting for
+/// `server.drain_delay`, then closes, and the requests in flight get
+/// `server.shutdown_timeout` to finish ([`drain_on`]).
 ///
 /// # Errors
 /// Returns the I/O error from accepting or serving connections.
@@ -300,7 +301,7 @@ pub async fn serve(
         listener,
         app,
         server.shutdown_timeout,
-        drain_on(shutdown_signal(), lifecycle),
+        drain_on(shutdown_signal(), lifecycle, server.drain_delay),
     )
     .await
 }

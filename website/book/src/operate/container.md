@@ -89,7 +89,9 @@ capability dropped and `no-new-privileges`. Its healthcheck is the image's
 port binds the loopback interface unless you set `FERROFED_BIND_HOST`, for the
 reason under [The quickstart](#the-quickstart). A registry URL can name a CDR
 on the Docker host itself as `host.docker.internal`. The stop grace period of
-20 seconds is longer than the gateway's 10-second drain.
+40 seconds outlasts the gateway's 30-second drain
+([Stopping without dropping a request](health.md#stopping-without-dropping-a-request));
+raise it with `server.drain_delay_ms` or `server.shutdown_timeout_ms`.
 
 The restart policy is `unless-stopped`. Docker restarts a gateway that exits
 with an error, doubling its wait before each attempt from 100 ms
@@ -163,39 +165,81 @@ encrypted disk; the gateway holds no key to encrypt it with. Each replica
 needs a spool of its own, since two gateways must never drain one
 directory.
 
+#### Losing a spool
+
+A record counts as recorded once it is on the spool's disk, and the
+transaction it records goes on from there
+([The spool and the failure policy](audit.md#the-spool-and-the-failure-policy)).
+A spool that is lost before the repository took everything in it therefore
+loses records of transactions that did happen: the repository's trail misses
+them for good, and nothing at the repository shows the gap. The gateway
+cannot send them again, because it keeps no other copy. While records wait,
+the dependency report shows `audit_repository` or `audit_feed` as
+`degraded` ([Health probes](health.md)), so a spool is safe to discard only
+once both read `up`.
+
+So keep the spool on storage that outlives the container and its host: a
+named volume under Docker, and a persistent volume claim per replica under
+Kubernetes. A replica that comes back on the same volume delivers what its
+spool still holds.
+
 ## Kubernetes
 
 `deploy/kubernetes/` holds an example: a ConfigMap with the configuration and
-the registry document and no secret, a Deployment, a Service and a
+the registry document and no secret, a StatefulSet, a Service and a
 PodDisruptionBudget. CI validates every manifest with `kubeconform` in strict
 mode, and runs `ferrofed config check` over the ConfigMap's configuration
 with synthetic secrets. The configuration trusts one example issuer in
 `[auth]` and reads the gateway's signing key from the `ferrofed-secrets`
-Secret, which you create before you apply the manifests. The Deployment:
+Secret, which you create before you apply the manifests.
+
+The gateway runs as a StatefulSet for its audit spool alone. In a
+Deployment, every pod mounts the same volume claim, or an `emptyDir` of its
+own, and neither fits: two gateways must never drain one spool, and an
+`emptyDir` is deleted with its pod, so a reschedule or a node drain would
+[lose the records](#losing-a-spool) still in it. A StatefulSet's
+`volumeClaimTemplates` gives each replica a claim of its own,
+`audit-spool-ferrofed-0` and `audit-spool-ferrofed-1`, which the replica
+finds again wherever it is scheduled
+([StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)).
+The replicas share nothing else, so `podManagementPolicy: Parallel` starts
+and stops them together, and the StatefulSet names no governing Service,
+because no client addresses one replica. The StatefulSet:
 
 - probes startup and readiness on `GET /health/readiness` and liveness on
   `GET /health`;
 - mounts the ConfigMap at `/etc/ferrofed` and the `ferrofed-secrets` Secret
   at `/run/secrets/ferrofed`, readable by the gateway's group (`fsGroup`
   `65532`, mode `0440`);
-- mounts an `emptyDir` at `/var/lib/ferrofed` for the
-  [audit spool](#the-audit-spool), writable through the same `fsGroup`; the
-  gateway creates the spool under it with mode `0700`. An `emptyDir` keeps
-  the spool across a container restart only: for a spool that outlives the
-  pod, run a StatefulSet with a `volumeClaimTemplate` on an encrypted
-  storage class. Its `sizeLimit` of `512Mi` holds the default spool bounds
-  (`spool_max_bytes`, `spool_max_events`); the kubelet evicts the pod past
-  it, so raise it with either bound;
+- mounts its `audit-spool` claim at `/var/lib/ferrofed` for the
+  [audit spool](#the-audit-spool), writable through the same `fsGroup`, which
+  the kubelet applies only when the volume's root does not already match
+  (`fsGroupChangePolicy: OnRootMismatch`); the gateway creates each spool
+  under it with mode `0700`. The claim asks for the storage class
+  `encrypted`, a placeholder: replace it with a class of your cluster that
+  encrypts the volume at rest, because the spool names patients. Its `1Gi`
+  holds the default bounds of both spools (`spool_max_bytes`,
+  `spool_max_events`) with headroom; raise it with either bound;
+- keeps each claim when the StatefulSet is deleted or scaled down
+  (`persistentVolumeClaimRetentionPolicy` `Retain`). A replica scaled away
+  leaves its claim behind, and the records in it wait until that replica
+  comes back. Before you delete a claim, scale back up until its spool is
+  delivered, and check that `GET /health/dependencies` reads `up` for the
+  audit repository;
 - runs as the numeric user `65532` with `runAsNonRoot`, a read-only root
   filesystem, `allowPrivilegeEscalation: false`, every capability dropped and
   the `RuntimeDefault` seccomp profile;
 - sets resource requests and limits, a starting point to size from your own
-  load, ephemeral storage among them (a `1Gi` limit covering the container
-  log and the spool's `emptyDir`);
-- gives the pod a `terminationGracePeriodSeconds` of 30, longer than the
-  10-second `server.shutdown_timeout_ms` of the example configuration, so the
-  kubelet never kills a drain in progress. Keep the grace period longer than
-  the drain if you change either.
+  load, ephemeral storage among them (a `256Mi` limit for the container
+  log, since the spool is on its claim);
+- sets `server.drain_delay_ms` to 5 seconds in the example configuration, so
+  a pod keeps accepting while it leaves the Service's endpoints, and
+  `server.shutdown_timeout_ms` to the 30-second request timeout;
+- gives the pod a `terminationGracePeriodSeconds` of 45, which outlasts the
+  delay plus the drain with 10 seconds of room, so the kubelet never kills a
+  drain in progress. Keep the grace period above the delay plus the drain if
+  you change either
+  ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 
 The PodDisruptionBudget keeps one of the two replicas serving through a
 voluntary disruption. Every secret is a key of the `ferrofed-secrets`

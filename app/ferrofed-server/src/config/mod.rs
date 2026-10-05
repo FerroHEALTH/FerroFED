@@ -419,8 +419,14 @@ pub struct Server {
     /// registry configured, it must exceed `federation.overall_timeout_ms`
     /// by more than [`COMBINING_MARGIN_MS`].
     pub request_timeout_ms: u64,
-    /// How long the drain may take after the stop signal.
-    pub shutdown_timeout_ms: u64,
+    /// How long the server keeps accepting connections after the stop signal,
+    /// with readiness already `503`, so a load balancer stops routing to the
+    /// process before its listener closes. `0`, the default, closes it at once.
+    pub drain_delay_ms: u64,
+    /// How long the drain may take once the listener has closed. Unset, it is
+    /// `request_timeout_ms`; set, it must be at least that, so the drain
+    /// outlasts every request accepted before the listener closed.
+    pub shutdown_timeout_ms: Option<u64>,
     /// The largest request body the server reads before answering `413`.
     pub body_limit_bytes: usize,
 }
@@ -431,7 +437,8 @@ impl Default for Server {
             listen: String::from("127.0.0.1:8080"),
             base_path: String::from("/"),
             request_timeout_ms: 30_000,
-            shutdown_timeout_ms: 10_000,
+            drain_delay_ms: 0,
+            shutdown_timeout_ms: None,
             body_limit_bytes: 1024 * 1024,
         }
     }

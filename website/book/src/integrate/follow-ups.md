@@ -88,7 +88,11 @@ gateway never picks one of them: the request, a read or a write, is a `409`
 is sent it (§12.5.2, N42). The explicit target of step 1 still routes such an
 `ehr_id` to the node you name. A write that none of the first three steps routes is a `400`
 with the code `target-required`, and nothing is probed, because the gateway
-never finds a write's destination by trial (§12.5.1, N41).
+never finds a write's destination by trial (§12.5.1, N41). Steps 2 and 3
+are held by each gateway replica on its own, so behind several replicas a
+write that names no node can be routed by one replica and refused by the
+next. Name the node on every write
+([Writes through a gateway with several replicas](client-contract.md#writes-through-a-gateway-with-several-replicas)).
 
 ## Querying one EHR by its `ehr_id`
 

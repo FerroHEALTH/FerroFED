@@ -104,8 +104,32 @@ database for several replicas, or read-only definition files.
 ## Running several replicas
 
 Several gateway replicas behind one address share nothing in memory: each
-holds its own `ehr_id` index and learned routes, and a
+holds its own resolution bindings, `ehr_id` index and learned routes, and a
 miss on one replica costs a probe or an explicit target, never a wrong route.
+For a write the miss is visible to your clients. A follow-up write under a
+path `ehr_id` that names no node is routed by the caller's resolution
+binding or the `ehr_id` index (§12.5.1, N41), and the gateway never probes
+for a write's owner, so the replica that resolved the patient routes it and
+any other replica answers `400` `target-required`. Nothing reaches a node,
+and behaviour then changes with the replica count. Give your clients one of
+two remedies:
+
+- Clients send `openEHR-federation-endpoint` on every write, with the
+  `endpoint_id` of the row they act on. It routes on every replica, and it
+  is what the client contract recommends
+  ([Writes through a gateway with several replicas](../integrate/client-contract.md#writes-through-a-gateway-with-several-replicas)).
+- The balancer keeps each client on one replica, such as a Kubernetes
+  Service with `sessionAffinity: ClientIP`
+  ([Session affinity](https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity)).
+  The bindings belong to the verified caller, which a balancer cannot read
+  from a token, so affinity by client address is an approximation: a replica
+  restart, a scale-down or the affinity timeout still moves a client to a
+  replica without its bindings.
+
+The replicas never share the bindings or the index: each lives in the
+memory of one process and is lost on its restart, and the gateway writes
+nothing derived from a patient identifier to a shared store.
+
 The stored-query registry is the exception, because a stored version must be
 the same on every replica and a second `PUT` of it refused on every replica
 (§12.7, N44):

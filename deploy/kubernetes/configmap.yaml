@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # An example configuration for the gateway: the configuration file and the
-# registry document, mounted read-only at /etc/ferrofed by deployment.yaml.
+# registry document, mounted read-only at /etc/ferrofed by statefulset.yaml.
 # It holds no secret. Every secret is a key of the ferrofed-secrets Secret,
-# which deployment.yaml mounts at /run/secrets/ferrofed, named here by a
+# which statefulset.yaml mounts at /run/secrets/ferrofed, named here by a
 # `_file` key: the signing key below, and for an endpoint that needs
 # credentials, the bearer_token_file or password_file of its
 # [credentials."<endpoint id>"] section. Make the Secret with, for example:
@@ -32,9 +32,14 @@ data:
     [server]
     # The address the image binds; the probes and the Service use the port.
     listen = "0.0.0.0:8080"
-    # The drain after SIGTERM. The pod's terminationGracePeriodSeconds must
-    # stay longer than this, so the kubelet never kills a drain in progress.
-    shutdown_timeout_ms = 10000
+    request_timeout_ms = 30000
+    # On SIGTERM readiness turns 503 at once, and the listener keeps
+    # accepting for this long, while the pod leaves the Service's endpoints.
+    drain_delay_ms = 5000
+    # Then the listener closes, and the requests in flight get this long to
+    # finish: at least request_timeout_ms, which config check enforces. The
+    # pod's terminationGracePeriodSeconds covers both.
+    shutdown_timeout_ms = 30000
 
     [telemetry]
     format = "json"
@@ -69,7 +74,7 @@ data:
     # The gateway's ES384 signing key, required with a registry: every
     # request to a node carries the caller's identity signed with it
     # (§13.1, N24). It is the signing-key.pem key of the ferrofed-secrets
-    # Secret that deployment.yaml mounts at /run/secrets/ferrofed.
+    # Secret that statefulset.yaml mounts at /run/secrets/ferrofed.
     # https://ferrofed.eu/docs/operate/configuration.html#signing-keys-and-the-jwk-set
     [signing]
     key_file = "/run/secrets/ferrofed/signing-key.pem"

@@ -26,8 +26,14 @@ profile = "production"
 # precedence; compose.yaml publishes port 8080.
 listen = "0.0.0.0:8080"
 request_timeout_ms = 30000
-# The drain after SIGTERM; compose.yaml's stop_grace_period stays longer.
-shutdown_timeout_ms = 10000
+# On SIGTERM readiness turns 503 at once. Behind a load balancer that polls
+# readiness, set drain_delay_ms to the time it takes to stop routing here,
+# and the listener keeps accepting for that long; 0 closes it at once.
+# drain_delay_ms = 5000
+# Then the requests in flight get this long to finish: at least
+# request_timeout_ms, which config check enforces. compose.yaml's
+# stop_grace_period outlasts the delay plus this drain.
+shutdown_timeout_ms = 30000
 
 [telemetry]
 # auto renders pretty output on a terminal and JSON otherwise.

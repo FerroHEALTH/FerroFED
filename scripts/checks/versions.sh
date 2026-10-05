@@ -46,7 +46,7 @@
 #                          a row naming the same reference, and the
 #                          compose.yaml gateway tag default, the one image of
 #                          the release asset deploy/compose/compose.yaml and
-#                          the image tag of deploy/kubernetes/deployment.yaml
+#                          the image tag of deploy/kubernetes/statefulset.yaml
 #                          against the product version.
 #  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
@@ -1238,20 +1238,20 @@ if [[ -f "$release_compose" ]]; then
 else
   note "no $release_compose yet, skipped"
 fi
-deployment=deploy/kubernetes/deployment.yaml
-if [[ -f "$deployment" ]]; then
-  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:([^@[:space:]]+)[[:space:]]*$|\1|p' "$deployment" | sort -u)"
+statefulset=deploy/kubernetes/statefulset.yaml
+if [[ -f "$statefulset" ]]; then
+  tags="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*ghcr\.io/ferrohealth/ferrofed:([^@[:space:]]+)[[:space:]]*$|\1|p' "$statefulset" | sort -u)"
   if [[ -z "$tags" ]]; then
-    bad "$deployment has no ghcr.io/ferrohealth/ferrofed image tag"
+    bad "$statefulset has no ghcr.io/ferrohealth/ferrofed image tag"
   elif [[ "$(line_count "$tags")" -gt 1 ]]; then
-    bad "$deployment names more than one ferrofed tag: $(printf '%s' "$tags" | tr '\n' ' ')"
+    bad "$statefulset names more than one ferrofed tag: $(printf '%s' "$tags" | tr '\n' ' ')"
   elif [[ "$tags" != "$want_product" ]]; then
-    bad "example manifest: $deployment runs $tags, $matrix pins the product version $want_product"
+    bad "example manifest: $statefulset runs $tags, $matrix pins the product version $want_product"
   else
-    note "OK: the $deployment gateway tag is the product version $tags"
+    note "OK: the $statefulset gateway tag is the product version $tags"
   fi
 else
-  note "no $deployment yet, skipped"
+  note "no $statefulset yet, skipped"
 fi
 
 echo "== licence (LICENSE <-> SPDX headers, manifests, badges, labels)"

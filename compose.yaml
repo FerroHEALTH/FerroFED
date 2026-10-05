@@ -135,10 +135,11 @@ services:
       nofile:
         soft: 8192
         hard: 16384
-    # Longer than the gateway's 10-second drain (server.shutdown_timeout_ms in
-    # docker/quickstart/ferrofed.toml), so `docker compose down` never kills a
-    # drain in progress; Docker's default stop timeout is those same 10 seconds.
-    stop_grace_period: 20s
+    # Longer than the gateway's 30-second drain (docker/quickstart/ferrofed.toml
+    # leaves server.shutdown_timeout_ms unset, so it is the request timeout),
+    # with 10 seconds for the background tasks, so `docker compose down` never
+    # kills a drain in progress; Docker's default stop timeout is 10 seconds.
+    stop_grace_period: 40s
     # The image's own HEALTHCHECK, repeated so `docker compose up --wait`
     # visibly waits on it. Readiness gates on the gateway alone, so a member
     # node that is down never marks the gateway unhealthy. An image of a
