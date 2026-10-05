@@ -12,6 +12,8 @@
 //! with its `did:web` key, and binds the token with `DPoP` (Nuts RFC021). No
 //! specification governs the shape of the table: our own design.
 
+use std::any::Any;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -22,14 +24,15 @@ use ferrofed_engine::onward::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use nl_generic_functions::nuts_auth::NutsClient;
+use nl_generic_functions::nuts_auth::did_document::{DidDocument, MEDIA_TYPE};
 use nl_generic_functions::nuts_auth::error::InvalidInput;
 use nl_generic_functions::nuts_auth::holder::{Did, Holder, HolderKey};
 use serde::Deserialize;
 
-use crate::binding::{OnwardGrant, Provided};
+use crate::binding::{OnwardGrant, Provided, PublicDocument};
 use crate::config::error::Error;
 use crate::config::secrets::{read_secret, secret};
-use crate::config::settings::Settings;
+use crate::config::settings::{Scheme, Settings};
 use crate::config::transport::{Encryption, ProtectedSite};
 use crate::federation::error::FederationError;
 
@@ -55,6 +58,8 @@ pub struct Nuts {
     /// authorization server identifies its clients by one.
     pub client_id: Option<String>,
     /// The gateway's own `did:web` identifier, the holder of the credentials.
+    /// The gateway serves its DID document at the path the DID resolves to
+    /// (the did:web Method Specification, Read (Resolve)).
     pub did: String,
     /// The DID URL of the key the presentation is signed with, `<did>#<id>`,
     /// published in the holder's DID document.
@@ -130,6 +135,59 @@ impl OnwardGrant for NutsOnward {
             dpop: Some(Arc::clone(self.0.dpop())),
         })
     }
+}
+
+/// Returns the DID document of every holder the Nuts grants of `settings`
+/// present as, each served at its `did:web` location (the did:web Method
+/// Specification, Read (Resolve)), so an authorization server resolves a
+/// presentation's `kid` to the key that signed it (Nuts RFC021 §4.2 item 4).
+///
+/// Each document is built from the holder keys of those grants alone, so a
+/// key change in the configuration changes the document with it.
+///
+/// # Errors
+///
+/// [`FederationError::DidDocument`] for two different keys a DID's grants
+/// name by one DID URL, and [`FederationError::DidDocumentJson`] for a
+/// document that cannot be written.
+pub(super) fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
+    let mut holders: BTreeMap<&str, (&Did, Vec<&HolderKey>)> = BTreeMap::new();
+    for scheme in settings.credentials.values() {
+        let Scheme::Binding(grant) = scheme else {
+            continue;
+        };
+        let grant: &dyn Any = grant.as_ref();
+        let Some(nuts) = grant.downcast_ref::<NutsOnward>() else {
+            continue;
+        };
+        let holder = nuts.grant().holder();
+        holders
+            .entry(holder.did().as_str())
+            .or_insert_with(|| (holder.did(), Vec::new()))
+            .1
+            .push(holder.key());
+    }
+    holders
+        .into_values()
+        .map(|(did, keys)| {
+            let document =
+                DidDocument::new(did, keys).map_err(|source| FederationError::DidDocument {
+                    did: did.to_string(),
+                    source,
+                })?;
+            let body = serde_json::to_vec(&document).map_err(|source| {
+                FederationError::DidDocumentJson {
+                    did: did.to_string(),
+                    source,
+                }
+            })?;
+            Ok(PublicDocument {
+                path: did.document_path(),
+                media_type: MEDIA_TYPE,
+                body,
+            })
+        })
+        .collect()
 }
 
 /// The client the Nuts grant of `endpoint` sends its requests through.

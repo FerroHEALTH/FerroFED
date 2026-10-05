@@ -68,6 +68,18 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   and one at the other, each node is asked its `SUM` and `COUNT`, and the
   answer equals the mean weighted by the counts each node returns for the
   query it was sent, which differs from a mean of the node means.
+- The gateway serves the `did:web` DID document of each Nuts grant's
+  holder (#503; Annex B §B.4, Nuts RFC021 §4.2). It is served at the path
+  the DID resolves to (the did:web Method Specification, Read (Resolve)),
+  such as `/.well-known/did.json`, under any base URL, as
+  `application/did+ld+json` and with no client authentication, like the JWK
+  Set. The document is built from the holder keys the `nuts` sections name
+  and nothing else, one `JsonWebKey2020` verification method per `kid`, so
+  a key change shows up on the next reload with no file to edit. A DID
+  whose document would sit under `{base}/v1/`, two DIDs that share one
+  document path, or two keys under one `kid` refuse the configuration.
+  `nl-generic-functions` 0.0.13 adds the `nuts_auth::did_document` module,
+  `HolderKey::public` and `Did::document_path`.
 - A differential run against the Federation Tier reference implementation,
   behind `FERROFED_E2E` (#94; §16.3 tracks 1 to 7 and 9). The testkit builds
   `syntaric/openehr-federation-ref` at its pinned commit from the vendored

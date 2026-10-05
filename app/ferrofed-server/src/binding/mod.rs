@@ -31,6 +31,7 @@ pub mod ihe;
 pub mod nl;
 pub mod process;
 
+use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
@@ -234,7 +235,10 @@ pub trait Indicator: fmt::Debug + Send + Sync {
 
 /// An onward credential kind a binding adds beside the core's bearer token,
 /// basic credentials, OAuth 2.0 and FAPI 2.0 grants (§13.1, §13.3).
-pub trait OnwardGrant: fmt::Debug + Send + Sync {
+///
+/// A grant is [`Any`], so the binding that added it can read its own grants
+/// back from the settings ([`Binding::documents`]).
+pub trait OnwardGrant: Any + fmt::Debug + Send + Sync {
     /// Returns the table under `[credentials."<endpoint id>"]` it is
     /// configured by, such as `nuts`.
     fn key(&self) -> &'static str;
@@ -254,6 +258,32 @@ pub trait OnwardGrant: fmt::Debug + Send + Sync {
         endpoint: &EndpointId,
         settings: &Settings,
     ) -> Result<Provided, FederationError>;
+}
+
+/// A public document a binding has the gateway serve.
+///
+/// One example is the DID document its onward grants' keys are resolved by.
+/// It is public material, served with no client authentication outside the
+/// ITS-REST surface.
+///
+/// `Debug` shows the path and the media type, never the body.
+#[derive(Clone, PartialEq, Eq)]
+pub struct PublicDocument {
+    /// The absolute request path the document is served at.
+    pub path: String,
+    /// The `Content-Type` it is served as.
+    pub media_type: &'static str,
+    /// The document's bytes.
+    pub body: Vec<u8>,
+}
+
+impl fmt::Debug for PublicDocument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PublicDocument")
+            .field("path", &self.path)
+            .field("media_type", &self.media_type)
+            .finish_non_exhaustive()
+    }
 }
 
 /// What one endpoint's binding grant provides its node client.
@@ -384,6 +414,16 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// The [`FederationError`] of a trail that cannot start.
     fn indicators(&self, _settings: &Settings) -> Result<Vec<Arc<dyn Indicator>>, FederationError> {
+        Ok(Vec::new())
+    }
+
+    /// Returns the public documents the binding's configured sections have
+    /// the gateway serve, built from `settings` alone.
+    ///
+    /// # Errors
+    ///
+    /// The [`FederationError`] of a document that cannot be built.
+    fn documents(&self, _settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
         Ok(Vec::new())
     }
 

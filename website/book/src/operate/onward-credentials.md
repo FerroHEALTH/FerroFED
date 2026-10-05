@@ -266,10 +266,28 @@ gateway's `DPoP` key. The wire is Nuts RFC021, the VP Token Grant Type:
 | `dpop_key_file` | The key the tokens are bound to, as in an `oauth2` section. Required: GF-Authentication sender-constrains every token (GFI-005). |
 | `[[credential]]` | One per credential: `input_descriptor`, the descriptor it answers, and `file`, the JWT-encoded credential, issued to `did`. |
 
-The gateway's DID document must publish the holder key under `kid` where the
-`did:web` method resolves it (`https://<host>/.well-known/did.json` for a
-DID with no path), so the authorization server can verify the presentation
-(GFI-001); the gateway does not serve it. The credentials are issued to the
+The gateway serves its DID document, so the authorization server can
+resolve the presentation's `kid` and verify it (RFC021 §4.2; GFI-001). The
+document sits where the `did:web` method resolves the DID: the path is
+`/.well-known/did.json` for a DID with no path, and
+`/<segment>/…/did.json` for one with path segments, so
+`did:web:gateway.example.org:nuts` is served at `/nuts/did.json`. It is
+served at that path whatever the base URL, with no client authentication,
+like the JWK Set, as `application/did+ld+json`. Route
+`https://<host><path>` of the DID's host to the gateway. The document is
+built from the holder keys the `nuts` sections of that `did` name and
+nothing else: one `JsonWebKey2020` verification method per key, its `id`
+the `kid`, its `publicKeyJwk` the public half of `key_file`'s key,
+referenced from `authentication` and `assertionMethod`. A key change in
+`key_file` changes the served document on the next reload or restart, with
+no file to edit.
+
+Two `nuts` sections may share a `did`. If they name one `kid`, they must
+hold one key. A DID whose document path would sit under `{base}/v1/`, or
+two DIDs whose documents share one path, refuse the configuration, since
+one gateway serves one document per path. A deployment whose DID names
+another host still has to serve that host's path from the gateway, through
+its reverse proxy. The credentials are issued to the
 gateway by their authoritative sources ahead of time (GFI-002); the gateway
 reads them from their files at start and on each reload, and checks only
 that each is a JWT credential, with a `vc` claim, whose `sub` is `did`.

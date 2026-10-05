@@ -27,7 +27,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 
 use crate::binding::{
-    Binding, LocalizerSeam, Offer, OnwardGrant, Reload, Role, Section, StepBudgets,
+    Binding, LocalizerSeam, Offer, OnwardGrant, PublicDocument, Reload, Role, Section, StepBudgets,
 };
 use crate::config::error::Error;
 use crate::config::settings::Settings;
@@ -165,6 +165,10 @@ impl Binding for Nl {
             Some(nl_gf) => mitz::prefilter(settings, nl_gf, snapshot),
             None => Ok(None),
         }
+    }
+
+    fn documents(&self, settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
+        nuts::documents(settings)
     }
 
     fn onward_table(&self, credentials: &Credentials) -> Option<&'static str> {
