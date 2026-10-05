@@ -52,20 +52,29 @@
 //! engine's, in `ferrofed_engine::onward`.
 #![doc(test(attr(deny(warnings))))]
 
+#[cfg(feature = "ihe")]
 pub mod atna;
+#[cfg(feature = "ihe")]
 pub mod balp;
 pub mod binding;
 pub mod consent;
 pub mod demographics;
 pub mod dev;
+#[cfg(feature = "ihe")]
 pub mod directory;
 pub mod fhir;
+#[cfg(feature = "ihe")]
 pub mod lifecycle;
 pub mod localizer;
+#[cfg(feature = "nl")]
 pub mod mitz;
+#[cfg(feature = "nl")]
 pub mod nvi;
 pub mod patient;
+#[cfg(feature = "ihe")]
 pub mod pdqm;
+#[cfg(feature = "ihe")]
 pub mod pixm;
 pub mod resolver;
+#[cfg(feature = "ihe")]
 pub mod xcpd;

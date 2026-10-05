@@ -303,6 +303,12 @@ pub trait Binding: fmt::Debug + Sync {
         (&[], &[])
     }
 
+    /// Returns the sections of the binding that configure a cross-reference
+    /// resolver, as an error that needs one names them.
+    fn resolvers(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Refuses a section that names registry members when no registry is
     /// configured.
     ///
@@ -525,6 +531,23 @@ pub fn localizer_list() -> String {
     }
 }
 
+/// Returns how an error that needs a cross-reference resolver names every
+/// compiled one, in name order: `[dev] or [pixm]`, or `none in this build`.
+#[must_use]
+pub fn resolver_list() -> String {
+    let mut all: Vec<&str> = compiled()
+        .iter()
+        .flat_map(|binding| binding.resolvers())
+        .copied()
+        .collect();
+    all.sort_unstable();
+    match all.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+        Some((last, _)) => (*last).to_owned(),
+        None => String::from("none in this build"),
+    }
+}
+
 /// Builds the resolver of the one binding that offers one over `snapshot`.
 ///
 /// # Errors
@@ -628,7 +651,9 @@ fn first<T, E>(
 
 #[cfg(test)]
 mod tests {
-    use super::{Offer, Reload, Role, RoleConflict, compiled, listed, reloadable, single};
+    use super::{
+        Offer, Reload, Role, RoleConflict, compiled, listed, reloadable, resolver_list, single,
+    };
 
     #[test]
     fn a_role_one_section_may_fill_is_refused_when_two_do() {
@@ -670,6 +695,16 @@ mod tests {
     fn three_sections_are_listed_in_one_phrase() {
         assert_eq!("[a], [b] and [c]", listed(&["[a]", "[b]", "[c]"]));
         assert_eq!("[a]", listed(&["[a]"]));
+    }
+
+    #[test]
+    fn an_error_that_needs_a_resolver_names_only_the_compiled_ones() {
+        let expected = if cfg!(feature = "binding-ihe") {
+            "[dev] or [pixm]"
+        } else {
+            "[dev]"
+        };
+        assert_eq!(expected, resolver_list());
     }
 
     #[test]

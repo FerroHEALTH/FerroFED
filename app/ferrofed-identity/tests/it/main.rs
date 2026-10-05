@@ -11,21 +11,32 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
+#[cfg(feature = "ihe")]
 mod atna;
 mod binding;
 #[cfg(test)]
+#[cfg(feature = "ihe")]
 mod directory;
+#[cfg(feature = "ihe")]
 mod lifecycle;
 mod localizer;
+#[cfg(feature = "nl")]
 mod mitz;
+#[cfg(all(feature = "ihe", feature = "nl"))]
 mod nvi_directory;
+#[cfg(feature = "nl")]
 mod nvi_localizer;
 mod patient;
+#[cfg(feature = "ihe")]
 mod pdqm;
+#[cfg(feature = "ihe")]
 mod pixm;
+#[cfg(feature = "ihe")]
 mod pixm_localizer;
 mod static_consent;
 mod static_resolver;
 mod support;
+#[cfg(feature = "ihe")]
 mod timing;
+#[cfg(feature = "ihe")]
 mod xcpd;

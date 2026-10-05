@@ -122,6 +122,10 @@ impl Binding for Development {
         )
     }
 
+    fn resolvers(&self) -> &'static [&'static str] {
+        &["[dev]"]
+    }
+
     fn unregistered(&self, settings: &Settings) -> Result<(), FederationError> {
         if settings.dev.is_some() {
             return Err(FederationError::DevWithoutRegistry);
