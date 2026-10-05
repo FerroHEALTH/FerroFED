@@ -29,7 +29,7 @@ use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
 use http::{HeaderMap, Method};
 use openehr_its::rest::routes::RouteMatch;
 
-use super::{Arrived, Deadlines, Failure, answered, failed, forward, held, learn, unheld};
+use super::{Arrived, Deadlines, Failure, failed, forward, held, learn, passed, unheld};
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::write::{self, Write};
@@ -151,17 +151,17 @@ pub(super) async fn route(
         "routed a path ehr_id"
     );
     let provenance = Provenance::of(snapshot, endpoint);
-    let forwarded = if let Some(answer) = probed {
-        Ok(answer)
-    } else {
-        let sent = (request, arrived.outbound, &arrived.conveyance);
-        forward(federation, endpoint, sent, &budget, &logged).await
+    let sent = (request, arrived.outbound, &arrived.conveyance);
+    let forwarded = match probed {
+        Some(answer) => Ok(answer),
+        None => forward(federation, endpoint, sent, &budget, &logged).await,
     };
     match forwarded {
         Ok(forwarded) => {
             let read = follow_up::version_of(arrived.method, matched);
             learn(federation, (&ehr_id, read), endpoint, &forwarded, &logged);
-            provenance.stamp(answered(forwarded))
+            let ids = (request_id, logged.as_str());
+            passed(provenance, (federation, endpoint), forwarded, ids)
         }
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
@@ -332,7 +332,7 @@ pub(crate) async fn ask_all<'a>(
         .into_iter()
         .map(|(endpoint, probed)| (endpoint, probed.answer))
         .collect();
-    let (endpoint, answer) = match owner::settled(answers) {
+    let (endpoint, answer) = match owner::settled(answers, federation.discloses_consent()) {
         owner::Settled::Owner { endpoint, answer } => (endpoint, answer),
         owner::Settled::Failed(unsettled) => {
             if let owner::Unsettled::Claimed(claimants) = &unsettled {

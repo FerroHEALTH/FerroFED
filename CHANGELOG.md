@@ -98,7 +98,13 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   knows, a new code in the error vocabulary. `OPTIONS {base}/` declares the
   choice as `federation.consent.disclose`, the pre-filter metrics still count
   every exclusion for the operator, and the default stays the
-  specification's `consent-denied` (N27a) (#493).
+  specification's `consent-denied` (N27a) (#493). The setting covers a
+  node's own consent refusal too, a `403` with a code the registry lists in
+  `consent_refusal_codes`: a federated query reports the node `not-resolved`
+  with no `latency_ms`, and a read by subject, a routed request and an
+  ask-all probe answer `404 subject-unavailable`. The node request metrics
+  now count such a refusal as `consent-denied` on every path, whatever the
+  setting.
 
 ## [0.0.8] - 2026-10-04
 

@@ -445,10 +445,11 @@ async fn identified(
 const UNKNOWN: &str = "the patient is not known at this member";
 
 /// The `not-resolved` error of a member the cross-reference does not know
-/// the patient at, and of a member the consent pre-filter excluded, in a
-/// deployment that does not disclose consent exclusions: one text for both,
-/// true of both (Regulation (EU) 2025/327 Art 8).
-const UNAVAILABLE: &str = "no record of the patient at this member is available to this request";
+/// the patient at, of a member the consent pre-filter excluded, and of a node
+/// that refused on consent grounds, in a deployment that does not disclose
+/// consent exclusions: one text, true of each (Regulation (EU) 2025/327 Art 8).
+pub(crate) const UNAVAILABLE: &str =
+    "no record of the patient at this member is available to this request";
 
 /// `plan` with every member `consented` denies settled `consent-denied` when
 /// the deployment discloses consent exclusions, each leaving `asked`, and the

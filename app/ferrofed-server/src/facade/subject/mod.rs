@@ -195,10 +195,13 @@ pub(crate) async fn serve(
         Err(refused) => Err(Failure::Forward(refused)),
     };
     match forwarded {
-        Ok(forwarded) => {
-            route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
-            provenance.stamp(route::answered(forwarded))
-        }
+        // NOTE: Regulation (EU) 2025/327 Art 8: a withheld refusal answers as no holder would, so
+        // it names no acting endpoint (no specification governs this: our own design).
+        Ok(forwarded) => route::withheld(federation, endpoint, &forwarded, (request_id, &logged))
+            .unwrap_or_else(|| {
+                route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
+                provenance.stamp(route::answered(forwarded))
+            }),
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => {
             route::failed(&failure, provenance, (request_id, &logged))

@@ -13,7 +13,8 @@
 //! only a denied member could serve answers as one no member could:
 //! `404 subject-unavailable`. The operator still counts every exclusion in
 //! the pre-filter metrics. With the setting left at its default, the
-//! specification's `consent-denied` stands (N27a).
+//! specification's `consent-denied` stands (N27a). A node's own consent
+//! refusal is withheld the same way on every path ([`node`]).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -22,6 +23,8 @@
     clippy::disallowed_types,
     reason = "the test seam: the tests compare emitted endpoint records as JSON values"
 )]
+
+mod node;
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -57,14 +60,14 @@ use crate::facade::{
 use crate::metrics::{count, parse};
 use crate::support::{call, error_body, send};
 
-type TestResult = Result<(), Box<dyn Error>>;
+pub(super) type TestResult = Result<(), Box<dyn Error>>;
 
 /// The Prometheus name of the pre-filter call counter.
 const PREFILTER_CALLS: &str = "ferrofed_consent_prefilter_requests_total";
 
 /// A consent pre-filter that denies asking `node-b`, or denies nothing.
 #[derive(Debug, Clone, Copy)]
-struct Denies(bool);
+pub(super) struct Denies(pub(super) bool);
 
 #[async_trait]
 impl ConsentPrefilter for Denies {
@@ -99,7 +102,7 @@ impl ConsentPrefilter for Denies {
 /// A resolver that knows the patient at the members it names, or that
 /// cannot answer for any member.
 #[derive(Debug, Clone, Copy)]
-enum Crossref {
+pub(super) enum Crossref {
     /// Knows the patient at these members, with their `ehr_id`s.
     Knows(&'static [(&'static str, &'static str)]),
     /// Cannot answer for any member.
@@ -132,25 +135,35 @@ impl Resolver for Crossref {
 }
 
 /// The patient known at both members.
-const BOTH: &[(&str, &str)] = &[("node-a", EHR_A), ("node-b", EHR_B)];
+pub(super) const BOTH: &[(&str, &str)] = &[("node-a", EHR_A), ("node-b", EHR_B)];
 
 /// The patient known at node A only.
-const AT_A: &[(&str, &str)] = &[("node-a", EHR_A)];
+pub(super) const AT_A: &[(&str, &str)] = &[("node-a", EHR_A)];
 
 /// The patient known at node B only.
-const AT_B: &[(&str, &str)] = &[("node-b", EHR_B)];
+pub(super) const AT_B: &[(&str, &str)] = &[("node-b", EHR_B)];
 
 /// The patient known at no member.
-const NOWHERE: &[(&str, &str)] = &[];
+pub(super) const NOWHERE: &[(&str, &str)] = &[];
 
 /// A metered gateway over node A and node B resolving through `crossref`,
 /// pre-filtering through `prefilter`, under `disclosure`.
 fn gateway_over(
+    nodes: (&Server, &Server),
+    scripted: (Crossref, Denies),
+    disclosure: ConsentDisclosure,
+) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
+    gateway_with(nodes, "", scripted, disclosure)
+}
+
+/// The gateway of [`gateway_over`], with `extra` in node B's endpoint entry.
+fn gateway_with(
     (a, b): (&Server, &Server),
+    extra: &str,
     (crossref, prefilter): (Crossref, Denies),
     disclosure: ConsentDisclosure,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
-    let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), ""))?;
+    let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), extra))?;
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(5))?;
     let clients = NodeClients::from_snapshot(&snapshot, &transport, &BTreeMap::new())?;
     let federation = Federation::new(
@@ -194,7 +207,7 @@ struct RecordsFederation {
 }
 
 /// The record of `endpoint` in the answer `text`, every member as sent.
-fn record_of(
+pub(super) fn record_of(
     text: &str,
     endpoint: &str,
 ) -> Result<serde_json::Map<String, serde_json::Value>, Box<dyn Error>> {
@@ -210,7 +223,7 @@ fn record_of(
 
 /// Runs the patient query through `app`, and returns the status, every
 /// response header value, and the body.
-async fn ask(app: Router) -> Result<(StatusCode, Vec<String>, String), Box<dyn Error>> {
+pub(super) async fn ask(app: Router) -> Result<(StatusCode, Vec<String>, String), Box<dyn Error>> {
     let response = send(app, post(body(&patient_query())?)?).await?;
     let status = response.status();
     let headers = response
@@ -223,7 +236,7 @@ async fn ask(app: Router) -> Result<(StatusCode, Vec<String>, String), Box<dyn E
 }
 
 /// Whether `text` names consent, in any case.
-fn names_consent(text: &str) -> bool {
+pub(super) fn names_consent(text: &str) -> bool {
     text.to_ascii_lowercase().contains("consent")
 }
 
@@ -352,7 +365,7 @@ async fn with_disclosure_the_exclusion_stays_consent_denied() -> TestResult {
 }
 
 /// A node answering `GET /v1/ehr/{ehr_id}` with a synthetic `EHR`.
-async fn ehr_node(system: &str, ehr_id: &str) -> Server {
+pub(super) async fn ehr_node(system: &str, ehr_id: &str) -> Server {
     let server = Server::start().await;
     let ehr = format!(
         r#"{{"system_id":{{"value":"{system}"}},"ehr_id":{{"value":"{ehr_id}"}},"time_created":{{"value":"2026-01-01T00:00:00Z"}}}}"#
@@ -366,7 +379,7 @@ async fn ehr_node(system: &str, ehr_id: &str) -> Server {
 }
 
 /// `GET {base}/v1/ehr` for the patient.
-fn by_subject() -> Result<Request<Body>, http::Error> {
+pub(super) fn by_subject() -> Result<Request<Body>, http::Error> {
     Request::get(format!(
         "/v1/ehr?subject_id={PATIENT}&subject_namespace={NAMESPACE}"
     ))

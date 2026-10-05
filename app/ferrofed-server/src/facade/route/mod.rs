@@ -453,10 +453,56 @@ pub(crate) async fn send(
     federation
         .dependencies()
         .contacted(endpoint.id(), Contact::of_forwarded(&forwarded));
+    let refused = forwarded
+        .as_ref()
+        .is_ok_and(|answer| client.refuses_on_consent(answer));
     federation
         .requests()
-        .forwarded(endpoint.id(), &forwarded, started.elapsed());
+        .forwarded(endpoint.id(), (&forwarded, refused), started.elapsed());
     forwarded.map_err(Failure::Forward)
+}
+
+/// The answer to a routed request the node answered with `forwarded`, under
+/// `provenance`: the node's own ([`answered`]), or [`withheld`]'s where it
+/// replaces it.
+pub(crate) fn passed(
+    provenance: Provenance,
+    (federation, endpoint): (&Federation, &Endpoint),
+    forwarded: Forwarded,
+    ids: (&str, &str),
+) -> Response {
+    provenance.stamp(
+        withheld(federation, endpoint, &forwarded, ids).unwrap_or_else(|| answered(forwarded)),
+    )
+}
+
+/// The answer to a routed request in place of `forwarded`, the node's own,
+/// when the node refused on consent grounds and the deployment does not
+/// disclose consent exclusions: `404 subject-unavailable`, the answer for an
+/// EHR this request may not reach whatever the reason, naming the client's
+/// `request_id` (Regulation (EU) 2025/327 Art 8; RFC 9110 §15.5.5).
+///
+/// The node's refusal is logged for the operator under the gateway's
+/// `logged` id, and counted in the node request metrics by [`send`].
+pub(crate) fn withheld(
+    federation: &Federation,
+    endpoint: &Endpoint,
+    forwarded: &Forwarded,
+    (request_id, logged): (&str, &str),
+) -> Option<Response> {
+    if federation.discloses_consent() {
+        return None;
+    }
+    let client = federation.clients().get(endpoint.id())?;
+    if !client.refuses_on_consent(forwarded) {
+        return None;
+    }
+    tracing::info!(
+        endpoint = %endpoint.id(),
+        request_id = logged,
+        "the node refused on consent grounds, which the answer does not disclose"
+    );
+    Some(error::fixed(Code::SubjectUnavailable, request_id))
 }
 
 /// The node's answer as the client's response: its status, its headers and

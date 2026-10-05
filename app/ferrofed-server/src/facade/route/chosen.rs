@@ -17,7 +17,7 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::HeaderMap;
 
-use super::{Arrived, Deadlines, Failure, answered, failed, forward, held, unheld};
+use super::{Arrived, Deadlines, Failure, failed, forward, held, passed, unheld};
 use crate::error::{self, Code};
 use crate::facade::owner;
 use crate::facade::provenance::Provenance;
@@ -99,7 +99,12 @@ pub(super) async fn to_named(
     let provenance = Provenance::of(snapshot, endpoint);
     let sent = (request, arrived.outbound, &arrived.conveyance);
     match forward(federation, endpoint, sent, &budget, &logged).await {
-        Ok(forwarded) => provenance.stamp(answered(forwarded)),
+        Ok(forwarded) => passed(
+            provenance,
+            (federation, endpoint),
+            forwarded,
+            (request_id, &logged),
+        ),
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
     }

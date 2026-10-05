@@ -17,7 +17,9 @@ disclose = false    # the default is true: the specification's consent-denied (N
 ```
 
 With `disclose = false`, a member the pre-filter excludes is still never sent
-a request, and:
+a request, and the gateway asks its own cross-reference about it with the
+other candidates, so its record matches theirs. The node learns nothing of
+that lookup. Then:
 
 - **A federated query** reports it as a member the cross-reference does not
   know the patient at: `not-resolved`, with the same `error` text that member
@@ -46,8 +48,29 @@ a request, and:
   `meta.federation.consent.error` and on `GET {base}/health/dependencies`,
   since it says nothing about a patient.
 
-The setting covers the pre-filter only. A node that refuses on consent
-grounds with a code the registry lists in `consent_refusal_codes` is still
-reported `consent-denied`, so the setting does not change what a node's
-own refusal shows. Record the choice with your
+A node's own consent refusal, a `403` whose ITS-REST `Error` carries a code
+the registry lists in `consent_refusal_codes`
+([Consent](identity.md#consent)), is withheld the same way on every path:
+
+- **A federated query** reports the node `not-resolved`, with the same
+  `error` text as a member that does not know the patient and no
+  `latency_ms`, so its record is identical to that member's. N40 asks for the
+  latency of every node the gateway sent a request to; a record carrying one
+  would show the refusal, so this deployment leaves it out, a conflict with
+  the specification that is recorded on #212.
+- **A read of an EHR by subject** whose holder refuses answers
+  `404 subject-unavailable` and names no acting endpoint, as for a subject no
+  member knows.
+- **A routed read or write, and a request routed to a chosen node**, that the
+  node refuses answers `404 subject-unavailable` instead of the node's `403`,
+  still naming the endpoint the request was routed to.
+- **An ask-all probe** reads the refusing member as one that does not hold the
+  `ehr_id`; when no member answers with the EHR, the answer is
+  `404 subject-unavailable`, which in this deployment also replaces
+  `no-destination` for an `ehr_id` no member holds.
+- **The operator** still counts the refusal in
+  `ferrofed_node_requests_total{outcome="consent-denied"}`, and a refusal on a
+  routed path is logged with the endpoint and the request id.
+
+Record the choice with your
 [§13.4 deployment decisions](deployment-decisions.md).

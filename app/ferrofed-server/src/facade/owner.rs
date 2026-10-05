@@ -460,6 +460,13 @@ pub enum Unsettled {
         "no member holds the ehr_id: every member asked answered 404, so the request can be routed to no destination (§11.2, §12.5.1)"
     )]
     Nowhere,
+    /// No member the gateway may read holds the `ehr_id`, in a deployment
+    /// that does not disclose consent exclusions: the one answer for an
+    /// `ehr_id` no member holds and for one only a member refusing on
+    /// consent grounds would serve (Regulation (EU) 2025/327 Art 8; RFC 9110
+    /// §15.5.5).
+    #[error("no EHR for this subject is available to this request (§11.2)")]
+    Unavailable,
     /// More than one member holds the `ehr_id`, and the gateway never
     /// chooses between them (§12.5.2, N42).
     #[error(
@@ -493,6 +500,7 @@ impl Unsettled {
     pub fn code(&self) -> Code {
         match self {
             Self::Nowhere => Code::NoDestination,
+            Self::Unavailable => Code::SubjectUnavailable,
             Self::Claimed(_) => Code::EhrIdCollision,
             Self::Unknown { code, .. } => *code,
         }
@@ -565,8 +573,14 @@ impl fmt::Display for Silence {
 /// Two members holding the `ehr_id` are a collision whatever the others
 /// answered. Otherwise every member must have answered: one that did not may
 /// hold it too, so neither one claimant nor none is an answer then.
+///
+/// A member's consent refusal is its `403` where the deployment discloses
+/// consent exclusions. Where it does not, the member is read as one that does
+/// not hold the `ehr_id`, and a probe no member answers with the EHR is
+/// [`Unsettled::Unavailable`] whatever the reason, so the answer never shows
+/// a restriction (Regulation (EU) 2025/327 Art 8).
 #[must_use]
-pub fn settled(answers: Vec<(EndpointId, Answer)>) -> Settled {
+pub fn settled(answers: Vec<(EndpointId, Answer)>, disclosed: bool) -> Settled {
     let mut holders = Vec::new();
     let mut silent = Vec::new();
     for (endpoint, answer) in answers {
@@ -576,6 +590,8 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>) -> Settled {
                 continue;
             }
             Answer::Absent => continue,
+            Answer::ConsentRefused if !disclosed => continue,
+            Answer::ConsentRefused => Silence::Erred(StatusCode::FORBIDDEN),
             Answer::Erred(status) => Silence::Erred(status),
             Answer::Abandoned
             | Answer::Failed(ForwardError::TimeOut { .. } | ForwardError::Expired { .. }) => {
@@ -602,7 +618,8 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>) -> Settled {
     }
     match holders.pop() {
         Some((endpoint, answer)) => Settled::Owner { endpoint, answer },
-        None => Settled::Failed(Unsettled::Nowhere),
+        None if disclosed => Settled::Failed(Unsettled::Nowhere),
+        None => Settled::Failed(Unsettled::Unavailable),
     }
 }
 

@@ -27,6 +27,7 @@ use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::Analysis;
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::dedup::DedupMode;
+use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::generated::query::ResultSet;
 use openehr_its::rest::runtime::ApiError;
 use tracing::Instrument as _;
@@ -285,9 +286,8 @@ fn observed(federation: &Federation, answer: &FederatedAnswer) {
             .iter()
             .find(|record| record.id().as_str() == endpoint.as_str());
         if let Some(record) = record {
-            federation
-                .requests()
-                .settled(endpoint, record.outcome(), contact);
+            let outcome = answer.observed(endpoint).unwrap_or(record.outcome());
+            federation.requests().settled(endpoint, outcome, contact);
         }
     }
 }
@@ -365,6 +365,9 @@ async fn federate(
         .annotating(attributes.clone());
     if let Some(recombination) = analysis.recombination() {
         plan = plan.recombining(recombination.clone());
+    }
+    if !federation.discloses_consent() {
+        plan = plan.withholding_consent(ErrorDetail::Text(String::from(plan::UNAVAILABLE)));
     }
     let dispatch = Dispatch::of(routed, &plan);
     let answer = fanned_out(federation, plan, budget, (started, conveyance, outbound))
