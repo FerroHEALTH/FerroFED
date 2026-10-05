@@ -86,7 +86,8 @@ the orchestrator, never made in a slice.
   `[package.metadata.leptos]`; `[profile.release]` stays the server's. Avoid
   `regex` and generics-heavy code on browser paths (factor a concrete inner
   function). A new browser-side dependency is justified against the bundle
-  bytes it adds, measured from `scripts/release/viewer-site.sh --release`.
+  bytes it adds, measured from `scripts/release/viewer-site.sh --release`,
+  and the bundle is held to the budget of §12.
 - **The bundle name is fixed at compile time.** Leptos names the WebAssembly
   file it loads from `LEPTOS_OUTPUT_NAME`, which the repository's
   `.cargo/config.toml` sets to the crate's `output-name`, so a plain cargo
@@ -258,3 +259,67 @@ tokens of `assets/brand/tokens.css`; motion respects
 - **Never weaken a gate to make a change pass.** A failing wasm32 clippy pass
   usually means a dependency cannot compile for the browser, which is the gate
   working.
+
+## 12. The bundle budget and the `wasm-release` profile
+
+The browser downloads the WebAssembly before the page hydrates, so its size
+is held to a budget in CI. After `scripts/release/viewer-site.sh --release`,
+the `viewer` job runs `scripts/checks/viewer-bundle.sh`, which writes the
+WebAssembly and its JavaScript glue, raw, `gzip -9` and `brotli -q 11`, to the
+job summary, and fails when the brotli-compressed WebAssembly is over the
+budget below. The script reads the budget from this table, so the number
+changes here and nowhere else.
+
+| Measure | Budget |
+|---|---|
+| WebAssembly, brotli-compressed | 225280 bytes |
+
+- **The gating number is the brotli-compressed WebAssembly.** The book's
+  `deployment/binary_size` chapter has a site serve its WebAssembly
+  compressed, every current browser accepts brotli, and the compressed size
+  is the download. The raw and gzip sizes are reported beside it, ungated.
+- **The budget is 220 KiB, 25% over the measured 180057 bytes** (2026-10-05,
+  the operator views of #276, cargo-leptos 0.3.7, wasm-bindgen 0.2.129, Rust
+  1.98.1). The headroom takes ordinary growth and toolchain drift. A slice
+  that needs more raises the budget in this table in its own pull request,
+  with the measured size and the reason, after checking that what it adds
+  belongs in the browser at all (§1).
+- **The profile keeps the overflow checks.** Dropping them saves 11904 bytes
+  raw and 2773 brotli-compressed (1.5%). The console's own browser code does
+  no arithmetic: it renders counts and latencies the server computed. The
+  checks guard the arithmetic of Leptos, serde and the standard library, where
+  a wrapped length or index would draw a wrong page with no error. A 1.5%
+  saving does not justify an exception to `.claude/rules/reliability.md`.
+- **The profile drops the line tables** (`debug = false`). wasm-bindgen
+  strips the debug sections from the bundle it writes, so the inherited
+  `line-tables-only` saves the browser 431 bytes raw and 36 compressed, and
+  costs a 20 MB intermediate and its build time. A browser panic still names
+  its file and line: `console_error_panic_hook` prints the panic location,
+  which rustc embeds as data whatever the debug setting.
+
+| `wasm-release` variant | Raw | gzip -9 | brotli -q 11 |
+|---|---:|---:|---:|
+| as inherited from `release` | 620830 | 230455 | 180093 |
+| without overflow checks | 608926 | 226822 | 177320 |
+| without line tables (the profile) | 620399 | 230413 | 180057 |
+
+The JavaScript glue was 22757 bytes raw and 5718 brotli-compressed in each.
+
+## 13. Icons
+
+- **Icons come from `leptos_icons` with the Lucide pack alone**:
+  `icondata_lu` for the icons and `icondata_core` for the `Icon` type a prop
+  names, never the `icondata` umbrella, which depends on every pack. The three
+  are pinned in the root `[workspace.dependencies]` and join the crate's
+  shared `[dependencies]` with the first view that draws an icon, since the
+  server renders it and the browser hydrates it.
+- **An icon no view names costs nothing.** Every icon of the pack is a
+  `static`, and the linker drops each one nothing references. Measured on the
+  profile of §12: the three crates linked with no icon used changed the
+  bundle by 8 bytes raw. The first icon adds the `Icon` component and the SVG
+  rendering it pulls in, 20801 bytes raw and 6292 brotli-compressed, plus 220
+  bytes of JavaScript glue, once. Each further icon adds its own path data
+  and its call site, about 1 KB raw and 435 bytes compressed for the second.
+  The bundle then holds the path data of the icons used and no other.
+- An icon never carries meaning alone (§10): it sits beside the word it
+  illustrates.

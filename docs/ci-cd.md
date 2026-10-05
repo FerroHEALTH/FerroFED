@@ -177,10 +177,13 @@ lanes build, lint and test its server half on the host; this job runs
 `-D warnings`, so a dependency that cannot compile for the browser fails here,
 and then builds the release site bundle with `scripts/release/viewer-site.sh
 --release`, which freezes `Cargo.lock` around cargo-leptos and checks the
-WebAssembly, its JavaScript glue and the stylesheet are all written. The
-console chooses its two halves by compilation target, never by Cargo feature,
-so the workspace `--all-features` lanes build it like any other member and
-`features (cargo-hack)` has nothing to add for it.
+WebAssembly, its JavaScript glue and the stylesheet are all written.
+`scripts/checks/viewer-bundle.sh` then writes the WebAssembly and JavaScript
+sizes, raw and compressed with gzip and brotli, to the job summary, and fails
+when the brotli-compressed WebAssembly is over the byte budget the console's
+rule file sets. The console chooses its two halves by compilation target,
+never by Cargo feature, so the workspace `--all-features` lanes build it like
+any other member and `features (cargo-hack)` has nothing to add for it.
 
 `crate-version-guard` runs on pull requests only and fails a change that
 alters a `crates/*` member's packaged content without moving its version,
