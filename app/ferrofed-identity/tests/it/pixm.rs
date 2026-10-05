@@ -337,6 +337,45 @@ async fn two_identifiers_in_one_domain_are_never_guessed_between() {
 }
 
 #[tokio::test]
+async fn one_identifier_repeated_in_a_domain_names_one_ehr_id() {
+    let server = stub(
+        200,
+        parameters(&[(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B), (DOMAIN_A, EHR_A)]),
+    )
+    .await;
+    let resolutions = resolve(&resolver(&server)).await;
+    assert_eq!(
+        Some(EHR_A.to_owned()),
+        resolved_at(&resolutions, "node-a"),
+        "a repeated (system, value) is one identifier (PIXm §2:3.83.4.2.2.1): {resolutions:?}"
+    );
+    assert_eq!(Some(EHR_B.to_owned()), resolved_at(&resolutions, "node-b"));
+}
+
+#[tokio::test]
+async fn a_repeat_beside_a_second_value_in_one_domain_stays_ambiguous() {
+    let server = stub(
+        200,
+        parameters(&[
+            (DOMAIN_A, EHR_A),
+            (DOMAIN_A, EHR_A),
+            (DOMAIN_A, "3333cccc-3333-4333-8333-333333333333"),
+        ]),
+    )
+    .await;
+    let resolutions = resolve(&resolver(&server)).await;
+    assert!(
+        is_unavailable(&resolutions, "node-a"),
+        "two distinct values in one domain are never guessed between: {resolutions:?}"
+    );
+    assert!(
+        rendered(&resolutions).contains("more than one identifier for member node-a"),
+        "{}",
+        rendered(&resolutions)
+    );
+}
+
+#[tokio::test]
 async fn an_identifier_that_is_no_ehr_id_is_unavailable_and_not_echoed() {
     let server = stub(200, parameters(&[(DOMAIN_A, "not an ehr id!")])).await;
     let resolutions = resolve(&resolver(&server)).await;
