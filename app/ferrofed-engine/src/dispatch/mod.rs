@@ -350,9 +350,9 @@ impl Contact {
 
     /// Returns what a call that ended in `error` showed of the node: the
     /// status of an answer, [`Contact::Silent`] for a request that left with
-    /// no answer, and [`Contact::Unsent`] for one the error alone shows never
-    /// left. A `DPoP` call whose request left before such an error is read
-    /// by its caller, which saw the call's sends.
+    /// no answer, and [`Contact::Unsent`] for a failure on the gateway's
+    /// side. A deadline or a missing proof whose `sent` names an earlier send
+    /// of the call is read by its caller as that request's.
     #[must_use]
     pub fn of_client_error(error: &ClientError) -> Self {
         match error {
@@ -553,9 +553,9 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint: endpoint.id().clone(),
                 source: Box::new(source),
             })?
-            // NOTE: openehr-its Client::execute (docs.rs) raises DeadlineElapsed before an attempt or
-            // a DPoP nonce re-send, its `sent` naming an earlier send, and one attempt keeps the
-            // prover's evidence of a re-send (dpop::Sent) to the one request of the call.
+            // NOTE: openehr-its Client::execute (docs.rs) raises DeadlineElapsed or DpopProof before an
+            // attempt or a DPoP nonce re-send, its `sent` naming an earlier send; with one attempt,
+            // the nonce re-send is the only send that can follow another.
             .with_retry(RetryPolicy {
                 max_attempts: 1,
                 ..RetryPolicy::default()

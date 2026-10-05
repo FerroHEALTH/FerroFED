@@ -124,7 +124,7 @@ pub const ITS_REST_PREFIX: &str = "/v1/";
 /// The family moves in lockstep, so one version names every member the
 /// workspace pins (`openehr-query`, `openehr-its`, `openehr-base`,
 /// `openehr-rm`, `openehr-sdt`).
-pub const OPENEHR_FAMILY: &str = "0.0.83";
+pub const OPENEHR_FAMILY: &str = "0.0.84";
 
 /// Returns `error` and every cause behind it as one line.
 pub(crate) fn chain(error: &dyn std::error::Error) -> String {

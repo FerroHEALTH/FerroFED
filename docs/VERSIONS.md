@@ -189,7 +189,7 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is the latest version on crates.io, 0.0.83 since 2026-10-05.
+pin is the latest version on crates.io, 0.0.84 since 2026-10-05.
 `openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
 family pin with its default features off, so only the grammar is compiled:
 the onward grant (#81) writes and checks the scope it requests with it, and client
@@ -197,11 +197,11 @@ authentication (#80) reads every caller's scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.83 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.83 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.83 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.83 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-sdt` | 0.0.83 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.84 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.84 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.84 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.84 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-sdt` | 0.0.84 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -249,9 +249,13 @@ rewrote the scheme is gone (#448).
 send of the call went out, such as the first send of a request a node
 answered with a `use_dpop_nonce` challenge. The node clients read a deadline
 before the nonce re-send as the node's time-out from that field, where they
-inferred it from what the call's prover saw (#470, #566). The prover's
-record still reads a `DpopProof` failure of the re-send, which carries no
-such field.
+inferred it from what the call's prover saw (#470, #566). On that pin the
+prover's record still read a `DpopProof` failure of the re-send, which
+carried no such field.
+0.0.84, published on 2026-10-05, carries FerroEHR #3565: `ClientError::DpopProof`
+gains the same `sent` field, true when the proof for a retry or for the nonce
+re-send failed after an earlier send went out. The node clients read both
+errors from the client, and the per-call prover record is gone (#574).
 
 ## FHIR model crate (crates.io)
 
