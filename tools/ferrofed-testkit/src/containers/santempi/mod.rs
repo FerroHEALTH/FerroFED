@@ -296,7 +296,8 @@ impl SanteMpi {
 
     /// Waits until SanteMPI has installed the OAuth 2.0 flow policies,
     /// grants them to the debugging application, then polls the token
-    /// endpoint with it until it issues a token, or the budget runs out.
+    /// endpoint with it until it issues a token and the administration
+    /// interface answers, or the budget runs out.
     ///
     /// The grant precedes the first token request, so no decision SanteMPI
     /// caches predates it.
@@ -309,7 +310,10 @@ impl SanteMpi {
                 granted = installed.as_deref() == Some("1")
                     && self.database_says(GRANT_FLOWS).await.is_some();
             }
-            if granted && self.token(&administrator()).await.is_ok() {
+            if granted
+                && let Ok(token) = self.token(&administrator()).await
+                && self.started(&token).await
+            {
                 return Ok(());
             }
             tokio::time::sleep(READINESS_INTERVAL).await;
@@ -319,6 +323,20 @@ impl SanteMpi {
             budget: READINESS_BUDGET,
             log: self.log_tail().await,
         })
+    }
+
+    /// Returns whether SanteMPI has finished its startup: its token endpoint
+    /// answers before the rest, which refuses with `503` until then.
+    async fn started(&self, token: &str) -> bool {
+        let request = self
+            .http
+            .get(format!(
+                "{}/ami/SecurityApplication?name=fiddler",
+                self.origin
+            ))
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header(ACCEPT, "application/xml");
+        send(request, "the startup probe").await.is_ok()
     }
 
     /// Runs `sql` with `psql` in the database container and returns what it
