@@ -48,6 +48,9 @@ pub(crate) fn record(incident: &Incident) {
 }
 
 /// The body of `GET {base}/operator/incidents`.
+///
+/// It is one page by construction: at most [`RECENT_PER_KIND`] incidents of
+/// each of the four kinds, never more than [`MAX_PAGE`] in all.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IncidentReport {
     /// How many incidents of each kind were emitted since the process
@@ -287,7 +290,7 @@ mod tests {
     use super::{
         IncidentReport, MAX_PAGE, Page, PageRequest, RECENT_PER_KIND, RecordedIncident, record,
     };
-    use crate::incident::{Detection, Incident};
+    use crate::incident::{Detection, Incident, Kind};
     use jiff::Timestamp;
 
     #[test]
@@ -355,6 +358,16 @@ mod tests {
                 .any(|recorded| recorded.creating_system_id.as_deref()
                     == Some("legacy-x.example.org")),
             "{report:?}"
+        );
+    }
+
+    #[test]
+    fn the_incident_report_never_holds_more_than_a_page() {
+        let most = RECENT_PER_KIND * Kind::ALL.len();
+        let page = usize::try_from(MAX_PAGE).expect("a page fits a usize");
+        assert!(
+            most <= page,
+            "{most} recent incidents over a page of {page}"
         );
     }
 

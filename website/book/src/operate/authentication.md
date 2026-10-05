@@ -256,13 +256,24 @@ Three read-only routes on the client listener give the
 | `GET {base}/operator/creating-systems` | the `creating_system_id` routing table: each member's own `system_id`, each `[[creating_system]]` mapping, and each learned or withdrawn mapping |
 | `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL |
 
+The incident report is `{"counts": {...}, "recent": [...]}`: `counts` names
+every incident kind with how many the gateway emitted since it started, and
+`recent` lists the kept incidents oldest first, each with its `kind`, its
+RFC 3339 `at`, its `description`, and the `creating_system_id`, `ehr_id`,
+`detection`, `endpoints` and `nodes` it is about. The gateway keeps the last
+25 of each of the four kinds, so the report is one page of at most 100
+incidents and takes no paging parameters.
+
 The routing table and the stored queries answer one page, as
 `{"items": [...], "offset": 0, "total": 2}`, where `total` counts every row
 and `items` holds at most `limit` of them from `offset`. Both query
 parameters are optional: `offset` defaults to `0` and `limit` to `100`, its
 most. A `limit` of `0` or over `100` is a `400` (`parameter-invalid`). A
 stored query is the ITS-REST `StoredQuery`: `name`, `type`, `version`,
-`saved` and `q`.
+`saved` and `q`. The bodies are the types of `ferrofed_registry::operator`,
+which the operator console reads as well, and the stored query is the
+`openehr-its` `StoredQuery`, so the gateway and the console share one
+definition of each.
 
 A caller reaches them only with a token whose `scope` holds the
 `operator_scope` its issuer's entry names, as one whole scope token:
