@@ -510,7 +510,10 @@ pub(crate) fn signed(text: &str) -> String {
 /// test of what an absent `[audit]` means.
 #[cfg_attr(
     not(feature = "binding-ihe"),
-    expect(dead_code, reason = "only the IHE binding's tests read an absent [audit]")
+    expect(
+        dead_code,
+        reason = "only the IHE binding's tests read an absent [audit]"
+    )
 )]
 pub(crate) fn signing_only(text: &str) -> String {
     if text.contains("[registry") && !text.contains("[signing]") {

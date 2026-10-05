@@ -36,7 +36,7 @@ use openehr_its::rest::runtime::ApiError;
 use tracing::Instrument as _;
 use tracing::field::Empty;
 
-use crate::access::Accessed;
+use crate::access::{Accessed, NoAccess};
 use crate::error::{self, Code};
 use crate::facade::accessed;
 use crate::facade::provenance::{Dispatch, Provenance};
@@ -99,8 +99,12 @@ pub(crate) async fn answer(
             if let Some(applied) = wait.filter(|_| budget != configured) {
                 applied_wait(&mut response, applied);
             }
+            // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the gate stores the record before
+            // the answer leaves, and admits an answer with none only when no node was sent it.
             if let Some(accessed) = accessed {
                 response.extensions_mut().insert(accessed);
+            } else {
+                response.extensions_mut().insert(NoAccess);
             }
             provenance.stamp(response)
         }

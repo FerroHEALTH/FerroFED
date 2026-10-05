@@ -3,6 +3,8 @@
 
 //! Integration tests through the library run path the binary shares.
 
+#[cfg(feature = "binding-ihe")]
+mod access;
 mod admission;
 mod aggregate;
 mod ask_all;

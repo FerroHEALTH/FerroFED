@@ -202,7 +202,13 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         .with_state(Arc::clone(&state))
         // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate,
         // so every record names the caller the gate verified.
-        .layer(axum::middleware::from_fn(access::record))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::new(access::Gate::new(
+                Arc::clone(&state),
+                server.base_path.clone(),
+            )),
+            access::record,
+        ))
         .layer(axum::middleware::from_fn_with_state(guard, auth::guard))
         // NOTE: RFC 7517 §5, DID 1.0 §7.1: published key material is public, so a
         // binding's documents are answered outside the client authentication gate.

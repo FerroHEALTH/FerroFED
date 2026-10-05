@@ -34,7 +34,7 @@ use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use axum::extract::{ConnectInfo, Request};
+use axum::extract::{ConnectInfo, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
 use ehds_logging::classify::{Classification, Evidence};
@@ -42,12 +42,16 @@ use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{AccessRecord, Accessor, Action, DataSubject, Origin, Outcome, Purpose};
 use ehds_logging::sink::AccessSink;
 use ferrofed_engine::outbound_id::OutboundId;
-use http::StatusCode;
+use http::{Method, StatusCode};
+use openehr_federation::headers;
+use openehr_its::rest::routes::{self, Lookup};
 use secrecy::SecretString;
 
 use crate::auth::caller::Caller;
+use crate::base_path::BasePath;
 use crate::error::{self, Code};
 use crate::request_id;
+use crate::state::AppState;
 
 /// The access log of one federation: the category map and the sink.
 pub struct AccessLog {
@@ -230,26 +234,107 @@ fn accessor(caller: &Caller) -> Accessor {
     }
 }
 
-/// Records the access the handler behind `next` served, if it served one,
-/// and withholds its answer when the record cannot be stored.
-pub async fn record(request: Request, next: Next) -> Response {
+/// A handler's statement that the request it answered reached no patient
+/// data at a node, such as a query no member was sent: the gate admits its
+/// answer with no record.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct NoAccess;
+
+/// The gate every answer passes on its way out.
+///
+/// It stores the record of the access the answer carries before the answer
+/// leaves, and refuses an answer of a patient-data operation that carries
+/// data and no access.
+#[derive(Debug)]
+pub struct Gate {
+    state: Arc<AppState>,
+    base: BasePath,
+}
+
+impl Gate {
+    /// The gate over the federation `state` serves, under the base `base`.
+    #[must_use]
+    pub fn new(state: Arc<AppState>, base: BasePath) -> Self {
+        Self { state, base }
+    }
+
+    /// Whether the federation `state` serves keeps an access log.
+    fn logs(&self) -> bool {
+        self.state
+            .federation()
+            .is_some_and(|federation| federation.access_log().is_some())
+    }
+
+    /// Whether `method` on `path` is an operation that reaches patient data
+    /// at a node: a query execution, a request in the EHR area, the creation
+    /// of an EHR, a DEMOGRAPHIC request, or the read of an EHR by subject.
+    fn reaches_patient_data(&self, method: &Method, path: &str) -> bool {
+        let under_base = if self.base.is_root() {
+            Some(path)
+        } else {
+            path.strip_prefix(self.base.as_str())
+        };
+        let Some(relative) = under_base.and_then(|path| path.strip_prefix("/v1")) else {
+            return false;
+        };
+        let Lookup::Matched(matched) = routes::lookup(method, relative) else {
+            return false;
+        };
+        (matched.group == QUERY_GROUP && matched.operation_id.starts_with(QUERY_EXECUTION))
+            || crate::facade::route::in_ehr_area(&matched)
+            || crate::facade::write::creates_ehr(&matched)
+            || crate::facade::route::in_demographic_area(&matched)
+            || crate::facade::subject::serves(&matched)
+    }
+}
+
+/// The API group of the Query API (ITS-REST).
+const QUERY_GROUP: &str = "query";
+
+/// The prefix of every query-execution operation of the Query API.
+const QUERY_EXECUTION: &str = "query_execute";
+
+/// Whether `response` carries what a node answered: a success, or an answer
+/// that names the endpoint that acted for it (N31).
+fn carries_data(response: &Response) -> bool {
+    response.status().is_success() || response.headers().contains_key(headers::ENDPOINT)
+}
+
+/// Stores the record of the access the answer of `next` carries before the
+/// answer leaves.
+///
+/// The answer is withheld when the record cannot be stored, or when a
+/// patient-data answer carries data and no access at all.
+/// Every answer of the gateway's surface passes here, so no path that
+/// returns data can leave without its record.
+pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next) -> Response {
     let caller = request.extensions().get::<Caller>().cloned();
     let address = request
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|ConnectInfo(peer)| peer.ip());
-    let outbound = request
+    let logged = request
         .extensions()
         .get::<OutboundId>()
-        .map(ToString::to_string);
+        .map(ToString::to_string)
+        .unwrap_or_default();
     let request_id = request_id::of(request.headers())
         .unwrap_or_default()
         .to_owned();
+    let reaches = gate.reaches_patient_data(request.method(), request.uri().path());
     let mut response = next.run(request).await;
-    let Some(accessed) = response.extensions_mut().remove::<Accessed>() else {
+    let accessed = response.extensions_mut().remove::<Accessed>();
+    let declared_none = response.extensions_mut().remove::<NoAccess>().is_some();
+    let Some(accessed) = accessed else {
+        if reaches && !declared_none && carries_data(&response) && gate.logs() {
+            tracing::error!(
+                request_id = logged,
+                "an answer of a patient-data operation carried no access, so it is withheld"
+            );
+            return error::fixed(Code::AccessUnrecorded, &request_id);
+        }
         return response;
     };
-    let logged = outbound.unwrap_or_default();
     let Some(caller) = caller else {
         tracing::error!(
             request_id = logged,

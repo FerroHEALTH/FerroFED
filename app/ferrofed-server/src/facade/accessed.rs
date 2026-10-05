@@ -70,7 +70,7 @@ pub(super) fn query(
         .endpoints()
         .iter()
         .any(|record| dispatched(record.outcome()));
-    if !contacted {
+    if !contacted && answered.rows.is_empty() {
         return None;
     }
     let analysis = answered.analysis;
