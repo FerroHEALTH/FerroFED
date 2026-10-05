@@ -267,4 +267,13 @@ pub enum Error {
         /// The key.
         key: String,
     },
+    /// The cookies are set without `Secure` on a console that is not on
+    /// loopback.
+    #[error(
+        "{key} = false is admitted only when oidc.redirect_uri is http on a loopback host (localhost, 127.0.0.0/8 or ::1)"
+    )]
+    InsecureCookie {
+        /// The key.
+        key: String,
+    },
 }

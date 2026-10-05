@@ -99,8 +99,10 @@ impl Config {
     /// Returns [`Error::Address`] for a listen address that does not parse,
     /// [`Error::Url`] and [`Error::UrlShape`] for a URL that does not parse
     /// or is not one its key admits, [`Error::Zero`] for a zero timeout or
-    /// session bound, [`Error::Missing`] for an absent `[oidc]` key, and the
-    /// secret errors of a `_file`.
+    /// session bound, [`Error::Missing`] for an absent `[oidc]` key,
+    /// [`Error::InsecureCookie`] for `secure_cookie = false` on a console
+    /// whose `redirect_uri` is not `http` on loopback, and the secret errors
+    /// of a `_file`.
     pub fn resolve(&self) -> Result<Settings, Error> {
         let listen = self
             .server
@@ -124,6 +126,17 @@ impl Config {
             max_sessions: bound("session.max_sessions", session.max_sessions)?,
         };
         let oidc = self.oidc.as_ref().map(resolve_oidc).transpose()?;
+        // NOTE: RFC 6265bis §4.1.2.5: a cookie without `Secure` travels over plain
+        // HTTP, so it is admitted only where the console itself is HTTP on loopback.
+        if !session.secure_cookie
+            && oidc.as_ref().is_some_and(|oidc| {
+                !(oidc.redirect_uri.scheme() == "http" && is_loopback(&oidc.redirect_uri))
+            })
+        {
+            return Err(Error::InsecureCookie {
+                key: String::from("session.secure_cookie"),
+            });
+        }
         Ok(Settings {
             listen,
             site_root: self.server.site_root.clone(),
@@ -253,13 +266,7 @@ fn provider_url(key: &str, text: &str) -> Result<Url, Error> {
     let url = web_url(key, text)?;
     // NOTE: RFC 6749 §3.1: the authorization server MUST require TLS at its
     // authorization endpoint, so plain `http` is admitted only on loopback.
-    let loopback = match url.host() {
-        Some(url::Host::Domain(name)) => name == "localhost",
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        None => false,
-    };
-    if url.scheme() == "https" || loopback {
+    if url.scheme() == "https" || is_loopback(&url) {
         Ok(url)
     } else {
         Err(Error::UrlShape {
@@ -303,4 +310,14 @@ fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
         });
     }
     Ok(SecretString::from(value))
+}
+
+/// Whether `url` names a loopback host: `localhost`, `127.0.0.0/8` or `::1`.
+fn is_loopback(url: &Url) -> bool {
+    match url.host() {
+        Some(url::Host::Domain(name)) => name == "localhost",
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    }
 }
