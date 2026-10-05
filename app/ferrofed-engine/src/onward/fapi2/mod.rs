@@ -16,7 +16,8 @@
 //!   §5.3.3.1), an assertion whose `aud` is the issuer identifier as one
 //!   string (§5.3.3.1), signed `ES256` (§5.4.1 admits `PS256`, `ES256` and
 //!   `EdDSA`) with a P-256 key of the grant's own, which the gateway publishes
-//!   in its JWK Set (§5.4.2);
+//!   in its JWK Set (§5.4.2), with the previous key beside it while the key
+//!   is rotated ([`Fapi2Grant::with_previous_client_key`]);
 //! - every token is sender-constrained with `DPoP` (§5.3.2.1, §5.3.3.1;
 //!   RFC 9449), proven with a P-256 key, so a grant without one cannot be
 //!   built; a nonce the server demands is answered (§5.3.3.1, RFC 9449 §8);
@@ -49,6 +50,7 @@ use std::time::Duration;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use jsonwebtoken::Algorithm;
+use jsonwebtoken::jwk::JwkSet;
 use oauth_server_metadata::Issuer;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use url::Url;
@@ -102,7 +104,12 @@ pub enum Fapi2GrantError {
     /// §5.4.1).
     #[error("the client key does not sign ES256, which FAPI 2.0 §5.4.1 requires of it")]
     ClientKey,
-    /// The client key cannot be held.
+    /// The previous client key does not sign `ES256`, so no assertion the
+    /// grant signed with it can be one to verify (FAPI 2.0 Security Profile
+    /// §5.4.1).
+    #[error("the previous client key does not sign ES256, which FAPI 2.0 §5.4.1 requires of it")]
+    PreviousClientKey,
+    /// The client key cannot be held: the previous key is the current one.
     #[error("the client key cannot be held")]
     Keys(#[source] KeyError),
     /// The `DPoP` key does not sign `ES256` (FAPI 2.0 Security Profile
@@ -168,6 +175,36 @@ impl Fapi2Grant {
             client_key: Arc::new(client_key),
             dpop,
         })
+    }
+
+    /// This grant, publishing `previous` beside its client key while it is
+    /// rotated: until the grant is built again without it.
+    ///
+    /// Only the current client key signs. An authorization server that
+    /// fetches the gateway's JWK Set during the rotation still finds the
+    /// key an assertion signed before it named (FAPI 2.0 Security Profile
+    /// §5.4.2). No specification governs the rotation: our own design.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Fapi2GrantError::PreviousClientKey`] for a key that does
+    /// not sign `ES256`, and [`Fapi2GrantError::Keys`] when `previous` is the
+    /// current client key.
+    pub fn with_previous_client_key(
+        mut self,
+        previous: SigningKey,
+    ) -> Result<Self, Fapi2GrantError> {
+        if previous.algorithm() != ALGORITHM {
+            return Err(Fapi2GrantError::PreviousClientKey);
+        }
+        let ring = KeyRing::until_removed(
+            self.client_key.current().clone(),
+            previous,
+            Arc::new(SystemClock),
+        )
+        .map_err(Fapi2GrantError::Keys)?;
+        self.client_key = Arc::new(ring);
+        Ok(self)
     }
 
     /// This grant, naming `resource` as the target service (RFC 8707 §2).
@@ -246,6 +283,21 @@ impl Fapi2Grant {
     #[must_use]
     pub fn client_key(&self) -> &SigningKey {
         self.client_key.current()
+    }
+
+    /// The previous client key while the grant is rotated, published and
+    /// never signing.
+    #[must_use]
+    pub fn previous_client_key(&self) -> Option<&SigningKey> {
+        self.client_key.previous()
+    }
+
+    /// The public halves the gateway publishes for the grant in its JWK
+    /// Set: the client key, then the previous one while the grant is
+    /// rotated (RFC 7517 §5; FAPI 2.0 Security Profile §5.4.2).
+    #[must_use]
+    pub fn published_client_keys(&self) -> JwkSet {
+        self.client_key.published()
     }
 
     /// The key the tokens are bound to, which proves every request to the

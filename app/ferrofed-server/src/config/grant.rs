@@ -28,7 +28,7 @@
 //!
 //! No specification governs the shape of the table: our own design.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ferrofed_engine::onward::authorization_details::{
@@ -84,6 +84,11 @@ pub struct Fapi2 {
     /// private key in PKCS#8 PEM, read at boot; its public half is published
     /// in the gateway's JWK Set.
     pub client_key_file: Option<PathBuf>,
+    /// A file holding the previous client key while the key is rotated, a
+    /// P-256 private key in PKCS#8 PEM, read at boot. Its public half is
+    /// published beside the current key's until the key is removed from the
+    /// configuration, and it never signs.
+    pub previous_client_key_file: Option<PathBuf>,
     /// A file holding the key the tokens are bound to with `DPoP` (RFC 9449),
     /// a P-256 private key in PKCS#8 PEM, read at boot. Required.
     pub dpop_key_file: Option<PathBuf>,
@@ -270,6 +275,10 @@ pub(super) fn resolve_fapi2(section: &str, fapi2: &Fapi2) -> Result<Fapi2Grant, 
         (scope, details),
     )
     .map_err(refused)?;
+    if let Some(path) = &fapi2.previous_client_key_file {
+        let previous = p256_key(&format!("{section}.previous_client_key"), path)?;
+        grant = grant.with_previous_client_key(previous).map_err(refused)?;
+    }
     if let Some(resource) = &fapi2.resource {
         grant = grant.with_resource(resource).map_err(refused)?;
     }
@@ -294,10 +303,16 @@ fn client_key(section: &str, fapi2: &Fapi2) -> Result<SigningKey, Error> {
         .client_key_file
         .as_deref()
         .ok_or_else(|| Error::Missing { key: key.clone() })?;
-    let pem = secret::<Secret>(&format!("{section}.client_key"), None, Some(path))?
-        .ok_or_else(|| Error::Missing { key: key.clone() })?;
+    p256_key(&format!("{section}.client_key"), path)
+}
+
+/// Reads the P-256 key the `_file` sibling of `key` names, at `path`.
+fn p256_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
+    let named = format!("{key}_file");
+    let pem = secret::<Secret>(key, None, Some(path))?
+        .ok_or_else(|| Error::Missing { key: named.clone() })?;
     SigningKey::from_p256_pem(&pem.to_secret_string())
-        .map_err(|source| GrantFault::ClientKey { key, source }.into())
+        .map_err(|source| GrantFault::ClientKey { key: named, source }.into())
 }
 
 /// Reads the `DPoP` key `dpop_key_file` names.
