@@ -51,14 +51,14 @@ const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS 
 
 /// A harness Nuts node, the grant at it, and the synthetic credential it
 /// trusts.
-struct Setup {
-    authority: NutsNode,
-    grant: NutsGrant,
-    prover: Arc<Prover>,
-    credential: String,
+pub(crate) struct Setup {
+    pub(crate) authority: NutsNode,
+    pub(crate) grant: NutsGrant,
+    pub(crate) prover: Arc<Prover>,
+    pub(crate) credential: String,
 }
 
-async fn setup() -> Result<Setup, Box<dyn Error>> {
+pub(crate) async fn setup() -> Result<Setup, Box<dyn Error>> {
     let authority = NutsNode::start("hospital-a", SCOPE, Some(300)).await;
     authority.define(DEFINITION);
     let holder_pem = oauth::p256_pem()?;

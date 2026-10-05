@@ -57,6 +57,8 @@ mod mutual_tls;
 #[cfg(feature = "binding-nl")]
 mod nl_gf;
 mod no_destination;
+#[cfg(feature = "binding-nl")]
+mod nvi_nuts;
 mod onward;
 mod onward_exchange;
 mod onward_fapi2;

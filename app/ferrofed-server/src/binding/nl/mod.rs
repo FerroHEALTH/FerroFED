@@ -20,6 +20,7 @@ pub mod nuts;
 pub mod nvi;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use ferrofed_identity::consent::ConsentPrefilter;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -31,7 +32,7 @@ use crate::binding::{
 use crate::config::error::Error;
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
-use crate::config::{Config, Credentials};
+use crate::config::{Config, Credentials, Localization};
 use crate::federation::error::FederationError;
 use crate::localization::LocalizationError;
 
@@ -65,7 +66,8 @@ pub struct NlGfSettings {
 }
 
 /// Resolves `[nl_gf]`: an NVI URL that parses, carries no userinfo and is
-/// `https` outside development, a bearer token or basic credentials, and
+/// `https` outside development, a bearer token, basic credentials or the
+/// Nuts grant for the NVI, a bearer token or basic credentials for Mitz, and
 /// every secret and file read.
 ///
 /// # Errors
@@ -73,8 +75,10 @@ pub struct NlGfSettings {
 /// [`Error::Missing`] for no registry or no `url`, [`Error::Url`] for a URL
 /// that does not parse, [`Error::UrlCredentials`] for one that carries a
 /// user name or a password, [`Error::Cleartext`] for one that is not
-/// `https` outside the development profile, [`Error::GrantNotHere`] for an
-/// OAuth 2.0 grant, and the errors of a secret or a file that cannot be read.
+/// `https` outside the development profile, [`Error::NviGrant`] for an
+/// OAuth 2.0 or FAPI 2.0 grant for the NVI, [`Error::GrantNotHere`] for a
+/// grant for Mitz, the errors of a Nuts grant that cannot be built, and the
+/// errors of a secret or a file that cannot be read.
 fn resolve(config: &Config) -> Result<Option<NlGfSettings>, Error> {
     let Some(nl_gf) = &config.nl_gf else {
         return Ok(None);
@@ -140,11 +144,15 @@ impl Binding for Nl {
         settings: &Settings,
         snapshot: &RegistrySnapshot,
     ) -> Result<Option<LocalizerSeam>, LocalizationError> {
+        let timeout = settings.federation.localization.map_or_else(
+            || Duration::from_millis(Localization::default().timeout_ms),
+            |localization| localization.timeout,
+        );
         settings
             .nl_gf
             .as_ref()
             .and_then(|nl_gf| nl_gf.nvi.as_ref())
-            .map(|section| nvi::localizer(section, snapshot))
+            .map(|section| nvi::localizer(section, snapshot, timeout))
             .transpose()
     }
 
@@ -199,6 +207,11 @@ impl Binding for Nl {
                 url,
                 transport::identity_site(key, credentials.as_deref()),
             )?);
+        }
+        // NOTE: Nuts RFC021 §7, every endpoint is TLS-protected, the NVI's
+        // authorization server as a node's.
+        if let Some((url, site)) = nl_gf.nvi.as_ref().and_then(nvi::NviSettings::grant_site) {
+            cleartext.extend(transport::protected_payload(settings.profile, &url, site)?);
         }
         Ok(cleartext)
     }

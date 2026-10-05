@@ -7,9 +7,10 @@
 //! takes its credential from [`authentication`] and its TLS material from
 //! [`tls`], both over `ferrofed_identity::fhir`, so the mapping from the
 //! configuration is written once (#507). A credential section names a bearer
-//! token or basic credentials; an OAuth 2.0, Nuts or FAPI 2.0 grant belongs
-//! to a node's onward credentials alone, and here it is refused, never read
-//! as no credential. No specification governs the mapping: our own design.
+//! token or basic credentials; an OAuth 2.0, Nuts or FAPI 2.0 grant is
+//! refused here, never read as no credential. The NVI's Nuts grant is the
+//! one grant a service takes, and the Dutch binding wires it itself. No
+//! specification governs the mapping: our own design.
 
 use ferrofed_identity::fhir::{Authentication, Tls, TlsError};
 use ferrofed_registry::secret::Secret;

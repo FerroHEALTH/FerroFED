@@ -51,7 +51,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 const MEMBERS: [&str; 3] = ["node-a", "node-b", "node-c"];
 
 /// The care provider, by a synthetic URA, whose data each member holds.
-const URAS: [&str; 3] = ["ura-test-0001", "ura-test-0002", "ura-test-0003"];
+pub(crate) const URAS: [&str; 3] = ["ura-test-0001", "ura-test-0002", "ura-test-0003"];
 
 /// The `ehr_id` domains of the three members at the PIX Manager.
 const DOMAINS: [EhrDomain; 3] = [EhrDomain::new(21), EhrDomain::new(22), EhrDomain::new(23)];
@@ -62,13 +62,13 @@ const EHR_A: Uuid = Uuid::from_u128(0x7d8e_7d8e_7d8e_4d8e_8d8e_7d8e_7d8e_7a19);
 const EHR_B: Uuid = Uuid::from_u128(0xb3c1_b3c1_b3c1_4b3c_8b3c_b3c1_b3c1_05f0);
 
 /// The pseudonymised patient the application presents, in the example arc.
-fn patient() -> PatientId {
+pub(crate) fn patient() -> PatientId {
     PatientId::new(1, 487)
 }
 
 /// The façade query of §B.7 Step 0, naming only the pseudonym, with the one
 /// column the mock nodes answer.
-fn query() -> String {
+pub(crate) fn query() -> String {
     let patient = patient();
     format!(
         "SELECT c/uid/value AS composition_id FROM EHR e CONTAINS COMPOSITION c \
@@ -99,7 +99,7 @@ fn gateway(
 
 /// The configuration under `profile` of the gateway [`gateway`] builds, with
 /// its registry document written into `dir`.
-fn configuration(
+pub(crate) fn configuration(
     dir: &Path,
     profile: &str,
     urls: [&str; 3],
@@ -150,7 +150,7 @@ fn edited(
 
 /// The harness PIX Manager, fed with the patient's `ehr_id` at node A and
 /// node B.
-async fn fed_manager() -> Result<PixManager, Box<dyn Error>> {
+pub(crate) async fn fed_manager() -> Result<PixManager, Box<dyn Error>> {
     let pix = PixManager::start().await?;
     let feed = CrossReferenceSeed {
         patient: patient(),
@@ -164,7 +164,7 @@ async fn fed_manager() -> Result<PixManager, Box<dyn Error>> {
     Ok(pix)
 }
 
-async fn members() -> [Server; 3] {
+pub(crate) async fn members() -> [Server; 3] {
     [
         node_answering("a-uid::node-a.example.org::1").await,
         node_answering("b-uid::node-b.example.org::1").await,
@@ -172,7 +172,7 @@ async fn members() -> [Server; 3] {
     ]
 }
 
-async fn asked_counts(servers: &[Server; 3]) -> Result<[usize; 3], Box<dyn Error>> {
+pub(crate) async fn asked_counts(servers: &[Server; 3]) -> Result<[usize; 3], Box<dyn Error>> {
     Ok([
         received(&servers[0]).await?.len(),
         received(&servers[1]).await?.len(),

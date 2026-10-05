@@ -1143,7 +1143,15 @@ GFI-004 names the RFC 7523 JWT bearer grant with a presentation in both
 `assertion` and `client_assertion`; Nuts RFC021 defines the
 `vp_token-bearer` grant with no client assertion instead, and FerroFED speaks
 RFC021 (recorded on #88). The gateway does not serve its
-DID document.
+DID document. The same grant authenticates the gateway to the NVI as a data
+user (built with #539; the IG's Localization page, GFI-005): the engine's
+`NutsAuthorizer` holds a `NutsCredentials` for the service and is the
+authorizer of `nl-generic-functions`' NVI client, which asks it for the
+`Authorization` and `DPoP` headers of each search, handing it the URL
+without the query that holds the pseudonym, and tells it every answer, so a
+`401` drops the token and a demanded nonce is answered once. An `oauth2` or
+`fapi2` grant for the NVI is refused: the IG defines none for the
+Localization Service.
 
 **The FAPI 2.0 grant** (built with #497; Annex B §B.4a, §13.3, §13.4). An
 endpoint whose `[credentials]` name a `fapi2` grant authenticates to an
