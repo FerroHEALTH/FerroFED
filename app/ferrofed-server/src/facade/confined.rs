@@ -27,6 +27,7 @@ use std::time::Instant;
 
 use axum::response::Response;
 use ferrofed_engine::onward::conveyance::{Confinement, Conveyance};
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::patient::{PatientRef, PatientRefError};
 use ferrofed_identity::resolver::{Resolution, ResolverError};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -99,8 +100,9 @@ impl Unconfined {
     }
 }
 
-/// The confinement of `caller`'s grant, resolved before `deadline`, or
-/// `None` for a caller whose grant is not confined to a patient.
+/// The confinement of `caller`'s grant, resolved on the caller's behalf
+/// before `deadline`, or `None` for a caller whose grant is not confined to
+/// a patient.
 ///
 /// The `ehrId` is resolved at every member, the bound member included, and
 /// that member keeps the `ehrId` itself: the token names the patient's EHR
@@ -116,7 +118,9 @@ pub(crate) async fn confinement(
     caller: Option<&Caller>,
     deadline: Instant,
 ) -> Result<Option<Confinement>, Unconfined> {
-    let Some(context) = caller.and_then(Caller::patient) else {
+    let Some((caller, context)) =
+        caller.and_then(|caller| caller.patient().map(|context| (caller, context)))
+    else {
         return Ok(None);
     };
     let snapshot = federation.snapshot();
@@ -134,7 +138,9 @@ pub(crate) async fn confinement(
     )
     .map_err(Unconfined::Patient)?;
     let members: Vec<NodeId> = snapshot.nodes().map(|node| node.id().clone()).collect();
-    let mut resolutions = resolver.resolve(&patient, &members, deadline).await;
+    let mut resolutions = resolver
+        .resolve(&patient, &members, &caller.on_behalf(), deadline)
+        .await;
     let mut held: BTreeMap<NodeId, EhrId> = BTreeMap::new();
     for member in members {
         match resolutions.remove(&member) {
@@ -163,8 +169,9 @@ pub(crate) async fn confinement(
 }
 
 /// Whether `patient`, the subject a confined request names, is the patient
-/// `confinement` names: resolved at the bound member alone before
-/// `deadline`, it must be the token's own `ehr_id` there (§5.2).
+/// `confinement` names: resolved at the bound member alone, on behalf of
+/// `on_behalf`, before `deadline`, it must be the token's own `ehr_id` there
+/// (§5.2).
 ///
 /// Nothing else is asked first, no localizer, no consent pre-filter and no
 /// other member, so a confined caller who names another patient makes the
@@ -178,6 +185,7 @@ pub(crate) async fn names_own(
     federation: &Federation,
     confinement: &Confinement,
     patient: &PatientRef,
+    on_behalf: &OnBehalfOf,
     deadline: Instant,
 ) -> Result<bool, Unconfined> {
     let bound = federation
@@ -188,7 +196,7 @@ pub(crate) async fn names_own(
         .clone();
     let cross_reference = federation.resolver().ok_or(Unconfined::NoResolver)?;
     let mut answers = cross_reference
-        .resolve(patient, std::slice::from_ref(&bound), deadline)
+        .resolve(patient, std::slice::from_ref(&bound), on_behalf, deadline)
         .await;
     match answers.remove(&bound) {
         Some(Resolution::Resolved(ehr_id)) => {

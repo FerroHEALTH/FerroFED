@@ -18,6 +18,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::behalf::OnBehalfOf;
 use crate::patient::{IdentifierNamespace, PatientRef};
 
 /// Why a demographics service could not answer.
@@ -115,7 +116,12 @@ pub trait Demographics: Send + Sync {
     /// before resolution.
     fn handles(&self, namespace: &IdentifierNamespace) -> bool;
 
-    /// Asks the service which master identity `patient` names, before
-    /// `deadline`.
-    async fn identify(&self, patient: &PatientRef, deadline: Instant) -> Identification;
+    /// Asks the service which master identity `patient` names, on behalf of
+    /// `on_behalf`, before `deadline`.
+    async fn identify(
+        &self,
+        patient: &PatientRef,
+        on_behalf: &OnBehalfOf,
+        deadline: Instant,
+    ) -> Identification;
 }

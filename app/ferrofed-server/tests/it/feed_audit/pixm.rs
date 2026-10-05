@@ -24,7 +24,10 @@ use http::StatusCode;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use super::{SETTLE, audit_tables, await_feed_state, feed_state, spool_key, spooled, transactions};
+use super::{
+    SETTLE, audit_tables, await_feed_state, feed_state, names_the_default_caller, spool_key,
+    spooled, transactions,
+};
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, body, gateway, gateway_within, node_answering,
     patient_query, post, received, registry, statuses,
@@ -296,5 +299,76 @@ async fn the_log_destination_records_each_resolution_without_the_patient() -> Te
     assert!(event.contains("ferrofed::audit"), "{event}");
     assert!(event.contains("ITI-83"), "{event}");
     assert!(!log.contains(PATIENT), "no identifier in the log: {log}");
+    assert!(
+        event.contains(r#""on_behalf":"caller""#),
+        "the event says whose behalf: {event}"
+    );
+    let claims = crate::support::claims();
+    for value in [&claims.sub, &claims.client_id] {
+        assert!(!log.contains(value.as_str()), "no caller in the log: {log}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn each_resolution_names_the_verified_caller_as_its_user_agent() -> TestResult {
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let pix = manager().await;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let app = audited_gateway(
+        dir.path(),
+        [&a.uri(), &b.uri(), &pix.uri()],
+        &repository,
+        "",
+    )?;
+    answered_by_both(&app, "a patient query of the default caller").await?;
+    let records = repository.wait_for(1, SETTLE).await;
+    assert_eq!(1, records.len(), "one record per ITI-83 exchange");
+    // NOTE: PIXm §2:3.83.5.2.1 augments the record "following IHE-BALP" with the agent
+    // details of the OAuth token, which BALP 1.1.4 §3:5.7.5.4 maps.
+    names_the_default_caller(&records[0])
+}
+
+#[tokio::test]
+async fn the_caller_reaches_the_repository_and_no_log_line_or_metric() -> TestResult {
+    let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+    let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+    let pix = manager().await;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let app = audited_gateway(
+        dir.path(),
+        [&a.uri(), &b.uri(), &pix.uri()],
+        &repository,
+        "",
+    )?;
+    let logs = crate::support::Logs::default();
+    let capture = ferrofed_server::telemetry::subscriber(
+        ferrofed_server::telemetry::Rendering::Json,
+        "trace",
+        false,
+        logs.clone(),
+    )?;
+    let guard = tracing::subscriber::set_default(capture);
+    let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
+    let records = repository.wait_for(1, SETTLE).await;
+    drop(guard);
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let claims = crate::support::claims();
+    assert!(
+        records.iter().any(|record| record.contains(&claims.sub)),
+        "the caller reaches the repository"
+    );
+    let log = logs.text();
+    let exposition = Metrics::default().render()?;
+    for value in [&claims.sub, &claims.client_id] {
+        assert!(!log.contains(value.as_str()), "no caller in the log: {log}");
+        assert!(
+            !exposition.contains(value.as_str()),
+            "no caller in a metric"
+        );
+    }
     Ok(())
 }

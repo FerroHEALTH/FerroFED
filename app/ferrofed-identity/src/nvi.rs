@@ -44,6 +44,7 @@ use secrecy::SecretString;
 use thiserror::Error;
 use url::Url;
 
+use crate::behalf::OnBehalfOf;
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
@@ -333,6 +334,7 @@ impl Localizer for NviLocalizer {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> Localization {
         match self.locate(patient, members, deadline).await {

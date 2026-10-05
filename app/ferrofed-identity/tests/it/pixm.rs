@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::fhir::{Authentication, Tls};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::pixm::{ManagerConfig, PixmConfigError, PixmResolver};
@@ -132,7 +133,12 @@ fn soon() -> Instant {
 
 async fn resolve(resolver: &PixmResolver) -> BTreeMap<NodeId, Resolution> {
     resolver
-        .resolve(&patient(), &[node("node-a"), node("node-b")], soon())
+        .resolve(
+            &patient(),
+            &[node("node-a"), node("node-b")],
+            &OnBehalfOf::Gateway,
+            soon(),
+        )
         .await
 }
 
@@ -260,6 +266,7 @@ async fn a_manager_slower_than_the_deadline_is_unavailable() {
         .resolve(
             &patient(),
             &[node("node-a"), node("node-b")],
+            &OnBehalfOf::Gateway,
             Instant::now() + Duration::from_millis(150),
         )
         .await;
@@ -296,6 +303,7 @@ async fn an_answer_whose_record_is_not_stored_by_the_deadline_is_unavailable_in_
         .resolve(
             &patient(),
             &[node("node-a"), node("node-b")],
+            &OnBehalfOf::Gateway,
             asked + budget,
         )
         .await;

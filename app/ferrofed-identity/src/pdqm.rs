@@ -48,6 +48,8 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
+use crate::balp::audited_as;
+use crate::behalf::OnBehalfOf;
 use crate::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
 use crate::fhir::{Authentication, ClientError, Tls, http_client};
 use crate::patient::{IdentifierNamespace, PatientRef, PatientRefError};
@@ -332,7 +334,12 @@ impl Demographics for PdqmDemographics {
         self.namespaces.contains_key(namespace)
     }
 
-    async fn identify(&self, patient: &PatientRef, deadline: Instant) -> Identification {
+    async fn identify(
+        &self,
+        patient: &PatientRef,
+        on_behalf: &OnBehalfOf,
+        deadline: Instant,
+    ) -> Identification {
         let Some(system) = self.namespaces.get(patient.namespace()) else {
             return Identification::Unavailable(DemographicsError::Backend(Box::new(Unhandled)));
         };
@@ -341,6 +348,7 @@ impl Demographics for PdqmDemographics {
             return Identification::Unavailable(DemographicsError::DeadlineExceeded);
         }
         let value = SecretString::from(patient.value());
+        let audited = audited_as(on_behalf);
         match self.transaction {
             Transaction::Search => {
                 let query = PatientQuery::new()
@@ -350,7 +358,7 @@ impl Demographics for PdqmDemographics {
                     Ok(query) => query,
                     Err(refused) => return refused_input(refused),
                 };
-                match self.client.search(&query, timeout).await {
+                match self.client.search(&query, &audited, timeout).await {
                     Ok(page) => self.searched(&page),
                     Err(error) => unavailable(error),
                 }
@@ -360,7 +368,7 @@ impl Demographics for PdqmDemographics {
                     Ok(input) => input.only_certain_matches(true),
                     Err(refused) => return refused_input(refused),
                 };
-                match self.client.match_patient(&input, timeout).await {
+                match self.client.match_patient(&input, &audited, timeout).await {
                     Ok(found) => self.matched(&found),
                     Err(error) => unavailable(error),
                 }

@@ -26,7 +26,7 @@ use super::{
 use crate::facade::{
     Answer, PATIENT, body, node_answering, patient_query, post, received, registry, statuses,
 };
-use crate::feed_audit::{audit_tables, transactions};
+use crate::feed_audit::{audit_tables, names_the_default_caller, transactions};
 use crate::metrics::{count, parse};
 use crate::support::call;
 
@@ -74,6 +74,42 @@ async fn each_exchange_reaches_the_repository_beside_the_resolution_it_feeds() -
         matched.contains("IHE.PDQm.Match.Audit.Consumer") && matched.contains(CLIENT_ID),
         "the Match Consumer record names the patient the input identifies: {matched}"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn each_search_and_match_names_the_verified_caller_as_its_user_agent() -> TestResult {
+    for transaction in ["iti-78", "iti-119"] {
+        let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
+        let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
+        let pix = manager().await;
+        let pdq = supplier().await?;
+        let repository = FeedRepository::start().await;
+        let dir = tempfile::tempdir()?;
+        let tables = format!(
+            "{}\n{}\n{}",
+            pixm(&pix.uri()),
+            pdqm(&pdq.base_url(), transaction),
+            audit_tables(&repository, "")
+        );
+        let (app, _state) = gateway(
+            dir.path(),
+            &registry(&a.uri(), &b.uri(), ""),
+            ASK_ALL,
+            &tables,
+        )?;
+        let (status, text) = call(app, post(body(&local_query())?)?).await?;
+        assert_eq!(StatusCode::OK, status, "{transaction}: {text}");
+        let records = repository.wait_for(2, Duration::from_secs(5)).await;
+        let code = transaction.to_uppercase();
+        let step = records
+            .iter()
+            .find(|record| transactions(record).is_ok_and(|seen| seen.contains(&code)))
+            .ok_or_else(|| format!("the {code} record"))?;
+        // NOTE: PDQm §2:3.78.5.1 and §2:3.119.5.1.1 build on BALP Query, whose agent:user
+        // names the user BALP 1.1.4 §3:5.7.5.4 maps from the OAuth token.
+        names_the_default_caller(step).map_err(|error| format!("{code}: {error}"))?;
+    }
     Ok(())
 }
 

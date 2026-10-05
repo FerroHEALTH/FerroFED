@@ -10,6 +10,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::dev::{DevCrossRefError, Profile, StaticResolver};
 use ferrofed_identity::localizer::{Localization, Localizer};
 use ferrofed_identity::patient::{IdentifierNamespace, PatientRef};
@@ -79,6 +80,7 @@ fn a_row_resolves_its_member_and_every_other_member_is_unknown() -> TestResult {
     let outcome = ready(resolver.resolve(
         &patient("2.999.1", PATIENT_VALUE)?,
         &members(&["node-a", "node-b"])?,
+        &OnBehalfOf::Gateway,
         Instant::now(),
     ));
 
@@ -102,6 +104,7 @@ fn a_member_not_asked_gets_no_outcome() -> TestResult {
     let outcome = ready(resolver.resolve(
         &patient("2.999.1", PATIENT_VALUE)?,
         &members(&["node-b"])?,
+        &OnBehalfOf::Gateway,
         Instant::now(),
     ));
     let node_a: NodeId = "node-a".parse()?;
@@ -116,6 +119,7 @@ fn the_same_value_in_another_namespace_is_another_patient() -> TestResult {
     let outcome = ready(resolver.resolve(
         &patient("2.999.2", PATIENT_VALUE)?,
         &members(&["node-a"])?,
+        &OnBehalfOf::Gateway,
         Instant::now(),
     ));
     let node_a: NodeId = "node-a".parse()?;
@@ -132,6 +136,7 @@ fn the_resolver_works_behind_the_seam() -> TestResult {
     let outcome = ready(resolver.resolve(
         &patient("2.999.1", PATIENT_VALUE)?,
         &members(&["node-a"])?,
+        &OnBehalfOf::Gateway,
         Instant::now(),
     ));
     assert_eq!(outcome.len(), 1, "one member, one outcome");
@@ -220,6 +225,7 @@ fn as_a_localizer_it_names_the_asked_members_that_hold_a_row() -> TestResult {
     let answer = ready(localizer.localize(
         &patient("2.999.1", PATIENT_VALUE)?,
         &members(&["node-a", "node-b"])?,
+        &OnBehalfOf::Gateway,
         Instant::now(),
     ));
     let node_a: NodeId = "node-a".parse()?;
@@ -238,6 +244,7 @@ fn as_a_localizer_it_finds_no_records_for_a_patient_with_no_row() -> TestResult 
     let answer = ready(localizer.localize(
         &patient("2.999.2", PATIENT_VALUE)?,
         &members(&["node-a", "node-b"])?,
+        &OnBehalfOf::Gateway,
         Instant::now(),
     ));
     match answer {

@@ -40,6 +40,8 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
+use crate::balp::audited_as;
+use crate::behalf::OnBehalfOf;
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::localizer::{Localization, Localizer, LocalizerError};
 use crate::patient::{IdentifierNamespace, PatientRef};
@@ -236,7 +238,9 @@ impl PixmResolver {
     }
 
     /// This resolver, every ITI-83 exchange of which is recorded through
-    /// `recorder` as the PIXm Query Consumer audit record (§2:3.83.5.1.1).
+    /// `recorder` as the PIXm Query Consumer audit record (§2:3.83.5.1.1),
+    /// naming the verified caller it was made for as its user agent
+    /// (§2:3.83.5.2.1).
     ///
     /// An exchange whose record the recorder refuses fails, so the member's
     /// resolution is [`Resolution::Unavailable`] and the query fails closed.
@@ -427,12 +431,13 @@ impl Shared {
 }
 
 impl PixmResolver {
-    /// Asks every Manager about the members of `members` it serves, within
-    /// the time left before `deadline`.
+    /// Asks every Manager about the members of `members` it serves, on
+    /// behalf of `on_behalf`, within the time left before `deadline`.
     async fn lookup(
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> BTreeMap<NodeId, Lookup> {
         let mut out = BTreeMap::new();
@@ -451,6 +456,7 @@ impl PixmResolver {
             return out;
         };
         let timeout = deadline.saturating_duration_since(Instant::now());
+        let audited = audited_as(on_behalf);
         let mut tasks = JoinSet::new();
         for manager in &self.managers {
             let asked: Vec<(NodeId, TargetSystem)> = manager
@@ -464,7 +470,8 @@ impl PixmResolver {
             }
             let manager = Arc::clone(manager);
             let source = source.clone();
-            tasks.spawn(async move { ask(&manager, &source, asked, timeout).await });
+            let audited = audited.clone();
+            tasks.spawn(async move { ask(&manager, (&source, asked), &audited, timeout).await });
         }
         while let Some(joined) = tasks.join_next().await {
             // NOTE: a task that panicked leaves its members out of the map,
@@ -522,6 +529,7 @@ impl Resolver for PixmResolver {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         let mut lookups = self.take(patient, members);
@@ -531,7 +539,7 @@ impl Resolver for PixmResolver {
             .cloned()
             .collect();
         if !missing.is_empty() {
-            lookups.extend(self.lookup(patient, &missing, deadline).await);
+            lookups.extend(self.lookup(patient, &missing, on_behalf, deadline).await);
         }
         lookups
             .into_iter()
@@ -554,9 +562,10 @@ impl Localizer for PixmResolver {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        on_behalf: &OnBehalfOf,
         deadline: Instant,
     ) -> Localization {
-        let lookups = self.lookup(patient, members, deadline).await;
+        let lookups = self.lookup(patient, members, on_behalf, deadline).await;
         let answered = members.iter().all(|member| lookups.contains_key(member));
         let failing = lookups.values().any(|lookup| {
             matches!(
@@ -612,11 +621,12 @@ fn failed(error: &Arc<PixmError>) -> LocalizerError {
 #[error("a PIX Manager gave no answer for a member")]
 struct NoAnswer;
 
-/// Asks one Manager about `asked`, within `timeout`.
+/// Asks one Manager about `asked`, on behalf of `on_behalf`, within
+/// `timeout`.
 async fn ask(
     manager: &Manager,
-    source: &SourceIdentifier,
-    asked: Vec<(NodeId, TargetSystem)>,
+    (source, asked): (&SourceIdentifier, Vec<(NodeId, TargetSystem)>),
+    on_behalf: &ihe_iti::user::OnBehalfOf,
     timeout: Duration,
 ) -> Vec<(NodeId, Lookup)> {
     if timeout.is_zero() {
@@ -628,7 +638,7 @@ async fn ask(
     let targets: Vec<TargetSystem> = asked.iter().map(|(_, domain)| domain.clone()).collect();
     let answer = manager
         .client
-        .cross_reference(source, &targets, timeout)
+        .cross_reference(source, &targets, on_behalf, timeout)
         .await;
     read(answer, &asked)
 }

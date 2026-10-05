@@ -98,6 +98,140 @@ pub(crate) async fn await_feed_state(
     }
 }
 
+/// What an `AuditEvent` names of the user it was made for: its `agent:user`
+/// (BALP `IRCP`) and the client application of the user's token (DICOM
+/// `110150`), as BALP 1.1.4 §3:5.7.5.4 maps the token.
+#[derive(Debug, Default)]
+pub(crate) struct NamedUser {
+    /// Each `IRCP` agent.
+    pub(crate) users: Vec<UserAgent>,
+    /// The `who.identifier.value` of each Application agent.
+    pub(crate) clients: Vec<Option<String>>,
+}
+
+/// One `agent:user` of a record.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct UserAgent {
+    /// `who.identifier.system`: the token's `iss`.
+    pub(crate) issuer: Option<String>,
+    /// `who.identifier.value`: the token's `sub`.
+    pub(crate) subject: Option<String>,
+    /// `requestor`.
+    pub(crate) requestor: bool,
+    /// Whether it has a `network`.
+    pub(crate) networked: bool,
+    /// Its purpose-of-use codes.
+    pub(crate) purposes: Vec<String>,
+}
+
+/// The user `record`, an `AuditEvent` as JSON, names.
+pub(crate) fn named_user(record: &str) -> Result<NamedUser, Box<dyn Error>> {
+    #[derive(Deserialize)]
+    struct Coding {
+        system: Option<String>,
+        code: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct Concept {
+        #[serde(default)]
+        coding: Vec<Coding>,
+    }
+    #[derive(Deserialize)]
+    struct Identifier {
+        system: Option<String>,
+        value: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct Who {
+        identifier: Option<Identifier>,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Agent {
+        r#type: Option<Concept>,
+        who: Option<Who>,
+        requestor: bool,
+        network: Option<serde::de::IgnoredAny>,
+        #[serde(default)]
+        purpose_of_use: Vec<Concept>,
+    }
+    #[derive(Deserialize)]
+    struct Event {
+        agent: Vec<Agent>,
+    }
+    let event: Event = serde_json::from_str(record)?;
+    let mut named = NamedUser::default();
+    for agent in event.agent {
+        let typed = |system: &str, code: &str| {
+            agent.r#type.as_ref().is_some_and(|concept| {
+                concept.coding.iter().any(|coding| {
+                    coding.system.as_deref() == Some(system) && coding.code.as_deref() == Some(code)
+                })
+            })
+        };
+        let identifier = agent.who.and_then(|who| who.identifier);
+        if typed(
+            "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+            "IRCP",
+        ) {
+            let (system, value) = identifier.map_or((None, None), |id| (id.system, id.value));
+            let purposes = agent
+                .purpose_of_use
+                .into_iter()
+                .flat_map(|concept| concept.coding)
+                .filter_map(|coding| coding.code)
+                .collect();
+            named.users.push(UserAgent {
+                issuer: system,
+                subject: value,
+                requestor: agent.requestor,
+                networked: agent.network.is_some(),
+                purposes,
+            });
+        } else if typed("http://dicom.nema.org/resources/ontology/DCM", "110150") {
+            named.clients.push(identifier.and_then(|id| id.value));
+        }
+    }
+    Ok(named)
+}
+
+/// Fails unless `record` names the suite's default caller as BALP 1.1.4
+/// §3:5.7.5.4 maps their token: one `agent:user` with the token's `iss` and
+/// `sub`, `requestor` and no `network` (BALP Query `agent:user`), the
+/// purpose of use `TREAT`, and one Application agent with its `client_id`.
+pub(crate) fn names_the_default_caller(record: &str) -> Result<(), Box<dyn Error>> {
+    let claims = crate::support::claims();
+    let named = named_user(record)?;
+    let expected = UserAgent {
+        issuer: Some(claims.iss.clone()),
+        subject: Some(claims.sub.clone()),
+        requestor: true,
+        networked: false,
+        purposes: vec!["TREAT".to_owned()],
+    };
+    if named.users != vec![expected] {
+        return Err(format!("one agent:user naming the caller, got {named:?}").into());
+    }
+    if named.clients != vec![Some(claims.client_id)] {
+        return Err(format!("one Application agent naming the client, got {named:?}").into());
+    }
+    Ok(())
+}
+
+/// Fails unless `record` names no user and no client application, as a
+/// record the gateway makes on its own behalf (the BALP `NoUser` examples).
+pub(crate) fn names_no_caller(record: &str) -> Result<(), Box<dyn Error>> {
+    let named = named_user(record)?;
+    if !named.users.is_empty() {
+        return Err(format!("no agent:user, got {named:?}").into());
+    }
+    let claims = crate::support::claims();
+    if record.contains(&claims.sub) || record.contains(&claims.client_id) {
+        return Err("the gateway's own record names no caller".into());
+    }
+    Ok(())
+}
+
 /// The IHE transaction codes of `record`, an `AuditEvent` as JSON.
 pub(crate) fn transactions(record: &str) -> Result<Vec<String>, Box<dyn Error>> {
     #[derive(Deserialize)]

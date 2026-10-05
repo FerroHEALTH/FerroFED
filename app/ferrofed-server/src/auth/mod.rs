@@ -314,6 +314,7 @@ impl Gate {
         }
         let credential = self.credential(headers)?;
         let (caller, trusted) = self.verify(credential).await?;
+        let caller = caller.with_audience(self.audience.clone());
         let mut caller = if exchanging {
             caller.with_token(SecretString::from(credential.to_owned()))
         } else {

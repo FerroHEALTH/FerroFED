@@ -15,6 +15,7 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::localizer::{Localization, LocalizerError, OnFailure};
 use ferrofed_identity::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
@@ -103,8 +104,8 @@ pub(crate) fn inside(until: Instant) -> Instant {
 }
 
 /// Asks the federation's localizer which of `members` might hold
-/// `patient`'s data, within the localizer's budget and before `deadline`
-/// (§14.1, N4), and records what it showed of itself.
+/// `patient`'s data, on behalf of `on_behalf`, within the localizer's budget
+/// and before `deadline` (§14.1, N4), and records what it showed of itself.
 ///
 /// Without a configured localizer, or with no member, every member is a
 /// candidate. The localizer is given a deadline [`inside`] its budget, so
@@ -113,7 +114,7 @@ pub(crate) fn inside(until: Instant) -> Instant {
 /// failure policy applies as to any other failure.
 pub(crate) async fn localize(
     federation: &Federation,
-    patient: &PatientRef,
+    (patient, on_behalf): (&PatientRef, &OnBehalfOf),
     members: &[NodeId],
     deadline: Instant,
 ) -> Localized {
@@ -129,7 +130,7 @@ pub(crate) async fn localize(
         .map_or(deadline, |at| at.min(deadline));
     let answer = tokio::time::timeout_at(
         tokio::time::Instant::from_std(until),
-        localizer.localize(patient, members, inside(until)),
+        localizer.localize(patient, members, on_behalf, inside(until)),
     )
     .instrument(tracing::info_span!("localize", members = members.len()))
     .await

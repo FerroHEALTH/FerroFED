@@ -35,6 +35,7 @@ use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::ehr::EhrCallError;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId, SystemId};
 use ferrofed_registry::snapshot::{Node, RegistrySnapshot};
@@ -399,8 +400,15 @@ async fn exchange(
                 one.ehr_id
             ));
         };
+        // NOTE: PIXm §2:3.83.5.2.1 names the user a token authorized; the admission check
+        // is the gateway's own, so its records name no user.
         let mut answer = resolver
-            .resolve(&patient, std::slice::from_ref(node.id()), deadline)
+            .resolve(
+                &patient,
+                std::slice::from_ref(node.id()),
+                &OnBehalfOf::Gateway,
+                deadline,
+            )
             .await;
         lines.push(match answer.remove(node.id()) {
             Some(Resolution::Resolved(found)) => {

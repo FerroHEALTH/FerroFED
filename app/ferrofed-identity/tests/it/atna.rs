@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::atna::RepositoryAudit;
-use ferrofed_identity::localizer::{Localization, LocalizerError};
+use ferrofed_identity::localizer::{Localization, Localizer as _, LocalizerError};
 use ferrofed_testkit::atna::AuditRepository;
 use ferrofed_testkit::xcpd::RespondingGateway;
 use ihe_iti::atna::forwarder::Forwarder;
@@ -28,7 +28,7 @@ use ihe_iti::atna::spool::{Bounds, Spool};
 use ihe_iti::atna::syslog::Sender;
 use url::Url;
 
-use crate::support::PATIENT_VALUE;
+use crate::support::{CALLER_AUDIENCE, CALLER_ISSUER, CALLER_SUBJECT, PATIENT_VALUE, caller};
 use crate::timing;
 use crate::xcpd::{COMMUNITY_A, holds, localize, localizer, node};
 
@@ -110,6 +110,37 @@ async fn each_discovery_reaches_the_repository_as_one_iti_20_message() -> TestRe
         "the identifier travels only base64-encoded inside the query"
     );
     assert_eq!(0, audit.status().depth.messages, "delivered, not held");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_discovery_made_for_a_caller_names_them_as_its_human_requestor() -> TestResult {
+    let repository = AuditRepository::start().await?;
+    let audit = Arc::new(recorder(&repository, Spool::in_memory(ROOMY))?);
+    let stub = RespondingGateway::answering(holds(COMMUNITY_A)).await;
+    let localizer = localizer(&[&stub])?.audited(audit.clone());
+    let answer = localizer
+        .localize(
+            &crate::xcpd::patient()?,
+            &crate::xcpd::members()?,
+            &caller(),
+            std::time::Instant::now() + Duration::from_secs(2),
+        )
+        .await;
+    assert!(matches!(answer, Localization::Candidates(_)), "{answer:?}");
+    let messages = repository.wait_for(1, timing::within(delivery(1))).await;
+    assert_eq!(1, messages.len(), "one message per exchange");
+    // NOTE: ITI TF-2 §3.55.5.1.1 Human Requestor UserID is the human's identity, and IUA
+    // ITI TF-2 §3.72.5.1 writes the JWT's aud, sub and iss into UserName.
+    let requestor = format!(
+        "<ActiveParticipant UserID=\"{CALLER_SUBJECT}\" UserName=\"{CALLER_AUDIENCE}&lt;{CALLER_SUBJECT}@{CALLER_ISSUER}&gt;\" UserIsRequestor=\"true\">"
+    );
+    assert!(messages[0].contains(&requestor), "{}", messages[0]);
+    assert!(
+        messages[0]
+            .contains("UserIsRequestor=\"false\" NetworkAccessPointID=\"gateway.example.org\""),
+        "one requestor: the caller, never the gateway too (DICOM PS3.15 A.5.2)"
+    );
     Ok(())
 }
 

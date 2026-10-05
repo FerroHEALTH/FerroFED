@@ -23,7 +23,10 @@
 //! or the request that carries one.
 //!
 //! A record names the patient, so it leaves this module only for the spool
-//! and the repository connection; no log line and no error carries it.
+//! and the repository connection; no log line and no error carries it. A
+//! record made for a verified caller names them as its user agent (PIXm
+//! §2:3.83.5.2.1), and that identity takes the same path alone:
+//! [`LogFeedAudit`] says whose behalf a record was made on, never who.
 
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -33,11 +36,48 @@ use async_trait::async_trait;
 use ihe_iti::atna::feed::{FeedAddressError, FeedRepository};
 use ihe_iti::atna::forwarder::{Forwarder, Status};
 use ihe_iti::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer};
+use ihe_iti::user::{PurposeOfUse, User};
 use tokio::task::JoinHandle;
 use url::Url;
 
+use crate::behalf::OnBehalfOf;
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::xcpd::AUDIT_TARGET;
+
+/// Returns `on_behalf` as `ihe_iti`'s audited clients take it: a verified
+/// caller is the user of the exchange, and the gateway its own system.
+pub(crate) fn audited_as(on_behalf: &OnBehalfOf) -> ihe_iti::user::OnBehalfOf {
+    match on_behalf {
+        OnBehalfOf::Caller(caller) => ihe_iti::user::OnBehalfOf::User(
+            User::new(
+                caller.issuer().to_owned(),
+                caller.subject().to_owned(),
+                caller.client_id().to_owned(),
+            )
+            .with_audience(caller.audience().map(str::to_owned))
+            .with_purposes(
+                caller
+                    .purposes()
+                    .iter()
+                    .map(|purpose| PurposeOfUse {
+                        system: purpose.system.clone(),
+                        code: purpose.code.clone(),
+                    })
+                    .collect(),
+            ),
+        ),
+        OnBehalfOf::Gateway => ihe_iti::user::OnBehalfOf::System,
+    }
+}
+
+/// What a log line says of `on_behalf`: whose behalf, never who.
+pub(crate) fn logged_as(on_behalf: &ihe_iti::user::OnBehalfOf) -> &'static str {
+    match on_behalf {
+        ihe_iti::user::OnBehalfOf::System => "gateway",
+        ihe_iti::user::OnBehalfOf::User(_) => "caller",
+        _ => "other",
+    }
+}
 
 /// Why a FHIR Feed repository could not be built.
 #[derive(Debug, thiserror::Error)]
@@ -148,10 +188,11 @@ impl AuditRecorder for FeedAudit {
 /// The recorder that writes each record as a structured `tracing` event at
 /// [`AUDIT_TARGET`].
 ///
-/// The event carries the record's profile, subtypes, action, outcome and
-/// the other party's name, with the count of each kind of entity; it never
-/// carries a patient identifier, a patient reference or the request, which
-/// may name one. It accepts every record.
+/// The event carries the record's profile, subtypes, action, outcome, the
+/// other party's name, whether it was made for a caller or by the gateway on
+/// its own behalf, and the count of each kind of entity; it never carries a
+/// patient identifier, a patient reference, the request, which may name one,
+/// or the caller's identity. It accepts every record.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LogFeedAudit;
 
@@ -188,6 +229,7 @@ impl AuditRecorder for LogFeedAudit {
             outcome = exchange.outcome.code(),
             direction,
             peer,
+            on_behalf = logged_as(&exchange.on_behalf),
             patients,
             queries,
             resources,

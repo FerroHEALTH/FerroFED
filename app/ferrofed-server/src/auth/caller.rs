@@ -13,6 +13,7 @@
 
 use std::fmt;
 
+use ferrofed_identity::behalf::{self, OnBehalfOf};
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::consent::Requester;
 use ferrofed_identity::patient::IdentifierNamespace;
@@ -29,6 +30,9 @@ pub struct Caller {
     subject: String,
     /// The client the caller used (`client_id`).
     client_id: String,
+    /// The audience the caller's token was admitted under: the one this
+    /// gateway is known by, which every admitted token names in `aud`.
+    audience: Option<String>,
     /// The caller's organisation: the IHE IUA `subject_organization_id`,
     /// when the token carries one.
     organisation: Option<String>,
@@ -166,6 +170,7 @@ impl Caller {
             issuer: stated.issuer,
             subject: stated.subject,
             client_id: stated.client_id,
+            audience: None,
             organisation: stated.organisation,
             granted: stated.granted,
             scopes,
@@ -177,6 +182,45 @@ impl Caller {
             patient: None,
             requester: None,
         }
+    }
+
+    /// Returns this caller, admitted under `audience`, the audience their
+    /// token names this gateway by.
+    #[must_use]
+    pub fn with_audience(mut self, audience: Option<String>) -> Self {
+        self.audience = audience;
+        self
+    }
+
+    /// Returns the audience the caller's token names this gateway by, when
+    /// the gate checked one.
+    #[must_use]
+    pub fn audience(&self) -> Option<&str> {
+        self.audience.as_deref()
+    }
+
+    /// Returns whom an identity exchange made for this caller's request is
+    /// on behalf of: this caller, as an IHE audit record names its user from
+    /// the token (PIXm §2:3.83.5.2.1, BALP 1.1.4 §3:5.7.5.4).
+    #[must_use]
+    pub fn on_behalf(&self) -> OnBehalfOf {
+        OnBehalfOf::Caller(
+            behalf::Caller::new(
+                self.issuer.clone(),
+                self.subject.clone(),
+                self.client_id.clone(),
+            )
+            .with_audience(self.audience.clone())
+            .with_purposes(
+                self.purposes
+                    .iter()
+                    .map(|purpose| behalf::Purpose {
+                        system: purpose.system.clone(),
+                        code: purpose.code.clone(),
+                    })
+                    .collect(),
+            ),
+        )
     }
 
     /// Returns this caller, asking for the data as `requester` states.

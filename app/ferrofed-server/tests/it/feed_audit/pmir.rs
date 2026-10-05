@@ -19,7 +19,7 @@ use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::pmir::{PatientIdentityRegistry, merge_message};
 use http::{Request, StatusCode, header};
 
-use super::{SETTLE, audit_tables, transactions};
+use super::{SETTLE, audit_tables, names_no_caller, transactions};
 use crate::pmir::{DOMAIN_A, EHR_A, EHR_A2, PATH, TOKEN, gateway, text};
 use crate::support::send_as_is;
 
@@ -82,6 +82,9 @@ async fn each_subscription_exchange_is_recorded() -> TestResult {
         records.len(),
         "and the search before the create is recorded too"
     );
+    for record in &records {
+        names_no_caller(record)?;
+    }
     Ok(())
 }
 
@@ -113,6 +116,7 @@ async fn a_received_message_is_recorded_naming_its_patient_toward_the_repository
     assert_eq!(1, gateway.bound()?, "the merge was applied");
     let [record] = <[String; 1]>::try_from(records).map_err(|_all| "one record")?;
     assert_eq!(vec!["ITI-93"], transactions(&record)?);
+    names_no_caller(&record)?;
     assert!(
         record.contains(&format!("Patient/{SUBSUMED}")),
         "the patient entity names the merged Patient: {record}"

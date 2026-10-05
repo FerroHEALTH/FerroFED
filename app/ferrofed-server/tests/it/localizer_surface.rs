@@ -86,6 +86,7 @@ impl Localizer for Scripted {
         &self,
         _patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> Localization {
         self.asked.fetch_add(1, Ordering::SeqCst);
@@ -119,6 +120,7 @@ impl Resolver for KnownAt {
         &self,
         _patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         members

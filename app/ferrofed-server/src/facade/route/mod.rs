@@ -62,6 +62,7 @@ use ferrofed_engine::dispatch::{Contact, DispatchOptions, REQUEST_ID_HEADER, is_
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::consent::Requester;
 use ferrofed_registry::id::EhrId;
@@ -128,6 +129,9 @@ pub struct Arrived<'a> {
     /// Who asks for the data, as the verified caller's token states it,
     /// which the consent pre-filter asks about (§13.4).
     pub requester: Option<&'a Requester>,
+    /// The verified caller, whom every identity exchange the request makes
+    /// is made for and whom its audit record names (PIXm §2:3.83.5.2.1).
+    pub on_behalf: OnBehalfOf,
     /// Whom the request is on behalf of, conveyed to every node it reaches
     /// (§13.1, N24).
     pub conveyance: Conveyance,
@@ -179,6 +183,9 @@ pub(crate) async fn unrouted(
         Ok(conveyance) => conveyance,
         Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
     };
+    let Some(on_behalf) = caller.as_deref().map(Caller::on_behalf) else {
+        return conveyed::Unconveyed::NoCaller.respond(request_id, &outbound.to_string());
+    };
     let started = Instant::now();
     let conveyance =
         match crate::facade::confined_by(serving, caller.as_deref(), started, conveyance).await {
@@ -195,6 +202,7 @@ pub(crate) async fn unrouted(
         outbound,
         session: session.as_ref(),
         requester: caller.as_deref().and_then(Caller::requester),
+        on_behalf,
         conveyance,
     };
     if let Some(definitions) = state.definitions()

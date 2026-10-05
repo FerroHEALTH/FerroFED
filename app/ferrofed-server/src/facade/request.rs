@@ -19,6 +19,7 @@ use ferrofed_engine::declared;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_identity::behalf::OnBehalfOf;
 use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::consent::Requester;
 use ferrofed_registry::id::EndpointId;
@@ -53,6 +54,9 @@ pub(crate) struct Arrived<'a> {
     /// Who asks for the data, as the verified caller's token states it,
     /// which the consent pre-filter asks about (§13.4).
     pub(crate) requester: Option<&'a Requester>,
+    /// The verified caller, whom every identity exchange the request makes
+    /// is made for and whom its audit record names (PIXm §2:3.83.5.2.1).
+    pub(crate) on_behalf: &'a OnBehalfOf,
 }
 
 /// What a federated query request submits.

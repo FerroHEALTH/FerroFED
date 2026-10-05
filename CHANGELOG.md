@@ -133,6 +133,21 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   forms release the EHR whose read the node refuses. The invocation finding
   names why an EHR body does not decode. No specification governs which
   products the harness runs: our own design.
+- Each IHE audit record the gateway makes for a client's request names the
+  verified caller (#500; PIXm §2:3.83.5.2.1, BALP 1.1.4 §3:5.7.5.4, ITI TF-2
+  §3.55.5.1.1, IUA ITI TF-2 §3.72.5.1). The ITI-83, ITI-78 and ITI-119
+  `AuditEvent` carries the BALP `agent:user` with the token's `iss` and
+  `sub`, `requestor` true and its purposes of use, and an Application agent
+  with its `client_id`; the ITI-55 DICOM message carries the Human Requestor
+  with the `sub` as `UserID` and `aud<sub@iss>` as `UserName`, as its one
+  requestor. A record the gateway makes on its own behalf (the admission
+  check, the mCSD directory reads, the PMIR subscription and feed) names no
+  caller. The identity reaches the Audit Record Repository alone: the log
+  destinations record only whether a record was made for a caller or by the
+  gateway, and no metric carries it.
+  `ihe-iti` 0.0.23 takes whom each PIXm, PDQm and XCPD exchange is made for
+  (`ihe_iti::user::OnBehalfOf`), and the resolver, localizer and
+  demographics roles take it too.
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at

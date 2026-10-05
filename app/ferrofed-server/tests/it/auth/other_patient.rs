@@ -95,6 +95,7 @@ impl Resolver for Recording {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> BTreeMap<NodeId, Resolution> {
         record(&self.0, patient, members);
@@ -129,6 +130,7 @@ impl Localizer for Locating {
         &self,
         patient: &PatientRef,
         members: &[NodeId],
+        _on_behalf: &ferrofed_identity::behalf::OnBehalfOf,
         _deadline: Instant,
     ) -> Localization {
         record(&self.0, patient, members);
