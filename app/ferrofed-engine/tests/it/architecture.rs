@@ -12,7 +12,8 @@
 //! core, depend on nothing in FerroFED (#106), so a
 //! patient index or another gateway can use them as they are. The engine names
 //! no HTTP engine directly, so every request to a node is built by
-//! `openehr-its`'s client runtime (#34).
+//! `openehr-its`'s client runtime (#34). The operator console links no part
+//! of the gateway, so it reaches it over HTTP as any client does (#275).
 //!
 //! The checks read the graph with `cargo tree`, so they hold from the
 //! placeholder modules on and turn red the day a dependency edge would break
@@ -72,6 +73,13 @@ const APPLICATION: &str = "ferrofed-server";
 /// The binding crates, and the specification crates they share, that carry no
 /// FerroFED dependency at all; one may depend on another.
 const STANDALONE: &[&str] = &["ihe-iti", "nl-generic-functions", "oauth-server-metadata"];
+
+/// The operator console, a client of the gateway's public surface.
+const VIEWER: &str = "ferrofed-viewer";
+
+/// The parts of the gateway the operator console must not link: it reaches
+/// the gateway over HTTP as any other client does.
+const GATEWAY: &[&str] = &["ferrofed-engine", "ferrofed-identity", "ferrofed-server"];
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -209,6 +217,29 @@ fn the_binding_crates_depend_on_nothing_in_ferrofed() -> Result<(), Box<dyn Erro
     assert!(
         breaches.is_empty(),
         "a binding crate depends on FerroFED (#106): {breaches:?}"
+    );
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_operator_console_reaches_the_gateway_over_http_alone() -> Result<(), Box<dyn Error>> {
+    let reached = closure(VIEWER)?;
+    assert!(
+        reached.contains(VIEWER),
+        "cargo tree for {VIEWER} did not list the crate itself, so its output was not read"
+    );
+    let breaches: Vec<&str> = GATEWAY
+        .iter()
+        .copied()
+        .filter(|name| reached.contains(*name))
+        .collect();
+    assert!(
+        breaches.is_empty(),
+        "the operator console links a part of the gateway, so it could do what no client can (#275): {breaches:?}"
     );
     Ok(())
 }

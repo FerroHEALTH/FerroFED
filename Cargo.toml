@@ -195,6 +195,21 @@ pem = { version = "3.0.6", default-features = false, features = ["std"] }
 # crypto library rustls already builds on, so no private key is ever
 # committed. Verified against crates.io on 2026-10-04.
 rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
+# The operator console (#275; no specification governs it: our own design):
+# Leptos server-side rendering with hydration, the family's viewer stack. The
+# server half and the browser half take their features per target in
+# app/ferrofed-viewer, so a workspace --all-features build never enables both.
+# The wasm-bindgen CLI of the viewer build must equal the wasm-bindgen crate
+# version, and scripts/checks/versions.sh holds the two to the pin matrix. The
+# session cookie is written and read with the cookie crate. Verified against
+# crates.io on 2026-10-05.
+leptos = "0.8.21"
+leptos_axum = "0.8.10"
+leptos_meta = "0.8.7"
+leptos_router = "0.8.16"
+wasm-bindgen = "0.2.129"
+console_error_panic_hook = "0.1.7"
+cookie = { version = "0.18.2", default-features = false }
 
 # The reliability bar (no specification governs it: our own design). Groups sit
 # at priority -1 so every named lint below overrides its group.
@@ -306,3 +321,12 @@ deref_by_slicing = "warn"
 panic = "unwind"
 overflow-checks = true
 debug = "line-tables-only"
+
+# The operator console's WebAssembly bundle (app/ferrofed-viewer), built by
+# cargo-leptos: optimized for size, since the browser downloads it (the Cargo
+# reference, profiles; no specification governs this: our own design).
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1

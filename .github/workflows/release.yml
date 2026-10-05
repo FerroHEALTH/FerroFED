@@ -5,13 +5,15 @@
 # a `needs` edge:
 #
 #   plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish)
+#                                  └─ build-viewer ───────────────┘
 #
-# build-binaries and build-image are calls to the reusable workflows
-# release-build.yml and release-image.yml, the SLSA Build Level 3 lanes.
+# build-binaries, build-image and build-viewer are calls to the reusable
+# workflows release-build.yml, release-image.yml and release-viewer.yml, the
+# SLSA Build Level 3 lanes.
 #
 # The release is created as a DRAFT, the gateway compose files, the binaries,
-# SBOMs and attestation bundles are attached to it, the image is pushed to
-# GHCR, and only
+# SBOMs and attestation bundles are attached to it, the gateway and operator
+# console images are pushed to GHCR, and only
 # once the expected asset set is complete is it PUBLISHED. Publishing last
 # means a half-assembled release is never visible.
 #
@@ -358,13 +360,30 @@ jobs:
       tag: ${{ needs.plan.outputs.tag }}
       version: ${{ needs.plan.outputs.version }}
 
+  # ---- build-viewer: the operator console image ------------------------------
+
+  # A call and nothing else, for the same Build L3 reason. The console ships
+  # as an image alone, so it adds no asset to the draft.
+  build-viewer:
+    name: viewer image (linux/amd64, linux/arm64)
+    needs: [plan, github-release]
+    permissions:
+      contents: read # the attestations API, to verify the inputs
+      packages: write # push the image and its attestations to GHCR
+      id-token: write # Sigstore, for the provenance and SBOM attestations
+      attestations: write # store them against this repository
+    uses: ./.github/workflows/release-viewer.yml
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
+      version: ${{ needs.plan.outputs.version }}
+
   # ---- finalize-release: verify the asset set, then PUBLISH -----------------
 
   finalize-release:
     name: github release (publish)
     # Every `needs` job has to succeed, the default, so a failed or skipped
     # leg leaves the release a draft.
-    needs: [plan, github-release, build-binaries, build-image]
+    needs: [plan, github-release, build-binaries, build-image, build-viewer]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

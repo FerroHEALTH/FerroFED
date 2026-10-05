@@ -1,0 +1,391 @@
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The operator console image, as a REUSABLE workflow: the static binaries and
+# the site bundle built here, attested, and packed into
+# ghcr.io/ferrohealth/ferrofed-viewer with the same provenance and SBOM
+# attestations as the gateway image.
+#
+# It is a reusable workflow for the reason release-build.yml and
+# release-image.yml are: SLSA v1.2 Build Level 3 needs the signing identity
+# out of reach of caller-defined steps, and a `workflow_call` job runs on a VM
+# a caller cannot add steps to
+# (https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-and-reusable-workflows-to-achieve-slsa-v1-build-level-3).
+#
+# Three jobs. `binary` builds the musl server binary with cargo auditable on a
+# runner of each architecture, and `site` builds the architecture-independent
+# site bundle with cargo-leptos; each attests what it built. `image` verifies
+# both against this workflow's signer identity before it stages them, so the
+# image provenance chains to attested inputs, then pushes the index, attests
+# the index and both platform manifests as OCI referrers, and verifies its own
+# output as a consumer would. The console ships as an image alone, so the
+# release carries no viewer asset.
+#
+# Verify a published image (the tag resolves to the index):
+#   gh attestation verify oci://ghcr.io/ferrohealth/ferrofed-viewer:<version> \
+#     --repo FerroHEALTH/FerroFED \
+#     --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-viewer.yml
+name: Release viewer (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The vX.Y.Z tag being released.
+        required: true
+        type: string
+      version:
+        description: The tag without its leading v, which is the image tag.
+        required: true
+        type: string
+    outputs:
+      digest:
+        description: The digest of the pushed image index.
+        value: ${{ jobs.image.outputs.digest }}
+
+permissions: {}
+
+env:
+  # NOTE: an OCI reference is lowercase and github.repository_owner is FerroHEALTH, so the owner is a literal.
+  IMAGE: ghcr.io/ferrohealth/ferrofed-viewer
+  # Annotate the index as well as the manifests: GHCR reads the package
+  # description from the index
+  # (https://docs.docker.com/build/ci/github-actions/annotations/).
+  DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+
+jobs:
+  binary:
+    name: viewer binary (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    permissions:
+      contents: read
+      id-token: write # Sigstore, for the binary's provenance
+      attestations: write # store it against this repository
+    steps:
+      # github.sha in a called workflow is the caller's, the commit the tag
+      # points at.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      # Cold by construction: a cache an untrusted run could poison must never
+      # feed a release.
+      - uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+          cache: "false"
+
+      # musl needs its C toolchain for the link step; each target builds on a
+      # runner of its own architecture, so there is no cross toolchain.
+      - name: Install the musl toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends musl-tools
+
+      # cargo-auditable embeds the dependency list in the binary, which is
+      # what the image SBOM below reads its crates from.
+      - name: Install cargo-auditable
+        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-auditable@0.7.5
+
+      # LEPTOS_OUTPUT_NAME, the bundle name the page loads, comes from the
+      # repository's .cargo/config.toml.
+      - name: Build the console server
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo auditable build --release --locked -p ferrofed-viewer --bin ferrofed-viewer --target "$TARGET"
+
+      - name: Stage the binary
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          mkdir -p "out/linux_${ARCH}"
+          cp "target/${TARGET}/release/ferrofed-viewer" "out/linux_${ARCH}/ferrofed-viewer"
+          strip "out/linux_${ARCH}/ferrofed-viewer"
+
+      - name: Attest the binary's provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: out/linux_${{ matrix.arch }}/ferrofed-viewer
+
+      - name: Hand the binary to the image job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ferrofed-viewer-${{ inputs.tag }}-${{ matrix.arch }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+
+  site:
+    name: viewer site bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # Sigstore, for the bundle's provenance
+      attestations: write # store it against this repository
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: ./.github/actions/setup-rust
+        with:
+          target: wasm32-unknown-unknown
+          cache: "false"
+      # Prebuilt and checksum-verified by the installer; cargo-leptos finds
+      # the wasm-bindgen CLI on PATH, which must equal the wasm-bindgen crate
+      # Cargo.lock holds.
+      - name: Install cargo-leptos
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        with:
+          tool: cargo-leptos@0.3.11
+      - name: Install the wasm-bindgen CLI
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2.87.24
+        with:
+          tool: wasm-bindgen@0.2.129
+      - name: Build the site bundle
+        run: bash scripts/release/viewer-site.sh --release
+      # One tarball, so the bundle is one attested subject.
+      - name: Pack the site bundle
+        run: tar -C target -czf ferrofed-viewer-site.tar.gz site
+      - name: Attest the bundle's provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ferrofed-viewer-site.tar.gz
+      - name: Hand the bundle to the image job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ferrofed-viewer-${{ inputs.tag }}-site
+          path: ferrofed-viewer-site.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  image:
+    name: viewer image (linux/amd64, linux/arm64)
+    needs: [binary, site]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # the attestations API, to verify the inputs
+      packages: write # push the image and its attestations to GHCR
+      id-token: write # Sigstore, for the provenance and SBOM attestations
+      attestations: write # store them against this repository
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Download the linux/amd64 binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ferrofed-viewer-${{ inputs.tag }}-amd64
+          path: inputs/
+      - name: Download the linux/arm64 binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ferrofed-viewer-${{ inputs.tag }}-arm64
+          path: inputs/
+      - name: Download the site bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ferrofed-viewer-${{ inputs.tag }}-site
+          path: inputs/
+
+      # Refuse any input this workflow did not attest. The staged layout is
+      # the one docker/viewer/Dockerfile copies from, dist/viewer/.
+      - name: Verify the inputs and stage them
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          signer="${GITHUB_REPOSITORY}/.github/workflows/release-viewer.yml"
+          mkdir -p dist/viewer
+          for arch in amd64 arm64; do
+            binary="inputs/linux_${arch}/ferrofed-viewer"
+            gh attestation verify "$binary" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
+            mkdir -p "dist/viewer/linux_${arch}"
+            cp "$binary" "dist/viewer/linux_${arch}/ferrofed-viewer"
+            chmod 0555 "dist/viewer/linux_${arch}/ferrofed-viewer"
+          done
+          gh attestation verify inputs/ferrofed-viewer-site.tar.gz --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
+          tar -C dist/viewer -xzf inputs/ferrofed-viewer-site.tar.gz site
+          for file in ferrofed-viewer.wasm ferrofed-viewer.js ferrofed-viewer.css; do
+            test -s "dist/viewer/site/pkg/${file}"
+          done
+
+      # No QEMU: docker/viewer/Dockerfile runs no command, it only copies what
+      # was built for each platform above
+      # (https://docs.docker.com/build/building/multi-platform/).
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # Tags: the version, and for a release that is not a pre-release also its
+      # major.minor and latest, both skipped for a pre-release by the action's
+      # own semver rule.
+      - name: Image tags, labels and annotations
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ inputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
+          # These repeat the build-independent set docker/viewer/Dockerfile
+          # carries, so the two never disagree.
+          labels: |
+            org.opencontainers.image.title=FerroFED operator console
+            org.opencontainers.image.description=The FerroFED operator console: a web client of the gateway's public surface
+            org.opencontainers.image.url=https://ferrofed.eu
+            org.opencontainers.image.documentation=https://ferrofed.eu/docs/operate/operator-console.html
+            org.opencontainers.image.source=https://github.com/FerroHEALTH/FerroFED
+            org.opencontainers.image.vendor=FerroHEALTH
+            org.opencontainers.image.authors=FerroHEALTH <https://github.com/FerroHEALTH>
+            org.opencontainers.image.licenses=BUSL-1.1
+          annotations: |
+            org.opencontainers.image.title=FerroFED operator console
+            org.opencontainers.image.description=The FerroFED operator console: a web client of the gateway's public surface
+            org.opencontainers.image.url=https://ferrofed.eu
+            org.opencontainers.image.documentation=https://ferrofed.eu/docs/operate/operator-console.html
+            org.opencontainers.image.source=https://github.com/FerroHEALTH/FerroFED
+            org.opencontainers.image.vendor=FerroHEALTH
+            org.opencontainers.image.authors=FerroHEALTH <https://github.com/FerroHEALTH>
+            org.opencontainers.image.licenses=BUSL-1.1
+
+      # Cold by construction. BuildKit's own unsigned attestations are off;
+      # the GitHub attestations below carry provenance and the SBOMs.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/viewer/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          no-cache: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+
+      - name: Resolve the platform manifests
+        id: manifests
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          index="$(docker buildx imagetools inspect "${IMAGE}@${DIGEST}" --raw)"
+          amd64="$(jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest' <<< "$index")"
+          arm64="$(jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64") | .digest' <<< "$index")"
+          case "$amd64" in sha256:*) ;; *) echo "::error::no linux/amd64 manifest in ${DIGEST}" >&2; exit 1 ;; esac
+          case "$arm64" in sha256:*) ;; *) echo "::error::no linux/arm64 manifest in ${DIGEST}" >&2; exit 1 ;; esac
+          {
+            echo "amd64=$amd64"
+            echo "arm64=$arm64"
+          } >> "$GITHUB_OUTPUT"
+
+      # syft reads the dependency list cargo-auditable embedded in the binary,
+      # so the SBOM names the crates rather than the files in the image.
+      - name: Install syft
+        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: syft@1.51.1
+      - name: Generate one SBOM per platform
+        env:
+          VERSION: ${{ inputs.version }}
+          AMD64: ${{ steps.manifests.outputs.amd64 }}
+          ARM64: ${{ steps.manifests.outputs.arm64 }}
+        run: |
+          set -euo pipefail
+          syft scan "registry:${IMAGE}@${AMD64}" --platform linux/amd64 \
+            -o "spdx-json=ferrofed-viewer-${VERSION}-image-amd64.spdx.json"
+          syft scan "registry:${IMAGE}@${ARM64}" --platform linux/arm64 \
+            -o "spdx-json=ferrofed-viewer-${VERSION}-image-arm64.spdx.json"
+          # A `pkg:cargo/` purl comes only from the `.dep-v0` section
+          # cargo-auditable wrote into the binary.
+          for f in "ferrofed-viewer-${VERSION}-image-amd64.spdx.json" "ferrofed-viewer-${VERSION}-image-arm64.spdx.json"; do
+            if ! jq -e '[.packages[].externalRefs[]? | select(.referenceLocator | startswith("pkg:cargo/"))] | length > 0' "$f" > /dev/null; then
+              echo "::error::${f} carries no pkg:cargo purl; was the binary built with cargo auditable?" >&2
+              exit 1
+            fi
+          done
+
+      - name: Attest the index provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Attest the linux/amd64 provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.manifests.outputs.amd64 }}
+          push-to-registry: true
+      - name: Attest the linux/amd64 SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.manifests.outputs.amd64 }}
+          sbom-path: ferrofed-viewer-${{ inputs.version }}-image-amd64.spdx.json
+          push-to-registry: true
+      - name: Attest the linux/arm64 provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.manifests.outputs.arm64 }}
+          push-to-registry: true
+      - name: Attest the linux/arm64 SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.manifests.outputs.arm64 }}
+          sbom-path: ferrofed-viewer-${{ inputs.version }}-image-arm64.spdx.json
+          push-to-registry: true
+
+      - name: Verify the published image as a consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          AMD64: ${{ steps.manifests.outputs.amd64 }}
+          ARM64: ${{ steps.manifests.outputs.arm64 }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          signer="${GITHUB_REPOSITORY}/.github/workflows/release-viewer.yml"
+          gh attestation verify "oci://${IMAGE}:${VERSION}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
+          for manifest in "$AMD64" "$ARM64"; do
+            gh attestation verify "oci://${IMAGE}@${manifest}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
+            gh attestation verify "oci://${IMAGE}@${manifest}" --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer" \
+              --predicate-type https://spdx.dev/Document/v2.3
+          done
+          {
+            echo "image ${IMAGE}:${VERSION}"
+            echo "index ${DIGEST}"
+            echo "amd64 ${AMD64}"
+            echo "arm64 ${ARM64}"
+          } >> "$GITHUB_STEP_SUMMARY"
