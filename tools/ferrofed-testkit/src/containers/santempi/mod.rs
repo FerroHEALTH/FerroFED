@@ -25,27 +25,21 @@
 
 use std::time::Duration;
 
-use fhir_types::r4::bundle::{Bundle, BundleEntry, BundleEntryRequest};
-use fhir_types::r4::human_name::HumanName;
-use fhir_types::r4::identifier::Identifier;
-use fhir_types::r4::message_header::{
-    MessageHeader, MessageHeaderDestination, MessageHeaderEvent, MessageHeaderSource,
-};
-use fhir_types::r4::patient::Patient;
-use fhir_types::r4::reference::Reference;
-use fhir_types::r4::resource::Resource;
 use http::StatusCode;
 use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
-use testcontainers::core::{IntoContainerPort, WaitFor};
+use testcontainers::core::{CmdWaitFor, ExecCommand, IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use uuid::Uuid;
+
+mod feed;
 
 use super::{
     HarnessError, POSTGRES_PORT, SANTEMPI, SANTEMPI_POSTGRES, names, postgres_health_check,
 };
 use crate::seed::{EhrDomain, PatientId};
+use feed::feed_message;
 
 /// The port SanteMPI serves its REST interfaces on inside its container.
 const PORT: u16 = 8080;
@@ -84,9 +78,6 @@ const LOG_LINES: usize = 80;
 
 /// How many characters of a refusing answer a provisioning error carries.
 const BODY_CHARS: usize = 2048;
-
-/// The destination every feed message names, a synthetic endpoint.
-const FEED_DESTINATION: &str = "urn:oid:2.999.3.1";
 
 /// SanteMPI could not be started, did not become usable, or refused its
 /// setup.
@@ -155,20 +146,30 @@ pub struct Client {
 }
 
 /// Returns the debugging application a fresh SanteMPI installation carries
-/// for development, through which the administrator signs in.
-fn debugging_application() -> Client {
+/// for development, which the harness provisions the installation as.
+fn administrator() -> Client {
     Client {
         name: "fiddler".to_owned(),
         secret: "fiddler".to_owned(),
     }
 }
 
-/// The administrator a fresh SanteMPI installation carries for development,
-/// and the password it signs in with, which the harness provisions the
-/// installation as.
-// NOTE: santedb/santedb-data@490cf38 SQL/PSQL/santedb-init.sql seeds `Administrator`
-// and `fiddler`; santedb/dev-doc@a7951d6 "SanteDB within Instant OpenHIE" signs in so.
-const ADMINISTRATOR: (&str, &str) = ("administrator", "Mohawk123");
+/// The query that answers `1` once SanteMPI has seeded the debugging
+/// application and installed the OAuth 2.0 flow policies.
+const FLOWS_INSTALLED: &str = "SELECT (SELECT COUNT(*) FROM SEC_APP_TBL WHERE APP_PUB_ID = 'fiddler') \
+     * (SELECT COUNT(*) FROM SEC_POL_TBL WHERE OID = '1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1')";
+
+/// The statements that grant the debugging application every OAuth 2.0
+/// flow policy, in the form the installation's own initialization grants it every
+/// other policy.
+// NOTE: santedb/santedb-server@f70e765 000-OAuthPolicies.dataset adds the flow policies
+// after santedb-init.sql (@011b7f0) granted `fiddler` the rest, so none is granted to it.
+const GRANT_FLOWS: &str = "DELETE FROM SEC_APP_POL_ASSOC_TBL \
+     WHERE APP_ID IN (SELECT APP_ID FROM SEC_APP_TBL WHERE APP_PUB_ID = 'fiddler') \
+     AND POL_ID IN (SELECT POL_ID FROM SEC_POL_TBL WHERE OID LIKE '1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.%'); \
+     INSERT INTO SEC_APP_POL_ASSOC_TBL (APP_ID, POL_ID, POL_ACT) SELECT APP_ID, POL_ID, 2 \
+     FROM SEC_APP_TBL, SEC_POL_TBL WHERE APP_PUB_ID = 'fiddler' \
+     AND OID LIKE '1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.%';";
 
 /// The policies that admit an application to the client-credentials grant
 /// with no device credential, which the Manager denies an application they
@@ -246,49 +247,18 @@ impl SanteMpi {
     /// reached and [`SanteMpiError::Refused`] when it refuses or answers
     /// with no token.
     pub async fn token(&self, client: &Client) -> Result<String, SanteMpiError> {
-        self.grant(
-            &[("grant_type", "client_credentials")],
-            client,
-            "the client-credentials grant",
-        )
-        .await
-    }
-
-    /// Returns a bearer token SanteMPI issues to its development
-    /// administrator by the password grant, through the debugging
-    /// application.
-    async fn administrator_token(&self) -> Result<String, SanteMpiError> {
-        let (username, password) = ADMINISTRATOR;
-        self.grant(
-            &[
-                ("grant_type", "password"),
-                ("username", username),
-                ("password", password),
-            ],
-            &debugging_application(),
-            "the administrator's password grant",
-        )
-        .await
-    }
-
-    /// Posts the token request `fields` names for `client`, asking for every
-    /// scope, and returns the access token.
-    async fn grant(
-        &self,
-        fields: &[(&str, &str)],
-        client: &Client,
-        step: &'static str,
-    ) -> Result<String, SanteMpiError> {
-        let mut form = url::form_urlencoded::Serializer::new(String::new());
-        form.extend_pairs(fields.iter().copied())
+        let form = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("grant_type", "client_credentials")
             .append_pair("scope", "*")
             .append_pair("client_id", &client.name)
-            .append_pair("client_secret", &client.secret);
+            .append_pair("client_secret", &client.secret)
+            .finish();
         let request = self
             .http
             .post(format!("{}{TOKEN_PATH}", self.origin))
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(form.finish());
+            .body(form);
+        let step = "the client-credentials grant";
         let body = send(request, step).await?;
         serde_json::from_slice::<TokenAnswer>(&body)
             .map(|answer| answer.access_token)
@@ -324,12 +294,22 @@ impl SanteMpi {
         send(request, step).await.map(drop)
     }
 
-    /// Polls the token endpoint with the administrator's password grant
-    /// until it issues a token, or the budget runs out.
+    /// Waits until SanteMPI has installed the OAuth 2.0 flow policies,
+    /// grants them to the debugging application, then polls the token
+    /// endpoint with it until it issues a token, or the budget runs out.
+    ///
+    /// The grant precedes the first token request, so no decision SanteMPI
+    /// caches predates it.
     async fn await_ready(&self) -> Result<(), SanteMpiError> {
         let started = tokio::time::Instant::now();
+        let mut granted = false;
         while started.elapsed() < READINESS_BUDGET {
-            if self.administrator_token().await.is_ok() {
+            if !granted {
+                let installed = self.database_says(FLOWS_INSTALLED).await;
+                granted = installed.as_deref() == Some("1")
+                    && self.database_says(GRANT_FLOWS).await.is_some();
+            }
+            if granted && self.token(&administrator()).await.is_ok() {
                 return Ok(());
             }
             tokio::time::sleep(READINESS_INTERVAL).await;
@@ -339,6 +319,28 @@ impl SanteMpi {
             budget: READINESS_BUDGET,
             log: self.log_tail().await,
         })
+    }
+
+    /// Runs `sql` with `psql` in the database container and returns what it
+    /// printed, trimmed, or `None` when it did not run to a clean exit.
+    async fn database_says(&self, sql: &str) -> Option<String> {
+        let command = ExecCommand::new([
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-U",
+            DATABASE_ROLE,
+            "-d",
+            DATABASE_ROLE,
+            "-tAc",
+            sql,
+        ])
+        .with_cmd_ready_condition(CmdWaitFor::exit_code(0));
+        // NOTE: no specification governs this: our own design; a database that is
+        // not ready yet is legitimately polled again, so a failed run is an answer.
+        let mut run = self.database.exec(command).await.ok()?;
+        let out = run.stdout_to_vec().await.ok()?;
+        Some(String::from_utf8_lossy(&out).trim().to_owned())
     }
 
     /// Returns the last [`LOG_LINES`] lines the container wrote, for a
@@ -366,13 +368,13 @@ impl SanteMpi {
     }
 
     /// Creates the applications, each admitted to the client-credentials
-    /// grant, and the identity domains, as the development administrator.
+    /// grant, and the identity domains, as the debugging application.
     async fn provision(
         &self,
         patient_namespace: &str,
         members: &[EhrDomain],
     ) -> Result<(), SanteMpiError> {
-        let admin = self.administrator_token().await?;
+        let admin = self.token(&administrator()).await?;
         let mut applications = vec![(record_id(0, 0), consumer())];
         let mut authorities = vec![authority(
             record_id(1, 0),
@@ -562,97 +564,6 @@ fn authority(
     ))
 }
 
-/// Returns the ITI-93 message that registers `patient` under `ehr_id` in
-/// `domain`: a message Bundle whose focus is a history Bundle holding the
-/// Patient (PMIR 1.6.0 §2:3.93.4.1.2).
-fn feed_message(domain: EhrDomain, patient: PatientId, ehr_id: Uuid) -> Bundle {
-    let key =
-        format!("{}-{}", source(domain).name.to_lowercase(), patient.value()).replace('_', "-");
-    let identifier = |system: String, value: String, usage: &str| Identifier {
-        r#use: Some(usage.into()),
-        system: Some(system.into()),
-        value: Some(value.into()),
-        ..Identifier::default()
-    };
-    let record = Patient {
-        id: Some(key.clone()),
-        active: Some(true.into()),
-        identifier: vec![
-            identifier(domain.system(), ehr_id.to_string(), "official"),
-            identifier(patient.namespace(), patient.value(), "usual"),
-        ],
-        name: vec![HumanName {
-            family: Some("Synthetic".into()),
-            given: vec![patient.value().as_str().into()],
-            ..HumanName::default()
-        }],
-        gender: Some("unknown".into()),
-        birth_date: Some("1970-01-01".into()),
-        ..Patient::default()
-    };
-    let history = Bundle {
-        id: Some(key.clone()),
-        r#type: "history".into(),
-        entry: vec![BundleEntry {
-            full_url: Some(format!("Patient/{key}").into()),
-            resource: Some(Resource::Patient(Box::new(record))),
-            request: Some(BundleEntryRequest {
-                method: "POST".into(),
-                url: format!("Patient/{key}").into(),
-                ..BundleEntryRequest::default()
-            }),
-            ..BundleEntry::default()
-        }],
-        ..Bundle::default()
-    };
-    let header = MessageHeader {
-        id: Some(key.clone()),
-        meta: None,
-        implicit_rules: None,
-        language: None,
-        text: None,
-        contained: Vec::new(),
-        extension: Vec::new(),
-        modifier_extension: Vec::new(),
-        event: MessageHeaderEvent::Uri("urn:ihe:iti:pmir:2019:patient-feed".into()),
-        destination: vec![MessageHeaderDestination {
-            endpoint: FEED_DESTINATION.into(),
-            ..MessageHeaderDestination::default()
-        }],
-        sender: None,
-        enterer: None,
-        author: None,
-        source: MessageHeaderSource {
-            endpoint: format!("{}.feed", domain.system()).into(),
-            ..MessageHeaderSource::default()
-        },
-        responsible: None,
-        reason: None,
-        response: None,
-        focus: vec![Reference {
-            reference: Some(format!("Bundle/{key}").into()),
-            ..Reference::default()
-        }],
-        definition: None,
-    };
-    Bundle {
-        r#type: "message".into(),
-        entry: vec![
-            BundleEntry {
-                full_url: Some(format!("MessageHeader/{key}").into()),
-                resource: Some(Resource::MessageHeader(Box::new(header))),
-                ..BundleEntry::default()
-            },
-            BundleEntry {
-                full_url: Some(format!("Bundle/{key}").into()),
-                resource: Some(Resource::Bundle(Box::new(history))),
-                ..BundleEntry::default()
-            },
-        ],
-        ..Bundle::default()
-    }
-}
-
 /// Sends `request` and returns the body of a success answer.
 async fn send(
     request: reqwest::RequestBuilder,
@@ -684,11 +595,18 @@ async fn send(
 #[cfg(test)]
 mod tests {
     use super::{
-        CLIENT_CREDENTIALS_POLICIES, FEED_DESTINATION, application, authority, consumer,
-        feed_message, record_id, source,
+        CLIENT_CREDENTIALS_POLICIES, GRANT_FLOWS, application, authority, consumer, record_id,
+        source,
     };
-    use crate::seed::{EhrDomain, PatientId};
-    use uuid::Uuid;
+    use crate::seed::EhrDomain;
+
+    #[test]
+    fn the_debugging_application_alone_is_granted_the_flow_policies() {
+        let flows = "OID LIKE '1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.%'";
+        assert_eq!(2, GRANT_FLOWS.matches(flows).count(), "{GRANT_FLOWS}");
+        assert_eq!(2, GRANT_FLOWS.matches("APP_PUB_ID = 'fiddler'").count());
+        assert!(GRANT_FLOWS.contains("POL_ACT) SELECT APP_ID, POL_ID, 2"));
+    }
 
     #[test]
     fn each_member_feeds_as_an_application_of_its_own() {
@@ -724,24 +642,5 @@ mod tests {
             "open to every source"
         );
         assert!(authority(record_id(1, 2), "X", "https://example.org/x", None).is_err());
-    }
-
-    #[test]
-    fn the_feed_message_carries_the_patient_and_the_ehr_id() {
-        let ehr_id = Uuid::from_u128(0x3333_3333_3333_4333_8333_3333_3333_3333);
-        let message = feed_message(EhrDomain::new(1), PatientId::new(1, 38), ehr_id);
-        let json = serde_json::to_string(&message).expect("a message");
-        for needle in [
-            "\"type\":\"message\"",
-            "urn:ihe:iti:pmir:2019:patient-feed",
-            "\"type\":\"history\"",
-            "urn:oid:2.999.2.1",
-            "33333333-3333-4333-8333-333333333333",
-            "urn:oid:2.999.1.1",
-            "ffd-test-0038",
-            FEED_DESTINATION,
-        ] {
-            assert!(json.contains(needle), "{needle} in {json}");
-        }
     }
 }
