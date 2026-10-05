@@ -7,7 +7,7 @@
 //!
 //! A federated query, a stored-query execution, a routed read and a routed
 //! write each reach a node on behalf of the caller the gateway verified.
-//! The handler that served one attaches what it saw ([`Accessed`]) to its
+//! The handler that served one attaches what it saw to its
 //! response: the data subject, the origins, and the model ids of what it
 //! delivered, read or wrote. [`record`], the layer inside client
 //! authentication, builds the record from those facts, the verified caller

@@ -52,7 +52,6 @@ async fn run(
     Ok((status, text, accesses(&records)?))
 }
 
-// conformance: track-10
 #[tokio::test]
 async fn a_patient_query_names_the_caller_the_patient_the_origins_and_every_category() -> TestResult
 {

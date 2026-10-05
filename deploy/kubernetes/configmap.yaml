@@ -81,6 +81,14 @@ data:
     # EDIT: the address the nodes fetch the JWK Set from.
     jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
 
+    # Every access to patient data is recorded, with the caller who made it,
+    # and a gateway with a registry refuses to start without a destination.
+    # EDIT: "repository" with [audit.repository] keeps the whole record at
+    # your Audit Record Repository; "log" writes only what it names of no one.
+    # https://ferrofed.eu/docs/operate/audit.html#the-access-log
+    [audit]
+    destination = "log"
+
   registry.toml: |
     [[organisation]]
     id = "org-a"
