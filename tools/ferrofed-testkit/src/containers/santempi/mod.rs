@@ -636,7 +636,7 @@ mod tests {
         for oid in CLIENT_CREDENTIALS_POLICIES {
             assert!(
                 xml.contains(&format!("<policy oid=\"{oid}\" grant=\"Grant\" />")),
-                "{xml}"
+                "the application is granted {oid}"
             );
         }
     }
