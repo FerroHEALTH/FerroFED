@@ -319,9 +319,13 @@ Discipline is unchanged for subagents: they obey the hard rules below.
   licensing box ticked, or `contribution-licence-guard` fails
   (`.claude/memory/pr-body-licence-checkbox.md`). Arm auto-merge on open
   (`.claude/memory/pr-auto-merge.md`).
-- **Keep the changelog.** `CHANGELOG.md` follows Keep a Changelog 1.1.0: every
-  change with user-visible effect adds an entry under `[Unreleased]` in the
-  same PR. Releases are cut from the changelog.
+- **Keep the changelog.** `CHANGELOG.md` follows Keep a Changelog 1.1.0, and
+  every change with user-visible effect adds its entry in the same PR as a
+  fragment, `changelog.d/<issue>-<kebab-slug>.<section>.md` (#598), never as
+  an edit of `CHANGELOG.md`. The format is `changelog.d/README.md`;
+  `changelog-guard` fails a PR with no entry unless it carries `no-changelog`.
+  The release cut assembles the fragments with
+  `scripts/release/changelog.sh --assemble`.
 - **Never weaken, skip, or delete a test** to make a build pass, and never edit
   a test to route around a bug it exposes (`.claude/rules/testing.md`).
 - **No patient data** in the repository, a fixture, an issue, or a prompt.

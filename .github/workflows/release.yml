@@ -194,7 +194,7 @@ jobs:
             exit 1
           fi
           if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no '## [$VERSION]' section. Cut the release before tagging: rename [Unreleased] to $VERSION with its date." >&2
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section. Cut the release before tagging: run scripts/release/changelog.sh --assemble $VERSION <date> and merge the result." >&2
             exit 1
           fi
           # Everything under the version heading, stopping at the next version

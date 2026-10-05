@@ -66,6 +66,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `site-links` | `scripts/checks/site-links.sh --self-test`, then `scripts/checks/site-links.sh`: the site assembled by `scripts/site/assemble.sh` with the roadmap block left empty, every internal link and anchor of every page checked by lychee with `--offline --include-fragments`, and `README.md` against the repository tree; lychee is the release binary pinned by version and SHA-256, and no request leaves the runner |
 | `tracker-helpers` | the `--self-test` of `scripts/gh/fields.sh`, `labels.sh`, `migrate-fields.sh` and `rel.sh`, each driven against a stub `gh` on `PATH` |
 | `crate-version-guard-self-test` | `scripts/checks/crate-version-guard.sh --self-test`, the guard over a stub repository whose `main` bumped a crate after the branch forked: an untouched crate passes, and packaged content changed without a bump fails |
+| `changelog` | `scripts/release/changelog.sh --self-test` and `scripts/checks/changelog-guard.sh --self-test`, each over a stub repository, then `scripts/release/changelog.sh --check`: every fragment under `changelog.d/` is named `<issue>-<kebab-slug>.<section>.md` with a Keep a Changelog 1.1.0 section and holds Markdown list items alone (`changelog.d/README.md`) |
 | `manifests` | `scripts/checks/manifests.sh --self-test`, then `scripts/checks/manifests.sh`: `cargo metadata --locked --format-version 1 --no-deps` over the root `Cargo.toml` and `fuzz/Cargo.toml`, so a manifest that does not parse (a dependency written twice by a merge) fails here with Cargo's own message; the self-test proves a manifest with a key written twice fails. It is the one tier-1 job that installs the pinned toolchain, with no build cache, and `detect` needs it, so a broken manifest starts no Rust job |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
@@ -193,6 +194,17 @@ label is its escape for a diff that provably does not change packaged bytes.
 Nothing is published yet, behind the workspace `publish` switch
 (`.claude/rules/crates-publishing.md`); the guard keeps each crate's line
 honest until the switch flips.
+
+`changelog-guard` runs on pull requests only and fails a change that records
+no changelog entry: it passes when the change adds a fragment under
+`changelog.d/`, or edits `CHANGELOG.md` while pull requests opened before the
+fragments still land. Like `crate-version-guard`, it reads the change from the
+merge base, so a fragment that reached `main` after the branch forked does not
+count. The `no-changelog` label is its escape for a change with no
+user-visible effect, and a pull request a bot opened is skipped, as
+`contribution-licence-guard` skips it. A label applied after the run started
+is read only by the next run, which a new push starts. The release cut turns
+the fragments into the version's section (`docs/release.md`).
 
 `hashFiles()` cannot do the detection. It is evaluated before checkout, when
 the workspace is empty, so an `if: hashFiles('Cargo.toml') != ''` gate on a job
