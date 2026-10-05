@@ -154,14 +154,27 @@ pub struct Client {
     pub secret: String,
 }
 
-/// Returns the administrative client a fresh SanteMPI installation carries
-/// for development, which the harness provisions the installation with.
-fn administrator() -> Client {
+/// Returns the debugging application a fresh SanteMPI installation carries
+/// for development, through which the administrator signs in.
+fn debugging_application() -> Client {
     Client {
         name: "fiddler".to_owned(),
         secret: "fiddler".to_owned(),
     }
 }
+
+/// The administrator a fresh SanteMPI installation carries for development,
+/// and the password it signs in with, which the harness provisions the
+/// installation as.
+// NOTE: santedb/santedb-data@490cf38 SQL/PSQL/santedb-init.sql seeds `Administrator`
+// and `fiddler`; santedb/dev-doc@a7951d6 "SanteDB within Instant OpenHIE" signs in so.
+const ADMINISTRATOR: (&str, &str) = ("administrator", "Mohawk123");
+
+/// The policy that admits an application to the client-credentials grant,
+/// which the Manager denies an application it is not granted to.
+// NOTE: santedb/santedb-data@490cf38 SQL/PSQL/santedb-ddl.sql names this policy; a
+// policy granted in the AMI create is added to the application (santedb-restsvc@ecafe70).
+const CLIENT_CREDENTIALS_POLICY: &str = "1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1";
 
 /// Returns the application the gateway asks the Manager as, its PIX
 /// Consumer.
@@ -229,18 +242,49 @@ impl SanteMpi {
     /// reached and [`SanteMpiError::Refused`] when it refuses or answers
     /// with no token.
     pub async fn token(&self, client: &Client) -> Result<String, SanteMpiError> {
-        let form = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("grant_type", "client_credentials")
+        self.grant(
+            &[("grant_type", "client_credentials")],
+            client,
+            "the client-credentials grant",
+        )
+        .await
+    }
+
+    /// Returns a bearer token SanteMPI issues to its development
+    /// administrator by the password grant, through the debugging
+    /// application.
+    async fn administrator_token(&self) -> Result<String, SanteMpiError> {
+        let (username, password) = ADMINISTRATOR;
+        self.grant(
+            &[
+                ("grant_type", "password"),
+                ("username", username),
+                ("password", password),
+            ],
+            &debugging_application(),
+            "the administrator's password grant",
+        )
+        .await
+    }
+
+    /// Posts the token request `fields` names for `client`, asking for every
+    /// scope, and returns the access token.
+    async fn grant(
+        &self,
+        fields: &[(&str, &str)],
+        client: &Client,
+        step: &'static str,
+    ) -> Result<String, SanteMpiError> {
+        let mut form = url::form_urlencoded::Serializer::new(String::new());
+        form.extend_pairs(fields.iter().copied())
             .append_pair("scope", "*")
             .append_pair("client_id", &client.name)
-            .append_pair("client_secret", &client.secret)
-            .finish();
+            .append_pair("client_secret", &client.secret);
         let request = self
             .http
             .post(format!("{}{TOKEN_PATH}", self.origin))
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(form);
-        let step = "the client-credentials grant";
+            .body(form.finish());
         let body = send(request, step).await?;
         serde_json::from_slice::<TokenAnswer>(&body)
             .map(|answer| answer.access_token)
@@ -276,12 +320,12 @@ impl SanteMpi {
         send(request, step).await.map(drop)
     }
 
-    /// Polls the token endpoint with the administrative client until it
-    /// issues a token, or the budget runs out.
+    /// Polls the token endpoint with the administrator's password grant
+    /// until it issues a token, or the budget runs out.
     async fn await_ready(&self) -> Result<(), SanteMpiError> {
         let started = tokio::time::Instant::now();
         while started.elapsed() < READINESS_BUDGET {
-            if self.token(&administrator()).await.is_ok() {
+            if self.administrator_token().await.is_ok() {
                 return Ok(());
             }
             tokio::time::sleep(READINESS_INTERVAL).await;
@@ -317,14 +361,14 @@ impl SanteMpi {
             .join("\n")
     }
 
-    /// Creates the applications and the identity domains, as the
-    /// administrative client.
+    /// Creates the applications, each admitted to the client-credentials
+    /// grant, and the identity domains, as the development administrator.
     async fn provision(
         &self,
         patient_namespace: &str,
         members: &[EhrDomain],
     ) -> Result<(), SanteMpiError> {
-        let admin = self.token(&administrator()).await?;
+        let admin = self.administrator_token().await?;
         let mut applications = vec![(record_id(0, 0), consumer())];
         let mut authorities = vec![authority(
             record_id(1, 0),
@@ -479,7 +523,9 @@ fn application(id: Uuid, client: &Client) -> String {
          <id xmlns=\"http://santedb.org/model\">{id}</id>\
          <applicationSecret xmlns=\"http://santedb.org/model\">{}</applicationSecret>\
          <name xmlns=\"http://santedb.org/model\">{}</name>\
-         </entity><id>{id}</id></SecurityApplicationInfo>",
+         </entity><id>{id}</id>\
+         <policy oid=\"{CLIENT_CREDENTIALS_POLICY}\" grant=\"Grant\" />\
+         </SecurityApplicationInfo>",
         client.secret, client.name
     )
 }
@@ -629,7 +675,10 @@ async fn send(
 
 #[cfg(test)]
 mod tests {
-    use super::{FEED_DESTINATION, authority, feed_message, record_id, source};
+    use super::{
+        CLIENT_CREDENTIALS_POLICY, FEED_DESTINATION, application, authority, consumer,
+        feed_message, record_id, source,
+    };
     use crate::seed::{EhrDomain, PatientId};
     use uuid::Uuid;
 
@@ -638,6 +687,17 @@ mod tests {
         let (a, b) = (source(EhrDomain::new(1)), source(EhrDomain::new(2)));
         assert_ne!(a.name, b.name);
         assert_eq!("FFD_SOURCE_urn_oid_2_999_2_1", a.name);
+    }
+
+    #[test]
+    fn each_application_is_admitted_to_the_client_credentials_grant() {
+        let xml = application(record_id(0, 0), &consumer());
+        assert!(
+            xml.contains(&format!(
+                "<policy oid=\"{CLIENT_CREDENTIALS_POLICY}\" grant=\"Grant\" />"
+            )),
+            "{xml}"
+        );
     }
 
     #[test]
