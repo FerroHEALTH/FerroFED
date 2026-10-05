@@ -87,11 +87,12 @@ pub async fn federation() -> Result<FederationView, ViewError> {
 /// gateway's bodies onto the view models.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
+    use ferrofed_registry::health::DependencyReport;
     use ferrofed_registry::operator::{CreatingSystemReport, IncidentReport, StoredQueryReport};
     use leptos::context::use_context;
     use openehr_federation::options::OptionsRoot;
 
-    use crate::gateway::{AccessToken, Dependencies, GatewayError};
+    use crate::gateway::{AccessToken, GatewayError};
     use crate::server::ViewerState;
     use crate::views::model::{
         FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, RouteRow, StoredRow,
@@ -136,18 +137,17 @@ pub mod server {
 
     /// The members view of `description` and `dependencies`.
     #[must_use]
-    pub fn members(description: &OptionsRoot, dependencies: &Dependencies) -> MembersView {
+    pub fn members(description: &OptionsRoot, dependencies: &DependencyReport) -> MembersView {
         let members = description
             .endpoints
             .iter()
             .map(|endpoint| {
                 let id = endpoint.id.to_string();
                 MemberRow {
-                    health: dependencies
-                        .endpoints
-                        .get(&id)
-                        .cloned()
-                        .unwrap_or_else(|| String::from("not reported")),
+                    health: dependencies.endpoints.get(&id).map_or_else(
+                        || String::from("not reported"),
+                        |observed| observed.as_str().to_owned(),
+                    ),
                     endpoint_id: id,
                     organisation: endpoint.organisation.clone(),
                     status: endpoint.status.as_str().to_owned(),
@@ -165,9 +165,9 @@ pub mod server {
         MembersView {
             members,
             services: dependencies
-                .services
-                .iter()
-                .map(|(key, state)| (key.clone(), state.clone()))
+                .services()
+                .into_iter()
+                .map(|(key, state)| (key.to_owned(), state.to_owned()))
                 .collect(),
         }
     }

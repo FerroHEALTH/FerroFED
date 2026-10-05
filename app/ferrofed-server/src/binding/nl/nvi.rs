@@ -66,7 +66,7 @@ use nl_generic_functions::nvi::authorizer::Authorizer;
 use serde::Deserialize;
 
 use super::nuts::{self, NutsOnward};
-use crate::binding::{LocalizerSeam, OnwardGrant};
+use crate::binding::seam::{LocalizerSeam, OnwardGrant};
 use crate::config::error::Error;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::Scheme;

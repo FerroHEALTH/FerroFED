@@ -44,7 +44,7 @@ use serde::Deserialize;
 
 use crate::binding::ihe::audit::repository::{AuditRepository, AuditRepositorySettings};
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
-use crate::binding::{Indicator, LocalizerSeam};
+use crate::binding::seam::{Indicator, LocalizerSeam};
 use crate::config::error::Error;
 use crate::config::secrets::secret;
 use crate::config::{Config, transport};

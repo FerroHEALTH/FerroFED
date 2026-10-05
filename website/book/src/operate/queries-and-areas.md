@@ -17,7 +17,7 @@ names every node with its status and `complete: false`. A member that does not
 know the patient (`not-resolved`) clears `complete` and never fails the
 query, and so does a `consent-denied` member, whether a consent pre-filter
 dropped it or its node refused with a code the registry lists
-([Consent](identity.md#consent)). A member the cross-reference could not answer for fails
+([Consent](consent.md)). A member the cross-reference could not answer for fails
 the query `424` ([Identity resolution](identity.md)). A member that was never
 in scope (`excluded`, `not-localized`) leaves `complete` alone. When
 every endpoint is `excluded`, for example because every one is suspended, no

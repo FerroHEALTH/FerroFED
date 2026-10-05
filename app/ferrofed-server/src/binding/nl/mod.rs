@@ -26,9 +26,8 @@ use ferrofed_identity::consent::ConsentPrefilter;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 
-use crate::binding::{
-    Binding, LocalizerSeam, Offer, OnwardGrant, PublicDocument, Reload, Role, Section, StepBudgets,
-};
+use crate::binding::seam::{LocalizerSeam, OnwardGrant, PublicDocument};
+use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
 use crate::config::error::Error;
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};

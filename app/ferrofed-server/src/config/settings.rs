@@ -24,8 +24,8 @@ use openehr_federation::id::FederationId;
 use openehr_federation::object::Uri;
 
 use crate::base_path::BasePath;
-use crate::binding::OnwardGrant;
 use crate::binding::development::DevSection;
+use crate::binding::seam::OnwardGrant;
 use crate::config::auth::AuthSettings;
 use crate::config::stored_queries::Store;
 use crate::config::{NodeSelection, RegistryFormat};

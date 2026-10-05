@@ -145,7 +145,7 @@ destination = "log"
 # names this gateway's homeCommunityID, so home_community is required with
 # audit = "repository". compose.yaml mounts the spool's volume at
 # /var/lib/ferrofed.
-# https://ferrofed.eu/docs/operate/identity.html#the-audit-repository
+# https://ferrofed.eu/docs/operate/localization.html#the-audit-repository
 # [xcpd]
 # sender_device = "2.999.40.1"                  # EDIT
 # home_community = "2.999.40"                   # EDIT

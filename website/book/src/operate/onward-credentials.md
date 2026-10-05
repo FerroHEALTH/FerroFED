@@ -301,7 +301,7 @@ section and a `nuts` section for the same endpoint refuse the configuration.
 
 The same table under `[nl_gf.nvi.credentials.nuts]` authenticates the
 gateway to the NVI, the Localization Service of
-[Dutch localization](identity.md#dutch-localization-nl_gfnvi), as a data
+[Dutch localization](localization.md#dutch-localization-nl_gfnvi), as a data
 user on GF-Authentication (the IG's Localization page, GFI-004, GFI-005):
 
 ```toml

@@ -23,7 +23,7 @@ use openehr_federation::outcome::{ErrorDetail, Outcome};
 use tracing::Instrument as _;
 
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
+use crate::health::dependencies;
 
 /// What localization left of the members asked (§14.1).
 #[derive(Debug)]
@@ -135,7 +135,7 @@ pub(crate) async fn localize(
     .instrument(tracing::info_span!("localize", members = members.len()))
     .await
     .unwrap_or(Localization::Unavailable(LocalizerError::DeadlineExceeded));
-    if let Some(observed) = Observed::of_localization(&answer) {
+    if let Some(observed) = dependencies::of_localization(&answer) {
         federation.dependencies().localizer(observed);
     }
     federation.requests().localized(&answer);

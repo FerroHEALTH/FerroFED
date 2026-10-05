@@ -15,10 +15,11 @@
 //! readiness that followed it would turn one CDR outage into a total
 //! outage. A member's state is its reachability and health, never whether
 //! a request to it was valid: every call that sends a member a request reads
-//! the node's own answer the same way ([`Observed::of_contact`]), whatever
-//! the §11.1 record of that call says. What a binding records through, such
-//! as an audit repository, is read live from its [`Indicator`] at each
-//! report. No specification governs health probes: our own design.
+//! the node's own answer the same way ([`of_contact`]), whatever the §11.1
+//! record of that call says. What a binding records through, such as an
+//! audit repository, is read live from its [`Indicator`] at each report. The
+//! report itself is the [`DependencyReport`] the operator console reads. No
+//! specification governs health probes: our own design.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -29,147 +30,125 @@ use ferrofed_identity::consent::ConsentDecision;
 use ferrofed_identity::demographics::{DemographicsError, Identification};
 use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_identity::resolver::Resolution;
+use ferrofed_registry::health::{DependencyReport, Observed};
 use ferrofed_registry::id::{EndpointId, NodeId};
-use serde::Serialize;
 
-use crate::binding::{Indication, Indicator};
+use crate::binding::seam::Indicator;
 
-/// The last state observed of one dependency.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Observed {
-    /// No request has reached it since the federation was built.
-    Unknown,
-    /// It answered the last request.
-    Up,
-    /// It was reached and answered the last request with a failure.
-    Failing,
-    /// The last request could not reach it or got no answer in time.
-    Down,
-    /// It is reachable, and work it has not taken yet waits for it: the
-    /// audit repository while its spool holds messages, and the care
-    /// services directory while the change it answered with is refused.
-    Degraded,
+/// Returns the byte `observed` is stored as.
+const fn code(observed: Observed) -> u8 {
+    match observed {
+        Observed::Unknown => 0,
+        Observed::Up => 1,
+        Observed::Failing => 2,
+        Observed::Down => 3,
+        Observed::Degraded => 4,
+    }
 }
 
-impl Observed {
-    /// Returns the byte this state is stored as.
-    const fn code(self) -> u8 {
-        match self {
-            Self::Unknown => 0,
-            Self::Up => 1,
-            Self::Failing => 2,
-            Self::Down => 3,
-            Self::Degraded => 4,
+/// Returns the state stored as `code`.
+const fn from_code(code: u8) -> Observed {
+    match code {
+        0 => Observed::Unknown,
+        1 => Observed::Up,
+        2 => Observed::Failing,
+        4 => Observed::Degraded,
+        _ => Observed::Down,
+    }
+}
+
+/// Returns what a request's contact with a node says of it, or `None` when
+/// the request never left the gateway.
+///
+/// The state is the node's reachability and health, never whether the
+/// request was valid: any answer below `500` is [`Observed::Up`], a `5xx` is
+/// [`Observed::Failing`], and no answer is [`Observed::Down`].
+#[must_use]
+pub fn of_contact(contact: Contact) -> Option<Observed> {
+    match contact {
+        Contact::Unsent => None,
+        Contact::Answered(status) => Some(of_answer(status)),
+        Contact::Silent => Some(Observed::Down),
+    }
+}
+
+/// Returns what a node's HTTP answer says of it: a server error is a
+/// failure, and any other answer is an answer.
+// NOTE: no specification governs this: our own design; a 4xx says the
+// request was refused, never that the node is unwell, so the node is up.
+#[must_use]
+pub fn of_answer(status: http::StatusCode) -> Observed {
+    if status.is_server_error() {
+        Observed::Failing
+    } else {
+        Observed::Up
+    }
+}
+
+/// Returns what a consent pre-filter's decision says of its service.
+///
+/// It follows the rule the members follow: a decision, or any answer below
+/// `500`, is [`Observed::Up`], a `5xx` is [`Observed::Failing`], and no
+/// answer is [`Observed::Down`]; `None` when the pre-filter did not ask its
+/// service, which then showed nothing of itself.
+#[must_use]
+pub fn of_consent(decision: &ConsentDecision) -> Option<Observed> {
+    match decision {
+        ConsentDecision::NotAsked(_) => None,
+        ConsentDecision::Denied(_) | ConsentDecision::NoSignal => Some(Observed::Up),
+        ConsentDecision::Unavailable(error) | ConsentDecision::Partial { failure: error, .. } => {
+            Some(error.status().map_or(Observed::Down, of_answer))
         }
     }
+}
 
-    /// Returns the state stored as `code`.
-    const fn from_code(code: u8) -> Self {
-        match code {
-            0 => Self::Unknown,
-            1 => Self::Up,
-            2 => Self::Failing,
-            4 => Self::Degraded,
-            _ => Self::Down,
-        }
+/// Returns what a localizer's answer says of its service.
+///
+/// It follows the rule the members follow: an answer, or a failure answered
+/// below `500`, is [`Observed::Up`], a `5xx` is [`Observed::Failing`], and
+/// no answer is [`Observed::Down`]; an exchange that could not be audited is
+/// [`Observed::Failing`]; `None` when no localizer was asked.
+#[must_use]
+pub fn of_localization(localization: &Localization) -> Option<Observed> {
+    match localization {
+        Localization::NotConfigured => None,
+        Localization::Candidates(_) | Localization::NoRecords => Some(Observed::Up),
+        // NOTE: no specification governs this: our own design; an exchange the
+        // gateway could not audit is a failure of the localization path itself.
+        Localization::Unavailable(LocalizerError::AuditFailed(_)) => Some(Observed::Failing),
+        Localization::Unavailable(error) => Some(error.status().map_or(Observed::Down, of_answer)),
     }
+}
 
-    /// Returns what a request's contact with a node says of it, or `None`
-    /// when the request never left the gateway.
-    ///
-    /// The state is the node's reachability and health, never whether the
-    /// request was valid: any answer below `500` is [`Observed::Up`], a `5xx`
-    /// is [`Observed::Failing`], and no answer is [`Observed::Down`].
-    #[must_use]
-    pub fn of_contact(contact: Contact) -> Option<Self> {
-        match contact {
-            Contact::Unsent => None,
-            Contact::Answered(status) => Some(Self::of_answer(status)),
-            Contact::Silent => Some(Self::Down),
-        }
+/// Returns what a demographics answer says of its service.
+///
+/// It follows the rule the localizer follows: an answer, no match or an
+/// ambiguous one included, is [`Observed::Up`], a `5xx` is
+/// [`Observed::Failing`], no answer is [`Observed::Down`], and an exchange
+/// that could not be audited is [`Observed::Failing`].
+#[must_use]
+pub fn of_identification(identification: &Identification) -> Observed {
+    match identification {
+        Identification::Unavailable(DemographicsError::AuditFailed(_)) => Observed::Failing,
+        Identification::Unavailable(error) => error.status().map_or(Observed::Down, of_answer),
+        _ => Observed::Up,
     }
+}
 
-    /// Returns what a node's HTTP answer says of it: a server error is a
-    /// failure, and any other answer is an answer.
-    // NOTE: no specification governs this: our own design; a 4xx says the
-    // request was refused, never that the node is unwell, so the node is up.
-    #[must_use]
-    pub fn of_answer(status: http::StatusCode) -> Self {
-        if status.is_server_error() {
-            Self::Failing
-        } else {
-            Self::Up
-        }
-    }
-
-    /// Returns what a consent pre-filter's decision says of its service, by
-    /// the rule the members follow: a decision, or any answer below `500`, is
-    /// [`Observed::Up`], a `5xx` is [`Observed::Failing`], and no answer is
-    /// [`Observed::Down`]; `None` when the pre-filter did not ask its
-    /// service, which then showed nothing of itself.
-    #[must_use]
-    pub fn of_consent(decision: &ConsentDecision) -> Option<Self> {
-        match decision {
-            ConsentDecision::NotAsked(_) => None,
-            ConsentDecision::Denied(_) | ConsentDecision::NoSignal => Some(Self::Up),
-            ConsentDecision::Unavailable(error)
-            | ConsentDecision::Partial { failure: error, .. } => {
-                Some(error.status().map_or(Self::Down, Self::of_answer))
-            }
-        }
-    }
-
-    /// Returns what a localizer's answer says of its service, by the rule the
-    /// members follow: an answer, or a failure answered below `500`, is
-    /// [`Observed::Up`], a `5xx` is [`Observed::Failing`], and no answer is
-    /// [`Observed::Down`]; an exchange that could not be audited is
-    /// [`Observed::Failing`]; `None` when no localizer was asked.
-    #[must_use]
-    pub fn of_localization(localization: &Localization) -> Option<Self> {
-        match localization {
-            Localization::NotConfigured => None,
-            Localization::Candidates(_) | Localization::NoRecords => Some(Self::Up),
-            // NOTE: no specification governs this: our own design; an exchange the
-            // gateway could not audit is a failure of the localization path itself.
-            Localization::Unavailable(LocalizerError::AuditFailed(_)) => Some(Self::Failing),
-            Localization::Unavailable(error) => {
-                Some(error.status().map_or(Self::Down, Self::of_answer))
-            }
-        }
-    }
-
-    /// Returns what a demographics answer says of its service, by the rule
-    /// the localizer follows: an answer, no match or an ambiguous one
-    /// included, is [`Observed::Up`], a `5xx` is [`Observed::Failing`], no
-    /// answer is [`Observed::Down`], and an exchange that could not be
-    /// audited is [`Observed::Failing`].
-    #[must_use]
-    pub fn of_identification(identification: &Identification) -> Self {
-        match identification {
-            Identification::Unavailable(DemographicsError::AuditFailed(_)) => Self::Failing,
-            Identification::Unavailable(error) => {
-                error.status().map_or(Self::Down, Self::of_answer)
-            }
-            _ => Self::Up,
-        }
-    }
-
-    /// Returns what a resolution says of the resolver: down when it could not
-    /// answer for some member, up when it answered for each, and `None` when
-    /// it was not asked.
-    #[must_use]
-    pub fn of_resolutions(resolutions: &BTreeMap<NodeId, Resolution>) -> Option<Self> {
-        if resolutions.is_empty() {
-            None
-        } else if resolutions
-            .values()
-            .any(|resolution| matches!(resolution, Resolution::Unavailable(_)))
-        {
-            Some(Self::Down)
-        } else {
-            Some(Self::Up)
-        }
+/// Returns what a resolution says of the resolver: down when it could not
+/// answer for some member, up when it answered for each, and `None` when it
+/// was not asked.
+#[must_use]
+pub fn of_resolutions(resolutions: &BTreeMap<NodeId, Resolution>) -> Option<Observed> {
+    if resolutions.is_empty() {
+        None
+    } else if resolutions
+        .values()
+        .any(|resolution| matches!(resolution, Resolution::Unavailable(_)))
+    {
+        Some(Observed::Down)
+    } else {
+        Some(Observed::Up)
     }
 }
 
@@ -200,9 +179,9 @@ impl Dependencies {
         Self {
             endpoints: endpoints
                 .into_iter()
-                .map(|endpoint| (endpoint.clone(), AtomicU8::new(Observed::Unknown.code())))
+                .map(|endpoint| (endpoint.clone(), AtomicU8::new(code(Observed::Unknown))))
                 .collect(),
-            resolver: resolver.then(|| AtomicU8::new(Observed::Unknown.code())),
+            resolver: resolver.then(|| AtomicU8::new(code(Observed::Unknown))),
             consent: None,
             localizer: None,
             demographics: None,
@@ -222,7 +201,7 @@ impl Dependencies {
     /// `configured` is `true`, its state [`Observed::Unknown`].
     #[must_use]
     pub fn with_consent(mut self, configured: bool) -> Self {
-        self.consent = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
+        self.consent = configured.then(|| AtomicU8::new(code(Observed::Unknown)));
         self
     }
 
@@ -230,7 +209,7 @@ impl Dependencies {
     /// `true`, its state [`Observed::Unknown`].
     #[must_use]
     pub fn with_localizer(mut self, configured: bool) -> Self {
-        self.localizer = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
+        self.localizer = configured.then(|| AtomicU8::new(code(Observed::Unknown)));
         self
     }
 
@@ -238,7 +217,7 @@ impl Dependencies {
     /// `configured` is `true`, its state [`Observed::Unknown`].
     #[must_use]
     pub fn with_demographics(mut self, configured: bool) -> Self {
-        self.demographics = configured.then(|| AtomicU8::new(Observed::Unknown.code()));
+        self.demographics = configured.then(|| AtomicU8::new(code(Observed::Unknown)));
         self
     }
 
@@ -247,14 +226,14 @@ impl Dependencies {
     /// An endpoint outside the record is ignored, so the record never grows.
     pub fn endpoint(&self, endpoint: &EndpointId, observed: Observed) {
         if let Some(slot) = self.endpoints.get(endpoint) {
-            slot.store(observed.code(), Ordering::Relaxed);
+            slot.store(code(observed), Ordering::Relaxed);
         }
     }
 
     /// Records what a request to `endpoint` showed of it, when the request
-    /// left the gateway ([`Observed::of_contact`]).
+    /// left the gateway ([`of_contact`]).
     pub fn contacted(&self, endpoint: &EndpointId, contact: Contact) {
-        if let Some(observed) = Observed::of_contact(contact) {
+        if let Some(observed) = of_contact(contact) {
             self.endpoint(endpoint, observed);
         }
     }
@@ -263,7 +242,7 @@ impl Dependencies {
     /// configured.
     pub fn resolver(&self, observed: Observed) {
         if let Some(slot) = &self.resolver {
-            slot.store(observed.code(), Ordering::Relaxed);
+            slot.store(code(observed), Ordering::Relaxed);
         }
     }
 
@@ -271,7 +250,7 @@ impl Dependencies {
     /// configured.
     pub fn consent(&self, observed: Observed) {
         if let Some(slot) = &self.consent {
-            slot.store(observed.code(), Ordering::Relaxed);
+            slot.store(code(observed), Ordering::Relaxed);
         }
     }
 
@@ -279,7 +258,7 @@ impl Dependencies {
     /// configured.
     pub fn localizer(&self, observed: Observed) {
         if let Some(slot) = &self.localizer {
-            slot.store(observed.code(), Ordering::Relaxed);
+            slot.store(code(observed), Ordering::Relaxed);
         }
     }
 
@@ -287,92 +266,53 @@ impl Dependencies {
     /// one is configured.
     pub fn demographics(&self, observed: Observed) {
         if let Some(slot) = &self.demographics {
-            slot.store(observed.code(), Ordering::Relaxed);
+            slot.store(code(observed), Ordering::Relaxed);
         }
     }
 
     /// Returns the report `GET /health/dependencies` answers with.
     #[must_use]
-    pub fn report(&self) -> Report {
-        Report {
+    pub fn report(&self) -> DependencyReport {
+        DependencyReport {
             endpoints: self
                 .endpoints
                 .iter()
                 .map(|(endpoint, slot)| {
                     (
                         endpoint.as_str().to_owned(),
-                        Observed::from_code(slot.load(Ordering::Relaxed)),
+                        from_code(slot.load(Ordering::Relaxed)),
                     )
                 })
                 .collect(),
             resolver: self
                 .resolver
                 .as_ref()
-                .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
+                .map(|slot| from_code(slot.load(Ordering::Relaxed))),
             consent: self
                 .consent
                 .as_ref()
-                .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
+                .map(|slot| from_code(slot.load(Ordering::Relaxed))),
             localizer: self
                 .localizer
                 .as_ref()
-                .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
+                .map(|slot| from_code(slot.load(Ordering::Relaxed))),
             demographics: self
                 .demographics
                 .as_ref()
-                .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
+                .map(|slot| from_code(slot.load(Ordering::Relaxed))),
             bindings: self
                 .indicators
                 .iter()
                 .flat_map(|indicator| indicator.indicate())
+                .map(|(key, indication)| (key.to_owned(), indication))
                 .collect(),
         }
     }
 }
 
-/// What `GET /health/dependencies` answers with: endpoint ids and states,
-/// and nothing else.
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct Report {
-    /// Every member endpoint by id, in id order.
-    pub endpoints: BTreeMap<String, Observed>,
-    /// The resolver's state, absent when no resolver is configured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resolver: Option<Observed>,
-    /// The consent pre-filter's state, absent when no pre-filter is
-    /// configured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub consent: Option<Observed>,
-    /// The localizer's state, absent when no localizer is configured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub localizer: Option<Observed>,
-    /// The state of the demographics service the gateway asks for a master
-    /// identity, absent when none is configured (`[pdqm]`).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub demographics: Option<Observed>,
-    /// What each binding indicates of the services it runs or records
-    /// through, by key, each absent when the binding configures none.
-    ///
-    /// The IHE binding indicates `directory`, the care services directory the
-    /// registry is read from (`up` after an answer the gateway accepted,
-    /// `degraded` after an answer whose change it refused, `failing` after an
-    /// HTTP error or an answer that breaks ITI-90 or ITI-91, `down` when it
-    /// did not answer), with `directory_fault` (`registry-invalid`,
-    /// `configuration-mismatch` or `refused-credentials`); `identity_registry`,
-    /// the PMIR Patient Identity Registry (`up` while it holds the
-    /// subscription, `failing` after a refusal, a broken answer or a
-    /// subscription in `error` or `off`, `down` when it did not answer), with
-    /// `identity_registry_fault` (`unreachable`, `refused`, `malformed`,
-    /// `unmanageable` or `audit-failed`); `audit_repository`, the ATNA
-    /// repository the ITI-55 audit messages go to; and `audit_feed`, the
-    /// repository the PIXm, PDQm, mCSD and PMIR records are posted to.
-    #[serde(flatten)]
-    pub bindings: BTreeMap<&'static str, Indication>,
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Dependencies, Observed};
+    use super::{Dependencies, Observed, of_consent, of_contact};
     use ferrofed_engine::dispatch::Contact;
     use ferrofed_engine::dispatch::definition::NodeCopy;
     use ferrofed_identity::consent::{ConsentDecision, NotAsked};
@@ -412,8 +352,8 @@ mod tests {
 
     #[test]
     fn only_a_request_that_left_the_gateway_is_an_observation() {
-        assert_eq!(None, Observed::of_contact(Contact::Unsent));
-        assert_eq!(Some(Observed::Down), Observed::of_contact(Contact::Silent));
+        assert_eq!(None, of_contact(Contact::Unsent));
+        assert_eq!(Some(Observed::Down), of_contact(Contact::Silent));
     }
 
     #[test]
@@ -430,7 +370,7 @@ mod tests {
         ] {
             assert_eq!(
                 Some(Observed::Up),
-                Observed::of_contact(Contact::Answered(status)),
+                of_contact(Contact::Answered(status)),
                 "{status}"
             );
         }
@@ -441,7 +381,7 @@ mod tests {
         ] {
             assert_eq!(
                 Some(Observed::Failing),
-                Observed::of_contact(Contact::Answered(status)),
+                of_contact(Contact::Answered(status)),
                 "{status}"
             );
         }
@@ -453,9 +393,9 @@ mod tests {
             aql: "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
             latency_ms: 3,
         };
-        assert_eq!(Some(Observed::Up), Observed::of_contact(held.contact()));
+        assert_eq!(Some(Observed::Up), of_contact(held.contact()));
         let missing = NodeCopy::Missing { latency_ms: 3 };
-        assert_eq!(Some(Observed::Up), Observed::of_contact(missing.contact()));
+        assert_eq!(Some(Observed::Up), of_contact(missing.contact()));
         let failed = NodeCopy::Failed {
             outcome: Outcome::NodeError {
                 latency_ms: 3,
@@ -463,10 +403,7 @@ mod tests {
             },
             contact: Contact::Answered(StatusCode::BAD_GATEWAY),
         };
-        assert_eq!(
-            Some(Observed::Failing),
-            Observed::of_contact(failed.contact())
-        );
+        assert_eq!(Some(Observed::Failing), of_contact(failed.contact()));
     }
 
     #[test]
@@ -479,13 +416,13 @@ mod tests {
         ] {
             assert_eq!(
                 None,
-                Observed::of_consent(&ConsentDecision::NotAsked(reason)),
+                of_consent(&ConsentDecision::NotAsked(reason)),
                 "{reason:?}: the service saw nothing, so it showed nothing"
             );
         }
         assert_eq!(
             Some(Observed::Up),
-            Observed::of_consent(&ConsentDecision::NoSignal),
+            of_consent(&ConsentDecision::NoSignal),
             "an answer with no signal is an answer"
         );
     }

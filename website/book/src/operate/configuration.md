@@ -123,9 +123,9 @@ The sections, and the page that covers each:
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
 | `[pixm]`, `[dev]` | the cross-reference | [Identity resolution](identity.md) |
 | `[pdqm]` | the PDQm Supplier asked for the master identity of an identifier the cross-reference does not map | [Demographics first](identity.md#demographics-first-pdqm) |
-| `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](identity.md#xcpd-localization-xcpd), [The audit repository](identity.md#the-audit-repository) |
-| `[nl_gf.nvi]` | the NVI localizer of the Dutch Generic Functions | [Dutch localization](identity.md#dutch-localization-nl_gfnvi) |
-| `[nl_gf.mitz]` | the Mitz consent pre-filter of the Dutch Generic Functions | [Dutch consent](identity.md#dutch-consent-nl_gfmitz) |
+| `[xcpd]` | the XCPD localizer and its audit repository | [XCPD localization](localization.md#xcpd-localization-xcpd), [The audit repository](localization.md#the-audit-repository) |
+| `[nl_gf.nvi]` | the NVI localizer of the Dutch Generic Functions | [Dutch localization](localization.md#dutch-localization-nl_gfnvi) |
+| `[nl_gf.mitz]` | the Mitz consent pre-filter of the Dutch Generic Functions | [Dutch consent](consent.md#dutch-consent-nl_gfmitz) |
 | `[pmir]` | the PMIR identity feed: the subscription and the route the Registry sends to | [The identity feed](identity.md#the-identity-feed-pmir) |
 | `[audit]` | where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go | [The audit trail](audit.md) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
@@ -250,7 +250,7 @@ credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]` and `[nl_gf.mitz]`: a
 grant in any of them is refused at load, and never read as no credential.
 `[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
 `oauth2` and `fapi2`
-([Dutch localization](identity.md#dutch-localization-nl_gfnvi)).
+([Dutch localization](localization.md#dutch-localization-nl_gfnvi)).
 
 ### A PIX Manager asked by `GET` or `POST`
 

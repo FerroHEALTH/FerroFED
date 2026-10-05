@@ -197,7 +197,7 @@ can be replayed at its own node until it expires. Record whether that is
 acceptable in your setting.
 
 **What changes the answer:** a consent pre-filter
-([Consent](identity.md#consent)) adds a check before dispatch, never in
+([Consent](consent.md)) adds a check before dispatch, never in
 place of the node's own; `consent_refusal_codes` in the registry decides
 which node refusals are reported `consent-denied`;
 `[federation.consent] disclose = false` keeps a member the pre-filter

@@ -116,11 +116,8 @@ pub enum EhrCallError {
     Failed {
         /// The endpoint.
         endpoint: EndpointId,
-        /// Whether a request of the call left before the failure, as the
-        /// client's error says: the node answered it with a `DPoP` nonce
-        /// challenge, and no proof could be made to send it again.
-        sent: bool,
-        /// What the client runtime reported, the node's status included.
+        /// What the client runtime reported, the node's status included, and
+        /// whether a request of the call left before the failure (its `sent`).
         #[source]
         source: Box<ClientError>,
     },
@@ -356,7 +353,6 @@ impl<T: Transport + Clone> NodeClient<T> {
             },
             other => EhrCallError::Failed {
                 endpoint,
-                sent: contacted,
                 source: Box::new(other),
             },
         }

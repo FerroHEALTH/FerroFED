@@ -31,9 +31,9 @@ use ihe_iti::balp::AuditRecorder;
 use crate::binding::ihe::audit::config::{AuditSettings, FeedRepositorySettings};
 use crate::binding::ihe::audit::repository::AuditRepositorySettings;
 use crate::binding::ihe::xcpd::AuditDestination;
-use crate::binding::{Indication, Indicator};
-use crate::health::dependencies::Observed;
+use crate::binding::seam::Indicator;
 use crate::service::{self, TlsRefused};
+use ferrofed_registry::health::{Indication, Observed};
 
 /// Returns what an audit forwarder's `status` says of its repository.
 ///

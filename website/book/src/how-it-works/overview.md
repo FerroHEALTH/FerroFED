@@ -117,7 +117,7 @@ flowchart TB
   demographics step ahead of them (a PDQm Supplier over ITI-78 or ITI-119,
   Annex A §A.2). The pre-filter has a
   development binding and a production binding, the Dutch Mitz
-  ([Dutch consent](../operate/identity.md#dutch-consent-nl_gfmitz)).
+  ([Dutch consent](../operate/consent.md#dutch-consent-nl_gfmitz)).
 - **Engine:** sends one request per node under one deadline (§11.5, N38),
   routes a follow-up to the node that owns it (§12), and passes every
   outbound request through the outbound gate (§5.4.1, N33). Each request

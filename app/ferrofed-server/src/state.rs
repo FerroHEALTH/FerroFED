@@ -215,12 +215,17 @@ impl AppState {
     /// processes indicate, such as a care services directory with why it is
     /// degraded.
     #[must_use]
-    pub fn dependencies(&self) -> crate::health::dependencies::Report {
+    pub fn dependencies(&self) -> ferrofed_registry::health::DependencyReport {
         let mut report = self
             .federation()
             .map(|federation| federation.dependencies().report())
             .unwrap_or_default();
-        report.bindings.extend(self.processes.indicate());
+        report.bindings.extend(
+            self.processes
+                .indicate()
+                .into_iter()
+                .map(|(key, indication)| (key.to_owned(), indication)),
+        );
         report
     }
 
