@@ -254,11 +254,15 @@ unchanged.
 A PIX Manager's `url` carries no credential: one with a user name or a
 password in it is refused naming the key, as an endpoint URL in the registry
 document is. Its credentials go in `[pixm.manager.credentials]`, which takes
-a bearer token or a user and a password, never an `oauth2`, `nuts` or `fapi2`
-grant. Each grant a node's section can name is described in
-[Onward credentials](onward-credentials.md). The same holds for the
-credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]` and `[nl_gf.mitz]`: a
-grant in any of them is refused at load, and never read as no credential.
+a bearer token, a user and a password, or an `oauth2` client-credentials
+grant authenticated by a client secret or a client assertion
+([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)), never a
+`nuts` or `fapi2` grant. The credentials of `[pdqm]`, `[pmir]` and
+`[registry.mcsd]` take the same. Each grant a node's section can name is
+described in [Onward credentials](onward-credentials.md). The credentials of
+`[nl_gf.mitz]` take a bearer token or a user and a password alone. A grant
+a section does not take is refused at load, naming it, and never read as no
+credential.
 `[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
 `oauth2` and `fapi2`
 ([Dutch localization](localization.md#dutch-localization-nl_gfnvi)).
@@ -337,7 +341,7 @@ never a value. The rule covers:
   which receives its bearer token, its basic credentials or the access token
   its `oauth2` grant obtains;
 - the `token_endpoint` of an `oauth2` section, which receives the client
-  assertion;
+  assertion, or for an identity service's grant the client secret;
 - the `authorization_server` of a `nuts` section, which receives the
   gateway's credentials in a Verifiable Presentation;
 - the `issuer` of a `fapi2` section, whose token endpoint receives the
