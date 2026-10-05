@@ -48,6 +48,7 @@ use crate::conveyed::{UPSTREAM, caller, conveyance, shared};
 
 mod metadata;
 mod mtls;
+mod rotation;
 
 type TestResult = Result<(), Box<dyn Error>>;
 

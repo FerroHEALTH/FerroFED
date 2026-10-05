@@ -267,17 +267,20 @@ impl Federation {
 }
 
 /// The public half of the client key of every FAPI 2.0 grant `settings`
-/// configures, each once, in endpoint order.
+/// configures, then its previous key while it is rotated, each once, in
+/// endpoint order.
 fn client_keys(settings: &Settings) -> Vec<Jwk> {
     let mut keys: Vec<Jwk> = Vec::new();
     for scheme in settings.credentials.values() {
-        if let Scheme::Fapi2(grant) = scheme
-            && let Some(key) = grant.client_key()
-            && !keys
-                .iter()
-                .any(|known| known.common.key_id.as_deref() == Some(key.kid()))
-        {
-            keys.push(key.public().clone());
+        if let Scheme::Fapi2(grant) = scheme {
+            for key in grant.published_client_keys().keys {
+                if !keys
+                    .iter()
+                    .any(|known| known.common.key_id == key.common.key_id)
+                {
+                    keys.push(key);
+                }
+            }
         }
     }
     keys

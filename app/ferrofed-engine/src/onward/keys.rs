@@ -13,8 +13,9 @@
 //! ([`SigningKey::from_p256_pem`]). Its `kid` is its RFC 7638 JWK thumbprint over
 //! SHA-256, so the same key always has the same `kid` and no operator names
 //! one. The previous key is published, and never signs, for one overlap
-//! window from the moment the ring is built. No specification governs the
-//! rotation: our own design.
+//! window from the moment the ring is built ([`KeyRing::new`]), or until the
+//! ring is built again without it ([`KeyRing::until_removed`]). No
+//! specification governs the rotation: our own design.
 
 use std::fmt;
 use std::sync::Arc;
@@ -180,8 +181,9 @@ impl fmt::Debug for SigningKey {
 /// previous key may be on the other curve, so a rotation can move the
 /// gateway from ES384 to ES256 or back. The previous key never signs, and
 /// is published until the window that started when the ring was built ends,
-/// so an assertion it signed before the rotation still verifies while a node
-/// may hold it (RFC 7517 §5).
+/// or for the life of a ring built [`KeyRing::until_removed`], so an
+/// assertion it signed before the rotation still verifies while a node may
+/// hold it (RFC 7517 §5).
 #[derive(Debug)]
 pub struct KeyRing {
     current: SigningKey,
@@ -216,6 +218,30 @@ impl KeyRing {
         Ok(Self {
             current,
             previous,
+            clock,
+        })
+    }
+
+    /// A ring that signs with `current` and publishes `previous` beside it
+    /// for as long as the ring lives: until the ring is built again without
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyError::SameKey`] when `previous` is `current`.
+    pub fn until_removed(
+        current: SigningKey,
+        previous: SigningKey,
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self, KeyError> {
+        if previous.kid == current.kid {
+            return Err(KeyError::SameKey {
+                kid: current.kid.clone(),
+            });
+        }
+        Ok(Self {
+            current,
+            previous: Some((previous, None)),
             clock,
         })
     }
