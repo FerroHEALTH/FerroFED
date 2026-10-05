@@ -3,6 +3,7 @@
 
 //! Integration tests through the library run path the binary shares.
 
+mod admin_peer;
 mod admission;
 mod aggregate;
 mod ask_all;

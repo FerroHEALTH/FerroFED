@@ -51,8 +51,13 @@ data:
     burst = 20
 
     # The admin listener: GET /metrics for the scraper. It has no
-    # authentication of its own, so allow_remote is set only because
-    # networkpolicy.yaml admits the scraper alone to this port.
+    # authentication of its own, so a remote peer gets GET /metrics alone; its
+    # write actions, such as the stored-query distribution, answer a loopback
+    # peer only: reach them through kubectl port-forward, or by kubectl exec
+    # into a container that shares the pod's network and has an HTTP client,
+    # such as an ephemeral one from kubectl debug, since the gateway's image
+    # carries no shell. networkpolicy.yaml admits the scraper alone to this
+    # port as well.
     [metrics]
     listen = "0.0.0.0:9464"
     allow_remote = true

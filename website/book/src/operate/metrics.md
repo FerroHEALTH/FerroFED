@@ -29,14 +29,28 @@ otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; unset, nothi
 The admin listener serves `GET /metrics` and the operator's
 [stored-query distribution](../integrate/stored-queries.md#repairing-drift)
 (`POST /admin/stored-queries/{name}/{version}/distribute`), answers every
-other path `404`, and never sits under the base path. It has no
-authentication, and it is never the gateway's own listener, so no client of
-the federation reaches it. `serve` and `config check` refuse:
+other path `404`, and never sits under the base path. It is never the
+gateway's own listener, so no client of the federation reaches it. It has no
+authentication of its own yet (#635), so its peer decides what it may do:
+
+| Peer | `GET /metrics` | A write action, such as the distribution |
+|---|---|---|
+| loopback (`127.0.0.0/8`, `::1`) | served | served |
+| any other address | served | `403 operation-refused`, whatever `allow_remote` says |
+
+`allow_remote = true` therefore opens the scrape to the network and nothing
+else. Run a write action from the gateway's host; in Kubernetes, through
+`kubectl port-forward`, or with `kubectl exec` in a container of the pod that
+has an HTTP client, such as an ephemeral one from `kubectl debug`, since the
+gateway's image carries no shell. `config check` says so for a listener that
+is not on a loopback address. `serve` and `config check` refuse:
 
 - a `listen` address that is not a loopback address, such as `0.0.0.0:9464`,
   unless `allow_remote = true` is set. Set it only when the address is
   reachable from your scraper and nothing else, for example inside a pod
-  network a network policy closes;
+  network a network policy closes; the policy is defence in depth over the
+  write actions' loopback rule, and holds only where the cluster's network
+  plugin enforces it;
 - a `listen` address equal to `server.listen`;
 - an `otlp_endpoint` that is not an `http://` URL. The push speaks gRPC
   without TLS, so run the collector beside the gateway, on the same host or
@@ -75,7 +89,7 @@ the unit after a histogram.
 | `ferrofed_resolver_request_duration_seconds` | `ferrofed.resolver.request.duration` (unit `s`) | histogram | none | the time each resolver call took |
 | `ferrofed_localizer_request_duration_seconds` | `ferrofed.localizer.request.duration` (unit `s`) | histogram | none | the time each localizer call took, an XCPD or NVI exchange; a `not-configured` call asks nothing and is not timed |
 | `ferrofed_demographics_request_duration_seconds` | `ferrofed.demographics.request.duration` (unit `s`) | histogram | none | the time each PDQm call took |
-| `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, and a patient grant's confinement |
+| `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, a patient grant's confinement, and an admin listener write action refused to a peer that is not loopback |
 | `ferrofed_overload_refusals_total` | `ferrofed.overload.refusals` | counter | `limit`, and `endpoint` on `node-in-flight` | the requests a limit refused ([Overload protection](overload.md)) |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
 | `ferrofed_identity_feed_messages_total` | `ferrofed.identity_feed.messages` | counter | `result` | the ITI-93 messages the [identity feed](identity.md#the-identity-feed-pmir) received, by `applied`, `refused` (not held to the PMIR profiles), `unauthenticated` (no feed token) or `audit-failed` (its audit record could not be stored, and nothing was applied) |
@@ -102,7 +116,7 @@ path reaches the surface:
 | `http_response_status_code`, `error_type` | the HTTP status the gateway answered |
 | `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
 | `url_scheme` | `http`: the listener speaks plain HTTP, and TLS ends in front of it |
-| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`: the `event` field of the log line |
+| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`: the `event` field of the log line |
 | `reason` | on `ferrofed_security_events_total`, the reason the `WWW-Authenticate` challenge names: `missing`, `malformed`, `algorithm`, `type`, `issuer`, `key`, `signature`, `expired`, `not-yet-valid`, `audience`, `inactive`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic` |
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
 | `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |
@@ -191,8 +205,9 @@ the metrics the gateway exports, and runs `promtool check rules`.
 The Kubernetes example (`deploy/kubernetes/`) serves the admin listener on
 port `9464` of each pod, annotates the pods for a Prometheus that reads
 `prometheus.io/scrape`, and opens the port to the Prometheus pods of the
-`monitoring` namespace alone with a network policy, since the listener has
-no authentication of its own.
+`monitoring` namespace alone with a network policy. The gateway refuses the
+write actions to every remote peer by itself, so the policy is defence in
+depth.
 
 The gateway does not call a webhook. An incident is counted, and its log
 line under `ferrofed::integrity` carries the routing ids you act on; route

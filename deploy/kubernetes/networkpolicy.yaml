@@ -3,9 +3,12 @@
 #
 # Who may reach the gateway pods. The gateway port takes every client in the
 # cluster: client authentication decides who is served. The admin listener,
-# the metrics port, has no authentication of its own and also serves the
-# operator's stored-query distribution, so it takes the Prometheus pods of
-# the monitoring namespace alone. Everything else is refused. Egress stays
+# the metrics port, has no authentication of its own: it answers a remote peer
+# GET /metrics alone, and refuses every write action to a peer that is not
+# loopback, so the gateway itself already keeps those inside the pod. This
+# policy is defence in depth over that, and holds only where the cluster's
+# network plugin enforces NetworkPolicy: the metrics port takes the Prometheus
+# pods of the monitoring namespace alone. Everything else is refused. Egress stays
 # open: the gateway reaches its members, its identity services and its
 # issuers wherever they are.
 apiVersion: networking.k8s.io/v1
