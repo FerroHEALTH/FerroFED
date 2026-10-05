@@ -317,6 +317,21 @@ jobs:
             deploy/compose/registry.toml \
             --repo "$GITHUB_REPOSITORY" --clobber
 
+      # The Grafana dashboard and the Prometheus alert rules over the
+      # gateway's metrics, each under its file name, which
+      # scripts/checks/observability.sh holds to the metrics this release
+      # exports.
+      - name: Attach the observability files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" \
+            deploy/observability/ferrofed-dashboard.json \
+            deploy/observability/ferrofed-alerts.yaml \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
       # The vendored demo data `ferrofed conformance run --seed-data` reads,
       # in one file with the Apache-2.0 licence and notice it is distributed
       # under, and that file's SHA-256 in sha256sum form, so an operator
@@ -435,11 +450,12 @@ jobs:
             done
           done < <(printf '%s' "$TARGETS" | jq -r '.include[].target')
           # The release-wide assets github-release attaches: the gateway
-          # compose file, the two example files it mounts, and the
-          # conformance seed data with its SHA-256.
+          # compose file, the two example files it mounts, the conformance
+          # seed data with its SHA-256, and the dashboard and alert rules.
           for asset in compose.yaml ferrofed.toml registry.toml \
             ferrofed-conformance-seed-data.json \
-            ferrofed-conformance-seed-data.json.sha256sum; do
+            ferrofed-conformance-seed-data.json.sha256sum \
+            ferrofed-dashboard.json ferrofed-alerts.yaml; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
           done
           if [ -n "$missing" ]; then

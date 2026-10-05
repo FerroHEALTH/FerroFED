@@ -52,6 +52,7 @@ use std::time::Instant;
 use ferrofed_registry::secret::SecretUrl;
 use oauth_server_metadata::Issuer;
 use openehr_sdt::smart_scopes::{Compartment, SmartScope};
+use secrecy::SecretString;
 use url::Url;
 
 use crate::onward::authorization_details::AuthorizationDetails;
@@ -83,12 +84,15 @@ impl Clock for SystemClock {
     }
 }
 
-/// The scope an onward token is requested with, in the SMART on openEHR
-/// grammar (ITS-REST SMART App Launch, master08 §Resource Scopes).
+/// The scope a token is requested with.
 ///
-/// Every scope is a resource scope of the `system` compartment, the one a
-/// client-credentials grant to the gateway names, as `openehr-sdt` reads
-/// it.
+/// A node's scope is read with [`Scope::parse`] in the SMART on openEHR
+/// grammar (ITS-REST SMART App Launch, master08 §Resource Scopes): every
+/// scope a resource scope of the `system` compartment, the one a
+/// client-credentials grant to the gateway names, as `openehr-sdt` reads it.
+/// An identity service's scope is read with [`Scope::tokens`], held to RFC
+/// 6749 §3.3 alone, since its authorization server defines its own scopes
+/// (IHE IUA ITI-71 §3.71.4.1.3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scope {
     scopes: Vec<SmartScope>,
@@ -108,6 +112,12 @@ pub enum ScopeError {
         "{scope:?} is not a system resource scope (system/<template-|composition-|aql-><id>.<cruds>)"
     )]
     NotSystemResource {
+        /// The scope as written.
+        scope: String,
+    },
+    /// A scope holds a character RFC 6749 §3.3 admits in no `scope-token`.
+    #[error("{scope:?} holds a character no RFC 6749 §3.3 scope-token admits")]
+    NotScopeToken {
         /// The scope as written.
         scope: String,
     },
@@ -143,22 +153,58 @@ impl Scope {
         Ok(Self { scopes, text })
     }
 
-    /// The scopes, as `openehr-sdt` read them.
+    /// Reads `text`, the space-delimited scopes of RFC 6749 §3.3, each held
+    /// to the `scope-token` grammar alone, as an identity service's
+    /// authorization server defines them.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ScopeError::Empty`] when `text` names no scope, and
+    /// [`ScopeError::NotScopeToken`] for a scope with a character outside
+    /// `%x21 / %x23-5B / %x5D-7E`.
+    pub fn tokens(text: &str) -> Result<Self, ScopeError> {
+        let mut tokens = Vec::new();
+        for raw in text.split_whitespace() {
+            // NOTE: RFC 6749 §3.3, a scope-token is 1*( %x21 / %x23-5B / %x5D-7E ),
+            // so a quote, a backslash, a control or a non-ASCII character is refused.
+            let admitted = raw
+                .bytes()
+                .all(|byte| matches!(byte, 0x21 | 0x23..=0x5B | 0x5D..=0x7E));
+            if !admitted {
+                return Err(ScopeError::NotScopeToken {
+                    scope: raw.to_owned(),
+                });
+            }
+            tokens.push(raw);
+        }
+        if tokens.is_empty() {
+            return Err(ScopeError::Empty);
+        }
+        Ok(Self {
+            scopes: Vec::new(),
+            text: tokens.join(" "),
+        })
+    }
+
+    /// The scopes, as `openehr-sdt` read them; none for a scope read with
+    /// [`Scope::tokens`].
     #[must_use]
     pub fn scopes(&self) -> &[SmartScope] {
         &self.scopes
     }
 
-    /// The `scope` parameter the token request carries: each scope in the
-    /// canonical form of the SMART on openEHR grammar, as `openehr-sdt`
-    /// prints it, one space apart (RFC 6749 §3.3).
+    /// The `scope` parameter the token request carries, one space apart
+    /// (RFC 6749 §3.3): each scope in the canonical form of the SMART on
+    /// openEHR grammar, as `openehr-sdt` prints it, or as written for a
+    /// scope read with [`Scope::tokens`].
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.text
     }
 }
 
-/// What a grant at one node's token endpoint asks for, and as whom.
+/// What a grant at one token endpoint, a node's or an identity service's,
+/// asks for, and as whom.
 ///
 /// `Debug` shows the token endpoint with its credentials redacted, and the
 /// types of its `authorization_details` alone.
@@ -173,6 +219,7 @@ pub struct Grant {
     assertion_audience: AssertionAudience,
     authorization_details: Option<AuthorizationDetails>,
     client_auth: ClientAuthentication,
+    client_secret: Option<SecretString>,
     sender: Option<SenderConstraint>,
 }
 
@@ -186,6 +233,35 @@ pub enum ClientAuthentication {
     /// The TLS client certificate the endpoint's transport presents, with
     /// the `client_id` in the request (RFC 8705 §2).
     Tls(TlsClientAuth),
+    /// The client secret the authorization server issued, sent as
+    /// [`SecretMethod`] says (RFC 6749 §2.3.1).
+    ClientSecret(SecretMethod),
+}
+
+/// How a [`Grant`] authenticated by a client secret sends it (RFC 6749
+/// §2.3.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SecretMethod {
+    /// `client_secret_basic`: the HTTP Basic scheme, the client id and the
+    /// secret each form-urlencoded first, the method every authorization
+    /// server supports and IHE IUA ITI-71 prescribes (§3.71.4.1.2.1).
+    Basic,
+    /// `client_secret_post`: `client_id` and `client_secret` in the request
+    /// body, for an authorization server that takes no Basic scheme.
+    Post,
+}
+
+impl SecretMethod {
+    /// The method as the "OAuth Token Endpoint Authentication Methods"
+    /// registry names it (RFC 8414 §2).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Basic => "client_secret_basic",
+            Self::Post => "client_secret_post",
+        }
+    }
 }
 
 impl ClientAuthentication {
@@ -196,6 +272,7 @@ impl ClientAuthentication {
         match self {
             Self::PrivateKeyJwt => "private_key_jwt",
             Self::Tls(method) => method.as_str(),
+            Self::ClientSecret(method) => method.as_str(),
         }
     }
 }
@@ -334,6 +411,7 @@ impl Grant {
             assertion_audience: AssertionAudience::TokenEndpoint,
             authorization_details: None,
             client_auth: ClientAuthentication::PrivateKeyJwt,
+            client_secret: None,
             sender: None,
         })
     }
@@ -385,7 +463,27 @@ impl Grant {
     #[must_use]
     pub fn with_tls_client_auth(mut self, method: TlsClientAuth) -> Self {
         self.client_auth = ClientAuthentication::Tls(method);
+        self.client_secret = None;
         self
+    }
+
+    /// This grant, authenticating the gateway with the client `secret` the
+    /// authorization server issued, sent by `method` (RFC 6749 §2.3.1), in
+    /// place of a client assertion.
+    ///
+    /// A token exchange still names the gateway as the actor with an
+    /// assertion the gateway signs (RFC 8693 §2.1).
+    #[must_use]
+    pub fn with_client_secret(mut self, method: SecretMethod, secret: SecretString) -> Self {
+        self.client_auth = ClientAuthentication::ClientSecret(method);
+        self.client_secret = Some(secret);
+        self
+    }
+
+    /// The client secret the grant authenticates with, when it is
+    /// authenticated by one.
+    pub(crate) fn client_secret(&self) -> Option<&SecretString> {
+        self.client_secret.as_ref()
     }
 
     /// This grant, taking only tokens bound to the TLS client certificate of
@@ -543,6 +641,7 @@ impl fmt::Debug for Grant {
             .field("assertion_audience", &self.assertion_audience)
             .field("authorization_details", &self.authorization_details)
             .field("client_auth", &self.client_auth)
+            .field("client_secret", &self.client_secret.is_some())
             .field("sender", &self.sender)
             .finish()
     }

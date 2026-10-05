@@ -7,10 +7,11 @@
 //! N7, N16, N17, N33).
 //!
 //! The gateway resolves the patient through the development cross-reference
-//! ([`crossref`]) or the harness PIX Manager ([`pixm`]). Both nodes hold the
-//! patient's identifier on `EHR_STATUS.subject`, so a subject predicate the
-//! gateway leaked would match there, and the journals show that none reached
-//! either node.
+//! ([`crossref`]), the harness PIX Manager ([`pixm`]), or SanteMPI, a
+//! deployable PIX Manager each member feeds over ITI-93 ([`santempi`]). Both
+//! nodes hold the patient's identifier on `EHR_STATUS.subject`, so a subject
+//! predicate the gateway leaked would match there, and the journals show that
+//! none reached either node.
 //!
 //! A commit routed to one node lands there byte-identical, its
 //! `DV_IDENTIFIER` included, with the node's `Location` and `ETag` and the
@@ -72,6 +73,7 @@ mod conformance_run;
 mod crossref;
 mod differential;
 mod pixm;
+mod santempi;
 mod scenario;
 #[cfg(feature = "postgres")]
 mod stored_postgres;

@@ -213,6 +213,32 @@ pub enum GrantFault {
         /// The grant's section.
         section: String,
     },
+    /// A node's grant names a client secret, which an identity service's
+    /// grant alone takes.
+    #[error(
+        "{key} applies to an identity service's grant alone; a node's grant authenticates with private_key_jwt or its TLS client certificate (§13.1, N25)"
+    )]
+    SecretForNode {
+        /// The key that names it.
+        key: String,
+    },
+    /// An identity service's grant names a key only a node's grant takes:
+    /// token exchange, a sender constraint, or the TLS client certificate.
+    #[error(
+        "{key} applies to a node's grant alone; an identity service's grant is the client-credentials grant, authenticated by client_secret_basic, client_secret_post or private_key_jwt (IUA ITI-71 §3.71.4.1.2.1)"
+    )]
+    NodeOnly {
+        /// The key that names it.
+        key: String,
+    },
+    /// A client secret is set beside `client_auth = "private_key_jwt"`.
+    #[error(
+        "{key} applies only with client_auth = \"client_secret_basic\" or \"client_secret_post\"; remove it, or set one of them"
+    )]
+    SecretUnused {
+        /// The key that holds it.
+        key: String,
+    },
     /// An entry of `mtls_alias_hosts` is no host.
     #[error(
         "{key} names a value that is not a host name, or a host name and a port, in canonical form; write it as mtls.example.com or mtls.example.com:8443, without a scheme or a path"
@@ -271,7 +297,7 @@ pub(super) fn with_mtls_alias_hosts(
 /// # Errors
 ///
 /// Returns [`TlsFault::WithoutClientIdentity`] for a TLS method without a
-/// certificate.
+/// certificate, and [`GrantFault::SecretForNode`] for a client secret.
 pub(super) fn client_authentication(
     section: &str,
     client_auth: ClientAuth,
@@ -281,6 +307,14 @@ pub(super) fn client_authentication(
         ClientAuth::PrivateKeyJwt => return Ok(ClientAuthentication::PrivateKeyJwt),
         ClientAuth::Tls => TlsClientAuth::Pki,
         ClientAuth::SelfSignedTls => TlsClientAuth::SelfSigned,
+        // NOTE: §13.1, N25 name a signed client assertion as a node's default, and the
+        // FAPI 2.0 grant takes no secret, so a node's grant keeps an assertion or mTLS.
+        ClientAuth::ClientSecretBasic | ClientAuth::ClientSecretPost => {
+            return Err(GrantFault::SecretForNode {
+                key: format!("{section}.client_auth"),
+            }
+            .into());
+        }
     };
     if certificate.is_none() {
         return Err(TlsFault::WithoutClientIdentity {

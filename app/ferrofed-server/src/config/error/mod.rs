@@ -376,6 +376,25 @@ pub enum Error {
         /// The section.
         section: String,
     },
+    /// An identity service's scope is not the space-delimited scopes of RFC
+    /// 6749 §3.3.
+    #[error("{key} is not a space-delimited list of RFC 6749 §3.3 scope-tokens")]
+    ServiceScope {
+        /// The key that holds it.
+        key: String,
+        /// What the scope grammar refused.
+        #[source]
+        source: ferrofed_engine::onward::ScopeError,
+    },
+    /// An identity service's credentials section names a Nuts grant or a
+    /// FAPI 2.0 grant.
+    #[error(
+        "{section} takes a bearer token, basic credentials or an oauth2 client-credentials grant, not a nuts or fapi2 grant"
+    )]
+    ServiceGrantNotHere {
+        /// The section.
+        section: String,
+    },
     /// A credentials section that takes a bearer token or basic credentials
     /// names an OAuth 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
     #[error(

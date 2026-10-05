@@ -12,8 +12,8 @@
 //!   syslog over TLS (#418);
 //! - [`atna_feed`]: a harness Audit Record Repository that takes the BALP
 //!   `AuditEvent` records ITI-20 posts over the FHIR Feed (#486);
-//! - [`containers`]: the two CDR products behind the `FERROFED_E2E` gate,
-//!   pinned by digest;
+//! - [`containers`]: the two CDR products and the deployable PIX Manager,
+//!   SanteMPI, behind the `FERROFED_E2E` gate, pinned by digest;
 //! - [`proxy`]: the capturing and fault proxy in front of each node, whose
 //!   journal the tests read;
 //! - [`leak`]: the track 10 oracle over that journal, which searches every

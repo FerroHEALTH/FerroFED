@@ -70,7 +70,12 @@ fn both(
 ) -> Result<(Router, Router), Box<dyn Error>> {
     let state = state(dir, &three(a, b, c), federation)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
-    Ok((client, admin::router(state)))
+    // NOTE: no specification governs this: our own design; the operator runs the
+    // write actions from the gateway's host, so the tests speak as a loopback peer.
+    let operator = admin::router(state).layer(axum::extract::connect_info::MockConnectInfo(
+        std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
+    ));
+    Ok((client, operator))
 }
 
 /// The operator's `POST` distributing [`NAME`] at `version`, naming `target`

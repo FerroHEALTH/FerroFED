@@ -232,6 +232,10 @@ pub(crate) fn auth_toml() -> Result<String, IssuerError> {
 }
 
 /// Returns server settings a test drives the middleware with.
+#[expect(
+    clippy::expect_used,
+    reason = "the default [server] limits are positive, so they resolve"
+)]
 pub(crate) fn settings() -> ServerSettings {
     ServerSettings {
         listen: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
@@ -241,6 +245,9 @@ pub(crate) fn settings() -> ServerSettings {
         shutdown_timeout: Duration::from_secs(5),
         body_limit: 1024,
         auth: auth(),
+        overload: ferrofed_server::config::Server::default()
+            .resolve_overload()
+            .expect("the default limits should resolve"),
     }
 }
 

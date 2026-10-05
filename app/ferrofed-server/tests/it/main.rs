@@ -5,6 +5,7 @@
 
 #[cfg(feature = "binding-ihe")]
 mod access;
+mod admin_peer;
 mod admission;
 mod aggregate;
 mod ask_all;
@@ -46,6 +47,8 @@ mod follow_up;
 mod healthcheck;
 mod http;
 mod hygiene;
+#[cfg(feature = "binding-ihe")]
+mod identity_grant;
 mod its_rest_areas;
 mod lifecycle;
 mod localization;
@@ -76,6 +79,7 @@ mod order;
 mod order_key;
 mod outbound;
 mod outbound_id;
+mod overload;
 mod path_ehr_id;
 #[cfg(feature = "binding-ihe")]
 mod pdqm;

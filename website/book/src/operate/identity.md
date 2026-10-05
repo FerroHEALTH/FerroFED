@@ -71,9 +71,10 @@ bearer_token_file = "/run/secrets/pix-token"
   `pixm.manager[N].url` and never quoting it; the credentials go in
   `[pixm.manager.credentials]`, with the keys of an endpoint's
   [credentials](configuration.md#the-file): `bearer_token`, or `user` and
-  `password`, each with its `_file` sibling. Leave the section out when the
-  transport, such as mutual TLS or a private network, authenticates the
-  gateway.
+  `password`, each with its `_file` sibling, or an `oauth2` grant
+  ([A PIX Manager behind OAuth 2.0](#a-pix-manager-behind-oauth-20)). Leave
+  the section out when the transport, such as mutual TLS or a private
+  network, authenticates the gateway.
 - `[pixm.namespaces]` maps the namespace a client writes to the assigning
   authority the Manager knows it by. A namespace that is itself an absolute
   URI needs no entry.
@@ -91,7 +92,7 @@ to the Manager and nowhere else; no node, log line or error body carries it
 |---|---|---|
 | exactly one identifier in the domain, which reads as an `ehr_id` | sent its node query | goes on |
 | no identifier in the domain, or the patient is unknown | `not-resolved` | goes on; `complete` is false (N6) |
-| two identifiers, one that is no `ehr_id`, an error, no answer within the budget, or a namespace with no mapping | `not-resolved`, with the reason in `error` | fails `424` under all-or-nothing |
+| two different identifiers, one that is no `ehr_id`, an error, no answer within the budget, or a namespace with no mapping | `not-resolved`, with the reason in `error` | fails `424` under all-or-nothing |
 
 A member the Manager could not answer for may hold the patient, so the
 gateway fails the query by default rather than answer without it (§11.1;
@@ -99,6 +100,61 @@ gateway fails the query by default rather than answer without it (§11.1;
 `openEHR-federation-completeness: partial`, the members that did resolve
 answer. Resolution runs inside the request's overall budget
 ([Timeouts](queries-and-areas.md#timeouts)).
+
+Two identical identifiers in one domain, the same `system` and the same
+`value`, are one identifier: ITI-83 returns one `targetIdentifier` per
+business identifier of the patient (PIXm 3.1.0 §2:3.83.4.2.2.1), and
+resolution yields a set of `{node, local ehr_id}` (§5.2). A Manager that
+lists the same identifier from a master record and a local record resolves
+the member. Two different values in one domain are never guessed between.
+
+### A PIX Manager behind OAuth 2.0
+
+A Manager that issues expiring tokens, as an IHE IUA Authorization Server
+does, is asked with a token the gateway obtains itself by the OAuth 2.0
+client-credentials grant (RFC 6749 §4.4; IUA ITI-71 §3.71.4.1.2.1). The
+same `oauth2` table serves `[pdqm.credentials]`, `[pmir.credentials]` and
+`[registry.mcsd.credentials]`.
+
+```toml
+[pixm.manager.credentials.oauth2]
+grant = "client_credentials"
+token_endpoint = "https://mpi.example.org/auth/oauth2_token"
+client_id = "ferrofed-pix-consumer"
+client_auth = "client_secret_basic"     # or client_secret_post, or private_key_jwt
+client_secret_file = "/run/secrets/pix-consumer-secret"
+scope = "*"                             # the scopes the Manager's server defines
+# resource = "https://mpi.example.org/fhir/"   # RFC 8707, when the server takes one
+# audience = "https://mpi.example.org"
+```
+
+- `client_auth` says how the gateway authenticates at the token endpoint:
+  `client_secret_basic`, the client id and secret in the HTTP Basic scheme,
+  as ITI-71 prescribes; `client_secret_post`, the two in the request body,
+  for a server that reads them there (RFC 6749 §2.3.1); or
+  `private_key_jwt`, a client assertion the `[signing]` key signs (RFC 7523
+  §2.2), with no secret.
+- `client_secret` or `client_secret_file` holds the secret. It is required
+  with the two secret methods and refused beside `private_key_jwt`.
+- `scope` is required, each value an RFC 6749 §3.3 scope token.
+- `token_endpoint` is `https` outside the development profile: the client
+  secret or assertion travels to it.
+- `grant = "token_exchange"`, `dpop_key_file`,
+  `tls_client_certificate_bound_access_tokens` and the TLS methods of
+  `client_auth` belong to a node's grant
+  ([Onward credentials](onward-credentials.md)) and are refused here.
+  `config check` names every key it refuses, and never a secret.
+
+The gateway caches the token until 30 seconds before the `expires_in` the
+token response states, and incorporates it in each ITI-83 request as
+`Authorization: Bearer` (ITI-72 §3.72.4.2). A token with no stated lifetime
+serves the one request it was obtained for. When the Manager answers `401`,
+the gateway drops the token, obtains a new one, and sends the request once
+more; it never retries with the refused token (§3.72.4.3). A token endpoint
+that refuses or does not answer within the per-node timeout leaves the
+members of that Manager `not-resolved` with the reason in `error`, and the
+query fails `424` under all-or-nothing; nothing is sent to the Manager
+without a token.
 
 ### `[pixm]` as the localizer
 
@@ -118,6 +174,249 @@ the gateway cannot read, or does not answer within
 asked unless `on_failure = "ask-all"`. `OPTIONS {base}/` declares
 `localization.mode` as `"pixm"`. With `[xcpd]` set, XCPD localizes and
 `[pixm]` only resolves.
+
+## Keeping the PIX Manager current
+
+The gateway reads each member's `ehr_id` from the Manager and never writes
+to it. The Manager answers only from what its identity feeds delivered, so
+for every patient it must hold:
+
+- the identifier clients name the patient by, in the system
+  `[pixm.namespaces]` maps the client's namespace to (or the namespace
+  itself when it is an absolute URI);
+- for each member that holds an EHR for the patient, that EHR's `ehr_id` as
+  an identifier whose `system` is the member's `ehr_id` domain, the value
+  `[pixm.manager.members]` maps the member to;
+- the demographics the Manager links records by. The PIXm Patient profile
+  requires a `name` (PIXm 3.1.0, StructureDefinition `IHE.PIXm.Patient`).
+
+Annex A puts it the same way: the ITI-104 identity feed "seeds the
+cross-reference with, for example, a local id or an openEHR id" (Annex A
+§A.1). How the Manager links records from different domains to one patient
+is its own business: PIXm "does not specify the rules and algorithm applied
+by the Patient Identifier Cross-reference Manager" (PIXm 3.1.0 §1:41.4.1).
+
+### Who feeds a member's domain
+
+Each `ehr_id` domain has one feeding system. "The Patient Identifier
+Cross-reference Manager shall only recognize a single Patient Identity
+Source per domain" (PIXm 3.1.0 §2:3.104.4.1.3). Make that Source the member
+itself, or the integration engine at the member that creates its EHRs or
+sees them created. Whether a CDR product can send a feed message on its own
+depends on the product. FerroFED makes no claim for any CDR.
+
+Register each member's domain at the Manager before you add the member to
+the registry. A Manager that does not know a domain the gateway asks for
+refuses the whole call (`403`, PIXm 3.1.0 §2:3.83.4.2.2.4), and every member of
+that Manager is then unavailable for the query.
+
+### ITI-104: the Patient Identity Feed FHIR
+
+ITI-104 is PIXm's own feed (PIXm 3.1.0 §2:3.104). The Source sends it when
+it adds a patient, revises one, merges two of its own records, and, with
+the Remove Patient Option, when it removes one (§2:3.104.4.1.1,
+§2:3.104.4.2.1, §2:3.104.4.3.1). For a member, adding a patient is creating an EHR. The
+message is a conditional update keyed on the identifier in the Source's
+own domain (§2:3.104.4.1.2), here the `ehr_id`:
+
+```http
+PUT https://pix.example.org/fhir/Patient?identifier=urn:oid:2.999.10|aaaaaaaa-aaaa-4aaa-8aaa-000000000001
+Content-Type: application/fhir+json
+
+{
+  "resourceType": "Patient",
+  "identifier": [
+    { "system": "urn:oid:2.999.10", "value": "aaaaaaaa-aaaa-4aaa-8aaa-000000000001" },
+    { "system": "urn:oid:2.999.1", "value": "ffd-test-0001" }
+  ],
+  "name": [ { "family": "Synthetic", "given": [ "Example" ] } ]
+}
+```
+
+The Manager's CapabilityStatement requires conditional update for ITI-104
+and conditional delete with the Remove Patient Option (PIXm 3.1.0,
+CapabilityStatement `IHE.PIXm.Manager`). A removed EHR is that conditional
+delete on the same identifier (§2:3.104.4.3.2).
+
+### ITI-93: the PMIR Mobile Patient Identity Feed
+
+When the Manager is a PMIR Patient Identity Registry, the Source sends the
+Mobile Patient Identity Feed instead (PMIR 1.6.0 §2:3.93), on each create,
+update, merge or delete (§2:3.93.4.1.1). It is an HTTP POST of a message
+Bundle: a MessageHeader whose event is `urn:ihe:iti:pmir:2019:patient-feed`,
+whose focus is a history Bundle that holds the Patient (§2:3.93.4.1.2). The
+Patient carries the same identifiers as the ITI-104 example. A Registry
+answers ITI-83 as the Patient Identifier Cross-reference Manager (PMIR 1.6.0
+§1:49.1.1.1), and its CapabilityStatement declares `$ihe-pix` on `Patient`
+(CapabilityStatement `IHE.PMIR.PatientIdentityRegistry`).
+
+PMIR keeps a single master identity per patient (PMIR 1.6.0 §1:49), so each
+member's `ehr_id` is one more identifier on it. This feed runs from each
+member to the Registry. It is a different flow from [`[pmir]`](#the-identity-feed-pmir)
+below, where the gateway subscribes to hear of identity changes.
+
+### A bulk load for the EHRs that already exist
+
+Neither profile defines a bulk transaction, so each EHR that existed before
+the feed started reaches the Manager as one feed message. At each member,
+as that member's operator, read the pairs from the member's own CDR:
+
+```sql
+SELECT e/ehr_id/value,
+       e/ehr_status/subject/external_ref/id/value,
+       e/ehr_status/subject/external_ref/namespace
+FROM EHR e
+```
+
+Then send one ITI-104 or ITI-93 message per row, as the member's Source,
+and switch the Source to the live feed before the load ends, so an EHR
+created during the load is not missed. Run the query at the member, never
+through the gateway: the member is the Source of its domain, and the pairs
+are the member's to publish. A member whose EHRs carry no subject has no
+pairs to read, and its feed has to come from the system that knows which
+patient each EHR belongs to.
+
+### Why the gateway does not feed the Manager
+
+FerroFED could read each member's EHRs and post the pairs itself. It does
+not (no specification governs this: our own design):
+
+- The Manager recognizes one Source per domain (PIXm 3.1.0 §2:3.104.4.1.3),
+  and the member creates, merges and removes its own EHRs. A copy the
+  gateway posts in batches is a second Source that lags the first.
+- FerroFED holds no clinical data and stores no patient identifier. A feed
+  would make it read and send every patient's identifier in bulk, which no
+  federation request needs: a query consumes one identifier, once, at
+  resolution (§5.4.1, N33).
+- Feeding a Manager is the identity source's function. A helper that does
+  it belongs beside the MPI, never on the gateway's request path.
+
+### A PIX Manager verified with FerroFED: SanteMPI
+
+SanteMPI, SanteSuite's master patient index (Apache License 2.0), answers
+ITI-83 and takes the ITI-93 feed. The end-to-end lane runs
+`santesuite/santedb-mpi:2.5.12`, pinned by the digest in the example below,
+against two FerroEHR members: each member's feed application registers
+the patient with its own `ehr_id` over ITI-93, the gateway resolves the
+patient over ITI-83 `GET`, both members answer the federated query, and a
+patient no member fed is `not-resolved` at both.
+
+Set it up as follows. The image settings are the ones the lane uses, and
+every domain, address and secret is an example.
+
+1. Run the image with SanteSuite's documented SanteMPI features and a
+   PostgreSQL database
+   ([SanteSuite: Using Docker Containers](https://help.santesuite.org/installation/installation-1/deployment/installing-software/santedb-server/installation-using-appliances/docker-containers)):
+
+   ```yaml
+   services:
+     santempi:
+       image: santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207
+       environment:
+         SDB_FEATURE: "LOG;DATA_POLICY;AUDIT_REPO;ADO;PUBSUB_ADO;RAMCACHE;SEC;SWAGGER;OPENID;FHIR;HDSI;AMI;BIS;MDM;MATCHING;IHE_PIXM;IHE_PDQM;IHE_PMIR"
+         SDB_MATCHING_MODE: WEIGHTED
+         SDB_MDM_RESOURCE: Patient=org.santedb.matching.patient.default
+         SDB_MDM_AUTO_MERGE: "false"
+         SDB_DB_MAIN: "server=db;port=5432; database=santedb; user id=santedb; password=…; pooling=true;"
+         SDB_DB_AUDIT: "server=db;port=5432; database=auditdb; user id=santedb; password=…; pooling=true;"
+         SDB_DB_MAIN_PROVIDER: Npgsql
+         SDB_DB_AUDIT_PROVIDER: Npgsql
+         SDB_OPENID_INSECURE_CLIENT_AUTH: "true"
+   ```
+
+   Its FHIR base is `{origin}/fhir/` and its token endpoint
+   `{origin}/auth/oauth2_token`.
+2. Create one security application per member's feed, and one for the
+   gateway, through SanteMPI's administration interface, each granted the
+   client-credentials policies `1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1` and
+   `1.3.6.1.4.1.33349.3.1.5.9.2.1.0.0.1.0`, and set
+   `SDB_OPENID_INSECURE_CLIENT_AUTH: "true"` so an application can obtain a
+   token with no device credential. SanteMPI denies the client-credentials
+   grant otherwise.
+3. Register the identity domains: the patient namespace, open to every
+   source, and one per member, with `url` set to the member's domain URI
+   and the member's feed application as its assigning application, so that
+   application is the domain's one authoritative Source
+   ([SanteSuite: Patient Identity Feed, Blocks Inappropriate Assigner](https://help.santesuite.org/installation/installation-1/deployment/installing-software/santedb-server/installation-qualification/fhir-interface-validation/mpi-cr-test-cases-for-fhir/test-ohie-cr-04-fhir)).
+   SanteMPI writes the domain's `url` as the identifier `system` in its
+   answers, so it must equal the value in `[pixm.manager.members]`.
+4. Feed each member's EHRs as its feed application, over ITI-93 to
+   `POST {origin}/fhir/Bundle`, live and as the bulk load above.
+5. Point the gateway at it:
+
+   ```toml
+   [[pixm.manager]]
+   url = "https://mpi.example.org/fhir/"
+   method = "get"
+
+   [pixm.manager.members]
+   "hospital-a" = "urn:oid:2.999.10"
+   "clinic-b" = "urn:oid:2.999.20"
+
+   [pixm.manager.credentials.oauth2]
+   grant = "client_credentials"
+   token_endpoint = "https://mpi.example.org/auth/oauth2_token"
+   client_id = "FFD_PIX_CONSUMER"
+   client_auth = "client_secret_post"   # SanteMPI reads the client from the body
+   client_secret_file = "/run/secrets/mpi-consumer-secret"
+   scope = "*"
+   ```
+
+Before you rely on it, weigh these:
+
+- **The image.** 2.5.12, published on 2023-07-04, is the newest stable
+  image SanteSuite publishes. It is built for `linux/amd64` only and runs on
+  Mono as root. The 3.0 line is still an alpha. Put it through your own
+  security review.
+- **The token.** SanteMPI issues bearer tokens by the client-credentials
+  grant, and they expire. The gateway runs that grant itself and refreshes
+  the token before it expires
+  ([A PIX Manager behind OAuth 2.0](#a-pix-manager-behind-oauth-20)).
+  SanteMPI reads the client id and secret from the request body, so
+  `client_auth` is `client_secret_post`.
+- **What was verified.** Resolution by `GET`, which is `method`'s default,
+  and the feed over ITI-93. ITI-83 by `POST` and the ITI-104 feed were not
+  verified against SanteMPI.
+- **Every domain registered.** SanteMPI refuses a call naming a domain it
+  does not know with `403`, as PIXm requires, so the members of that Manager
+  are unavailable and the query fails `424`.
+
+### Products checked that do not answer as the gateway needs
+
+| Product | What it is | Why it is not a Manager for FerroFED |
+|---|---|---|
+| HAPI FHIR JPA server | a FHIR server with a master data management module | its MDM operations do not include `$ihe-pix` ([HAPI FHIR: MDM Operations](https://hapifhir.io/hapi-fhir/docs/server_jpa_mdm/mdm_operations.html)) |
+| OpenCR (IntraHealth client registry) | a client registry on a FHIR server | its `$ihe-pix` is served on `GET` alone, compares a single `targetSystem`, so a call for two members' domains finds none, and writes `targetId` without a `Reference` value ([`server/lib/routes/fhir.js`](https://github.com/intrahealth/client-registry/blob/7569452055dc6de2719e1e362e78a7d7973856d4/server/lib/routes/fhir.js)) |
+| IHE Gazelle Patient Manager | a simulator that plays IHE actors, the PIXm Manager among them, for testing | a test tool, not a production MPI ([Gazelle Patient Manager](https://connectathon.ihe-catalyst.net/gazelle-documentation/Patient-Manager/user.html)) |
+| IPF | a Java integration library | a component to build a Manager with, not a server ([IPF: ITI-83](https://oehf.github.io/ipf-docs/docs/ihe/iti83/)) |
+| OpenHIM | an interoperability layer | it relies on a client registry behind it and holds no cross-reference of its own ([OpenHIM: About](https://openhim.org/docs/introduction/about)) |
+
+### When the hospital MPI does not speak PIXm
+
+The cross-reference role need not sit in one place. "Whether the node, its
+organization's MPI, or a regional service fills that role is immaterial to
+the federation" (N34, §5.5). When the MPI you have does not answer ITI-83:
+
+- **It speaks PIX or PIXV3.** A PIXm Manager "can be grouped with either PIX
+  or PIXV3 Patient Identifier Cross-reference Consumer and Source to proxy"
+  ITI-83 and ITI-104 (PIXm 3.1.0 §1:41.6.1). A PIXm front grouped with the
+  MPI in that way serves the gateway. FerroFED has verified no such front.
+- **Run a PIXm Manager for the federation beside it.** SanteMPI, set up as
+  above, holds the members' `ehr_id` domains, keyed on an identifier the
+  hospital MPI issues, such as its enterprise identifier. The hospital MPI
+  stays the authority for its own identifiers, and the federation's Manager
+  only cross-references them to `ehr_id`s. The feed to it comes from the
+  members, as above.
+- **Clients name a local identifier.** If clients know the patient by an
+  identifier only the hospital MPI holds, and the MPI answers PDQm,
+  [`[pdqm]`](#demographics-first-pdqm) translates it to the master
+  identifier first.
+- **A Manager per organization.** Each `[[pixm.manager]]` names the members
+  it resolves, so each member's own organization can run its own Manager.
+
+The development table, `[dev]`, is refused outside `profile =
+"development"` and is no answer in production. Without any of these, every
+patient query fails `424`, as [Choosing one](#choosing-one) says.
 
 ## Demographics first: `[pdqm]`
 
@@ -235,7 +534,9 @@ other member is `not-localized`
 
 A merge at the identity source can leave a caller's
 [resolution bindings](registry.md) naming the `ehr_id` of an identity that no
-longer exists. The bindings expire with their lifetime in any case. With
+longer exists. Each binding expires in any case `federation.binding_ttl_ms`
+after the last resolution that returned it, and a resolution after the merge
+no longer returns the stale one. With
 `[pmir]` set, the gateway also hears of each change as it happens: it
 subscribes at your IHE PMIR Patient Identity Registry with ITI-94, and the
 Registry sends every Patient Master Identity change to the gateway as an

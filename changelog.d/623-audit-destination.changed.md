@@ -6,7 +6,7 @@
   development. The example Kubernetes ConfigMap sends the records to the
   log target. The `log` destination never names the client of a request
   the gateway received.
-- `ihe-iti` 0.0.26 writes a BALP entity with `detail` entries, a user's
+- `ihe-iti` 0.0.27 writes a BALP entity with `detail` entries, a user's
   organisation as an agent of its own and their alternative identity as
   `altId`, and a record that claims no pattern. `openehr-federation` 0.0.43
   reads the archetype and template ids a bound query constrains its data

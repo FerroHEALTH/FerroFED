@@ -26,7 +26,8 @@ use secrecy::ExposeSecret;
 use thiserror::Error;
 use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError, Tls};
+use crate::ihe::iua;
 use crate::session::IdentityChange;
 
 /// What one change touches.
@@ -120,6 +121,10 @@ pub enum PmirConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for the Patient Identity Registry could not be built")]
     Client(#[source] reqwest::Error),
+    /// The credential is a grant the client was built to send in a default
+    /// header, where its token cannot ride.
+    #[error("the grant of the Patient Identity Registry cannot ride in a default header")]
+    Grant,
 }
 
 impl From<ClientError> for PmirConfigError {
@@ -127,6 +132,7 @@ impl From<ClientError> for PmirConfigError {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
             ClientError::Build(source) => Self::Client(source),
+            ClientError::Grant => Self::Grant,
         }
     }
 }
@@ -135,7 +141,7 @@ impl From<ClientError> for PmirConfigError {
 ///
 /// It authenticates with `auth`, by which the Registry authorizes the
 /// subscription (§2:3.94.5), and with the `tls` material, over the IHE FHIR
-/// client of [`fhir::http_client`].
+/// client of [`crate::fhir::http_client`].
 ///
 /// # Errors
 /// A [`PmirConfigError`] for a base that is no `http(s)` URL, a
@@ -147,6 +153,10 @@ pub fn subscriber(
     tls: &Tls,
 ) -> Result<PmirSubscriber, PmirConfigError> {
     let base = Url::parse(base.expose()).map_err(PmirConfigError::BaseUrl)?;
-    let http = fhir::http_client(auth, tls)?;
-    PmirSubscriber::new(base, http).map_err(PmirConfigError::Base)
+    let (http, authorizer) = iua::client(auth, tls)?;
+    let subscriber = PmirSubscriber::new(base, http).map_err(PmirConfigError::Base)?;
+    Ok(match authorizer {
+        Some(authorizer) => subscriber.with_authorizer(authorizer),
+        None => subscriber,
+    })
 }

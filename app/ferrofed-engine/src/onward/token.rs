@@ -1,16 +1,18 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! One token request to a node's OAuth 2.0 token endpoint, and its answer.
+//! One token request to an OAuth 2.0 token endpoint, a node's or an
+//! identity service's, and its answer.
 //!
 //! The request is the client-credentials grant (RFC 6749 §4.4.2) or token
 //! exchange (RFC 8693 §2.1), authenticated by a signed JWT client assertion
-//! (RFC 7523 §2.2) or by the TLS client certificate of the connection, with
-//! the `client_id` in the request (RFC 8705 §2), with the grant's
-//! `authorization_details` where it has some (RFC 9396 §6), and the answer a
-//! token (RFC 6749 §5.1, RFC 8693 §2.2.1, RFC 9396 §7) or a typed refusal
-//! (RFC 6749 §5.2). A grant whose tokens are certificate-bound takes only a
-//! token whose stated binding names its certificate (RFC 8705 §3).
+//! (RFC 7523 §2.2), by a client secret in the Basic scheme or the request
+//! body (RFC 6749 §2.3.1), or by the TLS client certificate of the
+//! connection, with the `client_id` in the request (RFC 8705 §2), with the
+//! grant's `authorization_details` where it has some (RFC 9396 §6), and the
+//! answer a token (RFC 6749 §5.1, RFC 8693 §2.2.1, RFC 9396 §7) or a typed
+//! refusal (RFC 6749 §5.2). A grant whose tokens are certificate-bound takes
+//! only a token whose stated binding names its certificate (RFC 8705 §3).
 //!
 //! The request is composed here and sent through the same HTTP engine as
 //! the node requests. The token endpoint is no ITS-REST resource, so no
@@ -20,7 +22,7 @@
 
 use std::time::{Duration, Instant};
 
-use http::header::{ACCEPT, CONTENT_TYPE};
+use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
 use jsonwebtoken::Header;
 use openehr_its::rest::client::{
@@ -36,7 +38,7 @@ use crate::onward::authorization_details::{self, AuthorizationDetailsError};
 use crate::onward::dpop::{self, Prover, Role};
 use crate::onward::keys::SigningKey;
 use crate::onward::mtls::{self, Binding, Confirmation};
-use crate::onward::{ClientAuthentication, Grant};
+use crate::onward::{ClientAuthentication, Grant, SecretMethod};
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
 pub const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -93,6 +95,15 @@ pub enum TokenError {
     /// no key to sign one; nothing was sent.
     #[error("the token request needs an assertion of the gateway, and no key signs one")]
     Unsigned,
+    /// The client id and secret of a grant that sends them in the Basic
+    /// scheme form no `Authorization` value (RFC 6749 §2.3.1, RFC 7617 §2);
+    /// nothing was sent, and the source names no part of the secret.
+    #[error("the client id and secret cannot be sent in the Basic scheme")]
+    ClientSecret(#[source] InvalidCredentials),
+    /// The grant authenticates with a client secret and holds none, so
+    /// nothing was sent (RFC 6749 §2.3.1).
+    #[error("the token request needs the client secret, and the grant holds none")]
+    NoSecret,
     /// The token request could not be composed.
     #[error("the token request could not be composed")]
     Compose(#[source] http::Error),
@@ -333,6 +344,7 @@ pub fn assertion(
 ///
 /// Returns a [`TokenError`] for every request that produced no usable
 /// token: an assertion that could not be signed or has no key to sign it, a
+/// secret the grant authenticates with and does not hold, a
 /// request that could not be composed or sent, an RFC 6749 §5.2 refusal,
 /// another status, a body that is no token response, a token of another
 /// type than the grant asks for or that cannot be sent, and a token bound
@@ -401,13 +413,19 @@ pub async fn exchange<T: Transport>(
 
 /// The client assertion `grant`'s client authentication sends, signed with
 /// the key of `signer`, or `None` for a grant authenticated by its TLS
-/// client certificate (RFC 8705 §2).
+/// client certificate (RFC 8705 §2) or its client secret (RFC 6749 §2.3.1).
 fn client_assertion(
     grant: &Grant,
     signer: Option<(&SigningKey, Duration)>,
 ) -> Result<Option<String>, TokenError> {
     match grant.client_authentication() {
         ClientAuthentication::Tls(_) => Ok(None),
+        // NOTE: RFC 6749 §2.3.1, a client authenticated by a secret sends it, so a
+        // grant that names the method and holds no secret sends nothing at all.
+        ClientAuthentication::ClientSecret(_) => grant
+            .client_secret()
+            .map(|_| None)
+            .ok_or(TokenError::NoSecret),
         ClientAuthentication::PrivateKeyJwt => {
             let (key, lifetime) = signer.ok_or(TokenError::Unsigned)?;
             assertion(grant, key, lifetime).map(Some)
@@ -451,22 +469,48 @@ fn exchange_form(
 }
 
 /// Adds the client authentication to `form`: the assertion of RFC 7523
-/// §2.2, or the `client_id` alone that RFC 8705 §2 requires of a client the
-/// TLS handshake authenticates.
+/// §2.2, the `client_id` and `client_secret` of a client that posts its
+/// secret (RFC 6749 §2.3.1), nothing for a client that sends its secret in
+/// the Basic scheme ([`post`] adds it), or the `client_id` alone that RFC
+/// 8705 §2 requires of a client the TLS handshake authenticates.
 fn authenticated(
     form: &mut form_urlencoded::Serializer<'_, String>,
     grant: &Grant,
     assertion: Option<&str>,
 ) {
-    match assertion {
-        Some(assertion) => {
-            form.append_pair("client_assertion_type", CLIENT_ASSERTION_TYPE)
-                .append_pair("client_assertion", assertion);
+    if let Some(assertion) = assertion {
+        form.append_pair("client_assertion_type", CLIENT_ASSERTION_TYPE)
+            .append_pair("client_assertion", assertion);
+        return;
+    }
+    match (grant.client_authentication(), grant.client_secret()) {
+        (ClientAuthentication::ClientSecret(SecretMethod::Basic), _) => {}
+        (ClientAuthentication::ClientSecret(SecretMethod::Post), Some(secret)) => {
+            form.append_pair("client_id", grant.client_id())
+                .append_pair("client_secret", secret.expose_secret());
         }
-        None => {
+        _ => {
             form.append_pair("client_id", grant.client_id());
         }
     }
+}
+
+/// The `Authorization` value of a grant that sends its client secret in the
+/// HTTP Basic scheme, the client id and the secret each form-urlencoded
+/// first (RFC 6749 §2.3.1), or `None` for any other grant.
+fn basic_authorization(grant: &Grant) -> Result<Option<HeaderValue>, TokenError> {
+    let (ClientAuthentication::ClientSecret(SecretMethod::Basic), Some(secret)) =
+        (grant.client_authentication(), grant.client_secret())
+    else {
+        return Ok(None);
+    };
+    let encoded = |text: &str| form_urlencoded::byte_serialize(text.as_bytes()).collect::<String>();
+    let password = SecretString::from(encoded(secret.expose_secret()));
+    let mut value = Credentials::basic(encoded(grant.client_id()), password)
+        .header_value()
+        .map_err(TokenError::ClientSecret)?;
+    value.set_sensitive(true);
+    Ok(Some(value))
 }
 
 /// Adds the grant's `resource` (RFC 8707 §2), `audience`, and
@@ -533,6 +577,9 @@ async fn post<T: Transport>(
         .header(ACCEPT, HeaderValue::from_static("application/json"));
     if let Some(prover) = grant.dpop() {
         builder = builder.header(dpop::HEADER, proof(prover, grant)?);
+    }
+    if let Some(basic) = basic_authorization(grant)? {
+        builder = builder.header(AUTHORIZATION, basic);
     }
     let mut built = builder.body(body.to_vec()).map_err(TokenError::Compose)?;
     built.extensions_mut().insert(RequestTimeout(timeout));

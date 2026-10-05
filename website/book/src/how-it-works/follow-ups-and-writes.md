@@ -45,7 +45,8 @@ flowchart TD
   `endpoint_id`, so name it in `openEHR-federation-endpoint` (§12.5.1).
 - **Step 2**, the resolution binding your earlier query left behind, is kept
   per verified caller (issuer, subject and client), in memory, for
-  `federation.binding_ttl_ms` and up to `federation.binding_capacity`
+  `federation.binding_ttl_ms` after the last resolution that returned it, and
+  up to `federation.binding_capacity`
   bindings over every caller; another caller never sees it, and a consent
   denial of a member drops the bindings naming it (§12.5.1, N41).
 - **Step 3**, the `ehr_id` index, is in memory and learns from resolutions

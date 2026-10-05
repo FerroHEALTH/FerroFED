@@ -26,7 +26,7 @@ use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
 };
 
-use super::{Contact, DispatchError, DispatchOptions, NodeClient, classify, dpop, reported};
+use super::{Contact, DispatchError, DispatchOptions, NodeClient, cap, classify, dpop, reported};
 use crate::hygiene::{Composed, Outbound};
 use crate::trace_context;
 
@@ -135,6 +135,12 @@ impl<T: Transport + Clone> NodeClient<T> {
             accept: None,
         };
         let started = Instant::now();
+        let Ok(_slot) = self.slot(options.deadline()).await else {
+            return Ok(Stored {
+                outcome: cap::capped_outcome(classify::elapsed_ms(started)),
+                contact: Contact::Capped,
+            });
+        };
         let client = self.client_for(options);
         let answer = DefinitionClient::new(&client)
             .with_options(self.definition_call(options)?)
@@ -196,6 +202,12 @@ impl<T: Transport + Clone> NodeClient<T> {
             accept: None,
         };
         let started = Instant::now();
+        let Ok(_slot) = self.slot(options.deadline()).await else {
+            return Ok(NodeCopy::Failed {
+                outcome: cap::capped_outcome(classify::elapsed_ms(started)),
+                contact: Contact::Capped,
+            });
+        };
         let client = self.client_for(options);
         let answer = DefinitionClient::new(&client)
             .with_options(self.definition_call(options)?)

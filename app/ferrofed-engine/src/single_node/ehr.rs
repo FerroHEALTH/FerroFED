@@ -23,6 +23,7 @@ use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
 use crate::conveyance::ConveyanceError;
+use crate::dispatch::cap::Capped;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{Composed, Outbound, Part};
 use crate::trace_context;
@@ -49,6 +50,10 @@ pub enum EhrCallError {
         /// The part of the request that carried it; never the value.
         part: Part,
     },
+    /// The endpoint's in-flight cap stayed full until the deadline, so
+    /// nothing was sent and the node was never asked (§11.5).
+    #[error(transparent)]
+    Capped(#[from] Capped),
     /// The deadline passed before the request left the gateway, so nothing
     /// was sent and the node was never asked (§11.5).
     #[error("the deadline for endpoint {endpoint} passed before the request was sent")]
@@ -173,6 +178,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
+        let _slot = self.slot(options.deadline()).await?;
         let client = self.client_for(options);
         let answer = EhrClient::new(&client)
             .with_options(call)
@@ -247,6 +253,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         let call = options
             .call_options(self.endpoint())
             .map_err(|error| self.options_failure(error))?;
+        let _slot = self.slot(options.deadline()).await?;
         let client = self.client_for(options);
         let answer = EhrClient::new(&client)
             .with_options(call)

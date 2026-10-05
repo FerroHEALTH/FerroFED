@@ -40,6 +40,7 @@ use tracing::Instrument as _;
 use tracing::field::Empty;
 
 use crate::base_path::BasePath;
+use crate::metrics::inbound::Instruments;
 use crate::{ITS_REST_PREFIX, request_id};
 
 /// The route a request is logged under when no route matched it.
@@ -58,11 +59,33 @@ pub const LOGGED_QUERY_PARAMETERS: [&str; 2] = ["offset", "fetch"];
 /// The longest logged query value.
 pub const MAX_VALUE_LENGTH: usize = 10;
 
+/// What the request log reads: the deployment's base path, and the inbound
+/// request instruments it records each request through, when metered.
+#[derive(Debug)]
+pub struct RequestLog {
+    base: BasePath,
+    inbound: Option<Instruments>,
+}
+
+impl RequestLog {
+    /// Returns the log of the surface under `base`, recording through
+    /// `inbound` when it is set.
+    #[must_use]
+    pub fn new(base: BasePath, inbound: Option<Instruments>) -> Self {
+        Self { base, inbound }
+    }
+}
+
 /// Logs `request` after it completes and returns its response untouched,
 /// naming its route under the deployment's `base` path ([`route`]).
-pub async fn log(State(base): State<Arc<BasePath>>, request: Request, next: Next) -> Response {
+///
+/// The same method, route template and status are recorded in the inbound
+/// request metrics ([`crate::metrics::inbound`]), and nothing else of the
+/// request.
+pub async fn log(State(log): State<Arc<RequestLog>>, request: Request, next: Next) -> Response {
     let method = request.method().clone();
-    let route = route(&base, &request);
+    let route = route(&log.base, &request);
+    let active = log.inbound.as_ref().map(|inbound| inbound.started(&method));
     let query = paging_parameters(request.uri().query().unwrap_or_default());
     let id = request_id::outbound(request.extensions())
         .map(|id| id.to_string())
@@ -87,7 +110,12 @@ pub async fn log(State(base): State<Arc<BasePath>>, request: Request, next: Next
     if status.is_server_error() {
         span.record("otel.status_code", "ERROR");
     }
-    let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let elapsed = started.elapsed();
+    if let Some(inbound) = &log.inbound {
+        inbound.served((&method, &route), status, elapsed);
+    }
+    drop(active);
+    let latency_ms = elapsed.as_secs_f64() * 1000.0;
     let (method, route, query, request_id) =
         (method.as_str(), route.as_str(), query.as_str(), id.as_str());
     let status_code = status.as_u16();

@@ -41,7 +41,8 @@ use url::Url;
 
 use crate::ITS_REST_PREFIX;
 use crate::config::error::Error;
-use crate::config::secrets::{resolve_credentials, secret};
+use crate::config::secrets::secret;
+use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::transport::{self, Encryption, ProtectedSite};
@@ -164,14 +165,7 @@ impl PmirSettings {
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
             (None, None) => true,
-            (Some(Scheme::Bearer(was)), Some(Scheme::Bearer(now))) => was == now,
-            (
-                Some(Scheme::Basic { user, password }),
-                Some(Scheme::Basic {
-                    user: now_user,
-                    password: now_password,
-                }),
-            ) => user == now_user && password == now_password,
+            (Some(was), Some(now)) => was.same_as(now),
             _ => false,
         };
         credentials
@@ -248,7 +242,10 @@ pub fn sites(
 /// [`Error::Authorization`] for a feed token that is no RFC 6750 `b64token`;
 /// [`Error::FeedPath`]; [`Error::GrantNotHere`] for OAuth 2.0 credentials;
 /// [`Error::Zero`]; and the errors of a secret that cannot be read.
-pub(crate) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
+pub(crate) fn resolve(
+    config: &Config,
+    context: &ServiceContext<'_>,
+) -> Result<Option<PmirSettings>, Error> {
     let Some(pmir) = &config.pmir else {
         return Ok(None);
     };
@@ -300,11 +297,8 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<PmirSettings>, Error> {
     let credentials = pmir
         .credentials
         .as_ref()
-        .map(|credentials| resolve_credentials(&section, credentials))
+        .map(|credentials| resolve_service(&section, credentials, context))
         .transpose()?;
-    if credentials.as_ref().is_some_and(Scheme::is_grant) {
-        return Err(Error::GrantNotHere { section });
-    }
     if let Some(system) = &pmir.identifier_system {
         Url::parse(system).map_err(|source| Error::Url {
             key: String::from("pmir.identifier_system"),

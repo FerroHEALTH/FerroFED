@@ -216,13 +216,25 @@ pub enum FederationError {
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]
     Localization(#[source] localization::LocalizationError),
-    /// An OAuth 2.0 or FAPI 2.0 grant that cannot be used: one in a PIX
-    /// Manager's credentials, or a node's with no `[signing]` key (§13.1,
-    /// N25).
-    #[error("{section} names a grant it cannot use: only a node takes one, with [signing]")]
+    /// A grant that cannot be used: one in the credentials of a service that
+    /// takes none, or a node's with no `[signing]` key (§13.1, N25).
+    #[error(
+        "{section} names a grant it cannot use: a node takes one with [signing], an IHE FHIR service an oauth2 client-credentials grant"
+    )]
     Grant {
         /// The credentials section.
         section: String,
+    },
+    /// The HTTP client an IHE FHIR service's grant sends its token requests
+    /// through could not be built.
+    #[cfg(feature = "binding-ihe")]
+    #[error("the HTTP client of the token endpoint of {section} could not be built")]
+    TokenTransport {
+        /// The credentials section.
+        section: String,
+        /// Why it could not be built; it names no secret.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// The TLS material of an identity, localization, consent or audit
     /// service does not read.
@@ -313,6 +325,18 @@ impl From<GrantRefused> for FederationError {
     fn from(refused: GrantRefused) -> Self {
         Self::Grant {
             section: refused.section,
+        }
+    }
+}
+
+#[cfg(feature = "binding-ihe")]
+impl From<crate::service::ServiceAuthError> for FederationError {
+    fn from(error: crate::service::ServiceAuthError) -> Self {
+        match error {
+            crate::service::ServiceAuthError::Refused(refused) => refused.into(),
+            crate::service::ServiceAuthError::TokenTransport { section, source } => {
+                Self::TokenTransport { section, source }
+            }
         }
     }
 }

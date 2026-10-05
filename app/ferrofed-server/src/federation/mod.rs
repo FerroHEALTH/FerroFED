@@ -47,6 +47,7 @@ use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
 use crate::localization::LocalizationPolicy;
 use crate::metrics::nodes::{Instruments, NodeRequests};
+use crate::metrics::resolver::Metered;
 use crate::onward::NodeTransport;
 
 /// The federation a server serves the federated query over.
@@ -269,8 +270,17 @@ impl Federation {
     /// ([`NodeRequests`]); a registry reload keeps them.
     #[must_use]
     pub fn metered(mut self, instruments: Instruments) -> Self {
-        self.requests.metered(instruments);
+        self.meter(instruments);
         self
+    }
+
+    /// Records this federation's node requests through `instruments`, and
+    /// counts and times every call to its resolver ([`Metered`]).
+    pub(crate) fn meter(&mut self, instruments: Instruments) {
+        self.resolver = self.resolver.take().map(|inner| -> Arc<dyn Resolver> {
+            Arc::new(Metered::new(inner, instruments.clone()))
+        });
+        self.requests.metered(instruments);
     }
 
     /// The resolution bindings of every client session (§12.5.1 step 2).

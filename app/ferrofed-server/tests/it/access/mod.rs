@@ -14,6 +14,7 @@
 )]
 
 mod gate;
+mod limits;
 mod query;
 mod routed;
 
@@ -24,6 +25,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use ferrofed_server::config::Config;
+use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mock::Server;
@@ -69,9 +71,20 @@ fn map_toml() -> String {
 /// `dir`.
 fn gateway(
     dir: &Path,
+    nodes: (&str, &str),
+    repository: &FeedRepository,
+    extra: &str,
+) -> Result<Router, Box<dyn Error>> {
+    gateway_under(dir, nodes, repository, extra, &settings_with_room())
+}
+
+/// The gateway of [`gateway`], served under `server`.
+fn gateway_under(
+    dir: &Path,
     (a, b): (&str, &str),
     repository: &FeedRepository,
     extra: &str,
+    server: &ServerSettings,
 ) -> Result<Router, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b, ""))?;
@@ -89,10 +102,7 @@ fn gateway(
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let state = AppState::build(&settings)?;
-    Ok(ferrofed_server::router(
-        Arc::new(state),
-        &settings_with_room(),
-    ))
+    Ok(ferrofed_server::router(Arc::new(state), server))
 }
 
 /// A canonical `COMPOSITION` of `template`, the version `uid`.

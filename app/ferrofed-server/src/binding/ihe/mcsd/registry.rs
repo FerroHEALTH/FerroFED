@@ -328,9 +328,12 @@ pub fn read(settings: &DirectorySettings) -> Result<RegistrySnapshot, Federation
 
 /// The source `settings` name.
 fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationError> {
-    let credentials =
-        service::authentication("registry.mcsd.credentials", settings.credentials.as_ref())?;
     let tls = service::tls_of("registry.mcsd", &settings.tls).map_err(FederationError::Tls)?;
+    let credentials = service::service_authentication(
+        "registry.mcsd.credentials",
+        settings.credentials.as_ref(),
+        &tls,
+    )?;
     let source = DirectorySource::new(DirectoryConfig {
         base: settings.url.clone(),
         credentials,

@@ -42,7 +42,8 @@ use url::Url;
 
 use super::error::FhirFormError;
 use super::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM, selection_document};
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError, Tls};
+use crate::ihe::iua;
 
 /// The directory a registry is read from, as the configuration names it.
 #[derive(Debug)]
@@ -84,6 +85,10 @@ pub enum DirectoryConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for the directory could not be built")]
     Client(#[source] reqwest::Error),
+    /// The credential is a grant the client was built to send in a default
+    /// header, where its token cannot ride.
+    #[error("the grant of the directory cannot ride in a default header")]
+    Grant,
 }
 
 impl From<ClientError> for DirectoryConfigError {
@@ -91,6 +96,7 @@ impl From<ClientError> for DirectoryConfigError {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
             ClientError::Build(source) => Self::Client(source),
+            ClientError::Grant => Self::Grant,
         }
     }
 }
@@ -222,9 +228,12 @@ impl DirectorySource {
             bytes,
             entries,
         } = config;
-        let http = fhir::http_client(&credentials, &tls)?;
+        let (http, authorizer) = iua::client(&credentials, &tls)?;
         let base = Url::parse(base.expose()).map_err(DirectoryConfigError::BaseUrl)?;
-        let client = McsdClient::new(base, http).map_err(DirectoryConfigError::Base)?;
+        let mut client = McsdClient::new(base, http).map_err(DirectoryConfigError::Base)?;
+        if let Some(authorizer) = authorizer {
+            client = client.with_authorizer(authorizer);
+        }
         Ok(Self {
             client,
             deadline,

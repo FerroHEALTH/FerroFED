@@ -80,12 +80,16 @@ Thirteen workflows:
   The three are reusable workflows because SLSA Build Level 3 needs the
   signing identity out of reach of caller-defined steps.
 - `.github/workflows/pin-freshness.yml`: the weekly freshness read over every
-  pin no Dependabot ecosystem covers, the analyzer versions in `ci.yml` and the
-  documentation toolchain. It opens one issue when a pin is behind its newest
-  upstream release, through `scripts/gh/fields.sh new` (its default token may
-  not set the issue type and fields, and the issue then lands with its label
-  alone, `issue-workflow.md` §Type, priority and labels), and fails only when a
-  release could not be read.
+  pin no Dependabot ecosystem covers, the analyzer versions in `ci.yml`, the
+  documentation toolchain and the testkit's `PinnedImage` constants. It opens
+  one issue when a pin is behind its newest upstream release, through
+  `scripts/gh/fields.sh new` (its default token may not set the issue type
+  and fields, and the issue then lands with its label alone,
+  `issue-workflow.md` §Type, priority and labels), and fails only when a
+  release could not be read. Its `EHDS acts` job reads EUR-Lex and the
+  Commission's Have your say register for the acts Regulation (EU) 2025/327
+  still waits on (`scripts/checks/ehds-acts.sh`), and opens one issue per
+  newly adopted act.
 - `.github/workflows/publish-crates.yml`: the crates.io lane behind the
   workspace `publish` switch. It runs on every `v*` tag (and on a manual
   dispatch, a dry run unless `publish` is set), reads the publishable set from

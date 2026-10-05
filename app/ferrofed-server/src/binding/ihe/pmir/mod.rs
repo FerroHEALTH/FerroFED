@@ -44,7 +44,7 @@ use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
 use url::Url;
 
 use crate::binding::ihe::pmir::config::{OnDrain, PmirSettings};
-use crate::service::{self, GrantRefused, TlsRefused};
+use crate::service::{self, ServiceAuthError, TlsRefused};
 use ferrofed_registry::health::Observed;
 use subscription::{RegistryFault, Watch};
 
@@ -61,9 +61,10 @@ pub enum IdentityFeedError {
     /// The Registry's base URL does not parse.
     #[error("the PMIR Registry base URL is not a URL")]
     Registry(#[source] url::ParseError),
-    /// `[pmir.credentials]` names a grant, which only a node takes.
+    /// `[pmir.credentials]` names a grant the Registry does not take, or one
+    /// whose token requests have no HTTP client.
     #[error("the PMIR credentials cannot be used")]
-    Grant(#[source] GrantRefused),
+    Grant(#[source] ServiceAuthError),
     /// The TLS material of `[pmir]` does not read.
     #[error("the PMIR TLS material cannot be used")]
     Tls(#[source] TlsRefused),
@@ -113,9 +114,13 @@ impl IdentityFeed {
         domains: BTreeSet<String>,
         audit: Option<Arc<dyn AuditRecorder>>,
     ) -> Result<Self, IdentityFeedError> {
-        let auth = service::authentication("pmir.credentials", settings.credentials.as_ref())
-            .map_err(IdentityFeedError::Grant)?;
         let tls = service::tls_of("pmir", &settings.tls).map_err(IdentityFeedError::Tls)?;
+        let auth = service::service_authentication(
+            "pmir.credentials",
+            settings.credentials.as_ref(),
+            &tls,
+        )
+        .map_err(IdentityFeedError::Grant)?;
         let subscriber = pmir::subscriber(&settings.url, &auth, &tls)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose
         // record is refused fails like a Registry that did not answer.

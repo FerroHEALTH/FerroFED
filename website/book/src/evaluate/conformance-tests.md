@@ -40,12 +40,14 @@ with no marked test is not listed.
 
 ## CP-3
 
-11 tests.
+13 tests.
 
 - `app/ferrofed-identity/tests/it/pixm.rs`: `a_member_whose_domain_holds_nothing_does_not_know_the_patient`, `an_unknown_patient_is_unknown_at_every_member`, `one_call_resolves_the_patient_at_every_member_by_its_domain`
 - `app/ferrofed-server/tests/it/ask_all.rs`: `an_undirected_patient_query_over_three_members_dispatches_to_the_two_that_resolve`
 - `app/ferrofed-server/tests/it/e2e/pixm.rs` (e2e): `a_patient_fed_at_both_members_resolves_through_pix_at_both`, `a_pix_resolved_query_asks_only_the_member_that_knows_the_patient`
+- `app/ferrofed-server/tests/it/e2e/santempi.rs` (e2e): `a_patient_each_member_fed_to_santempi_is_answered_by_both`
 - `app/ferrofed-server/tests/it/e2e/track2.rs` (e2e): `the_pix_manager_resolves_both_carriers_to_each_nodes_own_ehr_id`
+- `app/ferrofed-server/tests/it/identity_grant.rs`: `the_manager_is_asked_with_a_token_the_grant_obtained_and_refreshed`
 - `app/ferrofed-server/tests/it/pdqm/flow.rs`: `an_iti_119_match_finds_the_master_identity_the_pix_manager_resolves`, `an_iti_78_search_finds_the_master_identity_the_pix_manager_resolves`
 - `app/ferrofed-server/tests/it/resolution.rs`: `one_pix_call_resolves_the_patient_and_both_members_answer`, `the_identifier_and_namespace_reach_the_pix_manager_and_no_node`
 
@@ -547,10 +549,11 @@ with no marked test is not listed.
 
 ## Track 2
 
-6 tests.
+7 tests.
 
 - `app/ferrofed-server/tests/it/e2e/crossref.rs` (e2e): `both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_nodes`, `one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire`
 - `app/ferrofed-server/tests/it/e2e/pixm.rs` (e2e): `a_patient_fed_at_both_members_resolves_through_pix_at_both`, `a_pix_resolved_query_asks_only_the_member_that_knows_the_patient`
+- `app/ferrofed-server/tests/it/e2e/santempi.rs` (e2e): `a_patient_each_member_fed_to_santempi_is_answered_by_both`
 - `app/ferrofed-server/tests/it/e2e/track2.rs` (e2e): `a_selected_subject_column_is_the_input_and_never_asked_of_a_node`, `the_pix_manager_resolves_both_carriers_to_each_nodes_own_ehr_id`
 
 ## Track 3

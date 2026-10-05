@@ -27,6 +27,7 @@ use crate::base_path::BasePath;
 use crate::binding::development::DevSection;
 use crate::binding::seam::OnwardGrant;
 use crate::config::auth::AuthSettings;
+use crate::config::limits::Overload;
 use crate::config::stored_queries::Store;
 use crate::config::{NodeSelection, RegistryFormat};
 use crate::telemetry::{Format, SampleRatio};
@@ -113,7 +114,8 @@ pub struct FederationSettings {
     pub budget: Budget,
     /// The issuing namespace an unqualified patient identifier resolves in.
     pub default_namespace: Option<String>,
-    /// How long the resolution bindings of a client session live.
+    /// How long each resolution binding lives after the last resolution that
+    /// returned it.
     pub binding_ttl: Duration,
     /// How many `ehr_id` bindings the resolution bindings hold together.
     pub binding_capacity: NonZeroU32,
@@ -149,6 +151,9 @@ pub struct FederationSettings {
     /// excludes as `consent-denied` (N27a), as `consent.disclose` declares
     /// it where a pre-filter is configured (§7a.2).
     pub consent_disclosure: ConsentDisclosure,
+    /// The most requests the gateway sends to one member endpoint at once
+    /// (§11.5, N38).
+    pub max_in_flight_per_node: NonZeroU32,
 }
 
 /// Whether an answer names a member the Step-1 consent pre-filter excludes
@@ -212,6 +217,9 @@ pub struct ServerSettings {
     /// Who may call the ITS-REST surface and `OPTIONS {base}/`, from
     /// `[auth]` (§13.1, N25).
     pub auth: AuthSettings,
+    /// How many requests the listener serves at once, and how many one
+    /// verified caller may send.
+    pub overload: Overload,
 }
 
 /// The console and the trace export, resolved.
@@ -262,15 +270,40 @@ pub enum Scheme {
     Fapi2(Box<Fapi2Grant>),
     /// A grant a binding adds, such as the Nuts grant of Annex B §B.4.
     Binding(Box<dyn OnwardGrant>),
+    /// The client-credentials grant of an identity service (IHE IUA
+    /// ITI-71), which no node takes.
+    #[cfg(feature = "binding-ihe")]
+    ServiceGrant(Box<crate::config::service_grant::ServiceGrant>),
 }
 
 impl Scheme {
-    /// Whether the scheme is a grant, which only a node's onward credentials
-    /// take; an identity, localization, consent or directory service takes a
-    /// bearer token or basic credentials.
+    /// Whether the scheme is a grant: a node's onward credentials take one,
+    /// and of the services only the IHE FHIR services, the client-credentials
+    /// grant of IUA ITI-71; every other service takes a bearer token or basic
+    /// credentials.
     #[must_use]
     pub fn is_grant(&self) -> bool {
-        matches!(self, Self::OAuth2(_) | Self::Fapi2(_) | Self::Binding(_))
+        !matches!(self, Self::Bearer(_) | Self::Basic { .. })
+    }
+
+    /// Whether `other` names the same credential, so a reload that reads it
+    /// again changes nothing; a node's grant is never compared, and reads as
+    /// changed.
+    #[must_use]
+    pub fn same_as(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Bearer(was), Self::Bearer(now)) => was == now,
+            (
+                Self::Basic { user, password },
+                Self::Basic {
+                    user: now_user,
+                    password: now_password,
+                },
+            ) => user == now_user && password == now_password,
+            #[cfg(feature = "binding-ihe")]
+            (Self::ServiceGrant(was), Self::ServiceGrant(now)) => was.same_as(now),
+            _ => false,
+        }
     }
 }
 
@@ -335,6 +368,13 @@ impl Settings {
             trace_sample_ratio = self.telemetry.trace_sample_ratio.get(),
             credentials = endpoints.join(","),
             client_certificates = mutual.join(","),
+            max_concurrent_requests = self.server.overload.max_concurrent_requests.get(),
+            caller_rate = self
+                .server
+                .overload
+                .caller_rate
+                .map(|rate| rate.requests_per_second.get()),
+            max_in_flight_per_node = self.federation.max_in_flight_per_node.get(),
             auth_issuers = self.server.auth.issuers.len(),
             auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
             purpose_of_use_required = self.server.auth.purpose_required,

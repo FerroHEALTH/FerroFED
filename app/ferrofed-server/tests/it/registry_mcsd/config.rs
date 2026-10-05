@@ -14,6 +14,8 @@ use std::error::Error;
 
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrofed_server::config::grant::GrantFault;
+use ferrofed_server::config::settings::Scheme;
 use ferrofed_testkit::mcsd::HarnessDirectory;
 use ferrofed_testkit::unreachable;
 
@@ -155,19 +157,31 @@ fn a_directory_url_with_a_credential_or_another_scheme_is_refused() -> TestResul
 }
 
 #[test]
-fn a_grant_and_a_zero_interval_are_refused() {
+fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
     let grant = settings(
         "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n\n[registry.mcsd.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://auth.example.org/token\"\nclient_id = \"ferrofed\"\nscope = \"system/aql-*.s\"\n",
     );
     assert!(
         matches!(
-            grant
-                .err()
-                .as_deref()
-                .and_then(|error| error.downcast_ref::<ConfigError>()),
-            Some(ConfigError::GrantNotHere { .. })
+            grant.as_ref().ok().and_then(|settings| settings
+                .registry_directory
+                .as_ref()
+                .and_then(|directory| directory.credentials.as_ref())),
+            Some(Scheme::ServiceGrant(_))
         ),
-        "a grant is refused"
+        "the client-credentials grant of IUA ITI-71 is taken: {:?}",
+        grant.err()
+    );
+    let mutual = settings(
+        "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n\n[registry.mcsd.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"https://auth.example.org/token\"\nclient_id = \"ferrofed\"\nscope = \"system/aql-*.s\"\n",
+    );
+    assert!(
+        matches!(
+            mutual.err().as_deref().and_then(|error| error.downcast_ref::<ConfigError>()),
+            Some(ConfigError::GrantFault(GrantFault::NodeOnly { key }))
+                if key == "registry.mcsd.credentials.oauth2.client_auth"
+        ),
+        "a node's client authentication is refused"
     );
     let zero = settings(
         "[audit]\ndestination = \"log\"\n\n[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nrefresh_interval_s = 0\n",

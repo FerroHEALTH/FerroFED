@@ -15,19 +15,24 @@
 //! no redirect: a request can carry a patient identifier and always carries
 //! the credential, and neither goes anywhere the configured base does not
 //! name. [`http_client_builder`] is the same build left open, for a client
-//! that finishes it itself.
+//! that finishes it itself. An OAuth 2.0 grant ([`Authentication::Grant`])
+//! rides in no default header: the PIXm, PDQm, PMIR and mCSD clients
+//! incorporate its token in each request themselves (IUA ITI-72), and every
+//! other client refuses it.
 
 use std::fmt;
+use std::sync::Arc;
 
 use http::header::{AUTHORIZATION, HeaderMap};
-use openehr_its::rest::client::{Credentials, InvalidCredentials};
+use openehr_its::rest::client::{Credentials, CredentialsProvider, InvalidCredentials};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 
 /// How the gateway authenticates to an IHE FHIR server (ITI TF-2 Appendix
 /// Z.8).
 ///
-/// `Debug` redacts every secret, because [`SecretString`] does.
+/// `Debug` redacts every secret, because [`SecretString`] does, and shows a
+/// grant by its provider's own `Debug`, which names no token.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Authentication {
@@ -43,6 +48,11 @@ pub enum Authentication {
         /// The password.
         password: SecretString,
     },
+    /// An OAuth 2.0 access token the provider obtains and refreshes,
+    /// incorporated in each request (IUA ITI-71, ITI-72 §3.72.4.2). Only a
+    /// client that takes an authorizer sends it; [`http_client`] refuses it
+    /// ([`ClientError::Grant`]).
+    Grant(Arc<dyn CredentialsProvider>),
 }
 
 impl Authentication {
@@ -50,7 +60,7 @@ impl Authentication {
     /// the transport authenticates the gateway.
     fn credentials(&self) -> Option<Credentials> {
         match self {
-            Self::None => None,
+            Self::None | Self::Grant(_) => None,
             Self::Bearer(token) => Some(Credentials::bearer(token.clone())),
             Self::Basic { user, password } => {
                 Some(Credentials::basic(user.as_str(), password.clone()))
@@ -124,6 +134,13 @@ pub enum ClientError {
     /// RFC 6750 §2.1).
     #[error("the credentials of an IHE FHIR server cannot be sent in the Authorization header")]
     Credentials(#[source] InvalidCredentials),
+    /// The credential is a grant, whose token changes from request to
+    /// request and so rides in no default header: the client that sends
+    /// it takes an authorizer.
+    #[error(
+        "an OAuth 2.0 grant cannot be a default header of the HTTP client for an IHE FHIR server"
+    )]
+    Grant,
     /// The HTTP client could not be built.
     #[error("the HTTP client for an IHE FHIR server could not be built")]
     Build(#[source] reqwest::Error),
@@ -133,8 +150,8 @@ pub enum ClientError {
 /// default `Authorization` header, the `tls` material, and no redirects.
 ///
 /// # Errors
-/// A [`ClientError`] for a credential that forms no `Authorization` value,
-/// or a client that cannot be built.
+/// A [`ClientError`] for a credential that forms no `Authorization` value or
+/// is a grant, or a client that cannot be built.
 pub fn http_client(auth: &Authentication, tls: &Tls) -> Result<reqwest::Client, ClientError> {
     http_client_builder(auth, tls)?
         .build()
@@ -146,11 +163,14 @@ pub fn http_client(auth: &Authentication, tls: &Tls) -> Result<reqwest::Client, 
 ///
 /// # Errors
 /// [`ClientError::Credentials`] for a credential that forms no
-/// `Authorization` value.
+/// `Authorization` value, and [`ClientError::Grant`] for a grant.
 pub fn http_client_builder(
     auth: &Authentication,
     tls: &Tls,
 ) -> Result<reqwest::ClientBuilder, ClientError> {
+    if matches!(auth, Authentication::Grant(_)) {
+        return Err(ClientError::Grant);
+    }
     let mut headers = HeaderMap::new();
     if let Some(credentials) = auth.credentials() {
         let header = credentials

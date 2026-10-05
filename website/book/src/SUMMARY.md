@@ -45,6 +45,7 @@
 - [Admitting a node](operate/admission.md)
 - [Scoring a deployment](operate/conformance-run.md)
 - [Health probes](operate/health.md)
+- [Overload protection](operate/overload.md)
 - [Metrics](operate/metrics.md)
 - [Tracing](operate/tracing.md)
 - [The operator console](operate/operator-console.md)

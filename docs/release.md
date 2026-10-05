@@ -37,7 +37,9 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   `scripts/release/seed-data.sh` writes, `ferrofed-conformance-seed-data.json`
   (the vendored demo data `ferrofed conformance run --seed-data` reads, with
   its Apache-2.0 licence and notice) and its SHA-256 as
-  `ferrofed-conformance-seed-data.json.sha256sum`. A draft is mutable and
+  `ferrofed-conformance-seed-data.json.sha256sum`, and the Grafana dashboard
+  and Prometheus alert rules of `deploy/observability/`,
+  `ferrofed-dashboard.json` and `ferrofed-alerts.yaml`. A draft is mutable and
   invisible to anyone browsing releases, which is the window the asset
   uploads need.
 - **build-binaries** calls `release-build.yml` once per target (two Linux

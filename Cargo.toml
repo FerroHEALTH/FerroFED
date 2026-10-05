@@ -48,7 +48,7 @@ openehr-sdt = { version = "0.0.84", default-features = false }
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.43" }
-ihe-iti = { path = "crates/ihe-iti", version = "0.0.26" }
+ihe-iti = { path = "crates/ihe-iti", version = "0.0.27" }
 nl-generic-functions = { path = "crates/nl-generic-functions", version = "0.0.19" }
 oauth-server-metadata = { path = "crates/oauth-server-metadata", version = "0.0.5" }
 ehds-logging = { path = "crates/ehds-logging", version = "0.0.1" }
@@ -95,6 +95,9 @@ mime = "0.3.17"
 axum = "0.8.9"
 tower = "0.5.3"
 tower-http = { version = "0.7.1", default-features = false, features = ["catch-panic", "request-id", "timeout", "limit"] }
+# The per-caller rate limit of the listener (#631): a GCRA bucket keyed on
+# the verified caller, without the dashmap, quanta and jitter extras.
+governor = { version = "0.10.4", default-features = false, features = ["std"] }
 tokio = { version = "1.53.1", default-features = false }
 tracing = "0.1.44"
 # The console: the env filter, the JSON line format and the pretty one.

@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 53] = [
+    pub const GATEWAY: [Self; 55] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -64,6 +64,8 @@ impl Code {
         Self::PatientConfinement,
         Self::PatientContextUnavailable,
         Self::SubjectUnavailable,
+        Self::Overloaded,
+        Self::RateLimited,
         Self::AccessUnrecorded,
     ];
 
@@ -133,6 +135,8 @@ impl Code {
             Self::PatientConfinement => "patient-confinement",
             Self::PatientContextUnavailable => "patient-context-unavailable",
             Self::SubjectUnavailable => "subject-unavailable",
+            Self::Overloaded => "overloaded",
+            Self::RateLimited => "rate-limited",
             Self::AccessUnrecorded => "access-unrecorded",
         }
     }
@@ -192,9 +196,10 @@ impl Code {
             | Self::OperationRefused
             | Self::PatientContextMissing
             | Self::PatientConfinement => StatusCode::FORBIDDEN,
-            Self::AuthenticationUnavailable | Self::AccessUnrecorded => {
+            Self::AuthenticationUnavailable | Self::Overloaded | Self::AccessUnrecorded => {
                 StatusCode::SERVICE_UNAVAILABLE
             }
+            Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 
@@ -324,6 +329,12 @@ impl Code {
             Self::SubjectUnavailable => {
                 "the requested resource is not available to this request (§11.2)"
             }
+            Self::Overloaded => {
+                "the gateway is serving as many requests as it takes at once; retry after the time Retry-After names"
+            }
+            Self::RateLimited => {
+                "this caller sent more requests than the gateway admits from one caller; retry after the time Retry-After names"
+            }
             Self::AccessUnrecorded => {
                 "the access could not be recorded, so its answer is withheld; a write may have reached the node, so read before writing again"
             }
@@ -397,7 +408,9 @@ mod tests {
             Code::PatientConfinement => Some(49),
             Code::PatientContextUnavailable => Some(50),
             Code::SubjectUnavailable => Some(51),
-            Code::AccessUnrecorded => Some(52),
+            Code::Overloaded => Some(52),
+            Code::RateLimited => Some(53),
+            Code::AccessUnrecorded => Some(54),
         }
     }
 
@@ -503,6 +516,8 @@ mod tests {
                 StatusCode::FAILED_DEPENDENCY,
             ),
             (Code::SubjectUnavailable, StatusCode::NOT_FOUND),
+            (Code::Overloaded, StatusCode::SERVICE_UNAVAILABLE),
+            (Code::RateLimited, StatusCode::TOO_MANY_REQUESTS),
             (Code::AccessUnrecorded, StatusCode::SERVICE_UNAVAILABLE),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());

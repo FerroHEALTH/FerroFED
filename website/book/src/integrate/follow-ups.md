@@ -58,7 +58,8 @@ exactly one node (§12.5.1, N41):
    ([Client authentication](../operate/authentication.md)): the token's
    issuer, subject and client together. Another caller, or the same subject
    through another client, never sees your bindings. A binding lives for
-   `federation.binding_ttl_ms` after your last resolution, and a consent
+   `federation.binding_ttl_ms` after the last of your resolutions that
+   returned it, and a consent
    denial of a member drops every binding of yours that names it. A binding
    records only where an `ehr_id` was resolved, never a consent decision: the
    node still decides what it releases.

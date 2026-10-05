@@ -10,7 +10,6 @@ pub mod registry;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ferrofed_identity::dev::Profile;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use serde::Deserialize;
 
@@ -18,7 +17,7 @@ use crate::binding::ihe::audit::config::AuditSettings;
 use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::resolve::{positive, positive_ms};
-use crate::config::secrets::resolve_credentials;
+use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::transport;
@@ -116,14 +115,7 @@ impl DirectorySettings {
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
             (None, None) => true,
-            (Some(Scheme::Bearer(was)), Some(Scheme::Bearer(now))) => was == now,
-            (
-                Some(Scheme::Basic { user, password }),
-                Some(Scheme::Basic {
-                    user: now_user,
-                    password: now_password,
-                }),
-            ) => user == now_user && password == now_password,
+            (Some(was), Some(now)) => was.same_as(now),
             _ => false,
         };
         credentials
@@ -153,9 +145,10 @@ pub fn site() -> transport::ProtectedSite {
 /// deadline and caps, audited as `audit` says.
 pub(super) fn resolve(
     directory: &McsdDirectory,
-    profile: Profile,
+    context: &ServiceContext<'_>,
     audit: AuditSettings,
 ) -> Result<DirectorySettings, Error> {
+    let profile = context.profile;
     if directory.url.is_empty() {
         return Err(Error::Missing {
             key: URL_KEY.to_owned(),
@@ -179,11 +172,8 @@ pub(super) fn resolve(
     let credentials = directory
         .credentials
         .as_ref()
-        .map(|credentials| resolve_credentials(&section, credentials))
+        .map(|credentials| resolve_service(&section, credentials, context))
         .transpose()?;
-    if credentials.as_ref().is_some_and(Scheme::is_grant) {
-        return Err(Error::GrantNotHere { section });
-    }
     // NOTE: no specification governs this: our own design; the credential is
     // held to https before anything is sent, and the binding's sites report it.
     if credentials.is_some() {

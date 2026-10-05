@@ -15,8 +15,11 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_registry::incident::Kind;
+use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::binding::ihe::metrics::FeedResult;
 use ferrofed_server::metrics::ReloadResult;
+use ferrofed_server::metrics::nodes::Limit;
+use ferrofed_server::metrics::security::{CALLER_REFUSED, Event};
 use http::{Request, header};
 use openehr_federation::status::EndpointStatus;
 
@@ -79,10 +82,40 @@ async fn no_label_carries_what_a_request_sent() -> TestResult {
     let results: BTreeSet<&str> = ReloadResult::ALL.iter().map(|r| r.as_str()).collect();
     let fed: BTreeSet<&str> = FeedResult::ALL.iter().map(|r| r.as_str()).collect();
     let endpoints = BTreeSet::from(["node-a-pub", "node-b-pub"]);
+    let resolver: BTreeSet<&str> = ferrofed_server::metrics::resolver::Outcome::ALL
+        .iter()
+        .map(|outcome| outcome.as_str())
+        .collect();
+    let mut events: BTreeSet<&str> = Event::ALL.iter().map(|event| event.as_str()).collect();
+    events.insert(CALLER_REFUSED);
+    let reasons: BTreeSet<&str> = Refusal::ALL
+        .iter()
+        .map(|refusal| refusal.reason())
+        .collect();
+    let limits: BTreeSet<&str> = Limit::ALL.iter().map(|limit| limit.as_str()).collect();
+    let methods = BTreeSet::from([
+        "CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE", "_OTHER",
+    ]);
+    let classes = BTreeSet::from(["1xx", "2xx", "3xx", "4xx", "5xx"]);
+    // NOTE: §5.4.1, N33: the two routes are the templates of the two requests,
+    // the read's path identifier written as its parameter name.
+    let routes = BTreeSet::from(["/v1/query/aql", "/v1/ehr/{ehr_id}/ehr_status"]);
     for sample in gateway.scraped()? {
         for (key, value) in &sample.labels {
             let drawn = match (sample.name.as_str(), key.as_str()) {
                 ("target_info", key) => RESOURCE.contains(&key),
+                ("ferrofed_resolver_requests_total", "outcome") => {
+                    resolver.contains(value.as_str())
+                }
+                ("ferrofed_security_events_total", "event") => events.contains(value.as_str()),
+                ("ferrofed_security_events_total", "reason") => reasons.contains(value.as_str()),
+                (_, "limit") => limits.contains(value.as_str()),
+                (_, "http_request_method") => methods.contains(value.as_str()),
+                (_, "url_scheme") => value == "http",
+                (_, "http_route") => routes.contains(value.as_str()),
+                (_, "http_response_status_code") => value.parse::<u16>().is_ok(),
+                (_, "error_type") => value.parse::<u16>().is_ok_and(|status| status >= 500),
+                (_, "status_class") => classes.contains(value.as_str()),
                 (_, "kind") => kinds.contains(value.as_str()),
                 (_, "outcome") => outcomes.contains(value.as_str()),
                 ("ferrofed_identity_feed_messages_total", "result") => fed.contains(value.as_str()),

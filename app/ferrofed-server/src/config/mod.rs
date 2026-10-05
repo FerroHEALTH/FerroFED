@@ -23,9 +23,12 @@ use crate::telemetry::{DEFAULT_FILTER, Format};
 pub mod auth;
 pub mod error;
 pub mod grant;
+pub mod limits;
 mod load;
 pub(crate) mod resolve;
 pub(crate) mod secrets;
+#[cfg(feature = "binding-ihe")]
+pub mod service_grant;
 pub mod settings;
 pub mod stored_queries;
 pub mod tls;
@@ -214,9 +217,9 @@ pub struct Federation {
     /// (§5.2 requires the namespace; no specification governs the default: our
     /// own design). Without it, a query that names no namespace is a `400`.
     pub default_namespace: Option<String>,
-    /// How long the resolution bindings of a client session live (§12.5.1
-    /// step 2): a correctness bound, past which a binding is
-    /// never routed on.
+    /// How long each resolution binding of a client session lives after the
+    /// last resolution that returned it (§12.5.1 step 2): a correctness
+    /// bound, past which the binding is never routed on.
     pub binding_ttl_ms: u64,
     /// How many `ehr_id` bindings the resolution bindings of every caller
     /// hold together (§12.5.1 step 2); zero is refused.
@@ -272,6 +275,11 @@ pub struct Federation {
     /// How a member the Step-1 consent pre-filter excludes is reported
     /// (`[federation.consent]`, N27a).
     pub consent: ConsentReporting,
+    /// The most requests the gateway sends to one member endpoint at once. A
+    /// request past it waits for a slot until its per-node deadline, and one
+    /// still waiting then is `time-out` with nothing sent (§11.5, N38). Zero is
+    /// refused.
+    pub max_in_flight_per_node: u32,
 }
 
 /// How a member the Step-1 consent pre-filter excludes is reported,
@@ -404,6 +412,7 @@ impl Default for Federation {
             fan_out_template_upload: false,
             fan_out_stored_queries: false,
             consent: ConsentReporting::default(),
+            max_in_flight_per_node: 64,
         }
     }
 }
@@ -433,6 +442,16 @@ pub struct Server {
     pub shutdown_timeout_ms: Option<u64>,
     /// The largest request body the server reads before answering `413`.
     pub body_limit_bytes: usize,
+    /// The most requests the server serves at once. One more is answered `503`
+    /// with `Retry-After` and reaches nothing behind the listener; the health
+    /// family is never refused. Zero is refused.
+    pub max_concurrent_requests: u32,
+    /// The seconds a `503` past `max_concurrent_requests` asks the client to
+    /// wait in `Retry-After`; zero is refused.
+    pub overload_retry_after_s: u32,
+    /// The per-caller rate limit (`[server.caller_rate]`), keyed on the caller
+    /// client authentication verified; unset, no caller is rate limited.
+    pub caller_rate: Option<limits::CallerRate>,
 }
 
 impl Default for Server {
@@ -444,6 +463,9 @@ impl Default for Server {
             drain_delay_ms: 0,
             shutdown_timeout_ms: None,
             body_limit_bytes: 1024 * 1024,
+            max_concurrent_requests: 512,
+            overload_retry_after_s: 1,
+            caller_rate: None,
         }
     }
 }
@@ -561,11 +583,10 @@ impl Credentials {
     }
 }
 
-/// An OAuth 2.0 grant at one node's token endpoint.
+/// An OAuth 2.0 grant at the token endpoint of a node or an IHE FHIR service.
 ///
-/// The gateway authenticates with a JWT client assertion signed by the
-/// `[signing]` key (RFC 7523 §2.2), and every token is requested with
-/// `scope`. No field has a default.
+/// A service's grant is the client-credentials grant of IHE IUA ITI-71.
+/// Every token is requested with `scope`. No field has a default.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OAuth2 {
@@ -573,9 +594,11 @@ pub struct OAuth2 {
     /// (RFC 8693), a token per verified caller.
     pub grant: Option<GrantKind>,
     /// How the gateway authenticates at the token endpoint:
-    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2), or
+    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2),
     /// `tls_client_auth` or `self_signed_tls_client_auth`, the section's
-    /// TLS client certificate (RFC 8705 §2).
+    /// TLS client certificate (RFC 8705 §2), for a node, or
+    /// `client_secret_basic` or `client_secret_post`, the client secret (RFC
+    /// 6749 §2.3.1), for an identity service.
     pub client_auth: Option<ClientAuth>,
     /// The token endpoint, an `http` or `https` URL with no userinfo; by
     /// default also the `aud` of every client assertion (RFC 7523 §3).
@@ -586,12 +609,17 @@ pub struct OAuth2 {
     /// The authorization server's issuer identifier (RFC 8414 §2), set with
     /// `assertion_audience = "issuer"` and never without it.
     pub issuer: Option<String>,
-    /// The client the node's authorization server registered the gateway
-    /// as, the `iss` and `sub` of every client assertion (RFC 7523 §3).
+    /// The client the authorization server registered the gateway as, the
+    /// `iss` and `sub` of every client assertion (RFC 7523 §3).
     pub client_id: String,
+    /// The client secret of `client_secret_basic` or `client_secret_post`.
+    pub client_secret: Option<Secret>,
+    /// A file holding `client_secret`, read at boot.
+    pub client_secret_file: Option<PathBuf>,
     /// The scope every token is requested with, space-delimited (RFC 6749
-    /// §3.3), each a SMART on openEHR resource scope of the `system`
-    /// compartment, such as `system/aql-*.s`.
+    /// §3.3): for a node each a SMART on openEHR resource scope of the
+    /// `system` compartment, such as `system/aql-*.s`; for an identity
+    /// service the scopes its authorization server defines.
     pub scope: String,
     /// The target service the token is for (RFC 8707 §2), when the
     /// authorization server takes one.
@@ -639,6 +667,10 @@ pub enum ClientAuth {
     /// authorization server registered for the client (RFC 8705 §2.2).
     #[serde(rename = "self_signed_tls_client_auth")]
     SelfSignedTls,
+    /// A service's client secret in the Basic scheme (RFC 6749 §2.3.1).
+    ClientSecretBasic,
+    /// A service's client secret in the request body (RFC 6749 §2.3.1).
+    ClientSecretPost,
 }
 
 /// The gateway's signing keys and their publication (§13.1, N25).

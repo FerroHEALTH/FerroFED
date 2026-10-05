@@ -87,6 +87,11 @@ openehr-query.workspace = true
 openehr-sdt.workspace = true
 # The RFC 7519 verification of every caller's access token (#80).
 jsonwebtoken.workspace = true
+# The per-caller rate limit of the listener (#631).
+governor.workspace = true
+# The metered cross-reference resolver implements the identity crate's
+# async resolver seam (#629).
+async-trait.workspace = true
 # The metrics surface (#281): one MeterProvider, the Prometheus pull reader on
 # the admin listener and the optional OTLP push.
 opentelemetry.workspace = true
@@ -123,7 +128,6 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-async-trait.workspace = true
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
 # The JWK Set the gateway publishes, read as the onward tests verify it (#81).

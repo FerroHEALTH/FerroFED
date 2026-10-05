@@ -38,6 +38,8 @@ use crate::binding::seam::{Indicator, LocalizerSeam, ResolverSeam};
 use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::config::service_grant::{self, ServiceContext};
+use crate::config::settings::Scheme;
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::federation::DemographicsStep;
@@ -99,10 +101,10 @@ impl Binding for Ihe {
         settings.pixm = config
             .pixm
             .as_ref()
-            .map(|section| pixm::resolve(section, config.profile))
+            .map(|section| pixm::resolve(section, &ServiceContext::of(settings)))
             .transpose()?;
         settings.xcpd = xcpd::resolve(config)?;
-        settings.pmir = pmir::config::resolve(config)?;
+        settings.pmir = pmir::config::resolve(config, &ServiceContext::of(settings))?;
         let audit = audit::config::resolve(config)?;
         if config.registry.document.is_some() && config.registry.mcsd.is_some() {
             return Err(Error::TwoRegistrySources);
@@ -111,10 +113,10 @@ impl Binding for Ihe {
             .registry
             .mcsd
             .as_ref()
-            .map(|directory| mcsd::resolve(directory, config.profile, audit.clone()))
+            .map(|directory| mcsd::resolve(directory, &ServiceContext::of(settings), audit.clone()))
             .transpose()?;
         settings.audit = audit;
-        settings.pdqm = pdqm::resolve(config)?;
+        settings.pdqm = pdqm::resolve(config, &ServiceContext::of(settings))?;
         Ok(())
     }
 
@@ -305,6 +307,9 @@ impl Binding for Ihe {
                 },
             )?;
         }
+        for (url, site) in token_endpoints(settings) {
+            hold(&url, site)?;
+        }
         cleartext.extend(pmir::config::sites(profile, settings.pmir.as_ref())?);
         cleartext.extend(audit);
         Ok(cleartext)
@@ -425,4 +430,47 @@ fn gateway(settings: &Settings) -> url::Url {
             url::Url::parse(&format!("http://{}/", settings.server.listen))
                 .expect("a socket address should form an http URL")
         })
+}
+
+/// The token endpoint of every IHE FHIR service whose credentials are a
+/// client-credentials grant, with its site: the gateway's client
+/// credentials travel to it (RFC 6749 §2.3.1).
+fn token_endpoints(settings: &Settings) -> Vec<(String, ProtectedSite)> {
+    let pixm = settings
+        .pixm
+        .iter()
+        .flat_map(|pixm| pixm.managers.iter().enumerate())
+        .map(|(index, manager)| {
+            (
+                format!("pixm.manager[{index}].credentials"),
+                manager.credentials.as_ref(),
+            )
+        });
+    let pdqm = settings.pdqm.iter().map(|pdqm| {
+        (
+            format!("{}.credentials", pdqm::PDQM_KEY),
+            pdqm.credentials.as_ref(),
+        )
+    });
+    let directory = settings.registry_directory.iter().map(|directory| {
+        (
+            String::from("registry.mcsd.credentials"),
+            directory.credentials.as_ref(),
+        )
+    });
+    let feed = settings
+        .pmir
+        .iter()
+        .map(|pmir| (String::from("pmir.credentials"), pmir.credentials.as_ref()));
+    pixm.chain(pdqm)
+        .chain(directory)
+        .chain(feed)
+        .filter_map(|(section, scheme)| match scheme {
+            Some(Scheme::ServiceGrant(grant)) => Some((
+                grant.grant().token_endpoint().to_string(),
+                service_grant::site(&format!("{section}.oauth2")),
+            )),
+            _ => None,
+        })
+        .collect()
 }

@@ -47,7 +47,7 @@ use serde::Deserialize;
 use crate::binding::ihe::audit::config::AuditSettings;
 use crate::config::error::Error;
 use crate::config::resolve::localization_budget_ms;
-use crate::config::secrets::resolve_credentials;
+use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::{Config, Credentials, transport};
@@ -136,7 +136,10 @@ pub struct PdqmSettings {
 /// [`Error::Cleartext`] for the URL, [`Error::GrantNotHere`] for an OAuth 2.0
 /// or Nuts grant, [`Error::Pdqm`] for a namespace `[pixm.namespaces]` maps,
 /// and the errors of a secret that cannot be read.
-pub(super) fn resolve(config: &Config) -> Result<Option<PdqmSettings>, Error> {
+pub(super) fn resolve(
+    config: &Config,
+    context: &ServiceContext<'_>,
+) -> Result<Option<PdqmSettings>, Error> {
     let Some(pdqm) = &config.pdqm else {
         return Ok(None);
     };
@@ -195,11 +198,8 @@ pub(super) fn resolve(config: &Config) -> Result<Option<PdqmSettings>, Error> {
     let credentials = pdqm
         .credentials
         .as_ref()
-        .map(|credentials| resolve_credentials(&section, credentials))
+        .map(|credentials| resolve_service(&section, credentials, context))
         .transpose()?;
-    if credentials.as_ref().is_some_and(Scheme::is_grant) {
-        return Err(Error::GrantNotHere { section });
-    }
     // NOTE: no specification governs this: our own design; the Supplier is sent
     // patient identifiers, held to https at load as every identity service is.
     transport::protected_payload(
@@ -229,8 +229,9 @@ pub(super) fn step(
     pdqm: &PdqmSettings,
     audit: &AuditSettings,
 ) -> Result<DemographicsStep, FederationError> {
-    let auth = service::authentication("pdqm.credentials", pdqm.credentials.as_ref())?;
     let tls = service::tls_of("pdqm", &pdqm.tls).map_err(FederationError::Tls)?;
+    let auth =
+        service::service_authentication("pdqm.credentials", pdqm.credentials.as_ref(), &tls)?;
     let mut namespaces = BTreeMap::new();
     for (namespace, system) in &pdqm.namespaces {
         let namespace =

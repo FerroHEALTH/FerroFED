@@ -33,8 +33,12 @@ with the `[signing]` key, ES256 or ES384 as its curve says. The assertion
 names `client_id` as its `iss` and `sub` and the token endpoint as its
 `aud`, lives
 `assertion_lifetime_s` seconds, and carries a fresh `jti`. The token request
-carries `scope` and, when set, `resource` and `audience`. Every key of the
-section is required except those two and the assertion audience below:
+carries `scope` and, when set, `resource` and `audience`. A node's section
+refuses `client_secret_basic`, `client_secret_post` and `client_secret`,
+naming the key: a client secret is for an identity service's grant
+([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)). Every key
+of the section is required except those two and the assertion audience
+below:
 
 - `scope` is space-separated SMART on openEHR scopes, each a resource scope
   of the `system` compartment (`system/aql-*.s`, `system/composition-*.cru`);

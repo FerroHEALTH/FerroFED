@@ -118,6 +118,7 @@ The sections, and the page that covers each:
 |---|---|---|
 | `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
+| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node` | the overload limits | [Overload protection](overload.md) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
@@ -156,6 +157,13 @@ request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
 shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
 body_limit_bytes = 1048576    # a body past this answers 413
+max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
+overload_retry_after_s = 1    # the Retry-After of that 503, in seconds
+
+# A per-caller rate, off unless set; see Overload protection.
+[server.caller_rate]
+requests_per_second = 10      # sustained, per verified issuer and client_id
+burst = 20                    # at once after a quiet spell; one more answers 429 rate-limited
 
 [telemetry]
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
@@ -247,11 +255,15 @@ unchanged.
 A PIX Manager's `url` carries no credential: one with a user name or a
 password in it is refused naming the key, as an endpoint URL in the registry
 document is. Its credentials go in `[pixm.manager.credentials]`, which takes
-a bearer token or a user and a password, never an `oauth2`, `nuts` or `fapi2`
-grant. Each grant a node's section can name is described in
-[Onward credentials](onward-credentials.md). The same holds for the
-credentials of `[pdqm]`, `[pmir]`, `[registry.mcsd]` and `[nl_gf.mitz]`: a
-grant in any of them is refused at load, and never read as no credential.
+a bearer token, a user and a password, or an `oauth2` client-credentials
+grant authenticated by a client secret or a client assertion
+([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)), never a
+`nuts` or `fapi2` grant. The credentials of `[pdqm]`, `[pmir]` and
+`[registry.mcsd]` take the same. Each grant a node's section can name is
+described in [Onward credentials](onward-credentials.md). The credentials of
+`[nl_gf.mitz]` take a bearer token or a user and a password alone. A grant
+a section does not take is refused at load, naming it, and never read as no
+credential.
 `[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
 `oauth2` and `fapi2`
 ([Dutch localization](localization.md#dutch-localization-nl_gfnvi)).
@@ -330,7 +342,7 @@ never a value. The rule covers:
   which receives its bearer token, its basic credentials or the access token
   its `oauth2` grant obtains;
 - the `token_endpoint` of an `oauth2` section, which receives the client
-  assertion;
+  assertion, or for an identity service's grant the client secret;
 - the `authorization_server` of a `nuts` section, which receives the
   gateway's credentials in a Verifiable Presentation;
 - the `issuer` of a `fapi2` section, whose token endpoint receives the

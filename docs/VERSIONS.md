@@ -170,7 +170,7 @@ the pins are renewed.
 | IHE PIXm FHIR package, Swiss pin | package `ihe.iti.pixm` 3.0.4, pin-set digest `68b36cfa85cc04551e30b3628ce16218c1b980495c06bb835f34b0ccc706063a` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pixm-ch/PROVENANCE.md` |
 | IHE PDQm FHIR package, Swiss pin | package `ihe.iti.pdqm` 3.1.0, pin-set digest `ae4fb56c9eba92fcdf5637c86135618e37b60642c99013a8ca06ba747c9c4e73` | `scripts/vendor/ch.sh`, `docs/specs/ihe-pdqm-ch/PROVENANCE.md` |
 | IHE IUA supplement, Swiss pin | `IHE/ITI.IUA` Revision 2.3, pin-set digest `2a5f13a87ccf307fecda8c48e77a61fd09c440089b2172be0edea912dea85439` | `scripts/vendor/ch.sh`, `docs/specs/ihe-iua-ch/PROVENANCE.md` |
-| EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, two eHealth Network guidelines and the Commission legal notice, pin-set digest `35a38a6ca7a1f6026bca1c412af9c8fbabd05a8efadb2111ab75b93aba0a0fd8` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
+| EU EHDS Regulation and eHealth Network guidelines | Regulation (EU) 2025/327, Implementing Regulations (EU) 2026/2083 and 2026/2099, Recommendation (EU) 2019/243, two eHealth Network guidelines and the Commission legal notice, pin-set digest `7c2e0fa5d9ca2bdceadc96250f90cb72a1be2b0f3663e87cc24fd67d0d6ffdc1` | `scripts/vendor/eu.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
 | MyHealth@EU NCPeH API and OpenNCP | package `myhealth.eu.fhir.ncp-api` 9.1.0, two guide pages and OpenNCP v10.1.0, pin-set digest `491dc60ee8b1bf8510758e0d4a62a8578c728f27c8b519a56ba40548f72c0c56` | `scripts/vendor/eu.sh`, `docs/specs/ehdsi/PROVENANCE.md` |
 | IHE ITI Technical Framework Volume 1 pages | ITI TF Revision 20.2 chapters 13, 18 and 27, pin-set digest `838b2f672e0bc34841d7fe297fd561c6f49c42fdd12b5a15119eb10a7234aeb7` | `scripts/vendor/ihe-iti-tf.sh`, `docs/specs/ihe-iti-tf/PROVENANCE.md` |
 | Belgian eHealth platform documents | ten cookbooks, two Swagger documents and the re-use conditions, pin-set digest `62377196eaf498ce49beca04948308cc78d02a718b5ecd1471514c1567b2c025` | `scripts/vendor/be.sh`, `docs/specs/be-ehealth/PROVENANCE.md` |
@@ -371,8 +371,9 @@ documents is the latest release line. A member node in the test harness runs
 its product's documented database image, which is part of the product under
 test (§13): FerroEHR's, and for the node profile's second product EHRbase's,
 built on PostgreSQL 16.2 (#549). The stored-query store's end-to-end tests run
-on FerroEHR's image, built on `postgres:18.6`, one database per use (#268), so
-no other PostgreSQL image is pinned.
+on FerroEHR's image, built on `postgres:18.6`, one database per use (#268).
+The one other PostgreSQL image pinned is the database of the harness PIX
+Manager, SanteMPI, below (#622).
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -398,6 +399,8 @@ it.
 | FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers.rs` |
+| SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation build image | `maven:3.9.16-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers.rs` |
 
@@ -408,7 +411,9 @@ The end-to-end lane starts the same two node images through the testkit
 harness, behind the `FERROFED_E2E` gate (`docs/ci-cd.md`): each is a
 `PinnedImage` constant in `tools/ferrofed-testkit/src/containers.rs`, and the
 guard holds every constant equal to its row here, so the quickstart and the
-test suite always run the same nodes.
+test suite always run the same nodes. The weekly
+`scripts/checks/pin-freshness.sh` reports a newer stable tag of any
+`PinnedImage` constant.
 
 The node profile also runs against a second CDR product, EHRbase (#549), so a
 finding can be told apart as the product's or the check's. Its rows pin the
@@ -417,6 +422,16 @@ file documents beside it, each resolved on 2026-10-05 from the registry by
 the digest of its image index. EHRbase is published under the Apache License
 2.0, and both images are public and need no credential to pull. No specification governs which products the
 harness runs: our own design.
+
+The identity binding also runs against a deployable PIX Manager, SanteMPI
+(#622), which answers PIXm ITI-83 and takes the PMIR ITI-93 feed. Its rows
+pin the newest stable image SanteSuite publishes, 2.5.12 of 2023-07-04,
+which is built for `linux/amd64` alone and is a single manifest rather than
+an image index, so the digest is the manifest's. SanteSuite's compose file
+names the official `postgres` image untagged; the row pins the newest patch
+of 15, the major release current when 2.5.12 was published. Both were
+resolved on 2026-10-05 from Docker Hub. SanteDB and SanteMPI are published
+under the Apache License 2.0, and both images are public.
 
 The differential run (#94) builds the Federation Tier reference
 implementation from the vendored source at its pinned commit, with the Maven
