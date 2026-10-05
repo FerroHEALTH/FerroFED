@@ -171,7 +171,7 @@ async fn a_create_whose_record_is_refused_is_adopted_by_the_next_check_and_never
     )?)?;
     let feed = gateway.state.identity_feed().ok_or("[pmir] is set")?;
     assert_eq!(
-        Some(ferrofed_server::pmir::subscription::RegistryFault::AuditFailed),
+        Some(ferrofed_server::binding::ihe::pmir::subscription::RegistryFault::AuditFailed),
         {
             let _failed = feed.check().await;
             feed.fault()

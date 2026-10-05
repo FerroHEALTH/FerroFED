@@ -69,6 +69,18 @@ pub enum RegistryFault {
 }
 
 impl RegistryFault {
+    /// The fault as `identity_registry_fault` names it.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unreachable => "unreachable",
+            Self::Refused => "refused",
+            Self::Malformed => "malformed",
+            Self::Unmanageable => "unmanageable",
+            Self::AuditFailed => "audit-failed",
+        }
+    }
+
     /// The state a fault shows the Registry in: no answer is down, any
     /// answer failing.
     #[must_use]

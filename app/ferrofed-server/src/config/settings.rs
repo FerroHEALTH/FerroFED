@@ -14,7 +14,6 @@ use ferrofed_engine::fanout::Budget;
 use ferrofed_engine::onward::Grant;
 use ferrofed_engine::onward::fapi2::Fapi2Grant;
 use ferrofed_engine::onward::keys::KeyRing;
-use ferrofed_engine::onward::nuts::NutsGrant;
 use ferrofed_identity::dev::Profile;
 use ferrofed_identity::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
@@ -25,12 +24,18 @@ use openehr_federation::id::FederationId;
 use openehr_federation::object::Uri;
 
 use crate::base_path::BasePath;
+use crate::binding::OnwardGrant;
+use crate::binding::development::DevSection;
 use crate::config::auth::AuthSettings;
 use crate::config::stored_queries::Store;
-use crate::config::{DevSection, NodeSelection, RegistryFormat};
+use crate::config::{NodeSelection, RegistryFormat};
 use crate::telemetry::{Format, SampleRatio};
 
 /// The settings the run path holds, with every secret already read.
+///
+/// The sections of a binding are resolved by the binding
+/// ([`Binding::resolve`](crate::binding::Binding::resolve)), each into the
+/// field that carries it.
 #[derive(Debug)]
 pub struct Settings {
     /// The deployment profile.
@@ -45,7 +50,8 @@ pub struct Settings {
     pub registry_format: RegistryFormat,
     /// The mCSD care services directory the registry is read from, when it
     /// is read from one (§15.1, Annex A.5).
-    pub registry_directory: Option<DirectorySettings>,
+    #[cfg(feature = "binding-ihe")]
+    pub registry_directory: Option<crate::binding::ihe::mcsd::DirectorySettings>,
     /// The federated query.
     pub federation: FederationSettings,
     /// The outbound credentials, by endpoint id.
@@ -53,15 +59,20 @@ pub struct Settings {
     /// The static development cross-reference, as written.
     pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
-    pub pixm: Option<PixmSettings>,
+    #[cfg(feature = "binding-ihe")]
+    pub pixm: Option<crate::binding::ihe::pixm::PixmSettings>,
     /// The XCPD localizer, with every secret and file read.
-    pub xcpd: Option<crate::config::xcpd::XcpdSettings>,
+    #[cfg(feature = "binding-ihe")]
+    pub xcpd: Option<crate::binding::ihe::xcpd::XcpdSettings>,
     /// The Dutch Generic Functions, with every secret and file read.
-    pub nl_gf: Option<crate::config::nl_gf::NlGfSettings>,
+    #[cfg(feature = "binding-nl")]
+    pub nl_gf: Option<crate::binding::nl::NlGfSettings>,
     /// The PMIR identity feed, with every secret read.
-    pub pmir: Option<crate::config::pmir::PmirSettings>,
+    #[cfg(feature = "binding-ihe")]
+    pub pmir: Option<crate::binding::ihe::pmir::config::PmirSettings>,
     /// The PDQm demographics step, with every secret read.
-    pub pdqm: Option<crate::config::pdqm::PdqmSettings>,
+    #[cfg(feature = "binding-ihe")]
+    pub pdqm: Option<crate::binding::ihe::pdqm::PdqmSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
     /// The metrics surface.
@@ -70,7 +81,8 @@ pub struct Settings {
     /// `[signing]` is set (§13.1, N25).
     pub signing: Option<SigningSettings>,
     /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go.
-    pub audit: crate::config::audit::AuditSettings,
+    #[cfg(feature = "binding-ihe")]
+    pub audit: crate::binding::ihe::audit::config::AuditSettings,
 }
 
 /// The gateway's signing keys, resolved.
@@ -82,84 +94,6 @@ pub struct SigningSettings {
     pub jwks_uri: Uri,
     /// How long a client assertion is valid.
     pub assertion_lifetime: Duration,
-}
-
-/// The mCSD care services directory the registry is read from, resolved.
-#[derive(Debug)]
-pub struct DirectorySettings {
-    /// The directory's FHIR base URL, already known to parse as an `http` or
-    /// `https` URL with no user name or password.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to it: a bearer token or basic
-    /// credentials.
-    pub credentials: Option<Scheme>,
-    /// The TLS material the directory is reached with.
-    pub tls: crate::config::tls::TlsSettings,
-    /// How often the changes are asked for.
-    pub refresh_interval: Duration,
-    /// How long one whole read or refresh may take.
-    pub deadline: Duration,
-    /// The most pages one read or refresh may read.
-    pub max_pages: usize,
-    /// The most bytes of answer bodies one read or refresh may read.
-    pub max_bytes: usize,
-    /// The most Bundle entries one read or refresh may read.
-    pub max_entries: usize,
-    /// Where the audit records of its ITI-90 searches and ITI-91 histories
-    /// go: `[audit]`, as the whole configuration resolves it.
-    pub audit: crate::config::audit::AuditSettings,
-}
-
-impl DirectorySettings {
-    /// Whether `other` names the same directory, credentials, TLS material,
-    /// interval, deadline and caps.
-    #[must_use]
-    pub fn same_as(&self, other: &Self) -> bool {
-        let credentials = match (&self.credentials, &other.credentials) {
-            (None, None) => true,
-            (Some(Scheme::Bearer(was)), Some(Scheme::Bearer(now))) => was == now,
-            (
-                Some(Scheme::Basic { user, password }),
-                Some(Scheme::Basic {
-                    user: now_user,
-                    password: now_password,
-                }),
-            ) => user == now_user && password == now_password,
-            _ => false,
-        };
-        credentials
-            && self.url.expose() == other.url.expose()
-            && self.tls == other.tls
-            && self.refresh_interval == other.refresh_interval
-            && self.deadline == other.deadline
-            && self.max_pages == other.max_pages
-            && self.max_bytes == other.max_bytes
-            && self.max_entries == other.max_entries
-    }
-}
-
-/// The PIXm resolver, resolved.
-#[derive(Debug)]
-pub struct PixmSettings {
-    /// The PIX Managers.
-    pub managers: Vec<PixManagerSettings>,
-    /// A client's issuing namespace mapped to a PIX assigning authority.
-    pub namespaces: BTreeMap<String, String>,
-}
-
-/// One PIX Manager, resolved.
-#[derive(Debug)]
-pub struct PixManagerSettings {
-    /// The Manager's FHIR base URL, already known to parse.
-    pub url: SecretUrl,
-    /// Each member it resolves, mapped to that member's `ehr_id` domain.
-    pub members: BTreeMap<String, String>,
-    /// How the gateway authenticates to it.
-    pub credentials: Option<Scheme>,
-    /// The TLS material it is reached with.
-    pub tls: crate::config::tls::TlsSettings,
-    /// How the gateway asks it.
-    pub method: crate::config::PixmMethod,
 }
 
 /// The federated query, resolved.
@@ -276,28 +210,37 @@ pub enum Scheme {
     /// An OAuth 2.0 client-credentials grant with a JWT client assertion
     /// (RFC 6749 §4.4, RFC 7523 §2.2).
     OAuth2(Box<Grant>),
-    /// The Nuts grant of Annex B §B.4: a `DPoP`-bound token for a
-    /// Verifiable Presentation of the gateway's credentials (Nuts RFC021).
-    Nuts(Box<NutsGrant>),
     /// A grant under the FAPI 2.0 Security Profile, the track of Annex B
     /// §B.4a: a `DPoP`-bound token for an ES256 `private_key_jwt` assertion,
     /// with RFC 9396 `authorization_details` where configured.
     Fapi2(Box<Fapi2Grant>),
+    /// A grant a binding adds, such as the Nuts grant of Annex B §B.4.
+    Binding(Box<dyn OnwardGrant>),
+}
+
+impl Scheme {
+    /// Whether the scheme is a grant, which only a node's onward credentials
+    /// take; an identity, localization, consent or directory service takes a
+    /// bearer token or basic credentials.
+    #[must_use]
+    pub fn is_grant(&self) -> bool {
+        matches!(self, Self::OAuth2(_) | Self::Fapi2(_) | Self::Binding(_))
+    }
 }
 
 impl Settings {
-    /// Whether the gateway federates: a registry document or a care services
-    /// directory names its members.
+    /// Whether the gateway federates: a registry document or a binding's
+    /// registry source names its members.
     #[must_use]
     pub fn federates(&self) -> bool {
-        self.registry_document.is_some() || self.registry_directory.is_some()
+        self.registry_document.is_some() || crate::binding::sources_registry(self)
     }
 
     /// Logs what this process is configured to reach, never a value.
     ///
     /// The line names the endpoints that carry credentials and never the
     /// credentials, so a start-up log states what the process can reach
-    /// without stating any of it.
+    /// without stating any of it; each binding then logs what it reaches.
     pub fn log_summary(&self) {
         let endpoints: Vec<&str> = self.credentials.keys().map(EndpointId::as_str).collect();
         let decomposable: Vec<&str> = self
@@ -306,17 +249,16 @@ impl Settings {
             .iter()
             .map(|function| function.name())
             .collect();
+        let bindings: Vec<&str> = crate::binding::compiled()
+            .iter()
+            .map(|binding| binding.name())
+            .collect();
         tracing::info!(
             listen = %self.server.listen,
             base_path = %self.server.base_path,
             profile = ?self.profile,
             registry = self.registry_document.is_some(),
             registry_format = ?self.registry_format,
-            registry_directory = self.registry_directory.is_some(),
-            registry_refresh_s = self
-                .registry_directory
-                .as_ref()
-                .map(|directory| directory.refresh_interval.as_secs()),
             federation_id = self.federation.id.as_ref().map(FederationId::as_str),
             node_selection = ?self.federation.node_selection,
             best_effort = self.federation.best_effort,
@@ -330,9 +272,6 @@ impl Settings {
                 .map(EndpointId::as_str),
             fan_out_template_upload = self.federation.fan_out_template_upload,
             fan_out_stored_queries = self.federation.fan_out_stored_queries,
-            pix_managers = self.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
-            pmir_feed = self.pmir.is_some(),
-            pdqm_transaction = self.pdqm.as_ref().map(|pdqm| pdqm.transaction.as_str()),
             stored_query_backend = self
                 .stored_queries
                 .as_ref()
@@ -345,7 +284,11 @@ impl Settings {
             auth_issuers = self.server.auth.issuers.len(),
             auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
             purpose_of_use_required = self.server.auth.purpose_required,
+            bindings = bindings.join(","),
             "configuration resolved"
         );
+        for binding in crate::binding::compiled() {
+            binding.log_summary(self);
+        }
     }
 }

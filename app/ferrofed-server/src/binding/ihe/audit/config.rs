@@ -43,10 +43,10 @@ use ihe_iti::balp::{NetworkAddress, Observer};
 use serde::Deserialize;
 use url::Url;
 
+use crate::binding::ihe::xcpd::AuditDestination;
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::secrets::secret;
-use crate::config::xcpd::AuditDestination;
 
 /// `[audit]`, as the configuration writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -174,7 +174,7 @@ const KEY: &str = "audit";
 /// another destination; [`Error::Url`] for a `url` that does not parse;
 /// [`Error::Zero`] for a zero bound or timeout; and the errors of a secret or
 /// a file that cannot be read.
-pub(super) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
+pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
     let profile = config.profile;
     let table = &config.audit;
     let audited = config.pixm.is_some()

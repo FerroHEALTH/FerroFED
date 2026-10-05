@@ -130,6 +130,22 @@ The sections, and the page that covers each:
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
 
+### The bindings and their features
+
+The sections of a regional or national binding belong to that binding, and
+each binding is one Cargo feature of the `ferrofed-server` crate:
+
+| Feature | Binding | Sections |
+|---|---|---|
+| always built | development | `[dev]` |
+| `binding-ihe` | IHE, Annex A | `[pixm]`, `[pdqm]`, `[xcpd]`, `[registry.mcsd]`, `[pmir]`, `[audit]` |
+| `binding-nl` | Dutch Generic Functions, Annex B | `[nl_gf]` (`[nl_gf.nvi]`, `[nl_gf.mitz]`), `[credentials."<id>".nuts]` |
+
+Both features are on by default, so the released binary and the container
+image carry every binding. A build without one, such as
+`cargo build -p ferrofed-server --no-default-features --features binding-ihe`,
+refuses that binding's sections as unknown keys.
+
 ```toml
 [server]
 listen = "127.0.0.1:8080"     # the socket address to bind

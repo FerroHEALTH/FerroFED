@@ -54,3 +54,4 @@
 
 - [How the work is organised](contribute/how-the-work-is-organised.md)
 - [Checks and gates](contribute/checks-and-gates.md)
+- [Adding a country](contribute/adding-a-country.md)

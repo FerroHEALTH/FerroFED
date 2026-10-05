@@ -10,25 +10,23 @@ use std::time::Duration;
 
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
-use ferrofed_engine::onward::nuts::NutsGrant;
 use ferrofed_engine::onward::provider::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::secret::Secret;
-use nl_generic_functions::nuts_auth::error::InvalidInput;
-use nl_generic_functions::nuts_auth::holder::{Did, Holder, HolderKey};
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use secrecy::SecretString;
 use secrecy::zeroize::Zeroizing;
 
+use crate::binding::Binding;
 use crate::config::error::{BasicFault, Error};
 use crate::config::grant;
 use crate::config::settings::{Scheme, SigningSettings};
-use crate::config::{ClientAuth, Credentials, GrantKind, Nuts, OAuth2, Signing};
+use crate::config::{ClientAuth, Credentials, GrantKind, OAuth2, Signing};
 
 /// Returns the scheme `credentials` describes, once it is known to fit the
 /// `Authorization` header it is sent in.
-pub(super) fn resolve_credentials(
+pub(crate) fn resolve_credentials(
     section: &str,
     credentials: &Credentials,
 ) -> Result<Scheme, Error> {
@@ -42,32 +40,40 @@ pub(super) fn resolve_credentials(
         credentials.password.as_ref(),
         credentials.password_file.as_deref(),
     )?;
+    let bound: Vec<&dyn Binding> = crate::binding::compiled()
+        .iter()
+        .copied()
+        .filter(|binding| binding.onward_table(credentials).is_some())
+        .collect();
+    let refused = || Error::Scheme {
+        section: section.to_owned(),
+    };
     if let Some(fapi2) = &credentials.fapi2 {
         if token.is_some()
             || credentials.user.is_some()
             || password.is_some()
             || credentials.oauth2.is_some()
-            || credentials.nuts.is_some()
+            || !bound.is_empty()
         {
-            return Err(Error::Scheme {
-                section: section.to_owned(),
-            });
+            return Err(refused());
         }
         return grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2)
             .map(|grant| Scheme::Fapi2(Box::new(grant)));
     }
-    if let Some(nuts) = &credentials.nuts {
+    if let [binding] = bound.as_slice() {
         if token.is_some()
             || credentials.user.is_some()
             || password.is_some()
             || credentials.oauth2.is_some()
         {
-            return Err(Error::Scheme {
-                section: section.to_owned(),
-            });
+            return Err(refused());
         }
-        return resolve_nuts(&format!("{section}.nuts"), nuts)
-            .map(|grant| Scheme::Nuts(Box::new(grant)));
+        if let Some(grant) = binding.onward(section, credentials) {
+            return grant.map(Scheme::Binding);
+        }
+    }
+    if bound.len() > 1 {
+        return Err(refused());
     }
     if let Some(oauth2) = &credentials.oauth2 {
         if token.is_some() || credentials.user.is_some() || password.is_some() {
@@ -158,7 +164,7 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
 
 /// Returns the secret `key` names, inline or from its `_file` sibling, as
 /// the redacting type `T` that holds it.
-pub(super) fn secret<T>(
+pub(crate) fn secret<T>(
     key: &str,
     inline: Option<&T>,
     file: Option<&Path>,
@@ -180,7 +186,7 @@ where
 
 /// Reads the secret file `path`, trimmed and refused when empty, into a
 /// [`SecretString`]; the text read is zeroed once the trimmed value is taken.
-fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
+pub(crate) fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
     let text = std::fs::read_to_string(path)
         .map(Zeroizing::new)
         .map_err(|source| Error::Secret {
@@ -264,89 +270,12 @@ fn resolve_grant(section: &str, oauth2: &OAuth2) -> Result<Grant, Error> {
     Ok(grant)
 }
 
-/// Returns the Nuts grant the `nuts` table at `section` describes (Annex B
-/// §B.4, Nuts RFC021): the authorization server an issuer URL (RFC 8414
-/// §2), the scope a list of RFC 6749 §3.3 scope tokens, the holder a
-/// `did:web` DID whose key `kid` names and whose every credential is a JWT
-/// credential issued to it, and a `DPoP` key the tokens are bound to.
-fn resolve_nuts(section: &str, nuts: &Nuts) -> Result<NutsGrant, Error> {
-    let missing = |name: &str| Error::Missing {
-        key: format!("{section}.{name}"),
-    };
-    let server = nuts
-        .authorization_server
-        .as_ref()
-        .ok_or_else(|| missing("authorization_server"))?;
-    if nuts.scope.trim().is_empty() {
-        return Err(missing("scope"));
-    }
-    let refused = |name: &str| {
-        let key = format!("{section}.{name}");
-        move |source| Error::NutsGrant { key, source }
-    };
-    let mut grant = nl_generic_functions::nuts_auth::Grant::new(server.expose(), &nuts.scope)
-        .map_err(|source| match source {
-            InvalidInput::Scope => refused("scope")(source),
-            _ => refused("authorization_server")(source),
-        })?;
-    if let Some(client_id) = &nuts.client_id {
-        grant = grant
-            .with_client_id(client_id.clone())
-            .map_err(refused("client_id"))?;
-    }
-    if nuts.did.is_empty() {
-        return Err(missing("did"));
-    }
-    if nuts.kid.is_empty() {
-        return Err(missing("kid"));
-    }
-    if nuts.credential.is_empty() {
-        return Err(missing("credential"));
-    }
-    let holder_refused = |source| Error::NutsHolder {
-        section: section.to_owned(),
-        source,
-    };
-    let did = Did::new(nuts.did.clone()).map_err(holder_refused)?;
-    let key_file = nuts
-        .key_file
-        .as_deref()
-        .ok_or_else(|| missing("key_file"))?;
-    let pem = secret::<Secret>(&format!("{section}.key"), None, Some(key_file))?
-        .ok_or_else(|| missing("key_file"))?;
-    let key =
-        HolderKey::from_pem(&pem.to_secret_string(), &nuts.kid, &did).map_err(holder_refused)?;
-    let mut credentials = Vec::with_capacity(nuts.credential.len());
-    for (index, held) in nuts.credential.iter().enumerate() {
-        let prefix = format!("{section}.credential[{index}]");
-        let file = held.file.as_deref().ok_or_else(|| Error::Missing {
-            key: format!("{prefix}.file"),
-        })?;
-        let jwt = read_secret(&format!("{prefix}.file"), file)?;
-        credentials.push((held.input_descriptor.clone(), jwt));
-    }
-    let holder = Holder::new(did, key, credentials).map_err(holder_refused)?;
-    let dpop_file = nuts
-        .dpop_key_file
-        .as_deref()
-        .ok_or_else(|| missing("dpop_key_file"))?;
-    let dpop_key = format!("{section}.dpop_key");
-    let dpop_pem = secret::<Secret>(&dpop_key, None, Some(dpop_file))?
-        .ok_or_else(|| missing("dpop_key_file"))?;
-    let prover =
-        Prover::from_pem(&dpop_pem.to_secret_string()).map_err(|source| Error::DpopKey {
-            key: format!("{dpop_key}_file"),
-            source,
-        })?;
-    Ok(NutsGrant::new(grant, Arc::new(holder), Arc::new(prover)))
-}
-
 /// Returns the signing keys and their publication `[signing]` describes:
 /// both keys read from their files and held to ES384, the assertion
 /// lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
 /// that lifetime plus the nodes' JWK Set cache time, and `jwks_uri` an
 /// absolute `http` or `https` URL (§13.1, N25).
-pub(super) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Error> {
+pub(crate) fn resolve_signing(signing: &Signing) -> Result<SigningSettings, Error> {
     let max = MAX_ASSERTION_LIFETIME.as_secs();
     if signing.assertion_lifetime_s == 0 || signing.assertion_lifetime_s > max {
         return Err(Error::AssertionLifetime {

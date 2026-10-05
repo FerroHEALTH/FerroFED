@@ -399,6 +399,7 @@ async fn a_query_that_reaches_dispatch_with_no_verified_caller_reaches_no_node()
     Ok(())
 }
 
+#[cfg(feature = "binding-ihe")]
 // conformance: CP-16
 #[tokio::test]
 async fn a_registry_from_either_source_without_a_signing_key_does_not_load() -> TestResult {

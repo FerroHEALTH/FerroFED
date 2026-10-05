@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
-use ferrofed_server::directory::RefreshOutcome;
+use ferrofed_server::binding::ihe::mcsd::registry::RefreshOutcome;
 use ferrofed_server::reload::ReloadError;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Outage};
 use http::{Request, StatusCode};

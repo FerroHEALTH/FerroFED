@@ -285,6 +285,7 @@ pub enum Error {
     /// RFC 6749 §3.3 does not admit, or its `client_id` is empty (RFC 8414
     /// §2).
     #[error("{key} is not usable in a Nuts grant")]
+    #[cfg(feature = "binding-nl")]
     NutsGrant {
         /// The key of the refused value.
         key: String,
@@ -296,6 +297,7 @@ pub enum Error {
     /// DID, its key is not one of the DID's or no P-256 or P-384 key, or a
     /// credential is no JWT credential issued to it (Nuts RFC021 §4.2).
     #[error("{section} names a holder that cannot present")]
+    #[cfg(feature = "binding-nl")]
     NutsHolder {
         /// The section of the holder.
         section: String,
@@ -419,6 +421,7 @@ pub enum Error {
     #[error(
         "{key} = \"off\" records no ITI-55 audit message, which only profile = \"development\" accepts; set it to \"log\" (ITI TF-2 §3.55.5.1)"
     )]
+    #[cfg(feature = "binding-ihe")]
     AuditOff {
         /// The key that turned the audit off.
         key: String,
@@ -427,6 +430,7 @@ pub enum Error {
     #[error(
         "{key} = \"off\" records no PIXm, mCSD or PMIR audit record, which only profile = \"development\" accepts; set it to \"log\" or \"repository\" (PIXm §2:3.83.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1)"
     )]
+    #[cfg(feature = "binding-ihe")]
     FeedAuditOff {
         /// The key that turned the audit off.
         key: String,
@@ -435,18 +439,21 @@ pub enum Error {
     #[error(
         "[audit.repository] applies only under audit.destination = \"repository\"; remove it, or send the audit records there"
     )]
+    #[cfg(feature = "binding-ihe")]
     FeedAuditRepositoryUnused,
     /// `[xcpd.audit_repository]` is set while the audit messages go
     /// elsewhere.
     #[error(
         "[xcpd.audit_repository] applies only under xcpd.audit = \"repository\"; remove it, or send the audit messages there"
     )]
+    #[cfg(feature = "binding-ihe")]
     AuditRepositoryUnused,
     /// `nl_gf.nvi.namespaces` lists a BSN system as standing for the
     /// pseudonymised BSN, which would send a BSN to the NVI.
     #[error(
         "nl_gf.nvi.namespaces lists {namespace}, a BSN system: the NVI is keyed on the pseudonymised BSN, and the gateway never sends it a BSN"
     )]
+    #[cfg(feature = "binding-nl")]
     BsnAsPseudonym {
         /// The namespace as written, a naming system and never a value.
         namespace: String,
@@ -454,6 +461,7 @@ pub enum Error {
     /// A `[nl_gf.mitz]` value the closed authorization question does not
     /// take: the key and why, never a patient value.
     #[error("{key} {fault}")]
+    #[cfg(feature = "binding-nl")]
     Mitz {
         /// The key.
         key: String,
@@ -463,6 +471,7 @@ pub enum Error {
     /// A `[pdqm]` value the demographics step does not take: the key and
     /// why, never a patient value.
     #[error("{key} {fault}")]
+    #[cfg(feature = "binding-ihe")]
     Pdqm {
         /// The key.
         key: String,
@@ -472,6 +481,7 @@ pub enum Error {
     /// A syslog header value is empty, too long, or holds a character
     /// syslog cannot carry (RFC 5424 §6).
     #[error("{key} cannot be a syslog header field")]
+    #[cfg(feature = "binding-ihe")]
     SyslogHeader {
         /// The key that holds it.
         key: String,
@@ -494,6 +504,7 @@ pub enum Error {
     /// Both a registry document and a directory are configured, and the
     /// registry has one source.
     #[error("set registry.document or [registry.mcsd], not both: the registry has one source")]
+    #[cfg(feature = "binding-ihe")]
     TwoRegistrySources,
     /// The path the ITI-93 feed is served at is not a path of its own: it
     /// must start with `/`, carry no query or fragment, and stay off the
@@ -501,6 +512,7 @@ pub enum Error {
     #[error(
         "{key} must be a path that starts with /, carries no query or fragment, and is not under /v1, /health or /.well-known"
     )]
+    #[cfg(feature = "binding-ihe")]
     FeedPath {
         /// The key that carries the path.
         key: String,
@@ -524,6 +536,7 @@ pub enum Error {
     #[error(
         "pdqm.timeout_ms ({timeout_ms}) plus federation.localization.timeout_ms ({localization_ms}) must be below federation.overall_timeout_ms ({overall_ms}), of which both are a part (§11.5)"
     )]
+    #[cfg(feature = "binding-ihe")]
     DemographicsBudget {
         /// The demographics step's budget.
         timeout_ms: u64,
@@ -540,6 +553,7 @@ pub enum Error {
     #[error(
         "nl_gf.mitz.timeout_ms ({timeout_ms}) plus pdqm.timeout_ms ({demographics_ms}) plus federation.localization.timeout_ms ({localization_ms}) must be below federation.overall_timeout_ms ({overall_ms}), of which all three are a part (§11.5)"
     )]
+    #[cfg(feature = "binding-nl")]
     PrefilterBudget {
         /// The consent pre-filter's budget.
         timeout_ms: u64,

@@ -680,16 +680,45 @@ The gateway core depends only on the traits. When FerroPIX exists, it can use
 PIXm resolver at a FerroPIX instance, with no change to the core. FerroFED
 never blocks on FerroPIX.
 
+**One module and one feature per binding** (decision A52, #489). The server
+wires each regional or national binding through one `Binding` trait, and each
+binding is one module of `app/ferrofed-server/src/binding/` behind one Cargo
+feature of `ferrofed-server`: the development binding (`[dev]`, always
+built), `binding-ihe` (PIXm, PDQm, XCPD, mCSD, PMIR and the ATNA and BALP
+trail they record through) and `binding-nl` (NVI, Mitz, the LRZa URAs and the
+Nuts grant), both features on by default. A binding declares the
+configuration sections it reads and whether a registry reload applies each or
+it takes a restart, resolves them, and declares the roles they fill
+(resolver, localizer, demographics step, consent pre-filter, registry source,
+identity feed) from the settings alone, before anything is built. It builds
+each role it fills, holds its own transport sites to the policy of section 7,
+keeps the boot's value of what takes a restart, and adds its health
+indications and instruments; its self-description is the mode each role it
+builds carries. An onward credential kind of a region, the Nuts grant today,
+is an `OnwardGrant` the binding resolves. The core holds the role rules once
+for every binding: at most one resolver, one consent pre-filter and one
+localizer of a binding's own, refused with one `RoleConflict` naming the
+sections, and a binding's own localizer under the ask-all selection refused
+naming its section. FAPI 2.0 stays in the core with OAuth 2.0: it is an OpenID
+Foundation profile that Annex B §B.4a selects, and its RFC 8414 checks are the
+ones the OAuth 2.0 issuer audience already uses. A build without a binding's
+feature compiles none of the server's code for it and refuses its sections as
+unknown keys; `ferrofed-identity` and `ferrofed-engine` still compile the
+binding crates' adapters in every build. A new country is a specification
+crate, a binding module and a feature line (the book's "Adding a country").
+No specification governs the module layout: our own design.
+
 **Choosing the localizer.** Under `federation.node_selection = "localized"`
-exactly one localizer is active, chosen by the configuration: the XCPD
-localizer when `[xcpd]` is set, the NVI localizer of Annex B §B.1 when
-`[nl_gf.nvi]` is (#87; the two together are refused), otherwise the PIXm
-resolver when `[pixm]` is, otherwise the development cross-reference under
-`profile = "development"`. `OPTIONS {base}/` declares it as
+exactly one localizer is active, built from the bindings: a binding's own
+localizer when one is configured, the XCPD localizer of `[xcpd]` or the NVI
+localizer of Annex B §B.1 of `[nl_gf.nvi]` (#87; two together are refused
+with one error naming both sections), otherwise the resolver itself where it
+localizes, the PIXm resolver of `[pixm]` or the development cross-reference
+under `profile = "development"`. `OPTIONS {base}/` declares it as
 `localization.mode`: `"xcpd"`, `"nl-gf-nvi"`, `"pixm"` or
 `"development-static"`. With `[xcpd]` or `[nl_gf.nvi]` set, `[pixm]` only
 resolves. Under `node_selection = "ask-all"` no localizer runs, and `[xcpd]`
-or `[nl_gf.nvi]` there refuses the configuration.
+or `[nl_gf.nvi]` there refuses the configuration, naming the section.
 
 **XCPD** (decision A15). ITI-55 is built with the localization seam (#85) as
 the `xcpd` feature of `ihe-iti`, so the SOAP 1.2, HL7 v3 and SAML XUA
@@ -1960,19 +1989,21 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
 | `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`, onward OAuth 2.0 and the signed caller token (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken` | any storage implementation (#40), the server |
-| `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), telemetry, health, the storage implementations, wiring | everything | is never depended on |
+| `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), telemetry, health, the storage implementations, the bindings (`src/binding/`, one module and one feature each), wiring | everything | is never depended on |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
 
 `ihe-iti` and `nl-generic-functions` know nothing of FerroFED. The adapters in
 `ferrofed-identity` turn their clients into the seams, so a binding can move
 to FerroPIX later, or be served by a FerroPIX instance, without a change to
-the engine or the server (section 6). The server enables the features a
-deployment configures, and a deployment that enables none of a binding
-compiles none of its dependencies. The architecture test in
+the engine or the server (section 6). The server wires each binding from one
+module behind one feature, `binding-ihe` or `binding-nl`, both on by default
+(section 6, decision A52); a build without a binding's feature compiles none
+of the server's code for it, while `ferrofed-identity` and `ferrofed-engine`
+still compile every binding crate they adapt. The architecture test in
 `app/ferrofed-engine/tests/it/architecture.rs` fails when a crate other than
 the server reaches a storage implementation (#40), or when a binding crate
 gains a FerroFED dependency, and CI lints every feature of the published crates
-on its own (`cargo hack --each-feature`).
+and of the server on its own (`cargo hack --each-feature`).
 
 ```mermaid
 flowchart TD
@@ -2281,7 +2312,7 @@ released the same day; v0.0.8 is the milestone in progress.
 Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
 and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48, A49, which amends
-A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04. The bracket names the report and its
+A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, and A52 on #489. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -2338,6 +2369,7 @@ R4 is #23, #25 and #27).
 | A49 | `AVG` over integers [owner, #309, amending A30] | an integer when every node `SUM` is an integer: the one nearest the exact quotient of the federation's sum and count, a tie to the even one, rounded once at the gateway and never per node; the decimal mean, written as the nearest JSON number, when a node `SUM` is a real | AQL 1.1.0 §3.9.1.5: "Input values type should be either Integer or Real, and it will also determine the return type"; §3.9.1.4 says the same of `SUM`, so the node sums carry the input type; AQL gives no rounding, and the rounding is our own design: the nearest integer is the Integer closest to the arithmetic mean §3.9.1 defines, and ties to even is the rule the gateway already applies writing a real mean as the nearest binary64 (IEEE 754 roundTiesToEven), with no bias toward zero or upward; the silence on the rounding is on #212 | decided by the specification text under the owner's spec-first rule (2026-10-03) for the return type; the ties-to-even rounding is our own design within that |
 | A50 | The metrics surface and the incident webhook [#281] | one OpenTelemetry `MeterProvider` (`opentelemetry` 0.33 with the Prometheus pull reader and an optional OTLP gRPC push), the family FerroEHR runs; `GET /metrics` on an admin listener of its own, off by default and on loopback unless `allow_remote`; the incident counter by `kind`, the node request counter by `endpoint` and §11.1 `outcome` with a duration histogram by `endpoint`, the reload counter by `result`, every label from an enum or the registry; no webhook | an operator alerts on a counter, and a webhook adds an outbound channel with its own credentials, retries and failure handling for no gain over a scrape; one provider keeps the two surfaces equal; a listener the client face never reaches needs no gateway authentication; no specification governs metrics: our own design | decided on #281 (2026-10-03) |
 | A51 | FerroFED under Regulation (EU) 2025/327 [#519] | an EHR system under Art 2(2)(k), its intended purpose covering every priority category its member CDRs hold, all six of Art 14(1)(a) to (f); the harmonised software components of Art 25(1) delivered before 26 March 2029 for (a) to (c) and 26 March 2031 for (d) to (f); cross-border care through the national contact point | FerroFED intermediates priority-category data for healthcare providers providing patient care and selects none by category; Art 25(2) excludes only "general purpose software"; Art 105 applies Art 25 and 26 from 26 March 2029 to a system intended to process categories (a) to (c) and from 26 March 2031 for (d) to (f); Art 11(2) and Art 23 route cross-border access through MyHealth@EU; section 16 | decided on #519 (2026-10-04, by the orchestrator under the owner's standing delegation); legal review can only narrow it |
+| A52 | The regional bindings [#489] | one `Binding` trait in the server; one module under `app/ferrofed-server/src/binding/` and one Cargo feature per binding: development always built, `binding-ihe` for Annex A, `binding-nl` for Annex B, both default; one `RoleConflict` naming the sections in place of one error per pair; FAPI 2.0 stays in the core | every country otherwise touched about eight files of the server, and a third localizer added a third pair of exclusion checks; a binding is a trait implementation, never a branch in the core (§2.4, N27, N27a); the research on #488 maps the next countries; the trait sits in the server because every hook it fills (configuration, settings, errors, transport, reload, state, health, metrics) is a server type; no specification governs the layout: our own design | decided on #489 |
 
 ## 16. Regulatory status
 

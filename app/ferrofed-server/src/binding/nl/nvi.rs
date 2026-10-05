@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The Dutch Generic Functions, `[nl_gf]`: the regional binding of Annex B,
-//! one table per function a deployment uses.
+//! The NVI localizer, `[nl_gf.nvi]`.
 //!
 //! `[nl_gf.nvi]` is the localizer over GF-Localization, the NVI
 //! Localization Service (Annex B §B.1, N4, §14.1): its FHIR base, how the
@@ -28,28 +27,29 @@
 //! protected-payload policy of [`transport`]. No specification governs the
 //! shape of the table: our own design.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use ferrofed_identity::nvi::is_bsn_system;
+use ferrofed_identity::nvi::{NviConfig, NviLocalizer, is_bsn_system};
+use ferrofed_identity::patient::IdentifierNamespace;
+use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 
+use crate::binding::LocalizerSeam;
 use crate::config::error::Error;
 use crate::config::secrets::{resolve_credentials, secret};
 use crate::config::settings::Scheme;
 use crate::config::{Config, Credentials, transport};
+use crate::localization::LocalizationError;
+use crate::service;
 
-/// The Dutch Generic Functions, as the configuration writes them.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct NlGf {
-    /// The NVI localizer (`[nl_gf.nvi]`).
-    pub nvi: Option<Nvi>,
-    /// The Mitz consent pre-filter (`[nl_gf.mitz]`).
-    pub mitz: Option<crate::config::mitz::Mitz>,
-}
+/// The `localization.mode` of the NVI localizer of the Dutch Generic
+/// Functions (Annex B §B.1).
+pub const NL_GF_NVI: &str = "nl-gf-nvi";
 
 /// The NVI localizer, as the configuration writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -77,15 +77,6 @@ pub struct Nvi {
     /// A file of PEM trust roots the service's certificate chains to, beside
     /// the platform's.
     pub trust_roots_file: Option<PathBuf>,
-}
-
-/// The Dutch Generic Functions, resolved.
-#[derive(Debug)]
-pub struct NlGfSettings {
-    /// The NVI localizer, when `[nl_gf.nvi]` is set.
-    pub nvi: Option<NviSettings>,
-    /// The Mitz consent pre-filter, when `[nl_gf.mitz]` is set.
-    pub mitz: Option<crate::config::mitz::MitzSettings>,
 }
 
 /// The NVI localizer, with every secret and file read.
@@ -120,36 +111,8 @@ impl fmt::Debug for NviSettings {
 /// The key of the NVI table, which names its URL and its credentials.
 pub const NVI_KEY: &str = "nl_gf.nvi";
 
-/// Resolves `[nl_gf]`: an NVI URL that parses, carries no userinfo and is
-/// `https` outside development, a bearer token or basic credentials, and
-/// every secret and file read.
-///
-/// # Errors
-/// [`Error::BsnAsPseudonym`] for a BSN system listed in `namespaces`,
-/// [`Error::Missing`] for no registry or no `url`, [`Error::Url`] for a URL
-/// that does not parse, [`Error::UrlCredentials`] for one that carries a
-/// user name or a password, [`Error::Cleartext`] for one that is not
-/// `https` outside the development profile, [`Error::GrantNotHere`] for an
-/// OAuth 2.0 grant, and the errors of a secret or a file that cannot be read.
-pub(super) fn resolve(config: &Config) -> Result<Option<NlGfSettings>, Error> {
-    let Some(nl_gf) = &config.nl_gf else {
-        return Ok(None);
-    };
-    let nvi = nl_gf
-        .nvi
-        .as_ref()
-        .map(|nvi| resolve_nvi(config, nvi))
-        .transpose()?;
-    let mitz = nl_gf
-        .mitz
-        .as_ref()
-        .map(|mitz| crate::config::mitz::resolve(config, mitz))
-        .transpose()?;
-    Ok(Some(NlGfSettings { nvi, mitz }))
-}
-
 /// Resolves `[nl_gf.nvi]`.
-fn resolve_nvi(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> {
+pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> {
     // NOTE: no specification governs this: our own design; the custodian map
     // names registry members, so it means nothing without a registry.
     if !config.registry.configured() {
@@ -190,10 +153,7 @@ fn resolve_nvi(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> {
         .as_ref()
         .map(|credentials| resolve_credentials(&section, credentials))
         .transpose()?;
-    if matches!(
-        credentials,
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
-    ) {
+    if credentials.as_ref().is_some_and(Scheme::is_grant) {
         return Err(Error::GrantNotHere { section });
     }
     // NOTE: Annex B §B.7: the pseudonym is personal data like the BSN, so the
@@ -226,5 +186,50 @@ fn resolve_nvi(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> {
         namespaces: nvi.namespaces.clone(),
         client_identity,
         trust_roots,
+    })
+}
+
+/// The NVI localizer `nvi` describes over the members of `snapshot`
+/// (Annex B §B.1).
+pub(super) fn localizer(
+    nvi: &NviSettings,
+    snapshot: &RegistrySnapshot,
+) -> Result<LocalizerSeam, LocalizationError> {
+    let mut custodians = BTreeMap::new();
+    for (ura, member) in &nvi.custodians {
+        let member =
+            NodeId::new(member.as_str()).map_err(|source| LocalizationError::NviMember {
+                ura: ura.clone(),
+                source,
+            })?;
+        custodians.insert(ura.clone(), member);
+    }
+    let namespaces = nvi
+        .namespaces
+        .iter()
+        .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map_err(LocalizationError::NviNamespace)?;
+    let auth = service::authentication("nl_gf.nvi.credentials", nvi.credentials.as_ref())
+        .map_err(LocalizationError::Grant)?;
+    let tls = service::tls(
+        NVI_KEY,
+        nvi.client_identity.as_ref(),
+        nvi.trust_roots.as_deref(),
+    )
+    .map_err(LocalizationError::Tls)?;
+    let config = NviConfig {
+        base: nvi.url.clone(),
+        auth,
+        custodians,
+        namespaces,
+        tls,
+    };
+    let localizer = NviLocalizer::from_config(config, snapshot).map_err(LocalizationError::Nvi)?;
+    Ok(LocalizerSeam {
+        localizer: Arc::new(localizer),
+        mode: NL_GF_NVI,
+        audit: None,
+        indicators: Vec::new(),
     })
 }

@@ -17,23 +17,23 @@
 //!   `https`, or `http` to a loopback host, under every profile, since a
 //!   verifier reached in the clear lets a network attacker forge callers.
 //!
-//! The protected-payload sites are a registry endpoint with a
+//! The protected-payload sites of the core are a registry endpoint with a
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
-//! 2.0 grant, the authorization server of its Nuts grant (sent the gateway's
-//! credentials in a Verifiable Presentation), the issuer of its FAPI 2.0
-//! grant (sent the client assertion and the callers' tokens), every PIX
-//! Manager, the PDQm Supplier of `[pdqm]`, every XCPD responding gateway, the
-//! NVI Localization Service of `[nl_gf.nvi]` and Mitz of `[nl_gf.mitz]` (each
-//! is sent the patient identifier, and a credential when one is configured),
-//! the Patient Identity Registry of `[pmir]` and its callback URL, which carry
-//! patient identities and the feed token, the
-//! care services directory of `[registry.mcsd]` when it has credentials,
+//! 2.0 grant, the issuer of its FAPI 2.0 grant (sent the client assertion and
+//! the callers' tokens), the site of a grant a binding adds, and
 //! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
-//! a user name or a password, and the ATNA Audit Record Repository the XCPD
-//! audit messages go to, which must be `tls://` ([`encrypted_syslog`]). Any
-//! other URL may stay `http`. The encrypted-connection site is the
-//! stored-query store's PostgreSQL connection string, whose `sslmode` must be
-//! `require` when it carries a password and reaches a host over the network.
+//! a user name or a password. Each binding holds its own sites
+//! ([`Binding::sites`](crate::binding::Binding::sites)): the IHE binding every
+//! PIX Manager, the PDQm Supplier of `[pdqm]`, every XCPD responding gateway,
+//! the Patient Identity Registry of `[pmir]` and its callback URL, the care
+//! services directory of `[registry.mcsd]` when it has credentials, the
+//! audit repository of `[audit]`, and the ATNA Audit Record Repository the
+//! XCPD audit messages go to, which must be `tls://` ([`encrypted_syslog`]);
+//! the Dutch binding the NVI Localization Service of `[nl_gf.nvi]`, Mitz of
+//! `[nl_gf.mitz]` and the authorization server of a Nuts grant. Any other URL
+//! may stay `http`. The encrypted-connection site is the stored-query store's
+//! PostgreSQL connection string, whose `sslmode` must be `require` when it
+//! carries a password and reaches a host over the network.
 //!
 //! The specification assumes transport security and binds it through the
 //! security profiles (§2.2, §13, Annex B); no specification governs these
@@ -236,16 +236,8 @@ fn credential_sites(
                 ),
             ));
         }
-        // NOTE: Nuts RFC021 §7, every endpoint is TLS-protected; the token and
-        // definition endpoints the metadata names are held to it by the client.
-        if let Scheme::Nuts(grant) = scheme {
-            sites.push((
-                grant.grant().authorization_server().to_owned(),
-                site(
-                    format!("{section}.nuts.authorization_server"),
-                    format!("{section}.nuts credentials and presentation"),
-                ),
-            ));
+        if let Scheme::Binding(grant) = scheme {
+            sites.push(grant.site(&section));
         }
         // NOTE: FAPI 2.0 Security Profile §5.2.1, every endpoint is TLS-protected; the
         // token endpoint the metadata names is held to the issuer's origin.
@@ -280,51 +272,11 @@ pub fn check(
 ) -> Result<Vec<ProtectedSite>, CleartextError> {
     let profile = settings.profile;
     let mut cleartext = Vec::new();
-    let mut audit = None;
-    let mut hold = |url: &str, site: ProtectedSite| {
-        protected_payload(profile, url, site).map(|exposed| cleartext.extend(exposed))
-    };
-    let site = |url_key: String, payload: String| ProtectedSite {
-        url_key,
-        payload,
-        requires: Encryption::Https,
-    };
     for (url, site) in credential_sites(settings, registry) {
-        hold(&url, site)?;
+        cleartext.extend(protected_payload(profile, &url, site)?);
     }
-    for (url, site) in identity_services(settings) {
-        hold(url, site)?;
-    }
-    if let Some(xcpd) = &settings.xcpd {
-        let assertion = xcpd.assertion.as_ref().map(|_| xcpd.assertion_key);
-        for (index, gateway) in xcpd.gateways.iter().enumerate() {
-            let key = format!("xcpd.gateway[{index}]");
-            hold(gateway.url.expose(), identity_site(&key, assertion))?;
-        }
-        if let Some(repository) = &xcpd.audit_repository {
-            let site = ProtectedSite {
-                url_key: String::from("xcpd.audit_repository.url"),
-                payload: String::from("the ITI-55 audit messages, which name the patient"),
-                requires: Encryption::SyslogTls,
-            };
-            audit = encrypted_syslog(profile, &repository.url, site)?;
-        }
-    }
-    if let Some(directory) = settings
-        .registry_directory
-        .as_ref()
-        .filter(|directory| directory.credentials.is_some())
-    {
-        hold(directory.url.expose(), directory_site())?;
-    }
-    if let Some(repository) = &settings.audit.repository {
-        hold(
-            repository.url.as_str(),
-            site(
-                String::from("audit.repository.url"),
-                String::from("the PIXm, PDQm, mCSD and PMIR audit records, which name the patient"),
-            ),
-        )?;
+    for binding in crate::binding::compiled() {
+        cleartext.extend(binding.sites(settings)?);
     }
     let collectors = [
         ("metrics.otlp_endpoint", &settings.metrics.otlp_endpoint),
@@ -337,10 +289,12 @@ pub fn check(
         let carries = Url::parse(endpoint.expose())
             .is_ok_and(|parsed| !parsed.username().is_empty() || parsed.password().is_some());
         if carries {
-            hold(
-                endpoint.expose(),
-                site(key.to_owned(), format!("the userinfo of {key}")),
-            )?;
+            let site = ProtectedSite {
+                url_key: key.to_owned(),
+                payload: format!("the userinfo of {key}"),
+                requires: Encryption::Https,
+            };
+            cleartext.extend(protected_payload(profile, endpoint.expose(), site)?);
         }
     }
     #[cfg(feature = "postgres")]
@@ -353,80 +307,13 @@ pub fn check(
         let requires_tls = !crate::stored::postgres::exposes_password(url);
         cleartext.extend(encrypted_connection(profile, requires_tls, site)?);
     }
-    cleartext.extend(crate::config::pmir::sites(profile, settings.pmir.as_ref())?);
-    cleartext.extend(audit);
     Ok(cleartext)
-}
-
-/// The URL and the site of every identity service `settings` ask about a
-/// patient over HTTP with a credential of their own: each PIX Manager, the
-/// PDQm Supplier, the NVI Localization Service and Mitz.
-fn identity_services(settings: &Settings) -> Vec<(&str, ProtectedSite)> {
-    let mut services = Vec::new();
-    for (index, manager) in settings
-        .pixm
-        .iter()
-        .flat_map(|pixm| pixm.managers.iter().enumerate())
-    {
-        let key = format!("pixm.manager[{index}]");
-        let credentials = manager
-            .credentials
-            .is_some()
-            .then(|| format!("{key}.credentials"));
-        let site = identity_site(&key, credentials.as_deref());
-        services.push((manager.url.expose(), site));
-    }
-    if let Some(pdqm) = &settings.pdqm {
-        let key = crate::config::pdqm::PDQM_KEY;
-        let credentials = pdqm
-            .credentials
-            .is_some()
-            .then(|| format!("{key}.credentials"));
-        services.push((
-            pdqm.url.expose(),
-            identity_site(key, credentials.as_deref()),
-        ));
-    }
-    if let Some(nvi) = settings.nl_gf.as_ref().and_then(|nl_gf| nl_gf.nvi.as_ref()) {
-        let key = crate::config::nl_gf::NVI_KEY;
-        let credentials = nvi
-            .credentials
-            .is_some()
-            .then(|| format!("{key}.credentials"));
-        services.push((nvi.url.expose(), identity_site(key, credentials.as_deref())));
-    }
-    if let Some(mitz) = settings
-        .nl_gf
-        .as_ref()
-        .and_then(|nl_gf| nl_gf.mitz.as_ref())
-    {
-        let key = crate::config::mitz::MITZ_KEY;
-        let credentials = mitz
-            .credentials
-            .is_some()
-            .then(|| format!("{key}.credentials"));
-        services.push((
-            mitz.url.expose(),
-            identity_site(key, credentials.as_deref()),
-        ));
-    }
-    services
-}
-
-/// The site of the care services directory of `[registry.mcsd]`: its `url`,
-/// sent the credentials of its own section.
-#[must_use]
-pub fn directory_site() -> ProtectedSite {
-    ProtectedSite {
-        url_key: String::from("registry.mcsd.url"),
-        payload: String::from("registry.mcsd.credentials"),
-        requires: Encryption::Https,
-    }
 }
 
 /// The site of the identity service configured at `key`, such as
 /// `pixm.manager[0]`: its `url`, sent the patient identifiers it is asked
 /// for, with the credential `credential` names when one is configured.
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub(crate) fn identity_site(key: &str, credential: Option<&str>) -> ProtectedSite {
     let payload = match credential {
         Some(credential) => format!("{credential} and patient identifiers"),

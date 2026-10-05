@@ -63,6 +63,28 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   its request line, media type and body. `ihe-iti` 0.0.22 adds
   `pixm::Invocation` and `PixmClient::invoked_by`, and the harness PIX
   Manager answers a posted query.
+- Each regional binding is one Cargo feature of `ferrofed-server`:
+  `binding-ihe` carries the IHE binding of Annex A (`[pixm]`, `[pdqm]`,
+  `[xcpd]`, `[registry.mcsd]`, `[pmir]` and `[audit]`) and `binding-nl` the
+  Dutch Generic Functions of Annex B (`[nl_gf]` and the Nuts grant of
+  `[credentials."<id>".nuts]`); `[dev]` is always built. Both features are on
+  by default, so the released binary and the container image behave as
+  before. A build without one refuses its sections as unknown keys (#489).
+- The book has a page on adding a country: a specification crate, a binding
+  module and a feature line (#489).
+
+### Changed
+
+- Two sections that fill a role exactly one may, two resolvers, two consent
+  pre-filters or two localizers of a binding's own, are refused with one
+  error that names every section, such as `[nl_gf.nvi] and [xcpd] are both
+  localizers; set one`, in place of one error per pair. A localizer section
+  under `node_selection = "ask-all"` is refused naming its section, as
+  before (#489).
+- The `configuration resolved` log line names the compiled bindings, and
+  each binding logs what it is configured to reach on a `binding configured`
+  line of its own; the registry directory, PIX Manager, PMIR and PDQm fields
+  move from the first line to the IHE binding's (#489).
 
 ## [0.0.8] - 2026-10-04
 

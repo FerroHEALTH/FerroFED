@@ -17,12 +17,10 @@ use tokio::net::TcpListener;
 use crate::cli::{AdmissionCommand, Cli, Command, ConfigCommand};
 use crate::config::Config;
 use crate::config::settings::Settings;
-use crate::directory::DirectoryRegistry;
 use crate::federation::Federation;
-use crate::pmir::IdentityFeed;
 use crate::state::AppState;
 use crate::{
-    EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, body, chain, config, directory, healthcheck,
+    EXIT_CONFIG, EXIT_USAGE, admin, admission, banner, binding, body, chain, config, healthcheck,
     metrics, panic, reload, router, serve, state, telemetry,
 };
 
@@ -92,7 +90,7 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     let stdout_is_terminal = std::io::stdout().is_terminal();
     let no_color = std::env::var_os("NO_COLOR");
     let format = settings.telemetry.format;
-    let (document, directory) = directory::read_source(&settings);
+    let (document, sources) = binding::process::read_source(&settings);
     if banner::prints(format, stdout_is_terminal) {
         let described = document.as_ref().map(Result::as_ref);
         // NOTE: no specification governs this: our own design; a document that
@@ -111,15 +109,9 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
             )
             .with_cleartext(cleartext.as_deref())
             .with_audit_spool_in_memory(
-                settings.xcpd.as_ref().is_some_and(|xcpd| {
-                    xcpd.audit_repository
-                        .as_ref()
-                        .is_some_and(|repository| repository.spool_dir.is_none())
-                }) || settings
-                    .audit
-                    .repository
-                    .as_ref()
-                    .is_some_and(|repository| repository.spool_dir.is_none()),
+                binding::compiled()
+                    .iter()
+                    .any(|binding| binding.spools_in_memory(&settings)),
             ),
             format.colour(stdout_is_terminal, no_color.as_deref()),
         );
@@ -166,17 +158,14 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     }
     let entered = runtime.enter();
     let state = match AppState::build_read(&settings, document) {
-        Ok(state) => Arc::new(match &directory {
-            Some(directory) => state.watching(Arc::clone(directory)),
-            None => state,
-        }),
+        Ok(state) => Arc::new(state.with_sources(sources)),
         Err(error) => {
             tracing::error!(error = chain(&error), "cannot start");
             return ExitCode::from(EXIT_CONFIG);
         }
     };
     drop(entered);
-    let code = match serve_command(&runtime, settings, &state, config, directory) {
+    let code = match serve_command(&runtime, settings, &state, config) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(error = format!("{error:#}"), "cannot serve");
@@ -311,9 +300,9 @@ fn healthcheck_command(settings: &Settings) -> ExitCode {
 /// reloading the registry on `SIGHUP` from `config`, the file `settings`
 /// were read from ([`reload`]), and serving `GET /metrics` and the operator's
 /// stored-query distribution on the admin listener when `metrics.listen` is
-/// set ([`admin`]). With `[pmir]`, the identity feed subscribes in the
-/// background and deletes its subscription once the drain ends
-/// ([`crate::pmir`]).
+/// set ([`admin`]). Each binding's processes start beside the server, such as
+/// a care services directory kept in step and the PMIR identity feed, which
+/// deletes its subscription once the drain ends ([`crate::binding`]).
 ///
 /// The metrics are flushed once the gateway has stopped, while the runtime
 /// an OTLP push runs on is still up.
@@ -322,7 +311,6 @@ fn serve_command(
     settings: Settings,
     state: &Arc<AppState>,
     config: Option<PathBuf>,
-    directory: Option<Arc<DirectoryRegistry>>,
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
     let admin = admin::listener(&settings.metrics, state);
@@ -355,17 +343,12 @@ fn serve_command(
             });
         }
         let reloader = Arc::new(reload::Reloader::new(config, settings, Arc::clone(state)));
-        if let Some(directory) = directory {
-            tokio::spawn(directory.keep_in_step(Arc::clone(&reloader)));
-        }
-        let subscription = state.identity_feed().map(IdentityFeed::start);
+        let running = state.processes().start(&reloader);
         tokio::spawn(reload::on_hangup(reloader));
         let app = router(Arc::clone(state), &server);
         state.lifecycle().booted();
         let stopped = serve(listener, app, &server, state.lifecycle().clone()).await;
-        if let Some(subscription) = subscription {
-            subscription.drain().await;
-        }
+        running.drain().await;
         stopped.context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
         anyhow::Ok(())

@@ -12,6 +12,7 @@
 //! metered gateway the request tests drive.
 
 mod exposition;
+#[cfg(feature = "binding-ihe")]
 mod hygiene;
 mod incidents;
 mod nodes;

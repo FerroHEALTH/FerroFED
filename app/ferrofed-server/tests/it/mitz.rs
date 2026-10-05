@@ -27,6 +27,7 @@ use axum::body::Body;
 use std::sync::Arc;
 
 use ferrofed_identity::mitz::MitzConfigError;
+use ferrofed_server::binding::Role;
 use ferrofed_server::config::auth::RequesterClaims;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::{Config, error, transport};
@@ -673,7 +674,12 @@ fn development_consent_rows_and_mitz_together_refuse_to_boot() -> TestResult {
     );
     let text = configuration(dir.path(), "development", &tables)?;
     match Federation::load(&resolved(&text)?) {
-        Err(FederationError::TwoConsentPrefilters) => Ok(()),
+        Err(FederationError::Conflict(conflict))
+            if conflict.role == Role::ConsentPrefilter
+                && conflict.sections == ["[nl_gf.mitz]", "[[dev.consent_denied]]"] =>
+        {
+            Ok(())
+        }
         other => Err(format!("N27a: at most one pre-filter is active: {other:?}").into()),
     }
 }

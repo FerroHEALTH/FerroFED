@@ -16,28 +16,23 @@
 //! outage. A member's state is its reachability and health, never whether
 //! a request to it was valid: every call that sends a member a request reads
 //! the node's own answer the same way ([`Observed::of_contact`]), whatever
-//! the §11.1 record of that call says. The ATNA Audit Record Repository,
-//! when the XCPD localizer sends its audit messages to one, is read live
-//! from its forwarder: [`Observed::Degraded`] while messages wait in the
-//! spool. No specification governs health probes: our own design.
+//! the §11.1 record of that call says. What a binding records through, such
+//! as an audit repository, is read live from its [`Indicator`] at each
+//! report. No specification governs health probes: our own design.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use ferrofed_engine::dispatch::Contact;
-use ferrofed_identity::atna::RepositoryAudit;
-use ferrofed_identity::balp::FeedAudit;
 use ferrofed_identity::consent::ConsentDecision;
 use ferrofed_identity::demographics::{DemographicsError, Identification};
 use ferrofed_identity::localizer::{Localization, LocalizerError};
 use ferrofed_identity::resolver::Resolution;
 use ferrofed_registry::id::{EndpointId, NodeId};
-use ihe_iti::atna::forwarder::Status;
 use serde::Serialize;
 
-use crate::directory::DirectoryFault;
-use crate::pmir::subscription::RegistryFault;
+use crate::binding::{Indication, Indicator};
 
 /// The last state observed of one dependency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -77,22 +72,6 @@ impl Observed {
             2 => Self::Failing,
             4 => Self::Degraded,
             _ => Self::Down,
-        }
-    }
-
-    /// Returns what the audit forwarder's `status` says of its repository:
-    /// [`Observed::Degraded`] while it retries a failed delivery, while
-    /// messages wait in the spool, and while any sits in quarantine;
-    /// [`Observed::Unknown`] before anything was sent; and [`Observed::Up`]
-    /// otherwise.
-    #[must_use]
-    pub fn of_audit(status: &Status) -> Self {
-        if !status.reachable || status.depth.messages > 0 {
-            Self::Degraded
-        } else if status.delivered == 0 {
-            Self::Unknown
-        } else {
-            Self::Up
         }
     }
 
@@ -206,11 +185,9 @@ pub struct Dependencies {
     localizer: Option<AtomicU8>,
     /// The demographics service's slot, when one is configured.
     demographics: Option<AtomicU8>,
-    /// The recorder of the audit repository, when one is configured.
-    audit_repository: Option<Arc<RepositoryAudit>>,
-    /// The recorder of the FHIR Feed audit repository, when one is
-    /// configured.
-    audit_feed: Option<Arc<FeedAudit>>,
+    /// What the bindings record through, such as an audit repository, read
+    /// live at each report.
+    indicators: Vec<Arc<dyn Indicator>>,
 }
 
 impl Dependencies {
@@ -227,24 +204,15 @@ impl Dependencies {
             consent: None,
             localizer: None,
             demographics: None,
-            audit_repository: None,
-            audit_feed: None,
+            indicators: Vec::new(),
         }
     }
 
-    /// Returns this record with the FHIR Feed audit repository `recorder`
-    /// sends to, when one is configured.
+    /// Returns this record reading `indicators` at each report, the
+    /// indications of what the bindings record through.
     #[must_use]
-    pub fn with_audit_feed(mut self, recorder: Option<Arc<FeedAudit>>) -> Self {
-        self.audit_feed = recorder;
-        self
-    }
-
-    /// Returns this record with the audit repository `recorder` sends to,
-    /// when one is configured.
-    #[must_use]
-    pub fn with_audit_repository(mut self, recorder: Option<Arc<RepositoryAudit>>) -> Self {
-        self.audit_repository = recorder;
+    pub fn with_indicators(mut self, indicators: Vec<Arc<dyn Indicator>>) -> Self {
+        self.indicators = indicators;
         self
     }
 
@@ -351,18 +319,11 @@ impl Dependencies {
                 .demographics
                 .as_ref()
                 .map(|slot| Observed::from_code(slot.load(Ordering::Relaxed))),
-            directory: None,
-            identity_registry: None,
-            identity_registry_fault: None,
-            directory_fault: None,
-            audit_repository: self
-                .audit_repository
-                .as_ref()
-                .map(|recorder| Observed::of_audit(&recorder.status())),
-            audit_feed: self
-                .audit_feed
-                .as_ref()
-                .map(|recorder| Observed::of_audit(&recorder.status())),
+            bindings: self
+                .indicators
+                .iter()
+                .flat_map(|indicator| indicator.indicate())
+                .collect(),
         }
     }
 }
@@ -387,41 +348,24 @@ pub struct Report {
     /// identity, absent when none is configured (`[pdqm]`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub demographics: Option<Observed>,
-    /// The state of the care services directory the registry is read from,
-    /// absent when the registry is a document: `up` after an answer the
-    /// gateway accepted, `degraded` after an answer whose change it refused,
-    /// `failing` after an HTTP error or an answer that breaks ITI-90 or
-    /// ITI-91, and `down` when it did not answer.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub directory: Option<Observed>,
-    /// The state of the PMIR Patient Identity Registry the identity feed
-    /// subscribes at, absent without `[pmir]`: `up` while it holds the
-    /// subscription `requested` or `active`, `failing` after a refusal, an
-    /// answer that breaks ITI-94, or a subscription in `error` or `off`, and
-    /// `down` when it did not answer.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub identity_registry: Option<Observed>,
-    /// Why the PMIR Patient Identity Registry is not up: `unreachable`,
-    /// `refused`, `malformed`, `unmanageable` after a create the gateway
-    /// cannot locate, or `audit-failed` when an exchange's audit record could
-    /// not be stored; absent while it is up, not yet asked, or not configured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub identity_registry_fault: Option<RegistryFault>,
-    /// Why the care services directory's last answer was not accepted:
-    /// `registry-invalid` or `configuration-mismatch` while it is `degraded`,
-    /// and `refused-credentials` while it is `failing` after a `401` or a
-    /// `403`; absent otherwise.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub directory_fault: Option<DirectoryFault>,
-    /// The audit repository's state, absent when no audit message goes to
-    /// one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub audit_repository: Option<Observed>,
-    /// The state of the audit repository the PIXm, PDQm, mCSD and PMIR audit
-    /// records are posted to over the FHIR Feed, absent when none goes to
-    /// one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub audit_feed: Option<Observed>,
+    /// What each binding indicates of the services it runs or records
+    /// through, by key, each absent when the binding configures none.
+    ///
+    /// The IHE binding indicates `directory`, the care services directory the
+    /// registry is read from (`up` after an answer the gateway accepted,
+    /// `degraded` after an answer whose change it refused, `failing` after an
+    /// HTTP error or an answer that breaks ITI-90 or ITI-91, `down` when it
+    /// did not answer), with `directory_fault` (`registry-invalid`,
+    /// `configuration-mismatch` or `refused-credentials`); `identity_registry`,
+    /// the PMIR Patient Identity Registry (`up` while it holds the
+    /// subscription, `failing` after a refusal, a broken answer or a
+    /// subscription in `error` or `off`, `down` when it did not answer), with
+    /// `identity_registry_fault` (`unreachable`, `refused`, `malformed`,
+    /// `unmanageable` or `audit-failed`); `audit_repository`, the ATNA
+    /// repository the ITI-55 audit messages go to; and `audit_feed`, the
+    /// repository the PIXm, PDQm, mCSD and PMIR records are posted to.
+    #[serde(flatten)]
+    pub bindings: BTreeMap<&'static str, Indication>,
 }
 
 #[cfg(test)]

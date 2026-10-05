@@ -11,7 +11,6 @@ use std::num::NonZeroU32;
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::dev::Profile;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
@@ -21,17 +20,14 @@ use openehr_federation::id::FederationId;
 use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::grant::GrantFault;
-use crate::config::mcsd::McsdDirectory;
 use crate::config::secrets::{resolve_credentials, resolve_signing};
 use crate::config::settings::{
-    DirectorySettings, FederationSettings, LocalizationSettings, MetricsSettings,
-    PixManagerSettings, PixmSettings, Scheme, ServerSettings, Settings, SigningSettings,
-    TelemetrySettings,
+    FederationSettings, LocalizationSettings, MetricsSettings, Scheme, ServerSettings, Settings,
+    SigningSettings, TelemetrySettings,
 };
-use crate::config::transport::{self, directory_site};
 use crate::config::{
     COMBINING_MARGIN_MS, Config, Federation, Localization, Metrics, NodeSelection, OffsetPaging,
-    Pixm, Telemetry, stored_queries,
+    Telemetry, stored_queries,
 };
 use crate::telemetry::SampleRatio;
 
@@ -112,28 +108,6 @@ impl Config {
         let signing = self.signing.as_ref().map(resolve_signing).transpose()?;
         signed_grants(signing.as_ref(), &credentials)?;
         let federation = self.resolve_federation(request_timeout)?;
-        let pixm = self
-            .pixm
-            .as_ref()
-            .map(|pixm| resolve_pixm(pixm, self.profile))
-            .transpose()?;
-        let xcpd = crate::config::xcpd::resolve(self)?;
-        let nl_gf = crate::config::nl_gf::resolve(self)?;
-        let pmir = crate::config::pmir::resolve(self)?;
-        let audit = crate::config::audit::resolve(self)?;
-        if self.registry.document.is_some() && self.registry.mcsd.is_some() {
-            return Err(Error::TwoRegistrySources);
-        }
-        let registry_directory = self
-            .registry
-            .mcsd
-            .as_ref()
-            .map(|directory| resolve_directory(directory, self.profile))
-            .transpose()?;
-        let registry_directory = registry_directory.map(|mut directory| {
-            directory.audit = audit.clone();
-            directory
-        });
         let stored_queries = stored_queries::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen)?;
         // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is a facility
@@ -147,7 +121,7 @@ impl Config {
                 Some(_) => {}
             }
         }
-        Ok(Settings {
+        let mut settings = Settings {
             profile: self.profile,
             server: ServerSettings {
                 listen,
@@ -160,20 +134,31 @@ impl Config {
             telemetry,
             registry_document: self.registry.document.clone(),
             registry_format: self.registry.format,
-            registry_directory,
+            #[cfg(feature = "binding-ihe")]
+            registry_directory: None,
             federation,
             credentials,
-            dev: self.dev.clone(),
-            pixm,
-            xcpd,
-            nl_gf,
-            pmir,
-            pdqm: crate::config::pdqm::resolve(self)?,
+            dev: None,
+            #[cfg(feature = "binding-ihe")]
+            pixm: None,
+            #[cfg(feature = "binding-ihe")]
+            xcpd: None,
+            #[cfg(feature = "binding-nl")]
+            nl_gf: None,
+            #[cfg(feature = "binding-ihe")]
+            pmir: None,
+            #[cfg(feature = "binding-ihe")]
+            pdqm: None,
             stored_queries,
             metrics,
             signing,
-            audit,
-        })
+            #[cfg(feature = "binding-ihe")]
+            audit: crate::binding::ihe::audit::config::AuditSettings::default(),
+        };
+        for binding in crate::binding::compiled() {
+            binding.resolve(self, &mut settings)?;
+        }
+        Ok(settings)
     }
 
     /// Resolves `[federation]`: both budgets positive (§11.5), and the overall
@@ -304,133 +289,6 @@ fn signed_grants(
     Ok(())
 }
 
-/// Resolves `[pixm]`: every Manager URL parses, carries no userinfo and is
-/// `https` outside the development `profile`, and every secret is read.
-fn resolve_pixm(pixm: &Pixm, profile: Profile) -> Result<PixmSettings, Error> {
-    let mut managers = Vec::with_capacity(pixm.manager.len());
-    for (index, manager) in pixm.manager.iter().enumerate() {
-        let key = format!("pixm.manager[{index}]");
-        let url = url::Url::parse(manager.url.expose()).map_err(|source| Error::Url {
-            key: format!("{key}.url"),
-            source,
-        })?;
-        // NOTE: no specification governs this: our own design; as the registry
-        // refuses it on an endpoint URL, a credential goes in its own section.
-        if !url.username().is_empty() || url.password().is_some() {
-            return Err(Error::UrlCredentials {
-                key: format!("{key}.url"),
-                section: format!("{key}.credentials"),
-            });
-        }
-        let section = format!("{key}.credentials");
-        let credentials = manager
-            .credentials
-            .as_ref()
-            .map(|credentials| resolve_credentials(&section, credentials))
-            .transpose()?;
-        if matches!(
-            credentials,
-            Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
-        ) {
-            return Err(Error::GrantNotHere { section });
-        }
-        // NOTE: no specification governs this: our own design; the Manager is sent
-        // patient identifiers, held to https at load as the XCPD and NVI tables are.
-        let carried = credentials.is_some().then_some(section.as_str());
-        transport::protected_payload(
-            profile,
-            manager.url.expose(),
-            transport::identity_site(&key, carried),
-        )?;
-        let tls = crate::config::tls::resolve(
-            &key,
-            manager.client_identity.as_ref(),
-            manager.client_identity_file.as_deref(),
-            manager.trust_roots_file.as_ref(),
-        )?;
-        managers.push(PixManagerSettings {
-            url: manager.url.clone(),
-            members: manager.members.clone(),
-            credentials,
-            tls,
-            method: manager.method,
-        });
-    }
-    Ok(PixmSettings {
-        managers,
-        namespaces: pixm.namespaces.clone(),
-    })
-}
-
-/// Resolves `[registry.mcsd]`: an `http` or `https` base URL with no user name
-/// or password, a bearer token or basic credentials, and a positive interval,
-/// deadline and caps.
-fn resolve_directory(
-    directory: &McsdDirectory,
-    profile: Profile,
-) -> Result<DirectorySettings, Error> {
-    let key = "registry.mcsd.url";
-    if directory.url.is_empty() {
-        return Err(Error::Missing {
-            key: key.to_owned(),
-        });
-    }
-    let url = url::Url::parse(directory.url.expose()).map_err(|source| Error::Url {
-        key: key.to_owned(),
-        source,
-    })?;
-    // NOTE: no specification governs this: our own design; as on a PIX Manager
-    // URL, a credential goes in its own section and never in the URL.
-    if !matches!(url.scheme(), "http" | "https")
-        || !url.username().is_empty()
-        || url.password().is_some()
-    {
-        return Err(Error::HttpUrl {
-            key: key.to_owned(),
-        });
-    }
-    let section = String::from("registry.mcsd.credentials");
-    let credentials = directory
-        .credentials
-        .as_ref()
-        .map(|credentials| resolve_credentials(&section, credentials))
-        .transpose()?;
-    if matches!(
-        credentials,
-        Some(Scheme::OAuth2(_) | Scheme::Nuts(_) | Scheme::Fapi2(_))
-    ) {
-        return Err(Error::GrantNotHere { section });
-    }
-    // NOTE: no specification governs this: our own design; the credential is
-    // held to https before anything is sent, and transport::check reports it.
-    if credentials.is_some() {
-        transport::protected_payload(profile, directory.url.expose(), directory_site())?;
-    }
-    let refresh_interval = Duration::from_secs(directory.refresh_interval_s);
-    if refresh_interval.is_zero() {
-        return Err(Error::Zero {
-            key: String::from("registry.mcsd.refresh_interval_s"),
-        });
-    }
-    let tls = crate::config::tls::resolve(
-        "registry.mcsd",
-        directory.client_identity.as_ref(),
-        directory.client_identity_file.as_deref(),
-        directory.trust_roots_file.as_ref(),
-    )?;
-    Ok(DirectorySettings {
-        url: directory.url.clone(),
-        credentials,
-        tls,
-        refresh_interval,
-        deadline: positive_ms("registry.mcsd.deadline_ms", directory.deadline_ms)?,
-        max_pages: positive("registry.mcsd.max_pages", directory.max_pages)?,
-        max_bytes: positive("registry.mcsd.max_bytes", directory.max_bytes)?,
-        max_entries: positive("registry.mcsd.max_entries", directory.max_entries)?,
-        audit: crate::config::audit::AuditSettings::default(),
-    })
-}
-
 /// Resolves `[metrics]`: the listener on a loopback address unless
 /// `allow_remote` is set and never on `server`, the gateway's own address,
 /// and the OTLP collector an `http://` URL.
@@ -500,7 +358,8 @@ fn otlp_collector(key: &str, endpoint: Option<&SecretUrl>) -> Result<Option<Secr
 }
 
 /// Returns `count`, refusing zero under `key`.
-fn positive(key: &str, count: usize) -> Result<usize, Error> {
+#[cfg(feature = "binding-ihe")]
+pub(crate) fn positive(key: &str, count: usize) -> Result<usize, Error> {
     if count == 0 {
         return Err(Error::Zero {
             key: key.to_owned(),
@@ -510,7 +369,7 @@ fn positive(key: &str, count: usize) -> Result<usize, Error> {
 }
 
 /// Returns the duration `millis` names, refusing zero under `key`.
-fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
+pub(crate) fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
     if millis == 0 {
         return Err(Error::Zero {
             key: key.to_owned(),
@@ -523,7 +382,8 @@ fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
 /// `[federation.localization]` budget when the section is written, its
 /// default under `node_selection = "localized"` without it, and zero with no
 /// localizer, as `resolve_federation` resolves it.
-pub(super) fn localization_budget_ms(config: &Config) -> u64 {
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
+pub(crate) fn localization_budget_ms(config: &Config) -> u64 {
     match (
         &config.federation.localization,
         config.federation.node_selection,

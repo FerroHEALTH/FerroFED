@@ -14,18 +14,20 @@ use crate::config::settings::Settings;
 
 use super::error::FederationError;
 
-/// Reads and checks the registry document or the care services directory
-/// `settings` name, blocking the caller, or returns `None` for neither.
+/// Reads and checks the registry document, or the registry from the binding
+/// that is its source, `settings` name, blocking the caller, or returns
+/// `None` for neither.
 ///
 /// The read fails with [`FederationError::Registry`] or
 /// [`FederationError::FhirRegistry`] for a document that cannot be read or
-/// refuses to load, and with [`FederationError::Directory`] for a directory
+/// refuses to load, and with the binding's error, such as
+/// [`FederationError::Directory`] for a care services directory, for a source
 /// that cannot be read or holds no valid registry; [`Federation::load_read`](super::Federation::load_read)
 /// stops on that error.
 #[must_use]
 pub fn read_registry(settings: &Settings) -> Option<Result<RegistrySnapshot, FederationError>> {
-    if let Some(directory) = &settings.registry_directory {
-        return Some(crate::directory::read(directory));
+    if let Some(read) = crate::binding::read_registry(settings) {
+        return Some(read);
     }
     let path = settings.registry_document.as_deref()?;
     Some(read_document(path, settings.registry_format))

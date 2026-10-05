@@ -15,6 +15,9 @@
 //! spool, and the metrics read their depth. No specification governs the
 //! process model: our own design.
 
+pub mod config;
+pub mod repository;
+
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
@@ -25,10 +28,54 @@ use ihe_iti::atna::repository::{Repository, RepositoryError, TlsSettings};
 use ihe_iti::atna::spool::{Content, Spool, SpoolError};
 use ihe_iti::balp::AuditRecorder;
 
-use crate::config::audit::{AuditSettings, FeedRepositorySettings};
-use crate::config::audit_repository::AuditRepositorySettings;
-use crate::config::xcpd::AuditDestination;
+use crate::binding::ihe::audit::config::{AuditSettings, FeedRepositorySettings};
+use crate::binding::ihe::audit::repository::AuditRepositorySettings;
+use crate::binding::ihe::xcpd::AuditDestination;
+use crate::binding::{Indication, Indicator};
+use crate::health::dependencies::Observed;
 use crate::service::{self, TlsRefused};
+
+/// Returns what an audit forwarder's `status` says of its repository.
+///
+/// It is [`Observed::Degraded`] while the forwarder retries a failed
+/// delivery, while messages wait in the spool, and while any sits in
+/// quarantine; [`Observed::Unknown`] before anything was sent; and
+/// [`Observed::Up`] otherwise.
+#[must_use]
+pub fn observed(status: &Status) -> Observed {
+    if !status.reachable || status.depth.messages > 0 {
+        Observed::Degraded
+    } else if status.delivered == 0 {
+        Observed::Unknown
+    } else {
+        Observed::Up
+    }
+}
+
+/// The ITI-20 syslog trail of the XCPD localizer, indicated as
+/// `audit_repository`.
+#[derive(Debug)]
+pub struct RepositoryTrail(pub Arc<RepositoryAudit>);
+
+impl Indicator for RepositoryTrail {
+    fn indicate(&self) -> Vec<(&'static str, Indication)> {
+        vec![(
+            "audit_repository",
+            Indication::State(observed(&self.0.status())),
+        )]
+    }
+}
+
+/// The FHIR Feed trail of the PIXm, PDQm, mCSD and PMIR audit records,
+/// indicated as `audit_feed`.
+#[derive(Debug)]
+pub struct FeedTrail(pub Arc<FeedAudit>);
+
+impl Indicator for FeedTrail {
+    fn indicate(&self) -> Vec<(&'static str, Indication)> {
+        vec![("audit_feed", Indication::State(observed(&self.0.status())))]
+    }
+}
 
 /// Every trail the process started, by its spool.
 static TRAILS: LazyLock<Mutex<BTreeMap<String, Trail>>> =
