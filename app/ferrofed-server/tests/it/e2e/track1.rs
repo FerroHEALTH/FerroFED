@@ -7,24 +7,28 @@
 //! is the same however the nodes responded (§16.3 track 1; N1, N2, N17, N18;
 //! CP-1, CP-2, CP-35).
 
+//!
+//! The client-visible checks are the conformance run's own
+//! ([`ferrofed_server::conformance::scenarios::track1`]); this suite adds
+//! what only the nodes' capturing proxies and a delay injected at one can
+//! show.
+
+use std::error::Error;
 use std::time::Duration;
 
-use axum::body::Body;
+use ferrofed_server::conformance::scenarios::track1;
 use ferrofed_testkit::containers;
 use ferrofed_testkit::proxy::Fault;
-use http::{Request, StatusCode};
+use http::StatusCode;
 
 use crate::e2e::scenario::{
-    Options, exchange, gateway_with, patient_predicate, post_aql, queries, seed_both,
+    Options, exchange, fixture, gateway_with, in_process, post_aql, queries, seed_both,
 };
 use crate::e2e::{EHR_A, EHR_B, TestResult, assert_no_patient_identifier_on_the_wire};
 
 /// The plain patient query a client sends, its one column aliased.
-fn plain_query() -> String {
-    format!(
-        "SELECT c/uid/value AS composition_uid FROM EHR e CONTAINS COMPOSITION c WHERE {}",
-        patient_predicate()
-    )
+fn plain_query() -> Result<String, Box<dyn Error>> {
+    Ok(track1::plain_query(&fixture(Some(1), Some(1))?))
 }
 
 // conformance: CP-1 CP-2 CP-35 track-1
@@ -38,58 +42,11 @@ async fn an_unmodified_client_gets_one_single_cdr_shaped_result_set() -> TestRes
     let dir = tempfile::tempdir()?;
     let app = gateway_with(dir.path(), &nodes, &Options::default())?;
 
-    let posted = exchange(&app, post_aql(&plain_query(), &[])?).await?;
-    assert_eq!(StatusCode::OK, posted.status, "CP-1: {}", posted.text);
-    let answer = posted.federated()?;
-    assert_eq!(
-        vec!["composition_uid"],
-        answer.names(),
-        "CP-35: the client's columns and no endpoint column it did not select"
-    );
-    assert_eq!(
-        2,
-        answer.rows.len(),
-        "one composition per node: {}",
-        posted.text
-    );
-    assert!(
-        answer
-            .rows
-            .iter()
-            .all(|row| row.len() == answer.columns.len()),
-        "CP-35: every row an ordered array matching columns[]"
-    );
-    assert!(
-        answer.meta.complete.is_none() && answer.meta.endpoints.is_none(),
-        "CP-35: no flat meta.complete or meta.endpoints"
-    );
-    for prefixed in ["\"_complete\"", "\"_endpoints\"", "\"_federation\""] {
-        assert!(
-            !posted.text.contains(prefixed),
-            "CP-35: no prefixed {prefixed} member"
-        );
-    }
+    let answer = track1::single_cdr_shaped(&in_process(&app), &fixture(Some(1), Some(1))?).await?;
     assert_eq!(
         vec![("node-a-pub", "active"), ("node-b-pub", "active")],
         answer.statuses(),
         "CP-35: the additions nested under meta.federation"
-    );
-    for endpoint in ["node-a-pub", "node-b-pub"] {
-        assert_eq!(
-            Some(1),
-            answer.endpoint(endpoint)?.row_count,
-            "N16: each endpoint's row count"
-        );
-    }
-
-    let encoded = crate::query_get::encoded(&plain_query());
-    let get = Request::get(format!("/v1/query/aql?q={encoded}")).body(Body::empty())?;
-    let fetched = exchange(&app, get).await?;
-    assert_eq!(StatusCode::OK, fetched.status, "CP-1: {}", fetched.text);
-    assert_eq!(
-        answer.sorted_rows(),
-        fetched.federated()?.sorted_rows(),
-        "CP-1: the ITS-REST GET form answers as the POST form does"
     );
 
     for (node, own, other) in [(&nodes.a, EHR_A, EHR_B), (&nodes.b, EHR_B, EHR_A)] {
@@ -122,10 +79,10 @@ async fn the_columns_are_the_same_whichever_node_answers_first() -> TestResult {
     let hold = Fault::Delay(Duration::from_millis(1_500));
 
     nodes.a.proxy.set_fault(hold);
-    let b_first = exchange(&app, post_aql(&plain_query(), &[])?).await?;
+    let b_first = exchange(&app, post_aql(&plain_query()?, &[])?).await?;
     nodes.a.proxy.clear_fault();
     nodes.b.proxy.set_fault(hold);
-    let a_first = exchange(&app, post_aql(&plain_query(), &[])?).await?;
+    let a_first = exchange(&app, post_aql(&plain_query()?, &[])?).await?;
     nodes.b.proxy.clear_fault();
 
     assert_eq!(StatusCode::OK, b_first.status, "{}", b_first.text);

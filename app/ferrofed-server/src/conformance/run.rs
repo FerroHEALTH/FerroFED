@@ -1,0 +1,278 @@
+// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! One conformance run, from the configuration to the written report.
+//!
+//! Without a gateway URL the run starts the gateway in-process from the
+//! configuration, as `serve` builds it, on a loopback port of its own, and
+//! drives it over HTTP like any client; the report is then of exactly the
+//! configuration given, and nothing else need be running. With one, it
+//! drives the gateway already serving there and reads the configuration for
+//! the registry, the node clients it seeds through and the cross-reference.
+//! Either way the scenarios reach the gateway by its base URL alone (§16.3
+//! track 9, N28). No specification governs the run: our own design.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use ferrofed_registry::id::EndpointId;
+use secrecy::SecretString;
+use tokio::net::TcpListener;
+use url::Url;
+use uuid::Uuid;
+
+use crate::admission::{self, AdmissionError, DEFAULT_COUNT};
+use crate::config::settings::Settings;
+use crate::conformance::catalogue::CATALOGUE;
+use crate::conformance::client::{GatewayError, HttpGateway};
+use crate::conformance::execute::{Context, execute};
+use crate::conformance::fixture::{SeedData, SeedDataError, SyntheticPatient};
+use crate::conformance::report::{Finding, Report};
+use crate::conformance::seed::{self, SeedError, Written};
+use crate::federation::Federation;
+use crate::federation::error::FederationError;
+use crate::state::{self, AppState, StateError};
+
+/// What a run is asked to do, past the safety refusals.
+#[derive(Debug)]
+pub struct RunOptions {
+    /// The gateway already serving, or `None` to start one in-process.
+    pub gateway: Option<Url>,
+    /// The caller's bearer token the gateway admits.
+    pub token: SecretString,
+    /// The synthetic patient the run seeds and queries.
+    pub patient: SyntheticPatient,
+    /// The directory of the vendored synthetic content the run writes.
+    pub seed_data: PathBuf,
+    /// The directory the report is written to.
+    pub out: PathBuf,
+    /// Whether to run the admission check against every active member and
+    /// record its findings as the node profile.
+    pub node_profile: bool,
+}
+
+/// What a run produced.
+#[derive(Debug)]
+pub struct Summary {
+    /// The base URL the gateway was reached at.
+    pub base: Url,
+    /// The report.
+    pub report: Report,
+    /// The files written.
+    pub paths: Vec<PathBuf>,
+}
+
+/// A run that could not reach its report.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum RunError {
+    /// The seed data is not the vendored synthetic content.
+    #[error(transparent)]
+    SeedData(#[from] SeedDataError),
+    /// The configuration names no registry, so there is nothing to score.
+    #[error("set a registry, registry.document or [registry.mcsd], whose members the run scores")]
+    NoRegistry,
+    /// The federation could not be loaded.
+    #[error("the federation could not be loaded")]
+    Federation(#[source] FederationError),
+    /// The in-process gateway could not be built.
+    #[error("the gateway could not be built")]
+    State(#[source] StateError),
+    /// The in-process gateway could not be bound or served.
+    #[error("the in-process gateway could not be served")]
+    Serve(#[source] std::io::Error),
+    /// The gateway's address is no base URL.
+    #[error("the in-process gateway's address is no base URL")]
+    Base(#[source] url::ParseError),
+    /// A credential or a patient identifier would travel in cleartext outside
+    /// the development profile.
+    #[error("a credential or a patient identifier would travel in cleartext")]
+    Cleartext(#[source] crate::config::transport::CleartextError),
+    /// The gateway client could not be built.
+    #[error(transparent)]
+    Gateway(#[from] GatewayError),
+    /// A write to a node failed.
+    #[error("the synthetic fixture could not be seeded")]
+    Seed(#[source] SeedError),
+    /// The report could not be written.
+    #[error("the report could not be written")]
+    Write(#[source] std::io::Error),
+}
+
+/// Runs the conformance scenarios against the deployment `settings`
+/// configure, and writes the report.
+///
+/// # Errors
+///
+/// Returns [`RunError`] when the run cannot reach a report: the seed data
+/// is not the vendored content, no registry is configured, the gateway or
+/// its client cannot be built, a node refuses a seed write, or the report
+/// cannot be written. A scenario that fails is in the report, never an
+/// error.
+pub async fn run(settings: &Settings, options: RunOptions) -> Result<Summary, RunError> {
+    let data = SeedData::read(&options.seed_data)?;
+    let (federation, base, served) = if let Some(base) = &options.gateway {
+        let federation = Federation::load(settings)
+            .map_err(RunError::Federation)?
+            .ok_or(RunError::NoRegistry)?;
+        (Arc::new(federation), base.clone(), None)
+    } else {
+        let (federation, base, served) = in_process(settings).await?;
+        (federation, base, Some(served))
+    };
+    crate::config::transport::check_and_print(settings, Some(federation.snapshot()))
+        .map_err(RunError::Cleartext)?;
+    let gateway = HttpGateway::new(base.clone(), options.token)?;
+    let seeded = seed::seed(&federation, &options.patient, &data)
+        .await
+        .map_err(RunError::Seed)?;
+    let mut written = seeded.written;
+    let token: String = Uuid::new_v4()
+        .simple()
+        .to_string()
+        .chars()
+        .take(8)
+        .collect();
+    let context = Context {
+        fixture: &seeded.fixture,
+        seed: &data,
+        run: &token,
+    };
+    let mut outcomes = Vec::with_capacity(CATALOGUE.len());
+    for entry in CATALOGUE {
+        let outcome = execute(&gateway, &context, entry, &mut written).await;
+        outcomes.push((entry, outcome));
+    }
+    let findings = if options.node_profile {
+        node_profile(&federation, &mut written).await
+    } else {
+        Vec::new()
+    };
+    let report = Report::new(
+        &outcomes,
+        findings,
+        written,
+        format!("the gateway at {base}"),
+    );
+    let paths = report.write(&options.out).map_err(RunError::Write)?;
+    if let Some((stop, serving)) = served {
+        drop(stop);
+        match serving.await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => return Err(RunError::Serve(error)),
+            Err(joined) => return Err(RunError::Serve(std::io::Error::other(joined))),
+        }
+    }
+    Ok(Summary {
+        base,
+        report,
+        paths,
+    })
+}
+
+/// The handle that stops the in-process gateway, and its serving task.
+type Served = (
+    tokio::sync::oneshot::Sender<()>,
+    tokio::task::JoinHandle<std::io::Result<()>>,
+);
+
+/// Starts the gateway `settings` configure on a loopback port of its own,
+/// and returns its federation, its base URL and the handle that stops it.
+async fn in_process(settings: &Settings) -> Result<(Arc<Federation>, Url, Served), RunError> {
+    state::admits_callers(settings, settings.federates()).map_err(RunError::State)?;
+    let state = Arc::new(AppState::build(settings).map_err(RunError::State)?);
+    let federation = state.federation().ok_or(RunError::NoRegistry)?;
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .map_err(RunError::Serve)?;
+    let address = listener.local_addr().map_err(RunError::Serve)?;
+    let base_path = if settings.server.base_path.is_root() {
+        ""
+    } else {
+        settings.server.base_path.as_str()
+    };
+    let base = Url::parse(&format!("http://{address}{base_path}/")).map_err(RunError::Base)?;
+    let app = crate::router(state, &settings.server);
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let serving = tokio::spawn(crate::serve_until(
+        listener,
+        app,
+        settings.server.shutdown_timeout,
+        async {
+            // NOTE: no specification governs this: our own design; a dropped
+            // sender ends the wait as a sent signal does.
+            let _signalled = stopped.await;
+        },
+    ));
+    Ok((federation, base, (stop, serving)))
+}
+
+/// The admission check of every active member, as node profile findings,
+/// with the test EHRs each check created recorded in `written` (§12b.1,
+/// §16.2; CP-27, CP-33a).
+async fn node_profile(federation: &Federation, written: &mut Vec<Written>) -> Vec<Finding> {
+    let snapshot = federation.snapshot();
+    let mut findings = Vec::new();
+    let active: Vec<EndpointId> = snapshot
+        .nodes()
+        .filter_map(|node| snapshot.asked_through(node.id()))
+        .map(|endpoint| endpoint.id().clone())
+        .collect();
+    for endpoint in active {
+        let product = snapshot
+            .endpoint(&endpoint)
+            .and_then(|declared| snapshot.node(declared.node()))
+            .map_or_else(
+                || endpoint.as_str().to_owned(),
+                |node| match (node.product(), node.version()) {
+                    (Some(product), Some(version)) => format!("{product} {version}"),
+                    (Some(product), None) => product.to_owned(),
+                    _ => format!("node {}", node.id()),
+                },
+            );
+        match admission::check(federation, &endpoint, DEFAULT_COUNT).await {
+            Ok(report) => {
+                for ehr_id in report.created() {
+                    written.push(Written {
+                        endpoint: endpoint.as_str().to_owned(),
+                        what: format!("EHR {ehr_id} (the admission check's synthetic subject)"),
+                    });
+                }
+                for finding in report.findings() {
+                    let condition = finding.condition();
+                    let points: &[&str] = match condition {
+                        admission::report::Condition::EhrIdExchange => &["CP-27", "CP-33a"],
+                        _ => &["CP-33a"],
+                    };
+                    let verdict = match finding.verdict() {
+                        admission::report::Verdict::Pass => "pass",
+                        admission::report::Verdict::Fail => "fail",
+                        admission::report::Verdict::CannotCheck => "not-observable",
+                    };
+                    for point in points {
+                        findings.push(Finding {
+                            product: product.clone(),
+                            point: (*point).to_owned(),
+                            check: condition.name().to_owned(),
+                            verdict: verdict.to_owned(),
+                            evidence: finding.evidence().join("; "),
+                        });
+                    }
+                }
+            }
+            Err(error) => findings.push(unchecked(&product, &error)),
+        }
+    }
+    findings
+}
+
+/// The finding of an admission check that could not start.
+fn unchecked(product: &str, error: &AdmissionError) -> Finding {
+    Finding {
+        product: product.to_owned(),
+        point: "CP-33a".to_owned(),
+        check: "the admission check".to_owned(),
+        verdict: "not-observable".to_owned(),
+        evidence: format!("the check could not start: {}", crate::chain(error)),
+    }
+}

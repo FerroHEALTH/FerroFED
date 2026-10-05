@@ -13,9 +13,12 @@
 //! A FerroEHR node of the harness runs with its own authentication off and
 //! holds no consent policy, so a node's consent refusal is the ITS-REST
 //! `Error` node B's capturing proxy answers in its place. CP-18 and CP-19
-//! are Node obligations, scored against the member CDRs (§16.2).
+//! are Node obligations, scored against the member CDRs (§16.2). The
+//! refusal of an unauthenticated caller is the conformance run's own check
+//! ([`ferrofed_server::conformance::scenarios::track7`]).
 
 use ferrofed_engine::onward::conveyance;
+use ferrofed_server::conformance::scenarios::track7;
 use ferrofed_testkit::containers::{self, TwoNodes};
 use ferrofed_testkit::oauth::{TokenEndpoint, Verdict};
 use ferrofed_testkit::proxy::Fault;
@@ -24,8 +27,9 @@ use http::{Request, StatusCode, header};
 
 use crate::conveyance::{CALLER, published, verified_from};
 use crate::e2e::scenario::{
-    Options, Reply, asked, captured_field, clear, dev_rows, development, exchange, gateway_with,
-    nobody_asked, patient_compositions, patient_predicate, post_aql, queries, seed_both,
+    Options, Reply, asked, captured_field, clear, dev_rows, development, exchange, fixture,
+    gateway_with, in_process, nobody_asked, patient_compositions, patient_predicate, post_aql,
+    queries, seed_both,
 };
 use crate::e2e::{EHR_A, EHR_B, PATIENT, TestResult};
 use crate::support::CLIENT_TOKEN;
@@ -158,13 +162,7 @@ async fn a_caller_that_does_not_authenticate_reaches_no_node() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway_with(dir.path(), &nodes, &Options::default())?;
 
-    let anonymous = post_aql(&patient_compositions(), &[])?;
-    let response = crate::support::send_as_is(app, anonymous).await?;
-    assert_eq!(
-        StatusCode::UNAUTHORIZED,
-        response.status(),
-        "CP-17: the client authenticates to the gateway"
-    );
+    track7::unauthenticated(&in_process(&app), &fixture(Some(1), Some(1))?).await?;
     nobody_asked(&nodes, "CP-17: an unauthenticated request reaches no node");
     Ok(())
 }

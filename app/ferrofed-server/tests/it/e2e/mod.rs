@@ -30,6 +30,10 @@
 //! write applied, and a write no earlier step routes refused unprobed
 //! (§12.5, N41, N42), in [`track11`].
 //!
+//! `ferrofed conformance run` scores the two nodes as a configured
+//! deployment, and its report reads what the harness scores and nothing
+//! more, in [`conformance_run`].
+//!
 //! The admission check creates its test EHRs on node A and reads each back,
 //! with only synthetic subjects on the wire (§12b.1, §12b.2, N42a), in
 //! [`admission`].
@@ -64,6 +68,7 @@ mod admission;
 mod aggregate;
 mod attributes;
 mod commit;
+mod conformance_run;
 mod crossref;
 mod differential;
 mod pixm;
@@ -308,14 +313,8 @@ pub(crate) fn assert_no_patient_identifier_on_the_wire(nodes: &containers::TwoNo
 /// check commits.
 pub(crate) fn composition_carrying(patient: PatientId) -> Result<String, Box<dyn Error>> {
     let vendored = std::fs::read_to_string(DemoComposition::FirstHospital.path())?;
-    let composer = "\"name\": \"Dr. Mark Antonio\"";
-    if !vendored.contains(composer) {
-        return Err("the vendored composition names its composer".into());
-    }
-    let identifier = format!(
-        "{composer},\n  \"identifiers\": [{{\"_type\": \"DV_IDENTIFIER\", \"issuer\": \"{ns}\", \"assigner\": \"{ns}\", \"id\": \"{id}\", \"type\": \"MR\"}}]",
-        ns = patient.namespace(),
-        id = patient.value()
-    );
-    Ok(vendored.replacen(composer, &identifier, 1))
+    Ok(ferrofed_server::conformance::fixture::composition_carrying(
+        &vendored,
+        &scenario::synthetic(patient)?,
+    )?)
 }

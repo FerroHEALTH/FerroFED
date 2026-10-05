@@ -9,10 +9,13 @@
 //! carve-outs of §11.3 answer `200` (§11, §16.3 track 4; N6, N16, N37, N38,
 //! N40; CP-11, CP-12, CP-30, CP-31).
 //!
-//! The members the localizer did not name are scored in `e2e::track3`.
+//! The members the localizer did not name are scored in `e2e::track3`. The
+//! found-nowhere checks are the conformance run's own
+//! ([`ferrofed_server::conformance::scenarios::track4`]).
 
 use std::time::Duration;
 
+use ferrofed_server::conformance::scenarios::track4;
 use ferrofed_testkit::containers::{self, TwoNodes};
 use ferrofed_testkit::proxy::Fault;
 use ferrofed_testkit::seed::PatientId;
@@ -20,8 +23,8 @@ use http::StatusCode;
 use openehr_federation::headers::{COMPLETENESS, COMPLETENESS_PARTIAL};
 
 use crate::e2e::scenario::{
-    Options, Reply, asked, dev_rows, development, exchange, gateway_with, nobody_asked,
-    patient_compositions, post_aql, seed_both,
+    Options, Reply, asked, dev_rows, development, exchange, fixture, gateway_with, in_process,
+    nobody_asked, patient_compositions, post_aql, seed_both, synthetic,
 };
 use crate::e2e::{EHR_A, EHR_B, PATIENT, TestResult};
 use crate::support::{SLACK, millis};
@@ -280,15 +283,12 @@ async fn found_nowhere_and_consent_denied_are_200_and_never_424() -> TestResult 
         },
     )?;
 
-    let reply = exchange(&unresolved, post_aql(&patient_compositions(), &[])?).await?;
-    assert_eq!(
-        StatusCode::OK,
-        reply.status,
-        "CP-12: found nowhere is a 200, never a 424 or a 404: {}",
-        reply.text
-    );
-    let answer = reply.federated()?;
-    assert!(answer.rows.is_empty(), "CP-12: empty rows");
+    let answer = track4::found_nowhere(
+        &in_process(&unresolved),
+        &fixture(None, None)?,
+        &synthetic(PATIENT)?,
+    )
+    .await?;
     assert!(!answer.meta.federation.complete, "CP-30: complete is false");
     assert_eq!(
         vec![

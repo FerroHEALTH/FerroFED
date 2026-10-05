@@ -70,46 +70,53 @@ impl SyntheticSubject {
     }
 
     /// The `EHR_STATUS` a test EHR is created with: a queryable, modifiable
-    /// status whose `PARTY_SELF` subject refers to this subject.
-    ///
-    /// The status names its archetype (RM `LOCATABLE` invariant
-    /// `Archetyped_valid`), as an archetype root must.
+    /// status whose `PARTY_SELF` subject refers to this subject
+    /// ([`ehr_status`]).
     #[must_use]
     pub fn ehr_status(&self) -> EhrStatus {
-        EhrStatus {
-            name: DvText::DvText(DvTextData {
-                value: "EHR Status".to_owned(),
-                hyperlink: None,
-                formatting: None,
-                mappings: None,
-                language: None,
-                encoding: None,
+        ehr_status(Some(PartyRef {
+            namespace: NAMESPACE.to_owned(),
+            r#type: "PERSON".to_owned(),
+            id: ObjectId::GenericId(GenericId {
+                value: self.value.expose_secret().to_owned(),
+                scheme: "ffd-admission".to_owned(),
             }),
-            archetype_node_id: EHR_STATUS_ARCHETYPE.to_owned(),
-            uid: None,
-            links: None,
-            archetype_details: Some(Archetyped {
-                archetype_id: ArchetypeId {
-                    value: EHR_STATUS_ARCHETYPE.to_owned(),
-                },
-                template_id: None,
-                rm_version: "1.1.0".to_owned(),
-            }),
-            feeder_audit: None,
-            subject: PartySelf {
-                external_ref: Some(PartyRef {
-                    namespace: NAMESPACE.to_owned(),
-                    r#type: "PERSON".to_owned(),
-                    id: ObjectId::GenericId(GenericId {
-                        value: self.value.expose_secret().to_owned(),
-                        scheme: "ffd-admission".to_owned(),
-                    }),
-                }),
+        }))
+    }
+}
+
+/// Returns the `EHR_STATUS` a synthetic EHR is created with: a queryable,
+/// modifiable status whose `PARTY_SELF` subject refers to `external_ref`, or
+/// an anonymous `PARTY_SELF` when there is none.
+///
+/// The status names its archetype (RM `LOCATABLE` invariant
+/// `Archetyped_valid`), as an archetype root must.
+#[must_use]
+pub fn ehr_status(external_ref: Option<PartyRef>) -> EhrStatus {
+    EhrStatus {
+        name: DvText::DvText(DvTextData {
+            value: "EHR Status".to_owned(),
+            hyperlink: None,
+            formatting: None,
+            mappings: None,
+            language: None,
+            encoding: None,
+        }),
+        archetype_node_id: EHR_STATUS_ARCHETYPE.to_owned(),
+        uid: None,
+        links: None,
+        archetype_details: Some(Archetyped {
+            archetype_id: ArchetypeId {
+                value: EHR_STATUS_ARCHETYPE.to_owned(),
             },
-            is_queryable: true,
-            is_modifiable: true,
-            other_details: None,
-        }
+            template_id: None,
+            rm_version: "1.1.0".to_owned(),
+        }),
+        feeder_audit: None,
+        subject: PartySelf { external_ref },
+        is_queryable: true,
+        is_modifiable: true,
+        other_details: None,
     }
 }
 
