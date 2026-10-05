@@ -205,8 +205,8 @@ fragments still land. Like `crate-version-guard`, it reads the change from the
 merge base, so a fragment that reached `main` after the branch forked does not
 count. The `no-changelog` label is its escape for a change with no
 user-visible effect, and a pull request a bot opened is skipped, as
-`contribution-licence-guard` skips it. A label applied after the run started
-is read only by the next run, which a new push starts. The release cut turns
+`contribution-licence-guard` skips it. Adding or removing a label starts a new
+run, so a label takes effect without a new push. The release cut turns
 the fragments into the version's section (`docs/release.md`).
 
 `hashFiles()` cannot do the detection. It is evaluated before checkout, when
