@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The resolution bindings of §12.5.1 step 2: per session, keyed by
-//! `ehr_id`, expiring with the session's time-to-live, and holding no patient
-//! identifier (no specification governs what a binding holds: our own
+//! `ehr_id`, each expiring a time-to-live after the last resolution that
+//! returned it, and holding no patient identifier (no specification governs what a binding holds: our own
 //! design).
 #![allow(
     clippy::expect_used,
@@ -376,5 +376,137 @@ fn a_session_alone_past_the_capacity_keeps_what_fits_and_holds_no_more() {
         Bound::Several(vec![node("node-a"), node("node-c")]),
         bindings.lookup(&session, now, &ehr(EHR_A)),
         "a second claimant of a held ehr_id adds no binding, so it is kept (§12.5.2)"
+    );
+}
+
+#[test]
+fn a_binding_no_later_resolution_returns_expires_while_the_session_lives_on() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let start = Instant::now();
+    bindings.record(&session, start, [(&node("node-a"), &ehr(EHR_A))]);
+    let resolve_b = |seconds: u64| {
+        bindings.record(
+            &session,
+            start + Duration::from_secs(seconds),
+            [(&node("node-b"), &ehr(EHR_B))],
+        );
+    };
+    resolve_b(20);
+    resolve_b(40);
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&session, start + Duration::from_secs(59), &ehr(EHR_A)),
+        "live just inside its own lifetime"
+    );
+    resolve_b(60);
+    resolve_b(80);
+    resolve_b(100);
+    let later = start + Duration::from_secs(101);
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&session, later, &ehr(EHR_A)),
+        "a binding the session's later resolutions never returned is not routed on past its lifetime"
+    );
+    assert_eq!(
+        Bound::One(node("node-b")),
+        bindings.lookup(&session, later, &ehr(EHR_B)),
+        "the session lives on through the bindings its resolutions keep returning"
+    );
+    assert_eq!(1, bindings.len(), "the expired binding is no longer held");
+}
+
+#[test]
+fn a_binding_each_resolution_returns_keeps_routing() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let start = Instant::now();
+    for seconds in [0, 40, 80, 120] {
+        bindings.record(
+            &session,
+            start + Duration::from_secs(seconds),
+            [(&node("node-a"), &ehr(EHR_A))],
+        );
+    }
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&session, start + Duration::from_secs(179), &ehr(EHR_A)),
+        "each resolution that returns the binding renews it"
+    );
+    assert_eq!(
+        Bound::None,
+        bindings.lookup(&session, start + Duration::from_secs(180), &ehr(EHR_A)),
+        "gone a lifetime after the last resolution that returned it"
+    );
+}
+
+#[test]
+fn a_claimant_no_later_resolution_returns_expires_on_its_own() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let start = Instant::now();
+    bindings.record(
+        &session,
+        start,
+        [
+            (&node("node-a"), &ehr(EHR_A)),
+            (&node("node-c"), &ehr(EHR_A)),
+        ],
+    );
+    bindings.record(
+        &session,
+        start + Duration::from_secs(40),
+        [(&node("node-a"), &ehr(EHR_A))],
+    );
+    assert_eq!(
+        Bound::Several(vec![node("node-a"), node("node-c")]),
+        bindings.lookup(&session, start + Duration::from_secs(59), &ehr(EHR_A)),
+        "both claimants live, so step 2 yields no answer (§12.5.2, N42)"
+    );
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&session, start + Duration::from_secs(61), &ehr(EHR_A)),
+        "node-c's binding is a lifetime old and claims nothing; node-a's was returned since"
+    );
+}
+
+#[test]
+fn an_identity_change_drops_a_renewed_binding_as_it_drops_any_other() {
+    let bindings = ResolutionBindings::new(Duration::from_secs(60));
+    let session = SessionKey::new("session-1");
+    let start = Instant::now();
+    bindings.record(&session, start, [(&node("node-a"), &ehr(EHR_A))]);
+    let renewed = start + Duration::from_secs(40);
+    bindings.record(&session, renewed, [(&node("node-a"), &ehr(EHR_A))]);
+    assert_eq!(
+        1,
+        bindings.identity_changed(&IdentityChange::Ehrs(vec![ehr(EHR_A)]))
+    );
+    assert_eq!(Bound::None, bindings.lookup(&session, renewed, &ehr(EHR_A)));
+}
+
+#[test]
+fn a_full_store_drops_expired_bindings_before_a_live_session() {
+    let capacity = NonZeroUsize::new(2).expect("two is not zero");
+    let bindings = ResolutionBindings::new(Duration::from_secs(60)).with_capacity(capacity);
+    let (renewing, other) = (SessionKey::new("session-1"), SessionKey::new("session-2"));
+    let start = Instant::now();
+    bindings.record(&renewing, start, [(&node("node-a"), &ehr(EHR_A))]);
+    bindings.record(
+        &renewing,
+        start + Duration::from_secs(50),
+        [(&node("node-b"), &ehr(EHR_B))],
+    );
+    let later = start + Duration::from_secs(70);
+    bindings.record(&other, later, [(&node("node-a"), &ehr(EHR_C))]);
+    assert_eq!(2, bindings.len());
+    assert_eq!(
+        Bound::One(node("node-b")),
+        bindings.lookup(&renewing, later, &ehr(EHR_B)),
+        "the session's live binding stays; only its expired one made room"
+    );
+    assert_eq!(
+        Bound::One(node("node-a")),
+        bindings.lookup(&other, later, &ehr(EHR_C))
     );
 }

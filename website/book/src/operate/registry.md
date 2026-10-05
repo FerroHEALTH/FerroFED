@@ -360,19 +360,26 @@ Both bounds are settings, checked at boot:
 
 ```toml
 [federation]
-binding_ttl_ms = 900000    # 15 minutes after a caller's last resolution, the default; 0 is refused
+binding_ttl_ms = 900000    # 15 minutes after the last resolution that returned the binding, the default; 0 is refused
 binding_capacity = 100000  # ehr_id bindings over every caller, the default; 0 is refused
 ```
 
-When the bindings are full, a new one first drops the bindings of the other
-callers whose lifetime ends soonest, whole; a binding that still does not fit
-is not kept, which costs that caller's follow-up the next step of §12.5.1,
-never a wrong node.
+Each binding has a lifetime of its own. A resolution that returns a
+`{node, ehr_id}` pair holds it, or renews it, for `binding_ttl_ms`; a binding
+the caller's later resolutions no longer return expires `binding_ttl_ms`
+after the last one that did, however many other resolutions the caller makes
+meanwhile.
+
+When the bindings are full, a new one first drops every binding that has
+expired, then the bindings of the other callers whose last binding expires
+soonest, whole; a binding that still does not fit is not kept, which costs
+that caller's follow-up the next step of §12.5.1, never a wrong node.
 
 The lifetime is a correctness bound. An identity merge or split at the
-identity source can make a binding stale, and a binding never outlives its
-lifetime, so set it no longer than you would accept a follow-up being routed
-on a superseded identity. With `[pmir]`, a merge the
+identity source can make a binding stale, and a resolution after the change
+no longer returns it, so a stale binding is routed on for at most
+`binding_ttl_ms` after the last resolution that returned it. Set it no longer
+than you would accept a follow-up being routed on a superseded identity. With `[pmir]`, a merge the
 identity source reports drops the bindings it could have made stale as it
 happens ([The identity feed](identity.md#the-identity-feed-pmir)); the
 specification marks this lifecycle track provisional.
