@@ -20,6 +20,7 @@ it for a tag that already exists and has to be dispatched at that tag.
 
 ```text
 plan ── github-release (draft) ── build-binaries ── build-image ── finalize-release (publish)
+                               └─ build-viewer ───────────────┘
 ```
 
 - **plan** validates the tag shape, refuses a dispatch that is not at the tag
@@ -38,16 +39,20 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   architectures, glibc and musl). See § The build legs.
 - **build-image** calls `release-image.yml`, which builds the container from
   the attested musl binaries and pushes it to `ghcr.io/ferrohealth/ferrofed`.
+- **build-viewer** calls `release-viewer.yml`, which builds the operator
+  console's binaries and site bundle, packs them into a container and pushes
+  it to `ghcr.io/ferrohealth/ferrofed-viewer`. The console ships as an image
+  alone, so it attaches no asset to the draft.
 - **finalize-release** checks that the draft carries every asset this version
   promises, eight per target and the three compose files, and publishes only
-  then. A draft missing any of
+  then, and only once both images are pushed. A draft missing any of
   them fails the check and stays a draft, so a half-assembled release is never
   visible. A pre-release is published with `--latest=false`, so it never
   becomes the repository's latest release.
 
 ## The build legs
 
-Both legs are reusable workflows (`on: workflow_call`). SLSA Build Level 3
+Every leg is a reusable workflow (`on: workflow_call`). SLSA Build Level 3
 requires that the signing material authenticating the provenance is out of
 reach of the user-defined build steps, and every step of one job shares a
 runner VM, so the build and its attestations run in a called workflow on its
@@ -80,6 +85,20 @@ names the called workflow as the signer, which a consumer can demand with
   SBOM per platform, all pushed to the registry as OCI referrers, then
   verifies the published image the way a consumer would.
 
+**`release-viewer.yml`, once:**
+
+- builds the musl `ferrofed-viewer` binary with `cargo auditable` on a runner
+  of each architecture, and the architecture-independent site bundle with
+  cargo-leptos through `scripts/release/viewer-site.sh`, each from a cold
+  checkout with no cache, and attests the SLSA provenance of each binary and
+  of the bundle's tarball;
+- verifies all three against its own signer before it stages them for
+  `docker/viewer/Dockerfile`;
+- builds, pushes, attests and verifies the `linux/amd64` and `linux/arm64`
+  index exactly as `release-image.yml` does for the gateway, with the same
+  provenance and per-platform SPDX SBOM referrers and the same `pkg:cargo`
+  purl check.
+
 Verify a release:
 
 ```sh
@@ -89,17 +108,22 @@ gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
 gh attestation verify oci://ghcr.io/ferrohealth/ferrofed:X.Y.Z \
   --repo FerroHEALTH/FerroFED \
   --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-image.yml
+gh attestation verify oci://ghcr.io/ferrohealth/ferrofed-viewer:X.Y.Z \
+  --repo FerroHEALTH/FerroFED \
+  --signer-workflow FerroHEALTH/FerroFED/.github/workflows/release-viewer.yml
 ```
 
 The tools are pinned in `docs/VERSIONS.md` (`cargo-auditable`,
-`cargo-cyclonedx`, `syft`) and `scripts/checks/versions.sh` holds the workflows
-to those rows.
+`cargo-cyclonedx`, `syft`, and `cargo-leptos` and the `wasm-bindgen` CLI for
+the console) and `scripts/checks/versions.sh` holds the workflows to those
+rows.
 
-**The package's visibility is an owner setting.** GHCR creates
-`ghcr.io/ferrohealth/ferrofed` on the first push, private by default. After the
-first release pushes it, the owner sets it public under the FerroHEALTH
-organization's package settings and links it to the repository, so `docker
-pull` works without a login.
+**A package's visibility is an owner setting.** GHCR creates
+`ghcr.io/ferrohealth/ferrofed` and `ghcr.io/ferrohealth/ferrofed-viewer` on
+their first push, private by default. After the first release pushes each,
+the owner sets it public under the FerroHEALTH organization's package
+settings and links it to the repository, so `docker pull` works without a
+login.
 
 The library crates are not part of this lane. `publish-crates.yml` runs on the
 same `v*` tag and is described below (§ The crates.io lane).

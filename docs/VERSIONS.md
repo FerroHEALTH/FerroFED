@@ -304,6 +304,29 @@ on 2026-10-04.
 | `tracing-opentelemetry` | 0.34.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `tonic` | 0.14.6 | the root `Cargo.toml` `[workspace.dependencies]` |
 
+## Operator console crates and build tools
+
+The operator console, `app/ferrofed-viewer` (#275), is a Leptos app rendered
+on the server and hydrated in the browser, the shape of FerroEHR's viewer.
+Each Leptos crate is on a release line of its own and is held to the root
+`Cargo.toml` alone. cargo-leptos builds the site bundle, and it runs the
+wasm-bindgen CLI it finds on `PATH`, which refuses a bundle the
+`wasm-bindgen` crate of another version wrote, so the CLI row is also held to
+the `wasm-bindgen` requirement of the root `Cargo.toml` and the version
+`Cargo.lock` locks. Both tools are fetched by `taiki-e/install-action`, which
+verifies the upstream release checksum, at the release whose manifest names
+these versions. Every version was the latest on crates.io on 2026-10-05.
+`scripts/checks/versions.sh` holds every row.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| `leptos` | 0.8.21 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `leptos_axum` | 0.8.10 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `leptos_meta` | 0.8.7 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `leptos_router` | 0.8.16 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-viewer.yml` |
+| `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-viewer.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
+
 ## Language and runtime
 
 `rust-toolchain.toml` carries the toolchain, and the root `Cargo.toml` carries
@@ -351,7 +374,7 @@ it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM` |
+| Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3` | `docker/Dockerfile` `FROM`, `docker/viewer/Dockerfile` `FROM` |
 | FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:4.3.3@sha256:1a5580b510dca1e49418e4c83431d19b92656d06ea0961d28d7df03d518b941f` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:4.3.3@sha256:b84808bf7321390491c5ba2e74676a8a36657fb9d00b1645006818ccb9a2beaa` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers.rs` |
@@ -470,9 +493,9 @@ release without a reviewed change.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `cargo-auditable` | 0.7.5 | `.github/workflows/release-build.yml` |
+| `cargo-auditable` | 0.7.5 | `.github/workflows/release-build.yml`, `.github/workflows/release-viewer.yml` |
 | `cargo-cyclonedx` | 0.5.9 | `.github/workflows/release-build.yml` |
-| `syft` | 1.51.1 | `.github/workflows/release-build.yml`, `.github/workflows/release-image.yml` |
+| `syft` | 1.51.1 | `.github/workflows/release-build.yml`, `.github/workflows/release-image.yml`, `.github/workflows/release-viewer.yml` |
 | `cargo-fuzz` | 0.13.2 | `.github/workflows/fuzz.yml` (the fuzz lane, the one nightly-toolchain job; #134) |
 
 `scripts/checks/versions.sh` reads every `tool:` line of the release and fuzz

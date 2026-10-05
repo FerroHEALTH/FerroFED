@@ -62,6 +62,15 @@
 #                          tracing-opentelemetry row and the tonic row
 #                          matches the root
 #                          Cargo.toml [workspace.dependencies] requirement.
+#  14. viewer toolchain    the Leptos rows against the root Cargo.toml
+#                          requirements, and the cargo-leptos and wasm-bindgen
+#                          versions ci.yml and release-viewer.yml install,
+#                          the wasm-bindgen CLI equal to the wasm-bindgen
+#                          crate the root Cargo.toml requires and Cargo.lock
+#                          locks.
+#
+# The container images check (9) holds docker/viewer/Dockerfile to the same
+# base-image row as docker/Dockerfile.
 #
 # FerroFED's own database image gets a check of its own in the change that adds
 # its first pin row.
@@ -750,7 +759,7 @@ else
   note "no $ci yet, skipped"
 fi
 
-release_workflows=(.github/workflows/release-build.yml .github/workflows/release-image.yml .github/workflows/fuzz.yml)
+release_workflows=(.github/workflows/release-build.yml .github/workflows/release-image.yml .github/workflows/release-viewer.yml .github/workflows/fuzz.yml)
 # Every version of TOOL the release and fuzz workflows install, deduplicated, so a tool
 # named in both files has to carry the same pin in both.
 release_tool_pins() {
@@ -932,6 +941,67 @@ for crate in opentelemetry opentelemetry_sdk opentelemetry-prometheus openteleme
   fi
 done
 
+echo "== viewer toolchain ($matrix <-> Cargo.toml, Cargo.lock, ci.yml, release-viewer.yml)"
+# The Leptos crates are released on lines of their own, each held to its row.
+if [[ -f Cargo.toml ]]; then
+  for crate in leptos leptos_axum leptos_meta leptos_router; do
+    want="$(pin_of "$crate" "$matrix")"
+    req="$(manifest_req "$crate")"
+    if [[ -z "$want" ]]; then
+      bad "$matrix has no $crate row"
+    elif [[ -z "$req" ]]; then
+      bad "$crate: root Cargo.toml has no requirement, $matrix pins $want"
+    elif [[ "$req" != "$want" ]]; then
+      bad "$crate: root Cargo.toml requires $req, $matrix pins $want"
+    else
+      note "OK: $crate $want (root Cargo.toml agrees)"
+    fi
+  done
+fi
+viewer_workflows=(.github/workflows/ci.yml .github/workflows/release-viewer.yml)
+# Every version of TOOL the viewer workflows install, deduplicated.
+viewer_tool_pins() {
+  local tool="$1" wf
+  for wf in "${viewer_workflows[@]}"; do
+    [[ -f "$wf" ]] || continue
+    sed -nE "s|^[[:space:]]*tool:[[:space:]]*$tool@([^[:space:]]+).*|\1|p" "$wf"
+  done | sort -u
+}
+for tool in cargo-leptos wasm-bindgen; do
+  want="$(pin_of "$tool" "$matrix")"
+  found="$(viewer_tool_pins "$tool")"
+  if [[ -z "$want" ]]; then
+    bad "$matrix has no '$tool' row"
+  elif [[ -z "$found" ]]; then
+    bad "the viewer workflows pin no $tool version"
+  elif [[ "$(line_count "$found")" != "1" ]]; then
+    bad "$tool: the viewer workflows disagree ($(printf '%s' "$found" | tr '\n' ' '))"
+  elif [[ "$found" != "$want" ]]; then
+    bad "$tool: the viewer workflows pin $found, $matrix pins $want"
+  else
+    note "OK: $tool $found"
+  fi
+done
+# The wasm-bindgen CLI reads the bundle the wasm-bindgen crate wrote, and
+# refuses one from any other version, so the crate is held to the same row.
+want="$(pin_of "wasm-bindgen" "$matrix")"
+if [[ -f Cargo.toml ]] && [[ -n "$want" ]]; then
+  req="$(manifest_req "wasm-bindgen")"
+  if [[ "$req" != "$want" ]]; then
+    bad "wasm-bindgen: root Cargo.toml requires ${req:-nothing}, $matrix pins $want"
+  fi
+fi
+if [[ -f Cargo.lock ]] && [[ -n "$want" ]]; then
+  locked="$(awk '
+    $0 == "name = \"wasm-bindgen\"" { getline; if (match($0, /"[^"]+"/)) print substr($0, RSTART + 1, RLENGTH - 2) }
+  ' Cargo.lock | sort -u)"
+  if [[ "$locked" != "$want" ]]; then
+    bad "wasm-bindgen: Cargo.lock locks ${locked:-nothing}, $matrix pins $want"
+  else
+    note "OK: Cargo.lock locks wasm-bindgen $want"
+  fi
+fi
+
 echo "== vendored corpora (docs/specs/*/PROVENANCE.md <-> $matrix)"
 # The reference a pin cell names: its first 40-hex token (a commit), else its
 # first 64-hex token (the sha256 of a FHIR package tarball, or the pin-set
@@ -1046,29 +1116,33 @@ if [[ -f "$spec_prov" ]]; then
   fi
 fi
 
-echo "== container images (docker/Dockerfile, compose.yaml <-> $matrix)"
-if [[ -f docker/Dockerfile ]]; then
+echo "== container images (docker/Dockerfile, docker/viewer/Dockerfile, compose.yaml <-> $matrix)"
+# The gateway image and the operator console image build on the one pinned
+# base.
+for dockerfile in docker/Dockerfile docker/viewer/Dockerfile; do
+  if [[ ! -f "$dockerfile" ]]; then
+    note "no $dockerfile yet, skipped"
+    continue
+  fi
   # The base is the last stage; an earlier one only stages files for it.
-  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' docker/Dockerfile | tail -n1)"
+  base="$(sed -nE 's|^FROM[[:space:]]+([^[:space:]]+).*|\1|p' "$dockerfile" | tail -n1)"
   want_base="$(pin_of "Container base image" "$matrix")"
   if [[ -z "$base" ]]; then
-    bad "docker/Dockerfile has no FROM"
+    bad "$dockerfile has no FROM"
   elif [[ -z "$want_base" ]]; then
     bad "$matrix has no 'Container base image' row"
   elif [[ "$base" != "$want_base" ]]; then
-    bad "base image: docker/Dockerfile builds on $base, $matrix pins $want_base"
+    bad "base image: $dockerfile builds on $base, $matrix pins $want_base"
   else
-    note "OK: docker/Dockerfile builds on the pinned base"
+    note "OK: $dockerfile builds on the pinned base"
   fi
   # The digest belongs to the FROM alone; the base.name label names the tag it
   # was resolved from, and the two must name the same image.
-  label_base="$(sed -nE 's|.*org\.opencontainers\.image\.base\.name="([^"]+)".*|\1|p' docker/Dockerfile | head -n1)"
+  label_base="$(sed -nE 's|.*org\.opencontainers\.image\.base\.name="([^"]+)".*|\1|p' "$dockerfile" | head -n1)"
   if [[ -n "$base" ]] && [[ "${base%@*}" != "$label_base" ]]; then
-    bad "docker/Dockerfile labels its base as '$label_base' but builds on ${base%@*}"
+    bad "$dockerfile labels its base as '$label_base' but builds on ${base%@*}"
   fi
-else
-  note "no docker/Dockerfile yet, skipped"
-fi
+done
 if [[ -f compose.yaml ]]; then
   # Every digest-pinned image is one of the matrix's pin cells, verbatim.
   pinned="$(sed -nE 's|^[[:space:]]*image:[[:space:]]*([^[:space:]]+@sha256:[0-9a-f]{64})[[:space:]]*$|\1|p' compose.yaml | sort -u)"

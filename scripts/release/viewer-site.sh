@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-License-Identifier: BUSL-1.1
+# Builds the operator console's site bundle (app/ferrofed-viewer) with
+# cargo-leptos, with the workspace lockfile frozen, and checks the bundle is
+# whole (no specification governs this: our own design).
+#
+# cargo-leptos resolves the workspace through its own `cargo metadata` call,
+# which takes no --locked, and cargo has no environment variable for it. So
+# the lockfile is checked with `cargo metadata --locked` first, which fails
+# loud when Cargo.lock does not satisfy every manifest and leaves the second
+# resolution nothing to change, and --locked is passed to the compile itself.
+#
+# The bundle is target/site: pkg/ferrofed-viewer.wasm, its JavaScript glue
+# and the stylesheet. The server binary is built apart from it, with cargo,
+# because the bundle is the same for every architecture.
+#
+# Usage: scripts/release/viewer-site.sh [--release]
+set -Eeuo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+viewer="$root/app/ferrofed-viewer"
+
+case "${1:-}" in
+  "" | --release) ;;
+  *)
+    echo "usage: scripts/release/viewer-site.sh [--release]" >&2
+    exit 2
+    ;;
+esac
+
+if ! cargo metadata --locked --format-version 1 \
+  --manifest-path "$viewer/Cargo.toml" > /dev/null; then
+  echo "viewer-site: Cargo.lock does not satisfy the workspace manifests;" >&2
+  echo "viewer-site: re-resolve it deliberately and commit the change." >&2
+  exit 1
+fi
+
+# cargo-leptos reads its configuration from the crate's own manifest
+# directory, so the build runs from there.
+cd "$viewer"
+cargo leptos build --frontend-only --lib-cargo-args=--locked "$@"
+
+missing=0
+for file in ferrofed-viewer.wasm ferrofed-viewer.js ferrofed-viewer.css; do
+  if [ ! -s "$root/target/site/pkg/$file" ]; then
+    echo "viewer-site: the bundle has no pkg/$file" >&2
+    missing=1
+  fi
+done
+[ "$missing" -eq 0 ] || exit 1
+echo "viewer-site: the bundle is in target/site"

@@ -315,8 +315,13 @@ async fn each_prefilter_call_is_counted_by_outcome() -> TestResult {
     Ok(())
 }
 
-/// Both reasons a pre-filter does not ask its service.
-const REASONS: [NotAsked; 2] = [NotAsked::Namespace, NotAsked::CallerClaims];
+/// Every reason a pre-filter does not ask its service.
+const REASONS: [NotAsked; 4] = [
+    NotAsked::Namespace,
+    NotAsked::CallerClaims,
+    NotAsked::CallerClaimsInvalid,
+    NotAsked::PatientValue,
+];
 
 #[tokio::test]
 async fn a_call_that_did_not_ask_is_counted_not_asked_by_its_reason() -> TestResult {

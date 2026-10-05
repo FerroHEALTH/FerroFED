@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: Vernum Projecten B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The run path of the `ferrofed` binary: the command line parsed, the
-//! configuration read, and each command run to its exit code: `serve`,
-//! `config check`, `admission check` and `healthcheck`.
+//! The run path of the `ferrofed` binary.
+//!
+//! The command line is parsed, the configuration read, and each command run
+//! to its exit code: `serve`, `config check`, `admission check`,
+//! `conformance run` and `healthcheck`.
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -14,9 +16,12 @@ use clap::Parser;
 use ferrofed_identity::dev::Profile;
 use tokio::net::TcpListener;
 
-use crate::cli::{AdmissionCommand, Cli, Command, ConfigCommand};
+use crate::cli::{AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, RunArgs};
 use crate::config::Config;
 use crate::config::settings::Settings;
+use crate::conformance::fixture::SyntheticPatient;
+use crate::conformance::run::{RunError, RunOptions};
+use crate::conformance::safety::{self, Refusal};
 use crate::federation::Federation;
 use crate::state::AppState;
 use crate::{
@@ -41,6 +46,17 @@ where
         Ok(cli) => cli,
         Err(error) => return ExitCode::from(clap_exit(&error)),
     };
+    if let Command::Conformance {
+        command: ConformanceCommand::Run(args),
+    } = &cli.command
+        && let Err(refusal) = refused_before_config(args)
+    {
+        eprintln!(
+            "ferrofed: cannot run the conformance scenarios: {}",
+            chain(&refusal)
+        );
+        return ExitCode::from(EXIT_USAGE);
+    }
     let settings = match Config::load(cli.config.as_deref()).and_then(|config| config.resolve()) {
         Ok(settings) => settings,
         Err(error) if cli.command == Command::Healthcheck => {
@@ -70,6 +86,9 @@ where
         Command::Admission {
             command: AdmissionCommand::Check { endpoint, count },
         } => admission_command(&settings, &endpoint, count),
+        Command::Conformance {
+            command: ConformanceCommand::Run(args),
+        } => conformance_command(&settings, args),
         Command::Serve => serve_job(settings, cli.config),
     }
 }
@@ -254,6 +273,120 @@ fn admission_command(settings: &Settings, endpoint: &str, count: u8) -> ExitCode
             eprintln!("ferrofed: cannot check admission: {}", chain(&error));
             match error {
                 admission::AdmissionError::UnknownEndpoint(_) => ExitCode::from(EXIT_USAGE),
+                _ => ExitCode::FAILURE,
+            }
+        }
+    }
+}
+
+/// The refusals of `conformance run` that need no configuration: the writes
+/// not allowed, or a patient outside the example arc.
+fn refused_before_config(args: &RunArgs) -> Result<(), Refusal> {
+    safety::writes(args.allow_writes)?;
+    SyntheticPatient::new(
+        &args.patient_namespace,
+        secrecy::SecretString::from(args.patient_value.clone()),
+    )?;
+    Ok(())
+}
+
+/// Runs `conformance run` against the deployment `settings` configure and
+/// writes the report.
+///
+/// The exit code is `0` when no scenario failed, `1` when one did or the
+/// run could not reach its report, [`EXIT_USAGE`] for a run the safety rules
+/// refuse, and [`EXIT_CONFIG`] for a configuration that federates nothing
+/// or does not build, or would send the token or the synthetic data in the
+/// clear.
+#[expect(
+    clippy::print_stdout,
+    reason = "`conformance run` answers the operator who ran it"
+)]
+#[expect(
+    clippy::print_stderr,
+    reason = "a refusal is reported to the operator, with no log subscriber installed"
+)]
+fn conformance_command(settings: &Settings, args: RunArgs) -> ExitCode {
+    let refuse = |refusal: &Refusal| {
+        eprintln!(
+            "ferrofed: cannot run the conformance scenarios: {}",
+            chain(refusal)
+        );
+        ExitCode::from(EXIT_USAGE)
+    };
+    if let Err(refusal) = safety::profile(settings.profile, args.acknowledged) {
+        return refuse(&refusal);
+    }
+    let patient = match SyntheticPatient::new(
+        &args.patient_namespace,
+        secrecy::SecretString::from(args.patient_value),
+    ) {
+        Ok(patient) => patient,
+        Err(error) => return refuse(&Refusal::Patient(error)),
+    };
+    let token = match std::fs::read_to_string(&args.token_file) {
+        Ok(text) if !text.trim().is_empty() => secrecy::SecretString::from(text.trim().to_owned()),
+        Ok(_) => return refuse(&Refusal::NoToken),
+        Err(error) => {
+            eprintln!(
+                "ferrofed: cannot run the conformance scenarios: the token file {} could not be read: {error}",
+                args.token_file.display()
+            );
+            return ExitCode::from(EXIT_USAGE);
+        }
+    };
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("ferrofed: cannot run the conformance scenarios: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let options = RunOptions {
+        gateway: args.gateway,
+        token,
+        patient,
+        seed_data: args.seed_data,
+        out: args.out,
+        node_profile: args.node_profile,
+    };
+    match runtime.block_on(crate::conformance::run::run(settings, options)) {
+        Ok(summary) => {
+            let counts: Vec<String> = summary
+                .report
+                .counts()
+                .iter()
+                .map(|(result, count)| format!("{result} {count}"))
+                .collect();
+            println!(
+                "ferrofed: conformance run against {}: {}",
+                summary.base,
+                counts.join("; ")
+            );
+            config::transport::print_warnings(&summary.cleartext);
+            for path in &summary.paths {
+                println!("ferrofed: wrote {}", path.display());
+            }
+            if summary.report.failed() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        Err(error) => {
+            eprintln!(
+                "ferrofed: cannot run the conformance scenarios: {}",
+                chain(&error)
+            );
+            match error {
+                RunError::NoRegistry
+                | RunError::Federation(_)
+                | RunError::State(_)
+                | RunError::Cleartext(_) => ExitCode::from(EXIT_CONFIG),
+                RunError::SeedData(_) => ExitCode::from(EXIT_USAGE),
                 _ => ExitCode::FAILURE,
             }
         }

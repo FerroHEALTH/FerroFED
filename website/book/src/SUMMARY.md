@@ -39,9 +39,11 @@
   - [Onward credentials](operate/onward-credentials.md)
   - [Queries and API areas](operate/queries-and-areas.md)
 - [Admitting a node](operate/admission.md)
+- [Scoring a deployment](operate/conformance-run.md)
 - [Health probes](operate/health.md)
 - [Metrics](operate/metrics.md)
 - [Tracing](operate/tracing.md)
+- [The operator console (planned screens)](operate/operator-console.md)
 
 # Integrate
 

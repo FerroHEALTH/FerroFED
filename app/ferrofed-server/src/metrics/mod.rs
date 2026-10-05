@@ -64,8 +64,8 @@ pub const NODE_REQUEST_DURATION: &str = "ferrofed.node.request.duration";
 /// `ferrofed_consent_prefilter_requests_total`.
 ///
 /// The outcome is `denied`, `no-signal`, `not-asked`, `unavailable` or
-/// `partial`, and a `not-asked` call carries a `reason`, `namespace` or
-/// `caller-claims`.
+/// `partial`, and a `not-asked` call carries a `reason`: `namespace`,
+/// `caller-claims`, `caller-claims-invalid` or `patient-value`.
 pub const CONSENT_PREFILTER_REQUESTS: &str = "ferrofed.consent.prefilter.requests";
 
 /// The calls to the localizer, by `outcome` (`candidates`, `no-records`,

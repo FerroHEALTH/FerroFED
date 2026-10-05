@@ -14,6 +14,7 @@ mod base_url;
 mod caller_bindings;
 mod completeness;
 mod config;
+mod conformance_run;
 mod consent;
 mod consent_everywhere;
 mod consent_withheld;

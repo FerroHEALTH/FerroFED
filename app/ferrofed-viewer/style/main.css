@@ -1,0 +1,32 @@
+/* SPDX-FileCopyrightText: Vernum Projecten B.V. */
+/* SPDX-License-Identifier: BUSL-1.1 */
+/* The operator console's stylesheet, on the "Azure & Iron" tokens of
+   assets/brand/tokens.css, whose values it repeats. */
+:root {
+  --ferrofed-brand: #0369A1;
+  --ferrofed-fg: #0F172A;
+  --ferrofed-bg: #F8FAFC;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ferrofed-brand: #7DD3FC;
+    --ferrofed-fg: #F1F5F9;
+    --ferrofed-bg: #0B1020;
+  }
+}
+body {
+  margin: 0;
+  background: var(--ferrofed-bg);
+  color: var(--ferrofed-fg);
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+a {
+  color: var(--ferrofed-brand);
+}

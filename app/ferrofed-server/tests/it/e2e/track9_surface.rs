@@ -8,22 +8,26 @@
 //! gateway runs by name over both members (§7a, §12.6, §12.7, §16.3 track 9;
 //! N30, N32, N43, N44; CP-23, CP-25, CP-34, CP-40).
 //!
-//! The read and the write of a plain client at a prefixed base are in
-//! `e2e::track9`.
+//! The client-visible checks are the conformance run's own
+//! ([`ferrofed_server::conformance::scenarios::track9`]); this suite adds
+//! what each node was asked, and the node failure a definition fan-out
+//! reports. The read and the write of a plain client at a prefixed base are
+//! in `e2e::track9`.
 
 use std::error::Error;
 use std::path::Path;
 
 use axum::body::Body;
+use ferrofed_server::conformance::client::FederationMeta;
+use ferrofed_server::conformance::scenarios::track9;
 use ferrofed_testkit::containers::{self, API_PATH, TwoNodes};
 use ferrofed_testkit::proxy::Fault;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::ENDPOINT;
-use openehr_federation::options::OptionsRoot;
 use serde::Deserialize;
 
 use crate::e2e::scenario::{
-    FederationMeta, Options, asked, clear, exchange, gateway_with, nobody_asked, seed_both,
+    Options, asked, clear, exchange, fixture, gateway_with, in_process, nobody_asked, seed_both,
 };
 use crate::e2e::track9::seeded;
 use crate::e2e::{PATIENT, TestResult};
@@ -37,36 +41,13 @@ const DIRECTED: &str = "org.example::node_a_compositions";
 /// The version every stored-query scenario stores.
 const VERSION: &str = "1.0.0";
 
-/// The patient's compositions over `from`, the identifier bound through
-/// `$patient` so the definition the registry holds carries none (§5.4.1).
-fn parameterised(from: &str) -> String {
-    format!(
-        "SELECT c/uid/value AS uid FROM {from} CONTAINS COMPOSITION c \
-         WHERE e/ehr_status/subject/external_ref/id/value = $patient \
-         AND e/ehr_status/subject/external_ref/namespace = '{}'",
-        PATIENT.namespace()
-    )
-}
-
 /// `PUT {base}/v1/definition/query/{name}/{VERSION}` with `aql`, naming
-/// `target` in the endpoint header when given.
-fn put(name: &str, aql: &str, target: Option<&str>) -> Result<Request<Body>, http::Error> {
-    let mut request = Request::put(format!("/v1/definition/query/{name}/{VERSION}"))
-        .header(header::CONTENT_TYPE, "text/plain");
-    if let Some(target) = target {
-        request = request.header(ENDPOINT, target);
-    }
-    request.body(Body::from(aql.to_owned()))
-}
-
-/// `POST {base}/v1/query/{name}` binding `$patient`.
-fn invoke(name: &str) -> Result<Request<Body>, http::Error> {
-    Request::post(format!("/v1/query/{name}"))
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(format!(
-            r#"{{"query_parameters":{{"patient":"{}"}}}}"#,
-            PATIENT.value()
-        )))
+/// `target` in the endpoint header.
+fn put_naming(name: &str, aql: &str, target: &str) -> Result<Request<Body>, http::Error> {
+    Request::put(format!("/v1/definition/query/{name}/{VERSION}"))
+        .header(header::CONTENT_TYPE, "text/plain")
+        .header(ENDPOINT, target)
+        .body(Body::from(aql.to_owned()))
 }
 
 /// A gateway over `nodes` holding its stored queries in `dir`, with
@@ -96,41 +77,11 @@ async fn the_self_description_lists_the_members_and_demographic_answers_as_decla
     let dir = tempfile::tempdir()?;
     let app = gateway_with(dir.path(), &nodes, &Options::default())?;
 
-    let described = exchange(&app, Request::options("/").body(Body::empty())?).await?;
+    let root = track9::self_description(&in_process(&app), &fixture(Some(1), Some(0))?).await?;
     assert_eq!(
-        StatusCode::OK,
-        described.status,
-        "CP-23: {}",
-        described.text
-    );
-    crate::facade::schema::validate_options(&described.text)?;
-    let root: OptionsRoot = serde_json::from_str(&described.text)?;
-    let members: Vec<(&str, Option<&str>)> = root
-        .endpoints
-        .iter()
-        .map(|member| (member.id.as_str(), member.system_id.as_deref()))
-        .collect();
-    assert_eq!(
-        vec![
-            ("node-a-pub", Some(containers::NODE_A_SYSTEM_ID)),
-            ("node-b-pub", Some(containers::NODE_B_SYSTEM_ID)),
-        ],
-        members,
-        "CP-23: the member endpoints behind the gateway, asked for no patient"
-    );
-    assert_eq!(
-        "unsupported: 501",
+        track9::DEMOGRAPHIC_UNSUPPORTED,
         root.federation.its_rest.demographic.as_str(),
-        "CP-25: the declaration the behaviour below is held to"
-    );
-
-    let read = Request::get("/v1/demographic/person/synthetic-party").body(Body::empty())?;
-    let answered = exchange(&app, read).await?;
-    assert_eq!(
-        StatusCode::NOT_IMPLEMENTED,
-        answered.status,
-        "CP-25: the DEMOGRAPHIC API is not federated: {}",
-        answered.text
+        "CP-25: the declaration the behaviour is held to"
     );
     nobody_asked(&nodes, "CP-23, CP-25: neither request asks a node");
     Ok(())
@@ -145,16 +96,11 @@ async fn a_definition_request_routes_to_the_one_named_node() -> TestResult {
     let nodes = Box::pin(seeded()).await?;
     let dir = tempfile::tempdir()?;
     let app = gateway_with(dir.path(), &nodes, &Options::default())?;
-    let templates = "/v1/definition/template/adl1.4";
+    let gateway = in_process(&app);
 
-    let named = Request::get(templates)
-        .header(ENDPOINT, "node-a-pub")
-        .body(Body::empty())?;
-    let listed = exchange(&app, named).await?;
-    assert_eq!(StatusCode::OK, listed.status, "CP-34: {}", listed.text);
-    assert_eq!(Some("node-a-pub"), listed.field(ENDPOINT), "N31");
+    track9::definition_named(&gateway, "node-a-pub").await?;
     assert_eq!(
-        vec![("GET".to_owned(), format!("{API_PATH}{templates}"))],
+        vec![("GET".to_owned(), format!("{API_PATH}{}", track9::TEMPLATES))],
         asked(&nodes.a),
         "CP-34: the one explicitly chosen node answers"
     );
@@ -162,17 +108,7 @@ async fn a_definition_request_routes_to_the_one_named_node() -> TestResult {
 
     for target in [None, Some("*")] {
         clear(&nodes);
-        let mut request = Request::get(templates);
-        if let Some(target) = target {
-            request = request.header(ENDPOINT, target);
-        }
-        let refused = exchange(&app, request.body(Body::empty())?).await?;
-        assert_eq!(
-            StatusCode::BAD_REQUEST,
-            refused.status,
-            "CP-34: {target:?} chooses no one node: {}",
-            refused.text
-        );
+        track9::definition_unnamed(&gateway, target).await?;
         nobody_asked(&nodes, "CP-34: a refused definition request asks no node");
     }
     Ok(())
@@ -188,23 +124,9 @@ async fn a_stored_query_is_held_at_the_gateway_and_runs_by_name_over_both_member
     seed_both(&nodes).await?;
     let dir = tempfile::tempdir()?;
     let app = registry_gateway(dir.path(), &nodes, "")?;
+    let (gateway, fixture) = (in_process(&app), fixture(Some(1), Some(1))?);
 
-    let stored = exchange(&app, put(NAME, &parameterised("EHR e"), None)?).await?;
-    assert_eq!(StatusCode::OK, stored.status, "CP-40: {}", stored.text);
-    let ran = exchange(&app, invoke(NAME)?).await?;
-    assert_eq!(StatusCode::OK, ran.status, "CP-40: {}", ran.text);
-    let answer = ran.federated()?;
-    assert_eq!(
-        Some(NAME),
-        answer.name.as_deref(),
-        "CP-40: the ITS-REST name member names the gateway's query"
-    );
-    assert_eq!(
-        vec![("node-a-pub", "active"), ("node-b-pub", "active")],
-        answer.statuses(),
-        "CP-40: invoked by name, it fans out"
-    );
-    assert_eq!(2, answer.rows.len(), "rows from both members");
+    track9::store_and_run(&gateway, &fixture, (NAME, VERSION)).await?;
     for node in [&nodes.a, &nodes.b] {
         assert!(
             asked(node)
@@ -216,30 +138,10 @@ async fn a_stored_query_is_held_at_the_gateway_and_runs_by_name_over_both_member
     }
 
     clear(&nodes);
-    let again = exchange(&app, put(NAME, &parameterised("EHR e"), None)?).await?;
-    assert_eq!(
-        StatusCode::CONFLICT,
-        again.status,
-        "CP-40: a second PUT to the same name and version is refused: {}",
-        again.text
-    );
+    track9::second_put_refused(&gateway, &fixture, (NAME, VERSION)).await?;
     nobody_asked(&nodes, "CP-40: the refused PUT reaches no node");
 
-    let directed = parameterised(r#"ENDPOINT ["node-a-pub"] CONTAINS EHR e"#);
-    let stored = exchange(&app, put(DIRECTED, &directed, None)?).await?;
-    assert_eq!(
-        StatusCode::OK,
-        stored.status,
-        "CP-40: storable: {}",
-        stored.text
-    );
-    let ran = exchange(&app, invoke(DIRECTED)?).await?;
-    assert_eq!(StatusCode::OK, ran.status, "CP-40: {}", ran.text);
-    assert_eq!(
-        vec![("node-a-pub", "active"), ("node-b-pub", "excluded")],
-        ran.federated()?.statuses(),
-        "CP-40: a directed definition stays federated-executable"
-    );
+    track9::directed_store_and_run(&gateway, &fixture, (DIRECTED, VERSION), "node-a-pub").await?;
     Ok(())
 }
 
@@ -264,12 +166,14 @@ async fn a_definition_fan_out_reports_a_one_node_rejection_as_partial() -> TestR
     let nodes = Box::pin(seeded()).await?;
     let dir = tempfile::tempdir()?;
     let app = registry_gateway(dir.path(), &nodes, "fan_out_stored_queries = true")?;
+    let fixture = fixture(Some(1), Some(0))?;
     nodes
         .b
         .proxy
         .set_fault(Fault::Status(StatusCode::INTERNAL_SERVER_ERROR));
 
-    let fanned = exchange(&app, put(NAME, &parameterised("EHR e"), Some("*"))?).await?;
+    let undirected = track9::parameterised(&fixture, "EHR e");
+    let fanned = exchange(&app, put_naming(NAME, &undirected, "*")?).await?;
     assert_eq!(
         StatusCode::MULTI_STATUS,
         fanned.status,
@@ -301,8 +205,8 @@ async fn a_definition_fan_out_reports_a_one_node_rejection_as_partial() -> TestR
 
     clear(&nodes);
     nodes.b.proxy.clear_fault();
-    let directed = parameterised(r#"ENDPOINT ["node-a-pub"] CONTAINS EHR e"#);
-    let refused = exchange(&app, put(DIRECTED, &directed, Some("*"))?).await?;
+    let directed = track9::parameterised(&fixture, r#"ENDPOINT ["node-a-pub"] CONTAINS EHR e"#);
+    let refused = exchange(&app, put_naming(DIRECTED, &directed, "*")?).await?;
     assert_eq!(
         StatusCode::BAD_REQUEST,
         refused.status,

@@ -32,6 +32,8 @@
 //!
 //! [`admission`] is the `admission check` job: one member exercised against
 //! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
+//! [`conformance`] is the `conformance run` job: the Connectathon tracks of
+//! §16.3 driven against a configured deployment, and its report (§16.4).
 //! [`healthcheck`] is the `healthcheck` job a container runtime runs beside
 //! the server, and [`health`] answers liveness, readiness and the last
 //! observed state of every dependency. [`jwks`] serves the gateway's public
@@ -60,6 +62,7 @@ pub mod body;
 pub mod cli;
 pub mod command;
 pub mod config;
+pub mod conformance;
 pub mod conveyed;
 pub mod documents;
 pub mod error;

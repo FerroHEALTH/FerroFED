@@ -35,10 +35,11 @@ has run on every change since the workspace landed.
 | `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish, with a tag whose tree has no root `Cargo.toml` refused at `plan` (`docs/release.md`) |
 | `release-build.yml` | called by `release.yml`, once per target | the SLSA Build Level 3 binary lane: `cargo auditable` build, CycloneDX and syft SBOMs, provenance and SBOM attestations, every asset attached to the draft (`docs/release.md` § The build legs) |
 | `release-image.yml` | called by `release.yml` | the container from the attested musl binaries, pushed to `ghcr.io/ferrohealth/ferrofed` by digest with provenance and SBOM attestations as OCI referrers, verified as a consumer would |
+| `release-viewer.yml` | called by `release.yml` | the operator console image: the musl `ferrofed-viewer` binaries built with `cargo auditable` and the site bundle built with cargo-leptos, each attested, verified, and packed into `ghcr.io/ferrohealth/ferrofed-viewer` with the same provenance and SBOM attestations as the gateway image (`docs/release.md` § The build legs) |
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
 | `fuzz.yml` | Wednesdays, dispatch, and pull requests touching `crates/openehr-federation`, `app/ferrofed-server`, `fuzz/` or `scripts/fuzz/` | the four `cargo fuzz` targets over the untrusted inputs, time-boxed and advisory, after a check that the generated seeds are current (§The fuzz lane) |
 
-Dependabot (`.github/dependabot.yml`) is the thirteenth piece and is described
+Dependabot (`.github/dependabot.yml`) is the fourteenth piece and is described
 under the pins below.
 
 ## The two tiers of `ci.yml`
@@ -53,7 +54,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `zizmor` | `zizmor --min-severity=low .github/`, with `GH_TOKEN` so the online audits work |
 | `actionlint` | the official image, pinned by tag and digest |
 | `shellcheck` | `--severity=style` over every tracked `*.sh` and every tracked extensionless file with a shell shebang, outside `docs/specs/**` and `**/vendor/**` |
-| `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` |
+| `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` and `docker/viewer/Dockerfile` |
 | `kubeconform` | the official image, pinned by tag and digest, in strict mode over the example manifests under `deploy/kubernetes/`, against the schemas of one Kubernetes release at a pinned commit of `yannh/kubernetes-json-schema` |
 | `comment-style` | `scripts/checks/comment-style.sh --all` |
 | `file-length` | `scripts/checks/file-length.sh --self-test`, then `scripts/checks/file-length.sh`: the 1000-line cap on hand-written Rust and on the book's Markdown pages, with its ratchet allow-list |
@@ -78,8 +79,9 @@ workflows under `docs/specs/` are never audited as if they ran here.
 `versions` skips each comparison whose subject file is absent and reports the
 skip with its reason. Every subject file it reads exists today, the
 architecture pin rows in `docs/architecture.md`, the workspace rows in the root
-`Cargo.toml` and the release tool pins in `release-build.yml` and
-`release-image.yml`, so every comparison runs.
+`Cargo.toml`, the release tool pins in `release-build.yml`,
+`release-image.yml` and `release-viewer.yml`, and the console's build tools
+in `ci.yml` and `release-viewer.yml`, so every comparison runs.
 
 **Tier 2 is gated on the workspace.** A `detect` job checks out and looks
 for a root `Cargo.toml`, publishing a boolean output. Every Rust job carries
@@ -167,6 +169,18 @@ identity crate and the engine have one feature per regional binding
 that only builds beside another one is a defect a caller would hit; the
 workspace `clippy` job sees the all-features union only. The job runs per
 package, never over the workspace.
+
+`viewer (wasm32 and site bundle)` covers the half of the operator console,
+`app/ferrofed-viewer`, that the workspace lanes never compile. The workspace
+lanes build, lint and test its server half on the host; this job runs
+`cargo clippy -p ferrofed-viewer --lib --target wasm32-unknown-unknown` at
+`-D warnings`, so a dependency that cannot compile for the browser fails here,
+and then builds the release site bundle with `scripts/release/viewer-site.sh
+--release`, which freezes `Cargo.lock` around cargo-leptos and checks the
+WebAssembly, its JavaScript glue and the stylesheet are all written. The
+console chooses its two halves by compilation target, never by Cargo feature,
+so the workspace `--all-features` lanes build it like any other member and
+`features (cargo-hack)` has nothing to add for it.
 
 `crate-version-guard` runs on pull requests only and fails a change that
 alters a `crates/*` member's packaged content without moving its version,
@@ -354,8 +368,9 @@ These are repository settings only the owner can change. The state on
 | Registration at bestpractices.dev | done: project [15130](https://www.bestpractices.dev/projects/15130), badge in the README |
 | The `github-pages` environment, deploying from `main` only | done |
 | A `crates-io` environment with a required reviewer, and one Trusted Publisher entry per crate naming `publish-crates.yml` | pending: the owner's two steps when the `publish` switch is flipped (`docs/release.md` § The crates.io lane) |
-| Artifact attestations for the release lane's provenance and SBOM bundles | done: available to a public repository with no setting; the lane writes them from `release-build.yml` and `release-image.yml` |
+| Artifact attestations for the release lane's provenance and SBOM bundles | done: available to a public repository with no setting; the lane writes them from `release-build.yml`, `release-image.yml` and `release-viewer.yml` |
 | The visibility of the `ghcr.io/ferrohealth/ferrofed` package | pending: GHCR creates it private on the first image push; the owner sets it public and links it to the repository |
+| The visibility of the `ghcr.io/ferrohealth/ferrofed-viewer` package | pending: the same as the gateway's, on the first release that pushes the console image |
 
 ## Sources
 

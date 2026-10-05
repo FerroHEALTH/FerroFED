@@ -30,4 +30,4 @@ disallowed-types = [
 
 # Product, specification, profile and organisation names are words, not code,
 # in documentation.
-doc-valid-idents = ["FerroFED", "FerroHEALTH", "FerroEHR", "FerroPIX", "EHRbase", "openEHR", "PIXm", "PDQm", "mCSD", "LRZa", "OAuth", ".."]
+doc-valid-idents = ["FerroFED", "FerroHEALTH", "FerroEHR", "FerroPIX", "EHRbase", "openEHR", "PIXm", "PDQm", "mCSD", "LRZa", "OAuth", "OpenID", ".."]

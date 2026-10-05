@@ -17,7 +17,7 @@ the rules every workflow keeps.
 
 ## What runs
 
-Twelve workflows:
+Thirteen workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
   (zizmor, actionlint, shellcheck, hadolint, kubeconform over the example
@@ -50,7 +50,7 @@ Twelve workflows:
 - `.github/workflows/release.yml`: the release lane, dormant until a `v*` tag
   is pushed. It validates the tag, checks it against every file that declares
   the product version, takes the release notes from the matching
-  `CHANGELOG.md` section, creates the release as a draft, calls the two lanes
+  `CHANGELOG.md` section, creates the release as a draft, calls the three lanes
   below, and publishes only after the expected asset set is complete. The
   library crates go to crates.io through `publish-crates.yml` on the same tag,
   never through this lane. The checklist a cut follows is `docs/release.md`.
@@ -62,9 +62,14 @@ Twelve workflows:
   verifies this run's musl tarballs against the build lane's signer identity,
   stages them for `docker/Dockerfile`, pushes the multi-platform image to GHCR,
   attests the index and both platform manifests as OCI referrers, and verifies
-  its own output as a consumer would. Both are reusable workflows because SLSA
-  Build Level 3 needs the signing identity out of reach of caller-defined
-  steps.
+  its own output as a consumer would.
+- `.github/workflows/release-viewer.yml`: the reusable operator console
+  lane. It builds the musl `ferrofed-viewer` binaries with `cargo auditable`
+  and the site bundle with cargo-leptos, attests each, verifies them against
+  its own signer, and pushes, attests and verifies
+  `ghcr.io/ferrohealth/ferrofed-viewer` as the image lane does the gateway.
+  The three are reusable workflows because SLSA Build Level 3 needs the
+  signing identity out of reach of caller-defined steps.
 - `.github/workflows/pin-freshness.yml`: the weekly freshness read over every
   pin no Dependabot ecosystem covers, the analyzer versions in `ci.yml` and the
   documentation toolchain. It opens one issue when a pin is behind its newest
@@ -129,7 +134,7 @@ sources, which subsumes cargo-audit); MSRV via `cargo hack check
 --rust-version`; every feature of each published crate alone via `cargo hack
 clippy --locked --each-feature --all-targets --package openehr-federation
 --package ihe-iti --package nl-generic-functions -- -D warnings`, per package
-and never the workspace all-features union; the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
+and never the workspace all-features union; the `viewer` job (`cargo clippy --locked -p ferrofed-viewer --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/viewer-site.sh --release`; `leptos-ui.md`); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
 crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 `dependency-review-action` on pull requests; the `e2e (containers)` job,
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the

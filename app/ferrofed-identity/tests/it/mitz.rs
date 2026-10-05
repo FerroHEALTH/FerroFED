@@ -193,18 +193,28 @@ async fn two_callers_with_different_roles_send_different_subjects() -> TestResul
 }
 
 #[tokio::test]
-async fn a_requester_the_question_does_not_take_is_no_decision() -> TestResult {
+async fn a_requester_the_question_does_not_take_is_not_asked_about() -> TestResult {
     let mitz = Mitz::start().await;
     let prefilter = over(&mitz)?;
-    let refused = requester("with-hyphen", "01.015")?;
-    let decision = prefilter
-        .prefilter(&patient(BSN_ALIAS)?, Some(&refused), &candidates()?, soon())
-        .await;
-    assert!(
-        matches!(decision, ConsentDecision::Unavailable(_)),
-        "§5: a UZI number is alphanumeric: {decision:?}"
-    );
-    assert!(mitz.questions().await.is_empty());
+    for (professional, role) in [("with-hyphen", "01.015"), ("professional0001", " 01.015")] {
+        let refused = requester(professional, role)?;
+        let decision = prefilter
+            .prefilter(&patient(BSN_ALIAS)?, Some(&refused), &candidates()?, soon())
+            .await;
+        assert!(
+            matches!(
+                decision,
+                ConsentDecision::NotAsked(NotAsked::CallerClaimsInvalid)
+            ),
+            "§5: {professional:?} {role:?}: Mitz is never asked, so it is no outage: {decision:?}"
+        );
+        let shown = format!("{decision:?}");
+        assert!(
+            !shown.contains(professional) && !shown.contains(role.trim()),
+            "no claim value is carried: {shown}"
+        );
+    }
+    assert!(mitz.questions().await.is_empty(), "Mitz is never asked");
     Ok(())
 }
 
@@ -323,6 +333,11 @@ async fn a_patient_mitz_cannot_be_asked_about_is_the_namespace_reason_whatever_t
 fn each_not_asked_reason_has_a_closed_name() {
     assert_eq!("namespace", NotAsked::Namespace.as_str());
     assert_eq!("caller-claims", NotAsked::CallerClaims.as_str());
+    assert_eq!(
+        "caller-claims-invalid",
+        NotAsked::CallerClaimsInvalid.as_str()
+    );
+    assert_eq!("patient-value", NotAsked::PatientValue.as_str());
 }
 
 #[tokio::test]

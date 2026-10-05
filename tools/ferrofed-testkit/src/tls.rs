@@ -93,14 +93,35 @@ impl MutualTls {
     /// A [`TlsHarnessError`] when the origin does not read, or the
     /// certificates, the TLS configuration or the listener cannot be made.
     pub fn front(origin: &str) -> Result<Self, TlsHarnessError> {
+        Self::over(origin, &material()?)
+    }
+
+    /// Starts two fronts on two free loopback ports, two origins, that pass
+    /// every connection to `origin` and share one CA, one server
+    /// certificate and one client certificate, so a client presenting one
+    /// identity reaches both.
+    ///
+    /// # Errors
+    ///
+    /// A [`TlsHarnessError`] as [`MutualTls::front`] gives one.
+    pub fn pair(origin: &str) -> Result<(Self, Self), TlsHarnessError> {
+        let material = material()?;
+        Ok((
+            Self::over(origin, &material)?,
+            Self::over(origin, &material)?,
+        ))
+    }
+
+    /// Starts a front over `material` that passes every connection to
+    /// `origin`.
+    fn over(origin: &str, material: &Material) -> Result<Self, TlsHarnessError> {
         let target = origin
             .strip_prefix("http://")
             .map(|rest| rest.trim_end_matches('/'))
             .filter(|rest| !rest.is_empty() && !rest.contains('/'))
             .ok_or(TlsHarnessError::Origin)?
             .to_owned();
-        let material = material()?;
-        let acceptor = TlsAcceptor::from(Arc::new(material.config));
+        let acceptor = TlsAcceptor::from(Arc::new(material.config.clone()));
         let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
@@ -133,9 +154,9 @@ impl MutualTls {
             })?;
         Ok(Self {
             address,
-            trust_roots: material.trust_roots,
-            client_identity: material.client_identity,
-            client_thumbprint: material.client_thumbprint,
+            trust_roots: material.trust_roots.clone(),
+            client_identity: material.client_identity.clone(),
+            client_thumbprint: material.client_thumbprint.clone(),
             handshakes,
             refused,
             presented,

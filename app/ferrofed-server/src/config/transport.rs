@@ -202,18 +202,50 @@ pub fn client_certificate(url: &str) -> bool {
 ///
 /// Returns [`TrustAnchorError`] naming `key` for any other URL.
 pub fn trust_anchor(key: &str, url: &Url) -> Result<(), TrustAnchorError> {
-    let loopback = match url.host() {
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" if is_loopback(url) => Ok(()),
+        _ => Err(TrustAnchorError {
+            key: key.to_owned(),
+        }),
+    }
+}
+
+/// Whether `url` names a loopback host: an IPv4 or IPv6 loopback address,
+/// or `localhost`.
+#[must_use]
+pub fn is_loopback(url: &Url) -> bool {
+    match url.host() {
         Some(url::Host::Ipv4(address)) => address.is_loopback(),
         Some(url::Host::Ipv6(address)) => address.is_loopback(),
         Some(url::Host::Domain(name)) => name == "localhost",
         None => false,
-    };
+    }
+}
+
+/// Holds one site to the stricter policy of a run that carries a caller's
+/// bearer token and writes synthetic data: `https`, or `http` to a loopback
+/// host under the development profile alone.
+///
+/// It returns `Ok(None)` for `https`, and `Ok(Some(site))` for loopback
+/// `http` under the development profile, so the caller reports that the
+/// payload travels unencrypted. The URL is read for its scheme and host and
+/// never rendered.
+///
+/// # Errors
+///
+/// Returns [`CleartextError`] naming `site` for plain `http` to a host that
+/// is not loopback under every profile, for any `http` outside the
+/// development profile, and for any other scheme.
+pub fn loopback_payload(
+    profile: Profile,
+    url: &Url,
+    site: ProtectedSite,
+) -> Result<Option<ProtectedSite>, CleartextError> {
     match url.scheme() {
-        "https" => Ok(()),
-        "http" if loopback => Ok(()),
-        _ => Err(TrustAnchorError {
-            key: key.to_owned(),
-        }),
+        "https" => Ok(None),
+        "http" if is_loopback(url) && profile == Profile::Development => Ok(Some(site)),
+        _ => Err(CleartextError { site }),
     }
 }
 /// The sites each endpoint's onward credentials send to: the endpoint's own
@@ -388,7 +420,7 @@ pub fn check_and_print(
 mod tests {
     use super::{
         CleartextError, Encryption, ProtectedSite, TrustAnchorError, encrypted_connection,
-        protected_payload, trust_anchor,
+        loopback_payload, protected_payload, trust_anchor,
     };
     use ferrofed_identity::dev::Profile;
     use url::Url;
@@ -398,6 +430,43 @@ mod tests {
             url_key: String::from("xcpd.gateway[0].url"),
             payload: String::from("xcpd.assertion and patient identifiers"),
             requires: Encryption::Https,
+        }
+    }
+
+    #[test]
+    fn a_run_admits_https_and_loopback_http_under_development_alone() {
+        let url = |text: &str| Url::parse(text).expect("a URL");
+        for profile in [Profile::Development, Profile::Production] {
+            assert_eq!(
+                Ok(None),
+                loopback_payload(profile, &url("https://gw.example.org/"), site()),
+                "{profile:?}: https"
+            );
+        }
+        for loopback in [
+            "http://127.0.0.1:8080/",
+            "http://[::1]/",
+            "http://localhost/",
+        ] {
+            assert_eq!(
+                Ok(Some(site())),
+                loopback_payload(Profile::Development, &url(loopback), site()),
+                "{loopback} under development, reported"
+            );
+            assert!(
+                loopback_payload(Profile::Production, &url(loopback), site()).is_err(),
+                "{loopback} outside development"
+            );
+        }
+        for refused in [
+            "http://gw.example.org/",
+            "http://10.0.0.7/",
+            "ftp://127.0.0.1/",
+        ] {
+            assert!(
+                loopback_payload(Profile::Development, &url(refused), site()).is_err(),
+                "{refused} carries a token in cleartext beyond the host"
+            );
         }
     }
 

@@ -18,13 +18,14 @@ use std::time::{Duration, Instant};
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
+use ferrofed_server::conformance::client::{self, Gateway, GatewayError};
+use ferrofed_server::conformance::fixture::{Fixture, Holding, Member, Spares, SyntheticPatient};
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::containers::{ProxiedNode, TwoNodes};
+use ferrofed_testkit::containers::{self, ProxiedNode, TwoNodes};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{self, DemoComposition, PatientId};
-use http::{HeaderMap, Request, StatusCode, header};
-use serde::Deserialize;
-use serde::de::IgnoredAny;
+use http::{HeaderMap, HeaderValue, Request, StatusCode, header};
+use secrecy::SecretString;
 use uuid::Uuid;
 
 use crate::e2e::{EHR_A, EHR_B, PATIENT, dev_resolver, plan, registry_document};
@@ -200,7 +201,7 @@ impl Reply {
 
     /// Returns the answer read as a federated `RESULT_SET`, after checking
     /// it against the vendored schema (§9, N17, CP-35).
-    pub(crate) fn federated(&self) -> Result<Federated, Box<dyn Error>> {
+    pub(crate) fn federated(&self) -> Result<client::Federated, Box<dyn Error>> {
         crate::facade::schema::validate(&self.text)?;
         Ok(serde_json::from_str(&self.text)?)
     }
@@ -228,101 +229,6 @@ pub(crate) async fn exchange(
         text: String::from_utf8(bytes.to_vec())?,
         took: started.elapsed(),
     })
-}
-
-/// A federated `RESULT_SET` whose cells are all text.
-#[derive(Debug, Deserialize)]
-pub(crate) struct Federated {
-    /// The ITS-REST `name` member, set on a stored query's answer.
-    pub(crate) name: Option<String>,
-    /// The columns.
-    pub(crate) columns: Vec<Column>,
-    /// The rows, each an ordered array.
-    pub(crate) rows: Vec<Vec<String>>,
-    /// The `meta` member.
-    pub(crate) meta: Meta,
-}
-
-/// One column of a result set.
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-pub(crate) struct Column {
-    /// The column name.
-    pub(crate) name: String,
-    /// The AQL path, when the column has one.
-    pub(crate) path: Option<String>,
-}
-
-/// The `meta` member, with the flat members a pre-0.9.0 envelope carried
-/// read so a test can assert that they are absent (CP-35).
-#[derive(Debug, Deserialize)]
-pub(crate) struct Meta {
-    /// `meta.federation`.
-    pub(crate) federation: FederationMeta,
-    /// A flat `meta.complete`, which a conformant envelope never carries.
-    pub(crate) complete: Option<IgnoredAny>,
-    /// A flat `meta.endpoints`, which a conformant envelope never carries.
-    pub(crate) endpoints: Option<IgnoredAny>,
-}
-
-/// `meta.federation`.
-#[derive(Debug, Deserialize)]
-pub(crate) struct FederationMeta {
-    /// Whether every in-scope node answered.
-    pub(crate) complete: bool,
-    /// One record per member endpoint.
-    pub(crate) endpoints: Vec<EndpointRecord>,
-}
-
-/// One `meta.federation.endpoints[]` record.
-#[derive(Debug, Deserialize)]
-pub(crate) struct EndpointRecord {
-    /// The endpoint id.
-    pub(crate) id: String,
-    /// The §11.1 status.
-    pub(crate) status: String,
-    /// The rows the endpoint contributed.
-    pub(crate) row_count: Option<u64>,
-    /// The endpoint's latency on this request.
-    pub(crate) latency_ms: Option<u64>,
-    /// The error an endpoint that failed carries.
-    pub(crate) error: Option<IgnoredAny>,
-}
-
-impl Federated {
-    /// Returns each endpoint's id and status, in the order reported.
-    pub(crate) fn statuses(&self) -> Vec<(&str, &str)> {
-        self.meta
-            .federation
-            .endpoints
-            .iter()
-            .map(|record| (record.id.as_str(), record.status.as_str()))
-            .collect()
-    }
-
-    /// Returns the record of `endpoint`.
-    pub(crate) fn endpoint(&self, endpoint: &str) -> Result<&EndpointRecord, Box<dyn Error>> {
-        self.meta
-            .federation
-            .endpoints
-            .iter()
-            .find(|record| record.id == endpoint)
-            .ok_or_else(|| format!("{endpoint} is reported").into())
-    }
-
-    /// Returns the column names.
-    pub(crate) fn names(&self) -> Vec<&str> {
-        self.columns
-            .iter()
-            .map(|column| column.name.as_str())
-            .collect()
-    }
-
-    /// Returns the rows, sorted.
-    pub(crate) fn sorted_rows(&self) -> Vec<Vec<String>> {
-        let mut rows = self.rows.clone();
-        rows.sort();
-        rows
-    }
 }
 
 /// Returns the ITS-REST requests `node` received, as method and path.
@@ -365,4 +271,137 @@ pub(crate) fn nobody_asked(nodes: &TwoNodes, why: &str) {
         asked(&nodes.b),
         "node B: {why}"
     );
+}
+
+/// The gateway's router as the [`Gateway`] the conformance scenarios ask,
+/// each request sent with a fresh default caller's token unless it names
+/// its own.
+pub(crate) struct InProcess(pub(crate) Router);
+
+impl Gateway for InProcess {
+    fn send(
+        &self,
+        request: Request<Vec<u8>>,
+    ) -> impl Future<Output = Result<client::Reply, GatewayError>> + Send {
+        let app = self.0.clone();
+        async move {
+            let mut request = request.map(Body::from);
+            if !request.headers().contains_key(header::AUTHORIZATION) {
+                let bearer = crate::support::bearer()
+                    .map_err(|error| GatewayError::Transport(Box::new(error)))?;
+                request.headers_mut().insert(
+                    header::AUTHORIZATION,
+                    HeaderValue::from_str(&bearer).map_err(GatewayError::Token)?,
+                );
+            }
+            read(app, request).await
+        }
+    }
+
+    fn send_anonymous(
+        &self,
+        request: Request<Vec<u8>>,
+    ) -> impl Future<Output = Result<client::Reply, GatewayError>> + Send {
+        let app = self.0.clone();
+        async move { read(app, request.map(Body::from)).await }
+    }
+}
+
+/// Sends `request` through `app` as it is and reads the whole answer.
+async fn read(app: Router, request: Request<Body>) -> Result<client::Reply, GatewayError> {
+    use tower::ServiceExt as _;
+    let started = Instant::now();
+    let response = match app.oneshot(request).await {
+        Ok(response) => response,
+        Err(never) => match never {},
+    };
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .map_err(|error| GatewayError::Transport(Box::new(error)))?;
+    Ok(client::Reply {
+        status,
+        headers,
+        text: String::from_utf8(bytes.to_vec()).map_err(GatewayError::Text)?,
+        took: started.elapsed(),
+    })
+}
+
+/// A [`Gateway`] whose every federated answer and self-description is
+/// validated against the vendored JSON Schemas (§9, §7a.2; CP-35).
+pub(crate) struct Validated<G>(pub(crate) G);
+
+impl<G: Gateway> Gateway for Validated<G> {
+    fn send(
+        &self,
+        request: Request<Vec<u8>>,
+    ) -> impl Future<Output = Result<client::Reply, GatewayError>> + Send {
+        self.0.send(request)
+    }
+
+    fn send_anonymous(
+        &self,
+        request: Request<Vec<u8>>,
+    ) -> impl Future<Output = Result<client::Reply, GatewayError>> + Send {
+        self.0.send_anonymous(request)
+    }
+
+    fn check_result_set(&self, text: &str) -> Result<(), String> {
+        crate::facade::schema::validate(text).map_err(|error| error.to_string())
+    }
+
+    fn check_options(&self, text: &str) -> Result<(), String> {
+        crate::facade::schema::validate_options(text).map_err(|error| error.to_string())
+    }
+}
+
+/// The router `app` as the schema-validated [`Gateway`] a scenario asks.
+pub(crate) fn in_process(app: &Router) -> Validated<InProcess> {
+    Validated(InProcess(app.clone()))
+}
+
+/// `patient` as the conformance run's synthetic patient.
+pub(crate) fn synthetic(patient: PatientId) -> Result<SyntheticPatient, Box<dyn Error>> {
+    Ok(SyntheticPatient::new(
+        &patient.namespace(),
+        SecretString::from(patient.value()),
+    )?)
+}
+
+/// The fixture of the two harness nodes: node A holding `a` compositions of
+/// [`PATIENT`] under [`EHR_A`], node B holding `b` under [`EHR_B`], `None`
+/// where the patient does not resolve.
+pub(crate) fn fixture(a: Option<usize>, b: Option<usize>) -> Result<Fixture, Box<dyn Error>> {
+    let member =
+        |endpoint: &str, system_id: &str, organisation: &str, held: Option<(Uuid, usize)>| Member {
+            endpoint: endpoint.to_owned(),
+            system_id: system_id.to_owned(),
+            organisation: organisation.to_owned(),
+            path: containers::API_PATH.to_owned(),
+            active: true,
+            holding: held.map(|(ehr_id, compositions)| Holding {
+                ehr_id: ehr_id.to_string(),
+                compositions,
+            }),
+        };
+    Ok(Fixture {
+        patient: synthetic(PATIENT)?,
+        members: vec![
+            member(
+                "node-a-pub",
+                containers::NODE_A_SYSTEM_ID,
+                "org-a",
+                a.map(|count| (EHR_A, count)),
+            ),
+            member(
+                "node-b-pub",
+                containers::NODE_B_SYSTEM_ID,
+                "org-b",
+                b.map(|count| (EHR_B, count)),
+            ),
+        ],
+        spares: Spares::default(),
+        shortfall: None,
+    })
 }

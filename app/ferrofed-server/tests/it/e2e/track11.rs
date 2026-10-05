@@ -14,13 +14,17 @@
 //! assertion on what a node received reads the journal of the capturing
 //! proxy in front of it, never the gateway's logs (§16.3).
 //!
-//! The admission half of the track scores CP-33a, an Operator point, so it
+//! The refusal of a versioned write no step routes is the conformance run's
+//! own check ([`ferrofed_server::conformance::scenarios::track11`]). The
+//! admission half of the track scores CP-33a, an Operator point, so it
 //! runs in the harness crate, where the operator's points are scored.
 
 use std::error::Error;
 
 use axum::Router;
 use axum::body::Body;
+use ferrofed_server::conformance::scenarios::track11;
+use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::containers::{self, API_PATH, ProxiedNode, TwoNodes};
 use ferrofed_testkit::seed::{
     self, CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedPlan, SeedReport,
@@ -28,9 +32,10 @@ use ferrofed_testkit::seed::{
 use http::{Method, Request, StatusCode, header};
 use uuid::Uuid;
 
+use crate::e2e::scenario::in_process;
 use crate::e2e::{TestResult, gateway_mounted, query};
 use crate::ehr_id_collision::{Answered, Logged, captured, incidents};
-use crate::support::error_body;
+use crate::support::{Logs, error_body};
 
 /// The `ehr_id` both nodes hold, each for a patient of its own.
 const DUPLICATE: Uuid = Uuid::from_u128(0x5555_5555_5555_4555_8555_5555_5555_5555);
@@ -340,35 +345,36 @@ async fn a_versioned_write_no_earlier_step_routes_is_refused_and_no_node_is_aske
     let nodes = &seeded.nodes;
     let dir = tempfile::tempdir()?;
     let app = fresh_gateway(dir.path(), nodes)?;
-    let mut requests = Vec::new();
+    let gateway = in_process(&app);
+    let captured_logs = Logs::default();
+    let capture = subscriber(Rendering::Json, "info", false, captured_logs.clone())?;
+    let guard = tracing::subscriber::set_default(capture);
+    let mut answers = Vec::new();
     for (ehr_id, version) in [
         (DUPLICATE, seeded.duplicate_at_a.as_str()),
         (ONLY_AT_A, seeded.only_at_a.as_str()),
     ] {
         // NOTE: §12.4, §12.5.1: the preceding version names node A's
         // system_id, and the path ehr_id still routes first, so no owner is guessed.
-        requests.push(write(
-            Method::PUT,
-            &format!("/v1/ehr/{ehr_id}/composition/{}", object_of(version)?),
-            Some(version),
-            composition()?,
-        )?);
-        requests.push(write(
-            Method::DELETE,
-            &format!("/v1/ehr/{ehr_id}/composition/{version}"),
-            None,
-            String::new(),
-        )?);
-    }
-    let (answers, logs) = captured(&app, requests).await?;
-    assert_eq!(4, answers.len(), "four writes answered");
-    for (status, acting, text) in &answers {
-        assert_eq!(
-            (StatusCode::BAD_REQUEST, "target-required".to_owned()),
-            (*status, error_body(text)?.code),
-            "§12.5.1, N41: a write is never ask-all-probed: {text}"
+        answers.extend(
+            track11::versioned_writes_unrouted(
+                &gateway,
+                &ehr_id.to_string(),
+                version,
+                &composition()?,
+            )
+            .await?,
         );
-        assert!(acting.is_none(), "no endpoint acted: {text}");
+    }
+    drop(guard);
+    let logs = captured_logs.text();
+    assert_eq!(4, answers.len(), "four writes answered");
+    for answer in &answers {
+        assert_eq!(
+            "target-required",
+            error_body(&answer.text)?.code,
+            "§12.5.1, N41: the ITS-REST Error carries the code and the request id alone"
+        );
     }
     assert!(
         incidents(&logs)?.is_empty(),

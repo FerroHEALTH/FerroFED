@@ -317,8 +317,8 @@ rules, by what it carries.
 
 **Credentials and patient identifiers.** Outside `profile = "development"`,
 a URL that a configured credential or a patient identifier is sent to must
-be `https`. `serve`, `config check`, `admission check` and every
-[reload](registry.md#reloading-the-registry) refuse anything else, with exit
+be `https`. `serve`, `config check`, `admission check`, `conformance run`
+and every [reload](registry.md#reloading-the-registry) refuse anything else, with exit
 code 78 and one line naming the URL's key and what would travel over it,
 never a value. The rule covers:
 

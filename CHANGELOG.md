@@ -23,6 +23,15 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- A mutual-TLS token endpoint alias on a host you name (#560; RFC 8705 §5).
+  A node's `[credentials."<id>"]` section takes `mtls_alias_hosts`, each a
+  host name with an optional port, and a `fapi2` grant that uses mutual TLS
+  then takes a `token_endpoint` of `mtls_endpoint_aliases` on one of those
+  hosts, over `https` alone, as well as on the issuer's origin. An alias on
+  any other host is still refused before a token request is sent. An entry
+  that is no host, or the key in a section with no `fapi2` grant over mutual
+  TLS, refuses the configuration, naming the key. `oauth-server-metadata`
+  0.0.2 adds `AliasHost` and `Issuer::mtls_alias`.
 - Mutual TLS toward a node and its authorization server, with RFC 8705
   client authentication and certificate-bound tokens (#492; §13.1, §13.4,
   N25, CP-17; FAPI 2.0 Security Profile §5.3.2.1). A node's
@@ -46,6 +55,28 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `http` token endpoint or node, and TLS material in a service's own
   `credentials` section refuse the configuration. RFC 8705 is vendored
   under `docs/specs/ietf-oauth/`.
+- The operator console's skeleton, `app/ferrofed-viewer` (#275): a Leptos app
+  rendered on the server and hydrated in the browser, with a
+  backend-for-frontend, as its own binary, `ferrofed-viewer`, and its own
+  image, `ghcr.io/ferrohealth/ferrofed-viewer`. It reaches the gateway over
+  HTTP alone, as any client does, and holds no clinical data. Built so far: a
+  landing page, `GET /health` and the `healthcheck` command, operator sign-in
+  at an OpenID Provider with the authorization code grant, a `nonce` and
+  PKCE, its `state`, `nonce` and verifier held on the server behind an
+  opaque `HttpOnly` cookie in a bounded, short-lived pool of pending
+  sign-ins that a flood of login starts cannot grow and that never touches
+  the separate, bounded pool of signed-in sessions with their idle and
+  absolute timeouts, configuration refusals that name a key and a line and
+  never a value, and a typed client of the gateway's `OPTIONS {base}/`
+  and ITS-REST surface called with the operator's own token. Every answer
+  carries a per-response script nonce in its Content-Security-Policy. The
+  console reads a TOML file with `FERROFED_VIEWER__` overrides and a
+  `client_secret_file`. The code exchange, the operator views (#276) and the
+  query console (#277) are planned. The release lane builds, attests and
+  pushes the image with the same SLSA provenance and SBOM attestations as
+  the gateway image, CI lints the browser half for `wasm32` and builds the
+  site bundle, and the book's "The operator console (planned screens)" page
+  says what is built and what is planned.
 - The NVI localizer authenticates with the Nuts grant (#539; Annex B §B.1,
   §B.4; the IG's Localization page, GF-Authentication, GFI-004 and
   GFI-005). `[nl_gf.nvi.credentials.nuts]` takes the table a node's onward
@@ -61,6 +92,31 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   `nl-generic-functions` NVI client takes an authorizer that makes each
   request's headers and is handed the request URL without the query that
   holds the pseudonym (0.0.12).
+
+- `ferrofed conformance run --config <file>` scores a configured deployment
+  against the Connectathon tracks 1 to 7, 9 and 11 over ITS-REST (#546;
+  §16.3, §16.4). It starts the gateway in-process from the configuration, or
+  drives one already serving at `--gateway <url>`, as a client holding a
+  bearer token from `--token-file`. It seeds a synthetic patient in the
+  `urn:oid:2.999` arc at every member the deployment's own cross-reference
+  names, through each node's ITS-REST writes: the patient's EHR, the vendored
+  template and one vendored composition, three EHRs with no subject, and the
+  writes the scenarios make. It reads no EHR it did not create and removes
+  nothing. It refuses to start without `--allow-writes`, against a profile
+  other than `development` without
+  `--i-understand-this-writes-synthetic-data-to-the-nodes`, for a patient
+  outside the example arc, and for seed files other than the vendored ones,
+  which it checks by SHA-256. The `--gateway` URL and every member endpoint
+  are held to `https`, or `http` to a loopback host under the development
+  profile alone, which the report names; the gateway client follows no
+  redirect, and the caller's token is held as a secret that no report, log
+  line or error carries. It writes the per-track and per-point report the
+  harness run writes, with the same columns and results, and reports every
+  scenario that needs fault injection, node-side capture or a gateway
+  configured for it `not-run` with the reason, never `pass`; `--node-profile`
+  adds the admission check of every member as the node profile findings. The
+  end-to-end tracks call the same scenario checks, and a run against the
+  harness reads what the harness scores and nothing more.
 
 - An end-to-end check that the `AVG` the gateway declares decomposable in
   `OPTIONS {base}/` is the mean weighted by each node's count (§11.6.3, N39,
@@ -293,6 +349,17 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   for a refusal alone; every `subject-unavailable` carries one fixed
   message. The node request metrics now count such a refusal as
   `consent-denied` on every path, whatever the setting.
+
+### Fixed
+
+- A caller whose token states the requester claims in a form the Mitz
+  question does not take, or a patient value Mitz does not take as a BSN,
+  is no longer reported as a Mitz outage, although Mitz was never asked
+  (#568). The pre-filter answers that it did not ask, with the reason
+  `caller-claims-invalid` or `patient-value`, so the call is counted as
+  `not-asked`, `GET /health/dependencies` keeps the pre-filter's state, and
+  the client's answer carries no `meta.federation.consent.error`. No claim
+  value reaches a label, a log line or an error.
 
 ## [0.0.8] - 2026-10-04
 

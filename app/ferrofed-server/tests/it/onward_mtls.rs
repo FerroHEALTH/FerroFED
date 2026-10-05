@@ -34,6 +34,7 @@ use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
 use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
+use oauth_server_metadata::AliasHost;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -512,6 +513,116 @@ fn no_rendering_shows_the_client_identity() -> TestResult {
         shown.contains(front.client_thumbprint()),
         "the binding is shown"
     );
+    Ok(())
+}
+
+/// Node A's section with `tls` and `hosts` as its `mtls_alias_hosts`, and a
+/// FAPI 2.0 grant that authenticates by, and binds its tokens to, the
+/// certificate.
+fn fapi2_by_certificate(tls: &str, hosts: &str) -> String {
+    format!(
+        "[credentials.\"node-a-pub\"]\n{tls}mtls_alias_hosts = {hosts}\n\n[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.cdr-a.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\ntls_client_certificate_bound_access_tokens = true\n"
+    )
+}
+
+/// The configuration of a gateway over node A with `tables`, its files
+/// written into `dir`.
+fn over_node_a(dir: &Path, tables: &str) -> Result<String, Box<dyn Error>> {
+    text(
+        dir,
+        ("https://cdr-a.example.org/openehr", unreachable::BASE),
+        tables,
+    )
+}
+
+/// The FAPI 2.0 grant takes the hosts its section names for the mutual-TLS
+/// aliases (RFC 8705 §5).
+#[test]
+fn a_fapi2_grant_takes_the_alias_hosts_its_section_names() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let front = MutualTls::front("http://127.0.0.1:9")?;
+    let tables = fapi2_by_certificate(
+        &tls_keys(dir.path(), &front)?,
+        r#"["mtls.cdr-a.example.org", "mtls2.cdr-a.example.org:8443"]"#,
+    );
+    let settings = settings(&over_node_a(dir.path(), &tables)?)?;
+    let Some(Scheme::Fapi2(grant)) = settings.credentials.values().next() else {
+        return Err("node A has a FAPI 2.0 grant".into());
+    };
+    assert_eq!(
+        vec!["mtls.cdr-a.example.org", "mtls2.cdr-a.example.org:8443"],
+        grant
+            .mtls_alias_hosts()
+            .iter()
+            .map(AliasHost::as_str)
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// An entry that is no host, a URL or a path among them, is refused naming
+/// the key; an alias host is reached over `https` alone, so no scheme is
+/// written.
+#[test]
+fn an_alias_host_that_is_no_host_is_refused_naming_the_key() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let front = MutualTls::front("http://127.0.0.1:9")?;
+    let tls = tls_keys(dir.path(), &front)?;
+    for entry in [
+        "https://mtls.cdr-a.example.org",
+        "http://mtls.cdr-a.example.org",
+        "mtls.cdr-a.example.org/token",
+        "MTLS.cdr-a.example.org",
+        "",
+    ] {
+        let tables = fapi2_by_certificate(&tls, &format!("[\"{entry}\"]"));
+        let error = refused(&over_node_a(dir.path(), &tables)?)?;
+        assert!(
+            matches!(
+                &error,
+                ConfigError::GrantFault(GrantFault::AliasHost { key, .. })
+                    if key == "credentials.node-a-pub.mtls_alias_hosts"
+            ),
+            "{entry}: {error:?}"
+        );
+    }
+    Ok(())
+}
+
+/// Alias hosts are refused in a section whose grant never reads
+/// `mtls_endpoint_aliases`: an `oauth2` grant, and a FAPI 2.0 grant that
+/// does not use mutual TLS.
+#[test]
+fn alias_hosts_without_a_mutual_tls_fapi2_grant_are_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let front = MutualTls::front("http://127.0.0.1:9")?;
+    let tls = tls_keys(dir.path(), &front)?;
+    let hosts = "mtls_alias_hosts = [\"mtls.cdr-a.example.org\"]\n";
+    let oauth2 = credentials(
+        &format!("{tls}{hosts}"),
+        "https://idp.example.org/token",
+        "",
+    );
+    let client_key = dir.path().join("client.pem");
+    let dpop = dir.path().join("dpop.pem");
+    std::fs::write(&client_key, oauth::p256_pem()?)?;
+    std::fs::write(&dpop, oauth::p256_pem()?)?;
+    let by_key = format!(
+        "[credentials.\"node-a-pub\"]\n{hosts}\n[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.cdr-a.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n",
+        toml::Value::String(client_key.display().to_string()),
+        toml::Value::String(dpop.display().to_string())
+    );
+    for tables in [oauth2, by_key] {
+        let error = refused(&over_node_a(dir.path(), &tables)?)?;
+        assert!(
+            matches!(
+                &error,
+                ConfigError::GrantFault(GrantFault::AliasHostsUnused { key })
+                    if key == "credentials.node-a-pub.mtls_alias_hosts"
+            ),
+            "{tables}: {error:?}"
+        );
+    }
     Ok(())
 }
 
