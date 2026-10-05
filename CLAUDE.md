@@ -50,7 +50,8 @@ profile run against FerroEHR 4.3.3 and EHRbase 2.36.0 pinned by digest (#93,
 #549), a differential run against the reference implementation (#94), and
 `ferrofed conformance run`, which scores a configured deployment, runs the
 node profile with `--node-profile` and reads the seed data each release
-attaches (#546, #573); the conformance statement is #95. It also carries the
+attaches (#546, #573), with the matrix closed and the conformance statement
+written (#89, #95). It also carries the
 regional binding refactor: one `Binding` trait with the `binding-ihe` and
 `binding-nl` features of the server, `ihe` and `nl` of the identity crate and
 `nl` of the engine, and RFC 8414 in its own crate, `oauth-server-metadata`
@@ -65,9 +66,10 @@ non-disclosure setting `[federation.consent] disclose` (#493) and a
 pre-filter that says it did not ask, with a closed `NotAsked` reason (#496,
 #568); PIXm asked by POST (#494); the verified caller as the user agent of
 each IHE audit record (#500); the operator console, `app/ferrofed-viewer`,
-with its own image (#275) and the operator views (#276), with the operator
-surface, sign-out, the bundle serving and the query console in flight (#583,
-#584, #600, #277); the country research (#488); FerroFED's intended
+with its own image (#275), the operator views over a read-only operator
+surface (#276, #583), sign-out (#584), the query console (#277) and the
+compressed bundle (#600), its browser journeys still to come (#608); the
+country research (#488); FerroFED's intended
 purpose and EHDS classification (#520); changelog fragments (#598); and
 Cadasto B.V. as the Licensor (#602). The re-pin to the specification's 1.0
 release moved to v0.0.10 (#17, #354).
@@ -249,7 +251,11 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   members, their health, the integrity incidents, the routing table, the
   stored queries and the self-description, the last four through the
   gateway's read-only operator surface (`{base}/operator/`, behind the
-  issuer's `operator_scope`); the query console is #277. Its discipline is
+  issuer's `operator_scope`). The query console (`query`, #277) runs AQL and
+  the stored queries with every node's status and completeness shown, and
+  sign-out ends the server session and, when configured, the provider's
+  (`oidc`, #584). Its
+  discipline is
   `.claude/rules/leptos-ui.md`.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
   reader, the wiremock `Server` that drops off the runtime (`mock`, #361),
