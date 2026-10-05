@@ -106,7 +106,11 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   other than `development` without
   `--i-understand-this-writes-synthetic-data-to-the-nodes`, for a patient
   outside the example arc, and for seed files other than the vendored ones,
-  which it checks by SHA-256. It writes the per-track and per-point report the
+  which it checks by SHA-256. The `--gateway` URL and every member endpoint
+  are held to `https`, or `http` to a loopback host under the development
+  profile alone, which the report names; the gateway client follows no
+  redirect, and the caller's token is held as a secret that no report, log
+  line or error carries. It writes the per-track and per-point report the
   harness run writes, with the same columns and results, and reports every
   scenario that needs fault injection, node-side capture or a gateway
   configured for it `not-run` with the reason, never `pass`; `--node-profile`

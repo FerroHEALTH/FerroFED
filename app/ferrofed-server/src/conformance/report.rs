@@ -97,6 +97,7 @@ pub struct Report {
     findings: Vec<Finding>,
     written: Vec<Written>,
     scored: String,
+    cleartext: Vec<String>,
 }
 
 /// The counts of one token over the outcomes.
@@ -155,7 +156,17 @@ impl Report {
             findings,
             written,
             scored: scored.into(),
+            cleartext: Vec::new(),
         }
+    }
+
+    /// Returns the report naming `lines`, each a site the run sent a
+    /// credential or synthetic data to unencrypted, which only the
+    /// development profile allows.
+    #[must_use]
+    pub fn with_cleartext(mut self, lines: Vec<String>) -> Self {
+        self.cleartext = lines;
+        self
     }
 
     /// Returns the rows, the tracks first.
@@ -321,6 +332,13 @@ impl Report {
                 );
             }
         }
+        self.appendix(&mut text);
+        text
+    }
+
+    /// Appends the scenarios that did not pass, the unencrypted connections
+    /// and the writes to `text`, the closing sections of `report.md`.
+    fn appendix(&self, text: &mut String) {
         let unpassed: Vec<_> = self
             .scenarios
             .iter()
@@ -337,6 +355,12 @@ impl Report {
                 );
             }
         }
+        if !self.cleartext.is_empty() {
+            text.push_str("\n## Unencrypted connections\n\nThe development profile admits plain http to a loopback host, and this run used it:\n\n");
+            for line in &self.cleartext {
+                let _line = writeln!(text, "- {}", md_cell(line));
+            }
+        }
         text.push_str("\n## What this run wrote\n\n");
         if self.written.is_empty() {
             text.push_str("Nothing.\n");
@@ -351,7 +375,6 @@ impl Report {
                 );
             }
         }
-        text
     }
 
     /// Writes `report.tsv`, `report.md`, `node-profile.tsv` and

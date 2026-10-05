@@ -65,13 +65,40 @@ drives the gateway already serving at that base URL, and reads the
 configuration for the registry, the node clients it seeds through and the
 cross-reference. Give it the same configuration that gateway serves.
 
+### What it sends in the clear
+
+The run carries your caller token and synthetic patient data, so it holds
+every connection it makes to a stricter rule than the gateway's own:
+
+- the `--gateway` URL and the URL of every member endpoint in the registry
+  are `https`, or plain `http` to a loopback host (`127.0.0.1`, `::1`,
+  `localhost`) under the development profile alone;
+- plain `http` to any other host is refused under every profile, and any
+  `http` outside the development profile, before the run sends anything;
+- the token endpoints and the other credential sites of the configuration
+  are held to the rule `serve` applies
+  ([Configuration](configuration.md)).
+
+A refusal exits `78` and names the URL's key, never the URL or a value. A
+loopback `http` connection the development profile admits is printed as a
+warning and listed under *Unencrypted connections* in `report.md`. The
+in-process gateway is the run's own listener on `127.0.0.1`, inside the
+same process.
+
+The run follows no redirect, to the gateway or to a node: a `3xx` is the
+answer it reads, so the token never travels to an origin you did not give
+it. The token is read from `--token-file` into a secret type, and no report
+file, log line or error message carries it. Each node receives the onward
+credentials the configuration names for it, never your token.
+
 `--node-profile` also runs the admission check against every active member
 ([Admitting a node](admission.md)) and records its findings as the node
 profile.
 
 The command exits `0` when no scenario failed, `1` when one did or the run
 could not reach its report, `2` when a safety rule refused it, and `78` for a
-configuration that does not load or has no registry.
+configuration that does not load or has no registry, or a connection that
+would carry the token or the synthetic data in the clear.
 
 ## What it writes
 

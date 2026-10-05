@@ -109,11 +109,17 @@ impl HttpGateway {
     /// Creates the client of the gateway at `base`, sending `token` as the
     /// caller's bearer credential (RFC 6750 §2.1).
     ///
+    /// The client follows no redirect: a `3xx` is the answer read, so the
+    /// token never travels to an origin the run was not given.
+    ///
     /// # Errors
     ///
     /// Returns [`GatewayError::Client`] when the HTTP client cannot be built.
     pub fn new(base: Url, token: SecretString) -> Result<Self, GatewayError> {
+        // NOTE: RFC 9110 §15.4 lets a redirect name any origin, and a followed one
+        // could carry the caller's token there.
         let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(GatewayError::Client)?;
         Ok(Self {

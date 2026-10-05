@@ -296,7 +296,8 @@ fn refused_before_config(args: &RunArgs) -> Result<(), Refusal> {
 /// The exit code is `0` when no scenario failed, `1` when one did or the
 /// run could not reach its report, [`EXIT_USAGE`] for a run the safety rules
 /// refuse, and [`EXIT_CONFIG`] for a configuration that federates nothing
-/// or does not build.
+/// or does not build, or would send the token or the synthetic data in the
+/// clear.
 #[expect(
     clippy::print_stdout,
     reason = "`conformance run` answers the operator who ran it"
@@ -365,6 +366,7 @@ fn conformance_command(settings: &Settings, args: RunArgs) -> ExitCode {
                 summary.base,
                 counts.join("; ")
             );
+            config::transport::print_warnings(&summary.cleartext);
             for path in &summary.paths {
                 println!("ferrofed: wrote {}", path.display());
             }

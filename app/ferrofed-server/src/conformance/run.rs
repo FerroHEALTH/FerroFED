@@ -23,6 +23,7 @@ use uuid::Uuid;
 
 use crate::admission::{self, AdmissionError, DEFAULT_COUNT};
 use crate::config::settings::Settings;
+use crate::config::transport::{self, CleartextError, Encryption, ProtectedSite};
 use crate::conformance::catalogue::CATALOGUE;
 use crate::conformance::client::{GatewayError, HttpGateway};
 use crate::conformance::execute::{Context, execute};
@@ -60,6 +61,9 @@ pub struct Summary {
     pub report: Report,
     /// The files written.
     pub paths: Vec<PathBuf>,
+    /// The sites the run sent a credential or synthetic data to unencrypted,
+    /// which only the development profile allows.
+    pub cleartext: Vec<ProtectedSite>,
 }
 
 /// A run that could not reach its report.
@@ -87,7 +91,7 @@ pub enum RunError {
     /// A credential or a patient identifier would travel in cleartext outside
     /// the development profile.
     #[error("a credential or a patient identifier would travel in cleartext")]
-    Cleartext(#[source] crate::config::transport::CleartextError),
+    Cleartext(#[source] CleartextError),
     /// The gateway client could not be built.
     #[error(transparent)]
     Gateway(#[from] GatewayError),
@@ -105,12 +109,21 @@ pub enum RunError {
 /// # Errors
 ///
 /// Returns [`RunError`] when the run cannot reach a report: the seed data
-/// is not the vendored content, no registry is configured, the gateway or
-/// its client cannot be built, a node refuses a seed write, or the report
+/// is not the vendored content, no registry is configured, a connection
+/// would carry the token or the synthetic data in the clear
+/// ([`transport::loopback_payload`]), the gateway or its client cannot be
+/// built, a node refuses a seed write, or the report
 /// cannot be written. A scenario that fails is in the report, never an
 /// error.
 pub async fn run(settings: &Settings, options: RunOptions) -> Result<Summary, RunError> {
     let data = SeedData::read(&options.seed_data)?;
+    let mut cleartext = Vec::new();
+    if let Some(base) = &options.gateway {
+        cleartext.extend(
+            transport::loopback_payload(settings.profile, base, gateway_site())
+                .map_err(RunError::Cleartext)?,
+        );
+    }
     let (federation, base, served) = if let Some(base) = &options.gateway {
         let federation = Federation::load(settings)
             .map_err(RunError::Federation)?
@@ -120,8 +133,10 @@ pub async fn run(settings: &Settings, options: RunOptions) -> Result<Summary, Ru
         let (federation, base, served) = in_process(settings).await?;
         (federation, base, Some(served))
     };
-    crate::config::transport::check_and_print(settings, Some(federation.snapshot()))
-        .map_err(RunError::Cleartext)?;
+    cleartext.extend(members_held(settings, &federation).map_err(RunError::Cleartext)?);
+    cleartext.extend(
+        transport::check(settings, Some(federation.snapshot())).map_err(RunError::Cleartext)?,
+    );
     let gateway = HttpGateway::new(base.clone(), options.token)?;
     let seeded = seed::seed(&federation, &options.patient, &data)
         .await
@@ -153,6 +168,12 @@ pub async fn run(settings: &Settings, options: RunOptions) -> Result<Summary, Ru
         findings,
         written,
         format!("the gateway at {base}"),
+    )
+    .with_cleartext(
+        cleartext
+            .iter()
+            .map(|site| format!("{} travels unencrypted to {}", site.payload, site.url_key))
+            .collect(),
     );
     let paths = report.write(&options.out).map_err(RunError::Write)?;
     if let Some((stop, serving)) = served {
@@ -167,7 +188,49 @@ pub async fn run(settings: &Settings, options: RunOptions) -> Result<Summary, Ru
         base,
         report,
         paths,
+        cleartext,
     })
+}
+
+/// The site of the gateway `--gateway` names: the caller's bearer token and
+/// the synthetic patient's identifier travel to it.
+fn gateway_site() -> ProtectedSite {
+    ProtectedSite {
+        url_key: "the --gateway URL".to_owned(),
+        payload: "the caller's bearer token and the synthetic patient's identifier".to_owned(),
+        requires: Encryption::Https,
+    }
+}
+
+/// Holds every member endpoint the run may write through to
+/// [`transport::loopback_payload`]: the endpoint's onward credentials and
+/// the synthetic patient's `EHR_STATUS` travel to it.
+///
+/// The in-process gateway is the run's own listener on `127.0.0.1`, inside
+/// this process, so it is not held here.
+///
+/// # Errors
+///
+/// Returns the [`CleartextError`] of the first endpoint, in registry order,
+/// the policy refuses.
+fn members_held(
+    settings: &Settings,
+    federation: &Federation,
+) -> Result<Vec<ProtectedSite>, CleartextError> {
+    let mut cleartext = Vec::new();
+    for endpoint in federation.snapshot().endpoints() {
+        let site = ProtectedSite {
+            url_key: format!("the url of endpoint {} in the registry", endpoint.id()),
+            payload: "the onward credentials and the synthetic patient's EHR_STATUS".to_owned(),
+            requires: Encryption::Https,
+        };
+        cleartext.extend(transport::loopback_payload(
+            settings.profile,
+            endpoint.url(),
+            site,
+        )?);
+    }
+    Ok(cleartext)
 }
 
 /// The handle that stops the in-process gateway, and its serving task.
