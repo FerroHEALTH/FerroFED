@@ -1,0 +1,157 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Prometheus alerting rules for a FerroFED gateway, over the metrics its
+# admin listener serves on GET /metrics. Load the file through rule_files in
+# prometheus.yml, or wrap its groups in a PrometheusRule for the Prometheus
+# Operator. Every threshold is a starting point: tune it to your traffic.
+# No series carries a patient identifier, so an alert never does either.
+# scripts/checks/observability.sh validates this file.
+groups:
+  - name: ferrofed-service
+    rules:
+      - alert: FerroFEDServerErrors
+        expr: |
+          sum(rate(ferrofed_http_requests_total{status_class="5xx"}[5m]))
+            / sum(rate(ferrofed_http_requests_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: More than 5% of the gateway's answers are server errors
+          description: >-
+            {{ $value | humanizePercentage }} of requests answered 5xx over the
+            last 5 minutes. Read ferrofed_node_requests_total by outcome and
+            the request log under the same route to see whether a member, the
+            resolver or the gateway fails.
+      - alert: FerroFEDSlowAnswers
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_request_duration_seconds_bucket[5m]))) > 20
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: The 95th percentile of the gateway's answers takes over 20 seconds
+          description: >-
+            Answers approach the overall fan-out budget. Look for a member whose
+            ferrofed_node_request_duration_seconds grows.
+      - alert: FerroFEDOverloaded
+        expr: sum(rate(ferrofed_overload_refusals_total{limit="concurrency"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: The gateway refuses requests past server.max_concurrent_requests
+          description: >-
+            Clients get 503 overloaded. Add replicas, or raise the limit if
+            the members can take the load.
+      - alert: FerroFEDCallerRateLimited
+        expr: sum(rate(ferrofed_overload_refusals_total{limit="caller-rate"}[5m])) > 0
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: A caller keeps sending faster than [server.caller_rate] admits
+          description: >-
+            Clients get 429 rate-limited for 15 minutes. Check which client
+            in your authorization server's records, and whether its rate is
+            the one it was given.
+  - name: ferrofed-members
+    rules:
+      - alert: FerroFEDMemberFailing
+        expr: |
+          sum by (endpoint) (rate(ferrofed_node_requests_total{outcome=~"node-error|time-out|offline"}[5m]))
+            / sum by (endpoint) (rate(ferrofed_node_requests_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: "Member endpoint {{ $labels.endpoint }} fails more than 10% of its requests"
+          description: >-
+            Under the all-or-nothing default every query that asks this member
+            fails with 504 or 424 (§11.4).
+      - alert: FerroFEDMemberCapSaturated
+        expr: sum by (endpoint) (rate(ferrofed_overload_refusals_total{limit="node-in-flight"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Requests to {{ $labels.endpoint }} wait out their deadline for a slot"
+          description: >-
+            The member's federation.max_in_flight_per_node cap stays full, so
+            requests to it end time-out with nothing sent. The member is slow,
+            or the cap is low for the traffic.
+      - alert: FerroFEDResolverFailing
+        expr: sum(rate(ferrofed_resolver_requests_total{outcome=~"unavailable|time-out"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: The cross-reference resolver does not answer
+          description: >-
+            Patient queries cannot resolve a member's ehr_id, so they fail
+            under the all-or-nothing default.
+      - alert: FerroFEDLocalizerFailing
+        expr: sum(rate(ferrofed_localizer_requests_total{outcome=~"unavailable|audit-failed"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: The localizer does not answer, or its exchanges cannot be audited
+  - name: ferrofed-integrity
+    rules:
+      - alert: FerroFEDIntegrityIncident
+        expr: increase(ferrofed_integrity_incidents_total[15m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: "The gateway raised a {{ $labels.kind }} integrity incident"
+          description: >-
+            Read the incident line under ferrofed::integrity, or the operator
+            console's incident list, for the routing ids involved.
+      - alert: FerroFEDRegistryReloadRefused
+        expr: increase(ferrofed_registry_reloads_total{result="refused"}[15m]) > 0
+        labels:
+          severity: ticket
+        annotations:
+          summary: A registry reload was refused, and the gateway runs the previous registry
+      - alert: FerroFEDAuditSpoolBacklog
+        expr: ferrofed_audit_spool_events > 1000
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: The ITI-20 audit spool holds over 1000 undelivered records
+      - alert: FerroFEDAuditRefused
+        expr: increase(ferrofed_audit_refused_total[15m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: The audit spool is full, and exchanges fail as audit failures
+  - name: ferrofed-security
+    rules:
+      - alert: FerroFEDOutboundGateStopped
+        expr: increase(ferrofed_security_events_total{event="outbound-gate-stopped"}[15m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: The outbound gate stopped a request that would have carried a patient identifier
+          description: >-
+            Nothing was sent, and the event under ferrofed::security names the
+            endpoint and the part of the request. A stop is a defect in the
+            gateway or a hostile request: raise it with the maintainers.
+      - alert: FerroFEDCallerRefusals
+        expr: sum by (reason) (rate(ferrofed_security_events_total{event="caller-refused"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Callers are refused at authentication for {{ $labels.reason }}, over one a second"
+      - alert: FerroFEDAuthenticationUnavailable
+        expr: |
+          increase(ferrofed_security_events_total{event=~"key-set-unavailable|introspection-unavailable"}[5m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: An issuer's key set or introspection endpoint cannot be reached, so its callers are refused

@@ -3,6 +3,7 @@
 
 //! Integration tests through the library run path the binary shares.
 
+mod admin_peer;
 mod admission;
 mod aggregate;
 mod ask_all;
@@ -74,6 +75,7 @@ mod order;
 mod order_key;
 mod outbound;
 mod outbound_id;
+mod overload;
 mod path_ehr_id;
 #[cfg(feature = "binding-ihe")]
 mod pdqm;

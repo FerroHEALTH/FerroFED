@@ -33,8 +33,9 @@ use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
 use crate::metrics::{
-    CONSENT_PREFILTER_REQUESTS, DEMOGRAPHICS_REQUESTS, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS,
-    NODE_REQUEST_DURATION, NODE_REQUESTS,
+    CONSENT_PREFILTER_REQUESTS, DEMOGRAPHICS_REQUEST_DURATION, DEMOGRAPHICS_REQUESTS,
+    LOCALIZER_REQUEST_DURATION, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
+    NODE_REQUESTS, OVERLOAD_REFUSALS, RESOLVER_REQUEST_DURATION, RESOLVER_REQUESTS,
 };
 
 /// The node request instruments of one meter provider, shared by every
@@ -45,7 +46,12 @@ pub struct Instruments {
     duration: Histogram<f64>,
     prefilter: Counter<u64>,
     localizer: Counter<u64>,
+    localizer_duration: Histogram<f64>,
     demographics: Counter<u64>,
+    demographics_duration: Histogram<f64>,
+    resolver: Counter<u64>,
+    resolver_duration: Histogram<f64>,
+    overload: Counter<u64>,
 }
 
 impl Instruments {
@@ -75,8 +81,96 @@ impl Instruments {
                 .u64_counter(DEMOGRAPHICS_REQUESTS)
                 .with_description("Calls to the demographics service, by outcome")
                 .build(),
+            demographics_duration: duration(
+                meter,
+                DEMOGRAPHICS_REQUEST_DURATION,
+                "The time the demographics service took to answer a call",
+            ),
+            localizer_duration: duration(
+                meter,
+                LOCALIZER_REQUEST_DURATION,
+                "The time the localizer took to answer a call",
+            ),
+            resolver: meter
+                .u64_counter(RESOLVER_REQUESTS)
+                .with_description("Calls to the cross-reference resolver, by outcome")
+                .build(),
+            resolver_duration: duration(
+                meter,
+                RESOLVER_REQUEST_DURATION,
+                "The time the cross-reference resolver took to answer a call",
+            ),
+            overload: overload(meter),
         }
     }
+
+    /// Counts one call to the cross-reference resolver that ended as
+    /// `outcome` after `elapsed`.
+    pub fn resolved(&self, outcome: crate::metrics::resolver::Outcome, elapsed: Duration) {
+        self.resolver
+            .add(1, &[KeyValue::new("outcome", outcome.as_str())]);
+        self.resolver_duration.record(elapsed.as_secs_f64(), &[]);
+    }
+
+    /// Counts one request a limit of the gateway refused.
+    pub fn shed(&self, limit: Limit) {
+        self.overload
+            .add(1, &[KeyValue::new("limit", limit.as_str())]);
+    }
+}
+
+/// A limit of the gateway that refuses a request past it, the `limit` label
+/// of [`OVERLOAD_REFUSALS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Limit {
+    /// The gateway serves as many requests as `server.max_concurrent_requests`
+    /// allows: `503`.
+    Concurrency,
+    /// The caller sent more than `[server.caller_rate]` allows: `429`.
+    CallerRate,
+    /// The endpoint's `federation.max_in_flight_per_node` cap stayed full
+    /// until the request's deadline: `time-out` (§11.5).
+    NodeInFlight,
+}
+
+impl Limit {
+    /// Every limit, in declaration order.
+    pub const ALL: [Self; 3] = [Self::Concurrency, Self::CallerRate, Self::NodeInFlight];
+
+    /// The label value.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Concurrency => "concurrency",
+            Self::CallerRate => "caller-rate",
+            Self::NodeInFlight => "node-in-flight",
+        }
+    }
+}
+
+/// A duration histogram named `name`, in seconds, over the node request
+/// buckets.
+fn duration(meter: &Meter, name: &'static str, description: &'static str) -> Histogram<f64> {
+    meter
+        .f64_histogram(name)
+        .with_description(description)
+        .with_unit("s")
+        .with_boundaries(NODE_DURATION_BUCKETS.to_vec())
+        .build()
+}
+
+/// The refusal counter of every limit, the two the listener applies at `0`
+/// from the start, so an alert on their increase works from the first
+/// scrape; a per-node refusal also names its `endpoint`.
+fn overload(meter: &Meter) -> Counter<u64> {
+    let counter = meter
+        .u64_counter(OVERLOAD_REFUSALS)
+        .with_description("Requests a limit of the gateway refused, by limit")
+        .build();
+    for limit in [Limit::Concurrency, Limit::CallerRate] {
+        counter.add(0, &[KeyValue::new("limit", limit.as_str())]);
+    }
+    counter
 }
 
 /// What one federation records of its node requests: the endpoints of its
@@ -117,6 +211,9 @@ impl NodeRequests {
     /// from a node that was not reached; `contact` can, and such a request
     /// is not counted.
     pub fn settled(&self, endpoint: &EndpointId, outcome: &Outcome, contact: Contact) {
+        if contact == Contact::Capped {
+            self.capped(endpoint);
+        }
         if !contact.sent() {
             return;
         }
@@ -138,7 +235,11 @@ impl NodeRequests {
         (outcome, refused): (&Result<Forwarded, ForwardError>, bool),
         elapsed: Duration,
     ) {
-        if !Contact::of_forwarded(outcome).sent() {
+        let contact = Contact::of_forwarded(outcome);
+        if contact == Contact::Capped {
+            self.capped(endpoint);
+        }
+        if !contact.sent() {
             return;
         }
         let status = match outcome {
@@ -157,6 +258,9 @@ impl NodeRequests {
     /// An abandoned probe is a `time-out`, timed to the moment the overall
     /// budget ran out, as an abandoned fan-out request is (§11.1, §11.5).
     pub fn probed(&self, endpoint: &EndpointId, probed: &Probed) {
+        if probed.contact() == Contact::Capped {
+            self.capped(endpoint);
+        }
         if !probed.contact().sent() {
             return;
         }
@@ -197,8 +301,10 @@ impl NodeRequests {
 
     /// Counts one call to the localizer that ended in `localization`, in a
     /// series of its own: the localizer is no member, so it has no
-    /// `endpoint` and no §11.1 outcome.
-    pub fn localized(&self, localization: &Localization) {
+    /// `endpoint` and no §11.1 outcome. A call that was made is timed
+    /// over `elapsed`; one the localizer was never asked, `not-configured`,
+    /// is not.
+    pub fn localized(&self, localization: &Localization, elapsed: Duration) {
         let Some(instruments) = &self.instruments else {
             return;
         };
@@ -212,12 +318,17 @@ impl NodeRequests {
         instruments
             .localizer
             .add(1, &[KeyValue::new("outcome", outcome)]);
+        if !matches!(localization, Localization::NotConfigured) {
+            instruments
+                .localizer_duration
+                .record(elapsed.as_secs_f64(), &[]);
+        }
     }
 
     /// Counts one call to the demographics service that ended in
     /// `identification`, in a series of its own: the service is no member,
-    /// so it has no `endpoint` and no §11.1 outcome.
-    pub fn identified(&self, identification: &Identification) {
+    /// so it has no `endpoint` and no §11.1 outcome, timed over `elapsed`.
+    pub fn identified(&self, identification: &Identification, elapsed: Duration) {
         let Some(instruments) = &self.instruments else {
             return;
         };
@@ -231,6 +342,27 @@ impl NodeRequests {
         instruments
             .demographics
             .add(1, &[KeyValue::new("outcome", outcome)]);
+        instruments
+            .demographics_duration
+            .record(elapsed.as_secs_f64(), &[]);
+    }
+
+    /// Counts one request to `endpoint` the endpoint's in-flight cap refused;
+    /// an endpoint outside the snapshot is not recorded.
+    fn capped(&self, endpoint: &EndpointId) {
+        let Some(instruments) = &self.instruments else {
+            return;
+        };
+        let Some(endpoint) = self.endpoints.get(endpoint) else {
+            return;
+        };
+        instruments.overload.add(
+            1,
+            &[
+                KeyValue::new("limit", Limit::NodeInFlight.as_str()),
+                KeyValue::new("endpoint", endpoint.as_str().to_owned()),
+            ],
+        );
     }
 
     /// Counts one request to `endpoint` that ended as `status` after

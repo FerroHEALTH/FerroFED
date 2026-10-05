@@ -9,22 +9,29 @@
 //! surface and not the other. Every label value is drawn from a closed set
 //! or from the registry: `kind` from the integrity incident kinds, `outcome`
 //! from the §11.1 statuses or, for the consent pre-filter's calls, from its
-//! three decisions, `result` from the reload outcomes, and `endpoint`
-//! from the registry's endpoint ids. Nothing a request carries becomes a
-//! label, so no patient identifier and no client text can reach the
+//! three decisions, `result` from the reload outcomes, `endpoint` from the
+//! registry's endpoint ids, the inbound request labels from the method set
+//! and the route templates ([`inbound`]), `event` and `reason` from the
+//! security events and the refusal reasons ([`security`]), and `limit` from
+//! the overload limits ([`nodes::Limit`]). Nothing a request carries becomes
+//! a label, so no patient identifier and no client text can reach the
 //! surface (§5.4.1, N33). Each binding adds its own instruments under the
-//! same rule ([`crate::binding::process::Instruments`]).
-//! The instruments fill from what the gateway already
-//! observes: an incident's event, the per-endpoint report of each node
-//! request, and a registry reload's outcome. No specification governs
-//! metrics: our own design.
+//! same rule ([`crate::binding::process::Instruments`]). The instruments
+//! fill from what the gateway already observes: each request it answers, an
+//! incident's event, the per-endpoint report of each node request, each
+//! resolver call, each security event, each refusal of a limit, and a
+//! registry reload's outcome. No specification governs metrics: our own
+//! design.
 //!
 //! Instrument names follow the `OpenTelemetry` naming convention, dotted and
 //! without a unit or a `_total`; the Prometheus exporter writes `.` as `_`,
 //! appends `_total` to a counter and the unit to a histogram
 //! (<https://opentelemetry.io/docs/specs/otel/compatibility/prometheus_and_openmetrics/>).
 
+pub mod inbound;
 pub mod nodes;
+pub mod resolver;
+pub mod security;
 
 use std::sync::Arc;
 
@@ -77,6 +84,28 @@ pub const LOCALIZER_REQUESTS: &str = "ferrofed.localizer.requests";
 /// `no-match`, `ambiguous`, `unavailable` or `audit-failed`); Prometheus
 /// `ferrofed_demographics_requests_total`.
 pub const DEMOGRAPHICS_REQUESTS: &str = "ferrofed.demographics.requests";
+
+/// The time the localizer took to answer a call; Prometheus
+/// `ferrofed_localizer_request_duration_seconds`.
+pub const LOCALIZER_REQUEST_DURATION: &str = "ferrofed.localizer.request.duration";
+
+/// The time the demographics service took to answer a call; Prometheus
+/// `ferrofed_demographics_request_duration_seconds`.
+pub const DEMOGRAPHICS_REQUEST_DURATION: &str = "ferrofed.demographics.request.duration";
+
+/// The calls to the cross-reference resolver, by `outcome` (`resolved`,
+/// `not-resolved`, `unavailable` or `time-out`); Prometheus
+/// `ferrofed_resolver_requests_total`.
+pub const RESOLVER_REQUESTS: &str = "ferrofed.resolver.requests";
+
+/// The time the cross-reference resolver took to answer a call; Prometheus
+/// `ferrofed_resolver_request_duration_seconds`.
+pub const RESOLVER_REQUEST_DURATION: &str = "ferrofed.resolver.request.duration";
+
+/// The requests a limit of the gateway refused, by `limit`
+/// (`concurrency`, `caller-rate` or `node-in-flight`, the last with its
+/// `endpoint`); Prometheus `ferrofed_overload_refusals_total`.
+pub const OVERLOAD_REFUSALS: &str = "ferrofed.overload.refusals";
 
 /// The registry reloads, by `result`; Prometheus
 /// `ferrofed_registry_reloads_total`.
@@ -143,7 +172,11 @@ pub struct Metrics {
     provider: SdkMeterProvider,
     registry: prometheus::Registry,
     nodes: Instruments,
+    inbound: inbound::Instruments,
     reloads: Counter<u64>,
+    /// Kept for the life of the provider: its callback reads the security
+    /// event counts at each collection.
+    _security: ObservableCounter<u64>,
     /// Kept for the life of the provider: its callback reads the incident
     /// counts at each collection.
     _incidents: ObservableCounter<u64>,
@@ -226,12 +259,16 @@ impl Metrics {
             reloads.add(0, &[KeyValue::new("result", result.as_str())]);
         }
         let nodes = Instruments::new(&meter);
+        let inbound = inbound::Instruments::new(&meter);
+        let security = security::observe(&meter);
         let bindings = crate::binding::process::Instruments::new(&meter);
         Ok(Self {
             provider,
             registry,
             nodes,
+            inbound,
             reloads,
+            _security: security,
             _incidents: incidents,
             bindings,
         })
@@ -241,6 +278,18 @@ impl Metrics {
     #[must_use]
     pub fn nodes(&self) -> Instruments {
         self.nodes.clone()
+    }
+
+    /// Returns the inbound request instruments the request log records
+    /// through.
+    #[must_use]
+    pub fn inbound(&self) -> inbound::Instruments {
+        self.inbound.clone()
+    }
+
+    /// Counts one request `limit` refused.
+    pub fn shed(&self, limit: nodes::Limit) {
+        self.nodes.shed(limit);
     }
 
     /// Counts a registry reload that ended as `result`.

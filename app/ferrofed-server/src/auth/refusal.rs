@@ -61,6 +61,28 @@ pub enum Refusal {
 }
 
 impl Refusal {
+    /// Every refusal, in declaration order.
+    pub const ALL: [Self; 18] = [
+        Self::Missing,
+        Self::Malformed,
+        Self::Algorithm,
+        Self::Type,
+        Self::Issuer,
+        Self::Key,
+        Self::Signature,
+        Self::Expired,
+        Self::NotYetValid,
+        Self::Audience,
+        Self::Inactive,
+        Self::Unavailable,
+        Self::Operation,
+        Self::Scope,
+        Self::Demographic,
+        Self::PurposeOfUse,
+        Self::PatientContext,
+        Self::PatientDemographic,
+    ];
+
     /// The reason the security log and the challenge name.
     #[must_use]
     pub const fn reason(self) -> &'static str {
@@ -167,5 +189,41 @@ impl Refusal {
                 .insert(header::WWW_AUTHENTICATE, value);
         }
         response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Refusal;
+
+    /// The declaration position of `refusal`; no wildcard, so a new variant
+    /// fails to compile here until [`Refusal::ALL`] lists it.
+    fn ordinal(refusal: Refusal) -> usize {
+        match refusal {
+            Refusal::Missing => 0,
+            Refusal::Malformed => 1,
+            Refusal::Algorithm => 2,
+            Refusal::Type => 3,
+            Refusal::Issuer => 4,
+            Refusal::Key => 5,
+            Refusal::Signature => 6,
+            Refusal::Expired => 7,
+            Refusal::NotYetValid => 8,
+            Refusal::Audience => 9,
+            Refusal::Inactive => 10,
+            Refusal::Unavailable => 11,
+            Refusal::Operation => 12,
+            Refusal::Scope => 13,
+            Refusal::Demographic => 14,
+            Refusal::PurposeOfUse => 15,
+            Refusal::PatientContext => 16,
+            Refusal::PatientDemographic => 17,
+        }
+    }
+
+    #[test]
+    fn all_lists_every_refusal_once_in_declaration_order() {
+        let ordinals: Vec<usize> = Refusal::ALL.into_iter().map(ordinal).collect();
+        assert_eq!((0..Refusal::ALL.len()).collect::<Vec<_>>(), ordinals);
     }
 }

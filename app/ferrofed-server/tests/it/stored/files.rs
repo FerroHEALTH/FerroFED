@@ -407,7 +407,14 @@ async fn the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothin
     let definitions = dir.path().join("definitions");
     write(&definitions, NAME, "1.0.0", parameterised().as_bytes())?;
     let settings = settings(dir.path(), (&a.uri(), &b.uri()), &definitions, "")?;
-    let operator = ferrofed_server::admin::router(Arc::new(AppState::build(&settings)?));
+    // NOTE: no specification governs this: our own design; the operator runs the
+    // write actions from the gateway's host, so the test speaks as a loopback peer.
+    let operator = ferrofed_server::admin::router(Arc::new(AppState::build(&settings)?)).layer(
+        axum::extract::connect_info::MockConnectInfo(std::net::SocketAddr::from((
+            [127, 0, 0, 1],
+            0,
+        ))),
+    );
     for target in ["*", "node-a-pub"] {
         let request = Request::post(format!("/admin/stored-queries/{NAME}/1.0.0/distribute"))
             .header("openEHR-federation-endpoint", target)

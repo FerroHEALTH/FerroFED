@@ -128,6 +128,7 @@ pub(crate) async fn localize(
     let until = Instant::now()
         .checked_add(policy.timeout())
         .map_or(deadline, |at| at.min(deadline));
+    let started = Instant::now();
     let answer = tokio::time::timeout_at(
         tokio::time::Instant::from_std(until),
         localizer.localize(patient, members, on_behalf, inside(until)),
@@ -138,7 +139,7 @@ pub(crate) async fn localize(
     if let Some(observed) = dependencies::of_localization(&answer) {
         federation.dependencies().localizer(observed);
     }
-    federation.requests().localized(&answer);
+    federation.requests().localized(&answer, started.elapsed());
     match answer {
         Localization::NotConfigured => Localized::everyone(),
         Localization::Candidates(named) => Localized {

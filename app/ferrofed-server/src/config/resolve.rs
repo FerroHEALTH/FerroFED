@@ -136,6 +136,7 @@ impl Config {
                 shutdown_timeout,
                 body_limit: self.server.body_limit_bytes,
                 auth: self.auth.resolve()?,
+                overload: self.server.resolve_overload()?,
             },
             telemetry,
             registry_document: self.registry.document.clone(),
@@ -233,6 +234,10 @@ impl Config {
             NonZeroU32::new(self.federation.ehr_index_capacity).ok_or_else(|| Error::Zero {
                 key: String::from("federation.ehr_index_capacity"),
             })?;
+        let max_in_flight_per_node = NonZeroU32::new(self.federation.max_in_flight_per_node)
+            .ok_or_else(|| Error::Zero {
+                key: String::from("federation.max_in_flight_per_node"),
+            })?;
         let max_window =
             NonZeroU32::new(self.federation.max_offset_window).ok_or_else(|| Error::Zero {
                 key: String::from("federation.max_offset_window"),
@@ -281,6 +286,7 @@ impl Config {
             fan_out_template_upload: self.federation.fan_out_template_upload,
             fan_out_stored_queries: self.federation.fan_out_stored_queries,
             consent_disclosure: ConsentDisclosure::of(self.federation.consent.disclose),
+            max_in_flight_per_node,
         })
     }
 }

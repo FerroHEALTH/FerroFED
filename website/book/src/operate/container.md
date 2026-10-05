@@ -186,8 +186,9 @@ spool still holds.
 ## Kubernetes
 
 `deploy/kubernetes/` holds an example: a ConfigMap with the configuration and
-the registry document and no secret, a StatefulSet, a Service and a
-PodDisruptionBudget. CI validates every manifest with `kubeconform` in strict
+the registry document and no secret, a StatefulSet, a Service, a
+PodDisruptionBudget and a NetworkPolicy that opens the metrics port to your
+Prometheus alone ([Metrics](metrics.md#dashboard-and-alert-rules)). CI validates every manifest with `kubeconform` in strict
 mode, and runs `ferrofed config check` over the ConfigMap's configuration
 with synthetic secrets. The configuration trusts one example issuer in
 `[auth]` and reads the gateway's signing key from the `ferrofed-secrets`

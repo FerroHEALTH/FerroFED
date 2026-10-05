@@ -77,7 +77,7 @@ where
         } => match AppState::check(&settings).and_then(|cleartext| {
             state::admits_callers(&settings, settings.federates()).map(|()| cleartext)
         }) {
-            Ok(cleartext) => config_checked(&cleartext),
+            Ok(cleartext) => config_checked(&cleartext, &settings.metrics),
             Err(error) => {
                 eprintln!("ferrofed: cannot start: {}", chain(&error));
                 ExitCode::from(EXIT_CONFIG)
@@ -199,13 +199,24 @@ fn serve_job(settings: Settings, config: Option<PathBuf>) -> ExitCode {
     code
 }
 
-/// Reports a resolved configuration and its `cleartext` credentials, and exits.
+/// Reports a resolved configuration, its `cleartext` credentials and what a
+/// remote admin listener of `surface` serves, and exits.
 #[expect(
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
 )]
-fn config_checked(cleartext: &[config::transport::ProtectedSite]) -> ExitCode {
+fn config_checked(
+    cleartext: &[config::transport::ProtectedSite],
+    surface: &config::settings::MetricsSettings,
+) -> ExitCode {
     config::transport::print_warnings(cleartext);
+    if let Some(address) = surface.listen.filter(|address| !address.ip().is_loopback()) {
+        println!(
+            "ferrofed: note: metrics.listen {address} is not a loopback address: a remote peer reads GET {} alone, and the admin write actions ({}) answer 403 to every peer that is not loopback",
+            metrics::PATH,
+            admin::DISTRIBUTE
+        );
+    }
     println!("ferrofed: the configuration is valid");
     ExitCode::SUCCESS
 }
@@ -470,7 +481,7 @@ fn serve_command(
                 "serving the admin listener"
             );
             tokio::spawn(async move {
-                if let Err(error) = axum::serve(metrics, app).await {
+                if let Err(error) = admin::serve(metrics, app).await {
                     tracing::error!(%error, "the metrics listener stopped");
                 }
             });

@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 52] = [
+    pub const GATEWAY: [Self; 54] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -64,6 +64,8 @@ impl Code {
         Self::PatientConfinement,
         Self::PatientContextUnavailable,
         Self::SubjectUnavailable,
+        Self::Overloaded,
+        Self::RateLimited,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -132,6 +134,8 @@ impl Code {
             Self::PatientConfinement => "patient-confinement",
             Self::PatientContextUnavailable => "patient-context-unavailable",
             Self::SubjectUnavailable => "subject-unavailable",
+            Self::Overloaded => "overloaded",
+            Self::RateLimited => "rate-limited",
         }
     }
 
@@ -190,7 +194,8 @@ impl Code {
             | Self::OperationRefused
             | Self::PatientContextMissing
             | Self::PatientConfinement => StatusCode::FORBIDDEN,
-            Self::AuthenticationUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::AuthenticationUnavailable | Self::Overloaded => StatusCode::SERVICE_UNAVAILABLE,
+            Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 
@@ -320,6 +325,12 @@ impl Code {
             Self::SubjectUnavailable => {
                 "the requested resource is not available to this request (§11.2)"
             }
+            Self::Overloaded => {
+                "the gateway is serving as many requests as it takes at once; retry after the time Retry-After names"
+            }
+            Self::RateLimited => {
+                "this caller sent more requests than the gateway admits from one caller; retry after the time Retry-After names"
+            }
         }
     }
 }
@@ -390,6 +401,8 @@ mod tests {
             Code::PatientConfinement => Some(49),
             Code::PatientContextUnavailable => Some(50),
             Code::SubjectUnavailable => Some(51),
+            Code::Overloaded => Some(52),
+            Code::RateLimited => Some(53),
         }
     }
 
@@ -495,6 +508,8 @@ mod tests {
                 StatusCode::FAILED_DEPENDENCY,
             ),
             (Code::SubjectUnavailable, StatusCode::NOT_FOUND),
+            (Code::Overloaded, StatusCode::SERVICE_UNAVAILABLE),
+            (Code::RateLimited, StatusCode::TOO_MANY_REQUESTS),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

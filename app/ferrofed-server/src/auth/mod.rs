@@ -66,6 +66,7 @@ use crate::auth::refusal::Refusal;
 use crate::base_path::BasePath;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
 use crate::facade::security::TARGET;
+use crate::metrics::security::Event;
 use crate::request_id;
 use crate::state::AppState;
 
@@ -319,6 +320,7 @@ impl Gate {
             .await
             .map_err(|error| match error {
                 KeyError::Unavailable(source) => {
+                    Event::KeySetUnavailable.record();
                     tracing::warn!(
                         target: TARGET,
                         event = "key-set-unavailable",
@@ -370,6 +372,7 @@ impl Gate {
         let answer = match bytes {
             Ok(answer) => answer,
             Err(source) => {
+                Event::IntrospectionUnavailable.record();
                 tracing::warn!(
                     target: TARGET,
                     event = "introspection-unavailable",
@@ -580,6 +583,7 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
             next.run(request).await
         }
         Err(refusal) => {
+            crate::metrics::security::refused(refusal);
             tracing::warn!(
                 target: TARGET,
                 event = "caller-refused",

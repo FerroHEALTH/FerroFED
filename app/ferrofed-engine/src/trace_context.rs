@@ -87,6 +87,7 @@ fn record(span: &Span, contact: Contact) {
     let reached = match contact {
         Contact::Unsent => "unsent",
         Contact::Silent => "silent",
+        Contact::Capped => "capped",
         Contact::Answered(status) => {
             span.record("http.response.status_code", status.as_u16());
             "answered"

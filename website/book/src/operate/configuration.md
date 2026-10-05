@@ -118,6 +118,7 @@ The sections, and the page that covers each:
 |---|---|---|
 | `profile` | `production`, the default, or `development`, the only profile that admits `[dev]` | [Identity resolution](identity.md#the-development-cross-reference-dev) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
+| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node` | the overload limits | [Overload protection](overload.md) |
 | `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
 | `[metrics]` | the admin listener and the OTLP push | [Metrics](metrics.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from | [The registry](registry.md) |
@@ -155,6 +156,13 @@ request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
 shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
 body_limit_bytes = 1048576    # a body past this answers 413
+max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
+overload_retry_after_s = 1    # the Retry-After of that 503, in seconds
+
+# A per-caller rate, off unless set; see Overload protection.
+[server.caller_rate]
+requests_per_second = 10      # sustained, per verified issuer and client_id
+burst = 20                    # at once after a quiet spell; one more answers 429 rate-limited
 
 [telemetry]
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal

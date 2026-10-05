@@ -12,7 +12,9 @@ use openehr_its::rest::client::Transport;
 use openehr_its::rest::generated::query::QueryExecuteAdhocQueryBodyParams;
 use openehr_its::rest::generated::query::client::QueryClient;
 
-use super::{Contact, DispatchError, DispatchOptions, NodeClient, NodeQuery, NodeReply, classify};
+use super::{
+    Contact, DispatchError, DispatchOptions, NodeClient, NodeQuery, NodeReply, cap, classify,
+};
 use crate::trace_context;
 
 impl<T: Transport + Clone> NodeClient<T> {
@@ -56,6 +58,9 @@ impl<T: Transport + Clone> NodeClient<T> {
             content_type: None,
         };
         let started = Instant::now();
+        let Ok(_slot) = self.slot(options.deadline()).await else {
+            return Ok(cap::capped_reply(classify::elapsed_ms(started)));
+        };
         let client = self.client_for(options);
         let answer = QueryClient::new(&client)
             .with_options(call)

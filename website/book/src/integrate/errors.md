@@ -62,6 +62,10 @@ every node with its status (§11.1, §11.4):
 | 424 | a node answered with an error, or with a result the gateway cannot use (under `version-identity`, a version uid that is not an `OBJECT_VERSION_ID`) | `node-error`, with the node's own failure in `error` |
 | 424 | the cross-reference service could not answer for a member | `not-resolved`, with the service's failure in `error` |
 
+A node the gateway already sends as many requests as
+`federation.max_in_flight_per_node` allows is `time-out` too: your request
+waited for a slot until its per-node deadline and was never sent, and the
+node's `error` says so (§11.5, N38; [Overload protection](../operate/overload.md)).
 When both a 504 and a 424 cause occur, the answer is `504` (§11.4). With
 `openEHR-federation-completeness: partial` on a gateway that offers it, the
 same causes answer `200` with the rows of the nodes that did answer, and the
@@ -196,10 +200,12 @@ and its set is closed, so the code says which.
 | `scope-insufficient` | 403 | The token is valid, and no scope it grants covers the operation, or, on the DEMOGRAPHIC API, its client is not one the issuer's entry lists as a demographic client ([Client authentication](../operate/authentication.md#scopes-per-route)). No node is asked. |
 | `purpose-of-use-required` | 403 | The token is valid and its scopes cover the operation, and it declares no purpose of use, which the deployment requires (§13.4). No node is asked. |
 | `authentication-unavailable` | 503 | The token's issuer cannot be asked: its key set cannot be fetched or read, or its introspection endpoint does not answer or answers with an error. The gateway cannot verify the caller, so it admits no one; ask again later (§13.1). No node is asked. |
-| `operation-refused` | 403 | The request addresses the ADMIN API under `{base}/v1/admin/`, which the gateway admits no caller to, whatever its token; nothing is verified and no node is asked. |
+| `operation-refused` | 403 | The request addresses the ADMIN API under `{base}/v1/admin/`, which the gateway admits no caller to, whatever its token; nothing is verified and no node is asked. On the admin listener, it answers a write action, such as the stored-query distribution, from a peer that is not loopback ([Metrics](../operate/metrics.md)). |
 | `patient-context-missing` | 403 | Only a `patient/` scope covers the operation, its issuer is bound to a member (`[auth.issuer.patient]`), and the token carries no `ehrId` claim, or one that is no `HIER_OBJECT_ID`. Without it there is no patient to confine the grant to (SMART on openEHR master07 §Context Selection; [Patient grants](../operate/authentication.md#patient-grants)). No node is asked. |
 | `patient-confinement` | 403 | The token's `patient/` grant is confined to one patient, and the request reaches beyond that patient's own `{node, ehr_id}` pairs: a query for another patient, a query that names no patient, a query whose `FROM` reads a class beside its one scoped `EHR` (under `AND` or `OR`, a second `EHR`, an `EHR` under `NOT CONTAINS`), an `ehr_id` that is not the patient's at the member it would go to, a read by subject of another patient, the creation of an EHR or a definition request. A token whose resource scopes are all `patient/` is refused on the DEMOGRAPHIC API too, whether or not its issuer is bound and even when its client is a listed demographic client. The gateway sends nothing, never probes for the `ehr_id`, records no binding or index entry for another patient, asks no localizer, consent pre-filter or other member about another patient it resolves at the bound member, and the message names no `ehr_id` and no endpoint (§5.2, §12.5; [Patient grants](../operate/authentication.md#patient-grants)). |
 | `patient-context-unavailable` | 424 | The cross-reference service could not resolve the patient of the token's `patient/` grant at every member, places that patient under another `ehr_id` at the member that issued the token, or no cross-reference service is configured. The grant cannot be confined, so the gateway sends nothing (§5.2, §11.2). |
+| `overloaded` | 503 | The gateway is serving as many requests as `server.max_concurrent_requests` allows, so it refused this one before reading it: no authentication, no resolver and no node. `Retry-After` names the seconds to wait, `server.overload_retry_after_s` (RFC 9110 §15.6.4, §10.2.3). The health family is never refused ([Overload protection](../operate/overload.md)). |
+| `rate-limited` | 429 | You sent more requests than `[server.caller_rate]` admits from one caller, counted per verified issuer and `client_id`, whatever address a request comes from. `Retry-After` names the whole seconds until your next request is admitted (RFC 6585 §4). No node is asked ([Overload protection](../operate/overload.md)). |
 
 The gateway answers `409` with five codes, and none of them sends anything
 to a node:

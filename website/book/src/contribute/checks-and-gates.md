@@ -31,6 +31,7 @@ manifest check installs the toolchain only to read the manifests):
 | shellcheck | every first-party shell script |
 | hadolint | every first-party Dockerfile |
 | kubeconform | the example Kubernetes manifests under `deploy/kubernetes/`, in strict mode |
+| observability | the Grafana dashboard and the Prometheus rule file under `deploy/observability/`: `promtool check rules`, and every metric they name is one the gateway exports (`scripts/checks/observability.sh`) |
 | comment-style | the comment budgets of the Rust sources |
 | file-length | no hand-written Rust file or book page over 1000 lines |
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |

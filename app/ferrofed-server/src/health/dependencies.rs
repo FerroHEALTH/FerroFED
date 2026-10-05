@@ -58,7 +58,8 @@ const fn from_code(code: u8) -> Observed {
 }
 
 /// Returns what a request's contact with a node says of it, or `None` when
-/// the request never left the gateway.
+/// the request never left the gateway, a request the endpoint's in-flight cap
+/// held included.
 ///
 /// The state is the node's reachability and health, never whether the
 /// request was valid: any answer below `500` is [`Observed::Up`], a `5xx` is
@@ -66,7 +67,7 @@ const fn from_code(code: u8) -> Observed {
 #[must_use]
 pub fn of_contact(contact: Contact) -> Option<Observed> {
     match contact {
-        Contact::Unsent => None,
+        Contact::Unsent | Contact::Capped => None,
         Contact::Answered(status) => Some(of_answer(status)),
         Contact::Silent => Some(Observed::Down),
     }

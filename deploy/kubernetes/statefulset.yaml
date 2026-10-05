@@ -48,6 +48,14 @@ spec:
       labels:
         app.kubernetes.io/name: ferrofed
         app.kubernetes.io/component: gateway
+      # The scrape annotations a Prometheus with the common kubernetes-pods
+      # job reads: each replica is scraped on its own admin listener, never
+      # through the Service. With the Prometheus Operator, a PodMonitor over
+      # the metrics port does the same.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /metrics
     spec:
       # The gateway calls no Kubernetes API.
       automountServiceAccountToken: false
@@ -76,6 +84,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
+            # The admin listener of [metrics] listen in configmap.yaml, which
+            # networkpolicy.yaml opens to the scraper alone.
+            - name: metrics
+              containerPort: 9464
               protocol: TCP
           env:
             - name: FERROFED_CONFIG
