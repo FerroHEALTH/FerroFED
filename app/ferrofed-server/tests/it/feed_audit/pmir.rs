@@ -191,7 +191,7 @@ async fn a_create_whose_record_is_refused_is_adopted_by_the_next_check_and_never
         "the spool drains once the repository is back"
     );
     assert_eq!(
-        ferrofed_server::health::dependencies::Observed::Up,
+        ferrofed_registry::health::Observed::Up,
         feed.check().await,
         "the next check's search adopts the subscription the Registry holds"
     );

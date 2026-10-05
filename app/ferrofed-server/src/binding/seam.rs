@@ -15,13 +15,12 @@ use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_identity::localizer::Localizer;
 use ferrofed_identity::resolver::Resolver;
+use ferrofed_registry::health::Indication;
 use ferrofed_registry::id::EndpointId;
-use serde::Serialize;
 
 use crate::config::settings::Settings;
 use crate::config::transport::ProtectedSite;
 use crate::federation::error::FederationError;
-use crate::health::dependencies::Observed;
 
 /// The resolver a binding builds, with the localizer it doubles as.
 #[derive(Clone)]
@@ -62,17 +61,6 @@ impl fmt::Debug for LocalizerSeam {
             .field("indicators", &self.indicators)
             .finish_non_exhaustive()
     }
-}
-
-/// What one indication of `GET /health/dependencies` says: a state, or the
-/// class of a fault.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
-pub enum Indication {
-    /// The last state observed.
-    State(Observed),
-    /// Why the dependency is not up, by class.
-    Fault(&'static str),
 }
 
 /// A source of indications a binding adds to `GET /health/dependencies`.

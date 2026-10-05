@@ -18,11 +18,11 @@ use opentelemetry::metrics::Meter;
 
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe;
-use crate::binding::seam::Indication;
 use crate::config::settings::Settings;
 use crate::federation::error::FederationError;
 use crate::reload::Reloader;
 use crate::state::{AppState, StateError};
+use ferrofed_registry::health::Indication;
 
 /// The instruments the bindings record through on the metrics surface, one
 /// field per binding that has any, created once over the surface's meter.

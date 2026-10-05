@@ -44,8 +44,8 @@ use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
 use url::Url;
 
 use crate::binding::ihe::pmir::config::PmirSettings;
-use crate::health::dependencies::Observed;
 use crate::service::{self, GrantRefused, TlsRefused};
+use ferrofed_registry::health::Observed;
 use subscription::{RegistryFault, Watch};
 
 /// The identity feed cannot be built from its settings.

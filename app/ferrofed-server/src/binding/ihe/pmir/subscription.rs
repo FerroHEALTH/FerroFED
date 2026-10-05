@@ -38,7 +38,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use super::IdentityFeed;
-use crate::health::dependencies::Observed;
+use ferrofed_registry::health::Observed;
 
 /// How many doublings the wait between two failed checks grows by at most:
 /// 32 times `check_interval_s`.

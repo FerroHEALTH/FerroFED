@@ -17,10 +17,10 @@ use axum::routing::post;
 use crate::binding::ihe::mcsd::registry::DirectoryRegistry;
 use crate::binding::ihe::pmir::IdentityFeed;
 use crate::binding::ihe::pmir::subscription;
-use crate::binding::seam::Indication;
 use crate::config::settings::Settings;
 use crate::reload::Reloader;
 use crate::state::{AppState, StateError};
+use ferrofed_registry::health::Indication;
 
 /// The directory and the identity feed of a running gateway.
 #[derive(Debug, Default)]
@@ -56,13 +56,19 @@ impl Processes {
         if let Some(directory) = &self.directory {
             indications.push(("directory", Indication::State(directory.observed())));
             if let Some(fault) = directory.fault() {
-                indications.push(("directory_fault", Indication::Fault(fault.as_str())));
+                indications.push((
+                    "directory_fault",
+                    Indication::Fault(fault.as_str().to_owned()),
+                ));
             }
         }
         if let Some(feed) = &self.identity_feed {
             indications.push(("identity_registry", Indication::State(feed.observed())));
             if let Some(fault) = feed.fault() {
-                indications.push(("identity_registry_fault", Indication::Fault(fault.as_str())));
+                indications.push((
+                    "identity_registry_fault",
+                    Indication::Fault(fault.as_str().to_owned()),
+                ));
             }
         }
         indications
