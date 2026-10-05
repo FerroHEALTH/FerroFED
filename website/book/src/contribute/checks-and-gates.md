@@ -57,13 +57,17 @@ the crate-version guard and dependency review run on pull requests only.
 The `conformance report` job reads the JUnit reports of the test run and
 the end-to-end run, and writes the report section 16.4 of the specification
 asks for: every test track of section 16.3 and every conformance point of
-section 17 as pass, fail, not run, deferred, not applicable or open, with
-the issue and the reason of each row that is not scored. The report is in
-the job summary and in the `conformance-report` artifact, and the job fails
-when a covered track or point did not pass. Locally, with Docker running,
-`bash scripts/conformance/report.sh --run` runs the whole workspace with the
-`FERROFED_E2E` gate set and writes `target/conformance/report.md` and
-`report.tsv`.
+section 17 as pass, fail, not run, deferred or open, with the issue and the
+reason of each row that is not scored. A point section 17 scores against a
+node or the federation operator is reported in a class of its own, never as
+a gateway pass (section 16.2). Its result comes from the node profile
+checks, which the end-to-end run executes against each harness CDR product,
+and the report lists what each check observed. The report is in the job
+summary and in the `conformance-report` artifact. The job fails when a
+covered track or point did not pass, and a node or operator point never
+fails it. Locally, with Docker running, `bash scripts/conformance/report.sh
+--run` runs the whole workspace with the `FERROFED_E2E` gate set and writes
+`target/conformance/report.md`, `report.tsv` and `node-profile.tsv`.
 
 The `Docs` workflow builds this book and the landing page on every pull
 request, and publishes them from `main`. A book that does not build fails it.

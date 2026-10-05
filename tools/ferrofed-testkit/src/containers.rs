@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use testcontainers::core::{Healthcheck, IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, CopyTargetOptions, GenericImage, ImageExt};
+use testcontainers::{ContainerAsync, ContainerRequest, CopyTargetOptions, GenericImage, ImageExt};
 
 /// The environment variable that admits the container-backed tests.
 pub const E2E_GATE: &str = "FERROFED_E2E";
@@ -457,7 +457,26 @@ async fn ferroehr_on(
     name: &str,
     system_id: &'static str,
 ) -> Result<Node, HarnessError> {
-    let server = FERROEHR
+    let server = ferroehr_request(database, name, system_id)
+        .with_env_var("FERROEHR__AUTH__ENABLED", "false")
+        .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "false")
+        .start()
+        .await
+        .map_err(|source| HarnessError::Container {
+            image: FERROEHR.repository,
+            source,
+        })?;
+    ready(system_id, server, Arc::clone(database)).await
+}
+
+/// The FerroEHR container as `system_id` on the database `name` of
+/// `database`, before its access posture is set.
+fn ferroehr_request(
+    database: &DatabaseServer,
+    name: &str,
+    system_id: &'static str,
+) -> ContainerRequest<GenericImage> {
+    FERROEHR
         .image()
         .with_exposed_port(CDR_PORT.tcp())
         .with_network(database.network.clone())
@@ -470,15 +489,80 @@ async fn ferroehr_on(
             ),
         )
         .with_env_var("FERROEHR__SERVER__SYSTEM_ID", system_id)
-        .with_env_var("FERROEHR__AUTH__ENABLED", "false")
-        .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "false")
+}
+
+/// A synthetic user of a node [`ferroehr_restricted`] starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HarnessUser {
+    /// The Basic user name.
+    pub user: &'static str,
+    /// The Basic password, a synthetic development value.
+    pub password: &'static str,
+}
+
+/// The administrator of a restricted node, whose role reaches every EHR.
+pub const RESTRICTED_ADMIN: HarnessUser = HarnessUser {
+    user: "harness-admin",
+    password: "harness-admin-example",
+};
+
+/// The clinician of a restricted node, whose role reaches no EHR without
+/// access settings.
+pub const RESTRICTED_CLINICIAN: HarnessUser = HarnessUser {
+    user: "harness-clinician",
+    password: "harness-clinician-example",
+};
+
+/// Where a restricted node reads [`RESTRICTED_CONFIG`] from.
+const RESTRICTED_CONFIG_TARGET: &str = "/tmp/ferrofed-harness-restricted.toml";
+
+/// The configuration file of a restricted node: its two Basic users, each
+/// password stored as the Argon2id hash FerroEHR requires, with cost
+/// parameters above the floor it checks at boot. The users are an array of
+/// tables, which only a file can carry.
+const RESTRICTED_CONFIG: &str = r#"[[auth.basic.users]]
+username = "harness-admin"
+password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1h$t/ra6Wz0qdF31frrVsd1pXhVK2mQdTQLx53fDeIgDS8"
+roles = ["ADMIN"]
+
+[[auth.basic.users]]
+username = "harness-clinician"
+password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1j$eBo26o4ip9ZdPKtCbzkJIjvpp+SfoLqTK0a07Qw6jcU"
+roles = ["USER"]
+"#;
+
+/// Starts FerroEHR as `system_id` on a database server of its own with its
+/// access controls on, and waits for its readiness endpoint.
+///
+/// Basic authentication admits [`RESTRICTED_ADMIN`] and
+/// [`RESTRICTED_CLINICIAN`], the role gate is on, and
+/// `authz.rbac.ehr_access_default` is `restricted`: an EHR with no access
+/// settings, which every new EHR is, reaches the administrator alone, so the
+/// node refuses the clinician by a decision of its own. The node profile's
+/// access check reads that decision (§13, N26).
+///
+/// # Errors
+///
+/// Returns [`HarnessError::Container`] when Docker refuses a container and
+/// [`HarnessError::NotReady`] when the CDR does not become ready in time.
+pub async fn ferroehr_restricted(system_id: &'static str) -> Result<Node, HarnessError> {
+    let database = Arc::new(database_server(NODE_A_DATABASE, &[]).await?);
+    let server = ferroehr_request(&database, NODE_A_DATABASE, system_id)
+        .with_copy_to(
+            RESTRICTED_CONFIG_TARGET,
+            RESTRICTED_CONFIG.as_bytes().to_vec(),
+        )
+        .with_env_var("FERROEHR_CONFIG", RESTRICTED_CONFIG_TARGET)
+        .with_env_var("FERROEHR__AUTH__ENABLED", "true")
+        .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "true")
+        .with_env_var("FERROEHR__AUTHZ__RBAC__EHR_ACCESS_DEFAULT", "restricted")
         .start()
         .await
         .map_err(|source| HarnessError::Container {
             image: FERROEHR.repository,
             source,
         })?;
-    ready(system_id, server, Arc::clone(database)).await
+    ready(system_id, server, database).await
 }
 
 /// Returns a network name and a database server container name unique to

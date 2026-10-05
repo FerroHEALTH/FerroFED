@@ -114,8 +114,12 @@ failure, and the `test` and `e2e (containers)` jobs upload theirs as the
 concluded, joins both with the `// conformance:` markers through
 `scripts/conformance/report.sh`, where a test under `e2e::` counts only from
 the gated run, and reports every section 16.3 track and section 17 point as
-pass, fail, not-run, deferred, not-applicable or open with the issue and
-reason of each row that is not scored. It adds the report to the job summary,
+pass, fail, not-run, deferred or open with the issue and reason of each row
+that is not scored. A Node or Operator point is a class of its own (section
+16.2): the `e2e (containers)` job also uploads the findings the node profile
+checks wrote for each harness CDR product as the `node-profile` artifact, and
+the report scores those points from them, never as a gateway pass and never
+in its exit status. It adds the report to the job summary,
 uploads `target/conformance/` as the `conformance-report` artifact, feeds
 `conclusion`, and fails when a covered track or point did not pass. The
 `conformance-matrix` job runs the script's `--self-test`. Locally: `bash

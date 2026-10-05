@@ -33,6 +33,9 @@
 //! - [`nuts`]: the harness Nuts node, a test device that answers the
 //!   GF-Authentication access token request (Nuts RFC021) with a
 //!   `DPoP`-bound token for a valid Verifiable Presentation (#88);
+//! - [`node_profile`]: the Federation-Node profile checks, which exercise
+//!   what a member CDR's ITS-REST interface shows of the node obligations of
+//!   §16.2 and record a finding per obligation for the report (#93);
 //! - [`nvi`]: a stub NVI Localization Service answering the GF-Localization
 //!   search of the Dutch Generic Functions (#87);
 //! - [`oauth`]: the harness OAuth 2.0 token endpoint, which verifies the
@@ -71,6 +74,7 @@ pub mod leak;
 pub mod mcsd;
 pub mod mitz;
 pub mod mock;
+pub mod node_profile;
 pub mod nuts;
 pub mod nvi;
 pub mod oauth;

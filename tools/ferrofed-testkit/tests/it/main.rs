@@ -8,6 +8,7 @@
 
 mod e2e;
 mod mcsd;
+mod node_profile;
 mod pdq;
 mod pix;
 mod pmir;
