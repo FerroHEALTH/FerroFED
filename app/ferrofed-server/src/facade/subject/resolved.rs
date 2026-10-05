@@ -15,7 +15,7 @@ use ferrofed_registry::snapshot::Endpoint;
 
 use crate::facade::subject::unserved::Unserved;
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
+use crate::health::dependencies;
 
 /// What the cross-reference said about each candidate.
 #[derive(Debug)]
@@ -101,7 +101,7 @@ pub(super) async fn resolve<'a>(
         }
         Some(_) | None => BTreeMap::new(),
     };
-    if let Some(observed) = Observed::of_resolutions(&answers) {
+    if let Some(observed) = dependencies::of_resolutions(&answers) {
         federation.dependencies().resolver(observed);
     }
     let mut resolved = Resolved {

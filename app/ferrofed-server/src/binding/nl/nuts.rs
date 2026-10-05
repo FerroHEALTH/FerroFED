@@ -29,7 +29,7 @@ use nl_generic_functions::nuts_auth::error::InvalidInput;
 use nl_generic_functions::nuts_auth::holder::{Did, Holder, HolderKey};
 use serde::Deserialize;
 
-use crate::binding::{OnwardGrant, Provided, PublicDocument};
+use crate::binding::seam::{OnwardGrant, Provided, PublicDocument};
 use crate::config::error::Error;
 use crate::config::secrets::{read_secret, secret};
 use crate::config::settings::{Scheme, Settings};

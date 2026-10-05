@@ -42,7 +42,7 @@ only in ASCII case are one `creating_system_id`.
 An endpoint may list the ITS-REST `Error` codes its node marks a consent
 refusal with. A `403` from that node whose `Error` carries one of them is
 reported `consent-denied`; every other refusal is `node-error`
-([Consent](identity.md#consent)). The list is empty by default, and an empty
+([Consent](consent.md)). The list is empty by default, and an empty
 code refuses the document:
 
 ```toml
@@ -257,7 +257,7 @@ patients, and a registry document in the native form carries none. Under
 Annex B §B.2) gives the localizer its custodian map, so a Dutch directory
 needs no `custodians` table: a member organisation that publishes its URA
 before its endpoint is never unmapped, and a refresh that adds it applies
-([Dutch localization](identity.md#dutch-localization-nl_gfnvi)).
+([Dutch localization](localization.md#dutch-localization-nl_gfnvi)).
 
 ## Federation id
 
@@ -329,9 +329,9 @@ that answers that no member holds the patient's data leaves every member
 `not-localized` with no error.
 
 The localizer is the IHE XCPD binding when `[xcpd]` is set
-([XCPD localization](identity.md#xcpd-localization-xcpd)), and the NVI of
+([XCPD localization](localization.md#xcpd-localization-xcpd)), and the NVI of
 the Dutch Generic Functions when `[nl_gf.nvi]` is
-([Dutch localization](identity.md#dutch-localization-nl_gfnvi)); setting
+([Dutch localization](localization.md#dutch-localization-nl_gfnvi)); setting
 both refuses to boot. Otherwise it is
 the resolver: the PIXm resolver when `[pixm]` is set, which names the members
 whose domain holds the patient at the PIX Manager

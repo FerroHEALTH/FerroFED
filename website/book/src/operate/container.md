@@ -144,7 +144,7 @@ outcome.
 
 With `[xcpd] audit = "repository"`, the gateway keeps each ITI-55 audit
 message in a spool until the ATNA Audit Record Repository takes it
-([The audit repository](identity.md#the-audit-repository)). Set
+([The audit repository](localization.md#the-audit-repository)). Set
 `xcpd.audit_repository.spool_dir = "/var/lib/ferrofed/audit-spool"`. The
 image ships `/var/lib/ferrofed` and that spool directory owned by the
 gateway's user `65532:65532` with mode `0700`, so a named Docker volume

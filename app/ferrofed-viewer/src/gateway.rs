@@ -11,13 +11,15 @@
 //! generated group clients of `openehr_its::rest::generated`;
 //! [`Gateway::self_description`] reads `OPTIONS {base}/` into the typed
 //! federation body (§7a.2, N30), [`Gateway::dependencies`] the health of
-//! each member and service, and the operator reads the gateway's read-only
-//! operator surface into the reports of `ferrofed_registry::operator`. A refusal or a failure is a typed
-//! [`GatewayError`] carrying the gateway's status, never an empty answer.
+//! each member and service into the report of `ferrofed_registry::health`,
+//! and the operator reads the gateway's read-only operator surface into the
+//! reports of `ferrofed_registry::operator`. A refusal or a failure is a
+//! typed [`GatewayError`] carrying the gateway's status, never an empty
+//! answer.
 
-use std::collections::BTreeMap;
 use std::fmt;
 
+use ferrofed_registry::health::DependencyReport;
 use ferrofed_registry::operator::{CreatingSystemReport, IncidentReport, StoredQueryReport};
 use http::{Method, StatusCode};
 use openehr_federation::options::OptionsRoot;
@@ -28,19 +30,6 @@ use secrecy::SecretString;
 use url::Url;
 
 use crate::config::settings::GatewaySettings;
-
-/// What `GET {base}/health/dependencies` answers, as far as the console
-/// renders it: each member endpoint's last observed state, and each other
-/// service the gateway reports by key.
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
-pub struct Dependencies {
-    /// Each member endpoint's state, by `endpoint_id`.
-    pub endpoints: BTreeMap<String, String>,
-    /// Every other dependency the gateway names, by key: the resolver, the
-    /// consent pre-filter, the localizer and each binding's services.
-    #[serde(flatten)]
-    pub services: BTreeMap<String, String>,
-}
 
 /// The operator's access token, sent to the gateway as a bearer credential.
 #[derive(Clone)]
@@ -195,7 +184,10 @@ impl Gateway {
     ///
     /// # Errors
     /// As [`Gateway::self_description`].
-    pub async fn dependencies(&self, token: &AccessToken) -> Result<Dependencies, GatewayError> {
+    pub async fn dependencies(
+        &self,
+        token: &AccessToken,
+    ) -> Result<DependencyReport, GatewayError> {
         self.read(Method::GET, "/health/dependencies", token).await
     }
 

@@ -16,9 +16,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
+use ferrofed_registry::health::Observed;
 use ferrofed_server::binding::ihe::pmir::IdentityFeed;
 use ferrofed_server::binding::ihe::pmir::subscription::{RegistryFault, backoff};
-use ferrofed_server::health::dependencies::Observed;
 use ferrofed_testkit::pmir::{LocationMode, PatientIdentityRegistry, merge_message};
 use http::{Request, StatusCode};
 use serde::Deserialize;

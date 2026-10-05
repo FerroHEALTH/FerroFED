@@ -35,7 +35,8 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::audit::AuditTrailError;
-use crate::binding::{self, Indicator, LocalizerSeam, Offer, ResolverSeam, Role};
+use crate::binding::seam::{Indicator, LocalizerSeam, ResolverSeam};
+use crate::binding::{self, Offer, Role};
 use crate::config::settings::{LocalizationSettings, Settings};
 use crate::config::{self, NodeSelection};
 use crate::service::{GrantRefused, TlsRefused};

@@ -62,7 +62,7 @@ sequenceDiagram
   responding gateway by the patient identifier alone which communities hold
   the patient (ITI-55, Annex A.3). The NVI of the Dutch binding names the
   care providers that hold data for the patient's pseudonym (Annex B §B.1,
-  [Dutch localization](../operate/identity.md#dutch-localization-nl_gfnvi)).
+  [Dutch localization](../operate/localization.md#dutch-localization-nl_gfnvi)).
   Without either, the PIX Manager localizes: its candidates are the members
   whose domain holds an identifier for the patient, and the resolution
   reuses that one ITI-83 answer (§14.2). The development cross-reference
@@ -74,7 +74,7 @@ sequenceDiagram
   When the pre-filter cannot answer, every candidate is asked. The
   pre-filter is the development table `[[dev.consent_denied]]` or the Dutch
   binding, Mitz
-  ([Dutch consent](../operate/identity.md#dutch-consent-nl_gfmitz)).
+  ([Dutch consent](../operate/consent.md#dutch-consent-nl_gfmitz)).
 - "No identifier in this domain" is an answer: that member is
   `not-resolved` and does not fail the query (N6). A PIX Manager that cannot
   answer is a failure, reported on the member and failing the query `424`
@@ -186,7 +186,7 @@ two `consent-denied` boxes differ. ITS-REST defines no consent signal, so a
 node's refusal is `consent-denied` only when it is a `403` whose ITS-REST
 `Error` carries a `code` the registry lists for that endpoint in
 `consent_refusal_codes`; every other refusal is `node-error`
-([Consent](../operate/identity.md#consent)). The list is empty by default,
+([Consent](../operate/consent.md)). The list is empty by default,
 and the key is FerroFED's own design.
 
 ## The status of the whole answer

@@ -26,7 +26,7 @@ use tracing::Instrument as _;
 
 use crate::facade::localize::inside;
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
+use crate::health::dependencies;
 
 /// What the demographics step made of the patient a route names.
 #[derive(Debug)]
@@ -83,7 +83,7 @@ pub(crate) async fn identify(
     ));
     federation
         .dependencies()
-        .demographics(Observed::of_identification(&answer));
+        .demographics(dependencies::of_identification(&answer));
     federation.requests().identified(&answer);
     match answer {
         Identification::Identified(master) => Identified::Master(master),

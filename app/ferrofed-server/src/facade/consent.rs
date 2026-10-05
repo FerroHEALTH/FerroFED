@@ -27,7 +27,7 @@ use openehr_federation::outcome::ErrorDetail;
 use tracing::Instrument as _;
 
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
+use crate::health::dependencies;
 
 /// What the consent pre-filter decided about one request's candidates.
 #[derive(Debug, Default)]
@@ -66,7 +66,7 @@ pub(crate) async fn prefilter(
         .prefilter(patient, requester, candidates, deadline)
         .instrument(span)
         .await;
-    if let Some(observed) = Observed::of_consent(&decision) {
+    if let Some(observed) = dependencies::of_consent(&decision) {
         federation.dependencies().consent(observed);
     }
     federation.requests().prefiltered(&decision);

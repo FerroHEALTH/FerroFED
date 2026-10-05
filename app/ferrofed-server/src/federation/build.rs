@@ -19,7 +19,8 @@ use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
 use openehr_its::rest::client::ReqwestTransport;
 
-use crate::binding::{self, PublicDocument, Role};
+use crate::binding::seam::PublicDocument;
+use crate::binding::{self, Role};
 use crate::config::NodeSelection;
 use crate::config::auth::PatientBinding;
 use crate::config::settings::{ConsentDisclosure, Scheme, Settings};

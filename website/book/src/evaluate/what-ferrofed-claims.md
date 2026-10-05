@@ -140,7 +140,7 @@ cut from `main` once the milestone closes.
   question asked once per data holder, a member Mitz denies reported
   `consent-denied` and never asked (Annex B §B.6, N27a;
   [#475](https://github.com/FerroHEALTH/FerroFED/issues/475),
-  [Dutch consent](../operate/identity.md#dutch-consent-nl_gfmitz)).
+  [Dutch consent](../operate/consent.md#dutch-consent-nl_gfmitz)).
 - The §13.4 deployment decisions, answered for the gateway, with an
   operator's template for the rest (CP-39;
   [#84](https://github.com/FerroHEALTH/FerroFED/issues/84),
@@ -163,7 +163,7 @@ cut from `main` once the milestone closes.
   candidates, with the custodian map read from the URAs a care services
   directory with the LRZa as its source publishes (Annex B §B.1, §B.2;
   [#87](https://github.com/FerroHEALTH/FerroFED/issues/87),
-  [Dutch localization](../operate/identity.md#dutch-localization-nl_gfnvi)).
+  [Dutch localization](../operate/localization.md#dutch-localization-nl_gfnvi)).
 - A PDQm step ahead of localization and resolution, for a patient named by
   an identifier the cross-reference does not know: the Patient Demographics
   Supplier is asked with ITI-78 or ITI-119 for the patient's identifier in
@@ -178,7 +178,7 @@ cut from `main` once the milestone closes.
   §3.55.5.1.1;
   [#418](https://github.com/FerroHEALTH/FerroFED/issues/418),
   [#512](https://github.com/FerroHEALTH/FerroFED/issues/512),
-  [The audit repository](../operate/identity.md#the-audit-repository)).
+  [The audit repository](../operate/localization.md#the-audit-repository)).
 - Every other IHE transaction the gateway makes or receives audited as its
   profile requires: ITI-83, ITI-78, ITI-119, ITI-90, ITI-91, ITI-93 and
   ITI-94, each as a FHIR `AuditEvent` on the IHE Basic Audit Log Patterns

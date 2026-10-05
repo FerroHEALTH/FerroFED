@@ -20,7 +20,8 @@ use ferrofed_identity::resolver::Resolver;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use serde::Deserialize;
 
-use crate::binding::{Binding, Offer, Reload, ResolverSeam, Role, Section};
+use crate::binding::seam::ResolverSeam;
+use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::settings::Settings;

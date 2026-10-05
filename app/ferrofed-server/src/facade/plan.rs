@@ -41,7 +41,7 @@ use crate::facade::consent;
 use crate::facade::demographics::{self, Identified};
 use crate::facade::localize::{Localized, localize};
 use crate::federation::Federation;
-use crate::health::dependencies::Observed;
+use ferrofed_registry::health::Observed;
 
 /// The plan of one query, and where each façade column of a node row comes
 /// from.
@@ -289,7 +289,7 @@ pub async fn patient(
         resolution_failed,
         resolved: bound,
         denied: consented.denied,
-        resolver: Observed::of_resolutions(&resolutions),
+        resolver: crate::health::dependencies::of_resolutions(&resolutions),
     })
 }
 

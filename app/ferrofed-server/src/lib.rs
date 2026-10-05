@@ -275,7 +275,9 @@ async fn readiness(State(state): State<Arc<AppState>>) -> Response {
 
 /// `GET /health/dependencies`: the last observed state of each dependency,
 /// always `200` ([`AppState::dependencies`]).
-async fn dependencies(State(state): State<Arc<AppState>>) -> Json<health::dependencies::Report> {
+async fn dependencies(
+    State(state): State<Arc<AppState>>,
+) -> Json<ferrofed_registry::health::DependencyReport> {
     Json(state.dependencies())
 }
 
