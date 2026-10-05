@@ -20,7 +20,7 @@ use openehr_federation::id::FederationId;
 use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::grant::GrantFault;
-use crate::config::secrets::{resolve_credentials, resolve_signing};
+use crate::config::secrets::{resolve_node_credentials, resolve_signing};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
     ServerSettings, Settings, SigningSettings, TelemetrySettings,
@@ -97,13 +97,20 @@ impl Config {
         }
         let telemetry = resolve_telemetry(&self.telemetry)?;
         let mut credentials = BTreeMap::new();
+        let mut onward_tls = BTreeMap::new();
         for (endpoint, section) in &self.credentials {
             let id = EndpointId::new(endpoint.as_str()).map_err(|source| Error::EndpointId {
                 key: endpoint.clone(),
                 source,
             })?;
-            let scheme = resolve_credentials(&format!("credentials.{endpoint}"), section)?;
-            credentials.insert(id, scheme);
+            let (scheme, tls) =
+                resolve_node_credentials(&format!("credentials.{endpoint}"), section)?;
+            if let Some(tls) = tls {
+                onward_tls.insert(id.clone(), tls);
+            }
+            if let Some(scheme) = scheme {
+                credentials.insert(id, scheme);
+            }
         }
         let signing = self.signing.as_ref().map(resolve_signing).transpose()?;
         signed_grants(signing.as_ref(), &credentials)?;
@@ -138,6 +145,7 @@ impl Config {
             registry_directory: None,
             federation,
             credentials,
+            onward_tls,
             dev: None,
             #[cfg(feature = "binding-ihe")]
             pixm: None,

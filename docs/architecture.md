@@ -1056,8 +1056,10 @@ the address it came from was rejected: a forwarded header "cannot be relied
 upon to be correct", and a list of trusted proxy addresses leaves it open to
 anyone "with access to the network" (RFC 7239 §8.1).
 Sender-constrained tokens (RFC 8705, RFC 9449) can be required per deployment
-and are off by default. Mutual TLS protects the transport and is never an
-organisation's identity (§13.4; the VWS memo, §B.4a.2).
+toward a node and are off by default. Toward the gateway, mutual TLS protects
+the transport and is never an organisation's identity (§13.4; the VWS memo,
+§B.4a.2); toward a node, the gateway's certificate is its client identity
+only where a grant declares RFC 8705 client authentication (below).
 
 **Nodes** (#81). FerroFED authenticates to each node as itself, with OAuth 2.0
 client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
@@ -1114,7 +1116,27 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   whether a request of the call left: a deadline that passes before the
   nonce re-send, or a re-send no proof could be made for, is then the
   node's `time-out` or `node-error` with the node counted as asked
-  (`Contact::Silent`), never as a request never sent (#470).
+  (`Contact::Silent`), never as a request never sent (#470);
+- **mutual TLS** (built with #492, RFC 8705): a node's `[credentials]`
+  section takes `client_identity_file` and `trust_roots_file`, the keys
+  and the `ferrofed_identity::fhir::Tls` type every outbound client takes
+  (#507), and the node and its token endpoint are reached over one
+  transport of the endpoint's own built with them
+  (`NodeClients::from_snapshot_over`), `https` under every profile. An
+  `oauth2` grant may then authenticate with `tls_client_auth` or
+  `self_signed_tls_client_auth` (§2): the token request carries
+  `client_id` and no client assertion, and a token exchange still names the
+  gateway as the actor with an assertion. With
+  `tls_client_certificate_bound_access_tokens` its tokens are bound to the
+  certificate (§3): the grant holds the certificate's `x5t#S256`
+  thumbprint (§3.1), takes `Bearer` tokens, and refuses one whose stated
+  binding, a `cnf` in the token response or the `cnf` claim of a JWT access
+  token, names another certificate or another method, before it is cached
+  or sent (`ferrofed_engine::onward::mtls`). An opaque token states no
+  binding; the gateway has no introspection client of its own toward a
+  node's authorization server. A grant holds one `SenderConstraint`, `DPoP`
+  or the certificate, and a section that configures both is refused at
+  load.
 
 **The Nuts track** (built with #88; Annex B §B.4, §13.3). An endpoint whose
 `[credentials]` name a `nuts` grant authenticates on the Dutch Generic
@@ -1167,21 +1189,31 @@ a configuration of it, with no branch for a region:
   `oauth-server-metadata` crate (`Issuer`:
   the canonical issuer, the identical-`issuer` check of RFC 8414 §3.3, the
   same-origin endpoint check, and the refusal of a repeated name), and it
-  must list `private_key_jwt` with `ES256`, `client_credentials` and, for
-  an exchanging grant, token exchange, every configured
-  `authorization_details` type (RFC 9396 §10), and `ES256` for `DPoP` when
-  it lists `DPoP` algorithms. RFC 8414 §2 defaults read strictly: an omitted
-  method list is `client_secret_basic`, an omitted grant list
-  `authorization_code` and `implicit`;
+  must list the grant's client authentication method (`private_key_jwt`
+  with `ES256`, or the RFC 8705 method), `client_credentials` and, for an
+  exchanging grant, token exchange, every configured
+  `authorization_details` type (RFC 9396 §10), `ES256` for `DPoP` when it
+  lists `DPoP` algorithms and the grant uses `DPoP`, and
+  `tls_client_certificate_bound_access_tokens` as `true` for a grant bound
+  to its certificate (RFC 8705 §3.3). A grant that uses mutual TLS takes
+  the `token_endpoint` of `mtls_endpoint_aliases` in preference (RFC 8705
+  §5), held to the issuer's origin as the other endpoint is. RFC 8414 §2
+  defaults read strictly: an omitted method list is `client_secret_basic`,
+  an omitted grant list `authorization_code` and `implicit`;
 - **client authentication:** `private_key_jwt` (FAPI 2.0 §5.3.2.1), the
   same RFC 7523 assertion as `oauth2` with `aud` the issuer as one string
   (§5.3.3.1), signed ES256 with a P-256 key of the grant's own, since
   §5.4.1 admits PS256, ES256 and EdDSA and the `[signing]` key is ES384.
   The key's public half is published in the gateway's JWK Set beside the
   `[signing]` keys (§5.4.2; §B.4a.2), so a `fapi2` grant requires
-  `[signing]`;
-- **sender-constraining:** always `DPoP` with a P-256 key, through the
-  engine's `Prover` as for `oauth2` (§5.3.2.1 requires MTLS or `DPoP`);
+  `[signing]`. MTLS, the profile's other method, is built with #492:
+  `client_auth = "tls_client_auth"` or `"self_signed_tls_client_auth"`
+  with the node section's certificate, and then a client key is needed
+  only to sign a token exchange's actor token (`Fapi2Security`);
+- **sender-constraining:** `DPoP` with a P-256 key, through the engine's
+  `Prover` as for `oauth2`, or, with #492, the node section's certificate
+  (`tls_client_certificate_bound_access_tokens`, RFC 8705 §3), never both
+  (§5.3.2.1 requires MTLS or `DPoP`);
 - **authorization details:** an optional RFC 9396 `authorization_details`
   value per endpoint, configured as JSON text, held to the §2 shape and sent
   as written in every token request (§6); a grant that asks for some takes
@@ -1296,10 +1328,12 @@ section per obligation:
 
 1. **The identity verified across the trust boundary.** Gateway to node: the
    gateway's organisation identity, the `client_id` its assertion asserts,
-   verified by the node's authorization server against its own client
-   registry. Caller to gateway: the issuer and subject of a validated token and
-   the organisation it names. The authentic organisation register (URA in the
-   Netherlands) is the deployment's to name.
+   or, where the grant declares RFC 8705 client authentication (#492), the
+   client its TLS certificate is registered as, verified by the node's
+   authorization server against its own client registry. Caller to gateway:
+   the issuer and subject of a validated token and the organisation it
+   names. The authentic organisation register (URA in the Netherlands) is
+   the deployment's to name.
 2. **Who authenticates the end user.** The requesting organisation does.
    FerroFED verifies the token that organisation's authorization server issued
    and never re-authenticates the user; the node relies on the conveyance JWT.
@@ -1309,8 +1343,13 @@ section per obligation:
    sender-constrained toward a node where the deployment configures it: an
    `oauth2` grant with a `dpop_key_file` binds its tokens with DPoP (#439,
    on the client since #448), and the Nuts grant (#88) and the FAPI 2.0
-   grant (#497) always do. mTLS-bound tokens (RFC 8705) are not built
-   (#492). Transport identity is never read as an organisation's identity.
+   grant (#497) always do; an `oauth2` or `fapi2` grant may bind them to the
+   gateway's TLS client certificate instead (RFC 8705 §3, #492). A
+   transport identity is never read as a caller's organisation identity.
+   The gateway's own certificate is read as its organisation identity
+   toward a node only where the deployment declares it, by giving that
+   node's grant `tls_client_auth` or `self_signed_tls_client_auth`;
+   otherwise it authenticates the connection alone.
 5. **What the technique does not cover.** Addressed in FerroFED: patient
    identifiers never reach a node, the caller's token is never forwarded,
    tokens are audience-restricted where the node's authorization server allows

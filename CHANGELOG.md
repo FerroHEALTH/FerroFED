@@ -23,6 +23,29 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Added
 
+- Mutual TLS toward a node and its authorization server, with RFC 8705
+  client authentication and certificate-bound tokens (#492; §13.1, §13.4,
+  N25, CP-17; FAPI 2.0 Security Profile §5.3.2.1). A node's
+  `[credentials."<id>"]` section takes `client_identity_file` and
+  `trust_roots_file`, the keys and the TLS type every identity service
+  takes, and the node and its token endpoint are reached over one transport
+  that presents that certificate, `https` under every profile; a section
+  may name that material alone. An `oauth2` grant, and a `fapi2` grant, may
+  authenticate with `client_auth = "tls_client_auth"` or
+  `"self_signed_tls_client_auth"`, sending `client_id` and no assertion
+  (RFC 8705 §2), and with `tls_client_certificate_bound_access_tokens =
+  true` take only tokens bound to the certificate (§3): a token whose `cnf`
+  names another certificate, in the token response or as a JWT claim, is
+  refused before the node is sent anything (§3.1, §3.2). It composes with
+  token exchange per caller, whose actor token the gateway still signs. A
+  `fapi2` grant over mutual TLS uses the `mtls_endpoint_aliases` token
+  endpoint (§5), needs the metadata to list `tls_client_auth` and state
+  `tls_client_certificate_bound_access_tokens` as the grant uses them, and
+  needs a client key only for a token exchange. A grant that sets both `dpop_key_file` and certificate binding,
+  either without a client identity, an identity with no certificate, an
+  `http` token endpoint or node, and TLS material in a service's own
+  `credentials` section refuse the configuration. RFC 8705 is vendored
+  under `docs/specs/ietf-oauth/`.
 - The NVI localizer authenticates with the Nuts grant (#539; Annex B §B.1,
   §B.4; the IG's Localization page, GF-Authentication, GFI-004 and
   GFI-005). `[nl_gf.nvi.credentials.nuts]` takes the table a node's onward

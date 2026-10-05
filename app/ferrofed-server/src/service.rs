@@ -15,9 +15,8 @@
 use ferrofed_identity::fhir::{Authentication, Tls, TlsError};
 use ferrofed_registry::secret::Secret;
 
-#[cfg(feature = "binding-ihe")]
-use crate::binding::ihe::tls::TlsSettings;
 use crate::config::settings::Scheme;
+use crate::config::tls::TlsSettings;
 
 /// A credential section that names a grant, which only a node takes.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -82,7 +81,6 @@ pub fn tls(key: &str, identity: Option<&Secret>, roots: Option<&str>) -> Result<
 /// # Errors
 ///
 /// [`TlsRefused`] for material that does not read as PEM.
-#[cfg(feature = "binding-ihe")]
 pub fn tls_of(key: &str, settings: &TlsSettings) -> Result<Tls, TlsRefused> {
     tls(
         key,

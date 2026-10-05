@@ -41,11 +41,15 @@ the trust you place in the issuer when you list it.
 an `oauth2` section for the endpoint, it signs an RFC 7523 client assertion
 naming the `client_id` the node's authorization server registered for it,
 and the node's authorization server verifies it against the gateway's
-published JWK Set and its own client registry. Without one, it sends the
-bearer token or the user and password configured for that endpoint. Either
-way, every request also carries the `openEHR-federation-client` token,
-signed with the same key, whose `iss` the node can check against that same
-`client_id`.
+published JWK Set and its own client registry. With `client_auth =
+"tls_client_auth"` or `"self_signed_tls_client_auth"`, the gateway's TLS
+client certificate is that identity instead: the node's authorization
+server matches the certificate to the client it registered for `client_id`
+(RFC 8705 §2). Without a grant, it sends the bearer token or the user and
+password configured for that endpoint, or, with TLS material alone, only
+presents its certificate. Every request also carries the
+`openEHR-federation-client` token, signed with the `[signing]` key, whose
+`iss` the node can check against that same `client_id`.
 
 **What changes the answer:** `[[auth.issuer]]` (the trust list, by key set or
 introspection), `auth.audience`, `auth.mode`,
@@ -116,24 +120,37 @@ and a node can refuse it from anyone who does not hold the key
 ([Tokens bound to a key](onward-credentials.md#tokens-bound-to-a-key-dpop)). The
 `openEHR-federation-client` token lives 60 seconds, names one node as its
 `aud`, and carries a fresh `jti`, so a node that records `jti` values can
-refuse a replay within that window. Certificate-bound tokens (RFC 8705) are
-not built ([#492](https://github.com/FerroHEALTH/FerroFED/issues/492)). A `nuts` section binds every token with DPoP, as the Dutch
+refuse a replay within that window. An `oauth2` or `fapi2` section with
+`tls_client_certificate_bound_access_tokens = true` takes only tokens bound
+to the gateway's TLS client certificate (RFC 8705 §3), sends them only over
+connections that present it, and refuses one whose stated binding names
+another certificate
+([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705)).
+A `nuts` section binds every token with DPoP, as the Dutch
 binding's Nuts track requires
 ([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)), and so
-does a `fapi2` section, since the FAPI 2.0 Security Profile issues only
-sender-constrained tokens
+does a `fapi2` section, with DPoP or with the certificate, since the FAPI
+2.0 Security Profile issues only sender-constrained tokens
 ([The FAPI 2.0 grant](onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
 
-**Transport identity.** The gateway never reads a transport identity as an
-organisation's identity. TLS protects the connection: outside the
+**Transport identity.** Toward the gateway, a transport identity is never
+read as an organisation's identity. TLS protects the connection: outside the
 development profile, a credential or a patient identifier is sent only over
 `https`. A client certificate, where your proxy asks for one, identifies a
 connection and not an organisation; the organisation is the one the
-verified token names. The XCPD binding's mutual TLS to a responding gateway
-authenticates that connection the same way.
+verified token names. Toward a node, the gateway's own certificate is read
+as its organisation's identity only where you declare it, with
+`client_auth = "tls_client_auth"` or `"self_signed_tls_client_auth"` in that
+node's grant: the node's authorization server then authenticates the
+gateway as the client registered for that certificate (RFC 8705 §2).
+Otherwise a certificate the gateway presents to a node, and the XCPD
+binding's mutual TLS to a responding gateway, authenticate the connection
+alone. Record here, per node, which of the two you chose.
 
-**What changes the answer:** the `resource` and `audience` keys of an
-`oauth2` section; your reverse proxy's TLS settings.
+**What changes the answer:** the `resource`, `audience`, `client_auth` and
+`tls_client_certificate_bound_access_tokens` keys of an `oauth2` or `fapi2`
+section, `client_identity_file` in a node's section, and your reverse
+proxy's TLS settings.
 
 ## 5. What the technique does not cover
 

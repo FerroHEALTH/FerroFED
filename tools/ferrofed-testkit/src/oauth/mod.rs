@@ -33,6 +33,14 @@
 //! [`TokenEndpoint::require_authorization_details`] requires RFC 9396
 //! `authorization_details` of the types it names and states them back in
 //! the token response; the FAPI 2.0 device ([`crate::fapi`]) uses both.
+//! Once a test calls [`TokenEndpoint::accept_tls_client_auth`], the endpoint
+//! authenticates the client by its TLS certificate (RFC 8705 §2): a request
+//! must name the client with `client_id` and carry no assertion; it runs
+//! behind a [`crate::tls::MutualTls`] front, which admits only a client
+//! presenting the certificate its CA signed.
+//! [`TokenEndpoint::bind_to_certificate`] binds every later token to a
+//! certificate thumbprint (RFC 8705 §3), issued as a JWT whose `cnf` claim
+//! names it (§3.1).
 //!
 //! [`es384_pem`] and [`p256_pem`] generate a synthetic private key in PKCS#8
 //! PEM at run time, so no key is ever committed. No specification governs the
@@ -256,6 +264,16 @@ struct Callers {
     issuer: String,
 }
 
+/// How the endpoint authenticates the client.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum ClientAuth {
+    /// An RFC 7523 §2.2 client assertion.
+    #[default]
+    Assertion,
+    /// The TLS client certificate, with `client_id` (RFC 8705 §2).
+    Tls,
+}
+
 #[derive(Debug, Default)]
 struct State {
     jwks: JwkSet,
@@ -272,6 +290,8 @@ struct State {
     audience: Option<String>,
     details: Option<BTreeSet<String>>,
     details_omitted: bool,
+    client_auth: ClientAuth,
+    certificate: Option<String>,
     accepted: BTreeSet<String>,
     subjects: BTreeMap<String, String>,
     bound: BTreeMap<String, String>,
@@ -394,6 +414,22 @@ impl TokenEndpoint {
     /// 9396 §7 requires in the token response, as a defective server would.
     pub fn omit_authorization_details(&self) {
         self.shared.lock().details_omitted = true;
+    }
+
+    /// Authenticates every later request by the client's TLS certificate
+    /// (RFC 8705 §2): it must name the client with `client_id` and carry no
+    /// client assertion. The endpoint relies on the
+    /// [`crate::tls::MutualTls`] front it runs behind to admit only the
+    /// certificate its CA signed.
+    pub fn accept_tls_client_auth(&self) {
+        self.shared.lock().client_auth = ClientAuth::Tls;
+    }
+
+    /// Binds every later token to the certificate of `thumbprint`, its
+    /// `x5t#S256` (RFC 8705 §3.1): the token is a JWT whose `cnf` claim
+    /// names the thumbprint, typed `Bearer`.
+    pub fn bind_to_certificate(&self, thumbprint: &str) {
+        self.shared.lock().certificate = Some(thumbprint.to_owned());
     }
 
     /// The mock server the endpoint runs on, for a test device that serves

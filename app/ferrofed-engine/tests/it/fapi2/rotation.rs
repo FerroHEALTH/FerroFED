@@ -7,8 +7,10 @@
 //! §5.4.2; RFC 7517 §5). No specification governs the rotation: our own
 //! design.
 
-use ferrofed_engine::onward::fapi2::{Fapi2Grant, Fapi2GrantError};
+use ferrofed_engine::onward::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
 use ferrofed_engine::onward::keys::{KeyError, SigningKey};
+use ferrofed_engine::onward::mtls::TlsClientAuth;
+use ferrofed_engine::onward::{ClientAuthentication, Scope, SenderConstraint};
 use ferrofed_testkit::oauth;
 use openehr_its::rest::client::CredentialsProvider as _;
 use secrecy::SecretString;
@@ -30,7 +32,7 @@ async fn the_previous_client_key_is_published_after_the_current_one() -> TestRes
     let (old, new) = (client_key()?, client_key()?);
     let server = server(&old).await;
     let rotated = grant(&server, new.clone(), &prover()?)?.with_previous_client_key(old.clone())?;
-    assert_eq!(new.kid(), rotated.client_key().kid());
+    assert_eq!(Some(new.kid()), rotated.client_key().map(SigningKey::kid));
     assert_eq!(
         Some(old.kid()),
         rotated.previous_client_key().map(SigningKey::kid)
@@ -87,6 +89,32 @@ async fn a_previous_client_key_that_is_the_current_one_or_no_es256_key_is_refuse
     assert!(
         matches!(es384, Err(Fapi2GrantError::PreviousClientKey)),
         "{es384:?}"
+    );
+    Ok(())
+}
+
+/// A grant authenticated by mutual TLS with no client key publishes no key,
+/// and a previous client key has no rotation to overlap there (RFC 8705 §2).
+#[tokio::test]
+async fn a_grant_with_no_client_key_publishes_none_and_takes_no_previous_one() -> TestResult {
+    let key = client_key()?;
+    let server = server(&key).await;
+    let by_certificate = Fapi2Grant::secured(
+        oauth_server_metadata::Issuer::parse(&server.issuer())?,
+        super::CLIENT_ID,
+        Fapi2Security {
+            client_auth: ClientAuthentication::Tls(TlsClientAuth::SelfSigned),
+            sender: SenderConstraint::Dpop(prover()?),
+            client_key: None,
+        },
+        (Some(Scope::parse(super::SCOPE)?), None),
+    )?;
+    assert!(by_certificate.published_client_keys().keys.is_empty());
+    assert!(by_certificate.previous_client_key().is_none());
+    let refused = by_certificate.with_previous_client_key(key);
+    assert!(
+        matches!(refused, Err(Fapi2GrantError::PreviousWithoutClientKey)),
+        "{refused:?}"
     );
     Ok(())
 }

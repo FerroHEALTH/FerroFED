@@ -17,8 +17,11 @@ request:
   such as the BgZ/eOverdracht track (Annex B §B.4a).
 
 A section names one of them; two in one section refuse the configuration.
-No log line, error or rendering carries a credential, an assertion, a key,
-a proof or a token.
+A node's section may also name the TLS client certificate the gateway
+presents to that node and to its authorization server
+([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). No log line,
+error or rendering carries a credential, an assertion, a key, a proof or a
+token.
 
 ## OAuth 2.0 to a node
 
@@ -145,6 +148,69 @@ before that second send is `time-out`, and it counts as a node that was
 asked.
 The key is read at start and on each reload; a key that is no P-256 or
 P-384 key refuses the configuration, naming `dpop_key_file`.
+
+## Mutual TLS to a node (RFC 8705)
+
+A node's `[credentials."<id>"]` section can name the TLS material the
+gateway reaches that node with, by the keys the identity services take:
+
+| Key | What it is |
+|---|---|
+| `client_identity_file` | The gateway's client certificate chain and its private key, PEM, the end-entity certificate first. `client_identity` takes the same inline, as a secret. |
+| `trust_roots_file` | A PEM bundle of trust roots, beside the platform's, the node and its authorization server are trusted by. |
+
+The node and its authorization server are reached over one transport built
+with that material, so every request to either presents the same
+certificate. A node presented a certificate is reached over `https` alone,
+under every profile: an `http` node URL refuses to start, and an `http`
+token endpoint or issuer refuses the configuration. A section may name the
+TLS material alone, with no scheme, when the node authenticates the gateway
+by the certificate and asks for no `Authorization` header.
+
+With that material, an `oauth2` section can authenticate by the certificate
+in place of an assertion, and bind its tokens to it:
+
+```toml
+[credentials."cdr-f"]
+client_identity_file = "/run/secrets/cdr-f-client.pem"
+trust_roots_file = "/etc/ferrofed/cdr-f-roots.pem"
+
+[credentials."cdr-f".oauth2]
+grant = "client_credentials"                 # or token_exchange
+client_auth = "tls_client_auth"              # or self_signed_tls_client_auth
+token_endpoint = "https://auth.cdr-f.example.org/oauth2/token"
+client_id = "ferrofed-gateway"
+scope = "system/aql-*.s"
+tls_client_certificate_bound_access_tokens = true
+```
+
+- `client_auth = "tls_client_auth"` authenticates the gateway by the
+  certificate, which the authorization server validates against its PKI and
+  matches to the subject it registered for `client_id` (RFC 8705 §2.1);
+  `"self_signed_tls_client_auth"` has it matched to the certificate it
+  registered instead (§2.2). The token request then carries `client_id` and
+  no client assertion. A token exchange still names the gateway as the
+  actor with an assertion the `[signing]` key signs (RFC 8693 §2.1).
+- `tls_client_certificate_bound_access_tokens = true` takes only tokens
+  bound to the certificate (§3). The token is sent under `Bearer` (RFC
+  6750), and only over the endpoint's transport, which presents the
+  certificate it is bound to. Where the token states its binding, as a
+  `cnf` member of the token response or the `cnf` claim of a JWT access
+  token, its `x5t#S256` must be the SHA-256 thumbprint of the configured
+  certificate (§3.1, §3.2); a token bound to another certificate is never
+  cached or sent, and the node is `node-error` with nothing sent. An opaque
+  token states no binding, and the node's authorization server and the node
+  check it.
+- Either key without `client_identity_file` refuses the configuration, and
+  so does an identity file with no certificate in it. A section with both
+  `tls_client_certificate_bound_access_tokens` and `dpop_key_file` refuses
+  the configuration: a token is bound one way.
+
+The client identity is a secret no rendering shows; the settings and the
+start-up log name the endpoints that present a certificate and the
+thumbprint a grant binds to, never the certificate or its key. A service's
+own `credentials` section, under `[[pixm.manager]]` or `[pdqm]` for
+example, takes no TLS material: name it on the service's table.
 
 ## The Nuts grant (Annex B §B.4)
 
@@ -302,14 +368,30 @@ authorization_details = '''[{"type": "nl-gis-v1",
    under the `DPoP` scheme with a proof of `dpop_key_file`'s key
    ([Tokens bound to a key](#tokens-bound-to-a-key-dpop)).
 
+The profile admits mutual TLS for both choices (§5.3.2.1), with the node
+section's `client_identity_file`
+([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). With `client_auth
+= "tls_client_auth"` or `"self_signed_tls_client_auth"` the metadata must
+list that method in place of `private_key_jwt`, and the token request
+carries `client_id` and no assertion. With
+`tls_client_certificate_bound_access_tokens = true` the metadata must state
+`tls_client_certificate_bound_access_tokens` as `true` (RFC 8705 §3.3), the
+token is taken as `Bearer` and held to the certificate as an `oauth2`
+grant's is, and no `DPoP` key is used. A grant that uses mutual TLS sends
+its token requests to the `token_endpoint` of `mtls_endpoint_aliases` where
+the metadata names one (RFC 8705 §5), held to the issuer's origin like the
+other endpoint, and its `issuer` must be `https`.
+
 | Key | What it is |
 |---|---|
 | `issuer` | The issuer identifier of the node's authorization server (RFC 8414 §2), in its canonical form. `https` outside the development profile. |
 | `grant` | `client_credentials` or `token_exchange`. `authorization_code` refuses the configuration. |
 | `client_id` | The client the server registered the gateway as, the assertion's `iss` and `sub`. On the §B.4a track, the organisation's URA-based identifier. |
-| `client_key_file` | The key every assertion is signed with: a P-256 private key in PKCS#8 PEM. The profile admits PS256, ES256 and EdDSA for a JWT (§5.4.1), so a P-384 key cannot sign here. |
+| `client_auth` | `private_key_jwt`, when unset, or `tls_client_auth` or `self_signed_tls_client_auth`, the node section's certificate ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). |
+| `client_key_file` | The key every assertion is signed with: a P-256 private key in PKCS#8 PEM. The profile admits PS256, ES256 and EdDSA for a JWT (§5.4.1), so a P-384 key cannot sign here. Required with `private_key_jwt`, and with `token_exchange` for the actor token. |
 | `previous_client_key_file` | Optional, while the client key is rotated: the previous client key, a P-256 private key in PKCS#8 PEM. It is published beside the current key until you remove it, and it never signs. |
-| `dpop_key_file` | A P-256 private key in PKCS#8 PEM. Required: the profile issues only sender-constrained tokens (§5.3.2.1). |
+| `dpop_key_file` | A P-256 private key in PKCS#8 PEM. Required unless the tokens are bound to the certificate: the profile issues only sender-constrained tokens (§5.3.2.1). |
+| `tls_client_certificate_bound_access_tokens` | `true` binds the tokens to the node section's certificate in place of `DPoP` (§5.3.2.1; RFC 8705 §3). Never beside `dpop_key_file`. |
 | `scope` | Optional SMART on openEHR `system` scopes, as in an `oauth2` section. |
 | `authorization_details` | Optional JSON text: an array of RFC 9396 §2 objects, each with a `type`. It is sent as written. |
 | `resource`, `audience` | As in an `oauth2` section; `resource` is required by `token_exchange`. |
@@ -353,10 +435,6 @@ What the gateway does not do on this track:
   "authorization_code"` refuses the configuration. The client-credentials
   grant is admitted under the profile's general requirements (§5.3.2.1
   Note 2).
-- **MTLS client authentication or certificate-bound tokens.** The profile
-  admits either in place of `private_key_jwt` and `DPoP` (§5.3.2.1); the
-  §B.4a track chooses `private_key_jwt`. Mutual TLS at the transport, which
-  §B.4a.2 keeps, is the deployment's network layer.
 - **Purpose of use per caller.** `purpose_of_use` and
   `subject_organisation_type` travel as the configured
   `authorization_details` of the endpoint, the same for every request, as a

@@ -17,10 +17,14 @@
 //!   string (§5.3.3.1), signed `ES256` (§5.4.1 admits `PS256`, `ES256` and
 //!   `EdDSA`) with a P-256 key of the grant's own, which the gateway publishes
 //!   in its JWK Set (§5.4.2), with the previous key beside it while the key
-//!   is rotated ([`Fapi2Grant::with_previous_client_key`]);
-//! - every token is sender-constrained with `DPoP` (§5.3.2.1, §5.3.3.1;
-//!   RFC 9449), proven with a P-256 key, so a grant without one cannot be
-//!   built; a nonce the server demands is answered (§5.3.3.1, RFC 9449 §8);
+//!   is rotated ([`Fapi2Grant::with_previous_client_key`]), or with mutual
+//!   TLS (§5.3.2.1; RFC 8705 §2), by the certificate the endpoint's
+//!   transport presents;
+//! - every token is sender-constrained (§5.3.2.1, §5.3.3.1): with `DPoP`
+//!   (RFC 9449), proven with a P-256 key, a nonce the server demands
+//!   answered (§5.3.3.1, RFC 9449 §8), or bound to the certificate the
+//!   endpoint's transport presents (RFC 8705 §3); a grant with neither
+//!   cannot be built ([`Fapi2Security`]);
 //! - the request carries the configured RFC 9396 `authorization_details`,
 //!   whose types the metadata must list, and the token response must state
 //!   the details it granted (RFC 9396 §7). FAPI 2.0 §5.3.2.2 Note 5
@@ -63,8 +67,11 @@ use crate::onward::dpop::Prover;
 use crate::onward::exchange::{Exchange, OnBehalf};
 use crate::onward::fapi2::metadata::DiscoveryError;
 use crate::onward::keys::{KeyError, KeyRing, SigningKey};
+use crate::onward::mtls::Thumbprint;
 use crate::onward::provider::ClientCredentials;
-use crate::onward::{Clock, Grant, GrantError, GrantKind, Scope, SystemClock};
+use crate::onward::{
+    ClientAuthentication, Clock, Grant, GrantError, GrantKind, Scope, SenderConstraint, SystemClock,
+};
 
 /// The JWS algorithm every assertion and proof of the grant is signed with.
 ///
@@ -89,8 +96,29 @@ pub struct Fapi2Grant {
     authorization_details: Option<AuthorizationDetails>,
     resource: Option<String>,
     audience: Option<String>,
-    client_key: Arc<KeyRing>,
-    dpop: Arc<Prover>,
+    client_key: Option<Arc<KeyRing>>,
+    client_auth: ClientAuthentication,
+    sender: SenderConstraint,
+}
+
+/// How a FAPI 2.0 grant authenticates the gateway and binds its tokens: the
+/// two choices FAPI 2.0 Security Profile §5.3.2.1 leaves to the deployment.
+///
+/// `Debug` shows the methods and the keys' `kid` and thumbprint, never a
+/// key.
+#[derive(Debug, Clone)]
+pub struct Fapi2Security {
+    /// `private_key_jwt` with the [`client_key`](Self::client_key), or
+    /// mutual TLS by the endpoint's certificate (RFC 8705 §2).
+    pub client_auth: ClientAuthentication,
+    /// `DPoP` with an `ES256` key (RFC 9449), or the endpoint's certificate
+    /// (RFC 8705 §3).
+    pub sender: SenderConstraint,
+    /// The `ES256` key the gateway's assertions are signed with: the client
+    /// assertion under `private_key_jwt`, and the actor token of a token
+    /// exchange. A grant authenticated by mutual TLS that exchanges no token
+    /// needs none.
+    pub client_key: Option<SigningKey>,
 }
 
 /// A FAPI 2.0 grant that cannot be built.
@@ -109,6 +137,10 @@ pub enum Fapi2GrantError {
     /// §5.4.1).
     #[error("the previous client key does not sign ES256, which FAPI 2.0 §5.4.1 requires of it")]
     PreviousClientKey,
+    /// A previous client key is given for a grant with no client key, so
+    /// there is no rotation for it to overlap.
+    #[error("a previous client key is given and the grant has no client key")]
+    PreviousWithoutClientKey,
     /// The client key cannot be held: the previous key is the current one.
     #[error("the client key cannot be held")]
     Keys(#[source] KeyError),
@@ -116,6 +148,14 @@ pub enum Fapi2GrantError {
     /// §5.4.1).
     #[error("the DPoP key does not sign ES256, which FAPI 2.0 §5.4.1 requires of it")]
     DpopKey,
+    /// The grant authenticates with `private_key_jwt` and has no client key
+    /// to sign its assertions with.
+    #[error("the grant authenticates with private_key_jwt and has no client key")]
+    NoClientKey,
+    /// A token exchange names the gateway as the actor with an assertion,
+    /// and the grant has no client key to sign it with (RFC 8693 §2.1).
+    #[error("a token exchange grant has no client key to sign its actor token with")]
+    NoActorKey,
     /// The grant asks for neither a scope nor `authorization_details`, so
     /// the authorization server would choose what the token may do (FAPI
     /// 2.0 Security Profile §5.3.3.1: request the least privilege).
@@ -146,24 +186,66 @@ impl Fapi2Grant {
         issuer: Issuer,
         client_id: impl Into<String>,
         (client_key, dpop): (SigningKey, Arc<Prover>),
+        request: (Option<Scope>, Option<AuthorizationDetails>),
+    ) -> Result<Self, Fapi2GrantError> {
+        let security = Fapi2Security {
+            client_auth: ClientAuthentication::PrivateKeyJwt,
+            sender: SenderConstraint::Dpop(dpop),
+            client_key: Some(client_key),
+        };
+        Self::secured(issuer, client_id, security, request)
+    }
+
+    /// A grant at the authorization server `issuer` for the client
+    /// `client_id`, authenticating and binding its tokens as `security`
+    /// says, and asking for `scope`, `authorization_details`, or both.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Fapi2GrantError::ClientId`] for an empty `client_id`,
+    /// [`Fapi2GrantError::NoClientKey`] for `private_key_jwt` without a
+    /// client key, [`Fapi2GrantError::ClientKey`] and
+    /// [`Fapi2GrantError::DpopKey`] for a key that does not sign `ES256`,
+    /// and [`Fapi2GrantError::Unrequested`] when it asks for neither a scope
+    /// nor details.
+    pub fn secured(
+        issuer: Issuer,
+        client_id: impl Into<String>,
+        security: Fapi2Security,
         (scope, authorization_details): (Option<Scope>, Option<AuthorizationDetails>),
     ) -> Result<Self, Fapi2GrantError> {
         let client_id = client_id.into();
         if client_id.is_empty() {
             return Err(Fapi2GrantError::ClientId);
         }
-        if client_key.algorithm() != ALGORITHM {
+        if security.client_auth == ClientAuthentication::PrivateKeyJwt
+            && security.client_key.is_none()
+        {
+            return Err(Fapi2GrantError::NoClientKey);
+        }
+        if security
+            .client_key
+            .as_ref()
+            .is_some_and(|key| key.algorithm() != ALGORITHM)
+        {
             return Err(Fapi2GrantError::ClientKey);
         }
-        if dpop.algorithm() != ALGORITHM {
+        if let SenderConstraint::Dpop(prover) = &security.sender
+            && prover.algorithm() != ALGORITHM
+        {
             return Err(Fapi2GrantError::DpopKey);
         }
         if scope.is_none() && authorization_details.is_none() {
             return Err(Fapi2GrantError::Unrequested);
         }
-        let clock: Arc<dyn Clock> = Arc::new(SystemClock);
-        let client_key =
-            KeyRing::new(client_key, None, Duration::ZERO, clock).map_err(Fapi2GrantError::Keys)?;
+        let client_key = security
+            .client_key
+            .map(|key| {
+                let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+                KeyRing::new(key, None, Duration::ZERO, clock).map(Arc::new)
+            })
+            .transpose()
+            .map_err(Fapi2GrantError::Keys)?;
         Ok(Self {
             issuer,
             client_id,
@@ -172,8 +254,9 @@ impl Fapi2Grant {
             authorization_details,
             resource: None,
             audience: None,
-            client_key: Arc::new(client_key),
-            dpop,
+            client_key,
+            client_auth: security.client_auth,
+            sender: security.sender,
         })
     }
 
@@ -188,8 +271,9 @@ impl Fapi2Grant {
     /// # Errors
     ///
     /// Returns [`Fapi2GrantError::PreviousClientKey`] for a key that does
-    /// not sign `ES256`, and [`Fapi2GrantError::Keys`] when `previous` is the
-    /// current client key.
+    /// not sign `ES256`, [`Fapi2GrantError::PreviousWithoutClientKey`] for a
+    /// grant with no client key, and [`Fapi2GrantError::Keys`] when
+    /// `previous` is the current client key.
     pub fn with_previous_client_key(
         mut self,
         previous: SigningKey,
@@ -197,13 +281,14 @@ impl Fapi2Grant {
         if previous.algorithm() != ALGORITHM {
             return Err(Fapi2GrantError::PreviousClientKey);
         }
-        let ring = KeyRing::until_removed(
-            self.client_key.current().clone(),
-            previous,
-            Arc::new(SystemClock),
-        )
-        .map_err(Fapi2GrantError::Keys)?;
-        self.client_key = Arc::new(ring);
+        let current = self
+            .client_key
+            .as_deref()
+            .map(KeyRing::current)
+            .ok_or(Fapi2GrantError::PreviousWithoutClientKey)?;
+        let ring = KeyRing::until_removed(current.clone(), previous, Arc::new(SystemClock))
+            .map_err(Fapi2GrantError::Keys)?;
+        self.client_key = Some(Arc::new(ring));
         Ok(self)
     }
 
@@ -244,10 +329,14 @@ impl Fapi2Grant {
     /// # Errors
     ///
     /// Returns [`Fapi2GrantError::Untargeted`] for a grant that names no
-    /// resource yet.
+    /// resource yet, and [`Fapi2GrantError::NoActorKey`] for one with no
+    /// client key to sign the actor token with.
     pub fn with_token_exchange(mut self) -> Result<Self, Fapi2GrantError> {
         if self.resource.is_none() {
             return Err(Fapi2GrantError::Untargeted);
+        }
+        if self.client_key.is_none() {
+            return Err(Fapi2GrantError::NoActorKey);
         }
         self.kind = GrantKind::TokenExchange;
         Ok(self)
@@ -278,33 +367,63 @@ impl Fapi2Grant {
         self.authorization_details.as_ref()
     }
 
-    /// The key every client assertion is signed with, whose public half the
-    /// gateway publishes in its JWK Set (FAPI 2.0 Security Profile §5.4.2).
+    /// The key every assertion of the gateway's is signed with, whose public
+    /// half the gateway publishes in its JWK Set (FAPI 2.0 Security Profile
+    /// §5.4.2), when the grant has one.
     #[must_use]
-    pub fn client_key(&self) -> &SigningKey {
-        self.client_key.current()
+    pub fn client_key(&self) -> Option<&SigningKey> {
+        self.client_key.as_deref().map(KeyRing::current)
     }
 
     /// The previous client key while the grant is rotated, published and
     /// never signing.
     #[must_use]
     pub fn previous_client_key(&self) -> Option<&SigningKey> {
-        self.client_key.previous()
+        self.client_key.as_deref().and_then(KeyRing::previous)
     }
 
     /// The public halves the gateway publishes for the grant in its JWK
     /// Set: the client key, then the previous one while the grant is
-    /// rotated (RFC 7517 §5; FAPI 2.0 Security Profile §5.4.2).
+    /// rotated, and none for a grant with no client key (RFC 7517 §5; FAPI
+    /// 2.0 Security Profile §5.4.2).
     #[must_use]
     pub fn published_client_keys(&self) -> JwkSet {
-        self.client_key.published()
+        self.client_key
+            .as_deref()
+            .map_or_else(|| JwkSet { keys: Vec::new() }, KeyRing::published)
     }
 
-    /// The key the tokens are bound to, which proves every request to the
-    /// node.
+    /// How the grant authenticates the gateway at the token endpoint.
     #[must_use]
-    pub fn dpop(&self) -> &Arc<Prover> {
-        &self.dpop
+    pub fn client_authentication(&self) -> ClientAuthentication {
+        self.client_auth
+    }
+
+    /// The `DPoP` key the tokens are bound to, which proves every request to
+    /// the node, when they are bound with `DPoP`.
+    #[must_use]
+    pub fn dpop(&self) -> Option<&Arc<Prover>> {
+        match &self.sender {
+            SenderConstraint::Dpop(prover) => Some(prover),
+            SenderConstraint::Certificate(_) => None,
+        }
+    }
+
+    /// The thumbprint of the certificate the tokens are bound to (RFC 8705
+    /// §3), when they are bound to one.
+    #[must_use]
+    pub fn certificate(&self) -> Option<&Thumbprint> {
+        match &self.sender {
+            SenderConstraint::Certificate(thumbprint) => Some(thumbprint),
+            SenderConstraint::Dpop(_) => None,
+        }
+    }
+
+    /// Whether the grant uses mutual TLS at the token endpoint: to
+    /// authenticate, to bind its tokens, or both (RFC 8705 §5).
+    #[must_use]
+    pub fn uses_mutual_tls(&self) -> bool {
+        matches!(self.client_auth, ClientAuthentication::Tls(_)) || self.certificate().is_some()
     }
 
     /// The `oauth2` grant this grant is at `token_endpoint`, the one its
@@ -316,8 +435,16 @@ impl Fapi2Grant {
             self.scope.clone(),
         )
         .map_err(Fapi2Error::TokenEndpoint)?
-        .with_issuer_audience(self.issuer.clone())
-        .with_dpop(Arc::clone(&self.dpop));
+        .with_issuer_audience(self.issuer.clone());
+        grant = match &self.sender {
+            SenderConstraint::Dpop(prover) => grant.with_dpop(Arc::clone(prover)),
+            SenderConstraint::Certificate(thumbprint) => {
+                grant.with_certificate_binding(thumbprint.clone())
+            }
+        };
+        if let ClientAuthentication::Tls(method) = self.client_auth {
+            grant = grant.with_tls_client_auth(method);
+        }
         if let Some(details) = &self.authorization_details {
             grant = grant.with_authorization_details(details.clone());
         }
@@ -352,6 +479,10 @@ pub enum Fapi2Error {
     /// The token endpoint the metadata names is one the grant refuses.
     #[error("the token endpoint the FAPI 2.0 metadata names is not usable")]
     TokenEndpoint(#[source] GrantError),
+    /// A token exchange has no client key to sign its actor token with,
+    /// which a grant built by [`Fapi2Grant::with_token_exchange`] always has.
+    #[error("the FAPI 2.0 token exchange has no client key to sign its actor token with")]
+    NoActorKey,
 }
 
 /// What both providers of one endpoint's grant share: the grant, its
@@ -420,14 +551,23 @@ impl<T: Transport + Clone + 'static> Fapi2Credentials<T> {
             .get_or_try_init(|| async {
                 let binding = &self.binding;
                 let grant = binding.discovered().await?.as_client_credentials();
-                Ok(ClientCredentials::new(
-                    binding.endpoint.clone(),
-                    grant,
-                    Arc::clone(&binding.grant.client_key),
-                    (binding.lifetime, binding.timeout),
-                    binding.transport.clone(),
-                    Arc::clone(&binding.clock),
-                ))
+                Ok(match &binding.grant.client_key {
+                    Some(keys) => ClientCredentials::new(
+                        binding.endpoint.clone(),
+                        grant,
+                        Arc::clone(keys),
+                        (binding.lifetime, binding.timeout),
+                        binding.transport.clone(),
+                        Arc::clone(&binding.clock),
+                    ),
+                    None => ClientCredentials::by_certificate(
+                        binding.endpoint.clone(),
+                        grant,
+                        binding.timeout,
+                        binding.transport.clone(),
+                        Arc::clone(&binding.clock),
+                    ),
+                })
             })
             .await
     }
@@ -503,11 +643,16 @@ impl<T: Transport + Clone + 'static> ExchangeInner<T> {
         self.exchange
             .get_or_try_init(|| async {
                 let binding = &self.binding;
+                let keys = binding
+                    .grant
+                    .client_key
+                    .as_ref()
+                    .ok_or(Fapi2Error::NoActorKey)?;
                 let grant = binding.discovered().await?;
                 Ok(Exchange::new(
                     binding.endpoint.clone(),
                     grant,
-                    Arc::clone(&binding.grant.client_key),
+                    Arc::clone(keys),
                     (binding.lifetime, binding.timeout),
                     binding.transport.clone(),
                     Arc::clone(&binding.clock),

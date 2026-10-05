@@ -1090,6 +1090,7 @@ dependencies = [
  "openehr-sdt",
  "opentelemetry",
  "opentelemetry_sdk",
+ "pem 3.0.6",
  "reqwest",
  "secrecy",
  "serde",

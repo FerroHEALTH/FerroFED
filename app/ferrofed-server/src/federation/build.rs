@@ -170,12 +170,16 @@ impl Federation {
         // only backstops a connection the call deadline cannot reach.
         let transport = ReqwestTransport::with_timeout(settings.federation.budget.overall())
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
-        let onward = crate::onward::onward(settings, transport)?;
+        let onward = crate::onward::onward(settings, transport, &snapshot)?;
         let signer = Arc::new(crate::conveyed::signer(settings, &id)?);
-        let clients = NodeClients::from_snapshot(&snapshot, &onward.transport, &onward.credentials)
-            .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
-            .and_then(|clients| clients.with_dpop(&onward.dpop))
-            .map_err(FederationError::Clients)?;
+        let clients = NodeClients::from_snapshot_over(
+            &snapshot,
+            (&onward.transport, &onward.transports),
+            &onward.credentials,
+        )
+        .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
+        .and_then(|clients| clients.with_dpop(&onward.dpop))
+        .map_err(FederationError::Clients)?;
         let mut context = Context::new(targeting(selection))
             .with_offset_strategy(settings.federation.offset)
             .with_decomposable_aggregates(settings.federation.decomposable.iter().copied());
