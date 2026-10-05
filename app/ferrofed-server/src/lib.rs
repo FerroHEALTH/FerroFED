@@ -75,6 +75,7 @@ pub mod localization;
 pub mod metrics;
 mod onward;
 pub mod operator;
+pub mod overload;
 pub mod panic;
 pub mod reload;
 pub mod request_id;
@@ -163,6 +164,13 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// [`ITS_REST_PREFIX`] is routed or answers `501`, and every path outside it,
 /// or outside the base, answers `404`. Under a base other than `/`, the base
 /// itself and the base with a trailing `/` are both `{base}/`.
+///
+/// Outside client authentication, a request past
+/// `server.max_concurrent_requests` is answered `503` before anything else
+/// reads it, the health family excepted; inside it, a verified caller past
+/// `[server.caller_rate]` is answered `429` ([`overload`]). The request log
+/// records each request in the inbound request metrics of `state`
+/// ([`metrics::inbound`]).
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     let surface = Router::new()
         .route("/health", get(liveness))
@@ -197,16 +205,33 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
         server.base_path.clone(),
         Arc::clone(&state),
     ));
-    let guarded = routes
-        .with_state(Arc::clone(&state))
+    let metrics = Arc::clone(state.metrics());
+    let routes = routes.with_state(Arc::clone(&state));
+    let rated = match server.overload.caller_rate {
+        Some(rate) => routes.layer(axum::middleware::from_fn_with_state(
+            Arc::new(overload::CallerLimit::new(rate, Arc::clone(&metrics))),
+            overload::per_caller,
+        )),
+        None => routes,
+    };
+    let admission = Arc::new(overload::Admission::new(
+        &server.overload,
+        &server.base_path,
+        Arc::clone(&metrics),
+    ));
+    let guarded = rated
         .layer(axum::middleware::from_fn_with_state(guard, auth::guard))
         // NOTE: RFC 7517 §5, DID 1.0 §7.1: published key material is public, so a
         // binding's documents are answered outside the client authentication gate.
         .layer(axum::middleware::from_fn_with_state(
             state,
             documents::serve,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            admission,
+            overload::admit,
         ));
-    with_middleware(guarded, server)
+    layered(guarded, server, Some(metrics.inbound()))
 }
 
 /// `GET` and `OPTIONS` of `{base}/` (§7a.2).
@@ -235,6 +260,16 @@ async fn outside_the_base(headers: HeaderMap) -> Response {
 /// catcher, the timeout and the ceiling, so a request one of them answers,
 /// a panicking one included, still gets its line with the status it answered.
 pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
+    layered(router, server, None)
+}
+
+/// Applies the middleware of [`with_middleware`] to `router`, the request log
+/// recording each request through `inbound` when it is set.
+fn layered(
+    router: Router,
+    server: &ServerSettings,
+    inbound: Option<metrics::inbound::Instruments>,
+) -> Router {
     router
         .layer(RequestBodyLimitLayer::new(server.body_limit))
         .layer(TimeoutLayer::with_status_code(
@@ -243,7 +278,10 @@ pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
         ))
         .layer(CatchPanicLayer::custom(panic::caught))
         .layer(axum::middleware::from_fn_with_state(
-            Arc::new(server.base_path.clone()),
+            Arc::new(request_log::RequestLog::new(
+                server.base_path.clone(),
+                inbound,
+            )),
             request_log::log,
         ))
         .layer(PropagateRequestIdLayer::new(request_id::HEADER))

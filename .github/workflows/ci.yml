@@ -210,6 +210,35 @@ jobs:
             -schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/8df8a883b68a24a104b4a9e43c1288090ae60b3b/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json' \
             deploy/kubernetes
 
+  # The observability assets every release attaches, the Grafana dashboard
+  # and the Prometheus rule file under deploy/observability: promtool checks
+  # the rules, and the guard holds both to the metrics the gateway exports.
+  observability:
+    name: observability
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The dashboard and the alert rules hold
+        # promtool from the Prometheus release tarball, checked against the
+        # SHA-256 its release publishes before it runs.
+        env:
+          PROMETHEUS_VERSION: 3.13.4
+          PROMETHEUS_SHA256: 87f21a66f96c597a189cef8d640e8921b621fc17a9feff707c332c4f3b3ddd56
+        run: |
+          set -euo pipefail
+          tarball="prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$tarball" \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/$tarball"
+          echo "${PROMETHEUS_SHA256}  $RUNNER_TEMP/$tarball" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP"
+          PROMTOOL="$RUNNER_TEMP/prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" \
+            bash scripts/checks/observability.sh
+
   # The comment-style guard (RFC 505 and RFC 1574) over the whole tree: every
   # hand-written .rs file, plus the citation checks over the shell scripts,
   # every Cargo.toml, clippy.toml, the YAML under .github and the TOML under
@@ -1058,6 +1087,7 @@ jobs:
       - shellcheck
       - dockerfile-lint
       - kubernetes-manifests
+      - observability
       - comment-style
       - file-length
       - versions

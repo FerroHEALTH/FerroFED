@@ -594,9 +594,11 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>, disclosed: bool) -> Settled {
             Answer::ConsentRefused => Silence::Erred(StatusCode::FORBIDDEN),
             Answer::Erred(status) => Silence::Erred(status),
             Answer::Abandoned
-            | Answer::Failed(ForwardError::TimeOut { .. } | ForwardError::Expired { .. }) => {
-                Silence::TimedOut
-            }
+            | Answer::Failed(
+                ForwardError::TimeOut { .. }
+                | ForwardError::Expired { .. }
+                | ForwardError::Capped(_),
+            ) => Silence::TimedOut,
             Answer::Failed(ForwardError::Unreachable { .. }) => Silence::Unreachable,
             Answer::Failed(ForwardError::Refused { .. }) => Silence::Refused,
             Answer::Failed(ForwardError::Credentials { .. }) => Silence::Unauthenticated,

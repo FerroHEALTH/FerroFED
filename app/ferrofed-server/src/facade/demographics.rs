@@ -72,6 +72,7 @@ pub(crate) async fn identify(
     let until = Instant::now()
         .checked_add(step.timeout())
         .map_or(deadline, |at| at.min(deadline));
+    let started = Instant::now();
     let answer = tokio::time::timeout_at(
         tokio::time::Instant::from_std(until),
         step.step().identify(patient, on_behalf, inside(until)),
@@ -84,7 +85,7 @@ pub(crate) async fn identify(
     federation
         .dependencies()
         .demographics(dependencies::of_identification(&answer));
-    federation.requests().identified(&answer);
+    federation.requests().identified(&answer, started.elapsed());
     match answer {
         Identification::Identified(master) => Identified::Master(master),
         Identification::NoMatch => Identified::NoMatch(String::from(

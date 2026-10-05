@@ -56,6 +56,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `shellcheck` | `--severity=style` over every tracked `*.sh` and every tracked extensionless file with a shell shebang, outside `docs/specs/**` and `**/vendor/**` |
 | `hadolint` | every tracked Dockerfile under `.hadolint.yaml`, outside the vendored trees, which today is `docker/Dockerfile` and `docker/viewer/Dockerfile` |
 | `kubeconform` | the official image, pinned by tag and digest, in strict mode over the example manifests under `deploy/kubernetes/`, against the schemas of one Kubernetes release at a pinned commit of `yannh/kubernetes-json-schema` |
+| `observability` | `scripts/checks/observability.sh` over `deploy/observability/`, with `promtool` from the Prometheus release tarball, its SHA-256 checked before it runs |
 | `comment-style` | `scripts/checks/comment-style.sh --all` |
 | `file-length` | `scripts/checks/file-length.sh --self-test`, then `scripts/checks/file-length.sh`: the 1000-line cap on hand-written Rust and on the book's Markdown pages, with its ratchet allow-list |
 | `versions` | `scripts/checks/versions.sh --self-test`, then `scripts/checks/versions.sh`: the pin matrix against every file that repeats a pin and each specification row against the crate constant it names, the landing page's release string against the newest `CHANGELOG.md` release, the book's pin table against the rows it names, the vendored provenance stamps and the SPDX licence claims |

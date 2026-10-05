@@ -27,6 +27,7 @@ use crate::base_path::BasePath;
 use crate::binding::development::DevSection;
 use crate::binding::seam::OnwardGrant;
 use crate::config::auth::AuthSettings;
+use crate::config::limits::Overload;
 use crate::config::stored_queries::Store;
 use crate::config::{NodeSelection, RegistryFormat};
 use crate::telemetry::{Format, SampleRatio};
@@ -146,6 +147,9 @@ pub struct FederationSettings {
     /// excludes as `consent-denied` (N27a), as `consent.disclose` declares
     /// it where a pre-filter is configured (§7a.2).
     pub consent_disclosure: ConsentDisclosure,
+    /// The most requests the gateway sends to one member endpoint at once
+    /// (§11.5, N38).
+    pub max_in_flight_per_node: NonZeroU32,
 }
 
 /// Whether an answer names a member the Step-1 consent pre-filter excludes
@@ -209,6 +213,9 @@ pub struct ServerSettings {
     /// Who may call the ITS-REST surface and `OPTIONS {base}/`, from
     /// `[auth]` (§13.1, N25).
     pub auth: AuthSettings,
+    /// How many requests the listener serves at once, and how many one
+    /// verified caller may send.
+    pub overload: Overload,
 }
 
 /// The console and the trace export, resolved.
@@ -332,6 +339,13 @@ impl Settings {
             trace_sample_ratio = self.telemetry.trace_sample_ratio.get(),
             credentials = endpoints.join(","),
             client_certificates = mutual.join(","),
+            max_concurrent_requests = self.server.overload.max_concurrent_requests.get(),
+            caller_rate = self
+                .server
+                .overload
+                .caller_rate
+                .map(|rate| rate.requests_per_second.get()),
+            max_in_flight_per_node = self.federation.max_in_flight_per_node.get(),
             auth_issuers = self.server.auth.issuers.len(),
             auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
             purpose_of_use_required = self.server.auth.purpose_required,

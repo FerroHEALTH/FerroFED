@@ -438,6 +438,10 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
 
 /// The keys a reload does not apply whose value in `fresh` differs from the
 /// one the process started with: the core's, then each binding's.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one entry per key a reload does not apply: the table of restart keys"
+)]
 fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
     let (was, now) = (&boot.federation, &fresh.federation);
     let (booted, reread) = (&boot.telemetry, &fresh.telemetry);
@@ -463,6 +467,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
         (
             "server.body_limit_bytes",
             boot.server.body_limit != fresh.server.body_limit,
+        ),
+        (
+            "server.overload",
+            boot.server.overload != fresh.server.overload,
         ),
         ("telemetry.format", booted.format != reread.format),
         ("telemetry.filter", booted.filter != reread.filter),
@@ -497,6 +505,10 @@ fn needs_restart(boot: &Settings, fresh: &Settings) -> Vec<&'static str> {
             was.node_selection != now.node_selection,
         ),
         ("federation.best_effort", was.best_effort != now.best_effort),
+        (
+            "federation.max_in_flight_per_node",
+            was.max_in_flight_per_node != now.max_in_flight_per_node,
+        ),
         (
             "federation.fan_out_template_upload",
             was.fan_out_template_upload != now.fan_out_template_upload,

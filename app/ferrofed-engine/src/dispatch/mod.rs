@@ -61,6 +61,7 @@ use openehr_its::rest::client::{
 use openehr_its::rest::generated::query::{AdhocQueryExecute, ResultSet};
 use url::Url;
 
+pub mod cap;
 mod classify;
 pub mod definition;
 pub(crate) mod dpop;
@@ -292,6 +293,9 @@ pub enum Contact {
     /// or was answered with a `DPoP` nonce challenge and could not be sent
     /// again (RFC 9449 §9).
     Silent,
+    /// The request waited for a slot of the endpoint's in-flight cap until
+    /// its deadline, and never left the gateway ([`cap`]).
+    Capped,
 }
 
 impl Contact {
@@ -314,6 +318,7 @@ impl Contact {
     pub fn of_forward_error(error: &ForwardError) -> Self {
         match error {
             ForwardError::Refused { status, .. } => Self::Answered(*status),
+            ForwardError::Capped(_) => Self::Capped,
             ForwardError::TimeOut { .. }
             | ForwardError::Unreachable { .. }
             | ForwardError::Credentials { sent: true, .. } => Self::Silent,
@@ -338,6 +343,7 @@ impl Contact {
                 Self::Answered(*status)
             }
             EhrCallError::TimeOut { .. } | EhrCallError::Unreachable { .. } => Self::Silent,
+            EhrCallError::Capped(_) => Self::Capped,
             EhrCallError::Withheld { .. }
             | EhrCallError::Expired { .. }
             | EhrCallError::Conveyance { .. } => Self::Unsent,
@@ -378,7 +384,7 @@ impl Contact {
     /// Whether the request left the gateway.
     #[must_use]
     pub const fn sent(self) -> bool {
-        !matches!(self, Self::Unsent)
+        !matches!(self, Self::Unsent | Self::Capped)
     }
 }
 
@@ -531,6 +537,7 @@ pub struct NodeClient<T> {
     consent_refusal_codes: BTreeSet<String>,
     on_behalf: Option<SharedOnBehalf>,
     dpop: Option<NodeProver>,
+    in_flight: Option<cap::InFlight>,
 }
 
 impl<T: Transport + Clone> NodeClient<T> {
@@ -566,6 +573,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             consent_refusal_codes: endpoint.consent_refusal_codes().clone(),
             on_behalf: None,
             dpop: None,
+            in_flight: None,
         })
     }
 

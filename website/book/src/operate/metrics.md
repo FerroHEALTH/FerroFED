@@ -3,9 +3,11 @@
 
 # Metrics
 
-The gateway counts what it already observes: the integrity incidents it
-raises, the requests it sends to each member node and how long they take,
-and the registry reloads. One OpenTelemetry meter provider holds the
+The gateway counts what it already observes: the requests its clients send
+it, by route and status, and how long they take; the requests it sends to
+each member node, and to its resolver, localizer and demographics service,
+and how long they take; the integrity incidents it raises; the security
+events it logs; the requests its limits refuse; and the registry reloads. One OpenTelemetry meter provider holds the
 counts. A Prometheus server scrapes them from `GET /metrics` on an admin
 listener of their own, and the gateway can also push them to an
 OpenTelemetry collector over OTLP. Both surfaces read the same provider, so
@@ -66,6 +68,15 @@ the unit after a histogram.
 | `ferrofed_consent_prefilter_requests_total` | `ferrofed.consent.prefilter.requests` | counter | `outcome`, `reason` | the calls to the [consent pre-filter](consent.md), by `denied`, `no-signal`, `not-asked`, `unavailable` or `partial`; a `not-asked` call, one that never reached the consent service, also carries a `reason`: `namespace` (the patient is named in a namespace the service is not asked by, such as a pseudonymised BSN for Mitz) `caller-claims` (the caller's token does not state the claims the service is asked on behalf of), `caller-claims-invalid` (the token states them in a form the service's question does not take) or `patient-value` (the patient's value is not one the identifier the service is asked by takes) |
 | `ferrofed_localizer_requests_total` | `ferrofed.localizer.requests` | counter | `outcome` | the calls to the [localizer](registry.md#node-selection), by `candidates`, `no-records`, `not-configured`, `unavailable`, or `audit-failed` for an XCPD exchange whose audit message could not be recorded |
 | `ferrofed_demographics_requests_total` | `ferrofed.demographics.requests` | counter | `outcome` | the calls to the [demographics step](identity.md#demographics-first-pdqm), by `identified`, `no-match`, `ambiguous`, `unavailable`, or `audit-failed` for an exchange whose audit record could not be stored |
+| `ferrofed_http_requests_total` | `ferrofed.http.requests` | counter | `http_request_method`, `http_route`, `status_class` | the requests the gateway answered, by the route template and the status class `1xx` to `5xx`, a refused one included |
+| `http_server_request_duration_seconds` | `http.server.request.duration` (unit `s`) | histogram | `http_request_method`, `http_route`, `http_response_status_code`, `url_scheme`, and `error_type` on a `5xx` | the time from receiving a request to answering it, the OpenTelemetry HTTP server metric (<https://opentelemetry.io/docs/specs/semconv/http/http-metrics/>) |
+| `http_server_active_requests` | `http.server.active_requests` | gauge | `http_request_method`, `url_scheme` | the requests being served now |
+| `ferrofed_resolver_requests_total` | `ferrofed.resolver.requests` | counter | `outcome` | the calls to the [cross-reference resolver](identity.md), a PIX Manager or the development cross-reference, one per patient lookup across the members asked, by `resolved`, `not-resolved`, `unavailable` (the service failed for a member) or `time-out` (its budget ran out) |
+| `ferrofed_resolver_request_duration_seconds` | `ferrofed.resolver.request.duration` (unit `s`) | histogram | none | the time each resolver call took |
+| `ferrofed_localizer_request_duration_seconds` | `ferrofed.localizer.request.duration` (unit `s`) | histogram | none | the time each localizer call took, an XCPD or NVI exchange; a `not-configured` call asks nothing and is not timed |
+| `ferrofed_demographics_request_duration_seconds` | `ferrofed.demographics.request.duration` (unit `s`) | histogram | none | the time each PDQm call took |
+| `ferrofed_security_events_total` | `ferrofed.security.events` | counter | `event`, and `reason` on `caller-refused` | the security events of the log targets `ferrofed::security`: a caller refused at [client authentication](authentication.md) by its reason, an issuer's key set or introspection endpoint that cannot be had, and every identifier-hygiene event: a query refused before dispatch, a patient predicate stripped, a request the outbound gate stopped, a query parameter or a declared value refused, a probe refused, a stored-query definition refused, and a patient grant's confinement |
+| `ferrofed_overload_refusals_total` | `ferrofed.overload.refusals` | counter | `limit`, and `endpoint` on `node-in-flight` | the requests a limit refused ([Overload protection](overload.md)) |
 | `ferrofed_registry_reloads_total` | `ferrofed.registry.reloads` | counter | `result` | the registry reloads `SIGHUP` asked for |
 | `ferrofed_identity_feed_messages_total` | `ferrofed.identity_feed.messages` | counter | `result` | the ITI-93 messages the [identity feed](identity.md#the-identity-feed-pmir) received, by `applied`, `refused` (not held to the PMIR profiles), `unauthenticated` (no feed token) or `audit-failed` (its audit record could not be stored, and nothing was applied) |
 | `ferrofed_audit_spool_events` | `ferrofed.audit.spool.events` | gauge | none | the ITI-20 audit messages waiting in the spools for the [audit repository](localization.md#the-audit-repository) and the FHIR Feed repository of [`[audit]`](audit.md), summed; present only with one configured |
@@ -86,10 +97,19 @@ path reaches the surface:
 | `endpoint` | an endpoint `id` of the registry document |
 | `outcome` | `active`, `node-error`, `time-out`, `offline`, `consent-denied` |
 | `result` | `applied`, `refused` |
-| `le` | a bucket bound in seconds: `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf` |
+| `http_route` | a route template of the gateway, such as `/v1/query/aql` or `/v1/ehr/{ehr_id}/composition`, under the base path, or `<unmatched>` for a path no route names; a path identifier is written as its parameter name, never its value |
+| `http_request_method` | `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`, `HEAD`, `PATCH`, `CONNECT`, `TRACE`, or `_OTHER` for any other method |
+| `http_response_status_code`, `error_type` | the HTTP status the gateway answered |
+| `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
+| `url_scheme` | `http`: the listener speaks plain HTTP, and TLS ends in front of it |
+| `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`: the `event` field of the log line |
+| `reason` | on `ferrofed_security_events_total`, the reason the `WWW-Authenticate` challenge names: `missing`, `malformed`, `algorithm`, `type`, `issuer`, `key`, `signature`, `expired`, `not-yet-valid`, `audience`, `inactive`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic` |
+| `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
+| `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |
 
-The incident and reload counters show every label value at `0` from the
-start, so an alert on their increase works from the first scrape. A node
+The incident, reload and security event counters, and the `concurrency` and
+`caller-rate` refusals, show every label value at `0` from the start, so an
+alert on their increase works from the first scrape. A node
 request series appears with the first request to that endpoint, and an
 endpoint a reload removes keeps its series until a restart.
 
@@ -135,16 +155,44 @@ answer by the same rules. Each outcome therefore covers these calls:
 | `offline` | a member the gateway sent a request to and could not reach |
 | `consent-denied` | a request whose node answered `403` with a consent refusal code the registry lists for it ([Consent](consent.md)): a federated query member, a routed or by-subject read, or an ask-all probe, counted so whether or not the client's answer withholds it ([Withholding consent exclusions](consent-exclusions.md)); a member a consent pre-filter dropped is sent no request and is not counted |
 
-## Alerting
+## Dashboard and alert rules
 
-Alert on the counters rather than on the log:
+Every release attaches a Grafana dashboard, `ferrofed-dashboard.json`, and a
+Prometheus rule file, `ferrofed-alerts.yaml`; both are in the repository
+under `deploy/observability/`. Import the dashboard and pick your Prometheus
+as its `datasource`: it charts the requests by status class and route, the
+members by outcome and answer time, the resolver, localizer and demographics
+calls, the security events, the limits' refusals, the integrity incidents
+and the audit spool. Load the rule file through `rule_files` in
+`prometheus.yml`, or wrap its groups in a `PrometheusRule` for the Prometheus
+Operator. Its alerts carry `severity: page` or `severity: ticket`:
 
-```text
-increase(ferrofed_integrity_incidents_total[15m]) > 0
-increase(ferrofed_registry_reloads_total{result="refused"}[15m]) > 0
-sum by (endpoint) (rate(ferrofed_node_requests_total{outcome!="active"}[5m]))
-  / sum by (endpoint) (rate(ferrofed_node_requests_total[5m])) > 0.1
-```
+| Alert | Fires when |
+|---|---|
+| `FerroFEDServerErrors` | over 5% of the answers are `5xx` for 10 minutes |
+| `FerroFEDSlowAnswers` | the 95th percentile answer takes over 20 seconds for 10 minutes |
+| `FerroFEDOverloaded` | the concurrency limit refuses requests for 5 minutes |
+| `FerroFEDCallerRateLimited` | a caller is rate limited for 15 minutes |
+| `FerroFEDMemberFailing` | a member endpoint fails over 10% of its requests for 10 minutes |
+| `FerroFEDMemberCapSaturated` | a member's in-flight cap stays full for 5 minutes |
+| `FerroFEDResolverFailing`, `FerroFEDLocalizerFailing` | the resolver or the localizer does not answer for 5 minutes |
+| `FerroFEDIntegrityIncident` | an integrity incident is raised |
+| `FerroFEDRegistryReloadRefused` | a registry reload is refused |
+| `FerroFEDAuditSpoolBacklog`, `FerroFEDAuditRefused` | the audit spool holds over 1000 records for 15 minutes, or refuses one |
+| `FerroFEDOutboundGateStopped` | the outbound gate stops a request that would have carried a patient identifier |
+| `FerroFEDCallerRefusals` | callers are refused at authentication over once a second for 10 minutes, by reason |
+| `FerroFEDAuthenticationUnavailable` | an issuer's key set or introspection endpoint cannot be had |
+
+The thresholds are a starting point; tune them to your traffic. Add an alert
+on your scrape job's `up` as well, since a gateway that does not answer the
+scrape counts nothing. `scripts/checks/observability.sh` holds both files to
+the metrics the gateway exports, and runs `promtool check rules`.
+
+The Kubernetes example (`deploy/kubernetes/`) serves the admin listener on
+port `9464` of each pod, annotates the pods for a Prometheus that reads
+`prometheus.io/scrape`, and opens the port to the Prometheus pods of the
+`monitoring` namespace alone with a network policy, since the listener has
+no authentication of its own.
 
 The gateway does not call a webhook. An incident is counted, and its log
 line under `ferrofed::integrity` carries the routing ids you act on; route

@@ -35,6 +35,7 @@ use std::fmt;
 
 use crate::conveyance::ConveyanceError;
 use crate::declared::{self, Refusal};
+use crate::dispatch::cap::Capped;
 use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
@@ -188,6 +189,10 @@ pub enum ForwardError {
         #[source]
         source: ConveyanceError,
     },
+    /// The endpoint's in-flight cap stayed full until the deadline, so
+    /// nothing was sent and the node was never asked (§11.5).
+    #[error(transparent)]
+    Capped(#[from] Capped),
     /// The deadline passed before the request left the gateway, so nothing
     /// was sent and the node was never asked (§11.5).
     #[error("the deadline for endpoint {endpoint} passed before the request was sent")]
@@ -416,6 +421,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             outgoing.raw_body(body, None);
         }
         self.gate_forward(&operation, &outgoing, options)?;
+        let _slot = self.slot(options.deadline()).await?;
         let client = self.client_for(options);
         match client.forward(outgoing).await {
             Ok(answer) if answer.status() == StatusCode::UNAUTHORIZED => {

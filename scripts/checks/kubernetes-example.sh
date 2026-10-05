@@ -15,10 +15,13 @@
 #      own and on no emptyDir, which a reschedule loses;
 #   4. checks that terminationGracePeriodSeconds outlasts the drain delay
 #      plus the drain of the configuration's [server] table;
-#   5. runs `ferrofed config check` over that configuration, with a synthetic
+#   5. checks that each replica serves /metrics on the port [metrics] listen
+#      names, annotated for the scraper, and that networkpolicy.yaml opens
+#      that port to a named source alone;
+#   6. runs `ferrofed config check` over that configuration, with a synthetic
 #      file for each `_file` secret it names and a synthetic ES384 key for each
 #      `key_file`, the mount paths rewritten to a temporary directory; and
-#   6. runs it again without the [signing] table, which it must refuse.
+#   7. runs it again without the [signing] table, which it must refuse.
 #
 # Usage:
 #   scripts/checks/kubernetes-example.sh <ferrofed binary>
@@ -126,6 +129,38 @@ elif (( grace * 1000 <= delay + shutdown )); then
   bad "terminationGracePeriodSeconds ($grace s) does not outlast drain_delay_ms ($delay) plus shutdown_timeout_ms ($shutdown)"
 else
   echo "OK: a grace period of $grace s outlasts the $delay ms delay and the $shutdown ms drain"
+fi
+
+echo "== the admin listener is scraped, and open to the scraper alone"
+metrics_port="$(awk '
+  /^\[/ { inside = ($0 == "[metrics]"); next }
+  inside && $1 == "listen" && $2 == "=" { print $3; exit }
+' "$work/ferrofed.toml" | sed -E 's/^".*:([0-9]+)"$/\1/')"
+container_port="$(awk '
+  /^[[:space:]]+- name: metrics$/ { named = 1; next }
+  named && /containerPort:/ { print $2; exit }
+' "$EXAMPLE/statefulset.yaml")"
+annotated="$(sed -nE 's/^[[:space:]]+prometheus\.io\/port: "([0-9]+)"$/\1/p' "$EXAMPLE/statefulset.yaml")"
+if ! [[ "$metrics_port" =~ ^[0-9]+$ ]]; then
+  bad "configmap.yaml sets no [metrics] listen port"
+elif [[ "$container_port" != "$metrics_port" ]]; then
+  bad "statefulset.yaml's metrics port ($container_port) is not [metrics] listen's ($metrics_port)"
+elif [[ "$annotated" != "$metrics_port" ]]; then
+  bad "statefulset.yaml's prometheus.io/port annotation ($annotated) is not [metrics] listen's ($metrics_port)"
+else
+  echo "OK: each replica serves /metrics on $metrics_port, annotated for the scraper"
+fi
+if ! grep -qE '^kind: NetworkPolicy$' "$EXAMPLE/networkpolicy.yaml" 2> /dev/null; then
+  bad "networkpolicy.yaml is no NetworkPolicy"
+elif ! awk '
+  /^    - from:$/ { from = 1; next }
+  /^    - / { from = 0 }
+  from && /^[[:space:]]+- port: metrics$/ { found = 1 }
+  END { exit !found }
+' "$EXAMPLE/networkpolicy.yaml"; then
+  bad "networkpolicy.yaml opens the metrics port to no named source"
+else
+  echo "OK: networkpolicy.yaml opens the metrics port to the scraper alone"
 fi
 
 # A synthetic value for every secret file the configuration names, and a

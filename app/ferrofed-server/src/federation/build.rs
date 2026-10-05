@@ -94,7 +94,7 @@ impl Federation {
     ) -> Result<Option<Self>, FederationError> {
         let mut next = Self::assemble(settings, document, Some(Arc::clone(&self.observed)))?;
         if let (Some(next), Some(instruments)) = (next.as_mut(), self.requests.instruments()) {
-            next.requests.metered(instruments.clone());
+            next.meter(instruments.clone());
         }
         Ok(next)
     }
@@ -180,6 +180,7 @@ impl Federation {
         )
         .and_then(|clients| clients.with_on_behalf(&onward.on_behalf))
         .and_then(|clients| clients.with_dpop(&onward.dpop))
+        .map(|clients| clients.with_in_flight_cap(settings.federation.max_in_flight_per_node))
         .map_err(FederationError::Clients)?;
         let mut context = Context::new(targeting(selection))
             .with_offset_strategy(settings.federation.offset)

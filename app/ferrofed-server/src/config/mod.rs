@@ -23,6 +23,7 @@ use crate::telemetry::{DEFAULT_FILTER, Format};
 pub mod auth;
 pub mod error;
 pub mod grant;
+pub mod limits;
 mod load;
 pub(crate) mod resolve;
 pub(crate) mod secrets;
@@ -268,6 +269,11 @@ pub struct Federation {
     /// How a member the Step-1 consent pre-filter excludes is reported
     /// (`[federation.consent]`, N27a).
     pub consent: ConsentReporting,
+    /// The most requests the gateway sends to one member endpoint at once. A
+    /// request past it waits for a slot until its per-node deadline, and one
+    /// still waiting then is `time-out` with nothing sent (§11.5, N38). Zero is
+    /// refused.
+    pub max_in_flight_per_node: u32,
 }
 
 /// How a member the Step-1 consent pre-filter excludes is reported,
@@ -400,6 +406,7 @@ impl Default for Federation {
             fan_out_template_upload: false,
             fan_out_stored_queries: false,
             consent: ConsentReporting::default(),
+            max_in_flight_per_node: 64,
         }
     }
 }
@@ -429,6 +436,16 @@ pub struct Server {
     pub shutdown_timeout_ms: Option<u64>,
     /// The largest request body the server reads before answering `413`.
     pub body_limit_bytes: usize,
+    /// The most requests the server serves at once. One more is answered `503`
+    /// with `Retry-After` and reaches nothing behind the listener; the health
+    /// family is never refused. Zero is refused.
+    pub max_concurrent_requests: u32,
+    /// The seconds a `503` past `max_concurrent_requests` asks the client to
+    /// wait in `Retry-After`; zero is refused.
+    pub overload_retry_after_s: u32,
+    /// The per-caller rate limit (`[server.caller_rate]`), keyed on the caller
+    /// client authentication verified; unset, no caller is rate limited.
+    pub caller_rate: Option<limits::CallerRate>,
 }
 
 impl Default for Server {
@@ -440,6 +457,9 @@ impl Default for Server {
             drain_delay_ms: 0,
             shutdown_timeout_ms: None,
             body_limit_bytes: 1024 * 1024,
+            max_concurrent_requests: 512,
+            overload_retry_after_s: 1,
+            caller_rate: None,
         }
     }
 }

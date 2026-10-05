@@ -14,6 +14,7 @@
 mod exposition;
 #[cfg(feature = "binding-ihe")]
 mod hygiene;
+mod inbound;
 mod incidents;
 mod nodes;
 mod panicked;
