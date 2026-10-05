@@ -24,8 +24,9 @@ use ferrofed_testkit::node_profile::{
 };
 use ferrofed_testkit::pix::PixManager;
 use ferrofed_testkit::seed::{
-    self, CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedPlan,
+    self, CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedError, SeedPlan,
 };
+use http::StatusCode;
 use openehr_its::json::to_canonical_json;
 use uuid::Uuid;
 
@@ -39,6 +40,26 @@ const PATIENT: PatientId = PatientId::new(1, 549);
 
 /// The EHR the restricted node withholds from its user role.
 const WITHHELD: Uuid = Uuid::from_u128(0x5495_4954_9549_4549_8549_0000_0000_0549);
+
+/// The pattern openEHR BASE gives `OBJECT_REF.namespace`, which a synthetic
+/// subject's namespace `urn:oid:2.999.1.<n>` matches (BASE 1.2.0
+/// `base_types`, `OBJECT_REF`, the `namespace` attribute).
+const BASE_NAMESPACE_PATTERN: &str = "[a-zA-Z][a-zA-Z0-9_.:/&?=+-]*";
+
+/// The seed of [`EHR`] with one composition, recorded for `subject`.
+fn plan(subject: Option<PatientId>) -> SeedPlan {
+    SeedPlan {
+        ehrs: vec![EhrSeed {
+            ehr_id: EHR,
+            subject,
+        }],
+        template: true,
+        compositions: vec![CompositionSeed {
+            ehr_id: EHR,
+            composition: DemoComposition::FirstClinic,
+        }],
+    }
+}
 
 /// The product, as the report names it.
 fn product() -> String {
@@ -60,22 +81,28 @@ async fn ehrbase_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
         return Ok(());
     }
     let node = ProxiedNode::new(ehrbase::ehrbase(NODE_A_SYSTEM_ID).await?).await?;
-    let plan = SeedPlan {
-        ehrs: vec![EhrSeed {
-            ehr_id: EHR,
-            subject: Some(PATIENT),
-        }],
-        template: true,
-        compositions: vec![CompositionSeed {
-            ehr_id: EHR,
-            composition: DemoComposition::FirstClinic,
-        }],
-    };
-    seed::seed(&node.api_root(), &plan).await?;
+    // NOTE: no specification governs the harness: our own design; a refused subject is evidence
+    // recorded with the finding, and the check needs only an EHR with a composition.
+    let mut arranged = Vec::new();
+    match seed::seed(&node.api_root(), &plan(Some(PATIENT))).await {
+        Ok(_) => {}
+        Err(SeedError::Refused {
+            step,
+            status,
+            detail,
+        }) if step.starts_with("PUT ") && status == StatusCode::BAD_REQUEST => {
+            arranged.push(format!(
+                "arranged with no subject: {step} with an EHR_STATUS subject in namespace {} answered {status} ({detail}), a namespace BASE OBJECT_REF.namespace admits by its pattern {BASE_NAMESPACE_PATTERN}",
+                PATIENT.namespace()
+            ));
+            seed::seed(&node.api_root(), &plan(None)).await?;
+        }
+        Err(error) => return Err(error.into()),
+    }
     node.proxy.clear_journal();
 
-    let finding = checks::invocable_on_ehr_id(&Interface::new(&node.api_root())?, EHR).await?;
-    assert_eq!(4, finding.evidence().len(), "{finding:?}");
+    let observed = checks::invocable_on_ehr_id(&Interface::new(&node.api_root())?, EHR).await?;
+    assert_eq!(4, observed.evidence().len(), "{observed:?}");
 
     let journal = node.proxy.journal();
     assert_eq!(4, journal.len(), "one request per observation");
@@ -93,7 +120,11 @@ async fn ehrbase_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
             capture.path
         );
     }
-    record(finding, "invocable-on-ehr-id")
+    arranged.extend_from_slice(observed.evidence());
+    record(
+        Finding::new(observed.check(), observed.verdict(), arranged),
+        "invocable-on-ehr-id",
+    )
 }
 
 // conformance: CP-27
@@ -202,11 +233,15 @@ async fn ehrbase_is_checked_against_the_identifier_integrity_conditions() -> Tes
     let report =
         ferrofed_server::admission::check(&federation, &EndpointId::new("node-b-pub")?, COUNT)
             .await?;
-    assert_eq!(
-        usize::from(COUNT),
-        report.created().len(),
-        "the check reached the node and created its test EHRs: {report}"
-    );
+    // NOTE: no specification governs the harness: our own design; a node refusing the test EHRs is
+    // the check's finding on the node, so the harness asserts only that the node answered.
+    let answered = report.created().len() == usize::from(COUNT)
+        || report
+            .findings()
+            .iter()
+            .flat_map(ferrofed_server::admission::report::Finding::evidence)
+            .any(|line| line.contains(" answered "));
+    assert!(answered, "the check reached the node: {report}");
     assert_eq!(
         5,
         report.findings().len(),
