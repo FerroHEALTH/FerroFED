@@ -58,7 +58,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::response::Response;
 use ferrofed_engine::declared::Refusal;
-use ferrofed_engine::dispatch::{Contact, DispatchOptions, REQUEST_ID_HEADER};
+use ferrofed_engine::dispatch::{Contact, DispatchOptions, REQUEST_ID_HEADER, is_consent_refusal};
 use ferrofed_engine::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
@@ -66,7 +66,7 @@ use ferrofed_identity::binding::SessionKey;
 use ferrofed_identity::consent::Requester;
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::Endpoint;
-use http::{HeaderMap, Method, Uri};
+use http::{HeaderMap, Method, StatusCode, Uri};
 use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
@@ -477,13 +477,18 @@ pub(crate) fn passed(
 }
 
 /// The answer to a routed request in place of `forwarded`, the node's own,
-/// when the node refused on consent grounds and the deployment does not
-/// disclose consent exclusions: `404 subject-unavailable`, the answer for an
-/// EHR this request may not reach whatever the reason, naming the client's
-/// `request_id` (Regulation (EU) 2025/327 Art 8; RFC 9110 §15.5.5).
+/// in a deployment that does not disclose consent exclusions: `404
+/// subject-unavailable`, naming the client's `request_id`, for a node that
+/// refused on consent grounds and for a node that answered `404`.
 ///
-/// The node's refusal is logged for the operator under the gateway's
-/// `logged` id, and counted in the node request metrics by [`send`].
+/// Both get the one answer, so a client cannot tell a refusal from an absent
+/// resource by its status, code, message or headers; the node's own body,
+/// which may name the refusal, is never passed on (Regulation (EU) 2025/327
+/// Art 8; RFC 9110 §15.5.5). The refusal is read from the registry's codes
+/// for `endpoint`, logged for the operator under the gateway's `logged` id,
+/// and counted in the node request metrics by [`send`].
+// NOTE: Regulation (EU) 2025/327 Art 8 against §11.2, which passes a node's 404 through: here it
+// is the gateway's, or the gateway's 404 for a refusal would be the only one and name it.
 pub(crate) fn withheld(
     federation: &Federation,
     endpoint: &Endpoint,
@@ -493,15 +498,15 @@ pub(crate) fn withheld(
     if federation.discloses_consent() {
         return None;
     }
-    let client = federation.clients().get(endpoint.id())?;
-    if !client.refuses_on_consent(forwarded) {
+    if is_consent_refusal(forwarded, endpoint.consent_refusal_codes()) {
+        tracing::info!(
+            endpoint = %endpoint.id(),
+            request_id = logged,
+            "the node refused on consent grounds, which the answer does not disclose"
+        );
+    } else if forwarded.status() != StatusCode::NOT_FOUND {
         return None;
     }
-    tracing::info!(
-        endpoint = %endpoint.id(),
-        request_id = logged,
-        "the node refused on consent grounds, which the answer does not disclose"
-    );
     Some(error::fixed(Code::SubjectUnavailable, request_id))
 }
 

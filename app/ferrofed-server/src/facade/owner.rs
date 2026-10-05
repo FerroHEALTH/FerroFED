@@ -465,7 +465,7 @@ pub enum Unsettled {
     /// `ehr_id` no member holds and for one only a member refusing on
     /// consent grounds would serve (Regulation (EU) 2025/327 Art 8; RFC 9110
     /// §15.5.5).
-    #[error("no EHR for this subject is available to this request (§11.2)")]
+    #[error("{}", Code::SubjectUnavailable.message())]
     Unavailable,
     /// More than one member holds the `ehr_id`, and the gateway never
     /// chooses between them (§12.5.2, N42).

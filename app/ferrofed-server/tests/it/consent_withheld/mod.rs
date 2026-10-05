@@ -25,6 +25,7 @@
 )]
 
 mod node;
+mod routed;
 
 use std::collections::BTreeMap;
 use std::error::Error;

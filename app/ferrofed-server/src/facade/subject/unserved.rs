@@ -73,7 +73,7 @@ pub(super) enum Unserved {
     /// No candidate the gateway may ask holds an EHR for the subject, in a
     /// deployment that does not disclose consent exclusions: the one answer
     /// for a subject no member knows and for one only a denied member holds.
-    #[error("no EHR for this subject is available to this request (§11.2)")]
+    #[error("{}", Code::SubjectUnavailable.message())]
     Unavailable,
     /// The localizer could not answer, the deployment fails closed, and so no
     /// member was asked (§14.1, N4).

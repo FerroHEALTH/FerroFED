@@ -320,7 +320,7 @@ impl FederatedAnswer {
 
     /// The values of the plan's ENDPOINT attributes beside each row, in
     /// [`FederatedAnswer::rows`] order, from the registry entry of the
-    /// endpoint the row came from (§9.3, N12; [`Plan::annotating`]). An entry
+    /// endpoint the row came from (§9.3, N12; [`super::Plan::annotating`]). An entry
     /// is empty when the plan adds no attribute, and for the one row of a
     /// recombined aggregate, which comes from no single endpoint.
     #[must_use]

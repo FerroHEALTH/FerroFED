@@ -508,6 +508,20 @@ impl DispatchError {
     }
 }
 
+/// Whether `forwarded`, a node's answer, is a refusal on consent grounds.
+///
+/// That is a `403` whose ITS-REST `Error` carries a `code` among
+/// `refusal_codes`, the endpoint's consent refusal codes (§11.1, N27).
+#[must_use]
+pub fn is_consent_refusal(forwarded: &Forwarded, refusal_codes: &BTreeSet<String>) -> bool {
+    forwarded.status() == StatusCode::FORBIDDEN
+        && classify::refused_on_consent(
+            &ErrorBody::from_bytes(forwarded.body().to_vec()),
+            refusal_codes,
+        )
+        .is_some()
+}
+
 /// The ITS-REST client of one registry endpoint.
 #[derive(Debug, Clone)]
 pub struct NodeClient<T> {
@@ -574,12 +588,7 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// as a query's refusal is read (§11.1, N27).
     #[must_use]
     pub fn refuses_on_consent(&self, forwarded: &Forwarded) -> bool {
-        forwarded.status() == StatusCode::FORBIDDEN
-            && classify::refused_on_consent(
-                &ErrorBody::from_bytes(forwarded.body().to_vec()),
-                &self.consent_refusal_codes,
-            )
-            .is_some()
+        is_consent_refusal(forwarded, &self.consent_refusal_codes)
     }
 
     /// The ITS-REST service root every path is resolved under.

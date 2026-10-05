@@ -693,7 +693,15 @@ it off:
   know. `no-destination` was rejected: it asserts the request routes nowhere,
   which is false when an excluded member holds the EHR. A routed answer still
   names the endpoint the request was routed to (N31); a read by subject names
-  none, as for a subject no member holds.
+  none, as for a subject no member holds. On a path where the gateway's `404`
+  would otherwise arise only from a refusal (a request under `{base}/v1/ehr/`,
+  the creation of an EHR, a DEMOGRAPHIC request), a node's own `404` gets the
+  same answer in this mode in place of §11.2's pass-through, and the node's
+  body, which may name the refusal, is never passed on; the definition area
+  holds no patient's data and is left as §11.2 has it. Every such answer
+  carries one fixed message. A read by subject a holder refuses still costs
+  one node request that a subject no member knows does not, a timing
+  difference the gateway cannot remove without asking a node it need not.
 - **The operator still sees every exclusion.** The pre-filter metrics count
   each denial, the node request metrics count a node's refusal as
   `consent-denied` on every path, a refusal on a routed path is logged, and an

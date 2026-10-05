@@ -318,7 +318,7 @@ impl Code {
                 "the cross-reference could not resolve the patient of the access token's patient/ grant, so the grant cannot be confined and nothing was sent (§5.2, §11.2)"
             }
             Self::SubjectUnavailable => {
-                "no EHR for this subject is available to this request (§11.2)"
+                "the requested resource is not available to this request (§11.2)"
             }
         }
     }

@@ -60,14 +60,24 @@ the registry lists in `consent_refusal_codes`
   the specification that is recorded on #212.
 - **A read of an EHR by subject** whose holder refuses answers
   `404 subject-unavailable` and names no acting endpoint, as for a subject no
-  member knows.
-- **A routed read or write, and a request routed to a chosen node**, that the
-  node refuses answers `404 subject-unavailable` instead of the node's `403`,
-  still naming the endpoint the request was routed to.
+  member knows. The two can still differ in how long they take: a refusal
+  costs one request to the holder, and a subject no member knows costs none.
+- **A routed request under `{base}/v1/ehr/`, the creation of an EHR and a
+  DEMOGRAPHIC request** that the node refuses answers
+  `404 subject-unavailable`, still naming the endpoint the request was routed
+  to. So that this answer never stands for a refusal alone, a node's own `404`
+  on those paths gets the same gateway answer in this deployment, instead of
+  passing through as §11.2 has it, and the node's body is never passed on.
+  Both take one request to the node. The definition area holds no patient's
+  data, so its answers pass through unchanged.
 - **An ask-all probe** reads the refusing member as one that does not hold the
   `ehr_id`; when no member answers with the EHR, the answer is
   `404 subject-unavailable`, which in this deployment also replaces
-  `no-destination` for an `ehr_id` no member holds.
+  `no-destination` for an `ehr_id` no member holds. Every member is asked
+  either way.
+
+Every `subject-unavailable` answer carries the one message "the requested
+resource is not available to this request (§11.2)".
 - **The operator** still counts the refusal in
   `ferrofed_node_requests_total{outcome="consent-denied"}`, and a refusal on a
   routed path is logged with the endpoint and the request id.

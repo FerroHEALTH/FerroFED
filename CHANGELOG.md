@@ -102,9 +102,12 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   node's own consent refusal too, a `403` with a code the registry lists in
   `consent_refusal_codes`: a federated query reports the node `not-resolved`
   with no `latency_ms`, and a read by subject, a routed request and an
-  ask-all probe answer `404 subject-unavailable`. The node request metrics
-  now count such a refusal as `consent-denied` on every path, whatever the
-  setting.
+  ask-all probe answer `404 subject-unavailable`. On a request under
+  `{base}/v1/ehr/`, the creation of an EHR and a DEMOGRAPHIC request, a
+  node's own `404` gets that same answer in this mode, so it never stands
+  for a refusal alone; every `subject-unavailable` carries one fixed
+  message. The node request metrics now count such a refusal as
+  `consent-denied` on every path, whatever the setting.
 
 ## [0.0.8] - 2026-10-04
 

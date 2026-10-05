@@ -17,7 +17,9 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::HeaderMap;
 
-use super::{Arrived, Deadlines, Failure, failed, forward, held, passed, unheld};
+use super::{
+    Arrived, DEFINITION_GROUP, Deadlines, Failure, answered, failed, forward, held, passed, unheld,
+};
 use crate::error::{self, Code};
 use crate::facade::owner;
 use crate::facade::provenance::Provenance;
@@ -99,6 +101,9 @@ pub(super) async fn to_named(
     let provenance = Provenance::of(snapshot, endpoint);
     let sent = (request, arrived.outbound, &arrived.conveyance);
     match forward(federation, endpoint, sent, &budget, &logged).await {
+        // NOTE: §12.6: a definition is no patient's data, so Regulation (EU) 2025/327 Art 8
+        // withholds nothing there and the node's answer passes through as §11.2 has it.
+        Ok(forwarded) if area == DEFINITION_GROUP => provenance.stamp(answered(forwarded)),
         Ok(forwarded) => passed(
             provenance,
             (federation, endpoint),
