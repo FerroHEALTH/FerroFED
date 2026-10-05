@@ -134,6 +134,8 @@ impl Shared {
 pub struct CapturingProxy {
     /// The origin the proxy listens on, with no path.
     origin: String,
+    /// The port the proxy listens on.
+    port: u16,
     /// The state the accept loop shares.
     shared: Arc<Shared>,
     /// The accept loop, aborted on drop.
@@ -155,10 +157,34 @@ impl CapturingProxy {
     /// Returns [`ProxyError::Bind`] when no loopback port can be bound and
     /// [`ProxyError::Client`] when the forwarding client cannot be built.
     pub async fn start(upstream: impl Into<String>) -> Result<Self, ProxyError> {
-        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+        Self::start_on(upstream, Ipv4Addr::LOCALHOST).await
+    }
+
+    /// Starts a proxy that forwards to `upstream` on a free port of every
+    /// interface, so a container reaches it through the Docker host gateway
+    /// as well as the host through loopback.
+    ///
+    /// [`CapturingProxy::origin`] still names the loopback address, and
+    /// [`CapturingProxy::port`] is the port a container dials.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProxyError::Bind`] when no port can be bound and
+    /// [`ProxyError::Client`] when the forwarding client cannot be built.
+    pub async fn start_reachable(upstream: impl Into<String>) -> Result<Self, ProxyError> {
+        Self::start_on(upstream, Ipv4Addr::UNSPECIFIED).await
+    }
+
+    /// Starts a proxy on a free port of `interface` that forwards to
+    /// `upstream`.
+    async fn start_on(
+        upstream: impl Into<String>,
+        interface: Ipv4Addr,
+    ) -> Result<Self, ProxyError> {
+        let listener = TcpListener::bind(SocketAddr::from((interface, 0)))
             .await
             .map_err(ProxyError::Bind)?;
-        let address = listener.local_addr().map_err(ProxyError::Bind)?;
+        let port = listener.local_addr().map_err(ProxyError::Bind)?.port();
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
@@ -172,7 +198,8 @@ impl CapturingProxy {
         });
         let task = tokio::spawn(accept_loop(listener, Arc::clone(&shared)));
         Ok(Self {
-            origin: format!("http://{address}"),
+            origin: format!("http://{}", SocketAddr::from((Ipv4Addr::LOCALHOST, port))),
+            port,
             shared,
             task,
         })
@@ -182,6 +209,12 @@ impl CapturingProxy {
     #[must_use]
     pub fn origin(&self) -> &str {
         &self.origin
+    }
+
+    /// Returns the port the proxy listens on.
+    #[must_use]
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     /// Returns the origin of the node behind the proxy.
