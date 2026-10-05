@@ -11,9 +11,9 @@
 //! provider sends the operator back: it takes the pending sign-in once and
 //! holds the returned `state` to it (RFC 6749 §10.12), then [`exchange`]
 //! trades the code for the operator's tokens and checks the ID Token, and
-//! only then is a signed-in session begun. The browser never sees a token. No
-//! specification of the federation governs sign-in to the console: our own
-//! design on RFC 6749 and RFC 7636.
+//! only then is a signed-in session begun, and [`logout`] ends it. The
+//! browser never sees a token. No specification of the federation governs
+//! sign-in to the console: our own design on RFC 6749 and RFC 7636.
 
 use axum::Extension;
 use axum::extract::Query;
@@ -28,6 +28,7 @@ use crate::server::ViewerState;
 use crate::session::{PendingSignIn, SIGN_IN_COOKIE, SessionError, SessionId, challenge};
 
 pub mod exchange;
+pub mod logout;
 
 /// The path of the sign-in route.
 pub const LOGIN: &str = crate::app::SIGN_IN;

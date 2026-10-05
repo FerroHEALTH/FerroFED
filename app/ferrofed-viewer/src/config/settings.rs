@@ -77,6 +77,19 @@ pub struct OidcSettings {
     pub redirect_uri: Url,
     /// The scopes requested, `openid` among them.
     pub scopes: Vec<String>,
+    /// The provider's end-session endpoint, when it publishes one.
+    pub end_session_endpoint: Option<Url>,
+    /// Where the provider sends the operator after a sign-out.
+    pub post_logout_redirect_uri: Option<Url>,
+}
+
+impl OidcSettings {
+    /// The console's own origin, `scheme://host:port`, which a sign-out
+    /// request must come from: the origin of its redirection endpoint.
+    #[must_use]
+    pub fn origin(&self) -> String {
+        self.redirect_uri.origin().ascii_serialization()
+    }
 }
 
 impl Config {
@@ -150,6 +163,23 @@ fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
             key: String::from("oidc.scopes (openid)"),
         });
     }
+    let end_session_endpoint = oidc
+        .end_session_endpoint
+        .as_deref()
+        .map(|text| provider_url("oidc.end_session_endpoint", text))
+        .transpose()?;
+    let post_logout_redirect_uri = oidc
+        .post_logout_redirect_uri
+        .as_deref()
+        .map(|text| web_url("oidc.post_logout_redirect_uri", text))
+        .transpose()?;
+    // NOTE: OpenID Connect RP-Initiated Logout 1.0 §3: the post-logout redirect
+    // is sent to the end-session endpoint, so one without the other is refused.
+    if post_logout_redirect_uri.is_some() && end_session_endpoint.is_none() {
+        return Err(Error::Missing {
+            key: String::from("oidc.end_session_endpoint (for post_logout_redirect_uri)"),
+        });
+    }
     let client_secret = secret(
         "oidc.client_secret",
         oidc.client_secret.as_ref(),
@@ -164,6 +194,8 @@ fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
         client_secret,
         redirect_uri,
         scopes: oidc.scopes.clone(),
+        end_session_endpoint,
+        post_logout_redirect_uri,
     })
 }
 

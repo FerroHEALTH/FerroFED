@@ -873,6 +873,10 @@ jobs:
       # this: our own design).
       - name: Measure the bundle against its budget
         run: bash scripts/checks/viewer-bundle.sh
+      # The bundle names no home, runner, registry or toolchain directory of
+      # the build host (no specification governs this: our own design).
+      - name: Check the bundle names no build-host path
+        run: bash scripts/checks/viewer-paths.sh
 
   # The library crates stay publishable while the workspace `publish` switch is
   # off (the Cargo reference, the `publish` field; no specification governs the

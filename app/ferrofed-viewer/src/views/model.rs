@@ -48,14 +48,22 @@ pub enum ViewError {
     /// The gateway gave no answer at all.
     #[error("the gateway could not be reached")]
     Unreachable,
+    /// The operator's input cannot be sent as it stands. The reason names
+    /// the field and never quotes what was entered (N33).
+    #[error("{reason}")]
+    Invalid {
+        /// What is wrong, by field.
+        reason: String,
+    },
     /// The console could not serve the view.
     #[error("the console could not serve this view")]
     Unavailable,
     /// The view could not be fetched from the console's server.
-    #[error("the view could not be fetched: {reason}")]
+    #[error("the view could not be fetched: {source}")]
     Fetch {
         /// What the server function transport reported.
-        reason: String,
+        #[source]
+        source: ServerFnErrorErr,
     },
 }
 
@@ -63,9 +71,7 @@ impl FromServerFnError for ViewError {
     type Encoder = JsonEncoding;
 
     fn from_server_fn_error(value: ServerFnErrorErr) -> Self {
-        Self::Fetch {
-            reason: value.to_string(),
-        }
+        Self::Fetch { source: value }
     }
 }
 

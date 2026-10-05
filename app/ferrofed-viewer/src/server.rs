@@ -26,6 +26,8 @@ use leptos::config::LeptosOptions;
 use leptos::nonce::Nonce;
 use leptos_axum::LeptosRoutes as _;
 use serde::Serialize;
+use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{And, Predicate as _, SizeAbove};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::config::settings::Settings;
@@ -123,6 +125,10 @@ pub fn router(state: ViewerState) -> axum::Router {
         .route(HEALTH, get(health))
         .route(crate::oidc::LOGIN, get(crate::oidc::login))
         .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
+        .route(
+            crate::oidc::logout::LOGOUT,
+            axum::routing::post(crate::oidc::logout::logout),
+        )
         .leptos_routes_with_context(&options, routes, context.clone(), {
             let options = options.clone();
             move || crate::app::shell(options.clone())
@@ -132,8 +138,9 @@ pub fn router(state: ViewerState) -> axum::Router {
             crate::app::shell,
         ))
         .layer(axum::middleware::from_fn(require_session))
+        .layer(axum::middleware::from_fn(same_origin_only))
         .layer(Extension(state));
-    with_security_headers(pages).with_state(options)
+    with_security_headers(pages.layer(bundle_compression())).with_state(options)
 }
 
 /// Sends a request for an operator view that carries no live signed-in
@@ -176,6 +183,79 @@ async fn require_session(
     }
 }
 
+/// The fetch metadata header that names where a request comes from.
+const SEC_FETCH_SITE: &str = "sec-fetch-site";
+
+/// Refuses every request that is not a safe method, a server function call
+/// and a sign-out among them, unless it comes from the console's own pages
+/// ([`same_origin`]), before anything reads the session or asks the gateway.
+///
+/// The session cookie is `SameSite=Lax` as well, so a cross-site `POST`
+/// carries no session in the first place; this check holds without it.
+async fn same_origin_only(
+    Extension(state): Extension<ViewerState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if request.method().is_safe() {
+        return next.run(request).await;
+    }
+    let origin = state
+        .settings()
+        .oidc
+        .as_ref()
+        .map(crate::config::settings::OidcSettings::origin);
+    if same_origin(request.headers(), origin.as_deref()) {
+        return next.run(request).await;
+    }
+    tracing::warn!(
+        method = %request.method(),
+        "a request that did not come from the console's own pages was refused"
+    );
+    (
+        StatusCode::FORBIDDEN,
+        [(CACHE_CONTROL, "no-store")],
+        "the console takes this request only from its own pages",
+    )
+        .into_response()
+}
+
+/// Whether `headers` show a request sent from a page of the console at
+/// `origin`, its own `scheme://host:port`.
+///
+/// `Sec-Fetch-Site` decides when the browser sends it, and only
+/// `same-origin` passes. Without it `Origin` must be `origin`, and without
+/// that the origin of `Referer` must be. A request that shows none of them,
+/// or a console with no known origin, is refused, so an unsafe request is
+/// never taken on trust (the Fetch Metadata Request Headers; RFC 6454 §7).
+///
+/// The console answers with `Referrer-Policy: no-referrer`, under which a
+/// browser sends a plain form post with `Origin: null` and no `Referer` (the
+/// Fetch standard, the request `Origin` header). The console's own forms,
+/// the sign-out among them, therefore pass by `Sec-Fetch-Site` alone; a
+/// browser without fetch metadata is refused, which fails closed. The
+/// `Origin` and `Referer` fallbacks serve a server function the page calls
+/// with `fetch`.
+#[must_use]
+pub fn same_origin(headers: &http::HeaderMap, origin: Option<&str>) -> bool {
+    if let Some(site) = headers.get(SEC_FETCH_SITE) {
+        return site.as_bytes() == b"same-origin";
+    }
+    let Some(origin) = origin else {
+        return false;
+    };
+    if let Some(sent) = headers.get(http::header::ORIGIN) {
+        return sent.as_bytes() == origin.as_bytes();
+    }
+    // NOTE: RFC 9110 §10.1.3: a `Referer` that is no URL names no origin, which
+    // refuses the request as a missing one does.
+    headers
+        .get(http::header::REFERER)
+        .and_then(|referer| referer.to_str().ok())
+        .and_then(|referer| url::Url::parse(referer).ok())
+        .is_some_and(|referer| referer.origin().ascii_serialization() == origin)
+}
+
 /// The body of the liveness route.
 #[derive(Debug, Serialize)]
 struct Health {
@@ -186,6 +266,47 @@ struct Health {
 /// Serves `GET /health`: `200` while the process serves.
 async fn health() -> Response {
     (StatusCode::OK, axum::Json(Health { status: "up" })).into_response()
+}
+
+/// The media types of the site bundle: the WebAssembly, its JavaScript glue
+/// and the stylesheet.
+const BUNDLE_TYPES: [&str; 4] = [
+    "application/wasm",
+    "text/javascript",
+    "application/javascript",
+    "text/css",
+];
+
+/// A test of a response, the shape the compression layer's predicate takes.
+type ResponsePredicate = fn(StatusCode, http::Version, &http::HeaderMap, &http::Extensions) -> bool;
+
+/// Whether a response carries a file of the site bundle, by its media type.
+fn is_bundle(
+    _status: StatusCode,
+    _version: http::Version,
+    headers: &http::HeaderMap,
+    _extensions: &http::Extensions,
+) -> bool {
+    headers
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|media| BUNDLE_TYPES.iter().any(|bundle| media.starts_with(bundle)))
+}
+
+/// Compresses the site bundle with brotli or gzip, as the request's
+/// `Accept-Encoding` chooses, and marks it `Vary: Accept-Encoding`.
+///
+/// Only the bundle is compressed. A document or a server function's answer
+/// carries what the operator entered beside data an attacker would want, so
+/// it is never compressed, which keeps a compression side channel shut
+/// (BREACH). The Leptos book (`deployment/binary_size`) has a site serve its
+/// WebAssembly compressed. No specification governs this: our own design.
+fn bundle_compression() -> CompressionLayer<And<SizeAbove, ResponsePredicate>> {
+    let bundle: ResponsePredicate = is_bundle;
+    CompressionLayer::new()
+        .br(true)
+        .gzip(true)
+        .compress_when(SizeAbove::new(256).and(bundle))
 }
 
 /// Wraps `router` in the browser security headers every response carries.

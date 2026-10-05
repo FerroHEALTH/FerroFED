@@ -57,6 +57,10 @@ bash scripts/release/viewer-site.sh --release
 #    sizes, and a failure when the brotli-compressed WebAssembly is over the
 #    budget of .claude/rules/leptos-ui.md §12. Report the sizes it prints.
 bash scripts/checks/viewer-bundle.sh
+
+# 6. The build-host paths, over the same bundle: a failure when it names a
+#    home, runner, registry or toolchain directory (leptos-ui.md §12).
+bash scripts/checks/viewer-paths.sh
 ```
 
 Stage 4 locally: the script freezes `Cargo.lock` and fails loud when it does

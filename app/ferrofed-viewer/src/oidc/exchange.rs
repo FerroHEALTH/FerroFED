@@ -199,6 +199,7 @@ pub async fn exchange(
     Ok(SignedIn {
         access_token: SecretString::from(tokens.access_token),
         expires_in: tokens.expires_in.map(Duration::from_secs),
+        id_token: Some(SecretString::from(id_token)),
     })
 }
 

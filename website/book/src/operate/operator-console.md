@@ -10,12 +10,16 @@ specification governs the console: it is FerroFED's own design.
 
 The console is one more client of the gateway. It reaches the gateway over
 HTTP, on the same public surface any other client uses, and it adds no
-behaviour to the gateway. It holds no clinical data.
+behaviour to the gateway. It stores no clinical data: the query console
+shows the signed-in operator the rows a query answered, and neither the
+console nor the browser keeps them. Every page and every answer is
+`Cache-Control: no-store`, and the page puts nothing in browser storage, a
+service worker or a URL.
 
 ## What is built
 
 - **A landing page** that names the console and offers sign-in, and a
-  navigation bar to the four operator views.
+  navigation bar to the four operator views and the query console.
 - **Operator sign-in at an OpenID Provider:** `GET /login` redirects the
   browser to the provider's authorization endpoint with the authorization
   code grant, a `nonce` and a PKCE challenge (RFC 6749 §4.1, RFC 7636). The
@@ -33,6 +37,28 @@ behaviour to the gateway. It holds no clinical data.
   operator's access token on the server, and the browser goes back to `/`. A
   session the browser already held ends when the new one begins. An ID Token that fails a check is
   `401`, and a provider that refuses or cannot be reached is `502`.
+- **Operator sign-out:** the navigation bar's "Sign out" button posts to
+  `POST /logout`, which ends the signed-in session on the console's server
+  and removes the session cookie. Where `[oidc]` names the provider's
+  `end_session_endpoint`, the console then redirects the browser there with
+  the session's ID Token as `id_token_hint`, its `client_id`, and the
+  `post_logout_redirect_uri` you registered with the provider (OpenID
+  Connect RP-Initiated Logout 1.0 §2); without one the browser goes back to
+  `/`. A `GET /logout` is `405`.
+- **Requests from the console's own pages only.** Every request that is not
+  a `GET`, `HEAD` or `OPTIONS`, the sign-out and every server function the
+  views and the query console call, must come from the console's own pages:
+  a request the browser marks `Sec-Fetch-Site: same-origin`, or, without
+  fetch metadata, one whose `Origin`, or else whose `Referer`, has the
+  origin of `redirect_uri`. Any other, one that names no origin among them,
+  is `403` before the session is read or the gateway asked, so no other
+  site can sign an operator out or spend their sign-in on a query. The
+  session cookie is `SameSite=Lax` as well, and every server function is a
+  `POST`: a `GET` of one runs nothing. Because the console sends
+  `Referrer-Policy: no-referrer`, a browser posts the console's own forms
+  with `Origin: null` and no `Referer`, so those forms pass by
+  `Sec-Fetch-Site` alone; a browser that sends no fetch metadata cannot sign
+  out or run a query, which fails closed.
 - **Two separate pools of server-side state.** Pending sign-ins live for
   `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
   its oldest pending sign-in, so a flood of `GET /login` holds at most that
@@ -69,21 +95,48 @@ behaviour to the gateway. It holds no clinical data.
   carrying the [operator scope](authentication.md#the-operator-surface) its
   issuer names. No view shows a patient identifier, a token or clinical
   data.
+- **The query console, `/query`:** an AQL query, or a stored query by name
+  and optional version, runs through the gateway's own query surface,
+  `POST {base}/v1/query/aql` or `POST {base}/v1/query/{name}`, as the
+  signed-in operator, exactly as any client sends it. The form offers what
+  the gateway's `OPTIONS {base}/` declares: the member endpoints and
+  organisations to target (`openEHR-federation-endpoint`,
+  `openEHR-federation-organisation`, §8.4), its dedup modes
+  (`openEHR-federation-dedup`, §10), and the best-effort opt-in
+  (`openEHR-federation-completeness: partial`, §11.4) where it offers one.
+  `offset` and `fetch` are optional. The answer shows the rows under
+  `columns[]` as the gateway renders them, and every endpoint of
+  `meta.federation.endpoints[]` with its status, latency, row count and
+  error. An answer whose `meta.federation.complete` is `false` says
+  "Incomplete answer" in words before its rows. A `504` or `424` the gateway
+  answers under its all-or-nothing default shows its status and the
+  endpoints that failed, from the diagnostic envelope it carries (§11.4). A
+  refusal shows its status and stable error code, and a result set with no
+  readable `meta.federation` is shown as unreadable, never as an answer.
+
+  Name a patient through a parameter, one `name=value` per line, never in
+  the AQL text; each value is sent as a string. The form posts its fields in
+  the request body to the console, which sends them to the gateway in the
+  request body, so nothing you enter reaches a URL or the browser history.
+  The fields carry `autocomplete="off"`, and the console logs a refusal by
+  its status and code alone, never the query or a parameter.
 - **`GET /health`**, which answers `200` while the process serves, and the
   `healthcheck` command the image runs against it.
 
 Every answer carries a Content-Security-Policy whose script source is a nonce
 minted for that answer, `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`, and no page is
-stored by a cache.
+stored by a cache. The site bundle under `/pkg/` is served brotli- or
+gzip-compressed, as the browser's `Accept-Encoding` chooses; pages and
+server function answers are never compressed, so no compression side
+channel reads what an operator entered.
 
-## What is planned
-
-- **The query console (#277):** an AQL query, or a stored query by name, run
-  through the gateway, with every node's status and latency and whether the
-  answer is complete shown plainly, and a refusal's stable code. A patient is
-  named through a parameter, and an identifier entered in the console never
-  appears in a URL, the browser history or the console's logs.
+The query console shows its answer on the page that asked, so it runs a
+query only once the console's WebAssembly bundle has loaded: until then the
+"Run the query" button is disabled, and a plain form post that reaches the
+console anyway is refused before the gateway is asked. The answer is
+rendered on the console's server, with every value a node sent escaped, and
+the page shows that HTML.
 
 ## Why a console of its own
 
@@ -128,6 +181,8 @@ client_id = "ferrofed-viewer"
 client_secret_file = "/run/secrets/viewer-client-secret"
 redirect_uri = "https://console.example.org/auth/callback"
 scopes = ["openid"]
+end_session_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/logout"
+post_logout_redirect_uri = "https://console.example.org/"
 ```
 
 With `secure_cookie = true` the session and sign-in cookies carry the
@@ -136,7 +191,8 @@ With `secure_cookie = true` the session and sign-in cookies carry the
 
 Without an `[oidc]` table the console offers no sign-in, and `GET /login`
 answers `503`. The provider's URLs must be `https` unless their host is
-loopback, and `scopes` must include `openid`. `ferrofed-viewer config check`
+loopback, and `scopes` must include `openid`. `end_session_endpoint` is
+optional, and `post_logout_redirect_uri` needs it. `ferrofed-viewer config check`
 reads and checks a configuration without binding a socket.
 
 The image sets `server.listen` to `0.0.0.0:3000` and `server.site_root` to

@@ -15,18 +15,30 @@
 //! and the operator reads the gateway's read-only operator surface into the
 //! reports of `ferrofed_registry::operator`. A refusal or a failure is a
 //! typed [`GatewayError`] carrying the gateway's status, never an empty
-//! answer.
+//! answer. [`Gateway::query`] runs an AQL or a stored query and reads the
+//! federated `RESULT_SET` with its `meta.federation` (§9.1, §11.4).
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 use ferrofed_registry::health::DependencyReport;
 use ferrofed_registry::operator::{CreatingSystemEntry, IncidentReport, Page, PageRequest};
 use http::{Method, StatusCode};
+use openehr_federation::error::WireError;
+use openehr_federation::meta::FederationMeta;
 use openehr_federation::options::OptionsRoot;
 use openehr_its::rest::client::{
-    Client, ClientError, Credentials, ErrorBody, Request, ReqwestTransport,
+    CallOptions, Client, ClientError, Credentials, ErrorBody, Request, ReqwestTransport,
 };
 use openehr_its::rest::generated::definition::StoredQuery;
+use openehr_its::rest::generated::query::client::{
+    QueryClient, QueryExecuteAdhocQueryBodyOutcome, QueryExecuteStoredQueryBodyOutcome,
+    QueryExecuteStoredQueryVersionBodyOutcome,
+};
+use openehr_its::rest::generated::query::{
+    AdhocQueryExecute, Query, QueryExecuteAdhocQueryBodyParams, QueryExecuteStoredQueryBodyParams,
+    QueryExecuteStoredQueryVersionBodyParams, QueryParameters, ResultSet,
+};
 use secrecy::SecretString;
 use url::Url;
 
@@ -82,6 +94,16 @@ pub enum GatewayError {
         /// The body it sent with it.
         body: ErrorBody,
     },
+    /// The gateway answered a result set whose `meta.federation` cannot be
+    /// read, so whether the answer is complete is unknown (§9.1, N17).
+    #[error("the gateway answered {status} with no readable meta.federation")]
+    Envelope {
+        /// The status the gateway answered with.
+        status: StatusCode,
+        /// What the federation reader refused.
+        #[source]
+        source: WireError,
+    },
 }
 
 impl GatewayError {
@@ -102,7 +124,10 @@ impl GatewayError {
             Self::Call {
                 source: ClientError::Forbidden { body, .. },
             } => (StatusCode::FORBIDDEN, body),
-            Self::Transport { .. } | Self::Base { .. } | Self::Call { .. } => return None,
+            Self::Transport { .. }
+            | Self::Base { .. }
+            | Self::Call { .. }
+            | Self::Envelope { .. } => return None,
         };
         Some((status, code_of(body)))
     }
@@ -114,8 +139,160 @@ impl GatewayError {
         match self {
             Self::Call {
                 source: ClientError::Body { status, .. },
-            } => Some(*status),
+            }
+            | Self::Envelope { status, .. } => Some(*status),
             _ => None,
+        }
+    }
+}
+
+/// What a query run through the gateway names: AQL text, or a stored query.
+///
+/// Its `Debug` output never prints the AQL text, which can name a patient.
+#[derive(Clone, PartialEq, Eq)]
+pub enum QueryTarget {
+    /// An ad hoc AQL query, `POST {base}/v1/query/aql`.
+    Aql(String),
+    /// A stored query by its qualified name, at a version when one is named,
+    /// `POST {base}/v1/query/{name}` or `/v1/query/{name}/{version}`.
+    Stored {
+        /// The qualified query name.
+        name: String,
+        /// The version, when the operator named one.
+        version: Option<String>,
+    },
+}
+
+impl fmt::Debug for QueryTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Aql(_) => f.write_str("Aql(..)"),
+            Self::Stored { name, version } => f
+                .debug_struct("Stored")
+                .field("name", name)
+                .field("version", version)
+                .finish(),
+        }
+    }
+}
+
+/// One query the console runs through the gateway's ITS-REST query surface,
+/// as any client would send it.
+///
+/// Its `Debug` output names the shape of the call alone: the AQL text and the
+/// parameter values can name a patient, so neither is ever printed (N33).
+#[derive(Clone)]
+pub struct QueryCall {
+    /// What runs.
+    pub target: QueryTarget,
+    /// The ITS-REST `offset`, when the operator gave one.
+    pub offset: Option<i64>,
+    /// The ITS-REST `fetch`, when the operator gave one.
+    pub fetch: Option<i64>,
+    /// The `query_parameters`, a patient among them where the query names
+    /// one; sent in the request body, never in the URL.
+    pub parameters: QueryParameters,
+    /// The federation request headers, each name with its value: the
+    /// targeting (§8.4), the dedup mode (§10) and the completeness opt-in
+    /// (§11.4).
+    pub headers: Vec<(&'static str, String)>,
+}
+
+impl fmt::Debug for QueryCall {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let headers: Vec<&str> = self.headers.iter().map(|(name, _)| *name).collect();
+        f.debug_struct("QueryCall")
+            .field("target", &self.target)
+            .field("parameters", &self.parameters.len())
+            .field("headers", &headers)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A federated answer: the status the gateway answered with, its ITS-REST
+/// `RESULT_SET`, and the `meta.federation` read out of it (§9.1).
+///
+/// A failing all-or-nothing answer, a `504` or a `424`, is one as well: it
+/// carries the diagnostic envelope with no rows (§11.4, N37, CP-30).
+#[derive(Clone)]
+pub struct FederatedAnswer {
+    /// The status the gateway answered with.
+    pub status: StatusCode,
+    /// The result set, its `meta` included.
+    pub result_set: ResultSet,
+    /// Its `meta.federation`.
+    pub federation: FederationMeta,
+}
+
+impl fmt::Debug for FederatedAnswer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FederatedAnswer")
+            .field("status", &self.status)
+            .field("rows", &self.result_set.rows.len())
+            .field("complete", &self.federation.complete())
+            .finish_non_exhaustive()
+    }
+}
+
+impl FederatedAnswer {
+    /// The answer `result_set` carries, answered with `status`.
+    ///
+    /// # Errors
+    /// Returns [`GatewayError::Envelope`] when its `meta.federation` is
+    /// missing or not a valid one.
+    pub fn read(status: StatusCode, result_set: ResultSet) -> Result<Self, GatewayError> {
+        let federation = result_set
+            .meta
+            .as_ref()
+            .ok_or(WireError::MissingMember {
+                object: "result set",
+                member: "meta",
+            })
+            .and_then(openehr_federation::envelope::read)
+            .map_err(|source| GatewayError::Envelope { status, source })?;
+        Ok(Self {
+            status,
+            result_set,
+            federation,
+        })
+    }
+}
+
+/// How a query call ended before its answer was read.
+enum Unanswered {
+    /// A status the operation documents, with its body.
+    Status(StatusCode, ErrorBody),
+    /// What the client reported.
+    Client(ClientError),
+}
+
+impl Unanswered {
+    /// The federated answer a failing response carries, or the error it is.
+    ///
+    /// A failing response whose body is a result set is the diagnostic
+    /// envelope of §11.4; any other body is the gateway's ITS-REST error.
+    fn into_answer(self) -> Result<FederatedAnswer, GatewayError> {
+        let (status, body) = match &self {
+            Self::Status(status, body)
+            | Self::Client(
+                ClientError::ServiceFailure { status, body, .. }
+                | ClientError::UndocumentedStatus { status, body, .. },
+            ) => (*status, body),
+            Self::Client(_) => return Err(self.into_error()),
+        };
+        // NOTE: §11.4 failure-carries-envelope; a body that is no result set is
+        // the ITS-REST error of a refusal, legitimately not an envelope.
+        match serde_json::from_slice::<ResultSet>(body.raw()) {
+            Ok(result_set) => FederatedAnswer::read(status, result_set),
+            Err(_not_a_result_set) => Err(self.into_error()),
+        }
+    }
+
+    /// The gateway error this is.
+    fn into_error(self) -> GatewayError {
+        match self {
+            Self::Status(status, body) => GatewayError::Status { status, body },
+            Self::Client(source) => GatewayError::Call { source },
         }
     }
 }
@@ -241,6 +418,72 @@ impl Gateway {
             .await
     }
 
+    /// Runs `call` through the gateway's ITS-REST query surface as the
+    /// operator, the query and its parameters in the request body.
+    ///
+    /// # Errors
+    /// Returns [`GatewayError::Status`] or [`GatewayError::Call`] for a
+    /// refusal or a failure that carries no federated result set,
+    /// [`GatewayError::Envelope`] for a result set with no readable
+    /// `meta.federation`, and [`GatewayError::Call`] when a header value is
+    /// not legal on the wire.
+    pub async fn query(
+        &self,
+        token: &AccessToken,
+        call: &QueryCall,
+    ) -> Result<FederatedAnswer, GatewayError> {
+        let client = self.its(token)?;
+        let mut options = CallOptions::default();
+        for (name, value) in &call.headers {
+            options = options
+                .with_header(name, value)
+                .map_err(|source| GatewayError::Call { source })?;
+        }
+        let group = QueryClient::new(&client).with_options(options);
+        let parameters = (!call.parameters.is_empty()).then(|| call.parameters.clone());
+        let answered = match &call.target {
+            QueryTarget::Aql(q) => {
+                let params = QueryExecuteAdhocQueryBodyParams {
+                    accept: Some(json()),
+                    content_type: Some(json()),
+                };
+                let body = AdhocQueryExecute {
+                    q: q.clone(),
+                    offset: call.offset,
+                    fetch: call.fetch,
+                    query_parameters: parameters,
+                    additional_properties: BTreeMap::new(),
+                };
+                match group.query_execute_adhoc_query_body(&params, &body).await {
+                    Ok(QueryExecuteAdhocQueryBodyOutcome::Ok { body, .. }) => Ok(body),
+                    Ok(QueryExecuteAdhocQueryBodyOutcome::BadRequest { body }) => {
+                        Err(Unanswered::Status(StatusCode::BAD_REQUEST, body))
+                    }
+                    Ok(QueryExecuteAdhocQueryBodyOutcome::RequestTimeout { body }) => {
+                        Err(Unanswered::Status(StatusCode::REQUEST_TIMEOUT, body))
+                    }
+                    Err(source) => Err(Unanswered::Client(source)),
+                }
+            }
+            QueryTarget::Stored { name, version } => {
+                let body = Query {
+                    offset: call.offset,
+                    fetch: call.fetch,
+                    query_parameters: parameters,
+                    additional_properties: BTreeMap::new(),
+                };
+                match version {
+                    None => stored(&group, name, &body).await,
+                    Some(version) => stored_version(&group, name, version, &body).await,
+                }
+            }
+        };
+        match answered {
+            Ok(result_set) => FederatedAnswer::read(StatusCode::OK, result_set),
+            Err(unanswered) => unanswered.into_answer(),
+        }
+    }
+
     /// Reads the page `page` of the listing at `path`.
     async fn read_page<T: serde::de::DeserializeOwned>(
         &self,
@@ -298,5 +541,67 @@ impl Gateway {
         Client::new(self.transport.clone(), root)
             .map(|client| client.with_credentials(Credentials::bearer(token.0.clone())))
             .map_err(|source| GatewayError::Call { source })
+    }
+}
+
+/// The `Accept` and `Content-Type` every query call sends.
+fn json() -> String {
+    String::from("application/json")
+}
+
+/// Runs the stored query `name` at its latest version.
+async fn stored(
+    group: &QueryClient<'_, ReqwestTransport>,
+    name: &str,
+    body: &Query,
+) -> Result<ResultSet, Unanswered> {
+    let params = QueryExecuteStoredQueryBodyParams {
+        qualified_query_name: name.to_owned(),
+        accept: Some(json()),
+        content_type: Some(json()),
+    };
+    match group.query_execute_stored_query_body(&params, body).await {
+        Ok(QueryExecuteStoredQueryBodyOutcome::Ok { body, .. }) => Ok(body),
+        Ok(QueryExecuteStoredQueryBodyOutcome::BadRequest { body }) => {
+            Err(Unanswered::Status(StatusCode::BAD_REQUEST, body))
+        }
+        Ok(QueryExecuteStoredQueryBodyOutcome::NotFound { body }) => {
+            Err(Unanswered::Status(StatusCode::NOT_FOUND, body))
+        }
+        Ok(QueryExecuteStoredQueryBodyOutcome::RequestTimeout { body }) => {
+            Err(Unanswered::Status(StatusCode::REQUEST_TIMEOUT, body))
+        }
+        Err(source) => Err(Unanswered::Client(source)),
+    }
+}
+
+/// Runs the stored query `name` at `version`.
+async fn stored_version(
+    group: &QueryClient<'_, ReqwestTransport>,
+    name: &str,
+    version: &str,
+    body: &Query,
+) -> Result<ResultSet, Unanswered> {
+    let params = QueryExecuteStoredQueryVersionBodyParams {
+        qualified_query_name: name.to_owned(),
+        version: version.to_owned(),
+        accept: Some(json()),
+        content_type: Some(json()),
+    };
+    match group
+        .query_execute_stored_query_version_body(&params, body)
+        .await
+    {
+        Ok(QueryExecuteStoredQueryVersionBodyOutcome::Ok { body, .. }) => Ok(body),
+        Ok(QueryExecuteStoredQueryVersionBodyOutcome::BadRequest { body }) => {
+            Err(Unanswered::Status(StatusCode::BAD_REQUEST, body))
+        }
+        Ok(QueryExecuteStoredQueryVersionBodyOutcome::NotFound { body }) => {
+            Err(Unanswered::Status(StatusCode::NOT_FOUND, body))
+        }
+        Ok(QueryExecuteStoredQueryVersionBodyOutcome::RequestTimeout { body }) => {
+            Err(Unanswered::Status(StatusCode::REQUEST_TIMEOUT, body))
+        }
+        Err(source) => Err(Unanswered::Client(source)),
     }
 }

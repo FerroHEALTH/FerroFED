@@ -18,11 +18,17 @@ mod exchange;
 #[cfg(test)]
 mod gateway;
 #[cfg(test)]
+mod query;
+#[cfg(test)]
+mod query_safety;
+#[cfg(test)]
 mod secrets;
 #[cfg(test)]
 mod server;
 #[cfg(test)]
 mod sign_in;
+#[cfg(test)]
+mod sign_out;
 #[cfg(test)]
 mod support;
 #[cfg(test)]
