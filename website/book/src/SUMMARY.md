@@ -26,6 +26,8 @@
 - [Pinned versions](evaluate/versions.md)
 - [Licensing](evaluate/licensing.md)
 - [Regulatory status](evaluate/regulatory-status.md)
+- [Data protection](evaluate/data-protection.md)
+- [Threat model](evaluate/threat-model.md)
 
 # Operate
 
@@ -49,6 +51,7 @@
 - [Metrics](operate/metrics.md)
 - [Tracing](operate/tracing.md)
 - [The operator console](operate/operator-console.md)
+- [Hardening](operate/hardening.md)
 
 # Integrate
 
