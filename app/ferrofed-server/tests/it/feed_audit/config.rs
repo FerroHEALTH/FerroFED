@@ -40,7 +40,10 @@ fn text(dir: &Path, profile: &str, audit: &str) -> Result<String, Box<dyn Error>
 }
 
 fn resolve(text: &str) -> Result<Result<Settings, ConfigError>, Box<dyn Error>> {
-    Ok(Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve())
+    Ok(
+        Config::from_sources(Some(&crate::support::signing_only(text)), &BTreeMap::new())?
+            .resolve(),
+    )
 }
 
 /// The message of the refusal `text` resolves to.

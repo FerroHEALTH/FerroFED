@@ -1456,6 +1456,7 @@ dependencies = [
  "aws-lc-rs",
  "axum",
  "clap",
+ "ehds-logging",
  "ferrofed-engine",
  "ferrofed-identity",
  "ferrofed-registry",

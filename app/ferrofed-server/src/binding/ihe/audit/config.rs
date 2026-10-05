@@ -5,7 +5,10 @@
 //!
 //! The transactions are PIXm ITI-83 (`[pixm]`), PDQm ITI-78 and ITI-119
 //! (`[pdqm]`), mCSD ITI-90 and ITI-91 (`[registry.mcsd]`), and PMIR ITI-93 and
-//! ITI-94 (`[pmir]`).
+//! ITI-94 (`[pmir]`). The access log of every federated query, stored-query
+//! execution, routed read and routed write writes its records here too
+//! ([`crate::access`]; Regulation (EU) 2025/327 Annex II 3.2), so a gateway
+//! with a registry needs a destination outside development.
 //!
 //! ```toml
 //! [audit]
@@ -179,10 +182,10 @@ pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
     let table = &config.audit;
     let audited = config.pixm.is_some()
         || config.pdqm.is_some()
-        || config.registry.mcsd.is_some()
+        || config.registry.configured()
         || config.pmir.is_some();
-    // NOTE: PIXm §2:3.83.5.1, PDQm §2:3.78.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 have each
-    // actor record its transactions, so no audit at all is a development-only choice.
+    // NOTE: PIXm §2:3.83.5.1, PDQm §2:3.78.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 and
+    // Regulation (EU) 2025/327 Annex II 3.2 have every exchange and access recorded.
     let destination = match table.destination {
         Some(AuditDestination::Off) if profile != Profile::Development => {
             return Err(Error::FeedAuditOff {

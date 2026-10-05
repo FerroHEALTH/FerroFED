@@ -606,6 +606,9 @@ pub enum Error {
         /// The overall fan-out budget.
         overall_ms: u64,
     },
+    /// `[access_log]` declares a category map the logging component refuses.
+    #[error("[access_log] declares a category map that cannot be used")]
+    AccessLogMap(#[source] ehds_logging::map::MapError),
 }
 
 impl Error {

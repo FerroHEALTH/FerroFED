@@ -28,6 +28,7 @@ use http::{HeaderMap, HeaderValue, StatusCode};
 use openehr_federation::aql::Analysis;
 use openehr_federation::aql::refusal::Refusal;
 use openehr_federation::aql::subject::Subject;
+use openehr_federation::attribute::EndpointAttribute;
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::generated::query::ResultSet;
@@ -35,7 +36,9 @@ use openehr_its::rest::runtime::ApiError;
 use tracing::Instrument as _;
 use tracing::field::Empty;
 
+use crate::access::Accessed;
 use crate::error::{self, Code};
+use crate::facade::accessed;
 use crate::facade::provenance::{Dispatch, Provenance};
 use crate::facade::request::{Arrived, Submitted, read};
 use crate::facade::{
@@ -89,12 +92,15 @@ pub(crate) async fn answer(
         on_behalf,
     };
     match federate(federation, query).await {
-        Ok((status, mut result_set, provenance)) => {
+        Ok((status, mut result_set, provenance, accessed)) => {
             // NOTE: §12.7, N44: the answer to a stored query names the gateway's definition.
             result_set.name = name;
             let mut response = (status, Json(result_set)).into_response();
             if let Some(applied) = wait.filter(|_| budget != configured) {
                 applied_wait(&mut response, applied);
+            }
+            if let Some(accessed) = accessed {
+                response.extensions_mut().insert(accessed);
             }
             provenance.stamp(response)
         }
@@ -309,7 +315,7 @@ fn observed(federation: &Federation, answer: &FederatedAnswer) {
 async fn federate(
     federation: &Federation,
     query: Query<'_>,
-) -> Result<(StatusCode, ResultSet, Provenance), Failure> {
+) -> Result<(StatusCode, ResultSet, Provenance, Option<Accessed>), Failure> {
     let Query {
         sent,
         headers,
@@ -325,6 +331,7 @@ async fn federate(
     } = query;
     let logged = outbound.to_string();
     let request_id = logged.as_str();
+    let stored = sent.stored_name().map(str::to_owned);
     let (request, named, analysis) =
         read(federation, (sent, headers), (completion, dedup), request_id)?;
     let deadline = started
@@ -349,29 +356,19 @@ async fn federate(
         deadline,
     )
     .await?;
-    if confined::is_confined(conveyance)
-        && !within(federation.snapshot(), conveyance, &analysis, &targets)
-    {
-        confined::stopped("patient", request_id);
-        return Err(Failure::Confined);
-    }
+    held_within(federation, conveyance, (&analysis, &targets), request_id)?;
     if targets.plan.has_no_destination() {
         return Err(Failure::NoDestination);
     }
     remember(federation, session, &targets);
     let attributes = analysis.attributes();
-    let mut plan = targets
-        .plan
-        .completing(completion)
-        .ordered(analysis.order().clone())
-        .deduplicating(dedup)
-        .annotating(attributes.clone());
-    if let Some(recombination) = analysis.recombination() {
-        plan = plan.recombining(recombination.clone());
-    }
-    if !federation.discloses_consent() {
-        plan = plan.withholding_consent(ErrorDetail::Text(String::from(plan::UNAVAILABLE)));
-    }
+    let plan = planned(
+        federation,
+        targets.plan,
+        &analysis,
+        (completion, dedup, attributes.clone()),
+    );
+    let routed_to = routed.map(|owner| owner.endpoint.id().as_str().to_owned());
     let dispatch = Dispatch::of(routed, &plan);
     let answer = fanned_out(federation, plan, budget, (started, conveyance, outbound))
         .await
@@ -381,17 +378,9 @@ async fn federate(
         })?;
     observed(federation, &answer);
     follow_up::observe(federation, answer.seen(), request_id);
-    let mut status = answer.status();
-    // NOTE: no specification governs this (§11.3 covers only an answered lookup):
-    // our own design, a cross-reference that could not answer fails the query
-    // 424 under all-or-nothing; under best-effort it stays reported.
-    if targets.resolution_failed
-        && completion == Completion::AllOrNothing
-        && status == StatusCode::OK
-    {
-        status = StatusCode::FAILED_DEPENDENCY;
-    }
+    let status = settled(answer.status(), targets.resolution_failed, completion);
     let acting = dispatch.provenance(federation.snapshot(), answer.federation(), status);
+    let meta = federation.access_log().map(|_| answer.federation().clone());
     let provenance = answer.attributes().to_vec();
     let mut result_set = answer
         .into_result_set(Some(request.q.clone()), Some(analysis.columns().to_vec()))
@@ -407,7 +396,76 @@ async fn federate(
     } else {
         Vec::new()
     };
-    Ok((status, result_set, acting))
+    let accessed = federation.access_log().zip(meta).and_then(|(log, meta)| {
+        let answered = accessed::Answered {
+            request: &request,
+            stored: stored.as_deref(),
+            analysis: &analysis,
+            resolved: &targets.resolved,
+            routed: routed_to.as_deref(),
+            federation: &meta,
+            rows: &result_set.rows,
+            status,
+        };
+        accessed::query(log, federation.snapshot(), &answered)
+    });
+    Ok((status, result_set, acting, accessed))
+}
+
+/// Refuses, when the caller in `conveyance` is confined to one patient, the
+/// `targets` of `analysis` that reach beyond that patient ([`within`]).
+///
+/// # Errors
+///
+/// Returns [`Failure::Confined`] for such targets, with nothing sent.
+fn held_within(
+    federation: &Federation,
+    conveyance: &Conveyance,
+    (analysis, targets): (&Analysis, &plan::Targets),
+    request_id: &str,
+) -> Result<(), Failure> {
+    if confined::is_confined(conveyance)
+        && !within(federation.snapshot(), conveyance, analysis, targets)
+    {
+        confined::stopped("patient", request_id);
+        return Err(Failure::Confined);
+    }
+    Ok(())
+}
+
+/// `plan` shaped for `analysis` under the request's completion strategy,
+/// dedup mode and ENDPOINT attributes, withholding consent where
+/// `federation` does not disclose it.
+fn planned(
+    federation: &Federation,
+    plan: Plan,
+    analysis: &Analysis,
+    (completion, dedup, attributes): (Completion, DedupMode, Vec<EndpointAttribute>),
+) -> Plan {
+    let mut plan = plan
+        .completing(completion)
+        .ordered(analysis.order().clone())
+        .deduplicating(dedup)
+        .annotating(attributes);
+    if let Some(recombination) = analysis.recombination() {
+        plan = plan.recombining(recombination.clone());
+    }
+    if !federation.discloses_consent() {
+        plan = plan.withholding_consent(ErrorDetail::Text(String::from(plan::UNAVAILABLE)));
+    }
+    plan
+}
+
+/// The status of a fan-out that answered `status`, its resolution failed
+/// at a member when `resolution_failed`, under `completion`.
+fn settled(status: StatusCode, resolution_failed: bool, completion: Completion) -> StatusCode {
+    // NOTE: no specification governs this (§11.3 covers only an answered lookup):
+    // our own design, a cross-reference that could not answer fails the query
+    // 424 under all-or-nothing; under best-effort it stays reported.
+    if resolution_failed && completion == Completion::AllOrNothing && status == StatusCode::OK {
+        return StatusCode::FAILED_DEPENDENCY;
+    }
+    status
 }
 
 /// The targets of `analysis` within `selection`, with the subject a patient

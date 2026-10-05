@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 52] = [
+    pub const GATEWAY: [Self; 53] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -64,6 +64,7 @@ impl Code {
         Self::PatientConfinement,
         Self::PatientContextUnavailable,
         Self::SubjectUnavailable,
+        Self::AccessUnrecorded,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -132,6 +133,7 @@ impl Code {
             Self::PatientConfinement => "patient-confinement",
             Self::PatientContextUnavailable => "patient-context-unavailable",
             Self::SubjectUnavailable => "subject-unavailable",
+            Self::AccessUnrecorded => "access-unrecorded",
         }
     }
 
@@ -190,7 +192,9 @@ impl Code {
             | Self::OperationRefused
             | Self::PatientContextMissing
             | Self::PatientConfinement => StatusCode::FORBIDDEN,
-            Self::AuthenticationUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::AuthenticationUnavailable | Self::AccessUnrecorded => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
         }
     }
 
@@ -320,6 +324,9 @@ impl Code {
             Self::SubjectUnavailable => {
                 "the requested resource is not available to this request (§11.2)"
             }
+            Self::AccessUnrecorded => {
+                "the access could not be recorded, so its answer is withheld; a write may have reached the node, so read before writing again"
+            }
         }
     }
 }
@@ -390,6 +397,7 @@ mod tests {
             Code::PatientConfinement => Some(49),
             Code::PatientContextUnavailable => Some(50),
             Code::SubjectUnavailable => Some(51),
+            Code::AccessUnrecorded => Some(52),
         }
     }
 
@@ -495,6 +503,7 @@ mod tests {
                 StatusCode::FAILED_DEPENDENCY,
             ),
             (Code::SubjectUnavailable, StatusCode::NOT_FOUND),
+            (Code::AccessUnrecorded, StatusCode::SERVICE_UNAVAILABLE),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

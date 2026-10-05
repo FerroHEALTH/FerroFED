@@ -112,6 +112,9 @@ pub struct Config {
     pub signing: Option<Signing>,
     /// How a caller authenticates to the gateway (`[auth]`, §13.1, N25).
     pub auth: auth::Auth,
+    /// The category map every access record is classified with
+    /// (`[access_log]`, #623).
+    pub access_log: crate::access::config::AccessLog,
     /// Where the audit records of the PIXm, PDQm, mCSD and PMIR transactions go
     /// (`[audit]`, #486).
     #[cfg(feature = "binding-ihe")]
@@ -142,6 +145,7 @@ impl Default for Config {
             metrics: Metrics::default(),
             signing: None,
             auth: auth::Auth::default(),
+            access_log: crate::access::config::AccessLog::default(),
             #[cfg(feature = "binding-ihe")]
             audit: crate::binding::ihe::audit::config::Audit::default(),
         }

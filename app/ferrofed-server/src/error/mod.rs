@@ -218,6 +218,9 @@ pub enum Code {
     /// (EU) 2025/327 Art 8; RFC 9110 §15.5.5). The body never names the
     /// subject or an endpoint.
     SubjectUnavailable,
+    /// The access the request made could not be recorded in the access log,
+    /// so its answer is withheld (Regulation (EU) 2025/327 Annex II 3.2).
+    AccessUnrecorded,
 }
 
 /// The code of a refused query: the refusal's stable kind

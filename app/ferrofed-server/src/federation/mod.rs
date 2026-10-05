@@ -41,6 +41,7 @@ use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::id::FederationId;
 
+use crate::access::AccessLog;
 use crate::binding::seam::PublicDocument;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
@@ -71,6 +72,7 @@ pub struct Federation {
     signer: Option<Arc<Signer>>,
     client_keys: Vec<Jwk>,
     documents: Vec<PublicDocument>,
+    access: Option<Arc<AccessLog>>,
 }
 
 /// The demographics step a patient identifier the cross-reference does not
@@ -204,6 +206,21 @@ impl Federation {
     #[must_use]
     pub fn signer(&self) -> Option<&Arc<Signer>> {
         self.signer.as_ref()
+    }
+
+    /// This federation, recording every access to patient data it serves in
+    /// `log` (Regulation (EU) 2025/327 Annex II 3.2).
+    #[must_use]
+    pub fn with_access_log(mut self, log: AccessLog) -> Self {
+        self.access = Some(Arc::new(log));
+        self
+    }
+
+    /// The access log every access to patient data is recorded in, when
+    /// one is configured.
+    #[must_use]
+    pub fn access_log(&self) -> Option<&Arc<AccessLog>> {
+        self.access.as_ref()
     }
 
     /// This federation, conveying each caller signed by `signer`.

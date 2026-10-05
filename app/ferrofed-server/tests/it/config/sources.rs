@@ -223,7 +223,10 @@ fn a_request_timeout_past_the_budget_and_the_margin_is_accepted() -> Result<(), 
         Duration::from_secs(25)
     );
     let defaults = Config::from_sources(
-        Some("[registry]\ndocument = \"/nonexistent/registry.toml\"\n"),
+        Some(&format!(
+            "[registry]\ndocument = \"/nonexistent/registry.toml\"\n{}",
+            crate::support::AUDIT_TOML
+        )),
         &BTreeMap::new(),
     )?
     .resolve()?;

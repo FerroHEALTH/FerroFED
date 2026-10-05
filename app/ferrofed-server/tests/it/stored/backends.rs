@@ -41,7 +41,8 @@ fn text(dir: &Path, table: &str) -> Result<String, Box<dyn Error>> {
     let document = toml::Value::String(document.display().to_string());
     Ok(format!(
         "[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\n\
-         node_selection = \"ask-all\"\n\n[stored_queries]\n{table}\n"
+         node_selection = \"ask-all\"\n\n[stored_queries]\n{table}\n{}",
+        crate::support::AUDIT_TOML
     ))
 }
 

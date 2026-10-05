@@ -159,6 +159,7 @@ impl Config {
             stored_queries,
             metrics,
             signing,
+            access_log: crate::access::config::resolve(&self.access_log)?,
             #[cfg(feature = "binding-ihe")]
             audit: crate::binding::ihe::audit::config::AuditSettings::default(),
         };

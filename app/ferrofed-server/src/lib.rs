@@ -52,6 +52,7 @@ compile_error!(
     "ferrofed-server builds for Unix targets only: it drains on SIGTERM and reloads on SIGHUP through tokio::signal::unix, and every release binary and the container image are Linux"
 );
 
+pub mod access;
 pub mod admin;
 pub mod admission;
 pub mod auth;
@@ -199,6 +200,9 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     ));
     let guarded = routes
         .with_state(Arc::clone(&state))
+        // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate,
+        // so every record names the caller the gate verified.
+        .layer(axum::middleware::from_fn(access::record))
         .layer(axum::middleware::from_fn_with_state(guard, auth::guard))
         // NOTE: RFC 7517 §5, DID 1.0 §7.1: published key material is public, so a
         // binding's documents are answered outside the client authentication gate.
@@ -326,6 +330,9 @@ where
 {
     let signalled = Arc::new(tokio::sync::Notify::new());
     let inner = Arc::clone(&signalled);
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2: an access record names the address the
+    // request came from, which the connection alone knows.
+    let app = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
     let server = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown.await;

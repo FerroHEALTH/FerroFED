@@ -19,6 +19,7 @@ use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
 use openehr_its::rest::client::ReqwestTransport;
 
+use crate::access::AccessLog;
 use crate::binding::seam::PublicDocument;
 use crate::binding::{self, Role};
 use crate::config::NodeSelection;
@@ -29,6 +30,7 @@ use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::NodeRequests;
 use crate::onward::NodeTransport;
+use ferrofed_identity::dev::Profile;
 
 use super::error::FederationError;
 use super::registry::read_registry;
@@ -213,6 +215,7 @@ impl Federation {
             signer: Some(signer),
             client_keys: client_keys(settings),
             documents: documents(settings)?,
+            access: access_log(settings)?.map(Arc::new),
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -265,8 +268,32 @@ impl Federation {
             signer: None,
             client_keys: Vec::new(),
             documents: Vec::new(),
+            access: None,
         }
     }
+}
+
+/// The access log `settings` describe: the category map, over the first sink
+/// a compiled binding builds; `None` under development with no sink.
+///
+/// # Errors
+///
+/// A binding's [`FederationError`] for a sink it cannot build, and
+/// [`FederationError::AccessLogUnavailable`] outside development when no
+/// binding of this build records accesses (Regulation (EU) 2025/327 Annex II
+/// 3.2).
+fn access_log(settings: &Settings) -> Result<Option<AccessLog>, FederationError> {
+    for binding in binding::compiled() {
+        if let Some(sink) = binding.access_sink(settings)? {
+            return Ok(Some(AccessLog::new(settings.access_log.clone(), sink)));
+        }
+    }
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2 asks for a record of every access, so a
+    // gateway that intermediates patient data records none only under development.
+    if settings.profile == Profile::Development {
+        return Ok(None);
+    }
+    Err(FederationError::AccessLogUnavailable)
 }
 
 /// The public documents every compiled binding has the gateway serve, each

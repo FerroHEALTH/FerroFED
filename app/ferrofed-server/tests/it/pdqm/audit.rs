@@ -59,7 +59,7 @@ async fn each_exchange_reaches_the_repository_beside_the_resolution_it_feeds() -
     )?;
     let (status, text) = call(app, post(body(&local_query())?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let records = repository.wait_for(2, Duration::from_secs(5)).await;
+    let records = repository.wait_for(3, Duration::from_secs(5)).await;
     let mut seen = Vec::new();
     for record in &records {
         seen.extend(transactions(record)?);
@@ -100,7 +100,7 @@ async fn each_search_and_match_names_the_verified_caller_as_its_user_agent() -> 
         )?;
         let (status, text) = call(app, post(body(&local_query())?)?).await?;
         assert_eq!(StatusCode::OK, status, "{transaction}: {text}");
-        let records = repository.wait_for(2, Duration::from_secs(5)).await;
+        let records = repository.wait_for(3, Duration::from_secs(5)).await;
         let code = transaction.to_uppercase();
         let step = records
             .iter()
@@ -162,10 +162,10 @@ async fn an_exchange_the_spool_cannot_take_fails_closed_and_asks_no_member() -> 
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         ASK_ALL,
-        &audited(&pix, &pdq.base_url(), &repository, "spool_max_events = 1"),
+        &audited(&pix, &pdq.base_url(), &repository, "spool_max_events = 2"),
     )?;
     // The master identity resolves without the step, and its ITI-83 record
-    // fills the one place the spool has.
+    // and the record of its access fill the two places the spool has.
     let query = patient_query().replace(PATIENT, MASTER_ID);
     let (status, text) = call(app.clone(), post(body(&query)?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
