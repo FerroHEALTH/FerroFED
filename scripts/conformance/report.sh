@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/conformance/report.sh: the per-track and per-point report of a test
 # run, the Gazelle-style logging of section 16.4 ("each executed test records

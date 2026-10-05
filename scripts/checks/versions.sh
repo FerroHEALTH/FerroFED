@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # Version-drift guard: the pin matrix, docs/VERSIONS.md, is the single source
 # of truth (no specification governs this: our own design).

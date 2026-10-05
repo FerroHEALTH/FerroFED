@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/checks/conformance-matrix.sh: the conformance-matrix guard, tier 1
 # (the §17 conformance points and the §16.3 tracks, #41). Offline and static:

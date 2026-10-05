@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # The e2e placement guard: a test that checks the FERROFED_E2E gate lives in
 # the e2e module of its crate's test binary, because the CI container job

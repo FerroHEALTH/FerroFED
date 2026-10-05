@@ -4,7 +4,7 @@ description: Look up the authoritative Federation Tier with AQL, openEHR ITS-RES
 allowed-tools: Read, Grep, Glob, WebFetch
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Spec lookup

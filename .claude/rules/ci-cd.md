@@ -5,7 +5,7 @@ paths:
   - "sonar-project.properties"
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # CI/CD and supply-chain discipline
@@ -22,7 +22,7 @@ Thirteen workflows:
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
   (zizmor, actionlint, shellcheck, hadolint, kubeconform over the example
   Kubernetes manifests, the comment-style guard, the versions guard, the
-  favicon guard, the site link guard over the assembled site, the
+  favicon guard, the copyright-holder guard, the site link guard over the assembled site, the
   conformance-matrix guard, the obligations guard, the
   e2e-placement guard, the tracker-helper self-tests), plus the manifest
   guard, the one tier-1 job with a toolchain, which reads every Cargo

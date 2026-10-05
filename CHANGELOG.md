@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Changelog
@@ -321,6 +321,7 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ### Changed
 
+- The Licensor and copyright holder of FerroFED's own work is Cadasto B.V., replacing Vernum Projecten B.V. (#602). The licence, its Additional Use Grant and its Change Date do not change. A new guard, `scripts/checks/copyright-holder.sh`, fails any first-party header that names another holder.
 - The `openehr-*` family moves from 0.0.83 to 0.0.84 (FerroEHR #3565,
   #574). A re-send answering a node's `DPoP` nonce challenge that no proof
   could be made for is the node's `node-error`, with the node counted as

@@ -1,21 +1,21 @@
 ---
 name: native-issue-types-and-priority
-description: "Type, priority and effort are GitHub's native issue type and the FerroHEALTH Priority and Effort issue fields, set with scripts/gh/fields.sh; the bug, enhancement and P0 to P3 labels are retired; owner 2026-10-02, modelled on VernumBOEK (#154)"
+description: "Type, priority and effort are GitHub's native issue type and the FerroHEALTH Priority and Effort issue fields, set with scripts/gh/fields.sh; the bug, enhancement and P0 to P3 labels are retired; owner 2026-10-02, modelled on another of the owner's projects (#154)"
 metadata:
   type: project
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 Since 2026-10-02 FerroFED tracks the kind and urgency of its work the way
-VernumBOEK has since 2026-09-19: the native issue type (`Bug`, `Feature`,
+another of the owner's projects has since 2026-09-19: the native issue type (`Bug`, `Feature`,
 `Task`), the organisation's `Priority` field (`Urgent`, `High`, `Medium`,
 `Low`) and its `Effort` field (`High`, `Medium`, `Low`). The FerroHEALTH
-organisation carries all three, configured as Vernum-Projecten's.
+organisation carries all three.
 
 **Why:** on 2026-10-02 the owner asked for an issue to adopt this and to
-remove the P0 to P3 labels, pointing at VernumBOEK's `scripts/gh/fields.sh`
+remove the P0 to P3 labels, pointing at that project's `scripts/gh/fields.sh`
 and its rules and agents, and for the whole codebase and the label setup to
 move with it. Labels for type and priority duplicate
 what GitHub now models natively, and the board and the issue list can filter

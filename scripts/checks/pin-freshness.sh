@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # Every CI tool pin no ecosystem watches, compared with its newest upstream
 # release. Dependabot's `github-actions` ecosystem reads `uses:`

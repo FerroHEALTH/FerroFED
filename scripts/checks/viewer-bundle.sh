@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # Measures the operator console's release site bundle (app/ferrofed-viewer)
 # and fails when its brotli-compressed WebAssembly is over its byte budget

@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Licensing
@@ -33,7 +33,7 @@ own or inside another product.
 
 A commercial licence starts with a conversation with the maintainer named in
 [`MAINTAINERS.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/MAINTAINERS.md).
-The Licensor is Vernum Projecten B.V.
+The Licensor is Cadasto B.V.
 
 ## The change date
 

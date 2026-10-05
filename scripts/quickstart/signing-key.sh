@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # Writes the compose quickstart gateway's ES384 signing key, once, before the
 # first `docker compose up` (no specification governs the quickstart key: our

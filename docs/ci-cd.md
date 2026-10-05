@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # CI: the two tiers and the required checks
@@ -60,6 +60,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `file-length` | `scripts/checks/file-length.sh --self-test`, then `scripts/checks/file-length.sh`: the 1000-line cap on hand-written Rust and on the book's Markdown pages, with its ratchet allow-list |
 | `versions` | `scripts/checks/versions.sh --self-test`, then `scripts/checks/versions.sh`: the pin matrix against every file that repeats a pin and each specification row against the crate constant it names, the landing page's release string against the newest `CHANGELOG.md` release, the book's pin table against the rows it names, the vendored provenance stamps and the SPDX licence claims |
 | `favicon-sync` | `scripts/checks/favicon-sync.sh`, the book theme favicons byte-identical to the brand favicon set |
+| `copyright-holder` | `scripts/checks/copyright-holder.sh`, every first-party `SPDX-FileCopyrightText` header naming Cadasto B.V., the Licensor of `LICENSE`; the vendored trees are skipped |
 | `conformance-matrix` | `scripts/checks/conformance-matrix.sh`, then `scripts/conformance/report.sh --self-test`: the conformance matrix against the vendored specification, the test markers against the matrix, the rendered book page against the matrix, and the README conformance badges under `conformance/badges/` against the matrix and the AQL golden pass list (`docs/architecture.md` section 12) |
 | `obligations` | `scripts/checks/obligations.sh --self-test`, then `scripts/checks/obligations.sh`: every row of `conformance/obligations.tsv` with a known status, an issue where its status needs one, an existing test where it is tested, and a point and requirements the matrix holds; the digest of each vendored source's keyword lines against `conformance/obligation-sources.tsv`, so a re-pin fails until the changed sources are reclassified; and the rendered book page against the checklist |
 | `e2e-placement` | `scripts/checks/e2e-placement.sh --self-test`, then `scripts/checks/e2e-placement.sh`: every Rust file that checks the `FERROFED_E2E` gate sits in an `e2e` module of its crate's test binary, and the `e2e (containers)` job still sets the gate and selects `test(/^e2e::/)` across the workspace |

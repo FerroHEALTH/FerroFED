@@ -2,7 +2,7 @@
 paths: ["**/*.rs"]
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Comments and documentation (RFC 505 + RFC 1574)

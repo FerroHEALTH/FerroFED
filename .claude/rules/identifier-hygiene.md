@@ -2,7 +2,7 @@
 paths: ["**/*.rs", "**/tests/**", "**/fixtures/**", "docs/architecture.md"]
 ---
 
-<!-- SPDX-FileCopyrightText: Vernum Projecten B.V. -->
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 # Identifier hygiene (§5.4, N33)

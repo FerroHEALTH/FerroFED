@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # The crates.io lane behind the workspace `publish` switch (the Cargo reference,
 # Publishing on crates.io; no specification governs the policy: our own design),

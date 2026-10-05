@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Vernum Projecten B.V.
+// SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The reference implementation's 17 AQL golden cases as a corpus, compared
@@ -53,7 +53,7 @@ const UPDATE: &str = "FERROFED_CONFORMANCE_UPDATE";
 
 /// The comment block the corpus test writes above the cases.
 const PASS_LIST_HEADER: &str = "\
-# SPDX-FileCopyrightText: Vernum Projecten B.V.
+# SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
 # The AQL golden cases of the reference implementation that FerroFED passes,
