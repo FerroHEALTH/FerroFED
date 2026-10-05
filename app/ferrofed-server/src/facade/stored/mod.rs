@@ -539,7 +539,7 @@ fn stored_answer(version: QueryVersion) -> Result<Response, Refused> {
 }
 
 /// The ITS-REST `StoredQuery` of `definition`.
-fn its_rest(definition: &StoredDefinition) -> StoredQuery {
+pub(crate) fn its_rest(definition: &StoredDefinition) -> StoredQuery {
     StoredQuery {
         name: definition.name().as_str().to_owned(),
         r#type: AQL.to_owned(),

@@ -3,43 +3,48 @@
 
 //! The bodies of the gateway's read-only operator surface.
 //!
-//! The gateway writes and the operator console reads three JSON reports:
-//! the integrity incidents, the `creating_system_id` routing table, and the
-//! stored-query registry. Every report carries routing ids, counts and stored definitions only. An
-//! `ehr_id` is named only when it is a bare UUID, which cannot spell a
-//! patient identifier, and a stored definition names no patient, because one
-//! that does is refused before it is held (§5.4.1, N33, §12.7). No
-//! specification governs the operator surface: our own design.
+//! The gateway writes and the operator console reads the integrity
+//! incidents, the `creating_system_id` routing table, and pages of the
+//! stored-query registry. Every report carries routing ids, counts and
+//! stored definitions only. An `ehr_id` is named only when it is a bare
+//! UUID, which cannot spell a patient identifier, and a stored definition
+//! names no patient, because one that does is refused before it is held
+//! (§5.4.1, N33, §12.7). No specification governs the operator surface: our
+//! own design.
 
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::creating_system::LearnedMap;
-use crate::definition::StoredDefinition;
 use crate::incident::{Incident, Kind};
 use crate::snapshot::RegistrySnapshot;
 
-/// How many incidents the operator report keeps, newest last.
-pub const RECENT_INCIDENTS: usize = 100;
+/// How many incidents of each kind the report keeps, newest last: a burst of
+/// one kind never pushes another kind's incidents out.
+pub const RECENT_PER_KIND: usize = 25;
 
-/// The incidents emitted since the process started, newest last, at most
-/// [`RECENT_INCIDENTS`] of them.
-static RECENT: Mutex<VecDeque<(Timestamp, Incident)>> = Mutex::new(VecDeque::new());
+/// The most a page of the operator surface holds, and the size of a page a
+/// request does not size.
+pub const MAX_PAGE: u64 = 100;
 
-/// Keeps `incident`, emitted now, among the recent ones, dropping the oldest
-/// beyond [`RECENT_INCIDENTS`].
+/// The incidents emitted since the process started, by kind, each kind's
+/// newest last and at most [`RECENT_PER_KIND`] of them.
+static RECENT: Mutex<BTreeMap<Kind, VecDeque<(Timestamp, Incident)>>> = Mutex::new(BTreeMap::new());
+
+/// Keeps `incident`, emitted now, among the recent ones of its kind,
+/// dropping that kind's oldest beyond [`RECENT_PER_KIND`].
 pub(crate) fn record(incident: &Incident) {
-    // NOTE: no specification governs this: our own design; a store unusable
-    // after a panic keeps nothing more, while the count and the event still go out.
-    if let Ok(mut recent) = RECENT.lock() {
-        while recent.len() >= RECENT_INCIDENTS {
-            recent.pop_front();
-        }
-        recent.push_back((Timestamp::now(), incident.clone()));
+    // NOTE: no specification governs this: our own design; a lock a panic
+    // poisoned still holds whole entries, so recording goes on.
+    let mut recent = RECENT.lock().unwrap_or_else(PoisonError::into_inner);
+    let kind = recent.entry(incident.kind()).or_default();
+    while kind.len() >= RECENT_PER_KIND {
+        kind.pop_front();
     }
+    kind.push_back((Timestamp::now(), incident.clone()));
 }
 
 /// The body of `GET {base}/operator/incidents`.
@@ -48,28 +53,31 @@ pub struct IncidentReport {
     /// How many incidents of each kind were emitted since the process
     /// started, every kind listed.
     pub counts: BTreeMap<String, u64>,
-    /// The most recent incidents, newest last.
+    /// The most recent incidents of every kind, oldest first.
     pub recent: Vec<RecordedIncident>,
 }
 
 impl IncidentReport {
     /// The report of this process: every kind's count and the incidents
-    /// the process keeps.
+    /// the process keeps of each kind.
     #[must_use]
     pub fn current() -> Self {
         let counts = Kind::ALL
             .iter()
             .map(|kind| (kind.as_str().to_owned(), kind.emitted()))
             .collect();
-        let recent = RECENT
+        let mut held: Vec<(Timestamp, Incident)> = RECENT
             .lock()
-            .map(|recent| {
-                recent
-                    .iter()
-                    .map(|(at, incident)| RecordedIncident::of(incident, *at))
-                    .collect()
-            })
-            .unwrap_or_default();
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .flatten()
+            .cloned()
+            .collect();
+        held.sort_by_key(|(at, _)| *at);
+        let recent = held
+            .iter()
+            .map(|(at, incident)| RecordedIncident::of(incident, *at))
+            .collect();
         Self { counts, recent }
     }
 }
@@ -174,92 +182,111 @@ pub struct CreatingSystemEntry {
     pub endpoint: Option<String>,
 }
 
-/// The body of `GET {base}/operator/creating-systems`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CreatingSystemReport {
-    /// Every route, the members' own `system_id`s first, then the registry
-    /// document's mappings, then the learned ones, each ordered by id.
-    pub entries: Vec<CreatingSystemEntry>,
-}
-
-impl CreatingSystemReport {
-    /// The routing table `snapshot` and `learned` hold together.
-    #[must_use]
-    pub fn of(snapshot: &RegistrySnapshot, learned: &LearnedMap) -> Self {
-        let members = snapshot.nodes().map(|node| CreatingSystemEntry {
-            creating_system_id: node.system_id().to_string(),
-            source: RouteSource::Member,
-            node: Some(node.id().to_string()),
-            endpoint: None,
+/// The routing table `snapshot` and `learned` hold together: the members'
+/// own `system_id`s first, then the registry document's mappings, then the
+/// learned ones, each ordered by id.
+#[must_use]
+pub fn routing_table(
+    snapshot: &RegistrySnapshot,
+    learned: &LearnedMap,
+) -> Vec<CreatingSystemEntry> {
+    let members = snapshot.nodes().map(|node| CreatingSystemEntry {
+        creating_system_id: node.system_id().to_string(),
+        source: RouteSource::Member,
+        node: Some(node.id().to_string()),
+        endpoint: None,
+    });
+    let registered = snapshot
+        .creating_systems()
+        .map(|(creating_system_id, endpoint)| CreatingSystemEntry {
+            creating_system_id: creating_system_id.to_string(),
+            source: RouteSource::Registered,
+            node: snapshot
+                .endpoint(endpoint)
+                .map(|declared| declared.node().to_string()),
+            endpoint: Some(endpoint.to_string()),
         });
-        let registered = snapshot
-            .creating_systems()
-            .map(|(creating_system_id, endpoint)| CreatingSystemEntry {
+    let learned = learned
+        .entries()
+        .map(|(creating_system_id, holder)| match holder {
+            Some(endpoint) => CreatingSystemEntry {
                 creating_system_id: creating_system_id.to_string(),
-                source: RouteSource::Registered,
+                source: RouteSource::Learned,
                 node: snapshot
                     .endpoint(endpoint)
                     .map(|declared| declared.node().to_string()),
                 endpoint: Some(endpoint.to_string()),
-            });
-        let learned = learned
-            .entries()
-            .map(|(creating_system_id, holder)| match holder {
-                Some(endpoint) => CreatingSystemEntry {
-                    creating_system_id: creating_system_id.to_string(),
-                    source: RouteSource::Learned,
-                    node: snapshot
-                        .endpoint(endpoint)
-                        .map(|declared| declared.node().to_string()),
-                    endpoint: Some(endpoint.to_string()),
-                },
-                None => CreatingSystemEntry {
-                    creating_system_id: creating_system_id.to_string(),
-                    source: RouteSource::Withdrawn,
-                    node: None,
-                    endpoint: None,
-                },
-            });
+            },
+            None => CreatingSystemEntry {
+                creating_system_id: creating_system_id.to_string(),
+                source: RouteSource::Withdrawn,
+                node: None,
+                endpoint: None,
+            },
+        });
+    members.chain(registered).chain(learned).collect()
+}
+
+/// Which page of a listing a request asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PageRequest {
+    /// How many items to skip.
+    pub offset: u64,
+    /// How many items to answer, at most [`MAX_PAGE`].
+    pub limit: u64,
+}
+
+impl Default for PageRequest {
+    fn default() -> Self {
         Self {
-            entries: members.chain(registered).chain(learned).collect(),
+            offset: 0,
+            limit: MAX_PAGE,
         }
     }
 }
 
-/// One held version of a stored query.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoredQueryEntry {
-    /// The qualified name.
-    pub name: String,
-    /// The `major.minor.patch` version.
-    pub version: String,
-    /// When it was stored, RFC 3339.
-    pub saved: String,
-    /// The AQL text, which names no patient.
-    pub aql: String,
-}
-
-impl From<&StoredDefinition> for StoredQueryEntry {
-    fn from(definition: &StoredDefinition) -> Self {
-        Self {
-            name: definition.name().to_string(),
-            version: definition.version().to_string(),
-            saved: definition.saved().to_string(),
-            aql: definition.aql().to_owned(),
-        }
+impl PageRequest {
+    /// Whether the request asks for a page the surface answers: at least one
+    /// item and at most [`MAX_PAGE`].
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
+        self.limit >= 1 && self.limit <= MAX_PAGE
     }
 }
 
-/// The body of `GET {base}/operator/stored-queries`.
+/// One page of a listing, with where it starts and how many there are in
+/// all, so a reader always knows when it holds only part of the listing.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoredQueryReport {
-    /// Every held version, by name and then by version.
-    pub definitions: Vec<StoredQueryEntry>,
+pub struct Page<T> {
+    /// The items of this page, in the listing's order.
+    pub items: Vec<T>,
+    /// Where this page starts in the listing.
+    pub offset: u64,
+    /// How many items the whole listing holds.
+    pub total: u64,
+}
+
+impl<T> Page<T> {
+    /// The page `request` selects of `all`.
+    #[must_use]
+    pub fn of(all: Vec<T>, request: PageRequest) -> Self {
+        let total = u64::try_from(all.len()).unwrap_or(u64::MAX);
+        let skip = usize::try_from(request.offset).unwrap_or(usize::MAX);
+        let take = usize::try_from(request.limit).unwrap_or(usize::MAX);
+        Self {
+            items: all.into_iter().skip(skip).take(take).collect(),
+            offset: request.offset,
+            total,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{IncidentReport, RecordedIncident, record};
+    use super::{
+        IncidentReport, MAX_PAGE, Page, PageRequest, RECENT_PER_KIND, RecordedIncident, record,
+    };
     use crate::incident::{Detection, Incident};
     use jiff::Timestamp;
 
@@ -297,15 +324,30 @@ mod tests {
     }
 
     #[test]
-    fn the_report_counts_every_kind_and_keeps_the_recent_ones() {
-        let incident = Incident::LearnedCreatingSystemConflict {
+    fn a_burst_of_one_kind_keeps_the_other_kinds_and_stays_bounded() {
+        record(&Incident::LearnedCreatingSystemConflict {
             creating_system_id: "legacy-x.example.org".parse().expect("a system id"),
             first: "node-a-pub".parse().expect("an endpoint"),
             second: "node-b-pub".parse().expect("an endpoint"),
+        });
+        let collision = Incident::EhrIdCollision {
+            ehr_id: "7d44b88c-4199-4bad-97dc-d78268e01398"
+                .parse()
+                .expect("an ehr_id"),
+            detection: Detection::Index,
+            claimants: vec!["node-a-pub".parse().expect("an endpoint")],
         };
-        record(&incident);
+        for _ in 0..1000 {
+            record(&collision);
+        }
         let report = IncidentReport::current();
         assert_eq!(4, report.counts.len());
+        let collisions = report
+            .recent
+            .iter()
+            .filter(|recorded| recorded.kind == "EhrIdCollision")
+            .count();
+        assert_eq!(RECENT_PER_KIND, collisions);
         assert!(
             report
                 .recent
@@ -313,6 +355,36 @@ mod tests {
                 .any(|recorded| recorded.creating_system_id.as_deref()
                     == Some("legacy-x.example.org")),
             "{report:?}"
+        );
+    }
+
+    #[test]
+    fn a_page_says_where_it_starts_and_how_many_there_are() {
+        let page = Page::of(
+            (0..250).collect::<Vec<u32>>(),
+            PageRequest {
+                offset: 200,
+                limit: MAX_PAGE,
+            },
+        );
+        assert_eq!(50, page.items.len());
+        assert_eq!(Some(&200), page.items.first());
+        assert_eq!(200, page.offset);
+        assert_eq!(250, page.total);
+        assert!(PageRequest::default().is_valid());
+        assert!(
+            !PageRequest {
+                offset: 0,
+                limit: MAX_PAGE + 1
+            }
+            .is_valid()
+        );
+        assert!(
+            !PageRequest {
+                offset: 0,
+                limit: 0
+            }
+            .is_valid()
         );
     }
 }

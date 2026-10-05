@@ -8,9 +8,10 @@
 
 use std::error::Error;
 
+use axum::body::Body;
 use ferrofed_viewer::server::ViewerState;
-use http::StatusCode;
-use wiremock::matchers::{header as header_is, method, path};
+use http::{Request, StatusCode};
+use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::support::{OPERATOR_TOKEN, console, get, get_as, header, send, signed_in};
@@ -49,7 +50,7 @@ fn example_endpoints() -> Result<Vec<String>, Box<dyn Error>> {
 async fn answers(gateway: &MockServer, verb: &str, route: &str, body: String) {
     Mock::given(method(verb))
         .and(path(route))
-        .and(header_is(
+        .and(wiremock::matchers::header(
             "authorization",
             format!("Bearer {OPERATOR_TOKEN}").as_str(),
         ))
@@ -96,8 +97,9 @@ async fn gateway() -> Result<MockServer, Box<dyn Error>> {
         "GET",
         "/operator/creating-systems",
         String::from(
-            r#"{"entries":[{"creating_system_id":"cdr-a.example.org","source":"member","node":"node-a","endpoint":null},
-               {"creating_system_id":"legacy-a.example.org","source":"learned","node":"node-a","endpoint":"node-a-pub"}]}"#,
+            r#"{"items":[{"creating_system_id":"cdr-a.example.org","source":"member","node":"node-a","endpoint":null},
+               {"creating_system_id":"legacy-a.example.org","source":"learned","node":"node-a","endpoint":"node-a-pub"}],
+               "offset":0,"total":2}"#,
         ),
     )
     .await;
@@ -106,8 +108,9 @@ async fn gateway() -> Result<MockServer, Box<dyn Error>> {
         "GET",
         "/operator/stored-queries",
         String::from(
-            r#"{"definitions":[{"name":"org.example::compositions","version":"1.0.0","saved":"2026-10-05T08:00:00Z",
-               "aql":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"}]}"#,
+            r#"{"items":[{"name":"org.example::compositions","type":"AQL","version":"1.0.0","saved":"2026-10-05T08:00:00Z",
+               "q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c"}],
+               "offset":0,"total":1}"#,
         ),
     )
     .await;
@@ -217,7 +220,10 @@ async fn a_view_without_a_signed_in_session_sends_the_browser_to_sign_in()
         let (response, _body) = send(&service, get_as(view, &unknown)?).await?;
         assert_eq!(StatusCode::SEE_OTHER, response.status(), "{view}");
     }
-    let asked = gateway.received_requests().await.unwrap_or_default();
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
     assert!(
         asked.is_empty(),
         "the gateway was asked {} times",
@@ -282,5 +288,203 @@ async fn no_view_renders_the_operators_token_and_each_carries_the_security_heade
         );
         assert!(!policy.contains("'unsafe-inline'"), "{view}: {policy}");
     }
+    Ok(())
+}
+
+/// Every server function a view loads through, with the form body it takes.
+const SERVER_FUNCTIONS: [(&str, &str); 4] = [
+    ("/api/members", ""),
+    ("/api/integrity", "offset=0"),
+    ("/api/stored-queries", "offset=0"),
+    ("/api/federation", ""),
+];
+
+/// A `POST` of the server function at `route` with `form`, carrying the
+/// session cookie `cookie` when given.
+fn call(route: &str, form: &str, cookie: Option<&str>) -> Result<Request<Body>, Box<dyn Error>> {
+    let mut request = Request::post(route)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("accept", "application/json");
+    if let Some(cookie) = cookie {
+        request = request.header(
+            "cookie",
+            format!("{}={cookie}", ferrofed_viewer::session::COOKIE),
+        );
+    }
+    Ok(request.body(Body::from(form.to_owned()))?)
+}
+
+// Each server function is a public endpoint of the console, so each refuses
+// a caller with no live session before it asks the gateway anything.
+#[tokio::test]
+async fn every_server_function_refuses_a_caller_without_a_live_session()
+-> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let (_state, service, _session) = signed_in_console(&gateway)?;
+    for (route, form) in SERVER_FUNCTIONS {
+        for cookie in [None, Some("forged")] {
+            let (response, body) = send(&service, call(route, form, cookie)?).await?;
+            assert_ne!(StatusCode::OK, response.status(), "{route} {cookie:?}");
+            assert!(body.contains("SignedOut"), "{route} {cookie:?}: {body}");
+        }
+    }
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(
+        asked.is_empty(),
+        "the gateway was asked {} times",
+        asked.len()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn every_server_function_answers_a_live_session() -> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    for (route, form) in SERVER_FUNCTIONS {
+        let (response, body) = send(&service, call(route, form, Some(session.as_str()))?).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{route}: {body}");
+        assert!(!body.contains(OPERATOR_TOKEN), "{route}: {body}");
+    }
+    Ok(())
+}
+
+// The gate names a view by its path in any case and with or without a
+// trailing slash, so neither form reaches a view without a session.
+#[tokio::test]
+async fn a_view_path_in_another_case_or_with_a_trailing_slash_still_needs_a_session()
+-> Result<(), Box<dyn Error>> {
+    let gateway = gateway().await?;
+    let (_state, service, _session) = signed_in_console(&gateway)?;
+    for view in ["/members/", "/MEMBERS", "/Integrity/", "/stored-queries//"] {
+        let (response, _body) = send(&service, get(view)?).await?;
+        assert_eq!(StatusCode::SEE_OTHER, response.status(), "{view}");
+        assert_eq!("/login", header(&response, "location"), "{view}");
+    }
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(asked.is_empty(), "the gateway was asked {}", asked.len());
+    Ok(())
+}
+
+/// A stub gateway whose routing table holds `total` rows, of which it answers
+/// the two from `offset` when asked for that page.
+async fn paged_gateway(offset: u64, total: u64) -> MockServer {
+    let gateway = MockServer::start().await;
+    answers(
+        &gateway,
+        "GET",
+        "/operator/incidents",
+        String::from(r#"{"counts":{},"recent":[]}"#),
+    )
+    .await;
+    Mock::given(method("GET"))
+        .and(path("/operator/creating-systems"))
+        .and(query_param("offset", offset.to_string().as_str()))
+        .and(query_param("limit", "100"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(format!(
+                    r#"{{"items":[{{"creating_system_id":"a.example.org","source":"registered","node":null,"endpoint":"node-a-pub"}},
+                       {{"creating_system_id":"b.example.org","source":"registered","node":null,"endpoint":"node-a-pub"}}],
+                       "offset":{offset},"total":{total}}}"#
+                )),
+        )
+        .mount(&gateway)
+        .await;
+    gateway
+}
+
+#[tokio::test]
+async fn the_routing_table_shows_its_page_and_links_the_next() -> Result<(), Box<dyn Error>> {
+    let gateway = paged_gateway(0, 150).await;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(&service, get_as("/integrity", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(body.contains("Rows 1 to 2 of 150."), "{body}");
+    assert!(
+        body.contains(r#"href="/integrity?offset=2" rel="next""#),
+        "{body}"
+    );
+    assert!(!body.contains(r#"rel="prev""#), "{body}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_later_page_of_the_routing_table_is_asked_for_by_its_offset() -> Result<(), Box<dyn Error>>
+{
+    let gateway = paged_gateway(148, 150).await;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(&service, get_as("/integrity?offset=148", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(body.contains("Rows 149 to 150 of 150."), "{body}");
+    assert!(
+        body.contains(r#"href="/integrity?offset=48" rel="prev""#),
+        "{body}"
+    );
+    assert!(!body.contains(r#"rel="next""#), "{body}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_offset_that_is_no_number_shows_the_first_page() -> Result<(), Box<dyn Error>> {
+    let gateway = paged_gateway(0, 2).await;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(&service, get_as("/integrity?offset=-1", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(body.contains("Rows 1 to 2 of 2."), "{body}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_view_the_gateway_does_not_authenticate_links_back_to_sign_in()
+-> Result<(), Box<dyn Error>> {
+    let gateway = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/operator/stored-queries"))
+        .respond_with(
+            ResponseTemplate::new(401)
+                .insert_header("content-type", "application/json")
+                .set_body_string(
+                    r#"{"message":"the access token has expired","code":"token-invalid"}"#,
+                ),
+        )
+        .mount(&gateway)
+        .await;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(&service, get_as("/stored-queries", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(
+        body.contains("The gateway did not accept your sign-in (token-invalid)."),
+        "{body}"
+    );
+    assert!(body.contains(r#"href="/login""#), "{body}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_view_whose_answer_the_console_cannot_read_says_so() -> Result<(), Box<dyn Error>> {
+    let gateway = MockServer::start().await;
+    answers(
+        &gateway,
+        "GET",
+        "/operator/stored-queries",
+        String::from(r#"{"definitions":"of a shape this console does not know"}"#),
+    )
+    .await;
+    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (response, body) = send(&service, get_as("/stored-queries", &session)?).await?;
+    assert_eq!(StatusCode::OK, response.status(), "{body}");
+    assert!(
+        body.contains("the gateway answered 200 with a body this console cannot read"),
+        "{body}"
+    );
+    assert!(!body.contains("holds no stored query"), "{body}");
     Ok(())
 }

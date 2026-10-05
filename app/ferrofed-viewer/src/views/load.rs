@@ -19,7 +19,7 @@ use crate::views::model::{FederationView, IntegrityView, MembersView, StoredView
 /// # Errors
 /// Returns [`ViewError::SignedOut`] without a live session, and the
 /// gateway's refusal or failure as its [`ViewError`].
-#[server]
+#[server(endpoint = "members")]
 pub async fn members() -> Result<MembersView, ViewError> {
     let (state, token) = server::signed_in()?;
     let gateway = state.gateway();
@@ -34,12 +34,16 @@ pub async fn members() -> Result<MembersView, ViewError> {
     Ok(server::members(&description, &dependencies))
 }
 
-/// Loads the integrity view: the incidents and the routing table.
+/// Loads the integrity view: the incidents and the page of the routing
+/// table that starts at `offset`.
 ///
 /// # Errors
 /// As [`members`].
-#[server]
-pub async fn integrity() -> Result<IntegrityView, ViewError> {
+#[server(endpoint = "integrity")]
+pub async fn integrity(
+    /// Where the page of the routing table starts.
+    offset: u64,
+) -> Result<IntegrityView, ViewError> {
     let (state, token) = server::signed_in()?;
     let gateway = state.gateway();
     let incidents = gateway
@@ -47,22 +51,25 @@ pub async fn integrity() -> Result<IntegrityView, ViewError> {
         .await
         .map_err(|error| server::refused(&error))?;
     let routes = gateway
-        .creating_systems(&token)
+        .creating_systems(&token, server::page(offset))
         .await
         .map_err(|error| server::refused(&error))?;
     Ok(server::integrity(&incidents, &routes))
 }
 
-/// Loads the stored-query view.
+/// Loads the page of the stored-query view that starts at `offset`.
 ///
 /// # Errors
 /// As [`members`].
-#[server]
-pub async fn stored_queries() -> Result<StoredView, ViewError> {
+#[server(endpoint = "stored-queries")]
+pub async fn stored_queries(
+    /// Where the page of held versions starts.
+    offset: u64,
+) -> Result<StoredView, ViewError> {
     let (state, token) = server::signed_in()?;
     let report = state
         .gateway()
-        .stored_queries(&token)
+        .stored_queries(&token, server::page(offset))
         .await
         .map_err(|error| server::refused(&error))?;
     Ok(server::stored(&report))
@@ -72,7 +79,7 @@ pub async fn stored_queries() -> Result<StoredView, ViewError> {
 ///
 /// # Errors
 /// As [`members`].
-#[server]
+#[server(endpoint = "federation")]
 pub async fn federation() -> Result<FederationView, ViewError> {
     let (state, token) = server::signed_in()?;
     let description = state
@@ -88,15 +95,18 @@ pub async fn federation() -> Result<FederationView, ViewError> {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server {
     use ferrofed_registry::health::DependencyReport;
-    use ferrofed_registry::operator::{CreatingSystemReport, IncidentReport, StoredQueryReport};
+    use ferrofed_registry::operator::{
+        CreatingSystemEntry, IncidentReport, MAX_PAGE, Page, PageRequest, RouteSource,
+    };
     use leptos::context::use_context;
     use openehr_federation::options::OptionsRoot;
+    use openehr_its::rest::generated::definition::StoredQuery;
 
     use crate::gateway::{AccessToken, GatewayError};
     use crate::server::ViewerState;
     use crate::views::model::{
-        FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, RouteRow, StoredRow,
-        StoredView, ViewError,
+        FederationView, IncidentRow, IntegrityView, MemberRow, MembersView, PAGE_SIZE, RouteRow,
+        StoredRow, StoredView, ViewError,
     };
 
     /// The console's state and the operator's access token, for a request
@@ -109,8 +119,11 @@ pub mod server {
     pub fn signed_in() -> Result<(ViewerState, AccessToken), ViewError> {
         let state = use_context::<ViewerState>().ok_or(ViewError::Unavailable)?;
         let parts = use_context::<http::request::Parts>().ok_or(ViewError::SignedOut)?;
-        let id = crate::oidc::cookie_named(&parts.headers, crate::session::COOKIE)
-            .ok_or(ViewError::SignedOut)?;
+        let id = crate::oidc::cookie_named(
+            &parts.headers,
+            &state.sessions().cookie_name(crate::session::COOKIE),
+        )
+        .ok_or(ViewError::SignedOut)?;
         let token = state
             .sessions()
             .access_token(&id)
@@ -123,8 +136,17 @@ pub mod server {
     /// and no body.
     #[must_use]
     pub fn refused(error: &GatewayError) -> ViewError {
+        if let Some(status) = error.unreadable() {
+            tracing::error!(%status, "the gateway answered a view with a body this console cannot read");
+            return ViewError::Unreadable {
+                status: status.as_u16(),
+            };
+        }
         if let Some((status, code)) = error.refusal() {
             tracing::warn!(%status, code = code.as_deref(), "the gateway refused a view");
+            if status == http::StatusCode::UNAUTHORIZED {
+                return ViewError::NotAuthenticated { code };
+            }
             ViewError::Refused {
                 status: status.as_u16(),
                 code,
@@ -174,7 +196,10 @@ pub mod server {
 
     /// The integrity view of `incidents` and `routes`.
     #[must_use]
-    pub fn integrity(incidents: &IncidentReport, routes: &CreatingSystemReport) -> IntegrityView {
+    pub fn integrity(
+        incidents: &IncidentReport,
+        routes: &Page<CreatingSystemEntry>,
+    ) -> IntegrityView {
         IntegrityView {
             counts: incidents
                 .counts
@@ -191,16 +216,18 @@ pub mod server {
                     description: recorded.description.clone(),
                 })
                 .collect(),
+            routes_offset: routes.offset,
+            routes_total: routes.total,
             routes: routes
-                .entries
+                .items
                 .iter()
                 .map(|entry| RouteRow {
                     creating_system_id: entry.creating_system_id.clone(),
                     source: match entry.source {
-                        ferrofed_registry::operator::RouteSource::Member => "member",
-                        ferrofed_registry::operator::RouteSource::Registered => "registered",
-                        ferrofed_registry::operator::RouteSource::Learned => "learned",
-                        ferrofed_registry::operator::RouteSource::Withdrawn => "withdrawn",
+                        RouteSource::Member => "member",
+                        RouteSource::Registered => "registered",
+                        RouteSource::Learned => "learned",
+                        RouteSource::Withdrawn => "withdrawn",
                     }
                     .to_owned(),
                     node: entry.node.clone(),
@@ -212,18 +239,36 @@ pub mod server {
 
     /// The stored-query view of `report`.
     #[must_use]
-    pub fn stored(report: &StoredQueryReport) -> StoredView {
+    pub fn stored(report: &Page<StoredQuery>) -> StoredView {
         StoredView {
             definitions: report
-                .definitions
+                .items
                 .iter()
                 .map(|entry| StoredRow {
                     name: entry.name.clone(),
                     version: entry.version.clone(),
                     saved: entry.saved.clone(),
-                    aql: entry.aql.clone(),
+                    aql: entry.q.clone(),
                 })
                 .collect(),
+            offset: report.offset,
+            total: report.total,
+        }
+    }
+
+    // NOTE: no specification governs this: our own design; a view never asks
+    // for more than the gateway answers in one page.
+    const _: () = assert!(
+        PAGE_SIZE <= MAX_PAGE && PAGE_SIZE > 0,
+        "a view asks for a page the gateway answers"
+    );
+
+    /// The page of at most [`PAGE_SIZE`] items that starts at `offset`.
+    #[must_use]
+    pub fn page(offset: u64) -> PageRequest {
+        PageRequest {
+            offset,
+            limit: PAGE_SIZE,
         }
     }
 

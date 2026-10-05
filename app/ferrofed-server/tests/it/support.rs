@@ -177,9 +177,15 @@ pub(crate) const OPERATOR_SCOPE: &str = "ferrofed:operator";
 /// Returns the `Authorization` value of an operator: the default [`claims`]
 /// with [`OPERATOR_SCOPE`] added to the scope.
 pub(crate) fn operator_bearer() -> Result<String, IssuerError> {
+    bearer_adding_scope(OPERATOR_SCOPE)
+}
+
+/// Returns the `Authorization` value of the default [`claims`] with `extra`
+/// added to the scope as one more token.
+pub(crate) fn bearer_adding_scope(extra: &str) -> Result<String, IssuerError> {
     let mut claims = claims();
     let scope = claims.scope.take().unwrap_or_default();
-    claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}").trim().to_owned());
+    claims.scope = Some(format!("{scope} {extra}").trim().to_owned());
     Ok(format!("Bearer {}", issuer().mint(&claims)?))
 }
 

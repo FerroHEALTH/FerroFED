@@ -86,6 +86,9 @@ pub enum ExchangeError {
         #[source]
         source: jsonwebtoken::errors::Error,
     },
+    /// The ID Token names an audience beyond this console's client id.
+    #[error("the ID Token names an audience beyond this console")]
+    Audience,
     /// The ID Token was issued to another client (`azp`).
     #[error("the ID Token was issued to another client")]
     AuthorizedParty,
@@ -101,7 +104,7 @@ impl ExchangeError {
     pub const fn refuses_the_operator(&self) -> bool {
         matches!(
             self,
-            Self::Key | Self::IdToken { .. } | Self::AuthorizedParty | Self::Nonce
+            Self::Key | Self::IdToken { .. } | Self::Audience | Self::AuthorizedParty | Self::Nonce
         )
     }
 }
@@ -119,8 +122,28 @@ struct TokenResponse {
 /// The ID Token claims the console checks beyond those the verifier checks.
 #[derive(Deserialize)]
 struct IdTokenClaims {
+    aud: Audience,
     nonce: Option<String>,
     azp: Option<String>,
+}
+
+/// An ID Token's `aud`: one string, or an array (OpenID Connect Core 1.0
+/// §2).
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Audience {
+    One(String),
+    Several(Vec<String>),
+}
+
+impl Audience {
+    /// Whether the audience is `client_id` and nothing else.
+    fn is_only(&self, client_id: &str) -> bool {
+        match self {
+            Self::One(audience) => audience == client_id,
+            Self::Several(audiences) => matches!(audiences.as_slice(), [only] if only == client_id),
+        }
+    }
 }
 
 /// Exchanges `code` for the operator's tokens and checks the ID Token
@@ -223,6 +246,11 @@ async fn verify_id_token(
     let claims = jsonwebtoken::decode::<IdTokenClaims>(id_token, &key, &validation)
         .map_err(|source| ExchangeError::IdToken { source })?
         .claims;
+    // NOTE: OpenID Connect Core 1.0 §3.1.3.7 item 3: a token with an audience
+    // beyond this client is refused, as no other audience is trusted here.
+    if !claims.aud.is_only(&oidc.client_id) {
+        return Err(ExchangeError::Audience);
+    }
     // NOTE: OpenID Connect Core 1.0 §3.1.3.7 item 6: an `azp` present names the
     // client the token was issued to, which must be this console.
     if claims

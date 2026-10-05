@@ -252,9 +252,17 @@ Three read-only routes on the client listener give the
 
 | Route | Answers |
 |---|---|
-| `GET {base}/operator/incidents` | how many integrity incidents of each kind the gateway emitted since it started, and the last 100 of them |
+| `GET {base}/operator/incidents` | how many integrity incidents of each kind the gateway emitted since it started, and the last 25 of each kind |
 | `GET {base}/operator/creating-systems` | the `creating_system_id` routing table: each member's own `system_id`, each `[[creating_system]]` mapping, and each learned or withdrawn mapping |
 | `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL |
+
+The routing table and the stored queries answer one page, as
+`{"items": [...], "offset": 0, "total": 2}`, where `total` counts every row
+and `items` holds at most `limit` of them from `offset`. Both query
+parameters are optional: `offset` defaults to `0` and `limit` to `100`, its
+most. A `limit` of `0` or over `100` is a `400` (`parameter-invalid`). A
+stored query is the ITS-REST `StoredQuery`: `name`, `type`, `version`,
+`saved` and `q`.
 
 A caller reaches them only with a token whose `scope` holds the
 `operator_scope` its issuer's entry names, as one whole scope token:
@@ -266,8 +274,9 @@ jwks_uri = "https://idp.example.org/jwks"
 operator_scope = "ferrofed:operator"
 ```
 
-A token without it is a `403` (`scope-insufficient`), and an issuer that
-names no `operator_scope` admits no operator at all. No purpose of use is
+A token without it is a `403` (`scope-insufficient`), and so is a token
+whose scope only contains it, starts with it or differs from it in case.
+An issuer that names no `operator_scope` admits no operator at all. No purpose of use is
 asked, because the routes answer no clinical data: routing ids, counts and
 stored definitions only. An incident names an `ehr_id` only when it is a
 bare UUID, and a stored definition names no patient, because the gateway

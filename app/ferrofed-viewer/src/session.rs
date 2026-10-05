@@ -34,11 +34,20 @@ use secrecy::{ExposeSecret as _, SecretString};
 
 use crate::config::settings::SessionSettings;
 
-/// The name of the cookie that carries a signed-in session.
+/// The name of the cookie that carries a signed-in session, under the
+/// `__Host-` prefix when the cookie is `Secure`.
 pub const COOKIE: &str = "ferrofed_viewer_session";
 
-/// The name of the short-lived cookie that carries a pending sign-in.
+/// The name of the short-lived cookie that carries a pending sign-in, under
+/// the `__Host-` prefix when the cookie is `Secure`.
 pub const SIGN_IN_COOKIE: &str = "ferrofed_viewer_sign_in";
+
+/// The cookie name prefix that binds a cookie to the host that set it.
+///
+/// It holds for a `Secure`, `Path=/` cookie with no `Domain`, so no sibling
+/// host can set or shadow it (RFC 6265bis §4.1.3.2), and a browser refuses
+/// it on a cookie that is not `Secure`.
+pub const HOST_PREFIX: &str = "__Host-";
 
 /// How many random bytes an id, a `state`, a `nonce` and a PKCE verifier
 /// carry: 256 bits, the entropy RFC 7636 §7.1 recommends for the verifier.
@@ -367,6 +376,26 @@ impl Sessions {
         })
     }
 
+    /// The name `base` takes on this console: [`HOST_PREFIX`] and `base` when
+    /// the cookies are `Secure`, and `base` alone when they are not.
+    #[must_use]
+    pub fn cookie_name(&self, base: &str) -> String {
+        if self.settings.secure_cookie {
+            format!("{HOST_PREFIX}{base}")
+        } else {
+            base.to_owned()
+        }
+    }
+
+    /// Ends the signed-in session `id`, if it is held.
+    ///
+    /// # Errors
+    /// Returns [`SessionError::Poisoned`] when the store is unusable.
+    pub fn end(&self, id: &SessionId) -> Result<(), SessionError> {
+        self.lock()?.sessions.remove(id);
+        Ok(())
+    }
+
     /// The `Set-Cookie` value that hands the browser the pending sign-in
     /// `id`, expiring with the sign-in.
     #[must_use]
@@ -396,8 +425,8 @@ impl Sessions {
     /// subrequest does not carry while the provider's redirect back does
     /// (`SameSite=Lax`), and that is `Secure` unless the configuration turns
     /// it off.
-    fn cookie(&self, name: &'static str, value: &str) -> cookie::CookieBuilder<'static> {
-        Cookie::build((name, value.to_owned()))
+    fn cookie(&self, base: &str, value: &str) -> cookie::CookieBuilder<'static> {
+        Cookie::build((self.cookie_name(base), value.to_owned()))
             .path("/")
             .http_only(true)
             .secure(self.settings.secure_cookie)
@@ -573,15 +602,15 @@ mod tests {
     }
 
     #[test]
-    fn the_cookies_are_http_only_lax_and_secure_and_the_sign_in_one_expires() {
+    fn the_cookies_are_host_bound_http_only_lax_and_secure_and_the_sign_in_one_expires() {
         let sessions = Sessions::new(settings());
         let id = SessionId::from_cookie("abc");
         assert_eq!(
-            "ferrofed_viewer_session=abc; HttpOnly; SameSite=Lax; Secure; Path=/",
+            "__Host-ferrofed_viewer_session=abc; HttpOnly; SameSite=Lax; Secure; Path=/",
             sessions.session_cookie(&id).to_string()
         );
         assert_eq!(
-            "ferrofed_viewer_sign_in=abc; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=60",
+            "__Host-ferrofed_viewer_sign_in=abc; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=60",
             sessions.sign_in_cookie(&id).to_string()
         );
         assert!(
@@ -590,6 +619,26 @@ mod tests {
                 .to_string()
                 .contains("Max-Age=0")
         );
+    }
+
+    #[test]
+    fn a_cookie_that_is_not_secure_carries_no_host_prefix_a_browser_would_refuse() {
+        let sessions = Sessions::new(SessionSettings {
+            secure_cookie: false,
+            ..settings()
+        });
+        assert_eq!(
+            "ferrofed_viewer_session",
+            sessions.cookie_name(super::COOKIE)
+        );
+    }
+
+    #[test]
+    fn an_ended_session_is_no_longer_live() {
+        let sessions = Sessions::new(settings());
+        let id = sessions.establish(signed_in()).expect("room");
+        sessions.end(&id).expect("usable");
+        assert!(sessions.access_token(&id).expect("usable").is_none());
     }
 
     #[test]

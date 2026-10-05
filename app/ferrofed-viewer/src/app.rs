@@ -131,6 +131,7 @@ fn NotFound() -> impl IntoView {
         response.set_status(http::StatusCode::NOT_FOUND);
     }
     view! {
+        <Title text=format!("Not found · {PRODUCT}") />
         <h1>"Not found"</h1>
         <p>
             <a href="/">"Back to the console"</a>

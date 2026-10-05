@@ -60,7 +60,7 @@ still builds the bundle; say which version ran. CI's `viewer` job runs the
 same script at the pinned version and gates the merge, so a local skip is not
 a pass.
 
-Browser journeys are planned with the query console (#277); until a journey
+Browser journeys are planned with the screens (#276, #277); until a journey
 script exists, report that stage as `SKIPPED(no journeys yet)`.
 
 ## Report

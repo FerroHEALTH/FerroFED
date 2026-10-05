@@ -112,11 +112,11 @@ pub async fn callback(
     headers: HeaderMap,
     Query(query): Query<CallbackQuery>,
 ) -> Response {
-    let Some(id) = cookie_named(&headers, SIGN_IN_COOKIE) else {
+    let Some(id) = cookie_named(&headers, &state.sessions().cookie_name(SIGN_IN_COOKIE)) else {
         return plain(StatusCode::BAD_REQUEST, "no sign-in is pending");
     };
     let mut response = match state.sessions().take_pending(&id) {
-        Ok(Some(pending)) => redirected(&state, &pending, &query).await,
+        Ok(Some(pending)) => redirected(&state, &headers, &pending, &query).await,
         Ok(None) => plain(StatusCode::BAD_REQUEST, "no sign-in is pending"),
         Err(error) => return refused(&error),
     };
@@ -134,6 +134,7 @@ pub async fn callback(
 /// code exchanged, the ID Token checked, and a signed-in session begun.
 async fn redirected(
     state: &ViewerState,
+    headers: &HeaderMap,
     pending: &PendingSignIn,
     query: &CallbackQuery,
 ) -> Response {
@@ -181,6 +182,15 @@ async fn redirected(
             );
         }
     };
+    // NOTE: no specification governs this: our own design; a new sign-in ends
+    // the session the browser held, so signing in again never fills the pool.
+    if let Some(replaced) = cookie_named(
+        headers,
+        &state.sessions().cookie_name(crate::session::COOKIE),
+    ) && let Err(error) = state.sessions().end(&replaced)
+    {
+        return refused(&error);
+    }
     let id = match state.sessions().establish(signed_in) {
         Ok(id) => id,
         Err(error) => return refused(&error),
