@@ -15,6 +15,7 @@ use ferrofed_engine::declared::Carrier;
 use ferrofed_engine::dispatch::DispatchError;
 use ferrofed_engine::fanout::FanOutError;
 use ferrofed_engine::hygiene::Part;
+use ferrofed_registry::definition::{QueryName, QueryVersion};
 use ferrofed_registry::id::EndpointId;
 use openehr_federation::aql::PatientQuery;
 use openehr_federation::aql::refusal::Refusal;
@@ -139,6 +140,20 @@ pub(super) fn definition_refused(at: Option<&Range<usize>>, request_id: &str) {
         at = %Position(at),
         request_id,
         "a stored-query definition named its patient by a literal, and was not stored"
+    );
+}
+
+/// A definition a stored-query store holds was refused on a read, because it
+/// names its patient by a literal or does not admit as a definition, so it
+/// is never served or run (§12.7, §5.4.1, N33); the event names the
+/// definition, never its text.
+pub(crate) fn held_definition_refused(name: &QueryName, version: QueryVersion) {
+    tracing::warn!(
+        target: TARGET,
+        event = "held-definition-refused",
+        name = %name,
+        version = %version,
+        "a definition the stored-query store holds was refused, and is not served or run"
     );
 }
 
