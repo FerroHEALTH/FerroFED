@@ -244,8 +244,12 @@ The outage is never silent: the answer to a query carries it as
 ([The client contract](../integrate/client-contract.md)), the pre-filter's
 state on `GET {base}/health/dependencies` turns `down` or `failing`
 ([Health probes](health.md)), and each call is counted in
-`ferrofed_consent_prefilter_requests_total` ([Metrics](metrics.md)). The
-pre-filter applies to every patient route: a federated query and the read
+`ferrofed_consent_prefilter_requests_total` ([Metrics](metrics.md)). A call
+the pre-filter could not put to its service at all, for the patient's
+namespace or for missing caller claims, is counted as `not-asked` with that
+reason and leaves the health state as it was, since the service saw
+nothing. The client's answer is the one a pre-filter that found nothing
+gives. The pre-filter applies to every patient route: a federated query and the read
 of an EHR by subject
 ([Follow-ups](../integrate/follow-ups.md#reading-an-ehr-by-subject)).
 `OPTIONS {base}/` declares a configured pre-filter under `federation.consent`,
@@ -327,7 +331,8 @@ What a deployment must provide:
   `urn:oid:2.16.840.1.113883.2.4.6.3` or dotted) or in one `namespaces`
   lists. A patient named by the pseudonymised BSN, as the NVI requires,
   cannot be asked about: the pre-filter then carries no consent signal and
-  every candidate is asked. The pseudonym's system is never accepted in
+  every candidate is asked, and the call is counted as `not-asked` with the
+  reason `namespace` ([Metrics](metrics.md)). The pseudonym's system is never accepted in
   `namespaces`. The BSN reaches Mitz and nothing else: never a node, a log
   line or an error.
 - **A holder per member.** Every registry member needs a `type`, and one
@@ -345,7 +350,8 @@ What a deployment must provide:
   specification the gateway binds names these claims, so each is configured
   and none has a default. A caller whose token does not carry all four is
   not asked about: Mitz is not called, no member is filtered, and each node
-  checks consent itself (N27).
+  checks consent itself (N27). The call is counted as `not-asked` with the
+  reason `caller-claims`.
 - **TLS.** The `url` must be `https` outside `profile = "development"`.
   `credentials` takes a bearer token or basic credentials, never an OAuth
   2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission

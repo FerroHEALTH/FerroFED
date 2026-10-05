@@ -26,7 +26,7 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::consent::{ConsentDecision, ConsentError, ConsentPrefilter};
+use ferrofed_identity::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked};
 use ferrofed_identity::patient::PatientRef;
 use ferrofed_identity::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::{EhrId, NodeId};
@@ -63,6 +63,8 @@ enum Script {
     Answers(StatusCode),
     /// The service denies asking `node-b`.
     DeniesB,
+    /// The pre-filter does not ask its service, for the reason given.
+    Skips(NotAsked),
 }
 
 #[async_trait]
@@ -87,6 +89,7 @@ impl ConsentPrefilter for Script {
                     .cloned()
                     .collect(),
             ),
+            Self::Skips(reason) => ConsentDecision::NotAsked(*reason),
         }
     }
 
@@ -309,6 +312,83 @@ async fn each_prefilter_call_is_counted_by_outcome() -> TestResult {
     assert_eq!(StatusCode::OK, status);
     assert_eq!(Some("1".to_owned()), prefilter_calls(&state, "denied")?);
     assert_eq!(None, prefilter_calls(&state, "unavailable")?);
+    Ok(())
+}
+
+/// Both reasons a pre-filter does not ask its service.
+const REASONS: [NotAsked; 2] = [NotAsked::Namespace, NotAsked::CallerClaims];
+
+#[tokio::test]
+async fn a_call_that_did_not_ask_is_counted_not_asked_by_its_reason() -> TestResult {
+    for reason in REASONS {
+        let a = node_answering("uid-at-a").await;
+        let b = node_answering("uid-at-b").await;
+        let (app, state) = scripted((&a, &b), KnownAt(BOTH), Script::Skips(reason))?;
+        let (status, text) = call(app, post(body(&patient_query())?)?).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+        let rendered = state.metrics().render()?;
+        let samples = parse(&rendered)?;
+        assert_eq!(
+            Some("1".to_owned()),
+            count(
+                &samples,
+                PREFILTER_CALLS,
+                &[("outcome", "not-asked"), ("reason", reason.as_str())]
+            ),
+            "{reason:?}"
+        );
+        assert_eq!(
+            None,
+            prefilter_calls(&state, "no-signal")?,
+            "{reason:?}: a call that did not ask is never counted as answered"
+        );
+        assert!(
+            !rendered.contains(PATIENT),
+            "§5.4.1, N33: no label carries the identifier"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_call_that_did_not_ask_leaves_the_health_report_as_it_was() -> TestResult {
+    for reason in REASONS {
+        let a = node_answering("uid-at-a").await;
+        let b = node_answering("uid-at-b").await;
+        let (app, _state) = scripted((&a, &b), KnownAt(BOTH), Script::Skips(reason))?;
+        let (status, text) = call(app.clone(), post(body(&patient_query())?)?).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+        assert_eq!(
+            Some("unknown".to_owned()),
+            consent_state(&app).await?,
+            "{reason:?}: the service saw nothing, so the report observed nothing"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_query_the_prefilter_did_not_ask_about_asks_every_member_and_carries_no_consent_member()
+-> TestResult {
+    for reason in REASONS {
+        let a = node_answering("uid-at-a").await;
+        let b = node_answering("uid-at-b").await;
+        let (app, _state) = scripted((&a, &b), KnownAt(BOTH), Script::Skips(reason))?;
+        let (status, text) = call(app, post(body(&patient_query())?)?).await?;
+        assert_eq!(StatusCode::OK, status, "{text}");
+        let answer: crate::facade::Answer = serde_json::from_str(&text)?;
+        assert_eq!(
+            vec![("node-a-pub", "active"), ("node-b-pub", "active")],
+            statuses(&answer),
+            "N27: {reason:?}: no signal, so each node checks consent itself"
+        );
+        assert!(answer.meta.federation.complete, "{reason:?}");
+        let carried: WithConsent = serde_json::from_str(&text)?;
+        assert!(
+            carried.meta.federation.consent.is_none(),
+            "{reason:?}: not asking is no outage: {text}"
+        );
+    }
     Ok(())
 }
 

@@ -67,6 +67,9 @@ fn denied(decision: ConsentDecision) -> Result<Option<BTreeSet<String>>, Box<dyn
     match decision {
         ConsentDecision::Denied(set) => Ok(Some(set.iter().map(ToString::to_string).collect())),
         ConsentDecision::NoSignal => Ok(None),
+        ConsentDecision::NotAsked(reason) => {
+            Err(format!("the table is always consulted, never not asked: {reason:?}").into())
+        }
         ConsentDecision::Unavailable(error) | ConsentDecision::Partial { failure: error, .. } => {
             Err(error.into())
         }

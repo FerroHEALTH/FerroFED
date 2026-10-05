@@ -25,6 +25,7 @@
 )]
 
 mod node;
+mod not_asked;
 mod routed;
 
 use std::collections::BTreeMap;
@@ -152,7 +153,7 @@ pub(super) const NOWHERE: &[(&str, &str)] = &[];
 /// pre-filtering through `prefilter`, under `disclosure`.
 fn gateway_over(
     nodes: (&Server, &Server),
-    scripted: (Crossref, Denies),
+    scripted: (Crossref, impl ConsentPrefilter + 'static),
     disclosure: ConsentDisclosure,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     gateway_with(nodes, "", scripted, disclosure)
@@ -162,7 +163,7 @@ fn gateway_over(
 fn gateway_with(
     (a, b): (&Server, &Server),
     extra: &str,
-    (crossref, prefilter): (Crossref, Denies),
+    (crossref, prefilter): (Crossref, impl ConsentPrefilter + 'static),
     disclosure: ConsentDisclosure,
 ) -> Result<(Router, Arc<AppState>), Box<dyn Error>> {
     let snapshot = RegistrySnapshot::from_toml_str(&registry(&a.uri(), &b.uri(), extra))?;

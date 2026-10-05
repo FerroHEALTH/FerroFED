@@ -19,10 +19,11 @@
 //! Mitz is asked by BSN (the Implementatiehandleiding Open en gesloten
 //! autorisatievraag 3.8.2 §3.2.4.2), so the patient must be named in a BSN
 //! system or in a namespace the configuration lists as standing for it. A
-//! patient named by a pseudonymised BSN cannot be asked about, and the
-//! pre-filter then carries no consent signal. The BSN reaches Mitz only,
-//! inside the binding crate's redacting types; nothing here logs it, and no
-//! error carries it.
+//! patient named by a pseudonymised BSN cannot be asked about: the pre-filter
+//! answers that it did not ask ([`NotAsked::Namespace`]), as it does for a
+//! caller whose token names no requester ([`NotAsked::CallerClaims`]). The
+//! BSN reaches Mitz only, inside the binding crate's redacting types; nothing
+//! here logs it, and no error carries it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -45,7 +46,7 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::consent::{ConsentDecision, ConsentError, ConsentPrefilter, Requester};
+use crate::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester};
 use crate::fhir::{self, Authentication, Tls};
 use crate::nvi::{NviConfigError, derived, is_bsn_system};
 use crate::patient::{IdentifierNamespace, PatientRef};
@@ -303,12 +304,12 @@ impl ConsentPrefilter for MitzPrefilter {
         // NOTE: Implementatiehandleiding §3.2.4.2 asks by BSN; a patient named otherwise,
         // such as by the pseudonym of Annex B §B.7, cannot be asked about, so no signal.
         if !self.takes(patient.namespace()) {
-            return ConsentDecision::NoSignal;
+            return ConsentDecision::NotAsked(NotAsked::Namespace);
         }
         // NOTE: Implementatiehandleiding §3.2.4.2, §13.4: the professional asked about is the
         // verified caller, so a token that does not name them asks nothing and filters no one.
         let Some(requester) = requester else {
-            return ConsentDecision::NoSignal;
+            return ConsentDecision::NotAsked(NotAsked::CallerClaims);
         };
         let user = match data_user(requester) {
             Ok(user) => user,

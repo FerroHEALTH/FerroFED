@@ -62,6 +62,10 @@ pub enum ConsentDecision {
     Denied(BTreeSet<NodeId>),
     /// The service answered and carries no consent signal for any candidate.
     NoSignal,
+    /// The pre-filter did not ask its service about this patient, for the
+    /// reason given, so it carries no consent signal and every candidate is
+    /// asked, as under [`ConsentDecision::NoSignal`].
+    NotAsked(NotAsked),
     /// The service could not answer.
     Unavailable(ConsentError),
     /// The service denied asking `denied` and could not answer for some
@@ -73,6 +77,30 @@ pub enum ConsentDecision {
         /// Why the service could not answer for the others.
         failure: ConsentError,
     },
+}
+
+/// Why a consent pre-filter did not ask its service about a patient.
+///
+/// The set is closed, and neither reason carries a value of the request, so
+/// a reason may name a metric series (§5.4.1, N33).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NotAsked {
+    /// The patient is named in a namespace the service is not asked by.
+    Namespace,
+    /// The verified caller's token does not state the claims the service is
+    /// asked on behalf of.
+    CallerClaims,
+}
+
+impl NotAsked {
+    /// Returns the reason's name: `namespace` or `caller-claims`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Namespace => "namespace",
+            Self::CallerClaims => "caller-claims",
+        }
+    }
 }
 
 /// Who asks for the patient's data, as the verified caller's token states it

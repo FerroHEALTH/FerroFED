@@ -66,9 +66,9 @@ pub(crate) async fn prefilter(
         .prefilter(patient, requester, candidates, deadline)
         .instrument(span)
         .await;
-    federation
-        .dependencies()
-        .consent(Observed::of_consent(&decision));
+    if let Some(observed) = Observed::of_consent(&decision) {
+        federation.dependencies().consent(observed);
+    }
     federation.requests().prefiltered(&decision);
     match decision {
         ConsentDecision::Denied(refused) => Prefiltered {
@@ -76,6 +76,15 @@ pub(crate) async fn prefilter(
             unavailable: None,
         },
         ConsentDecision::NoSignal => Prefiltered::default(),
+        ConsentDecision::NotAsked(reason) => {
+            // NOTE: N26, N27, N27a, §13.2.1: a pre-filter that did not ask carries no consent
+            // signal, so every candidate is asked; the event names the closed reason only.
+            tracing::debug!(
+                reason = reason.as_str(),
+                "the consent pre-filter did not ask its service; every candidate is asked"
+            );
+            Prefiltered::default()
+        }
         ConsentDecision::Unavailable(failure) => {
             // NOTE: N26, N27, N27a, §13.2.1: no consent signal leaves the node as the sole
             // gate, so every candidate is asked; the event names the failure, never a value.
