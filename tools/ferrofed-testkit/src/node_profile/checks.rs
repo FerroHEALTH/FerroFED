@@ -28,6 +28,12 @@ fn ehr_query(ehr_id: Uuid) -> String {
     format!("SELECT e/ehr_id/value FROM EHR e WHERE e/ehr_id/value = '{ehr_id}'")
 }
 
+/// The query of the EHR itself, scoped by its `ehr_id` in the `EHR`
+/// predicate, which answers one row when the node holds the EHR.
+fn ehr_predicate_query(ehr_id: Uuid) -> String {
+    format!("SELECT e/ehr_id/value FROM EHR e[ehr_id/value='{ehr_id}']")
+}
+
 /// The query of the EHR's compositions, scoped by its `ehr_id` in the `EHR`
 /// predicate.
 fn composition_query(ehr_id: Uuid) -> String {
@@ -359,20 +365,6 @@ async fn refusal(
             ),
         )
     });
-    let query = interface.query(&ehr_query(ehr_id), permitted).await?;
-    seen.push(match (query.status, rows(&query)) {
-        (StatusCode::OK, Some(n)) if n > 0 => (
-            Verdict::Pass,
-            format!("the ehr_id-scoped query as the permitted principal answered {n} row(s)"),
-        ),
-        (status, _) => (
-            Verdict::NotObservable,
-            format!(
-                "the ehr_id-scoped query as the permitted principal answered {status} with no row, so a refusal of another shows nothing"
-            ),
-        ),
-    });
-
     let read = interface.get(&format!("ehr/{ehr_id}"), refused).await?;
     seen.push(withheld(
         &read,
@@ -382,18 +374,35 @@ async fn refusal(
         ),
         false,
     ));
-    let query = interface.query(&ehr_query(ehr_id), refused).await?;
-    seen.push(withheld(
-        &query,
-        "the query scoped by e/ehr_id/value as the refused principal",
-        true,
-    ));
-    let predicate = interface.query(&composition_query(ehr_id), refused).await?;
-    seen.push(withheld(
-        &predicate,
-        "the query scoped by EHR e[ehr_id/value] as the refused principal",
-        true,
-    ));
+
+    let forms = [
+        (ehr_query(ehr_id), "the query scoped by e/ehr_id/value"),
+        (
+            ehr_predicate_query(ehr_id),
+            "the query scoped by EHR e[ehr_id/value]",
+        ),
+    ];
+    for (aql, form) in &forms {
+        let served = interface.query(aql, permitted).await?;
+        seen.push(match (served.status, rows(&served)) {
+            (StatusCode::OK, Some(n)) if n > 0 => (
+                Verdict::Pass,
+                format!("{form} as the permitted principal answered {n} row(s)"),
+            ),
+            (status, _) => (
+                Verdict::NotObservable,
+                format!(
+                    "{form} as the permitted principal answered {status} with no row, so a refusal of another shows nothing"
+                ),
+            ),
+        });
+        let answer = interface.query(aql, refused).await?;
+        seen.push(withheld(
+            &answer,
+            &format!("{form} as the refused principal"),
+            true,
+        ));
+    }
     Ok(Finding::from_observations(check, seen))
 }
 

@@ -352,6 +352,45 @@ async fn a_refusal_the_permitted_principal_gets_too_shows_nothing() -> TestResul
 }
 
 #[tokio::test]
+async fn a_query_form_that_serves_no_row_to_the_permitted_principal_shows_nothing() -> TestResult {
+    let server = Server::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/ehr/{EHR}")))
+        .and(basic_auth("permitted", "permitted-example"))
+        .respond_with(json(200, ehr_body(EHR)))
+        .mount(&server)
+        .await;
+    for (form, count) in [(WHERE_FORM, 1), (PREDICATE_FORM, 0)] {
+        Mock::given(method("POST"))
+            .and(path("/v1/query/aql"))
+            .and(basic_auth("permitted", "permitted-example"))
+            .and(body_string_contains(form))
+            .respond_with(json(200, result_set(count)))
+            .mount(&server)
+            .await;
+    }
+    Mock::given(method("GET"))
+        .and(basic_auth("refused", "refused-example"))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(basic_auth("refused", "refused-example"))
+        .respond_with(json(200, result_set(0)))
+        .mount(&server)
+        .await;
+    let arrangement = Arrangement::new(EHR, permitted(), refused());
+
+    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    assert_eq!(
+        Verdict::NotObservable,
+        finding.verdict(),
+        "an empty answer to the refused principal proves nothing where the permitted one gets none either: {finding:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_consent_refusal_is_observed_under_its_own_point() -> TestResult {
     let server = Server::start().await;
     arranged(&server, 403, 403, 0).await;
