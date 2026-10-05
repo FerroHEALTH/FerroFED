@@ -53,6 +53,20 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
   federation whose nodes hold to the FAPI 2.0 Security Profile, which admits
   ES256 and not ES384 (§5.4.1), signs with a P-256 key. A key on any other
   curve refuses the configuration, naming the key.
+- The Federation-Node profile runs against a second CDR product, EHRbase,
+  behind `FERROFED_E2E` (#549; §16.2, N26, N27, N34, CP-18, CP-19, CP-27,
+  CP-33a). The testkit pins `ehrbase/ehrbase` 2.36.0 and the
+  `ehrbase/ehrbase-v2-postgres` 16.2 database image by digest, each a
+  `docs/VERSIONS.md` row the versions guard compares, and every node profile
+  check runs against it in the `e2e (containers)` job and writes its findings
+  beside FerroEHR's. For the access check (CP-18) an EHRbase started with
+  Basic authentication withholds the request path of one EHR from its user
+  role, the narrowest refusal its `security.additionalAuthorizations`
+  expresses; it records no consent decision, so the consent check (CP-19)
+  reports not observable with that reason. The conformance report shows the
+  findings of each product side by side under the node class, then each
+  product's evidence. No specification governs which products the harness
+  runs: our own design.
 - Track 11, the integrity suite, against the two FerroEHR nodes of the
   harness behind `FERROFED_E2E` (#91; §16.3 track 11, §12.5.1, §12.5.2,
   §12b, N41, N42, N42a, CP-33, CP-33a). The harness seeds one `ehr_id` at
