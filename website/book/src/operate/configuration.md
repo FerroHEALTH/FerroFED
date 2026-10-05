@@ -69,7 +69,7 @@ configuration of [the quickstart](container.md#the-quickstart) prints this:
   Federation Tier  0.9.0
   ITS-REST         1.1.0
   AQL              1.1.0
-  openehr-*        0.0.82
+  openehr-*        0.0.83
 
   Base path        /
   Listen           0.0.0.0:8080

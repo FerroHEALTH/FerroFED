@@ -7,10 +7,12 @@
 //! node's demanded nonce once (§9).
 //!
 //! The `openehr-its` client answers that nonce by sending the request once
-//! more, and fails `DeadlineElapsed` or `DpopProof` when it cannot. Either
-//! error reads as a request never sent, though here the first request left
-//! and the node answered it. Each call's prover records what it saw
-//! ([`Sent`]), so such a call is read as a request that left.
+//! more, and fails `DeadlineElapsed` or `DpopProof` when it cannot. The
+//! deadline says itself whether an earlier send went out (its `sent`). A
+//! `DpopProof` reads as a request never sent, though for the re-send the
+//! first request left and the node answered it, so each call's prover
+//! records what it saw ([`Sent`]) and such a call is read as a request
+//! that left.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -86,15 +88,18 @@ impl Sent {
         self.0.store(true, Ordering::SeqCst);
     }
 
-    /// Whether `error`, which reads as a request never sent, ended a call
-    /// whose request evidently left: a deadline that passed before the
-    /// nonce re-send, or a re-send no proof could be made for.
+    /// Whether `error` ended a call whose request had left: a deadline the
+    /// client says passed after a send of the call, such as before the
+    /// nonce re-send, or a re-send no proof could be made for, which only
+    /// this evidence shows.
     pub(crate) fn contradicts(&self, error: &ClientError) -> bool {
-        self.evident()
-            && matches!(
-                error,
-                ClientError::DeadlineElapsed { .. } | ClientError::DpopProof { .. }
-            )
+        match error {
+            // NOTE: openehr-its 0.0.83 ClientError::DeadlineElapsed (docs.rs): `sent` says
+            // whether an earlier send of the call went out, so the client is read, not inferred.
+            ClientError::DeadlineElapsed { sent, .. } => *sent,
+            ClientError::DpopProof { .. } => self.evident(),
+            _ => false,
+        }
     }
 }
 
