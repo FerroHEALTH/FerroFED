@@ -1,6 +1,6 @@
 ---
 name: license-busl
-description: "FerroFED's own code and text are under the Business Source License 1.1 with Cadasto B.V. as Licensor (#1, #2, 2026-09-16; holder changed by #602, 2026-10-05) and the contribution-licence terms, checkbox and guard (#3, #4); Apache 2.0 is the Change License four years after each version"
+description: "FerroFED's own code and text are under the Business Source License 1.1 with Cadasto B.V. as Licensor (#1, #2, 2026-09-16; holder changed by #602, 2026-10-05; the commercial licence contact since #616, 2026-10-05) and the contribution-licence terms, checkbox and guard (#3, #4); Apache 2.0 is the Change License four years after each version"
 metadata:
   type: project
 ---
@@ -20,6 +20,11 @@ The terms, as `LICENSE` and `NOTICE` state them:
 - Free to read, build, modify, and redistribute.
 - Free for every non-production use and for non-commercial production use.
 - A commercial licence from the Licensor for any other production use.
+  Cadasto B.V. runs the business side: the commercial licence and every
+  other business or licensing question go to info@cadasto.com or
+  https://www.cadasto.com/contact/ (owner, 2026-10-05, #616). The maintainer
+  handles the technical side only: code, review, releases, issues and
+  security reports.
 - The Change License is Apache License 2.0, four years after each version.
 - A contribution is licensed under the same licence and grants the Licensor a
   relicensing right; the contributor keeps their copyright, and there is no

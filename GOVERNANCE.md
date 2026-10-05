@@ -13,9 +13,14 @@ a reviewer to rely on a control that is not there.
 ## Current structure: benevolent dictator, one maintainer
 
 FerroFED has a single maintainer ([MAINTAINERS.md](MAINTAINERS.md)) who
-holds final say on every decision: what gets built, what gets merged, what gets
-released, and what the project refuses to do. There is no steering committee,
-no technical oversight body, no foundation, and no vote.
+holds final say on every technical decision: what gets built, what gets
+merged, what gets released, and what the project refuses to do. There is no
+steering committee, no technical oversight body, no foundation, and no vote.
+
+Cadasto B.V. is the Licensor and the copyright holder named in
+[LICENSE](LICENSE), and it handles the business side of the project: the
+commercial licence and any other business or licensing question
+([MAINTAINERS.md § Commercial licensing](MAINTAINERS.md#commercial-licensing)).
 
 This is the standard structure for a project of this age and size, and it
 carries the standard trade-off: decisions are fast and coherent, and the
