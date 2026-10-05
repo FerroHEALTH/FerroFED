@@ -264,6 +264,43 @@ pub enum FederationError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    /// A public document a binding serves would sit inside the ITS-REST
+    /// surface, `{base}/v1/`, where the client authentication gate reads
+    /// every request.
+    #[error("the public document at {path} would sit inside the ITS-REST surface {surface}")]
+    DocumentInSurface {
+        /// The document's path.
+        path: String,
+        /// The surface's path prefix.
+        surface: String,
+    },
+    /// Two public documents would be served at one path.
+    #[error("two public documents would be served at {path}")]
+    DocumentTwice {
+        /// The path both claim.
+        path: String,
+    },
+    /// The DID document of a Nuts grant's holder cannot be built from the
+    /// holder keys of the grants that present as it (Nuts RFC021 §4.2).
+    #[error("the DID document of {did} cannot be built from its Nuts grants' keys")]
+    #[cfg(feature = "binding-nl")]
+    DidDocument {
+        /// The holder's DID, public.
+        did: String,
+        /// Why it cannot be built; it carries no key material.
+        #[source]
+        source: nl_generic_functions::nuts_auth::did_document::DocumentError,
+    },
+    /// The DID document of a Nuts grant's holder cannot be written as JSON.
+    #[error("the DID document of {did} cannot be written")]
+    #[cfg(feature = "binding-nl")]
+    DidDocumentJson {
+        /// The holder's DID, public.
+        did: String,
+        /// What the writer reported.
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 impl From<GrantRefused> for FederationError {

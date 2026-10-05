@@ -19,7 +19,7 @@ use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
 use openehr_its::rest::client::ReqwestTransport;
 
-use crate::binding::{self, Role};
+use crate::binding::{self, PublicDocument, Role};
 use crate::config::NodeSelection;
 use crate::config::auth::PatientBinding;
 use crate::config::settings::{ConsentDisclosure, Scheme, Settings};
@@ -211,6 +211,7 @@ impl Federation {
             signing: settings.signing.clone(),
             signer: Some(signer),
             client_keys: client_keys(settings),
+            documents: documents(settings)?,
         };
         options::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -262,8 +263,41 @@ impl Federation {
             signing: None,
             signer: None,
             client_keys: Vec::new(),
+            documents: Vec::new(),
         }
     }
+}
+
+/// The public documents every compiled binding has the gateway serve, each
+/// at a path of its own outside the ITS-REST surface, `{base}/v1/`.
+///
+/// # Errors
+///
+/// A binding's [`FederationError`] for a document it cannot build,
+/// [`FederationError::DocumentInSurface`] for one inside the surface, and
+/// [`FederationError::DocumentTwice`] for two at one path.
+fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
+    let surface = settings.server.base_path.join(crate::ITS_REST_PREFIX);
+    let mut documents: Vec<PublicDocument> = Vec::new();
+    for binding in binding::compiled() {
+        for document in binding.documents(settings)? {
+            // NOTE: no specification governs this: our own design; the client
+            // authentication gate reads every request under the surface.
+            if document.path.starts_with(&surface) {
+                return Err(FederationError::DocumentInSurface {
+                    path: document.path,
+                    surface,
+                });
+            }
+            if documents.iter().any(|known| known.path == document.path) {
+                return Err(FederationError::DocumentTwice {
+                    path: document.path,
+                });
+            }
+            documents.push(document);
+        }
+    }
+    Ok(documents)
 }
 
 /// The public half of the client key of every FAPI 2.0 grant `settings`
