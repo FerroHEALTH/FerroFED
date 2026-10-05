@@ -18,11 +18,14 @@ on:
 
 permissions: {}
 
-# One concurrency group serializes the Pages deployment. cancel-in-progress is
-# false so an in-flight publish finishes instead of being cut off half-written.
+# A push to main or a dispatch shares the `pages` group, which serializes the
+# Pages deployment; cancel-in-progress is false so an in-flight publish finishes
+# instead of being cut off half-written. A pull request only builds, so it gets
+# a group of its own per ref: GitHub keeps one pending run per group, and a
+# pull request run in `pages` cancelled the deploy waiting behind it.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Render the site and upload it as the Pages artifact. Runs on every event,
