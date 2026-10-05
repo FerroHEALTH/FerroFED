@@ -18,9 +18,9 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.9
+## Status: building v0.0.10
 
-v0.0.8 is released (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
+v0.0.9 is released (2026-10-05), and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
 membership (§12.6, §12.7, §12b): definition requests routed to one chosen node, the
 template fan-out, the stored-query registry with its storage backends and
 drift repair, the admission check, the metrics surface, every credential held
@@ -43,7 +43,7 @@ ATNA ITI-20, the BALP records with a bounded spool (#418, #486, #512);
 traces export over OpenTelemetry (#353); and the identity clients share one
 TLS type with mutual TLS (#507).
 
-v0.0.9, being built, carries the conformance program (#89): the Connectathon
+v0.0.9 carries the conformance program (#89): the Connectathon
 tracks 1 to 9 as scenarios with a per-track and per-point report (#92), the
 leakage and integrity suites of tracks 10 and 11 (#90, #91), the node
 profile run against FerroEHR 4.3.3 and EHRbase 2.36.0 pinned by digest (#93,
@@ -68,14 +68,21 @@ pre-filter that says it did not ask, with a closed `NotAsked` reason (#496,
 each IHE audit record (#500); the operator console, `app/ferrofed-viewer`,
 with its own image (#275), the operator views over a read-only operator
 surface (#276, #583), sign-out (#584), the query console (#277) and the
-compressed bundle (#600), its browser journeys still to come (#608); the
+compressed bundle (#600), and its browser journeys in headless Chrome
+(#608); the secure-cookie guard (#615); the
 country research (#488); FerroFED's intended
 purpose and EHDS classification (#520); changelog fragments (#598); and
 Cadasto B.V. as the Licensor (#602). The re-pin to the specification's 1.0
 release moved to v0.0.10 (#17, #354).
-v0.0.10 is EHDS readiness (#519): FerroFED is an EHR system under Regulation
-(EU) 2025/327, and its harmonised components are due before the dates the
-Regulation applies. v0.0.11 plans configuration from the file and from the
+v0.0.10, being built, is EHDS readiness (#519): FerroFED is an EHR system
+under Regulation (EU) 2025/327, and its harmonised components, the logging
+of every access, the exchange format, the national contact point face and
+the conformity file are due before the dates the Regulation applies. It
+also carries the production gaps the end-to-end audit found (#622 to #634,
+#639 to #641): identity resolution in production, zero-downtime restarts,
+several replicas, metrics, overload protection, TLS on the listener, and the
+production, upgrade, data-protection and threat-model pages. v0.0.12 plans
+operations packaging (#638, #644, #645). v0.0.11 plans configuration from the file and from the
 console as one set of versioned revisions (#575). Each crate gets the rest of
 its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
