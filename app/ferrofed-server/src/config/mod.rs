@@ -185,7 +185,8 @@ pub enum RegistryFormat {
     #[default]
     Toml,
     /// A FHIR R4 JSON `Bundle` of `Organization` and `Endpoint` resources, the
-    /// form N19 recommends.
+    /// form N19 recommends, read with the IHE binding's mCSD reader.
+    #[cfg(feature = "binding-ihe")]
     Fhir,
 }
 

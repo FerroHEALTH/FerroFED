@@ -17,7 +17,6 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use nl_generic_functions::oauth_metadata;
 use serde::Deserialize;
 use serde_json::value::RawValue;
 
@@ -87,7 +86,7 @@ impl AuthorizationDetails {
     /// array, and [`AuthorizationDetailsError::Untyped`] for an object
     /// without a `type`.
     pub fn parse(text: &str) -> Result<Self, AuthorizationDetailsError> {
-        oauth_metadata::repeats_no_name(text.as_bytes())
+        oauth_server_metadata::repeats_no_name(text.as_bytes())
             .map_err(AuthorizationDetailsError::Json)?;
         let types = types_of(text)?;
         let text = serde_json::from_str::<Box<RawValue>>(text.trim())

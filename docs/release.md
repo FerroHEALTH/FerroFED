@@ -171,8 +171,9 @@ next real cut. A tag with a suffix (`v0.0.1-rc.1`) publishes as a pre-release.
 ## The crates.io lane
 
 The library crates under `crates/` (`openehr-federation`, `ihe-iti`,
-`nl-generic-functions`) publish behind one switch: the root `Cargo.toml` sets
-`[workspace.package] publish = false`, every `crates/*` member inherits it, and
+`nl-generic-functions`, `oauth-server-metadata`) publish behind one switch: the
+root `Cargo.toml` sets `[workspace.package] publish = false`, every `crates/*`
+member inherits it, and
 `app/*` and `tools/*` carry a hard `publish = false` of their own
 (`docs/architecture.md` section 11, decision A35).
 

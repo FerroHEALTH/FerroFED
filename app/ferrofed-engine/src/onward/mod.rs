@@ -41,7 +41,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ferrofed_registry::secret::SecretUrl;
-use nl_generic_functions::oauth_metadata::Issuer;
+use oauth_server_metadata::Issuer;
 use openehr_sdt::smart_scopes::{Compartment, SmartScope};
 use url::Url;
 
@@ -54,6 +54,7 @@ pub mod dpop;
 pub mod exchange;
 pub mod fapi2;
 pub mod keys;
+#[cfg(feature = "nl")]
 pub mod nuts;
 pub mod provider;
 pub mod token;

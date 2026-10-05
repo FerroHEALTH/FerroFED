@@ -74,17 +74,36 @@ manifest_version() {
   metadata | jq -r --arg c "$crate" '.packages[] | select(.name == $c) | .version'
 }
 
+# One `--config` patch per crates/* member another member depends on, pointing
+# crates.io at its directory. Cargo resolves a library's dependency on another
+# library through its local overlay only when a target registry is known, and
+# while the switch is off there is none, so the patch stands in for the overlay.
+library_patches() {
+  metadata | jq -r '
+    .workspace_root as $root
+    | [ .packages[] | select(.manifest_path | startswith($root + "/crates/")) ] as $libs
+    | ($libs | map(.name)) as $names
+    | ([ $libs[].dependencies[]
+        | select(.kind != "dev" and (.name as $d | $names | index($d) != null))
+        | .name ] | unique) as $used
+    | $libs[]
+    | select(.name as $n | $used | index($n) != null)
+    | "--config", "patch.crates-io.\(.name).path=\"\(.manifest_path | rtrimstr("/Cargo.toml"))\""'
+}
+
 do_package() {
-  local args=() crate selected
+  local args=() patches=() crate selected
   while IFS= read -r crate; do args+=(-p "$crate"); done < <(libraries)
   if ((${#args[@]} == 0)); then
     echo "publish-crates: no crates/* member, nothing to package"
     return 0
   fi
+  while IFS= read -r crate; do patches+=("$crate"); done < <(library_patches)
   # `cargo package` builds and verifies the exact tarball an upload would send,
   # and it works while the switch is off; `cargo publish --dry-run` refuses a
-  # member whose `publish` is false, so it runs only over the publishable set.
-  cargo package --locked "${args[@]}"
+  # member whose `publish` is false, so it runs only over the publishable set,
+  # and without the patches, so it meets the registry as an upload would.
+  cargo package --locked "${patches[@]}" "${args[@]}"
   selected="$(select_crates)"
   if [[ -n "$selected" ]]; then
     args=()

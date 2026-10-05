@@ -767,7 +767,8 @@ jobs:
       - run: cargo hack check --rust-version --workspace --locked --all-targets
 
   # Each published crate is one specification with a feature per layer or
-  # profile, and the server has one feature per regional binding (the Cargo
+  # profile, and the server, the identity crate and the engine have one feature
+  # per regional binding (the Cargo
   # reference, Features; no specification governs the layout: our own
   # design), so every feature must build and lint on its own as well as
   # together. Per package, never the workspace all-features union.
@@ -790,6 +791,7 @@ jobs:
       - run: >-
           cargo hack clippy --locked --each-feature --all-targets
           --package openehr-federation --package ihe-iti --package nl-generic-functions
+          --package oauth-server-metadata --package ferrofed-identity --package ferrofed-engine
           --package ferrofed-server
           -- -D warnings
 

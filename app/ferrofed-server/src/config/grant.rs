@@ -39,7 +39,7 @@ use ferrofed_engine::onward::fapi2::{Fapi2Grant, Fapi2GrantError};
 use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_engine::onward::{Grant, Scope};
 use ferrofed_registry::secret::{Secret, SecretUrl};
-use nl_generic_functions::oauth_metadata::{InvalidIssuer, Issuer};
+use oauth_server_metadata::{InvalidIssuer, Issuer};
 use serde::Deserialize;
 
 use crate::config::OAuth2;

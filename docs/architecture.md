@@ -731,8 +731,9 @@ itself: our own design.
 **Built here, movable later.** The protocols live in two published crates
 that know nothing of FerroFED: `ihe-iti`, with a feature per profile (`pixm`,
 `pdqm`, `mcsd`, `pmir`, `xcpd`), and `nl-generic-functions`, with a feature per
-Annex B function (`nvi`, `mitz`, `lrza`, `nuts-auth`, and `oauth-metadata`,
-the RFC 8414 checks both authentication tracks share). The adapters that turn
+Annex B function (`nvi`, `mitz`, `lrza`, `nuts-auth`). The RFC 8414 checks the
+OAuth 2.0 issuer audience, the FAPI 2.0 grant and the Nuts grant share are a
+crate of their own, `oauth-server-metadata` (decision A54). The adapters that turn
 those clients into the seams, and the development cross-reference, which binds
 nothing, sit beside the traits in `app/ferrofed-identity` (section 11, #106).
 The gateway core depends only on the traits. When FerroPIX exists, it can use
@@ -762,9 +763,11 @@ sections, and a binding's own localizer under the ask-all selection refused
 naming its section. FAPI 2.0 stays in the core with OAuth 2.0: it is an OpenID
 Foundation profile that Annex B §B.4a selects, and its RFC 8414 checks are the
 ones the OAuth 2.0 issuer audience already uses. A build without a binding's
-feature compiles none of the server's code for it and refuses its sections as
-unknown keys; `ferrofed-identity` and `ferrofed-engine` still compile the
-binding crates' adapters in every build. A new country is a specification
+feature compiles none of its code and none of its binding crate: the server's
+features turn on the `ihe` and `nl` features of `ferrofed-identity`, which
+hold the adapters, and the `nl` feature of `ferrofed-engine`, which holds the
+Nuts grant (#551), and the registry document in FHIR form, read with the mCSD
+reader, is part of `binding-ihe`. A new country is a specification
 crate, a binding module and a feature line (the book's "Adding a country").
 No specification governs the module layout: our own design.
 
@@ -1152,8 +1155,8 @@ a configuration of it, with no branch for a region:
 - **discovery:** at the first token request the metadata is read once from
   the issuer's RFC 8414 §3.1 well-known URL over the node transport and kept
   for the provider's life; a failed read is not kept. It is held to the
-  issuer with the checks the Nuts grant built, moved for both tracks into
-  `nl-generic-functions` feature `oauth-metadata` (`oauth_metadata::Issuer`:
+  issuer with the checks the Nuts grant built, moved for both tracks into the
+  `oauth-server-metadata` crate (`Issuer`:
   the canonical issuer, the identical-`issuer` check of RFC 8414 §3.3, the
   same-origin endpoint check, and the refusal of a repeated name), and it
   must list `private_key_jwt` with `ES256`, `client_credentials` and, for
@@ -2045,10 +2048,11 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 |---|---|---|---|
 | `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
 | `crates/ihe-iti` | the IHE ITI profiles, one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies) | `fhir-types` (`r4`, `resources`), an HTTP client, and only under `xcpd` the SOAP stack | anything in FerroFED |
-| `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth`, and `oauth-metadata`, the RFC 8414 checks the §B.4 and §B.4a tracks share | the clients each function needs | anything in FerroFED |
+| `crates/nl-generic-functions` | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza`, `nuts-auth` | the clients each function needs, `oauth-server-metadata` under `nuts-auth` | anything in FerroFED |
+| `crates/oauth-server-metadata` | OAuth 2.0 Authorization Server Metadata (RFC 8414): the issuer identifier, the well-known metadata URL, the identical-issuer and same-origin endpoint checks, and the refusal of an answer that repeats a name; no feature | `serde`, `serde_json`, `url` | anything in FerroFED, any national crate |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, the `DefinitionStore` trait; a leaf | `openehr-base` | the engine, identity, any storage implementation |
-| `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` and `nl-generic-functions` into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
-| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`, onward OAuth 2.0 and the signed caller token (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken` | any storage implementation (#40), the server |
+| `app/ferrofed-identity` | the role traits of section 6, `PatientRef`, the development cross-reference, and the adapters that plug `ihe-iti` (feature `ihe`) and `nl-generic-functions` (feature `nl`) into the seams | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
+| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, single-node forwarding on `Client::forward`, the budgets, the completeness decision, follow-up routing on `creating_system_id`, onward OAuth 2.0, FAPI 2.0 and, under feature `nl`, the Nuts grant, and the signed caller token (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `openehr-sdt` (the `oauth2` scopes), `jsonwebtoken`, `oauth-server-metadata` | any storage implementation (#40), the server |
 | `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`openehr-sdt` scopes and `jsonwebtoken`, #80), telemetry, health, the storage implementations, the bindings (`src/binding/`, one module and one feature each), wiring | everything | is never depended on |
 | `tools/ferrofed-testkit` | pinned containers, the capturing and fault proxy, the PIXm Manager fake, the localizer and consent stubs, the synthetic seed builder, the conformance-matrix reader | `testcontainers`, `wiremock`, `hyper`, `axum`, `fhir-types`, `openehr-rm` | the app |
 
@@ -2057,13 +2061,16 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 to FerroPIX later, or be served by a FerroPIX instance, without a change to
 the engine or the server (section 6). The server wires each binding from one
 module behind one feature, `binding-ihe` or `binding-nl`, both on by default
-(section 6, decision A52); a build without a binding's feature compiles none
-of the server's code for it, while `ferrofed-identity` and `ferrofed-engine`
-still compile every binding crate they adapt. The architecture test in
+(section 6, decision A52), and each forwards to the `ihe` and `nl` features of
+`ferrofed-identity` and the `nl` feature of `ferrofed-engine`, so a build
+without a binding's feature compiles neither its code nor its binding crate
+(#551): `cargo tree -p ferrofed-server --no-default-features` lists neither
+`ihe-iti` nor `nl-generic-functions`. The architecture test in
 `app/ferrofed-engine/tests/it/architecture.rs` fails when a crate other than
-the server reaches a storage implementation (#40), or when a binding crate
-gains a FerroFED dependency, and CI lints every feature of the published crates
-and of the server on its own (`cargo hack --each-feature`).
+the server reaches a storage implementation (#40), or when a binding crate or
+the RFC 8414 crate they share gains a FerroFED dependency, and CI lints every
+feature of the published crates, the server, the identity crate and the engine
+on its own (`cargo hack --each-feature`).
 
 ```mermaid
 flowchart TD
@@ -2073,8 +2080,11 @@ flowchart TD
     engine --> registry["app/ferrofed-registry"]
     engine --> identity
     identity --> registry
-    identity --> iti["ihe-iti (pixm, pdqm, mcsd, pmir, xcpd)"]
-    identity --> nlgf["nl-generic-functions (nvi, mitz, lrza, nuts-auth)"]
+    identity -- ihe --> iti["ihe-iti (pixm, pdqm, mcsd, pmir, xcpd)"]
+    identity -- nl --> nlgf["nl-generic-functions (nvi, mitz, lrza, nuts-auth)"]
+    engine -- nl --> nlgf
+    engine --> metadata["oauth-server-metadata (RFC 8414)"]
+    nlgf --> metadata
     engine --> its["openehr-its rest-client"]
     federation --> query["openehr-query"]
     federation --> rm["openehr-rm"]
@@ -2099,8 +2109,10 @@ the whole publishing lane is built so that publishing is a one-line switch:
 
 Flipping the switch needs two owner steps: the `crates-io` environment, and a
 Trusted Publisher per crate on crates.io. Every `pub` surface is designed as
-API from the start. The three names are held on crates.io by 0.0.0
-placeholders published on 2026-10-01, and each crate's line starts at 0.0.1.
+API from the start. The first three names are held on crates.io by 0.0.0
+placeholders published on 2026-10-01; `oauth-server-metadata` (#551) takes a
+placeholder of its own before it is published, and each crate's line starts at
+0.0.1.
 `openehr-federation` would be the first to publish, because any client of any
 federation gateway reads `meta.federation`.
 
@@ -2375,8 +2387,8 @@ released the same day; v0.0.8 is the milestone in progress.
 Every choice this pass put to the owner, all decided by the owner on
 2026-10-01; A43, which supersedes A27, A44, which supersedes A40 and A41,
 and A45 were decided on 2026-10-02, and A46, A47, which amends A44, A48, A49, which amends
-A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, A52 on #489, and
-A53 on 2026-10-05. The bracket names the report and its
+A30, and A50 on 2026-10-03; A51 was decided on 2026-10-04, A52 on #489,
+A53 on 2026-10-05 (#493), and A54 on #551. The bracket names the report and its
 own decision number (R1 is #18 and #26, R2 is #19 and #22, R3 is #20 and #21,
 R4 is #23, #25 and #27).
 
@@ -2435,6 +2447,7 @@ R4 is #23, #25 and #27).
 | A51 | FerroFED under Regulation (EU) 2025/327 [#519] | an EHR system under Art 2(2)(k), its intended purpose covering every priority category its member CDRs hold, all six of Art 14(1)(a) to (f); the harmonised software components of Art 25(1) delivered before 26 March 2029 for (a) to (c) and 26 March 2031 for (d) to (f); cross-border care through the national contact point | FerroFED intermediates priority-category data for healthcare providers providing patient care and selects none by category; Art 25(2) excludes only "general purpose software"; Art 105 applies Art 25 and 26 from 26 March 2029 to a system intended to process categories (a) to (c) and from 26 March 2031 for (d) to (f); Art 11(2) and Art 23 route cross-border access through MyHealth@EU; section 16 | decided on #519 (2026-10-04, by the orchestrator under the owner's standing delegation); legal review can only narrow it |
 | A52 | The regional bindings [#489] | one `Binding` trait in the server; one module under `app/ferrofed-server/src/binding/` and one Cargo feature per binding: development always built, `binding-ihe` for Annex A, `binding-nl` for Annex B, both default; one `RoleConflict` naming the sections in place of one error per pair; FAPI 2.0 stays in the core | every country otherwise touched about eight files of the server, and a third localizer added a third pair of exclusion checks; a binding is a trait implementation, never a branch in the core (§2.4, N27, N27a); the research on #488 maps the next countries; the trait sits in the server because every hook it fills (configuration, settings, errors, transport, reload, state, health, metrics) is a server type; no specification governs the layout: our own design | decided on #489 |
 | A53 | Consent exclusions under Regulation (EU) 2025/327 Art 8 [#493] | `[federation.consent] disclose`, `true` by default (N27a's `consent-denied`); with `false`, a member the pre-filter excludes and a node's listed consent refusal are `not-resolved` with one neutral error text and no `latency_ms`, the excluded member resolved at the cross-reference with the others and never sent a request; a read by subject, a routed read and an ask-all probe the gateway cannot serve answer `404 subject-unavailable`, also for an EHR no member holds; `OPTIONS {base}/` declares `federation.consent.disclose`; the metrics keep counting every exclusion | Art 8 and Art 11(5) forbid showing a restriction to a healthcare provider; `not-resolved` clears `complete` and fails nothing as §11.1 and §11.3 give `consent-denied`, while N37 forbids a `not-localized` member from clearing `complete`; the cross-reference is the gateway's own service and a differing record would show the exclusion; RFC 9110 §15.5.5 admits a `404` for a resource the server will not disclose; the conflicts with N27a and N40 are report T182 on #212; no specification governs the setting: our own design | decided on #493 (2026-10-05, by the orchestrator under the owner's standing delegation) |
+| A54 | The RFC 8414 checks and the binding crates' features [#551] | the authorization server metadata checks move out of `nl-generic-functions` into `crates/oauth-server-metadata`, a crate named for RFC 8414 with no feature, used by the engine, the server and the Nuts grant; `ferrofed-identity` gains `ihe` and `nl` and `ferrofed-engine` `nl`, forwarded by `binding-ihe` and `binding-nl`; the registry document in FHIR form joins `binding-ihe` | the OAuth 2.0 issuer audience and the FAPI 2.0 grant are not Dutch, and the Nuts grant needs the same checks, which a binding crate can only take from a crate that depends on nothing in FerroFED, so a crate of its own carries one copy for all three; the FHIR form is read with `ihe-iti`'s mCSD reader; no specification governs the layout: our own design | decided on #551 |
 
 ## 16. Regulatory status
 
