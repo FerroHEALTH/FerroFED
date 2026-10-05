@@ -351,7 +351,12 @@ What a deployment must provide:
   and none has a default. A caller whose token does not carry all four is
   not asked about: Mitz is not called, no member is filtered, and each node
   checks consent itself (N27). The call is counted as `not-asked` with the
-  reason `caller-claims`.
+  reason `caller-claims`. A token that carries them in a form the question
+  does not take, such as a UZI number that is not alphanumeric, is treated
+  the same way, with the reason `caller-claims-invalid`, and so is a patient
+  value the question does not take as a BSN, with `patient-value`. Neither
+  is reported as a Mitz outage, since Mitz is never called, and no claim
+  value appears in a label, a log line or an error.
 - **TLS.** The `url` must be `https` outside `profile = "development"`.
   `credentials` takes a bearer token or basic credentials, never an OAuth
   2.0 grant. Whether a gateway may ask Mitz at all is a matter of admission
