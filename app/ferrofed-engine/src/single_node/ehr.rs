@@ -22,9 +22,9 @@ use openehr_its::rest::generated::ehr::{EhrCreateParams, EhrGetByIdParams};
 use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
+use crate::conveyance::ConveyanceError;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{Composed, Outbound, Part};
-use crate::onward::conveyance::ConveyanceError;
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::StatusCode;

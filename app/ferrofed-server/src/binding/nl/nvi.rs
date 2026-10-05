@@ -55,7 +55,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::onward::SystemClock;
-use ferrofed_engine::onward::nuts::NutsAuthorizer;
+use ferrofed_engine::onward::grant::nl::nuts::NutsAuthorizer;
 use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::nl::nvi::{NviConfig, NviLocalizer};
 use ferrofed_identity::role::patient::IdentifierNamespace;

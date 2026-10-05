@@ -20,7 +20,7 @@
 //! N22 forbids rewriting that `ehr_id` for another node, and that node never
 //! adopted it (N42a). The learned routes serve the versioned writes of §12.4.
 
-use ferrofed_engine::forward::Forwarded;
+use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_registry::creating_system::Sighting;
 use ferrofed_registry::id::EndpointId;
 use http::{Method, header};

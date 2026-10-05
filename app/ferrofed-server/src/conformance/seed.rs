@@ -25,11 +25,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient};
-use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_engine::single_node::forward::{ClientRequest, ForwardError};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_registry::id::NodeId;

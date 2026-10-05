@@ -51,7 +51,7 @@ use openehr_its::rest::client::{RequestTimeout, Transport, TransportError};
 use serde::Deserialize;
 use url::Url;
 
-use crate::onward::fapi2::{ALGORITHM_NAME, Fapi2Grant};
+use crate::onward::grant::fapi2::{ALGORITHM_NAME, Fapi2Grant};
 use crate::onward::token::{GRANT_TYPE, TOKEN_EXCHANGE};
 use crate::onward::{ClientAuthentication, GrantKind};
 

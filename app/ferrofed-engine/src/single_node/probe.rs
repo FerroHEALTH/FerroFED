@@ -32,10 +32,10 @@ use tokio::task::{JoinError, JoinSet};
 use tracing::Instrument as _;
 use tracing::field::Empty;
 
+use crate::conveyance::Conveyance;
 use crate::dispatch::{Contact, DispatchOptions, NodeClients};
-use crate::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
-use crate::onward::conveyance::Conveyance;
 use crate::outbound_id::OutboundId;
+use crate::single_node::forward::{ClientRequest, ForwardError, Forwarded, HeldRequest};
 
 /// What one member answered the probe.
 #[derive(Debug)]

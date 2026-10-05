@@ -22,17 +22,8 @@ use ferrofed_registry::id::EndpointId;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 
 use crate::onward::keys::KeyRing;
-use crate::onward::token::{self, TokenError};
+use crate::onward::token::{self, MAX_ASSERTION_LIFETIME, REFRESH_MARGIN, TokenError};
 use crate::onward::{Clock, Grant};
-
-/// How long before the end of its stated lifetime a cached token is
-/// replaced.
-pub const REFRESH_MARGIN: Duration = Duration::from_secs(30);
-
-/// The longest lifetime a client assertion may have.
-// NOTE: no specification governs this bound: our own design, the five
-// minutes SMART Backend Services sets for the same RFC 7523 assertion.
-pub const MAX_ASSERTION_LIFETIME: Duration = Duration::from_secs(300);
 
 /// A token in the cache, and when it is replaced.
 struct Cached {

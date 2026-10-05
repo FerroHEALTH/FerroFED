@@ -18,11 +18,11 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, SharedCredentials};
-use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::onward::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_engine::single_node::forward::{ClientRequest, ForwardError};
 use ferrofed_registry::id::EndpointId;
 use http::header::{ACCEPT, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, HeaderValue, Method, StatusCode};

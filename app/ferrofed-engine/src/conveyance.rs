@@ -45,7 +45,7 @@ use ferrofed_registry::id::{EhrId, EndpointId};
 use jsonwebtoken::Header;
 use serde::Serialize;
 
-use crate::onward::exchange::SubjectToken;
+use crate::onward::grant::exchange::SubjectToken;
 use crate::onward::keys::KeyRing;
 
 /// The header every request to a node carries the caller's identity in.

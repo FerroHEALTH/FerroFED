@@ -20,8 +20,8 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use ferrofed_engine::dispatch::Contact;
-use ferrofed_engine::forward::{ForwardError, Forwarded};
-use ferrofed_engine::probe::{Answer, Probed};
+use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
+use ferrofed_engine::single_node::probe::{Answer, Probed};
 use ferrofed_identity::role::consent::ConsentDecision;
 use ferrofed_identity::role::demographics::{DemographicsError, Identification};
 use ferrofed_identity::role::localizer::{Localization, LocalizerError};

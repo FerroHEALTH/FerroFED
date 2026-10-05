@@ -20,7 +20,7 @@
 //! endpoint's onward credentials set `Authorization`, and the request's
 //! minted [`OutboundId`](crate::outbound_id::OutboundId) sets `X-Request-Id`,
 //! and the caller's identity, signed for the node, sets
-//! [`openEHR-federation-client`](crate::onward::conveyance::HEADER). A
+//! [`openEHR-federation-client`](crate::conveyance::HEADER). A
 //! client's `traceparent` is stripped as every undeclared header is, and the
 //! gateway's own is set when it exports traces ([`crate::trace_context`]).
 //!
@@ -33,11 +33,11 @@
 
 use std::fmt;
 
+use crate::conveyance::ConveyanceError;
 use crate::declared::{self, Refusal};
 use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::{self, Composed, Outbound, Part, UnlistedParameter};
-use crate::onward::conveyance::ConveyanceError;
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};

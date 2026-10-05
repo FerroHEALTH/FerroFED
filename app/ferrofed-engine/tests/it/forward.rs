@@ -18,9 +18,9 @@ use std::time::{Duration, Instant};
 
 use ferrofed_engine::declared::Refusal;
 use ferrofed_engine::dispatch::{Contact, DispatchOptions, NodeClient};
-use ferrofed_engine::forward::{ClientRequest, ForwardError};
 use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrofed_engine::single_node::forward::{ClientRequest, ForwardError};
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mock::Server;

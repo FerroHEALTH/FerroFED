@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use axum::response::Response;
-use ferrofed_engine::onward::conveyance::{Confinement, Conveyance};
+use ferrofed_engine::conveyance::{Confinement, Conveyance};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::patient::{PatientRef, PatientRefError};
 use ferrofed_identity::role::resolver::{Resolution, ResolverError};

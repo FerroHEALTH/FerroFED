@@ -171,8 +171,7 @@ mod tests {
         let deadline = Instant::now()
             .checked_add(Duration::from_secs(5))
             .ok_or("the deadline is past the platform clock")?;
-        let options =
-            DispatchOptions::new(deadline, crate::onward::conveyance::tests::conveyance());
+        let options = DispatchOptions::new(deadline, crate::conveyance::tests::conveyance());
         let reply = client.query(&NodeQuery::new(NODE_AQL), &options).await?;
         Ok((reply, node.sends.load(Ordering::SeqCst)))
     }

@@ -47,7 +47,7 @@ use url::Url;
 
 use crate::onward::Clock;
 use crate::onward::dpop::{self, Prover, Role};
-use crate::onward::provider::REFRESH_MARGIN;
+use crate::onward::token::REFRESH_MARGIN;
 
 /// What a Nuts grant at one node's authorization server asks for, as whom,
 /// and the key its tokens are bound to.

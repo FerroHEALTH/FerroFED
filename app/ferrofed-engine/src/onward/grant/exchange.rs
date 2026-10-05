@@ -40,12 +40,13 @@ use ferrofed_registry::id::EndpointId;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use secrecy::{ExposeSecret, SecretString};
 
+use crate::conveyance::{Conveyance, Principal, Verification};
 use crate::dispatch::SharedCredentials;
 use crate::hygiene::Withheld;
-use crate::onward::conveyance::{Conveyance, Principal, Verification};
+use crate::onward::grant::client_credentials::ClientCredentials;
 use crate::onward::keys::KeyRing;
-use crate::onward::provider::{ClientCredentials, MAX_ASSERTION_LIFETIME, REFRESH_MARGIN};
 use crate::onward::token::{self, Subject, TokenError};
+use crate::onward::token::{MAX_ASSERTION_LIFETIME, REFRESH_MARGIN};
 use crate::onward::{Clock, Grant};
 
 /// The most exchanged tokens one endpoint keeps.

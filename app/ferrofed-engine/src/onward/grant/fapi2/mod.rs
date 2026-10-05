@@ -34,8 +34,8 @@
 //! The metadata is read once, at the first token request, and kept for the
 //! life of the provider; a discovery that fails is not kept, so the next
 //! request tries again. Tokens are cached and dropped on a `401` as the
-//! `oauth2` grant's are ([`crate::onward::provider`],
-//! [`crate::onward::exchange`]).
+//! `oauth2` grant's are ([`crate::onward::grant::client_credentials`],
+//! [`crate::onward::grant::exchange`]).
 //!
 //! What the profile asks of an authorization-endpoint flow is out of a
 //! server-to-server gateway's reach: the authorization code flow needs a
@@ -59,16 +59,16 @@ use oauth_server_metadata::{AliasHost, Issuer};
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use url::Url;
 
+use crate::conveyance::Conveyance;
 use crate::dispatch::SharedCredentials;
 use crate::hygiene::Withheld;
 use crate::onward::authorization_details::AuthorizationDetails;
-use crate::onward::conveyance::Conveyance;
 use crate::onward::dpop::Prover;
-use crate::onward::exchange::{Exchange, OnBehalf};
-use crate::onward::fapi2::metadata::DiscoveryError;
+use crate::onward::grant::client_credentials::ClientCredentials;
+use crate::onward::grant::exchange::{Exchange, OnBehalf};
+use crate::onward::grant::fapi2::metadata::DiscoveryError;
 use crate::onward::keys::{KeyError, KeyRing, SigningKey};
 use crate::onward::mtls::Thumbprint;
-use crate::onward::provider::ClientCredentials;
 use crate::onward::{
     ClientAuthentication, Clock, Grant, GrantError, GrantKind, Scope, SenderConstraint, SystemClock,
 };
