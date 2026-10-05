@@ -61,6 +61,7 @@ use uuid::Uuid;
 use crate::support::settings;
 
 mod admission;
+mod aggregate;
 mod attributes;
 mod commit;
 mod crossref;
